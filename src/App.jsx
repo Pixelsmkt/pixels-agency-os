@@ -1,5 +1,5 @@
 // App.jsx — Gerado por juntar.py
-// NAO EDITE DIRETAMENTE
+import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
 
 
 // ======= 00_globals.jsx =======
@@ -17747,24 +17747,12 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
 
 
 // ======= 12_estrutura.jsx =======
-// ── Supabase client (inline para não precisar de import separado)
-const _supa = (()=>{
-  try{
-    const {createClient} = window.supabase || {};
-    if(createClient){
-      return createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        import.meta.env.VITE_SUPABASE_ANON_KEY,
-        {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}
-      );
-    }
-  }catch(e){}
-  return null;
-})();
-
-// Usa o supabase importado pelo vite
-import {supabase as _supaClient} from "./lib/supabase.js";
-const _sb = _supaClient;
+// ── Supabase client
+const _sb = __createSupabaseClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}
+);
 
 function LoginScreen({onLoginCollaborator, onLoginClient}){
   const [email,setEmail]=useState("");
@@ -17872,6 +17860,38 @@ export default function AgencyOS(){
     return()=>subscription.unsubscribe();
   },[]);
 
+  // App completo (colaboradores)
+  // Define CURRENT_USER dinamicamente baseado no perfil logado
+  const loggedTeamUser = currentProfile
+    ? (TEAM.find(u=>u.id===currentProfile.team_id||u.name===currentProfile.name)||TEAM[0])
+    : TEAM[0];
+  window._pixelsUser = loggedTeamUser.id;
+
+  const [loggedUser,setLoggedUser]=useState(loggedTeamUser.id);
+  const [themeKey,setThemeKey]=useState(_themeKey);
+  const [page,setPage]=useState("demandas");
+  const [expanded,setExpanded]=useState({});
+  const [notifDrawer,setNotifDrawer]=useState(false);
+  const [isMob,setIsMob]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
+  const [sideOpen,setSideOpen]=useState(false);
+  const [activeCl,setActiveCl]=useState(null);
+  const [globalTasks,setGlobalTasksRaw]=useState(TASKS_INIT);
+  const [notifs,setNotifs]=useState(NOTIF_STORE.items);
+  const [storageLoaded,setStorageLoaded]=useState(false);
+
+  // ── Permissions live state — loaded from storage on mount ──
+  const [livePerms,setLivePerms]=useState(()=>{
+    // Carrega permissões salvas do localStorage na inicialização
+    const base={...ACCESS_STORE};
+    try{
+      TEAM.forEach(u=>{
+        const s=localStorage.getItem("pixels-perms-"+u.id);
+        if(s) base[u.id]={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...JSON.parse(s)};
+      });
+    }catch(e){}
+    return base;
+  });
+
   const handleLogout=async()=>{await _sb.auth.signOut();};
 
   // Enquanto verifica sessão
@@ -17907,39 +17927,10 @@ export default function AgencyOS(){
   );
 
   // App completo (colaboradores)
-  // Define CURRENT_USER dinamicamente baseado no perfil logado
-  const loggedTeamUser = currentProfile
-    ? (TEAM.find(u=>u.id===currentProfile.team_id||u.name===currentProfile.name)||TEAM[0])
-    : TEAM[0];
-  window._pixelsUser = loggedTeamUser.id;
-
-  const [loggedUser,setLoggedUser]=useState(loggedTeamUser.id);
-  const [themeKey,setThemeKey]=useState(_themeKey);
-  const [page,setPage]=useState("demandas");
-  const [expanded,setExpanded]=useState({});
-  const [notifDrawer,setNotifDrawer]=useState(false);
-  const [isMob,setIsMob]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
-  const [sideOpen,setSideOpen]=useState(false);
-  const [activeCl,setActiveCl]=useState(null);
-  const [globalTasks,setGlobalTasksRaw]=useState(TASKS_INIT);
-  const [notifs,setNotifs]=useState(NOTIF_STORE.items);
-  const [storageLoaded,setStorageLoaded]=useState(false);
 
   const TASKS_KEY="pixels-tasks-v3";
   const FILES_KEY_PREFIX="pixels-files-";
 
-  // ── Permissions live state — loaded from storage on mount ──
-  const [livePerms,setLivePerms]=useState(()=>{
-    // Carrega permissões salvas do localStorage na inicialização
-    const base={...ACCESS_STORE};
-    try{
-      TEAM.forEach(u=>{
-        const s=localStorage.getItem("pixels-perms-"+u.id);
-        if(s) base[u.id]={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...JSON.parse(s)};
-      });
-    }catch(e){}
-    return base;
-  });
   const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
   const myPerms=getPerms(CURRENT_USER.id);
 
