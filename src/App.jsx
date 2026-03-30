@@ -17836,18 +17836,15 @@ export default function AgencyOS(){
   // Verificar sessão ao montar
   useEffect(()=>{
     const checkSession=async()=>{
-      try{
-        const {data:{session}}=await _sb.auth.getSession();
-        if(session){
-          const {data:profile}=await _sb.from("profiles").select("*").eq("id",session.user.id).single();
-          if(profile){
-            if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
-            else{setCurrentProfile(profile);setAuthState("app");}
-          }else{setAuthState("login");}
+      const {data:{session}}=await _sb.auth.getSession();
+      if(session){
+        const {data:profile}=await _sb.from("profiles").select("*").eq("id",session.user.id).single();
+        if(profile){
+          if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
+          else{setCurrentProfile(profile);setAuthState("app");}
         }else{setAuthState("login");}
-      }catch(e){setAuthState("login");}
+      }else{setAuthState("login");}
     };
-    const timeout=setTimeout(()=>setAuthState(s=>s==="loading"?"login":s),5000);
     checkSession();
     // Listener para mudanças de auth
     const {data:{subscription}}=_sb.auth.onAuthStateChange(async(event,session)=>{
@@ -17860,10 +17857,9 @@ export default function AgencyOS(){
         }
       }
     });
-    return()=>{subscription.unsubscribe();clearTimeout(timeout);};
+    return()=>subscription.unsubscribe();
   },[]);
 
-  // App completo (colaboradores)
   // Define CURRENT_USER dinamicamente baseado no perfil logado
   const loggedTeamUser = currentProfile
     ? (TEAM.find(u=>u.id===currentProfile.team_id||u.name===currentProfile.name)||TEAM[0])
@@ -17882,6 +17878,9 @@ export default function AgencyOS(){
   const [notifs,setNotifs]=useState(NOTIF_STORE.items);
   const [storageLoaded,setStorageLoaded]=useState(false);
 
+  const TASKS_KEY="pixels-tasks-v3";
+  const FILES_KEY_PREFIX="pixels-files-";
+
   // ── Permissions live state — loaded from storage on mount ──
   const [livePerms,setLivePerms]=useState(()=>{
     // Carrega permissões salvas do localStorage na inicialização
@@ -17894,6 +17893,8 @@ export default function AgencyOS(){
     }catch(e){}
     return base;
   });
+  const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
+  const myPerms=getPerms(CURRENT_USER.id);
 
   // ── Load on mount ──
   useEffect(()=>{
@@ -18063,49 +18064,6 @@ export default function AgencyOS(){
   const unreadNotifs=notifs.filter(n=>!n.read).length;
 
   useEffect(()=>{const h=()=>setIsMob(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
-
-  const handleLogout=async()=>{await _sb.auth.signOut();};
-
-  // Enquanto verifica sessão
-  if(authState==="loading")return(
-    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
-      <div style={{width:48,height:48,borderRadius:16,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⬡</div>
-      <div style={{color:C.td,fontSize:13}}>Carregando...</div>
-    </div>
-  );
-
-  // Tela de login
-  if(authState==="login")return(
-    <LoginScreen
-      onLoginCollaborator={(profile)=>{setCurrentProfile(profile);setAuthState("app");}}
-      onLoginClient={(profile)=>{setClientPortalData(profile);setAuthState("portal");}}
-    />
-  );
-
-  // Portal do cliente
-  if(authState==="portal")return(
-    <div style={{fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
-      <div style={{maxWidth:1200,margin:"0 auto"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⬡</div>
-            <div style={{color:C.tx,fontWeight:800,fontSize:16}}>Pixels Agency OS</div>
-          </div>
-          <button onClick={handleLogout} style={{background:"none",border:"1px solid "+C.b1,borderRadius:9,padding:"7px 14px",color:C.ts,cursor:"pointer",fontSize:12,fontWeight:600}}>⏻ Sair</button>
-        </div>
-        <PagePortalCliente isMob={window.innerWidth<768} tasks={[]} setTasks={()=>{}}/>
-      </div>
-    </div>
-  );
-
-  // App completo (colaboradores)
-
-  const TASKS_KEY="pixels-tasks-v3";
-  const FILES_KEY_PREFIX="pixels-files-";
-
-  const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
-  const myPerms=getPerms(CURRENT_USER.id);
-
   const goClient=id=>{setActiveCl(id);setPage("clientes");setSideOpen(false);};
   const nav=id=>{setPage(id);setActiveCl(null);setSideOpen(false);};
 
@@ -18181,6 +18139,39 @@ export default function AgencyOS(){
     </div>;
   }
 
+  const handleLogout=async()=>{await _sb.auth.signOut();};
+
+  // Enquanto verifica sessão
+  if(authState==="loading")return(
+    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
+      <div style={{width:48,height:48,borderRadius:16,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⬡</div>
+      <div style={{color:C.td,fontSize:13}}>Carregando...</div>
+    </div>
+  );
+
+  // Tela de login
+  if(authState==="login")return(
+    <LoginScreen
+      onLoginCollaborator={(profile)=>{setCurrentProfile(profile);setAuthState("app");}}
+      onLoginClient={(profile)=>{setClientPortalData(profile);setAuthState("portal");}}
+    />
+  );
+
+  // Portal do cliente
+  if(authState==="portal")return(
+    <div style={{fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
+      <div style={{maxWidth:1200,margin:"0 auto"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⬡</div>
+            <div style={{color:C.tx,fontWeight:800,fontSize:16}}>Pixels Agency OS</div>
+          </div>
+          <button onClick={handleLogout} style={{background:"none",border:"1px solid "+C.b1,borderRadius:9,padding:"7px 14px",color:C.ts,cursor:"pointer",fontSize:12,fontWeight:600}}>⏻ Sair</button>
+        </div>
+        <PagePortalCliente isMob={window.innerWidth<768} tasks={[]} setTasks={()=>{}}/>
+      </div>
+    </div>
+  );
   return <div style={{display:"flex",height:"100vh",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",color:C.tx,overflow:"hidden"}}>
     <style>{MOBILE_CSS}</style>
     {/* Mobile overlay */}
