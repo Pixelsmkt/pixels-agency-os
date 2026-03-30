@@ -17836,15 +17836,18 @@ export default function AgencyOS(){
   // Verificar sessão ao montar
   useEffect(()=>{
     const checkSession=async()=>{
-      const {data:{session}}=await _sb.auth.getSession();
-      if(session){
-        const {data:profile}=await _sb.from("profiles").select("*").eq("id",session.user.id).single();
-        if(profile){
-          if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
-          else{setCurrentProfile(profile);setAuthState("app");}
+      try{
+        const {data:{session}}=await _sb.auth.getSession();
+        if(session){
+          const {data:profile}=await _sb.from("profiles").select("*").eq("id",session.user.id).single();
+          if(profile){
+            if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
+            else{setCurrentProfile(profile);setAuthState("app");}
+          }else{setAuthState("login");}
         }else{setAuthState("login");}
-      }else{setAuthState("login");}
+      }catch(e){setAuthState("login");}
     };
+    const timeout=setTimeout(()=>setAuthState(s=>s==="loading"?"login":s),5000);
     checkSession();
     // Listener para mudanças de auth
     const {data:{subscription}}=_sb.auth.onAuthStateChange(async(event,session)=>{
@@ -17857,7 +17860,7 @@ export default function AgencyOS(){
         }
       }
     });
-    return()=>subscription.unsubscribe();
+    return()=>{subscription.unsubscribe();clearTimeout(timeout);};
   },[]);
 
   // App completo (colaboradores)
