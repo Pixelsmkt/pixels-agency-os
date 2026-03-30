@@ -1,0 +1,19 @@
+# Dependências
+node_modules/
+
+# Ambiente — NUNCA suba para o GitHub
+.env
+.env.local
+.env.production
+
+# Build
+dist/
+build/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*

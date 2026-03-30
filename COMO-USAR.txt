@@ -1,0 +1,73 @@
+═══════════════════════════════════════════════════════════════
+  PIXELS AGENCY OS — Guia de Instalação (Windows)
+═══════════════════════════════════════════════════════════════
+
+VOCÊ JÁ FEZ:
+  ✓ Instalou o Node.js
+  ✓ Instalou o VS Code
+
+AGORA SIGA ESSES PASSOS:
+
+───────────────────────────────────────────────────────────────
+PASSO 1 — Descompactar o projeto
+───────────────────────────────────────────────────────────────
+1. Baixe o arquivo "pixels-vite.zip"
+2. Clique com botão direito → "Extrair tudo"
+3. Escolha uma pasta fácil, ex: C:\pixels-agency-os
+4. Clique em Extrair
+
+───────────────────────────────────────────────────────────────
+PASSO 2 — Abrir o terminal na pasta
+───────────────────────────────────────────────────────────────
+1. Abra a pasta C:\pixels-agency-os no Explorer
+2. Clique na barra de endereço do Explorer (onde mostra o caminho)
+3. Digite: cmd
+4. Pressione Enter
+5. Um terminal preto vai abrir
+
+───────────────────────────────────────────────────────────────
+PASSO 3 — Instalar as dependências (só uma vez)
+───────────────────────────────────────────────────────────────
+No terminal preto, cole esse comando e pressione Enter:
+
+  npm install
+
+Vai aparecer um monte de texto. Espere terminar (1-2 minutos).
+
+───────────────────────────────────────────────────────────────
+PASSO 4 — Rodar o app
+───────────────────────────────────────────────────────────────
+Ainda no terminal, cole esse comando e pressione Enter:
+
+  npm run dev
+
+Vai aparecer algo como:
+  ➜  Local:   http://localhost:5173/
+
+───────────────────────────────────────────────────────────────
+PASSO 5 — Abrir no navegador
+───────────────────────────────────────────────────────────────
+1. Abra o Chrome ou Edge
+2. Digite na barra de endereço: http://localhost:5173
+3. Pressione Enter
+4. O Pixels OS vai abrir!
+
+───────────────────────────────────────────────────────────────
+COMO EDITAR DAQUI PRA FRENTE
+───────────────────────────────────────────────────────────────
+1. Peça a mudança para o Claude aqui no chat
+2. Claude entrega o arquivo atualizado
+3. Você abre a pasta src\ no VS Code
+4. Substitui o arquivo pelo novo
+5. O navegador atualiza SOZINHO (hot reload)
+
+───────────────────────────────────────────────────────────────
+ATALHOS ÚTEIS
+───────────────────────────────────────────────────────────────
+Parar o app:       Ctrl + C no terminal
+Rodar de novo:     npm run dev
+Abrir VS Code:     code . (no terminal, na pasta do projeto)
+
+═══════════════════════════════════════════════════════════════
+  DÚVIDAS? Cola o erro aqui no Claude que eu resolvo!
+═══════════════════════════════════════════════════════════════
