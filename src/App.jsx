@@ -5041,8 +5041,8 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
     ACCESS_STORE[user.id]={...perms};
     if(setLivePerms) setLivePerms(p=>({...p,[user.id]:{...perms}}));
     try{localStorage.setItem(`pixels-perms-${user.id}`,JSON.stringify(perms));}catch(e){}
-    // Salvar permissoes no Supabase
-    try{await _sb.from("profiles").update({permissions:perms}).eq("id",user.id);}catch(e){console.warn("perms save:",e);}
+    // Salvar permissoes no Supabase (usando team_id)
+    try{await _sb.from("profiles").update({permissions:perms}).eq("team_id",user.id);}catch(e){console.warn("perms save:",e);}
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
   };
@@ -17945,7 +17945,7 @@ export default function AgencyOS(){
       for(const t of tasks){
         const {id,...rest}=t;
         const safeData={...rest,files:(t.files||[]).map(({url,...r})=>r)};
-        const {error}=await _sb.from("tasks").upsert({id:String(id),data:safeData},{onConflict:"id"});
+        const {error}=await _sb.from("tasks").upsert({id:String(id),data:safeData});
         if(error)console.warn("syncTasksToSupabase error:",error);
       }
     }catch(e){console.warn("syncTasksToSupabase:",e);}
