@@ -17942,12 +17942,12 @@ export default function AgencyOS(){
   const syncTasksToSupabase=async(tasks)=>{
     if(!tasks||tasks.length===0)return;
     try{
-      const rows=tasks.map(t=>{
+      for(const t of tasks){
         const {id,...rest}=t;
-        return {id:Number(id),data:{...rest,files:(t.files||[]).map(({url,...r})=>r)}};
-      });
-      const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
-      if(error)console.warn("syncTasksToSupabase error:",error);
+        const safeData={...rest,files:(t.files||[]).map(({url,...r})=>r)};
+        const {error}=await _sb.from("tasks").upsert({id:String(id),data:safeData},{onConflict:"id"});
+        if(error)console.warn("syncTasksToSupabase error:",error);
+      }
     }catch(e){console.warn("syncTasksToSupabase:",e);}
   };
 
