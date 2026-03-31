@@ -1745,6 +1745,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const moveTask=(id,toColId)=>{
     setTasks(p=>p.map(t=>{
       if(t.id!==id)return t;
+      if(t.status==="demanda"&&toColId==="recebida"){alert("Esta copy precisa ser aprovada em \"Aprovações\" antes de virar Demanda.");return t;}
       const fromIdx=cols.findIndex(c=>c.id===t.status);
       const toIdx=cols.findIndex(c=>c.id===toColId);
       // Bloquear arraste de Copys para Demanda sem aprovacao
@@ -2635,9 +2636,13 @@ function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms}){
   const addComment=(text,type)=>{
     const txt=text||comment;
     if(!txt&&type!=="audio")return;
-    const c={id:Date.now(),user:user.name,av:user.av,color:user.color,text:txt,type:type||"text",time:nowFmt()};
-    setComments(p=>[...p,c]);
-    if(!type)setComment("");
+    try{
+      const mentions=(txt.match(/@([\w]+)/g)||[]).map(m=>m.slice(1).toLowerCase());
+      const mentionedIds=TEAM.filter(u=>mentions.some(m=>u.name.toLowerCase().startsWith(m)||u.id.toLowerCase().startsWith(m))).map(u=>u.id);
+      const c={id:Date.now(),user:user.name,av:user.av,color:user.color,text:txt,type:type||"text",time:nowFmt(),mentions:mentionedIds};
+      setComments(p=>[...p,c]);
+      if(!type)setComment("");
+    }catch(e){console.warn("addComment error:",e);}
   };
 
   const handleFileUpload=(e)=>{
@@ -17999,17 +18004,20 @@ export default function AgencyOS(){
   const setGlobalTasks=(updater)=>{
     setGlobalTasksRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
-      // Sync changed tasks to Supabase
+      // Sync changed tasks to Supabase (strip base64 files to avoid payload limit)
       const changed=next.filter(t=>{
         const old=prev.find(p=>p.id===t.id);
-        return !old||JSON.stringify(old)!==JSON.stringify(t);
+        return !old||JSON.stringify({...old,files:[]})!==JSON.stringify({...t,files:[]});
       });
-      changed.forEach(t=>{
-        const {id,...data}=t;
-        _sb.from("tasks").upsert({id,data}).then(({error})=>{
-          if(error)console.warn("Supabase save error:",error);
-        });
-      });
+      if(changed.length>0){
+        setTimeout(()=>{
+          changed.forEach(t=>{
+            const {id,...rest}=t;
+            const safeData={...rest,files:(t.files||[]).map(({url,...r})=>r)};
+            _sb.from("tasks").upsert({id,data:safeData}).catch(e=>console.warn("Supabase sync:",e));
+          });
+        },500);
+      }
 
       // Save files separately per card (immediate, 100ms debounce per card)
       next.forEach(t=>{
