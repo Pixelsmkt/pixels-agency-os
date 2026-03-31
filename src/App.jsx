@@ -5042,7 +5042,11 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
     if(setLivePerms) setLivePerms(p=>({...p,[user.id]:{...perms}}));
     try{localStorage.setItem(`pixels-perms-${user.id}`,JSON.stringify(perms));}catch(e){}
     // Salvar permissoes no Supabase (usando team_id)
-    try{await _sb.from("profiles").update({permissions:perms}).eq("team_id",user.id);}catch(e){console.warn("perms save:",e);}
+    try{
+      const {data,error}=await _sb.from("profiles").update({permissions:perms}).eq("team_id",user.id).select();
+      if(error)console.warn("perms save error:",error);
+      else console.log("perms saved:",data);
+    }catch(e){console.warn("perms save:",e);}
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
   };
@@ -17967,6 +17971,8 @@ export default function AgencyOS(){
       return null;
     };
     const hardTimeout=setTimeout(()=>{loadFromLocal();setStorageLoaded(true);},5000);
+    // Pequeno delay para garantir que o token de auth esta pronto
+    setTimeout(()=>{
     _sb.from("tasks").select("*").then(async({data,error})=>{
       clearTimeout(hardTimeout);
       if(!error&&data&&data.length>0){
@@ -17979,6 +17985,7 @@ export default function AgencyOS(){
       }
       setStorageLoaded(true);
     }).catch(()=>{clearTimeout(hardTimeout);loadFromLocal();setStorageLoaded(true);});
+    },300); // end delay
     // Realtime — ignora mudancas feitas pelo proprio usuario (evita duplicatas)
     const myChannel="tasks-rt-"+Date.now();
     const channel=_sb.channel(myChannel)
