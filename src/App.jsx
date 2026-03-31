@@ -17938,9 +17938,19 @@ export default function AgencyOS(){
   const [isMob,setIsMob]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
   const [sideOpen,setSideOpen]=useState(false);
   const [activeCl,setActiveCl]=useState(null);
-  const [globalTasks,setGlobalTasksRaw]=useState(TASKS_INIT);
+  const [globalTasks,setGlobalTasksRaw]=useState(()=>{
+    // Carrega do cache local imediatamente — sem esperar Supabase no F5
+    try{
+      const s=localStorage.getItem("pixels-tasks-v3");
+      if(s){const p=JSON.parse(s);if(Array.isArray(p)&&p.length>0)return p;}
+    }catch(e){}
+    return TASKS_INIT;
+  });
   const [notifs,setNotifs]=useState(NOTIF_STORE.items);
-  const [storageLoaded,setStorageLoaded]=useState(false);
+  const [storageLoaded,setStorageLoaded]=useState(()=>{
+    // Inicia true se há tasks em cache — evita tela "Carregando dados..." no F5
+    try{const s=localStorage.getItem("pixels-tasks-v3");return !!(s&&JSON.parse(s)?.length>0);}catch(e){return false;}
+  });
 
   const TASKS_KEY="pixels-tasks-v3";
   const FILES_KEY_PREFIX="pixels-files-";
@@ -17982,12 +17992,13 @@ export default function AgencyOS(){
   const syncTasksToSupabase=async(tasks)=>{
     if(!tasks||tasks.length===0)return;
     try{
-      for(const t of tasks){
+      // Upsert em batch — muito mais rápido e atômico
+      const rows=tasks.map(t=>{
         const {id,...rest}=t;
-        const safeData={...rest,files:(t.files||[]).map(({url,...r})=>r)};
-        const {error}=await _sb.from("tasks").upsert({id:String(id),data:safeData});
-        if(error)console.warn("syncTasksToSupabase error:",error);
-      }
+        return {id:String(id),data:{...rest,files:(t.files||[]).map(({url,...r})=>r)}};
+      });
+      const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
+      if(error)console.warn("syncTasksToSupabase error:",error);
     }catch(e){console.warn("syncTasksToSupabase:",e);}
   };
 
@@ -18022,20 +18033,32 @@ export default function AgencyOS(){
       }
       if(!cancelled)setStorageLoaded(true);
     }).catch(()=>{clearTimeout(hardTimeout);if(!cancelled){loadFromLocal();setStorageLoaded(true);}});
-    // Realtime
+    // Realtime — escuta mudanças de OUTROS usuários
     const myChannel="tasks-rt-"+Date.now();
     const channel=_sb.channel(myChannel)
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
         if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
-          const t={...payload.new.data,id:payload.new.id};
+          const incoming={...payload.new.data,id:payload.new.id};
           setGlobalTasksRaw(prev=>{
-            const exists=prev.find(x=>x.id===t.id);
-            if(exists)return prev.map(x=>x.id===t.id?t:x);
-            return [...prev,t];
+            // Verifica se o dado do Supabase é mais novo que o local
+            const local=prev.find(x=>x.id===incoming.id);
+            if(local){
+              // Se for o mesmo conteúdo, ignora para não piscar
+              const localClean=JSON.stringify({...local,files:[]});
+              const incomingClean=JSON.stringify({...incoming,files:[]});
+              if(localClean===incomingClean) return prev;
+              return prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||[]}:x);
+            }
+            return [...prev,incoming];
           });
         }
-        if(payload.eventType==="DELETE")setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
-      }).subscribe();
+        if(payload.eventType==="DELETE"){
+          setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
+        }
+      }).subscribe((status)=>{
+        if(status==="SUBSCRIBED") console.log("Realtime tasks: conectado");
+        if(status==="CHANNEL_ERROR") console.warn("Realtime tasks: erro no canal");
+      });
     return()=>{cancelled=true;clearTimeout(hardTimeout);_sb.removeChannel(channel);};
   },[authState]);
 
@@ -18072,44 +18095,32 @@ export default function AgencyOS(){
   const saveTimer=useRef(null);
   const filesSaveTimers=useRef({});
 
+  // ID do cliente para ignorar updates do próprio usuario no realtime
+  const _clientId=useRef("client-"+Math.random().toString(36).slice(2));
+
   const setGlobalTasks=(updater)=>{
     setGlobalTasksRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
-      // Sync changed tasks to Supabase
+
+      // Detecta tarefas alteradas (ignora files na comparação para não duplicar)
       const changed=next.filter(t=>{
         const old=prev.find(p=>p.id===t.id);
         return !old||JSON.stringify({...old,files:[]})!==JSON.stringify({...t,files:[]});
       });
+
       if(changed.length>0){
-        setTimeout(()=>syncTasksToSupabase(changed),300);
+        // Sync imediato ao Supabase (sem delay — cada ms conta no realtime)
+        syncTasksToSupabase(changed).catch(()=>{});
       }
 
-      // Save files separately per card (immediate, 100ms debounce per card)
-      next.forEach(t=>{
-        const old=prev.find(p=>p.id===t.id);
-        const filesChanged=!old||
-          JSON.stringify((t.files||[]).map(f=>({id:f.id,name:f.name})))!==
-          JSON.stringify((old.files||[]).map(f=>({id:f.id,name:f.name})));
-        if(filesChanged&&(t.files||[]).length>0){
-          if(filesSaveTimers.current[t.id]) clearTimeout(filesSaveTimers.current[t.id]);
-          filesSaveTimers.current[t.id]=setTimeout(async()=>{
-            try{localStorage.setItem(FILES_KEY_PREFIX+t.id,JSON.stringify(t.files||[]));}
-            catch(e){console.warn("File save:",t.id,e);}
-          },100);
-        }
-      });
-
-      // Save to localStorage (cache confiavel)
+      // Save localStorage com debounce curto
       if(saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current=setTimeout(async()=>{
+      saveTimer.current=setTimeout(()=>{
         try{
-          const meta=next.map(t=>({
-            ...t,
-            files:(t.files||[]).map(({url,...rest})=>rest)
-          }));
+          const meta=next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}));
           localStorage.setItem(TASKS_KEY,JSON.stringify(meta));
-        }catch(e){console.warn("Tasks save:",e);}
-      },400);
+        }catch(e){console.warn("Tasks localStorage save:",e);}
+      },300);
 
       return next;
     });
