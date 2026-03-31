@@ -17938,35 +17938,49 @@ export default function AgencyOS(){
     }).catch(e=>console.warn("load perms:",e));
   },[]);
 
+  // Helper para salvar tasks no Supabase
+  const syncTasksToSupabase=async(tasks)=>{
+    if(!tasks||tasks.length===0)return;
+    try{
+      const rows=tasks.map(t=>{
+        const {id,...rest}=t;
+        return {id:Number(id),data:{...rest,files:(t.files||[]).map(({url,...r})=>r)}};
+      });
+      const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
+      if(error)console.warn("syncTasksToSupabase error:",error);
+    }catch(e){console.warn("syncTasksToSupabase:",e);}
+  };
+
   // ── Load tasks from Supabase + Realtime sync ──
   useEffect(()=>{
-    // Timeout de segurança: se Supabase não responder em 4s, carrega do localStorage
-    const fallback=setTimeout(()=>{
+    // Hard timeout: nunca trava mais de 5s
+    const hardTimeout=setTimeout(()=>setStorageLoaded(true),5000);
+    const loadFromLocal=()=>{
       try{
         const saved=localStorage.getItem("pixels-tasks-v3");
-        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0)setGlobalTasksRaw(parsed);}
+        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0){setGlobalTasksRaw(parsed);return parsed;}}
       }catch(e){}
-      setStorageLoaded(true);
-    },4000);
-    // Load initial tasks
-    _sb.from("tasks").select("*").then(({data,error})=>{
-      clearTimeout(fallback);
+      return null;
+    };
+    _sb.from("tasks").select("*").then(async({data,error})=>{
+      clearTimeout(hardTimeout);
       if(!error&&data&&data.length>0){
+        // Supabase tem dados — usa eles
         const parsed=data.map(row=>({...row.data,id:row.id}));
         setGlobalTasksRaw(parsed);
+        // Salva no localStorage como cache
+        try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
       }else{
-        try{
-          const saved=localStorage.getItem("pixels-tasks-v3");
-          if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0)setGlobalTasksRaw(parsed);}
-        }catch(e){}
+        // Supabase vazio — carrega do localStorage e sobe para o Supabase
+        const local=loadFromLocal();
+        if(local&&local.length>0){
+          await syncTasksToSupabase(local);
+        }
       }
       setStorageLoaded(true);
     }).catch(()=>{
-      clearTimeout(fallback);
-      try{
-        const saved=localStorage.getItem("pixels-tasks-v3");
-        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0)setGlobalTasksRaw(parsed);}
-      }catch(e){}
+      clearTimeout(hardTimeout);
+      loadFromLocal();
       setStorageLoaded(true);
     });
     // Realtime subscription
@@ -18023,19 +18037,13 @@ export default function AgencyOS(){
   const setGlobalTasks=(updater)=>{
     setGlobalTasksRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
-      // Sync changed tasks to Supabase (strip base64 files to avoid payload limit)
+      // Sync changed tasks to Supabase
       const changed=next.filter(t=>{
         const old=prev.find(p=>p.id===t.id);
         return !old||JSON.stringify({...old,files:[]})!==JSON.stringify({...t,files:[]});
       });
       if(changed.length>0){
-        setTimeout(()=>{
-          changed.forEach(t=>{
-            const {id,...rest}=t;
-            const safeData={...rest,files:(t.files||[]).map(({url,...r})=>r)};
-            _sb.from("tasks").upsert({id,data:safeData}).catch(e=>console.warn("Supabase sync:",e));
-          });
-        },500);
+        setTimeout(()=>syncTasksToSupabase(changed),300);
       }
 
       // Save files separately per card (immediate, 100ms debounce per card)
@@ -18053,11 +18061,10 @@ export default function AgencyOS(){
         }
       });
 
-      // Save full task metadata (all fields except file url content) — 400ms debounce
+      // Save to localStorage (cache confiavel)
       if(saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current=setTimeout(async()=>{
         try{
-          // Strip file url from metadata (stored separately to save space)
           const meta=next.map(t=>({
             ...t,
             files:(t.files||[]).map(({url,...rest})=>rest)
