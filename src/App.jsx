@@ -4924,8 +4924,8 @@ const ACCESS_STORE={
   ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,colAjuste:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true},
   erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
   andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
-  guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
-  joao:    {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
+  guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
+  joao:    {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
 };
 
 
@@ -5041,12 +5041,24 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
     ACCESS_STORE[user.id]={...perms};
     if(setLivePerms) setLivePerms(p=>({...p,[user.id]:{...perms}}));
     try{localStorage.setItem(`pixels-perms-${user.id}`,JSON.stringify(perms));}catch(e){}
-    // Salvar permissoes no Supabase (usando team_id)
+    // Salvar no Supabase via team_id
     try{
       const {data,error}=await _sb.from("profiles").update({permissions:perms}).eq("team_id",user.id).select();
-      if(error)console.warn("perms save error:",error);
-      else console.log("perms saved:",data);
-    }catch(e){console.warn("perms save:",e);}
+      if(error){
+        console.warn("perms save error:",error);
+      }else if(!data||data.length===0){
+        // RLS bloqueou silenciosamente — nenhuma linha atualizada
+        // Tenta pelo id do perfil diretamente como fallback
+        const {data:d2,error:e2}=await _sb.from("profiles").update({permissions:perms}).eq("id",user.supabaseId||user.id).select();
+        if(e2||!d2||d2.length===0){
+          console.warn("perms save: nenhuma linha atualizada (verifique RLS policy em profiles)");
+        }else{
+          console.log("perms saved via id fallback:",d2);
+        }
+      }else{
+        console.log("perms saved OK:",data);
+      }
+    }catch(e){console.warn("perms save exception:",e);}
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
   };
@@ -17850,29 +17862,54 @@ export default function AgencyOS(){
 
   // Verificar sessão ao montar
   useEffect(()=>{
-    const checkSession=async()=>{
-      const {data:{session}}=await _sb.auth.getSession();
-      if(session){
-        const {data:profile}=await _sb.from("profiles").select("*").eq("id",session.user.id).single();
+    let resolved=false;
+    // Timeout de segurança: se auth não resolver em 10s, vai para login
+    const authTimeout=setTimeout(()=>{
+      if(!resolved){resolved=true;console.warn("Auth timeout — redirecionando para login");setAuthState("login");}
+    },10000);
+
+    const applyProfile=async(userId,onDone)=>{
+      try{
+        const {data:profile}=await _sb.from("profiles").select("*").eq("id",userId).single();
         if(profile){
           if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
           else{setCurrentProfile(profile);setAuthState("app");}
         }else{setAuthState("login");}
-      }else{setAuthState("login");}
+      }catch(e){
+        console.warn("applyProfile error:",e);
+        setAuthState("login");
+      }finally{
+        if(onDone)onDone();
+      }
+    };
+
+    const checkSession=async()=>{
+      try{
+        const {data:{session}}=await _sb.auth.getSession();
+        if(session){
+          await applyProfile(session.user.id,()=>{resolved=true;clearTimeout(authTimeout);});
+        }else{
+          resolved=true;clearTimeout(authTimeout);setAuthState("login");
+        }
+      }catch(e){
+        console.warn("checkSession error:",e);
+        resolved=true;clearTimeout(authTimeout);setAuthState("login");
+      }
     };
     checkSession();
-    // Listener para mudanças de auth
+
+    // Listener para mudanças de auth (login/logout explícito e token refresh)
     const {data:{subscription}}=_sb.auth.onAuthStateChange(async(event,session)=>{
-      if(event==="SIGNED_OUT"||!session){setAuthState("login");setCurrentProfile(null);setClientPortalData(null);}
-      if(event==="SIGNED_IN"&&session){
-        const {data:profile}=await _sb.from("profiles").select("*").eq("id",session.user.id).single();
-        if(profile){
-          if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
-          else{setCurrentProfile(profile);setAuthState("app");}
-        }
+      if(event==="SIGNED_OUT"||(!session&&event!=="INITIAL_SESSION")){
+        resolved=true;clearTimeout(authTimeout);
+        setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
+      }
+      // SIGNED_IN: login explícito OU restauro de sessão caso checkSession falhe
+      if((event==="SIGNED_IN"||event==="INITIAL_SESSION")&&session&&!resolved){
+        await applyProfile(session.user.id,()=>{resolved=true;clearTimeout(authTimeout);});
       }
     });
-    return()=>subscription.unsubscribe();
+    return()=>{clearTimeout(authTimeout);subscription.unsubscribe();};
   },[]);
 
   // Define CURRENT_USER dinamicamente baseado no perfil logado
@@ -17958,35 +17995,35 @@ export default function AgencyOS(){
   // ── Load tasks do Supabase — so roda quando autenticado ──
   useEffect(()=>{
     if(authState!=="app"){
-      // Nao autenticado: marca como carregado para nao travar
       setStorageLoaded(true);
       return;
     }
+    let cancelled=false;
     setStorageLoaded(false);
     const loadFromLocal=()=>{
       try{
         const saved=localStorage.getItem("pixels-tasks-v3");
-        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0){setGlobalTasksRaw(parsed);return parsed;}}
+        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0){if(!cancelled)setGlobalTasksRaw(parsed);return parsed;}}
       }catch(e){}
       return null;
     };
-    const hardTimeout=setTimeout(()=>{loadFromLocal();setStorageLoaded(true);},5000);
-    // Pequeno delay para garantir que o token de auth esta pronto
-    setTimeout(()=>{
+    // Timeout de seguranca: 6s sem resposta → carrega do localStorage
+    const hardTimeout=setTimeout(()=>{if(!cancelled){loadFromLocal();setStorageLoaded(true);}},6000);
+    // Token ja garantido quando authState==="app"
     _sb.from("tasks").select("*").then(async({data,error})=>{
       clearTimeout(hardTimeout);
+      if(cancelled)return;
       if(!error&&data&&data.length>0){
         const parsed=data.map(row=>({...row.data,id:row.id}));
         setGlobalTasksRaw(parsed);
         try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
       }else{
         const local=loadFromLocal();
-        if(local&&local.length>0) await syncTasksToSupabase(local);
+        if(!cancelled&&local&&local.length>0) syncTasksToSupabase(local).catch(()=>{});
       }
-      setStorageLoaded(true);
-    }).catch(()=>{clearTimeout(hardTimeout);loadFromLocal();setStorageLoaded(true);});
-    },300); // end delay
-    // Realtime — ignora mudancas feitas pelo proprio usuario (evita duplicatas)
+      if(!cancelled)setStorageLoaded(true);
+    }).catch(()=>{clearTimeout(hardTimeout);if(!cancelled){loadFromLocal();setStorageLoaded(true);}});
+    // Realtime
     const myChannel="tasks-rt-"+Date.now();
     const channel=_sb.channel(myChannel)
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
@@ -18000,7 +18037,7 @@ export default function AgencyOS(){
         }
         if(payload.eventType==="DELETE")setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
       }).subscribe();
-    return()=>_sb.removeChannel(channel);
+    return()=>{cancelled=true;clearTimeout(hardTimeout);_sb.removeChannel(channel);};
   },[authState]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
