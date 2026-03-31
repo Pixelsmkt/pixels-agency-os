@@ -1733,7 +1733,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const canEdit       = myPerms.editarDemanda;     // editar cartao
   const canDrag       = myPerms.arrastarCards;     // mover entre colunas
   const canNewCol     = myPerms.novaColuna;        // criar/excluir coluna
-  const isLevel1      = CURRENT_USER.level===1;   // renomear colunas (só sócios)
+  const isLevel1      = (effectiveUser||CURRENT_USER).level===1;   // renomear colunas (só sócios)
 
   const addCol=()=>{
     if(!newColLabel.trim())return;
@@ -1767,8 +1767,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     publicado: !!myPerms.colPublicado,
     pausado:   !!myPerms.colPausado,
   };
-  // Sócios e quem tem verTodosKanban veem tudo independente do COL_PERM
-  const isAdmin=myPerms.verTodosKanban||CURRENT_USER.level===1;
+  // isAdmin: usa effectiveUser (prop correta) — CURRENT_USER global pode ser stale
+  const isAdmin=myPerms.verTodosKanban||(effectiveUser||CURRENT_USER).level===1;
 
   const activeUserId=(effectiveUser||CURRENT_USER).id;
 
@@ -7546,10 +7546,18 @@ const NOTIF_STORE = {
 };
 
 /* ─── CURRENT USER ───────────────────────── */
-const CURRENT_USER=(()=>{
+// CURRENT_USER: lido dinamicamente para refletir o usuário logado
+// Não usar IIFE — window._pixelsUser é atualizado pelo AgencyOS após login
+const getCURRENT_USER=()=>{
   const id=typeof window!=="undefined"&&window._pixelsUser||"vinicius";
-  return {...(TEAM.find(u=>u.id===id)||TEAM[0])};
-})();
+  return TEAM.find(u=>u.id===id)||TEAM[0];
+};
+// Compatibilidade: proxy dinâmico para código legado que usa CURRENT_USER diretamente
+// eslint-disable-next-line no-var
+var CURRENT_USER=new Proxy({},{
+  get(_,prop){return getCURRENT_USER()[prop];},
+  set(_,prop,val){return true;}
+});
 
 /* ─── UTILS & HELPERS ────────────────────── */
 const daysLeft=d=>{const e=new Date(d),n=new Date();n.setHours(0,0,0,0);return Math.ceil((e-n)/86400000);};
