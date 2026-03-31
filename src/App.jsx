@@ -5040,8 +5040,9 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   const save=async()=>{
     ACCESS_STORE[user.id]={...perms};
     if(setLivePerms) setLivePerms(p=>({...p,[user.id]:{...perms}}));
-    // Persist to storage
     try{localStorage.setItem(`pixels-perms-${user.id}`,JSON.stringify(perms));}catch(e){}
+    // Salvar permissoes no Supabase
+    try{await _sb.from("profiles").update({permissions:perms}).eq("id",user.id);}catch(e){console.warn("perms save:",e);}
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
   };
@@ -17904,9 +17905,8 @@ export default function AgencyOS(){
   const TASKS_KEY="pixels-tasks-v3";
   const FILES_KEY_PREFIX="pixels-files-";
 
-  // ── Permissions live state — loaded from storage on mount ──
+  // ── Permissions — localStorage + Supabase sync ──
   const [livePerms,setLivePerms]=useState(()=>{
-    // Carrega permissões salvas do localStorage na inicialização
     const base={...ACCESS_STORE};
     try{
       TEAM.forEach(u=>{
@@ -17918,6 +17918,25 @@ export default function AgencyOS(){
   });
   const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
   const myPerms=getPerms(CURRENT_USER.id);
+
+  // Carregar permissoes do Supabase e sobrescrever localStorage
+  useEffect(()=>{
+    _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
+      if(!error&&data){
+        data.forEach(profile=>{
+          if(profile.permissions&&Object.keys(profile.permissions).length>0){
+            const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
+            if(u){
+              const perms={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...profile.permissions};
+              ACCESS_STORE[u.id]=perms;
+              setLivePerms(p=>({...p,[u.id]:perms}));
+              try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
+            }
+          }
+        });
+      }
+    }).catch(e=>console.warn("load perms:",e));
+  },[]);
 
   // ── Load tasks from Supabase + Realtime sync ──
   useEffect(()=>{
@@ -18182,20 +18201,9 @@ export default function AgencyOS(){
 
   // ── Block render until storage is fully loaded ──
 
-  if(!storageLoaded){
-    return <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:C.bg,flexDirection:"column",gap:16}}>
-      <div style={{width:40,height:40,borderRadius:12,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⬡</div>
-      <div style={{color:C.ts,fontSize:13,fontWeight:600}}>Carregando dados salvos...</div>
-      <div style={{width:160,height:3,background:C.b1,borderRadius:99,overflow:"hidden"}}>
-        <div style={{width:"60%",height:"100%",background:C.a,borderRadius:99,animation:"progress 1s ease-in-out infinite alternate"}}/>
-      </div>
-      <style>{`@keyframes progress{from{width:20%}to{width:90%}}`}</style>
-    </div>;
-  }
-
   const handleLogout=async()=>{await _sb.auth.signOut();};
 
-  // Enquanto verifica sessão
+  // 1. Auth loading
   if(authState==="loading")return(
     <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
       <div style={{width:48,height:48,borderRadius:16,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⬡</div>
@@ -18203,7 +18211,7 @@ export default function AgencyOS(){
     </div>
   );
 
-  // Tela de login
+  // 2. Login
   if(authState==="login")return(
     <LoginScreen
       onLoginCollaborator={(profile)=>{setCurrentProfile(profile);setAuthState("app");}}
@@ -18211,7 +18219,7 @@ export default function AgencyOS(){
     />
   );
 
-  // Portal do cliente
+  // 3. Portal do cliente
   if(authState==="portal")return(
     <div style={{fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
       <div style={{maxWidth:1200,margin:"0 auto"}}>
@@ -18226,6 +18234,19 @@ export default function AgencyOS(){
       </div>
     </div>
   );
+
+  // 4. Dados salvos carregando
+  if(!storageLoaded)return(
+    <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:C.bg,flexDirection:"column",gap:16}}>
+      <div style={{width:40,height:40,borderRadius:12,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⬡</div>
+      <div style={{color:C.ts,fontSize:13,fontWeight:600}}>Carregando dados...</div>
+      <div style={{width:160,height:3,background:C.b1,borderRadius:99,overflow:"hidden"}}>
+        <div style={{width:"60%",height:"100%",background:C.a,borderRadius:99,animation:"progress 1s ease-in-out infinite alternate"}}/>
+      </div>
+      <style>{`@keyframes progress{from{width:20%}to{width:90%}}`}</style>
+    </div>
+  );
+
   return <div style={{display:"flex",height:"100vh",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",color:C.tx,overflow:"hidden"}}>
     <style>{MOBILE_CSS}</style>
     {/* Mobile overlay */}
