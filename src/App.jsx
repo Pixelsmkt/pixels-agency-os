@@ -1723,7 +1723,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
 
   // myPerms via props (effectivePerms) — sócios têm tudo true via PARTNER_PERMS
-  const myPerms=perms||DEFAULT_PERMS;
+  // Usa ACCESS_STORE como fallback — mais completo que DEFAULT_PERMS puro
+  const myPerms=perms||(ACCESS_STORE[CURRENT_USER.id]?{...DEFAULT_PERMS,...ACCESS_STORE[CURRENT_USER.id]}:DEFAULT_PERMS);
 
   const canPixelsIA   = myPerms.pixelsIA;
   const canEscanear   = myPerms.escanear;
@@ -1755,6 +1756,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
 
   // Cada coluna visível só se a permissão correspondente estiver ligada
+  // COL_PERM: true = pode ver, false = bloqueado, undefined = coluna custom (deixa ver)
   const COL_PERM={
     demanda:   !!myPerms.colCopys,
     recebida:  !!myPerms.colDemanda,
@@ -1765,6 +1767,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     publicado: !!myPerms.colPublicado,
     pausado:   !!myPerms.colPausado,
   };
+  // Sócios e quem tem verTodosKanban veem tudo independente do COL_PERM
+  const isAdmin=myPerms.verTodosKanban||CURRENT_USER.level===1;
 
   const activeUserId=(effectiveUser||CURRENT_USER).id;
 
@@ -1779,19 +1783,21 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
-    // Se não pode ver todos, força filtrar só as suas
-    if(!myPerms.verTodosKanban&&!isMyTask(t))return false;
+    // Admin/sócio vê tudo; colaborador só vê os seus
+    if(!isAdmin&&!isMyTask(t))return false;
     if(filterUser!=="todos"&&t.assignee!==filterUser)return false;
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
     if(filterClient!=="todos"&&t.client!==filterClient)return false;
     if(filterClient==="bioter"&&filterBioterUnit!=="todos"&&t.bioterUnit!==filterBioterUnit)return false;
-    // Oculta tasks de colunas sem permissão
-    if(COL_PERM[t.status]===false)return false;
+    // Oculta tasks de colunas bloqueadas (false = bloqueado; undefined = coluna custom = deixa ver)
+    if(!isAdmin&&COL_PERM[t.status]===false)return false;
     return true;
   });
 
-  // Colunas filtradas por permissão — só mostra se a permissão for true
-  const visibleCols=cols.filter(col=>COL_PERM[col.id]===true);
+  // Colunas visíveis: admin vê todas; colaborador vê as permitidas + colunas custom
+  const visibleCols=isAdmin
+    ?cols
+    :cols.filter(col=>COL_PERM[col.id]===true||COL_PERM[col.id]===undefined);
 
   const moveTask=(id,toColId)=>{
     setTasks(p=>p.map(t=>{
@@ -18027,24 +18033,25 @@ export default function AgencyOS(){
   const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
   const myPerms=getPerms(CURRENT_USER.id);
 
-  // Carregar permissoes do Supabase e sobrescrever localStorage
+  // Carregar permissoes do Supabase — roda quando autenticado
   useEffect(()=>{
+    if(authState!=="app")return;
     _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
       if(!error&&data){
         data.forEach(profile=>{
-          if(profile.permissions&&Object.keys(profile.permissions).length>0){
-            const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
-            if(u){
-              const perms={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...profile.permissions};
-              ACCESS_STORE[u.id]=perms;
-              setLivePerms(p=>({...p,[u.id]:perms}));
-              try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
-            }
+          const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
+          if(u){
+            // Sempre mescla: DEFAULT < ACCESS_STORE < Supabase (se existir)
+            const supabasePerms=profile.permissions&&Object.keys(profile.permissions).length>0?profile.permissions:{};
+            const perms={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...supabasePerms};
+            ACCESS_STORE[u.id]=perms;
+            setLivePerms(p=>({...p,[u.id]:perms}));
+            try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
           }
         });
       }
     }).catch(e=>console.warn("load perms:",e));
-  },[]);
+  },[authState]);
 
   // Helper para salvar tasks no Supabase
   const syncTasksToSupabase=async(tasks)=>{
@@ -18067,52 +18074,44 @@ export default function AgencyOS(){
       return;
     }
     let cancelled=false;
-
-    // Aplica dados do Supabase sem piscar — mantém cache na tela enquanto carrega
-    const applySupabaseTasks=(data)=>{
-      if(cancelled||!data||data.length===0)return;
-      const parsed=data.map(row=>({...row.data,id:row.id}));
-      setGlobalTasksRaw(parsed);
-      try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
+    setStorageLoaded(false);
+    const loadFromLocal=()=>{
+      try{
+        const saved=localStorage.getItem("pixels-tasks-v3");
+        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0){if(!cancelled)setGlobalTasksRaw(parsed);return parsed;}}
+      }catch(e){}
+      return null;
     };
-
-    // Busca inicial — em background, não bloqueia a tela
-    const hardTimeout=setTimeout(()=>{if(!cancelled)setStorageLoaded(true);},6000);
-    _sb.from("tasks").select("*").then(({data,error})=>{
+    // Timeout de seguranca: 6s sem resposta → carrega do localStorage
+    const hardTimeout=setTimeout(()=>{if(!cancelled){loadFromLocal();setStorageLoaded(true);}},6000);
+    // Token ja garantido quando authState==="app"
+    _sb.from("tasks").select("*").then(async({data,error})=>{
       clearTimeout(hardTimeout);
       if(cancelled)return;
       if(!error&&data&&data.length>0){
-        applySupabaseTasks(data);
-      }else if(!error&&data&&data.length===0){
-        // Supabase vazio — sobe dados do localStorage para o banco
-        try{
-          const s=localStorage.getItem("pixels-tasks-v3");
-          if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local).catch(()=>{});}
-        }catch(e){}
+        const parsed=data.map(row=>({...row.data,id:row.id}));
+        setGlobalTasksRaw(parsed);
+        try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
+      }else{
+        const local=loadFromLocal();
+        if(!cancelled&&local&&local.length>0) syncTasksToSupabase(local).catch(()=>{});
       }
       if(!cancelled)setStorageLoaded(true);
-    }).catch(()=>{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);});
-
-    // Polling a cada 15s como fallback ao realtime
-    const pollInterval=setInterval(()=>{
-      if(cancelled)return;
-      _sb.from("tasks").select("*").then(({data,error})=>{
-        if(!error&&data&&data.length>0)applySupabaseTasks(data);
-      }).catch(()=>{});
-    },15000);
-
-    // Realtime — entrega instantânea de mudanças
+    }).catch(()=>{clearTimeout(hardTimeout);if(!cancelled){loadFromLocal();setStorageLoaded(true);}});
+    // Realtime — escuta mudanças de OUTROS usuários
     const myChannel="tasks-rt-"+Date.now();
     const channel=_sb.channel(myChannel)
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
-        if(cancelled)return;
         if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
           const incoming={...payload.new.data,id:payload.new.id};
           setGlobalTasksRaw(prev=>{
+            // Verifica se o dado do Supabase é mais novo que o local
             const local=prev.find(x=>x.id===incoming.id);
             if(local){
-              const same=JSON.stringify({...local,files:[]})=== JSON.stringify({...incoming,files:[]});
-              if(same)return prev;
+              // Se for o mesmo conteúdo, ignora para não piscar
+              const localClean=JSON.stringify({...local,files:[]});
+              const incomingClean=JSON.stringify({...incoming,files:[]});
+              if(localClean===incomingClean) return prev;
               return prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||[]}:x);
             }
             return [...prev,incoming];
@@ -18122,11 +18121,10 @@ export default function AgencyOS(){
           setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
         }
       }).subscribe((status)=>{
-        if(status==="SUBSCRIBED")console.log("✅ Realtime tasks: conectado");
-        if(status==="CHANNEL_ERROR")console.warn("⚠️ Realtime tasks: erro — usando polling como fallback");
+        if(status==="SUBSCRIBED") console.log("Realtime tasks: conectado");
+        if(status==="CHANNEL_ERROR") console.warn("Realtime tasks: erro no canal");
       });
-
-    return()=>{cancelled=true;clearTimeout(hardTimeout);clearInterval(pollInterval);_sb.removeChannel(channel);};
+    return()=>{cancelled=true;clearTimeout(hardTimeout);_sb.removeChannel(channel);};
   },[authState]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
