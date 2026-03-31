@@ -17916,18 +17916,33 @@ export default function AgencyOS(){
 
   // ── Load tasks from Supabase + Realtime sync ──
   useEffect(()=>{
+    // Timeout de segurança: se Supabase não responder em 4s, carrega do localStorage
+    const fallback=setTimeout(()=>{
+      try{
+        const saved=localStorage.getItem("pixels-tasks-v3");
+        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0)setGlobalTasksRaw(parsed);}
+      }catch(e){}
+      setStorageLoaded(true);
+    },4000);
     // Load initial tasks
     _sb.from("tasks").select("*").then(({data,error})=>{
+      clearTimeout(fallback);
       if(!error&&data&&data.length>0){
         const parsed=data.map(row=>({...row.data,id:row.id}));
         setGlobalTasksRaw(parsed);
       }else{
-        // fallback: load from localStorage if Supabase empty
         try{
           const saved=localStorage.getItem("pixels-tasks-v3");
           if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0)setGlobalTasksRaw(parsed);}
         }catch(e){}
       }
+      setStorageLoaded(true);
+    }).catch(()=>{
+      clearTimeout(fallback);
+      try{
+        const saved=localStorage.getItem("pixels-tasks-v3");
+        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0)setGlobalTasksRaw(parsed);}
+      }catch(e){}
       setStorageLoaded(true);
     });
     // Realtime subscription
