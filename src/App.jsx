@@ -17862,54 +17862,61 @@ export default function AgencyOS(){
 
   // Verificar sessão ao montar
   useEffect(()=>{
-    let resolved=false;
-    // Timeout de segurança: se auth não resolver em 10s, vai para login
-    const authTimeout=setTimeout(()=>{
-      if(!resolved){resolved=true;console.warn("Auth timeout — redirecionando para login");setAuthState("login");}
-    },10000);
+    const PROFILE_CACHE_KEY="pixels-profile-cache";
 
-    const applyProfile=async(userId,onDone)=>{
+    // Aplica perfil do cache instantaneamente (sem rede)
+    const applyFromCache=(userId)=>{
+      try{
+        const raw=localStorage.getItem(PROFILE_CACHE_KEY);
+        if(raw){
+          const p=JSON.parse(raw);
+          if(p&&p.id===userId){
+            if(p.user_type==="client"){setClientPortalData(p);setAuthState("portal");}
+            else{setCurrentProfile(p);setAuthState("app");}
+            return true;
+          }
+        }
+      }catch(e){}
+      return false;
+    };
+
+    // Busca perfil do Supabase e atualiza cache (background)
+    const refreshProfile=async(userId)=>{
       try{
         const {data:profile}=await _sb.from("profiles").select("*").eq("id",userId).single();
         if(profile){
+          localStorage.setItem(PROFILE_CACHE_KEY,JSON.stringify(profile));
           if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
           else{setCurrentProfile(profile);setAuthState("app");}
-        }else{setAuthState("login");}
-      }catch(e){
-        console.warn("applyProfile error:",e);
-        setAuthState("login");
-      }finally{
-        if(onDone)onDone();
-      }
-    };
-
-    const checkSession=async()=>{
-      try{
-        const {data:{session}}=await _sb.auth.getSession();
-        if(session){
-          await applyProfile(session.user.id,()=>{resolved=true;clearTimeout(authTimeout);});
-        }else{
-          resolved=true;clearTimeout(authTimeout);setAuthState("login");
         }
-      }catch(e){
-        console.warn("checkSession error:",e);
-        resolved=true;clearTimeout(authTimeout);setAuthState("login");
-      }
+      }catch(e){console.warn("refreshProfile error:",e);}
     };
-    checkSession();
 
-    // Listener para mudanças de auth (login/logout explícito e token refresh)
+    const applyProfile=async(userId)=>{
+      const hadCache=applyFromCache(userId); // instantâneo — sem rede
+      if(!hadCache) setAuthState("loading"); // só mostra loading se não tem cache
+      await refreshProfile(userId); // atualiza em background
+    };
+
+    // Listener principal
     const {data:{subscription}}=_sb.auth.onAuthStateChange(async(event,session)=>{
-      if(event==="SIGNED_OUT"||(!session&&event!=="INITIAL_SESSION")){
-        resolved=true;clearTimeout(authTimeout);
+      if(event==="SIGNED_OUT"||(!session&&event==="INITIAL_SESSION")){
+        localStorage.removeItem(PROFILE_CACHE_KEY);
         setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
+        return;
       }
-      // SIGNED_IN: login explícito OU restauro de sessão caso checkSession falhe
-      if((event==="SIGNED_IN"||event==="INITIAL_SESSION")&&session&&!resolved){
-        await applyProfile(session.user.id,()=>{resolved=true;clearTimeout(authTimeout);});
+      if(session){
+        await applyProfile(session.user.id);
       }
     });
-    return()=>{clearTimeout(authTimeout);subscription.unsubscribe();};
+
+    // Fallback: getSession direto caso onAuthStateChange demore
+    _sb.auth.getSession().then(({data:{session}})=>{
+      if(!session){setAuthState("login");}
+      // se tem sessão, onAuthStateChange já vai disparar
+    }).catch(()=>{setAuthState("login");});
+
+    return()=>subscription.unsubscribe();
   },[]);
 
   // Define CURRENT_USER dinamicamente baseado no perfil logado
