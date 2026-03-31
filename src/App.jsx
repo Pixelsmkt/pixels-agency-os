@@ -17888,6 +17888,12 @@ export default function AgencyOS(){
     }
   },[currentProfile]);
 
+  // Reset storageLoaded quando entra no app para forcar reload das tasks
+  useEffect(()=>{
+    if(authState==="app") setStorageLoaded(false);
+    else setStorageLoaded(true); // login/loading nao precisa esperar tasks
+  },[authState]);
+
   // Sobrescreve CURRENT_USER com o usuario logado
   // eslint-disable-next-line no-shadow
   const CURRENT_USER=TEAM.find(u=>u.id===loggedUser)||TEAM[0];
@@ -17952,9 +17958,9 @@ export default function AgencyOS(){
   };
 
   // ── Load tasks from Supabase + Realtime sync ──
+  // Só carrega quando o usuario estiver autenticado (authState === 'app')
   useEffect(()=>{
-    // Hard timeout: nunca trava mais de 5s
-    const hardTimeout=setTimeout(()=>setStorageLoaded(true),5000);
+    if(authState!=="app")return;
     const loadFromLocal=()=>{
       try{
         const saved=localStorage.getItem("pixels-tasks-v3");
@@ -17962,44 +17968,31 @@ export default function AgencyOS(){
       }catch(e){}
       return null;
     };
+    // Hard timeout: 5s max
+    const hardTimeout=setTimeout(()=>{loadFromLocal();setStorageLoaded(true);},5000);
     _sb.from("tasks").select("*").then(async({data,error})=>{
       clearTimeout(hardTimeout);
       if(!error&&data&&data.length>0){
-        // Supabase tem dados — usa eles
         const parsed=data.map(row=>({...row.data,id:row.id}));
         setGlobalTasksRaw(parsed);
-        // Salva no localStorage como cache
         try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
       }else{
-        // Supabase vazio — carrega do localStorage e sobe para o Supabase
         const local=loadFromLocal();
-        if(local&&local.length>0){
-          await syncTasksToSupabase(local);
-        }
+        if(local&&local.length>0) await syncTasksToSupabase(local);
       }
       setStorageLoaded(true);
-    }).catch(()=>{
-      clearTimeout(hardTimeout);
-      loadFromLocal();
-      setStorageLoaded(true);
-    });
-    // Realtime subscription
-    const channel=_sb.channel("tasks-realtime")
+    }).catch(()=>{clearTimeout(hardTimeout);loadFromLocal();setStorageLoaded(true);});
+    // Realtime
+    const channel=_sb.channel("tasks-rt")
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
         if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
           const t={...payload.new.data,id:payload.new.id};
-          setGlobalTasksRaw(prev=>{
-            const exists=prev.find(x=>x.id===t.id);
-            return exists?prev.map(x=>x.id===t.id?t:x):[...prev,t];
-          });
+          setGlobalTasksRaw(prev=>prev.find(x=>x.id===t.id)?prev.map(x=>x.id===t.id?t:x):[...prev,t]);
         }
-        if(payload.eventType==="DELETE"){
-          setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
-        }
-      })
-      .subscribe();
+        if(payload.eventType==="DELETE")setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
+      }).subscribe();
     return()=>_sb.removeChannel(channel);
-  },[]);
+  },[authState]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
   useEffect(()=>{
