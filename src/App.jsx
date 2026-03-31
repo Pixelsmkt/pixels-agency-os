@@ -1747,6 +1747,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       if(t.id!==id)return t;
       const fromIdx=cols.findIndex(c=>c.id===t.status);
       const toIdx=cols.findIndex(c=>c.id===toColId);
+      // Bloquear arraste de Copys para Demanda sem aprovacao
+      if(t.status==="demanda"&&toColId==="recebida"){
+        alert("Esta copy precisa ser aprovada no menu \"Aprovações\" antes de virar Demanda.");
+        return t;
+      }
       // Enforce one-column-at-a-time (allow any direction but only ±1)
       if(Math.abs(toIdx-fromIdx)>1){
         const direction=toIdx>fromIdx?"avançar":"voltar";
@@ -17909,37 +17914,39 @@ export default function AgencyOS(){
   const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
   const myPerms=getPerms(CURRENT_USER.id);
 
-  // ── Load on mount ──
+  // ── Load tasks from Supabase + Realtime sync ──
   useEffect(()=>{
-    try{
-      const saved=localStorage.getItem("pixels-tasks-v3");
-      if(saved){
-        const parsed=JSON.parse(saved);
-        if(Array.isArray(parsed)&&parsed.length>0){
-          // Restore file URLs from separate storage
-          const restored=parsed.map(t=>{
-            try{
-              const fs=localStorage.getItem("pixels-files-"+t.id);
-              if(fs){
-                const savedFiles=JSON.parse(fs);
-                if(Array.isArray(savedFiles)&&savedFiles.length>0){
-                  return {...t,files:savedFiles};
-                }
-              }
-            }catch(e){}
-            return t;
-          });
-          setGlobalTasksRaw(restored);
-        }
+    // Load initial tasks
+    _sb.from("tasks").select("*").then(({data,error})=>{
+      if(!error&&data&&data.length>0){
+        const parsed=data.map(row=>({...row.data,id:row.id}));
+        setGlobalTasksRaw(parsed);
+      }else{
+        // fallback: load from localStorage if Supabase empty
+        try{
+          const saved=localStorage.getItem("pixels-tasks-v3");
+          if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0)setGlobalTasksRaw(parsed);}
+        }catch(e){}
       }
-    }catch(e){}
-    setStorageLoaded(true);
+      setStorageLoaded(true);
+    });
+    // Realtime subscription
+    const channel=_sb.channel("tasks-realtime")
+      .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
+        if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
+          const t={...payload.new.data,id:payload.new.id};
+          setGlobalTasksRaw(prev=>{
+            const exists=prev.find(x=>x.id===t.id);
+            return exists?prev.map(x=>x.id===t.id?t:x):[...prev,t];
+          });
+        }
+        if(payload.eventType==="DELETE"){
+          setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
+        }
+      })
+      .subscribe();
+    return()=>_sb.removeChannel(channel);
   },[]);
-
-  // ── Save tasks on every change ──
-  useEffect(()=>{
-    try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(globalTasks));}catch(e){}
-  },[globalTasks]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
   useEffect(()=>{
@@ -17977,6 +17984,17 @@ export default function AgencyOS(){
   const setGlobalTasks=(updater)=>{
     setGlobalTasksRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
+      // Sync changed tasks to Supabase
+      const changed=next.filter(t=>{
+        const old=prev.find(p=>p.id===t.id);
+        return !old||JSON.stringify(old)!==JSON.stringify(t);
+      });
+      changed.forEach(t=>{
+        const {id,...data}=t;
+        _sb.from("tasks").upsert({id,data}).then(({error})=>{
+          if(error)console.warn("Supabase save error:",error);
+        });
+      });
 
       // Save files separately per card (immediate, 100ms debounce per card)
       next.forEach(t=>{
