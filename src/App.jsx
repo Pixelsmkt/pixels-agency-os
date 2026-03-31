@@ -17778,7 +17778,7 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
 const _sb = __createSupabaseClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
-  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}
+  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage,storageKey:"pixels-sb-auth"}}
 );
 
 function LoginScreen({onLoginCollaborator, onLoginClient}){
@@ -17855,31 +17855,22 @@ function LoginScreen({onLoginCollaborator, onLoginClient}){
 }
 
 export default function AgencyOS(){
-  // ── AUTH STATE ──
-  const [authState,setAuthState]=useState("loading"); // "loading"|"login"|"app"|"portal"
-  const [currentProfile,setCurrentProfile]=useState(null); // perfil do Supabase
-  const [clientPortalData,setClientPortalData]=useState(null); // para clientes
+  // ── AUTH STATE — inicializa do cache síncrono para evitar "Carregando..." no F5 ──
+  const PROFILE_CACHE_KEY="pixels-profile-cache";
 
-  // Verificar sessão ao montar
+  // Lê cache síncrono antes de qualquer chamada ao Supabase
+  const _getCachedProfile=()=>{
+    try{const r=localStorage.getItem(PROFILE_CACHE_KEY);return r?JSON.parse(r):null;}catch(e){return null;}
+  };
+  const _cachedProfile=_getCachedProfile();
+  const _initState=_cachedProfile?(_cachedProfile.user_type==="client"?"portal":"app"):"loading";
+
+  const [authState,setAuthState]=useState(_initState);
+  const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
+  const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
+
+  // Verificar sessão ao montar — valida o cache e escuta mudanças
   useEffect(()=>{
-    const PROFILE_CACHE_KEY="pixels-profile-cache";
-
-    // Aplica perfil do cache instantaneamente (sem rede)
-    const applyFromCache=(userId)=>{
-      try{
-        const raw=localStorage.getItem(PROFILE_CACHE_KEY);
-        if(raw){
-          const p=JSON.parse(raw);
-          if(p&&p.id===userId){
-            if(p.user_type==="client"){setClientPortalData(p);setAuthState("portal");}
-            else{setCurrentProfile(p);setAuthState("app");}
-            return true;
-          }
-        }
-      }catch(e){}
-      return false;
-    };
-
     // Busca perfil do Supabase e atualiza cache (background)
     const refreshProfile=async(userId)=>{
       try{
@@ -17888,35 +17879,36 @@ export default function AgencyOS(){
           localStorage.setItem(PROFILE_CACHE_KEY,JSON.stringify(profile));
           if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
           else{setCurrentProfile(profile);setAuthState("app");}
+        }else{
+          // Perfil não existe mais — limpa tudo
+          localStorage.removeItem(PROFILE_CACHE_KEY);
+          setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
         }
-      }catch(e){console.warn("refreshProfile error:",e);}
+      }catch(e){
+        console.warn("refreshProfile error:",e);
+        // Se falhou mas temos cache, mantém o que está na tela
+        if(!_getCachedProfile()) setAuthState("login");
+      }
     };
 
-    const applyProfile=async(userId)=>{
-      const hadCache=applyFromCache(userId); // instantâneo — sem rede
-      if(!hadCache) setAuthState("loading"); // só mostra loading se não tem cache
-      await refreshProfile(userId); // atualiza em background
-    };
+    // Timeout de segurança: se onAuthStateChange não disparar em 8s e não há cache, vai para login
+    const fallbackTimer=setTimeout(()=>{
+      if(!_getCachedProfile()) setAuthState("login");
+    },8000);
 
-    // Listener principal
     const {data:{subscription}}=_sb.auth.onAuthStateChange(async(event,session)=>{
-      if(event==="SIGNED_OUT"||(!session&&event==="INITIAL_SESSION")){
+      clearTimeout(fallbackTimer);
+      if(event==="SIGNED_OUT"||(!session&&(event==="INITIAL_SESSION"||event==="TOKEN_REFRESHED"))){
         localStorage.removeItem(PROFILE_CACHE_KEY);
         setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
         return;
       }
       if(session){
-        await applyProfile(session.user.id);
+        await refreshProfile(session.user.id);
       }
     });
 
-    // Fallback: getSession direto caso onAuthStateChange demore
-    _sb.auth.getSession().then(({data:{session}})=>{
-      if(!session){setAuthState("login");}
-      // se tem sessão, onAuthStateChange já vai disparar
-    }).catch(()=>{setAuthState("login");});
-
-    return()=>subscription.unsubscribe();
+    return()=>{clearTimeout(fallbackTimer);subscription.unsubscribe();};
   },[]);
 
   // Define CURRENT_USER dinamicamente baseado no perfil logado
