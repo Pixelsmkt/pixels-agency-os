@@ -17888,12 +17888,6 @@ export default function AgencyOS(){
     }
   },[currentProfile]);
 
-  // Reset storageLoaded quando entra no app para forcar reload das tasks
-  useEffect(()=>{
-    if(authState==="app") setStorageLoaded(false);
-    else setStorageLoaded(true); // login/loading nao precisa esperar tasks
-  },[authState]);
-
   // Sobrescreve CURRENT_USER com o usuario logado
   // eslint-disable-next-line no-shadow
   const CURRENT_USER=TEAM.find(u=>u.id===loggedUser)||TEAM[0];
@@ -17957,10 +17951,14 @@ export default function AgencyOS(){
     }catch(e){console.warn("syncTasksToSupabase:",e);}
   };
 
-  // ── Load tasks from Supabase + Realtime sync ──
-  // Só carrega quando o usuario estiver autenticado (authState === 'app')
+  // ── Load tasks do Supabase — so roda quando autenticado ──
   useEffect(()=>{
-    if(authState!=="app")return;
+    if(authState!=="app"){
+      // Nao autenticado: marca como carregado para nao travar
+      setStorageLoaded(true);
+      return;
+    }
+    setStorageLoaded(false);
     const loadFromLocal=()=>{
       try{
         const saved=localStorage.getItem("pixels-tasks-v3");
@@ -17968,7 +17966,6 @@ export default function AgencyOS(){
       }catch(e){}
       return null;
     };
-    // Hard timeout: 5s max
     const hardTimeout=setTimeout(()=>{loadFromLocal();setStorageLoaded(true);},5000);
     _sb.from("tasks").select("*").then(async({data,error})=>{
       clearTimeout(hardTimeout);
@@ -17982,12 +17979,17 @@ export default function AgencyOS(){
       }
       setStorageLoaded(true);
     }).catch(()=>{clearTimeout(hardTimeout);loadFromLocal();setStorageLoaded(true);});
-    // Realtime
-    const channel=_sb.channel("tasks-rt")
+    // Realtime — ignora mudancas feitas pelo proprio usuario (evita duplicatas)
+    const myChannel="tasks-rt-"+Date.now();
+    const channel=_sb.channel(myChannel)
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
         if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
           const t={...payload.new.data,id:payload.new.id};
-          setGlobalTasksRaw(prev=>prev.find(x=>x.id===t.id)?prev.map(x=>x.id===t.id?t:x):[...prev,t]);
+          setGlobalTasksRaw(prev=>{
+            const exists=prev.find(x=>x.id===t.id);
+            if(exists)return prev.map(x=>x.id===t.id?t:x);
+            return [...prev,t];
+          });
         }
         if(payload.eventType==="DELETE")setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
       }).subscribe();
