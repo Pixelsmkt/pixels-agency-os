@@ -1617,6 +1617,44 @@ function ScanModal({tasks,onClose,onFilter}){
   </div>);
 }
 
+/* ─── QUICK CREATE — seletor rápido de responsável ─── */
+function QuickCreateBody({onConfirm,onCancel}){
+  const [title,setTitle]=useState("Nova Demanda");
+  const [selectedId,setSelectedId]=useState(TEAM[0].id);
+  const colabs=TEAM.filter(u=>u.level>=2); // colaboradores (não sócios)
+  return <div>
+    <div style={{marginBottom:14}}>
+      <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Título</div>
+      <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&selectedId)onConfirm(selectedId,title);}}
+        style={{width:"100%",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
+        autoFocus/>
+    </div>
+    <div style={{marginBottom:18}}>
+      <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Responsável</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {TEAM.map(u=>(
+          <div key={u.id} onClick={()=>setSelectedId(u.id)}
+            style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,border:`2px solid ${selectedId===u.id?u.color:C.b1}`,background:selectedId===u.id?u.color+"18":C.s1,cursor:"pointer",transition:"all .15s"}}>
+            <div style={{width:30,height:30,borderRadius:9,background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:13,flexShrink:0}}>{u.av}</div>
+            <div>
+              <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{u.name}</div>
+              <div style={{color:C.ts,fontSize:11}}>{u.role}</div>
+            </div>
+            {selectedId===u.id&&<div style={{marginLeft:"auto",color:u.color,fontWeight:800}}>✓</div>}
+          </div>
+        ))}
+      </div>
+    </div>
+    <div style={{display:"flex",gap:8}}>
+      <button onClick={onCancel} style={{flex:1,background:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:13}}>Cancelar</button>
+      <button onClick={()=>onConfirm(selectedId,title)} disabled={!selectedId||!title.trim()}
+        style={{flex:2,background:selectedId?`linear-gradient(135deg,${TEAM.find(u=>u.id===selectedId)?.color||C.a},${C.aD})`:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:"#fff",cursor:"pointer",fontWeight:800,fontSize:13}}>
+        Criar Demanda
+      </button>
+    </div>
+  </div>;
+}
+
 /* ─── PAGE: DEMANDAS ─────────────────────── */
 function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, notifs, setNotifs, effectiveUser}){
   const [localTasks,setLocalTasks]=useState(TASKS_INIT);
@@ -1626,6 +1664,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [drag,setDrag]=useState(null);
   const [over,setOver]=useState(null);
   const [openCard,setOpenCard]=useState(null);
+  const [quickCreate,setQuickCreate]=useState(null); // {colId} — seletor rápido
   const [viewMode,setViewMode]=useState("cartao");
   const [filterUser,setFilterUser]=useState("todos");
   const [filterSector,setFilterSector]=useState("todos_setores");
@@ -1644,12 +1683,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [newColColor,setNewColColor]=useState("#a140ff");
 
   // Helper: create new task + fire notification
-  const addNewTask=(colId,extraProps={})=>{
+  const createTask=(colId,assigneeId,titleStr,extraProps={})=>{
     const now=new Date();
     const nowFmt=now.toLocaleDateString("pt-BR")+` às ${now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`;
+    const respId=assigneeId||activeUserId;
     const newTask={
-      id:mkId(),title:"Nova Demanda",desc:"",
-      assignee:activeUserId,assignees:[activeUserId],watchers:[],
+      id:mkId(),title:titleStr||"Nova Demanda",desc:"",
+      assignee:respId,assignees:[respId],watchers:[],
       client:"",sector:"design",priority:"media",status:colId,
       startDate:now.toISOString().split("T")[0],
       deadline:new Date(Date.now()+7*86400000).toISOString().split("T")[0],
@@ -1657,21 +1697,29 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       deletedAt:null,bioterUnit:null,
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:CURRENT_USER.name,
-      timeline:[{type:"created",label:`Demanda criada por ${CURRENT_USER.name}`,atFmt:nowFmt,user:CURRENT_USER.name}],
+      timeline:[{type:"created",label:`Demanda criada por ${CURRENT_USER.name} → ${TEAM.find(u=>u.id===respId)?.name||respId}`,atFmt:nowFmt,user:CURRENT_USER.name}],
       ...extraProps
     };
     setTasks(p=>[...p,newTask]);
-    // Fire notification
     if(setNotifs){
       const col=KANBAN_COLS.find(c=>c.id===colId)||cols.find(c=>c.id===colId);
       setNotifs(p=>[{
         id:"nd-"+newTask.id,type:"demanda",icon:"📋",
         title:`Nova demanda em ${col?.label||colId}`,
-        body:`"${newTask.title}" foi criada por ${CURRENT_USER.name}`,
+        body:`"${newTask.title}" criada por ${CURRENT_USER.name} para ${TEAM.find(u=>u.id===respId)?.name||respId}`,
         read:false,at:"Agora",user:CURRENT_USER.name,category:"demanda"
       },...p].slice(0,50));
     }
     setOpenCard(newTask);
+  };
+
+  // Para sócios: abre seletor rápido. Para outros: cria direto para si mesmo
+  const addNewTask=(colId,extraProps={})=>{
+    if(CURRENT_USER.level===1){
+      setQuickCreate({colId,extraProps});
+    }else{
+      createTask(colId,activeUserId,"Nova Demanda",extraProps);
+    }
   };
 
   // myPerms via props (effectivePerms) — sócios têm tudo true via PARTNER_PERMS
@@ -1721,8 +1769,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const activeUserId=(effectiveUser||CURRENT_USER).id;
 
   const isMyTask=(t)=>{
+    // Responsável principal (assignee) sempre vê o cartão
     if(t.assignee===activeUserId)return true;
-    if(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId))return true;
+    // Co-responsáveis (assignees) só veem se o sócio adicionou explicitamente
+    // assignee[0] é o responsável principal — assignees adicionais são secundários
+    if(Array.isArray(t.assignees)&&t.assignees.length>0&&t.assignees[0]===activeUserId)return true;
     return false;
   };
 
@@ -1814,6 +1865,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   return <>
     {showPixelsIA&&<PixelsIAModal onClose={()=>setShowPixelsIA(false)} setTasks={setTasks} tasks={tasks}/>}
     {showScan&&<ScanModal tasks={tasks} onClose={()=>setShowScan(false)} onFilter={seg=>{setViewMode("lista");}}/>}
+    {quickCreate&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setQuickCreate(null)}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:20,padding:24,width:"100%",maxWidth:380,boxShadow:"0 24px 64px rgba(0,0,0,0.4)"}}>
+        <div style={{color:C.tx,fontWeight:800,fontSize:16,marginBottom:4}}>Nova Demanda</div>
+        <div style={{color:C.ts,fontSize:12,marginBottom:16}}>Selecione o responsável antes de criar</div>
+        <QuickCreateBody colId={quickCreate.colId} extraProps={quickCreate.extraProps} onConfirm={(assigneeId,title)=>{setQuickCreate(null);createTask(quickCreate.colId,assigneeId,title,quickCreate.extraProps);}} onCancel={()=>setQuickCreate(null)}/>
+      </div>
+    </div>}
     {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={effectiveUser||CURRENT_USER}/>}
     {showTrashConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
