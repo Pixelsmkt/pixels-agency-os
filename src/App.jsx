@@ -17867,6 +17867,15 @@ export default function AgencyOS(){
   window._pixelsUser = loggedTeamUser.id;
 
   const [loggedUser,setLoggedUser]=useState(loggedTeamUser.id);
+
+  // Sync loggedUser quando perfil muda apos login
+  useEffect(()=>{
+    if(currentProfile){
+      const u=TEAM.find(u=>u.id===currentProfile.team_id||u.name===currentProfile.name)||TEAM[0];
+      window._pixelsUser=u.id;
+      setLoggedUser(u.id);
+    }
+  },[currentProfile]);
   const [themeKey,setThemeKey]=useState(_themeKey);
   const [page,setPage]=useState("demandas");
   const [expanded,setExpanded]=useState({});
