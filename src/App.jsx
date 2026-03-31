@@ -17876,6 +17876,10 @@ export default function AgencyOS(){
       setLoggedUser(u.id);
     }
   },[currentProfile]);
+
+  // Sobrescreve CURRENT_USER com o usuario logado
+  // eslint-disable-next-line no-shadow
+  const CURRENT_USER=TEAM.find(u=>u.id===loggedUser)||TEAM[0];
   const [themeKey,setThemeKey]=useState(_themeKey);
   const [page,setPage]=useState("demandas");
   const [expanded,setExpanded]=useState({});
