@@ -17970,10 +17970,7 @@ export default function AgencyOS(){
   const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
   const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
   // tokenReady: true quando onAuthStateChange confirma sessão com token válido
-  const [tokenReady,setTokenReady]=useState(false);
-  // tokenReady: true quando o Supabase confirmar o token via onAuthStateChange
-  // Isso garante que o fetch de tasks sempre rode com token válido, mesmo que
-  // authState já viesse como "app" do cache (e o useEffect não re-executaria)
+  // Garante que fetch de tasks rode com token pronto, mesmo com authState do cache
   const [tokenReady,setTokenReady]=useState(false);
 
   // Verificar sessão ao montar — valida o cache e escuta mudanças
@@ -18195,8 +18192,8 @@ export default function AgencyOS(){
           applySupabaseTasks(data);
           if(!cancelled)setStorageLoaded(true);
         }else if(!error&&data&&data.length===0){
-          // Supabase retornou vazio — só sobe tasks locais se tokenReady (token confirmado)
-          if(_tokenConfirmed.current){
+          // Supabase retornou vazio — só sobe tasks locais se token confirmado
+          if(tokenReady){
             try{
               const s=localStorage.getItem("pixels-tasks-v3");
               if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
