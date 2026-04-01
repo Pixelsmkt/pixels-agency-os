@@ -1,4 +1,5 @@
-// App.jsx — Gerado por juntar.py
+// App.jsx — Gerado automaticamente por juntar.py
+// NAO EDITE ESTE ARQUIVO DIRETAMENTE
 import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
 
 
@@ -449,6 +450,7 @@ const mkTimelineEntry=(fromId,toId,cols)=>{
     user:CURRENT_USER?.name||"Sistema",
   };
 };
+
 
 
 
@@ -1002,6 +1004,7 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
 const LISTA_ORDER = ["publicado","agendado","aprovado","avaliacao","execucao","recebida","demanda","pausado"];
 
 /* ─── LISTA VIEW (reusável, sem useState em .map()) ─────── */
+
 
 
 // ======= 04_demandas.jsx =======
@@ -1682,7 +1685,25 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [newColLabel,setNewColLabel]=useState("");
   const [newColColor,setNewColColor]=useState("#a140ff");
 
-  // Helper: create new task + fire notification
+  // ── Usuário ativo — sempre usa effectiveUser (prop do AgencyOS) ──
+  const activeUser = effectiveUser || CURRENT_USER;
+  const activeUserId = activeUser.id;
+  const activeUserName = activeUser.name;
+
+  // ── myPerms — usa perms prop (effectivePerms do AgencyOS) ──
+  // Fallback: ACCESS_STORE do usuário ativo (nunca DEFAULT_PERMS puro)
+  const myPerms=perms||(ACCESS_STORE[activeUserId]?{...DEFAULT_PERMS,...ACCESS_STORE[activeUserId]}:DEFAULT_PERMS);
+
+  const canPixelsIA   = myPerms.pixelsIA;
+  const canEscanear   = myPerms.escanear;
+  const canDelete     = myPerms.excluirDemanda;
+  const canCreate     = myPerms.criarDemanda;
+  const canEdit       = myPerms.editarDemanda;
+  const canDrag       = myPerms.arrastarCards;
+  const canNewCol     = myPerms.novaColuna;
+  const isLevel1      = activeUser.level===1;
+
+  // Helper: cria nova task com responsável correto
   const createTask=(colId,assigneeId,titleStr,extraProps={})=>{
     const now=new Date();
     const nowFmt=now.toLocaleDateString("pt-BR")+` às ${now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`;
@@ -1696,8 +1717,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
       deletedAt:null,bioterUnit:null,
       colEnteredAt:now.toISOString(),
-      createdAt:nowFmt,createdBy:CURRENT_USER.name,
-      timeline:[{type:"created",label:`Demanda criada por ${CURRENT_USER.name} → ${TEAM.find(u=>u.id===respId)?.name||respId}`,atFmt:nowFmt,user:CURRENT_USER.name}],
+      createdAt:nowFmt,createdBy:activeUserName,
+      timeline:[{type:"created",label:`Demanda criada por ${activeUserName} → ${TEAM.find(u=>u.id===respId)?.name||respId}`,atFmt:nowFmt,user:activeUserName}],
       ...extraProps
     };
     setTasks(p=>[...p,newTask]);
@@ -1706,34 +1727,21 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       setNotifs(p=>[{
         id:"nd-"+newTask.id,type:"demanda",icon:"📋",
         title:`Nova demanda em ${col?.label||colId}`,
-        body:`"${newTask.title}" criada por ${CURRENT_USER.name} para ${TEAM.find(u=>u.id===respId)?.name||respId}`,
-        read:false,at:"Agora",user:CURRENT_USER.name,category:"demanda"
+        body:`"${newTask.title}" criada por ${activeUserName} para ${TEAM.find(u=>u.id===respId)?.name||respId}`,
+        read:false,at:"Agora",user:activeUserName,category:"demanda"
       },...p].slice(0,50));
     }
     setOpenCard(newTask);
   };
 
-  // Para sócios: abre seletor rápido. Para outros: cria direto para si mesmo
+  // Sócios: abre seletor de responsável. Colaboradores: cria direto para si
   const addNewTask=(colId,extraProps={})=>{
-    if(CURRENT_USER.level===1){
+    if(activeUser.level===1){
       setQuickCreate({colId,extraProps});
     }else{
       createTask(colId,activeUserId,"Nova Demanda",extraProps);
     }
   };
-
-  // myPerms via props (effectivePerms) — sócios têm tudo true via PARTNER_PERMS
-  // Usa ACCESS_STORE como fallback — mais completo que DEFAULT_PERMS puro
-  const myPerms=perms||(ACCESS_STORE[CURRENT_USER.id]?{...DEFAULT_PERMS,...ACCESS_STORE[CURRENT_USER.id]}:DEFAULT_PERMS);
-
-  const canPixelsIA   = myPerms.pixelsIA;
-  const canEscanear   = myPerms.escanear;
-  const canDelete     = myPerms.excluirDemanda;   // excluir cartao
-  const canCreate     = myPerms.criarDemanda;      // criar cartao
-  const canEdit       = myPerms.editarDemanda;     // editar cartao
-  const canDrag       = myPerms.arrastarCards;     // mover entre colunas
-  const canNewCol     = myPerms.novaColuna;        // criar/excluir coluna
-  const isLevel1      = (effectiveUser||CURRENT_USER).level===1;   // renomear colunas (só sócios)
 
   const addCol=()=>{
     if(!newColLabel.trim())return;
@@ -1767,17 +1775,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     publicado: !!myPerms.colPublicado,
     pausado:   !!myPerms.colPausado,
   };
-  // isAdmin: usa effectiveUser (prop correta) — CURRENT_USER global pode ser stale
-  const isAdmin=myPerms.verTodosKanban||(effectiveUser||CURRENT_USER).level===1;
-
-  const activeUserId=(effectiveUser||CURRENT_USER).id;
+  // isAdmin: sócios e quem tem verTodosKanban veem tudo
+  const isAdmin=myPerms.verTodosKanban||activeUser.level===1;
 
   const isMyTask=(t)=>{
-    // Responsável principal (assignee) sempre vê o cartão
     if(t.assignee===activeUserId)return true;
-    // Co-responsáveis (assignees) só veem se o sócio adicionou explicitamente
-    // assignee[0] é o responsável principal — assignees adicionais são secundários
-    if(Array.isArray(t.assignees)&&t.assignees.length>0&&t.assignees[0]===activeUserId)return true;
+    if(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId))return true;
     return false;
   };
 
@@ -1919,7 +1922,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Lixeira</button>}
           {myPerms.criarDemanda&&<button onClick={()=>{
             if(myPerms.novaColuna&&viewMode==="cartao"){setShowNewCol(true);}
-            else{setTasks(p=>[...p,{id:mkId(),title:"Nova Demanda",desc:"",assignee:activeUserId,client:"",sector:"design",priority:"media",status:"demanda",startDate:new Date().toISOString().split("T")[0],deadline:new Date(Date.now()+7*86400000).toISOString().split("T")[0],completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,deletedAt:null,bioterUnit:null}]);}
+            else{addNewTask("demanda");}
           }}
             style={{background:`linear-gradient(135deg,${C.a},${C.aD})`,color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:`0 4px 14px ${C.a}40`}}>
             {myPerms.novaColuna&&viewMode==="cartao"?"＋ Nova Coluna":"+ Nova"}
@@ -2531,6 +2534,7 @@ function PageCalendarioPublicacoes({isMob, tasks}){
     </div>
   );
 }
+
 // ======= 11_cardmodal.jsx =======
 function RichToolbar({taRef,onChange}){
   const btn=(icon,before,after,title)=>(
@@ -4502,8 +4506,8 @@ function MindMapEditor({clientId,onBack}){
 
 
 
-// ======= 01_dashboard.jsx =======
 
+// ======= 01_dashboard.jsx =======
 function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks}){
   const allTasks=propTasks||TASKS_INIT;
   const mrr=CLIENTS.reduce((a,c)=>a+c.contract,0);
@@ -5082,6 +5086,7 @@ const NoPerm=()=><div style={{display:"flex",flexDirection:"column",alignItems:"
   <div style={{color:C.tx,fontWeight:700,fontSize:16}}>Sem acesso</div>
   <div style={{color:C.ts,fontSize:13,textAlign:"center",maxWidth:300}}>Você não tem permissão para ver esta seção. Peça ao Vinicius ou Gustavo para liberar o acesso.</div>
 </div>;
+
 
 
 // ======= 09_acessos.jsx =======
@@ -5940,8 +5945,8 @@ function PageAcessos({isMob,livePerms,setLivePerms,onViewAs,tasks}){
 
 
 
-// ======= 05_chat.jsx =======
 
+// ======= 05_chat.jsx =======
 /* ─────────────────────────────────────────────────────────
    CHAT — Features:
    • /demandas  → picker de cartões com busca → card linkado
@@ -6641,6 +6646,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
   );
 }
 
+
 // ======= 06_aprovacoes.jsx =======
 function PublicacaoEditModal({task, onClose, onReject}){
   // All images from finalMedia + file attachments
@@ -7170,6 +7176,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 }
 
 
+
 // ======= 07_notificacoes.jsx =======
 function PageNotificacoes({isMob, notifs, setNotifs}){
   const [expanded,setExpanded]=useState({}); // which panels show "ver mais"
@@ -7323,6 +7330,7 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
     </div>
   </div>;
 }
+
 
 
 // ======= 08_financeiro.jsx =======
@@ -7482,6 +7490,7 @@ function PageFinanceiro({isMob}){
     </Card>}
   </div>;
 }
+
 
 
 // ======= 10_interno.jsx =======
@@ -9019,6 +9028,7 @@ const NAV=[
 
 
 
+
 // ======= 13_novidades.jsx =======
 /* ─── SPRINT SEMANAL ─────────────────────── */
 function PageSprint({isMob, tasks, setTasks}){
@@ -10485,6 +10495,7 @@ function PageCarreira({isMob}){
 
 
 
+
 // ======= 14_portal.jsx =======
 /* ─────────────────────────────────────────────────────────
    PORTAL DO CLIENTE — Features:
@@ -11150,6 +11161,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab}){
   </div>);
 }
 
+
 // ======= 15_contratos.jsx =======
 /* ─── CONTRATOS & LTV ────────────────────── */
 function PageContratos({isMob, tasks}){
@@ -11539,7 +11551,7 @@ function PageCapacidade({isMob, tasks}){
         <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,width:"100%",maxWidth:680,border:"1px solid "+C.b1,boxShadow:"0 24px 80px rgba(0,0,0,0.3)"}}>
           <div style={{padding:"20px 24px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{color:C.tx,fontWeight:900,fontSize:18}}>✏️ Editar Checklist de Onboarding</div>
+              <div style={{color:C.tx,fontWeight:900,fontSize:18}}>✏ Editar Checklist de Onboarding</div>
               <div style={{color:C.td,fontSize:12,marginTop:2}}>Este template é aplicado a todos os clientes novos</div>
             </div>
             <div style={{display:"flex",gap:8}}>
@@ -11615,7 +11627,7 @@ function PageCapacidade({isMob, tasks}){
                 {/* Ações */}
                 {(!editStep||editStep.idx!==i)&&<div style={{display:"flex",gap:4,flexShrink:0}}>
                   <button onClick={()=>setEditStep({idx:i,step:{...step}})}
-                    style={{background:"none",border:"1px solid "+C.b1,borderRadius:7,padding:"4px 9px",color:C.ts,fontSize:11,cursor:"pointer"}}>✏️</button>
+                    style={{background:"none",border:"1px solid "+C.b1,borderRadius:7,padding:"4px 9px",color:C.ts,fontSize:11,cursor:"pointer"}}>✏</button>
                   <button onClick={()=>{if(onbSteps.length>1)saveOnbSteps(onbSteps.filter((_,j)=>j!==i));}}
                     style={{background:"none",border:"1px solid "+C.rd+"44",borderRadius:7,padding:"4px 9px",color:C.rd,fontSize:11,cursor:"pointer"}}>✕</button>
                 </div>}
@@ -11680,7 +11692,7 @@ function PageCapacidade({isMob, tasks}){
         </div>
         <button onClick={()=>setEditingTemplate(true)}
           style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"8px 16px",color:C.ts,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-          ✏️ Editar checklist
+          ✏ Editar checklist
         </button>
       </div>
 
@@ -11755,6 +11767,7 @@ function PageCapacidade({isMob, tasks}){
     </div>)}
   </div>);
 }
+
 
 
 
@@ -12171,6 +12184,7 @@ function PageIAPixels({isMob, tasks}){
     </div>)}
   </div>);
 }
+
 
 
 
@@ -13496,7 +13510,7 @@ function CChecklistOnboarding({cl}){
               style={{background:"none",border:"none",color:C.b2,cursor:"pointer",fontSize:12,padding:"2px 5px",borderRadius:5,lineHeight:1}}
               onMouseEnter={e=>e.currentTarget.style.color=C.ts}
               onMouseLeave={e=>e.currentTarget.style.color=C.b2}
-              title="Editar">✏️</button>
+              title="Editar">✏</button>
             <button onClick={()=>removeItem(item.id)}
               style={{background:"none",border:"none",color:C.b2,cursor:"pointer",fontSize:13,padding:"2px 5px",borderRadius:5,lineHeight:1}}
               onMouseEnter={e=>e.currentTarget.style.color=C.rd}
@@ -17845,8 +17859,8 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
 }
 
 
+
 // ======= 12_estrutura.jsx =======
-// ── Supabase client
 const _sb = __createSupabaseClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
