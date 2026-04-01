@@ -1663,10 +1663,21 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [localTasks,setLocalTasks]=useState(TASKS_INIT);
   const tasks = propTasks || localTasks;
   const setTasks = propSetTasks || setLocalTasks;
-  const [trash,setTrash]=useState([]);
+  // trash derivado das tasks — sempre sincronizado com Supabase/realtime
+  const trash = (tasks||[]).filter(t=>t.deletedAt);
   const [drag,setDrag]=useState(null);
   const [over,setOver]=useState(null);
   const [openCard,setOpenCard]=useState(null);
+  // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
+  const _openCardId=useRef(null);
+  useEffect(()=>{_openCardId.current=openCard?.id||null;},[openCard]);
+  useEffect(()=>{
+    if(!_openCardId.current)return;
+    const updated=(tasks||[]).find(t=>t.id===_openCardId.current);
+    if(updated&&JSON.stringify(updated)!==JSON.stringify(openCard)){
+      setOpenCard(updated);
+    }
+  },[tasks]);
   const [quickCreate,setQuickCreate]=useState(null); // {colId} — seletor rápido
   const [viewMode,setViewMode]=useState("cartao");
   const [filterUser,setFilterUser]=useState("todos");
@@ -1837,15 +1848,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
 
   const confirmDelete=id=>{
-    const t=tasks.find(x=>x.id===id);
-    if(t){setTrash(p=>[...p,{...t,deletedAt:new Date().toISOString()}]);}
     setTasks(p=>p.map(x=>x.id===id?{...x,deletedAt:new Date().toISOString()}:x));
     setShowTrashConfirm(null);
   };
 
   const restoreTask=id=>{
     setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:null}:t));
-    setTrash(p=>p.filter(t=>t.id!==id));
   };
 
   const trashDaysLeft=t=>{
@@ -1881,7 +1889,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         <QuickCreateBody colId={quickCreate.colId} extraProps={quickCreate.extraProps} onConfirm={(assigneeId,title)=>{setQuickCreate(null);createTask(quickCreate.colId,assigneeId,title,quickCreate.extraProps);}} onCancel={()=>setQuickCreate(null)}/>
       </div>
     </div>}
-    {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={effectiveUser||CURRENT_USER}/>}
+    {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={effectiveUser||CURRENT_USER} canDelete={canDelete} onTrash={id=>{setOpenCard(null);setShowTrashConfirm(id);}}/>}
     {showTrashConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:40,marginBottom:12}}>🗑</div>
@@ -1920,6 +1928,23 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             ))}
           </div>
           {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Lixeira</button>}
+          {/* Botão de refresh manual — sincroniza tasks do Supabase sem reload */}
+          <button onClick={()=>{
+            const sb=window._sb||null;
+            if(!sb){window.location.reload();return;}
+            sb.from("tasks").select("*").then(({data,error})=>{
+              if(!error&&data&&data.length>0){
+                const parsed=data.map(row=>({...row.data,id:row.id}));
+                setTasks(parsed);
+                try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
+              }
+            });
+          }} title="Sincronizar agora"
+            style={{background:C.b1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:"pointer",color:C.ts,transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a;}}
+            onMouseLeave={e=>{e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+            ↻
+          </button>
           {myPerms.criarDemanda&&<button onClick={()=>{
             if(myPerms.novaColuna&&viewMode==="cartao"){setShowNewCol(true);}
             else{addNewTask("demanda");}
@@ -2283,6 +2308,16 @@ function PageCalendarioPublicacoes({isMob, tasks}){
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
+  // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
+  const _openCardId=useRef(null);
+  useEffect(()=>{_openCardId.current=openCard?.id||null;},[openCard]);
+  useEffect(()=>{
+    if(!_openCardId.current)return;
+    const updated=(tasks||[]).find(t=>t.id===_openCardId.current);
+    if(updated&&JSON.stringify(updated)!==JSON.stringify(openCard)){
+      setOpenCard(updated);
+    }
+  },[tasks]);
 
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -2610,7 +2645,7 @@ const isImg = a => a && a.type && a.type.startsWith("image/");
 const isVid = a => a && a.type && a.type.startsWith("video/");
 const isAud = a => a && a.type && (a.type.startsWith("audio/") || (a.name && a.name.endsWith(".webm")));
 
-function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms}){
+function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms,canDelete,onTrash}){
   const user=currentUser||CURRENT_USER;
   const col=KANBAN_COLS.find(c=>c.id===task.status);
   const [title,setTitle]=useState(task.title||"");
@@ -2926,6 +2961,12 @@ function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms}){
             {/* Salvar + Demanda Concluída + Enviar p/ Aprovação + Drive empilhados */}
             <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"stretch"}}>
               {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>Salvar</button>}
+              {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
+                style={{background:"#fff0f0",color:"#e53e3e",border:"1px solid #fecaca",borderRadius:10,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#fff0f0";}}>
+                🗑 Lixeira
+              </button>}
               {/* Demanda Concluida — execucao only */}
               {canEdit&&task.status==="execucao"&&<button
                 onClick={()=>setConclusionStep(1)}
@@ -17881,6 +17922,8 @@ const _sb = __createSupabaseClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY,
   {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage,storageKey:"pixels-sb-auth"}}
 );
+// Expõe _sb globalmente para uso no botão de refresh manual do Kanban
+window._sb = _sb;
 
 function LoginScreen({onLoginCollaborator, onLoginClient}){
   const [email,setEmail]=useState("");
@@ -18227,16 +18270,25 @@ export default function AgencyOS(){
           const incoming={...payload.new.data,id:payload.new.id};
           setGlobalTasksRaw(prev=>{
             const local=prev.find(x=>x.id===incoming.id);
+            let next;
             if(local){
               const same=JSON.stringify({...local,files:[]})=== JSON.stringify({...incoming,files:[]});
               if(same)return prev;
-              return prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||[]}:x);
+              next=prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||[]}:x);
+            }else{
+              next=[...prev,incoming];
             }
-            return [...prev,incoming];
+            // Salva no localStorage para manter todas as abas sincronizadas
+            try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
+            return next;
           });
         }
         if(payload.eventType==="DELETE"){
-          setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
+          setGlobalTasksRaw(prev=>{
+            const next=prev.filter(x=>x.id!==payload.old.id);
+            try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
+            return next;
+          });
         }
       }).subscribe((status)=>{
         if(status==="SUBSCRIBED")console.log("✅ Realtime tasks: conectado");
