@@ -18062,7 +18062,16 @@ export default function AgencyOS(){
     try{
       TEAM.forEach(u=>{
         const s=localStorage.getItem("pixels-perms-"+u.id);
-        if(s) base[u.id]={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...JSON.parse(s)};
+        if(s){
+          const saved=JSON.parse(s);
+          const merged={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...saved};
+          // Garante que não-sócios nunca tenham verTodosKanban do localStorage stale
+          // (só mantém se o ACCESS_STORE hardcoded já define como true)
+          if(u.level>1&&!ACCESS_STORE[u.id]?.verTodosKanban){
+            merged.verTodosKanban=false;
+          }
+          base[u.id]=merged;
+        }
       });
     }catch(e){}
     return base;
@@ -18095,7 +18104,7 @@ export default function AgencyOS(){
     }).catch(e=>console.warn("load perms:",e));
   },[authState]);
 
-  // Polling de permissões — garante que colaborador receba updates sem precisar recarregar
+  // Polling de permissões — garante sync em tempo real entre todos os browsers
   useEffect(()=>{
     if(authState!=="app")return;
     const pollPerms=()=>{
@@ -18104,38 +18113,52 @@ export default function AgencyOS(){
           data.forEach(profile=>{
             const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
             if(!u)return;
-            if(profile.permissions&&Object.keys(profile.permissions).length>0){
-              const perms={...DEFAULT_PERMS,...profile.permissions};
-              const current=JSON.stringify(ACCESS_STORE[u.id]||{});
-              const incoming=JSON.stringify(perms);
-              if(current!==incoming){
-                // Permissões mudaram — atualiza silenciosamente
-                ACCESS_STORE[u.id]=perms;
-                setLivePerms(p=>({...p,[u.id]:perms}));
-                try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
-                console.log("🔄 Permissões atualizadas para",u.name);
-              }
+            // Sempre usa Supabase como fonte de verdade
+            // Se Supabase tem perms salvas → usa elas; senão → usa ACCESS_STORE padrão
+            const supaPerms=profile.permissions&&Object.keys(profile.permissions).length>0
+              ?profile.permissions:null;
+            const perms=supaPerms
+              ?{...DEFAULT_PERMS,...supaPerms}
+              :{...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
+            // Limpa qualquer verTodosKanban indevido para não-sócios
+            if(u.level>1) perms.verTodosKanban=supaPerms?.verTodosKanban||ACCESS_STORE[u.id]?.verTodosKanban||false;
+            const current=JSON.stringify(livePerms[u.id]||{});
+            const incoming=JSON.stringify(perms);
+            if(current!==incoming){
+              ACCESS_STORE[u.id]=perms;
+              setLivePerms(p=>({...p,[u.id]:perms}));
+              try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
             }
           });
         }
       }).catch(()=>{});
     };
-    const interval=setInterval(pollPerms,30000); // a cada 30s
+    // Roda imediatamente e depois a cada 15s
+    pollPerms();
+    const interval=setInterval(pollPerms,15000);
     return()=>clearInterval(interval);
   },[authState]);
 
-  // Helper para salvar tasks no Supabase
-  const syncTasksToSupabase=async(tasks)=>{
+  // Helper para salvar tasks no Supabase — com retry automático
+  const syncTasksToSupabase=async(tasks,retryCount=0)=>{
     if(!tasks||tasks.length===0)return;
     try{
-      // Upsert em batch — muito mais rápido e atômico
       const rows=tasks.map(t=>{
         const {id,...rest}=t;
         return {id:String(id),data:{...rest,files:(t.files||[]).map(({url,...r})=>r)}};
       });
       const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
-      if(error)console.warn("syncTasksToSupabase error:",error);
-    }catch(e){console.warn("syncTasksToSupabase:",e);}
+      if(error){
+        console.warn("syncTasksToSupabase error:",error);
+        // Retry uma vez após 2s
+        if(retryCount===0){
+          setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
+        }
+      }
+    }catch(e){
+      console.warn("syncTasksToSupabase exception:",e);
+      if(retryCount===0) setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
+    }
   };
 
   // ── Load tasks + Realtime + Polling fallback ──
@@ -18248,18 +18271,18 @@ export default function AgencyOS(){
     setGlobalTasksRaw(prev=>{
       const next=typeof updater==="function"?updater(prev):updater;
 
-      // Detecta tarefas alteradas (ignora files na comparação para não duplicar)
+      // Detecta tarefas alteradas
       const changed=next.filter(t=>{
         const old=prev.find(p=>p.id===t.id);
         return !old||JSON.stringify({...old,files:[]})!==JSON.stringify({...t,files:[]});
       });
 
       if(changed.length>0){
-        // Sync imediato ao Supabase (sem delay — cada ms conta no realtime)
-        syncTasksToSupabase(changed).catch(()=>{});
+        // Sync imediato ao Supabase
+        syncTasksToSupabase(changed);
       }
 
-      // Save localStorage com debounce curto
+      // Salva no localStorage
       if(saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current=setTimeout(()=>{
         try{
