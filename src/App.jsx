@@ -18203,8 +18203,8 @@ export default function AgencyOS(){
         if(!cancelled) setTimeout(fetchTasks,1000);
       });
     };
-    // Pequeno delay para garantir token disponível quando authState vem do cache
-    setTimeout(fetchTasks, sessionReady?0:500);
+    // Delay para garantir token disponível quando authState vem do cache
+    setTimeout(fetchTasks, 500);
 
     // Polling a cada 10s — garante sync mesmo se realtime falhar
     const pollInterval=setInterval(()=>{
