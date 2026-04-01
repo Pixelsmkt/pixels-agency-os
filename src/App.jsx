@@ -17969,9 +17969,6 @@ export default function AgencyOS(){
   const [authState,setAuthState]=useState(_initState);
   const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
   const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
-  // sessionReady: true apenas após onAuthStateChange confirmar sessão válida
-  // Garante que o Supabase client tem o token antes de buscar tasks
-  const [sessionReady,setSessionReady]=useState(false);
 
   // Verificar sessão ao montar — valida o cache e escuta mudanças
   useEffect(()=>{
@@ -18004,14 +18001,10 @@ export default function AgencyOS(){
       clearTimeout(fallbackTimer);
       if(event==="SIGNED_OUT"||(!session&&(event==="INITIAL_SESSION"||event==="TOKEN_REFRESHED"))){
         localStorage.removeItem(PROFILE_CACHE_KEY);
-        setSessionReady(false);
         setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
         return;
       }
       if(session){
-        // Marca sessão como pronta ANTES de buscar o perfil
-        // Isso garante que o Supabase client tem o token disponível
-        setSessionReady(true);
         await refreshProfile(session.user.id);
       }
     });
@@ -18169,10 +18162,8 @@ export default function AgencyOS(){
   };
 
   // ── Load tasks + Realtime + Polling fallback ──
-  // Depende de sessionReady para garantir que o token está disponível antes de buscar
   useEffect(()=>{
     if(authState!=="app"){setStorageLoaded(true);return;}
-    if(!sessionReady){return;} // aguarda confirmação da sessão pelo onAuthStateChange
     let cancelled=false;
 
     // Aplica dados do Supabase sem piscar tela
@@ -18187,22 +18178,33 @@ export default function AgencyOS(){
     const hasCachedTasks=(()=>{try{const s=localStorage.getItem("pixels-tasks-v3");return !!(s&&JSON.parse(s)?.length>0);}catch(e){return false;}})();
     if(!hasCachedTasks) setStorageLoaded(false);
 
-    const hardTimeout=setTimeout(()=>{if(!cancelled)setStorageLoaded(true);},6000);
+    const hardTimeout=setTimeout(()=>{if(!cancelled)setStorageLoaded(true);},8000);
 
-    _sb.from("tasks").select("*").then(({data,error})=>{
-      clearTimeout(hardTimeout);
-      if(cancelled)return;
-      if(!error&&data&&data.length>0){
-        applySupabaseTasks(data);
-      }else if(!error&&data&&data.length===0){
-        // Supabase vazio — sobe dados do localStorage
-        try{
-          const s=localStorage.getItem("pixels-tasks-v3");
-          if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local).catch(()=>{});}
-        }catch(e){}
-      }
-      if(!cancelled)setStorageLoaded(true);
-    }).catch(()=>{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);});
+    const fetchTasks=()=>{
+      _sb.from("tasks").select("*").then(({data,error})=>{
+        clearTimeout(hardTimeout);
+        if(cancelled)return;
+        if(!error&&data&&data.length>0){
+          applySupabaseTasks(data);
+          if(!cancelled)setStorageLoaded(true);
+        }else if(!error&&data&&data.length===0){
+          try{
+            const s=localStorage.getItem("pixels-tasks-v3");
+            if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
+          }catch(e){}
+          if(!cancelled)setStorageLoaded(true);
+        }else{
+          // Erro ou sem dados — tenta de novo em 1s (token pode não estar pronto)
+          if(!cancelled) setTimeout(fetchTasks,1000);
+        }
+      }).catch(()=>{
+        clearTimeout(hardTimeout);
+        // Retry em 1s em caso de erro de rede/auth
+        if(!cancelled) setTimeout(fetchTasks,1000);
+      });
+    };
+    // Pequeno delay para garantir token disponível quando authState vem do cache
+    setTimeout(fetchTasks, sessionReady?0:500);
 
     // Polling a cada 10s — garante sync mesmo se realtime falhar
     const pollInterval=setInterval(()=>{
