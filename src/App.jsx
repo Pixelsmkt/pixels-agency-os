@@ -18006,6 +18006,9 @@ export default function AgencyOS(){
       }
       if(session){
         await refreshProfile(session.user.id);
+        // Token confirmado pelo Supabase — força re-fetch das tasks com token válido
+        _tokenConfirmed.current=true;
+        setTimeout(()=>{ if(typeof _triggerFetchTasks.current==="function") _triggerFetchTasks.current(); },200);
       }
     });
 
@@ -18161,6 +18164,11 @@ export default function AgencyOS(){
     }
   };
 
+  // Ref para re-disparar fetchTasks quando onAuthStateChange confirmar o token
+  const _triggerFetchTasks=useRef(null);
+  // Ref para garantir que só tentamos subir tasks locais quando o token já foi confirmado
+  const _tokenConfirmed=useRef(false);
+
   // ── Load tasks + Realtime + Polling fallback ──
   useEffect(()=>{
     if(authState!=="app"){setStorageLoaded(true);return;}
@@ -18187,11 +18195,15 @@ export default function AgencyOS(){
         if(!error&&data&&data.length>0){
           applySupabaseTasks(data);
           if(!cancelled)setStorageLoaded(true);
-        }else if(!error&&data&&data.length===0){
-          try{
-            const s=localStorage.getItem("pixels-tasks-v3");
-            if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
-          }catch(e){}
+        if(!error&&data&&data.length===0){
+          // Só sobe tasks locais se o token já foi confirmado pelo Supabase
+          // Evita falso "sem tasks" quando o Supabase retorna [] por falta de token
+          if(_tokenConfirmed.current){
+            try{
+              const s=localStorage.getItem("pixels-tasks-v3");
+              if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
+            }catch(e){}
+          }
           if(!cancelled)setStorageLoaded(true);
         }else{
           // Erro ou sem dados — tenta de novo em 1s (token pode não estar pronto)
@@ -18205,6 +18217,8 @@ export default function AgencyOS(){
     };
     // Delay para garantir token disponível quando authState vem do cache
     setTimeout(fetchTasks, 500);
+    // Expõe fetchTasks para ser chamado pelo onAuthStateChange quando o token for confirmado
+    _triggerFetchTasks.current=fetchTasks;
 
     // Polling a cada 10s — garante sync mesmo se realtime falhar
     const pollInterval=setInterval(()=>{
