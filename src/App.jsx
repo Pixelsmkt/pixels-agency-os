@@ -17969,6 +17969,12 @@ export default function AgencyOS(){
   const [authState,setAuthState]=useState(_initState);
   const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
   const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
+  // tokenReady: true quando onAuthStateChange confirma sessão com token válido
+  const [tokenReady,setTokenReady]=useState(false);
+  // tokenReady: true quando o Supabase confirmar o token via onAuthStateChange
+  // Isso garante que o fetch de tasks sempre rode com token válido, mesmo que
+  // authState já viesse como "app" do cache (e o useEffect não re-executaria)
+  const [tokenReady,setTokenReady]=useState(false);
 
   // Verificar sessão ao montar — valida o cache e escuta mudanças
   useEffect(()=>{
@@ -18001,14 +18007,12 @@ export default function AgencyOS(){
       clearTimeout(fallbackTimer);
       if(event==="SIGNED_OUT"||(!session&&(event==="INITIAL_SESSION"||event==="TOKEN_REFRESHED"))){
         localStorage.removeItem(PROFILE_CACHE_KEY);
-        setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
+        setAuthState("login");setCurrentProfile(null);setClientPortalData(null);setTokenReady(false);
         return;
       }
       if(session){
         await refreshProfile(session.user.id);
-        // Token confirmado pelo Supabase — força re-fetch das tasks com token válido
-        _tokenConfirmed.current=true;
-        setTimeout(()=>{ if(typeof _triggerFetchTasks.current==="function") _triggerFetchTasks.current(); },200);
+        setTokenReady(true);
       }
     });
 
@@ -18164,14 +18168,9 @@ export default function AgencyOS(){
     }
   };
 
-  // Ref para re-disparar fetchTasks quando onAuthStateChange confirmar o token
-  const _triggerFetchTasks=useRef(null);
-  // Ref para garantir que só tentamos subir tasks locais quando o token já foi confirmado
-  const _tokenConfirmed=useRef(false);
-
   // ── Load tasks + Realtime + Polling fallback ──
   useEffect(()=>{
-    if(authState!=="app"){setStorageLoaded(true);return;}
+    if(authState!=="app"||!tokenReady){setStorageLoaded(true);return;}
     let cancelled=false;
 
     // Aplica dados do Supabase sem piscar tela
@@ -18196,14 +18195,11 @@ export default function AgencyOS(){
           applySupabaseTasks(data);
           if(!cancelled)setStorageLoaded(true);
         if(!error&&data&&data.length===0){
-          // Só sobe tasks locais se o token já foi confirmado pelo Supabase
-          // Evita falso "sem tasks" quando o Supabase retorna [] por falta de token
-          if(_tokenConfirmed.current){
-            try{
-              const s=localStorage.getItem("pixels-tasks-v3");
-              if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
-            }catch(e){}
-          }
+          // Supabase retornou vazio com token válido — sobe tasks locais se existirem
+          try{
+            const s=localStorage.getItem("pixels-tasks-v3");
+            if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
+          }catch(e){}
           if(!cancelled)setStorageLoaded(true);
         }else{
           // Erro ou sem dados — tenta de novo em 1s (token pode não estar pronto)
@@ -18215,10 +18211,8 @@ export default function AgencyOS(){
         if(!cancelled) setTimeout(fetchTasks,1000);
       });
     };
-    // Delay para garantir token disponível quando authState vem do cache
-    setTimeout(fetchTasks, 500);
-    // Expõe fetchTasks para ser chamado pelo onAuthStateChange quando o token for confirmado
-    _triggerFetchTasks.current=fetchTasks;
+    // Delay mínimo para garantir token disponível
+    setTimeout(fetchTasks, 100);
 
     // Polling a cada 10s — garante sync mesmo se realtime falhar
     const pollInterval=setInterval(()=>{
@@ -18254,7 +18248,7 @@ export default function AgencyOS(){
       });
 
     return()=>{cancelled=true;clearTimeout(hardTimeout);clearInterval(pollInterval);_sb.removeChannel(channel);};
-  },[authState]);
+  },[authState,tokenReady]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
   useEffect(()=>{
