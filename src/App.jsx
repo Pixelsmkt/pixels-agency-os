@@ -17997,26 +17997,26 @@ export default function AgencyOS(){
     return()=>{clearTimeout(fallbackTimer);subscription.unsubscribe();};
   },[]);
 
-  // Define CURRENT_USER dinamicamente baseado no perfil logado
-  const loggedTeamUser = currentProfile
-    ? (TEAM.find(u=>u.id===currentProfile.team_id||u.name===currentProfile.name)||TEAM[0])
-    : TEAM[0];
-  window._pixelsUser = loggedTeamUser.id;
+  // ── CURRENT_USER — sempre derivado direto de currentProfile (sem estado intermediário) ──
+  // Isso evita o bug onde loggedUser inicia como "vinicius" antes do profile carregar
+  const _resolveUser=(profile)=>{
+    if(!profile) return null;
+    return TEAM.find(u=>u.id===profile.team_id||u.name===profile.name)||null;
+  };
+  const loggedTeamUser=_resolveUser(currentProfile)||TEAM[0];
+  // eslint-disable-next-line no-shadow
+  const CURRENT_USER=loggedTeamUser;
+  window._pixelsUser=CURRENT_USER.id;
 
-  const [loggedUser,setLoggedUser]=useState(loggedTeamUser.id);
-
-  // Sync loggedUser quando perfil muda apos login
+  // Mantém loggedUser sincronizado (usado em alguns lugares legados)
+  const [loggedUser,setLoggedUser]=useState(CURRENT_USER.id);
   useEffect(()=>{
-    if(currentProfile){
-      const u=TEAM.find(u=>u.id===currentProfile.team_id||u.name===currentProfile.name)||TEAM[0];
+    const u=_resolveUser(currentProfile);
+    if(u&&u.id!==loggedUser){
       window._pixelsUser=u.id;
       setLoggedUser(u.id);
     }
   },[currentProfile]);
-
-  // Sobrescreve CURRENT_USER com o usuario logado
-  // eslint-disable-next-line no-shadow
-  const CURRENT_USER=TEAM.find(u=>u.id===loggedUser)||TEAM[0];
   const [themeKey,setThemeKey]=useState(_themeKey);
   const [page,setPage]=useState("demandas");
   const [expanded,setExpanded]=useState({});
