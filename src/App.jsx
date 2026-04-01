@@ -1928,23 +1928,30 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             ))}
           </div>
           {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Lixeira</button>}
-          {/* Botão de refresh manual — sincroniza tasks do Supabase sem reload */}
-          <button onClick={()=>{
-            const sb=window._sb||null;
-            if(!sb){window.location.reload();return;}
-            sb.from("tasks").select("*").then(({data,error})=>{
-              if(!error&&data&&data.length>0){
-                const parsed=data.map(row=>({...row.data,id:row.id}));
-                setTasks(parsed);
-                try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
-              }
-            });
-          }} title="Sincronizar agora"
-            style={{background:C.b1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:"pointer",color:C.ts,transition:"all .15s"}}
-            onMouseEnter={e=>{e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a;}}
-            onMouseLeave={e=>{e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
-            ↻
-          </button>
+          {/* Botão de refresh manual */}
+          {(()=>{
+            const [syncing,setSyncing]=useState(false);
+            return <button onClick={()=>{
+              if(syncing)return;
+              setSyncing(true);
+              const sb=window._sb||null;
+              if(!sb){window.location.reload();return;}
+              sb.from("tasks").select("*").then(({data,error})=>{
+                if(!error&&data&&data.length>0){
+                  const parsed=data.map(row=>({...row.data,id:row.id}));
+                  // Usa propSetTasks para atualizar o estado global
+                  (propSetTasks||setTasks)(parsed);
+                  try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
+                }
+                setTimeout(()=>setSyncing(false),800);
+              }).catch(()=>setSyncing(false));
+            }} title="Sincronizar agora"
+              style={{background:syncing?C.a+"22":C.b1,border:`1px solid ${syncing?C.a:C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:syncing?"wait":"pointer",color:syncing?C.a:C.ts,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
+              onMouseEnter={e=>{if(!syncing){e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a;}}}
+              onMouseLeave={e=>{if(!syncing){e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}}>
+              <span style={{display:"inline-block",animation:syncing?"spin 0.8s linear infinite":"none"}}>↻</span>
+            </button>;
+          })()}
           {myPerms.criarDemanda&&<button onClick={()=>{
             if(myPerms.novaColuna&&viewMode==="cartao"){setShowNewCol(true);}
             else{addNewTask("demanda");}
@@ -18185,7 +18192,6 @@ export default function AgencyOS(){
   // Helper para salvar tasks no Supabase — com retry automático
   const syncTasksToSupabase=async(tasks,retryCount=0)=>{
     if(!tasks||tasks.length===0)return;
-    console.log("📤 Enviando para Supabase:",tasks.map(t=>t.id));
     try{
       const rows=tasks.map(t=>{
         const {id,...rest}=t;
@@ -18234,15 +18240,13 @@ export default function AgencyOS(){
           applySupabaseTasks(data);
           if(!cancelled)setStorageLoaded(true);
         }else if(!error&&data&&data.length===0){
-          if(fetchAttempt<8){
-            const delay=Math.min(fetchAttempt*500,2000);
+          if(fetchAttempt<12){
+            const delay=Math.min(fetchAttempt*300,1500);
             if(!cancelled)setTimeout(fetchTasks,delay);
           }else{
+            // Após 8 tentativas com [] do Supabase, aceita que não há tasks para este usuário
+            // NUNCA sobe tasks locais — o Supabase é a fonte de verdade
             clearTimeout(hardTimeout);
-            try{
-              const s=localStorage.getItem("pixels-tasks-v3");
-              if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
-            }catch(e){}
             if(!cancelled)setStorageLoaded(true);
           }
         }else{
@@ -18539,7 +18543,15 @@ export default function AgencyOS(){
 
   // ── Block render until storage is fully loaded ──
 
-  const handleLogout=async()=>{await _sb.auth.signOut();};
+  const handleLogout=async()=>{
+    // Limpa cache local antes de deslogar — garante sessão limpa para o próximo usuário
+    try{
+      localStorage.removeItem("pixels-tasks-v3");
+      localStorage.removeItem("pixels-profile-cache");
+      TEAM.forEach(u=>{try{localStorage.removeItem("pixels-perms-"+u.id);}catch(e){}});
+    }catch(e){}
+    await _sb.auth.signOut();
+  };
 
   // 1. Auth loading
   if(authState==="loading")return(
