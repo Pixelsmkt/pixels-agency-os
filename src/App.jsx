@@ -18089,51 +18089,60 @@ export default function AgencyOS(){
     }catch(e){console.warn("syncTasksToSupabase:",e);}
   };
 
-  // ── Load tasks do Supabase — so roda quando autenticado ──
+  // ── Load tasks + Realtime + Polling fallback ──
   useEffect(()=>{
-    if(authState!=="app"){
-      setStorageLoaded(true);
-      return;
-    }
+    if(authState!=="app"){setStorageLoaded(true);return;}
     let cancelled=false;
-    setStorageLoaded(false);
-    const loadFromLocal=()=>{
-      try{
-        const saved=localStorage.getItem("pixels-tasks-v3");
-        if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed)&&parsed.length>0){if(!cancelled)setGlobalTasksRaw(parsed);return parsed;}}
-      }catch(e){}
-      return null;
+
+    // Aplica dados do Supabase sem piscar tela
+    const applySupabaseTasks=(data)=>{
+      if(cancelled||!data||data.length===0)return;
+      const parsed=data.map(row=>({...row.data,id:row.id}));
+      setGlobalTasksRaw(parsed);
+      try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
     };
-    // Timeout de seguranca: 6s sem resposta → carrega do localStorage
-    const hardTimeout=setTimeout(()=>{if(!cancelled){loadFromLocal();setStorageLoaded(true);}},6000);
-    // Token ja garantido quando authState==="app"
-    _sb.from("tasks").select("*").then(async({data,error})=>{
+
+    // Carrega do Supabase em background — sem resetar storageLoaded se já tem cache
+    const hasCachedTasks=(()=>{try{const s=localStorage.getItem("pixels-tasks-v3");return !!(s&&JSON.parse(s)?.length>0);}catch(e){return false;}})();
+    if(!hasCachedTasks) setStorageLoaded(false);
+
+    const hardTimeout=setTimeout(()=>{if(!cancelled)setStorageLoaded(true);},6000);
+
+    _sb.from("tasks").select("*").then(({data,error})=>{
       clearTimeout(hardTimeout);
       if(cancelled)return;
       if(!error&&data&&data.length>0){
-        const parsed=data.map(row=>({...row.data,id:row.id}));
-        setGlobalTasksRaw(parsed);
-        try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
-      }else{
-        const local=loadFromLocal();
-        if(!cancelled&&local&&local.length>0) syncTasksToSupabase(local).catch(()=>{});
+        applySupabaseTasks(data);
+      }else if(!error&&data&&data.length===0){
+        // Supabase vazio — sobe dados do localStorage
+        try{
+          const s=localStorage.getItem("pixels-tasks-v3");
+          if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local).catch(()=>{});}
+        }catch(e){}
       }
       if(!cancelled)setStorageLoaded(true);
-    }).catch(()=>{clearTimeout(hardTimeout);if(!cancelled){loadFromLocal();setStorageLoaded(true);}});
-    // Realtime — escuta mudanças de OUTROS usuários
+    }).catch(()=>{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);});
+
+    // Polling a cada 10s — garante sync mesmo se realtime falhar
+    const pollInterval=setInterval(()=>{
+      if(cancelled)return;
+      _sb.from("tasks").select("*").then(({data,error})=>{
+        if(!error&&data&&data.length>0)applySupabaseTasks(data);
+      }).catch(()=>{});
+    },10000);
+
+    // Realtime — entrega instantânea
     const myChannel="tasks-rt-"+Date.now();
     const channel=_sb.channel(myChannel)
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
+        if(cancelled)return;
         if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
           const incoming={...payload.new.data,id:payload.new.id};
           setGlobalTasksRaw(prev=>{
-            // Verifica se o dado do Supabase é mais novo que o local
             const local=prev.find(x=>x.id===incoming.id);
             if(local){
-              // Se for o mesmo conteúdo, ignora para não piscar
-              const localClean=JSON.stringify({...local,files:[]});
-              const incomingClean=JSON.stringify({...incoming,files:[]});
-              if(localClean===incomingClean) return prev;
+              const same=JSON.stringify({...local,files:[]})=== JSON.stringify({...incoming,files:[]});
+              if(same)return prev;
               return prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||[]}:x);
             }
             return [...prev,incoming];
@@ -18143,10 +18152,11 @@ export default function AgencyOS(){
           setGlobalTasksRaw(prev=>prev.filter(x=>x.id!==payload.old.id));
         }
       }).subscribe((status)=>{
-        if(status==="SUBSCRIBED") console.log("Realtime tasks: conectado");
-        if(status==="CHANNEL_ERROR") console.warn("Realtime tasks: erro no canal");
+        if(status==="SUBSCRIBED")console.log("✅ Realtime tasks: conectado");
+        if(status==="CHANNEL_ERROR")console.warn("⚠ Realtime: erro — polling ativo como fallback");
       });
-    return()=>{cancelled=true;clearTimeout(hardTimeout);_sb.removeChannel(channel);};
+
+    return()=>{cancelled=true;clearTimeout(hardTimeout);clearInterval(pollInterval);_sb.removeChannel(channel);};
   },[authState]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
