@@ -18240,7 +18240,7 @@ export default function AgencyOS(){
       });
 
     return()=>{cancelled=true;clearTimeout(hardTimeout);clearInterval(pollInterval);_sb.removeChannel(channel);};
-  },[authState,sessionReady]);
+  },[authState]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
   useEffect(()=>{
