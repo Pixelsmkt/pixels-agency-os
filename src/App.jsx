@@ -17969,6 +17969,9 @@ export default function AgencyOS(){
   const [authState,setAuthState]=useState(_initState);
   const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
   const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
+  // sessionReady: true apenas após onAuthStateChange confirmar sessão válida
+  // Garante que o Supabase client tem o token antes de buscar tasks
+  const [sessionReady,setSessionReady]=useState(false);
 
   // Verificar sessão ao montar — valida o cache e escuta mudanças
   useEffect(()=>{
@@ -18001,10 +18004,14 @@ export default function AgencyOS(){
       clearTimeout(fallbackTimer);
       if(event==="SIGNED_OUT"||(!session&&(event==="INITIAL_SESSION"||event==="TOKEN_REFRESHED"))){
         localStorage.removeItem(PROFILE_CACHE_KEY);
+        setSessionReady(false);
         setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
         return;
       }
       if(session){
+        // Marca sessão como pronta ANTES de buscar o perfil
+        // Isso garante que o Supabase client tem o token disponível
+        setSessionReady(true);
         await refreshProfile(session.user.id);
       }
     });
@@ -18162,8 +18169,10 @@ export default function AgencyOS(){
   };
 
   // ── Load tasks + Realtime + Polling fallback ──
+  // Depende de sessionReady para garantir que o token está disponível antes de buscar
   useEffect(()=>{
     if(authState!=="app"){setStorageLoaded(true);return;}
+    if(!sessionReady){return;} // aguarda confirmação da sessão pelo onAuthStateChange
     let cancelled=false;
 
     // Aplica dados do Supabase sem piscar tela
@@ -18229,7 +18238,7 @@ export default function AgencyOS(){
       });
 
     return()=>{cancelled=true;clearTimeout(hardTimeout);clearInterval(pollInterval);_sb.removeChannel(channel);};
-  },[authState]);
+  },[authState,sessionReady]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
   useEffect(()=>{
