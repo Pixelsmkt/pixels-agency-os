@@ -5107,27 +5107,42 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   };
 
   const save=async()=>{
+    // 1. Atualiza memória e localStorage imediatamente
     ACCESS_STORE[user.id]={...perms};
     if(setLivePerms) setLivePerms(p=>({...p,[user.id]:{...perms}}));
     try{localStorage.setItem(`pixels-perms-${user.id}`,JSON.stringify(perms));}catch(e){}
-    // Salvar no Supabase via team_id
+
+    // 2. Salva no Supabase — busca o perfil pelo team_id para obter o UUID real
     try{
-      const {data,error}=await _sb.from("profiles").update({permissions:perms}).eq("team_id",user.id).select();
+      // Primeiro busca o UUID real do perfil pelo team_id
+      const {data:profileRow,error:findErr}=await _sb
+        .from("profiles")
+        .select("id")
+        .eq("team_id",user.id)
+        .single();
+
+      if(findErr||!profileRow){
+        console.warn("perms save: perfil não encontrado para team_id="+user.id, findErr);
+        setSaved(true);setTimeout(()=>setSaved(false),2500);
+        return;
+      }
+
+      // Atualiza pelo UUID real (sempre funciona independente de RLS por team_id)
+      const {data,error}=await _sb
+        .from("profiles")
+        .update({permissions:perms})
+        .eq("id",profileRow.id)
+        .select();
+
       if(error){
         console.warn("perms save error:",error);
       }else if(!data||data.length===0){
-        // RLS bloqueou silenciosamente — nenhuma linha atualizada
-        // Tenta pelo id do perfil diretamente como fallback
-        const {data:d2,error:e2}=await _sb.from("profiles").update({permissions:perms}).eq("id",user.supabaseId||user.id).select();
-        if(e2||!d2||d2.length===0){
-          console.warn("perms save: nenhuma linha atualizada (verifique RLS policy em profiles)");
-        }else{
-          console.log("perms saved via id fallback:",d2);
-        }
+        console.warn("perms save: atualização não aplicada — verifique RLS policy em profiles");
       }else{
-        console.log("perms saved OK:",data);
+        console.log("✅ perms saved OK para",user.name,":",Object.keys(perms).filter(k=>perms[k]).length,"permissões ativas");
       }
     }catch(e){console.warn("perms save exception:",e);}
+
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
   };
@@ -18055,24 +18070,58 @@ export default function AgencyOS(){
   const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
   const myPerms=getPerms(CURRENT_USER.id);
 
-  // Carregar permissoes do Supabase — roda quando autenticado
+  // Carregar permissoes do Supabase — Supabase é FONTE DE VERDADE
   useEffect(()=>{
     if(authState!=="app")return;
     _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
       if(!error&&data){
         data.forEach(profile=>{
           const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
-          if(u){
-            // Sempre mescla: DEFAULT < ACCESS_STORE < Supabase (se existir)
-            const supabasePerms=profile.permissions&&Object.keys(profile.permissions).length>0?profile.permissions:{};
-            const perms={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...supabasePerms};
-            ACCESS_STORE[u.id]=perms;
-            setLivePerms(p=>({...p,[u.id]:perms}));
-            try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
+          if(!u)return;
+          let perms;
+          if(profile.permissions&&Object.keys(profile.permissions).length>0){
+            // Supabase tem permissões salvas — usa como fonte de verdade completa
+            // Só adiciona chaves novas de DEFAULT que não existem (não sobrescreve valores salvos)
+            perms={...DEFAULT_PERMS,...profile.permissions};
+          }else{
+            // Sem permissões no Supabase — usa ACCESS_STORE (padrão hardcoded)
+            perms={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
           }
+          ACCESS_STORE[u.id]=perms;
+          setLivePerms(p=>({...p,[u.id]:perms}));
+          try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
         });
       }
     }).catch(e=>console.warn("load perms:",e));
+  },[authState]);
+
+  // Polling de permissões — garante que colaborador receba updates sem precisar recarregar
+  useEffect(()=>{
+    if(authState!=="app")return;
+    const pollPerms=()=>{
+      _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
+        if(!error&&data){
+          data.forEach(profile=>{
+            const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
+            if(!u)return;
+            if(profile.permissions&&Object.keys(profile.permissions).length>0){
+              const perms={...DEFAULT_PERMS,...profile.permissions};
+              const current=JSON.stringify(ACCESS_STORE[u.id]||{});
+              const incoming=JSON.stringify(perms);
+              if(current!==incoming){
+                // Permissões mudaram — atualiza silenciosamente
+                ACCESS_STORE[u.id]=perms;
+                setLivePerms(p=>({...p,[u.id]:perms}));
+                try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
+                console.log("🔄 Permissões atualizadas para",u.name);
+              }
+            }
+          });
+        }
+      }).catch(()=>{});
+    };
+    const interval=setInterval(pollPerms,30000); // a cada 30s
+    return()=>clearInterval(interval);
   },[authState]);
 
   // Helper para salvar tasks no Supabase
