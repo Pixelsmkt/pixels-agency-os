@@ -17969,9 +17969,6 @@ export default function AgencyOS(){
   const [authState,setAuthState]=useState(_initState);
   const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
   const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
-  // tokenReady: true quando onAuthStateChange confirma sessão com token válido
-  // Garante que fetch de tasks rode com token pronto, mesmo com authState do cache
-  const [tokenReady,setTokenReady]=useState(false);
 
   // Verificar sessão ao montar — valida o cache e escuta mudanças
   useEffect(()=>{
@@ -18004,12 +18001,11 @@ export default function AgencyOS(){
       clearTimeout(fallbackTimer);
       if(event==="SIGNED_OUT"||(!session&&(event==="INITIAL_SESSION"||event==="TOKEN_REFRESHED"))){
         localStorage.removeItem(PROFILE_CACHE_KEY);
-        setAuthState("login");setCurrentProfile(null);setClientPortalData(null);setTokenReady(false);
+        setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
         return;
       }
       if(session){
         await refreshProfile(session.user.id);
-        setTokenReady(true);
       }
     });
 
@@ -18167,10 +18163,10 @@ export default function AgencyOS(){
 
   // ── Load tasks + Realtime + Polling fallback ──
   useEffect(()=>{
-    if(authState!=="app"||!tokenReady){setStorageLoaded(true);return;}
+    if(authState!=="app"){setStorageLoaded(true);return;}
     let cancelled=false;
+    let fetchAttempt=0;
 
-    // Aplica dados do Supabase sem piscar tela
     const applySupabaseTasks=(data)=>{
       if(cancelled||!data||data.length===0)return;
       const parsed=data.map(row=>({...row.data,id:row.id}));
@@ -18178,41 +18174,44 @@ export default function AgencyOS(){
       try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
     };
 
-    // Carrega do Supabase em background — sem resetar storageLoaded se já tem cache
     const hasCachedTasks=(()=>{try{const s=localStorage.getItem("pixels-tasks-v3");return !!(s&&JSON.parse(s)?.length>0);}catch(e){return false;}})();
     if(!hasCachedTasks) setStorageLoaded(false);
 
-    const hardTimeout=setTimeout(()=>{if(!cancelled)setStorageLoaded(true);},8000);
+    const hardTimeout=setTimeout(()=>{if(!cancelled)setStorageLoaded(true);},12000);
 
+    // Retry até 8x: Supabase retorna [] quando token ainda não está pronto (RLS bloqueia silenciosamente)
     const fetchTasks=()=>{
+      if(cancelled)return;
+      fetchAttempt++;
       _sb.from("tasks").select("*").then(({data,error})=>{
-        clearTimeout(hardTimeout);
         if(cancelled)return;
         if(!error&&data&&data.length>0){
+          clearTimeout(hardTimeout);
           applySupabaseTasks(data);
           if(!cancelled)setStorageLoaded(true);
         }else if(!error&&data&&data.length===0){
-          // Supabase retornou vazio — só sobe tasks locais se token confirmado
-          if(tokenReady){
+          if(fetchAttempt<8){
+            const delay=Math.min(fetchAttempt*500,2000);
+            if(!cancelled)setTimeout(fetchTasks,delay);
+          }else{
+            clearTimeout(hardTimeout);
             try{
               const s=localStorage.getItem("pixels-tasks-v3");
               if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
             }catch(e){}
+            if(!cancelled)setStorageLoaded(true);
           }
-          if(!cancelled)setStorageLoaded(true);
         }else{
-          // Erro — tenta de novo em 1s (token pode não estar pronto ainda)
-          if(!cancelled) setTimeout(fetchTasks,1000);
+          if(fetchAttempt<8&&!cancelled)setTimeout(fetchTasks,1000);
+          else{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);}
         }
       }).catch(()=>{
-        clearTimeout(hardTimeout);
-        if(!cancelled) setTimeout(fetchTasks,1000);
+        if(fetchAttempt<8&&!cancelled)setTimeout(fetchTasks,1000);
+        else{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);}
       });
     };
-    // Delay mínimo para garantir token disponível
-    setTimeout(fetchTasks, 100);
+    fetchTasks();
 
-    // Polling a cada 10s — garante sync mesmo se realtime falhar
     const pollInterval=setInterval(()=>{
       if(cancelled)return;
       _sb.from("tasks").select("*").then(({data,error})=>{
@@ -18220,7 +18219,6 @@ export default function AgencyOS(){
       }).catch(()=>{});
     },10000);
 
-    // Realtime — entrega instantânea
     const myChannel="tasks-rt-"+Date.now();
     const channel=_sb.channel(myChannel)
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
@@ -18246,7 +18244,7 @@ export default function AgencyOS(){
       });
 
     return()=>{cancelled=true;clearTimeout(hardTimeout);clearInterval(pollInterval);_sb.removeChannel(channel);};
-  },[authState,tokenReady]);
+  },[authState]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
   useEffect(()=>{
