@@ -18194,20 +18194,21 @@ export default function AgencyOS(){
         if(!error&&data&&data.length>0){
           applySupabaseTasks(data);
           if(!cancelled)setStorageLoaded(true);
-        if(!error&&data&&data.length===0){
-          // Supabase retornou vazio com token válido — sobe tasks locais se existirem
-          try{
-            const s=localStorage.getItem("pixels-tasks-v3");
-            if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
-          }catch(e){}
+        }else if(!error&&data&&data.length===0){
+          // Supabase retornou vazio — só sobe tasks locais se tokenReady (token confirmado)
+          if(_tokenConfirmed.current){
+            try{
+              const s=localStorage.getItem("pixels-tasks-v3");
+              if(s){const local=JSON.parse(s);if(Array.isArray(local)&&local.length>0)syncTasksToSupabase(local);}
+            }catch(e){}
+          }
           if(!cancelled)setStorageLoaded(true);
         }else{
-          // Erro ou sem dados — tenta de novo em 1s (token pode não estar pronto)
+          // Erro — tenta de novo em 1s (token pode não estar pronto ainda)
           if(!cancelled) setTimeout(fetchTasks,1000);
         }
       }).catch(()=>{
         clearTimeout(hardTimeout);
-        // Retry em 1s em caso de erro de rede/auth
         if(!cancelled) setTimeout(fetchTasks,1000);
       });
     };
