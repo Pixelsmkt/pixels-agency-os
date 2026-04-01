@@ -18185,6 +18185,7 @@ export default function AgencyOS(){
   // Helper para salvar tasks no Supabase — com retry automático
   const syncTasksToSupabase=async(tasks,retryCount=0)=>{
     if(!tasks||tasks.length===0)return;
+    console.log("📤 Enviando para Supabase:",tasks.map(t=>t.id));
     try{
       const rows=tasks.map(t=>{
         const {id,...rest}=t;
@@ -18255,47 +18256,92 @@ export default function AgencyOS(){
     };
     fetchTasks();
 
+    // Polling a cada 5s — backbone confiável de sincronização
+    // Intervalo menor garante que se o realtime cair, a atualização chega em até 5s
     const pollInterval=setInterval(()=>{
       if(cancelled)return;
       _sb.from("tasks").select("*").then(({data,error})=>{
         if(!error&&data&&data.length>0)applySupabaseTasks(data);
       }).catch(()=>{});
-    },10000);
+    },5000);
 
-    const myChannel="tasks-rt-"+Date.now();
-    const channel=_sb.channel(myChannel)
-      .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
-        if(cancelled)return;
-        if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
-          const incoming={...payload.new.data,id:payload.new.id};
-          setGlobalTasksRaw(prev=>{
-            const local=prev.find(x=>x.id===incoming.id);
-            let next;
-            if(local){
-              const same=JSON.stringify({...local,files:[]})=== JSON.stringify({...incoming,files:[]});
-              if(same)return prev;
-              next=prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||[]}:x);
-            }else{
-              next=[...prev,incoming];
+    // Realtime com reconexão automática
+    let currentChannel=null;
+    let realtimeHealthy=false;
+    let reconnectTimer=null;
+
+    const applyRealtimePayload=(payload)=>{
+      if(cancelled)return;
+      if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
+        const incoming={...payload.new.data,id:payload.new.id};
+        setGlobalTasksRaw(prev=>{
+          const local=prev.find(x=>x.id===incoming.id);
+          let next;
+          if(local){
+            const same=JSON.stringify({...local,files:[]})=== JSON.stringify({...incoming,files:[]});
+            if(same)return prev;
+            next=prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||[]}:x);
+          }else{
+            next=[...prev,incoming];
+          }
+          try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
+          return next;
+        });
+      }
+      if(payload.eventType==="DELETE"){
+        setGlobalTasksRaw(prev=>{
+          const next=prev.filter(x=>x.id!==payload.old.id);
+          try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
+          return next;
+        });
+      }
+    };
+
+    const subscribeRealtime=()=>{
+      if(cancelled)return;
+      // Remove canal anterior se existir
+      if(currentChannel){try{_sb.removeChannel(currentChannel);}catch(e){}}
+      const ch=_sb.channel("tasks-rt-"+Date.now())
+        .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},applyRealtimePayload)
+        .subscribe((status)=>{
+          if(cancelled)return;
+          if(status==="SUBSCRIBED"){
+            realtimeHealthy=true;
+            console.log("✅ Realtime: conectado");
+          }
+          if(status==="CHANNEL_ERROR"||status==="TIMED_OUT"||status==="CLOSED"){
+            realtimeHealthy=false;
+            console.warn("⚠ Realtime: "+status+" — reconectando em 3s...");
+            // Reconecta após 3s
+            if(!cancelled){
+              if(reconnectTimer)clearTimeout(reconnectTimer);
+              reconnectTimer=setTimeout(subscribeRealtime,3000);
             }
-            // Salva no localStorage para manter todas as abas sincronizadas
-            try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
-            return next;
-          });
-        }
-        if(payload.eventType==="DELETE"){
-          setGlobalTasksRaw(prev=>{
-            const next=prev.filter(x=>x.id!==payload.old.id);
-            try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
-            return next;
-          });
-        }
-      }).subscribe((status)=>{
-        if(status==="SUBSCRIBED")console.log("✅ Realtime tasks: conectado");
-        if(status==="CHANNEL_ERROR")console.warn("⚠ Realtime: erro — polling ativo como fallback");
-      });
+          }
+        });
+      currentChannel=ch;
+    };
 
-    return()=>{cancelled=true;clearTimeout(hardTimeout);clearInterval(pollInterval);_sb.removeChannel(channel);};
+    subscribeRealtime();
+
+    // Watchdog: verifica a cada 30s se o realtime ainda está ativo
+    // Se não estiver, força reconexão
+    const watchdogInterval=setInterval(()=>{
+      if(cancelled)return;
+      if(!realtimeHealthy){
+        console.warn("⚠ Realtime watchdog: canal inativo — reconectando...");
+        subscribeRealtime();
+      }
+    },30000);
+
+    return()=>{
+      cancelled=true;
+      clearTimeout(hardTimeout);
+      clearInterval(pollInterval);
+      clearInterval(watchdogInterval);
+      if(reconnectTimer)clearTimeout(reconnectTimer);
+      if(currentChannel){try{_sb.removeChannel(currentChannel);}catch(e){}}
+    };
   },[authState]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
