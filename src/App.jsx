@@ -18020,139 +18020,184 @@ export default function AgencyOS(){
   const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
   const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
 
-  // Verificar sessão ao montar — valida o cache e escuta mudanças
-  useEffect(()=>{
-    // Busca perfil do Supabase e atualiza cache (background)
-    const refreshProfile=async(userId)=>{
-      try{
-        const {data:profile}=await _sb.from("profiles").select("*").eq("id",userId).single();
-        if(profile){
-          localStorage.setItem(PROFILE_CACHE_KEY,JSON.stringify(profile));
-          if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
-          else{setCurrentProfile(profile);setAuthState("app");}
-        }else{
-          // Perfil não existe mais — limpa tudo
-          localStorage.removeItem(PROFILE_CACHE_KEY);
-          setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
+  // ─────────────────────────────────────────────────────────────────
+  // AUTH + TASKS: bloco unificado
+  //
+  // SOLUÇÃO DEFINITIVA para o problema do token:
+  // - onAuthStateChange entrega a sessão com o access_token garantido
+  // - Guardamos esse token em _sessionRef
+  // - Todas as buscas de tasks usam fetch() direto com esse token
+  //   (não usa _sb.from() que tem race condition com o auth interno)
+  // ─────────────────────────────────────────────────────────────────
+
+  // Ref que guarda a sessão ativa (preenchida pelo onAuthStateChange)
+  const _sessionRef = useRef(null);
+
+  // Funções de aplicação de tasks — usadas por fetch inicial, polling e realtime
+  const _applyTasks = useCallback((rows) => {
+    if (!rows || rows.length === 0) return;
+    const parsed = rows.map(row => ({...row.data, id: row.id}));
+    setGlobalTasksRaw(parsed);
+    try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(parsed)); } catch(e) {}
+  }, []);
+
+  const _applyRealtimeRow = useCallback((row) => {
+    const incoming = {...row.data, id: row.id};
+    setGlobalTasksRaw(prev => {
+      const exists = prev.find(x => x.id === incoming.id);
+      const next = exists
+        ? prev.map(x => x.id === incoming.id ? {...incoming, files: exists.files || incoming.files || []} : x)
+        : [...prev, incoming];
+      try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(next.map(t => ({...t, files: (t.files||[]).map(({url,...r})=>r)})))); } catch(e) {}
+      return next;
+    });
+  }, []);
+
+  const _removeTask = useCallback((id) => {
+    setGlobalTasksRaw(prev => {
+      const next = prev.filter(x => x.id !== id);
+      try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(next.map(t => ({...t, files: (t.files||[]).map(({url,...r})=>r)})))); } catch(e) {}
+      return next;
+    });
+  }, []);
+
+  // Fetch tasks usando raw fetch() com o token da sessão
+  // Isso evita completamente qualquer race condition do cliente Supabase
+  const _fetchTasksWithToken = useCallback(async (token, attempt = 0) => {
+    if (!token) return;
+    try {
+      const res = await fetch(
+        import.meta.env.VITE_SUPABASE_URL + "/rest/v1/tasks?select=*",
+        { headers: {
+            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json"
+          }
         }
-      }catch(e){
-        console.warn("refreshProfile error:",e);
-        // Se falhou mas temos cache, mantém o que está na tela
-        if(!_getCachedProfile()) setAuthState("login");
+      );
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        console.log("✅ Tasks carregadas:", data.length);
+        _applyTasks(data);
+        setStorageLoaded(true);
+      } else if (attempt < 3) {
+        // Retry rápido caso o token demore a propagar
+        setTimeout(() => _fetchTasksWithToken(token, attempt + 1), 600);
+      } else {
+        setStorageLoaded(true);
+      }
+    } catch(e) {
+      console.warn("fetchTasks erro:", e);
+      if (attempt < 3) setTimeout(() => _fetchTasksWithToken(token, attempt + 1), 1000);
+      else setStorageLoaded(true);
+    }
+  }, [_applyTasks]);
+
+  // Verificar sessão ao montar — valida o cache e escuta mudanças
+  useEffect(() => {
+    const refreshProfile = async (userId) => {
+      try {
+        const {data: profile} = await _sb.from("profiles").select("*").eq("id", userId).single();
+        if (profile) {
+          localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+          if (profile.user_type === "client") { setClientPortalData(profile); setAuthState("portal"); }
+          else { setCurrentProfile(profile); setAuthState("app"); }
+        } else {
+          localStorage.removeItem(PROFILE_CACHE_KEY);
+          setAuthState("login"); setCurrentProfile(null); setClientPortalData(null);
+        }
+      } catch(e) {
+        console.warn("refreshProfile error:", e);
+        if (!_getCachedProfile()) setAuthState("login");
       }
     };
 
-    // Timeout de segurança: se onAuthStateChange não disparar em 8s e não há cache, vai para login
-    const fallbackTimer=setTimeout(()=>{
-      if(!_getCachedProfile()) setAuthState("login");
-    },8000);
+    const fallbackTimer = setTimeout(() => {
+      if (!_getCachedProfile()) setAuthState("login");
+    }, 8000);
 
-    const {data:{subscription}}=_sb.auth.onAuthStateChange(async(event,session)=>{
+    const {data: {subscription}} = _sb.auth.onAuthStateChange(async (event, session) => {
       clearTimeout(fallbackTimer);
-      if(event==="SIGNED_OUT"||(!session&&(event==="INITIAL_SESSION"||event==="TOKEN_REFRESHED"))){
+      if (event === "SIGNED_OUT" || (!session && (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED"))) {
+        _sessionRef.current = null;
         localStorage.removeItem(PROFILE_CACHE_KEY);
-        setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
+        setAuthState("login"); setCurrentProfile(null); setClientPortalData(null);
         return;
       }
-      if(session){
+      if (session) {
+        // Guarda a sessão com token válido ANTES de qualquer outra operação
+        _sessionRef.current = session;
         await refreshProfile(session.user.id);
+        // Busca tasks imediatamente com token garantido
+        _fetchTasksWithToken(session.access_token);
       }
     });
 
-    return()=>{clearTimeout(fallbackTimer);subscription.unsubscribe();};
-  },[]);
+    return () => { clearTimeout(fallbackTimer); subscription.unsubscribe(); };
+  }, []);
 
-  // ── CURRENT_USER — sempre derivado direto de currentProfile (sem estado intermediário) ──
-  // Isso evita o bug onde loggedUser inicia como "vinicius" antes do profile carregar
-  const _resolveUser=(profile)=>{
-    if(!profile) return null;
-    return TEAM.find(u=>u.id===profile.team_id||u.name===profile.name)||null;
-  };
-  const loggedTeamUser=_resolveUser(currentProfile)||TEAM[0];
-  // eslint-disable-next-line no-shadow
-  const CURRENT_USER=loggedTeamUser;
-  window._pixelsUser=CURRENT_USER.id;
+  // ── Polling de tasks a cada 5s — backbone de sincronização entre sessões ──
+  useEffect(() => {
+    if (authState !== "app") return;
+    let cancelled = false;
 
-  // Mantém loggedUser sincronizado (usado em alguns lugares legados)
-  const [loggedUser,setLoggedUser]=useState(CURRENT_USER.id);
-  useEffect(()=>{
-    const u=_resolveUser(currentProfile);
-    if(u&&u.id!==loggedUser){
-      window._pixelsUser=u.id;
-      setLoggedUser(u.id);
-    }
-  },[currentProfile]);
-  const [themeKey,setThemeKey]=useState(_themeKey);
-  const [page,setPage]=useState("demandas");
-  const [expanded,setExpanded]=useState({});
-  const [notifDrawer,setNotifDrawer]=useState(false);
-  const [isMob,setIsMob]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
-  const [sideOpen,setSideOpen]=useState(false);
-  const [activeCl,setActiveCl]=useState(null);
-  const [globalTasks,setGlobalTasksRaw]=useState(()=>{
-    // Carrega do cache local imediatamente — sem esperar Supabase no F5
-    try{
-      const s=localStorage.getItem("pixels-tasks-v3");
-      if(s){const p=JSON.parse(s);if(Array.isArray(p)&&p.length>0)return p;}
-    }catch(e){}
-    return TASKS_INIT;
-  });
-  const [notifs,setNotifs]=useState(NOTIF_STORE.items);
-  const [storageLoaded,setStorageLoaded]=useState(()=>{
-    // Inicia true se há tasks em cache — evita tela "Carregando dados..." no F5
-    try{const s=localStorage.getItem("pixels-tasks-v3");return !!(s&&JSON.parse(s)?.length>0);}catch(e){return false;}
-  });
-
-  const TASKS_KEY="pixels-tasks-v3";
-  const FILES_KEY_PREFIX="pixels-files-";
-
-  // ── Permissions — localStorage + Supabase sync ──
-  const [livePerms,setLivePerms]=useState(()=>{
-    const base={...ACCESS_STORE};
-    try{
-      TEAM.forEach(u=>{
-        const s=localStorage.getItem("pixels-perms-"+u.id);
-        if(s){
-          const saved=JSON.parse(s);
-          const merged={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...saved};
-          // Garante que não-sócios nunca tenham verTodosKanban do localStorage stale
-          // (só mantém se o ACCESS_STORE hardcoded já define como true)
-          if(u.level>1&&!ACCESS_STORE[u.id]?.verTodosKanban){
-            merged.verTodosKanban=false;
+    // Polling usa o token do _sessionRef (sempre atualizado pelo onAuthStateChange)
+    const poll = async () => {
+      const session = _sessionRef.current;
+      if (!session || cancelled) return;
+      try {
+        const res = await fetch(
+          import.meta.env.VITE_SUPABASE_URL + "/rest/v1/tasks?select=*",
+          { headers: {
+              "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+              "Authorization": "Bearer " + session.access_token
+            }
           }
-          base[u.id]=merged;
+        );
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data) && data.length > 0) {
+          _applyTasks(data);
+          setStorageLoaded(true);
         }
-      });
-    }catch(e){}
-    return base;
-  });
-  const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
-  const myPerms=getPerms(CURRENT_USER.id);
+      } catch(e) {}
+    };
 
-  // Carregar permissoes do Supabase — Supabase é FONTE DE VERDADE
-  useEffect(()=>{
-    if(authState!=="app")return;
-    _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
-      if(!error&&data){
-        data.forEach(profile=>{
-          const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
-          if(!u)return;
-          let perms;
-          if(profile.permissions&&Object.keys(profile.permissions).length>0){
-            // Supabase tem permissões salvas — usa como fonte de verdade completa
-            // Só adiciona chaves novas de DEFAULT que não existem (não sobrescreve valores salvos)
-            perms={...DEFAULT_PERMS,...profile.permissions};
-          }else{
-            // Sem permissões no Supabase — usa ACCESS_STORE (padrão hardcoded)
-            perms={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
+    const pollInterval = setInterval(poll, 5000);
+
+    // Realtime — atualizações instantâneas
+    let currentChannel = null;
+    const subscribeRealtime = () => {
+      if (cancelled) return;
+      if (currentChannel) { try { _sb.removeChannel(currentChannel); } catch(e) {} }
+      const ch = _sb.channel("tasks-rt-" + Date.now())
+        .on("postgres_changes", {event: "*", schema: "public", table: "tasks"}, payload => {
+          if (cancelled) return;
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            _applyRealtimeRow(payload.new);
           }
-          ACCESS_STORE[u.id]=perms;
-          setLivePerms(p=>({...p,[u.id]:perms}));
-          try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
+          if (payload.eventType === "DELETE") {
+            _removeTask(payload.old.id);
+          }
+        })
+        .subscribe(status => {
+          if (cancelled) return;
+          if (status === "SUBSCRIBED") console.log("✅ Realtime: conectado");
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            console.warn("⚠ Realtime: " + status + " — reconectando...");
+            if (!cancelled) setTimeout(subscribeRealtime, 3000);
+          }
         });
-      }
-    }).catch(e=>console.warn("load perms:",e));
-  },[authState]);
+      currentChannel = ch;
+    };
+    subscribeRealtime();
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollInterval);
+      if (currentChannel) { try { _sb.removeChannel(currentChannel); } catch(e) {} }
+    };
+  }, [authState]);
+
 
   // Polling de permissões — garante sync em tempo real entre todos os browsers
   useEffect(()=>{
@@ -18210,162 +18255,6 @@ export default function AgencyOS(){
       if(retryCount===0) setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
     }
   };
-
-  // ── Load tasks + Realtime + Polling fallback ──
-  useEffect(()=>{
-    if(authState!=="app"){setStorageLoaded(true);return;}
-    let cancelled=false;
-    let fetchAttempt=0;
-
-    const applySupabaseTasks=(data)=>{
-      if(cancelled||!data||data.length===0)return;
-      const parsed=data.map(row=>({...row.data,id:row.id}));
-      setGlobalTasksRaw(parsed);
-      try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
-    };
-
-    const hasCachedTasks=(()=>{try{const s=localStorage.getItem("pixels-tasks-v3");return !!(s&&JSON.parse(s)?.length>0);}catch(e){return false;}})();
-    if(!hasCachedTasks) setStorageLoaded(false);
-
-    const hardTimeout=setTimeout(()=>{if(!cancelled)setStorageLoaded(true);},12000);
-
-    // Retry até 8x: Supabase retorna [] quando token ainda não está pronto (RLS bloqueia silenciosamente)
-    // SOLUÇÃO DEFINITIVA para o problema do token assíncrono:
-    // getSession() bloqueia até a sessão estar carregada no cliente Supabase.
-    // Sem isso, queries rodam sem token e RLS retorna [] silenciosamente.
-    const startFetching=async()=>{
-      if(cancelled)return;
-      try{
-        const {data:{session}}=await _sb.auth.getSession();
-        if(!session){
-          console.warn("⏳ Aguardando sessão...");
-          if(!cancelled)setTimeout(startFetching,500);
-          return;
-        }
-      }catch(e){
-        if(!cancelled)setTimeout(startFetching,500);
-        return;
-      }
-      if(!cancelled)fetchTasks();
-    };
-
-    const fetchTasks=()=>{
-      if(cancelled)return;
-      fetchAttempt++;
-      _sb.from("tasks").select("*").then(({data,error})=>{
-        if(cancelled)return;
-        if(error){
-          console.warn("❌ fetchTasks erro:",error.message);
-          if(fetchAttempt<6&&!cancelled)setTimeout(fetchTasks,1000);
-          else{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);}
-          return;
-        }
-        if(data&&data.length>0){
-          console.log("✅ Tasks carregadas do Supabase:",data.length);
-          clearTimeout(hardTimeout);
-          applySupabaseTasks(data);
-          if(!cancelled)setStorageLoaded(true);
-        }else{
-          // [] com token válido = banco realmente vazio
-          console.warn("⚠ Supabase retornou [] com sessão válida");
-          clearTimeout(hardTimeout);
-          if(!cancelled)setStorageLoaded(true);
-        }
-      }).catch(e=>{
-        console.warn("❌ fetchTasks exception:",e);
-        if(fetchAttempt<6&&!cancelled)setTimeout(fetchTasks,1000);
-        else{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);}
-      });
-    };
-    startFetching();
-
-    // Polling a cada 5s — backbone confiável de sincronização
-    // Intervalo menor garante que se o realtime cair, a atualização chega em até 5s
-    const pollInterval=setInterval(()=>{
-      if(cancelled)return;
-      _sb.from("tasks").select("*").then(({data,error})=>{
-        if(!error&&data&&data.length>0){
-          console.log("🔁 Poll:",data.length,"tasks");
-          applySupabaseTasks(data);
-        }
-      }).catch(()=>{});
-    },5000);
-
-    // Realtime com reconexão automática
-    let currentChannel=null;
-    let realtimeHealthy=false;
-    let reconnectTimer=null;
-
-    const applyRealtimePayload=(payload)=>{
-      if(cancelled)return;
-      if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
-        const incoming={...payload.new.data,id:payload.new.id};
-        console.log("🔄 Realtime UPDATE recebido:",incoming.id,incoming.title);
-        setGlobalTasksRaw(prev=>{
-          const local=prev.find(x=>x.id===incoming.id);
-          // Sempre aplica o update do realtime — não usa comparação que pode bloquear
-          const next=local
-            ?prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||incoming.files||[]}:x)
-            :[...prev,incoming];
-          try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
-          return next;
-        });
-      }
-      if(payload.eventType==="DELETE"){
-        setGlobalTasksRaw(prev=>{
-          const next=prev.filter(x=>x.id!==payload.old.id);
-          try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
-          return next;
-        });
-      }
-    };
-
-    const subscribeRealtime=()=>{
-      if(cancelled)return;
-      // Remove canal anterior se existir
-      if(currentChannel){try{_sb.removeChannel(currentChannel);}catch(e){}}
-      const ch=_sb.channel("tasks-rt-"+Date.now())
-        .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},applyRealtimePayload)
-        .subscribe((status)=>{
-          if(cancelled)return;
-          if(status==="SUBSCRIBED"){
-            realtimeHealthy=true;
-            console.log("✅ Realtime: conectado");
-          }
-          if(status==="CHANNEL_ERROR"||status==="TIMED_OUT"||status==="CLOSED"){
-            realtimeHealthy=false;
-            console.warn("⚠ Realtime: "+status+" — reconectando em 3s...");
-            // Reconecta após 3s
-            if(!cancelled){
-              if(reconnectTimer)clearTimeout(reconnectTimer);
-              reconnectTimer=setTimeout(subscribeRealtime,3000);
-            }
-          }
-        });
-      currentChannel=ch;
-    };
-
-    subscribeRealtime();
-
-    // Watchdog: verifica a cada 30s se o realtime ainda está ativo
-    // Se não estiver, força reconexão
-    const watchdogInterval=setInterval(()=>{
-      if(cancelled)return;
-      if(!realtimeHealthy){
-        console.warn("⚠ Realtime watchdog: canal inativo — reconectando...");
-        subscribeRealtime();
-      }
-    },30000);
-
-    return()=>{
-      cancelled=true;
-      clearTimeout(hardTimeout);
-      clearInterval(pollInterval);
-      clearInterval(watchdogInterval);
-      if(reconnectTimer)clearTimeout(reconnectTimer);
-      if(currentChannel){try{_sb.removeChannel(currentChannel);}catch(e){}}
-    };
-  },[authState]);
 
   // ── Auto-publish: check every minute if scheduled cards are due ──
   useEffect(()=>{
@@ -18562,18 +18451,21 @@ export default function AgencyOS(){
 
   // ── Block render until storage is fully loaded ──
 
-  const handleLogout=async()=>{
-    // Limpa cache local
-    try{
+  const handleLogout = async () => {
+    // 1. Limpa ref de sessão
+    _sessionRef.current = null;
+    // 2. Limpa todo o cache local
+    try {
       localStorage.removeItem("pixels-tasks-v3");
       localStorage.removeItem("pixels-profile-cache");
-      TEAM.forEach(u=>{try{localStorage.removeItem("pixels-perms-"+u.id);}catch(e){}});
-    }catch(e){}
-    // Força reset imediato do estado (não espera onAuthStateChange)
+      TEAM.forEach(u => { try { localStorage.removeItem("pixels-perms-" + u.id); } catch(e) {} });
+    } catch(e) {}
+    // 3. Reset imediato do estado React
     setAuthState("login");
     setCurrentProfile(null);
     setClientPortalData(null);
-    // Depois faz o signOut no Supabase
+    setGlobalTasksRaw([]);
+    // 4. Signout no Supabase
     await _sb.auth.signOut();
   };
 
