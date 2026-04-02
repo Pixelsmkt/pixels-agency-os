@@ -18230,42 +18230,64 @@ export default function AgencyOS(){
     const hardTimeout=setTimeout(()=>{if(!cancelled)setStorageLoaded(true);},12000);
 
     // Retry até 8x: Supabase retorna [] quando token ainda não está pronto (RLS bloqueia silenciosamente)
+    // SOLUÇÃO DEFINITIVA para o problema do token assíncrono:
+    // getSession() bloqueia até a sessão estar carregada no cliente Supabase.
+    // Sem isso, queries rodam sem token e RLS retorna [] silenciosamente.
+    const startFetching=async()=>{
+      if(cancelled)return;
+      try{
+        const {data:{session}}=await _sb.auth.getSession();
+        if(!session){
+          console.warn("⏳ Aguardando sessão...");
+          if(!cancelled)setTimeout(startFetching,500);
+          return;
+        }
+      }catch(e){
+        if(!cancelled)setTimeout(startFetching,500);
+        return;
+      }
+      if(!cancelled)fetchTasks();
+    };
+
     const fetchTasks=()=>{
       if(cancelled)return;
       fetchAttempt++;
       _sb.from("tasks").select("*").then(({data,error})=>{
         if(cancelled)return;
-        if(!error&&data&&data.length>0){
+        if(error){
+          console.warn("❌ fetchTasks erro:",error.message);
+          if(fetchAttempt<6&&!cancelled)setTimeout(fetchTasks,1000);
+          else{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);}
+          return;
+        }
+        if(data&&data.length>0){
+          console.log("✅ Tasks carregadas do Supabase:",data.length);
           clearTimeout(hardTimeout);
           applySupabaseTasks(data);
           if(!cancelled)setStorageLoaded(true);
-        }else if(!error&&data&&data.length===0){
-          if(fetchAttempt<12){
-            const delay=Math.min(fetchAttempt*300,1500);
-            if(!cancelled)setTimeout(fetchTasks,delay);
-          }else{
-            // Após 8 tentativas com [] do Supabase, aceita que não há tasks para este usuário
-            // NUNCA sobe tasks locais — o Supabase é a fonte de verdade
-            clearTimeout(hardTimeout);
-            if(!cancelled)setStorageLoaded(true);
-          }
         }else{
-          if(fetchAttempt<8&&!cancelled)setTimeout(fetchTasks,1000);
-          else{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);}
+          // [] com token válido = banco realmente vazio
+          console.warn("⚠ Supabase retornou [] com sessão válida");
+          clearTimeout(hardTimeout);
+          if(!cancelled)setStorageLoaded(true);
         }
-      }).catch(()=>{
-        if(fetchAttempt<8&&!cancelled)setTimeout(fetchTasks,1000);
+      }).catch(e=>{
+        console.warn("❌ fetchTasks exception:",e);
+        if(fetchAttempt<6&&!cancelled)setTimeout(fetchTasks,1000);
         else{clearTimeout(hardTimeout);if(!cancelled)setStorageLoaded(true);}
       });
     };
-    fetchTasks();
+    startFetching();
 
     // Polling a cada 5s — backbone confiável de sincronização
     // Intervalo menor garante que se o realtime cair, a atualização chega em até 5s
     const pollInterval=setInterval(()=>{
       if(cancelled)return;
       _sb.from("tasks").select("*").then(({data,error})=>{
-        if(!error&&data&&data.length>0)applySupabaseTasks(data);
+        if(!error&&data&&data.length>0){
+          console.log("🔁 Poll:",data.length,"tasks");
+          applySupabaseTasks(data);
+        }
       }).catch(()=>{});
     },5000);
 
@@ -18278,16 +18300,13 @@ export default function AgencyOS(){
       if(cancelled)return;
       if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
         const incoming={...payload.new.data,id:payload.new.id};
+        console.log("🔄 Realtime UPDATE recebido:",incoming.id,incoming.title);
         setGlobalTasksRaw(prev=>{
           const local=prev.find(x=>x.id===incoming.id);
-          let next;
-          if(local){
-            const same=JSON.stringify({...local,files:[]})=== JSON.stringify({...incoming,files:[]});
-            if(same)return prev;
-            next=prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||[]}:x);
-          }else{
-            next=[...prev,incoming];
-          }
+          // Sempre aplica o update do realtime — não usa comparação que pode bloquear
+          const next=local
+            ?prev.map(x=>x.id===incoming.id?{...incoming,files:local.files||incoming.files||[]}:x)
+            :[...prev,incoming];
           try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}))));}catch(e){}
           return next;
         });
@@ -18544,12 +18563,17 @@ export default function AgencyOS(){
   // ── Block render until storage is fully loaded ──
 
   const handleLogout=async()=>{
-    // Limpa cache local antes de deslogar — garante sessão limpa para o próximo usuário
+    // Limpa cache local
     try{
       localStorage.removeItem("pixels-tasks-v3");
       localStorage.removeItem("pixels-profile-cache");
       TEAM.forEach(u=>{try{localStorage.removeItem("pixels-perms-"+u.id);}catch(e){}});
     }catch(e){}
+    // Força reset imediato do estado (não espera onAuthStateChange)
+    setAuthState("login");
+    setCurrentProfile(null);
+    setClientPortalData(null);
+    // Depois faz o signOut no Supabase
     await _sb.auth.signOut();
   };
 
