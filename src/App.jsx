@@ -18107,7 +18107,7 @@ export default function AgencyOS(){
         }
       }
     }catch(e){}
-    return TASKS_INIT;
+    return []; // Sem tasks hardcoded — Supabase é a fonte de verdade
   });
   const [notifs,setNotifs]=useState(NOTIF_STORE.items);
   const [storageLoaded,setStorageLoaded]=useState(()=>{
@@ -18269,8 +18269,8 @@ export default function AgencyOS(){
         _sessionRef.current = session;
         await refreshProfile(session.user.id);
         // Busca tasks com token garantido (flag evita duplo fetch com initSession)
-        if (!tasksFetched) {
-          tasksFetched = true;
+        if (!_tasksFetchedRef.current) {
+          _tasksFetchedRef.current = true;
           _fetchTasksWithToken(session.access_token);
         }
       }
@@ -18287,7 +18287,8 @@ export default function AgencyOS(){
     // Quando authState já começa como "app" do cache, _sessionRef pode estar null
     // até o onAuthStateChange disparar. Usamos getSession() como fallback imediato.
     // Evita duplo fetch: flag compartilhada entre initSession e onAuthStateChange
-    let tasksFetched = false;
+    // Usa ref compartilhado — evita duplo fetch com onAuthStateChange
+    _tasksFetchedRef.current = false;
 
     // Timeout de segurança: se após 10s nada carregou, libera a tela de "Carregando..."
     const safetyTimer = setTimeout(() => { if (!cancelled) setStorageLoaded(true); }, 10000);
@@ -18301,8 +18302,8 @@ export default function AgencyOS(){
       try {
         const { data: { session } } = await _sb.auth.getSession();
         if (cancelled) return;
-        if (session && !tasksFetched) {
-          tasksFetched = true;
+        if (session && !_tasksFetchedRef.current) {
+          _tasksFetchedRef.current = true;
           _sessionRef.current = session;
           _fetchTasksWithToken(session.access_token);
         } else if (!session) {
@@ -18458,6 +18459,9 @@ export default function AgencyOS(){
     const interval=setInterval(check,60000); // then every 60s
     return ()=>clearInterval(interval);
   },[]);
+
+  // Ref compartilhado entre useEffect([]) e useEffect([authState]) para evitar duplo fetch
+  const _tasksFetchedRef = useRef(false);
 
   // ── Save — called on every change, saves ALL fields ──
   const saveTimer=useRef(null);
