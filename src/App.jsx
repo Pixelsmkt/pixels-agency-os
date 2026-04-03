@@ -1008,6 +1008,11 @@ const LISTA_ORDER = ["publicado","agendado","aprovado","avaliacao","execucao","r
 
 
 // ======= 04_demandas.jsx =======
+const useOpenCardSync=(openCard,setOpenCard,tasks)=>{
+  // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
+  useOpenCardSync(openCard,setOpenCard,tasks);
+};
+
 function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask,canDrag}){
   const LISTA_ORDER_LOCAL=["publicado","agendado","aprovado","avaliacao","execucao","recebida","demanda","pausado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
@@ -1660,7 +1665,7 @@ function QuickCreateBody({onConfirm,onCancel}){
 
 /* ─── PAGE: DEMANDAS ─────────────────────── */
 function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, notifs, setNotifs, effectiveUser}){
-  const [localTasks,setLocalTasks]=useState(TASKS_INIT);
+  const [localTasks,setLocalTasks]=useState([]);
   const tasks = propTasks || localTasks;
   const setTasks = propSetTasks || setLocalTasks;
   // trash derivado das tasks — sempre sincronizado com Supabase/realtime
@@ -1669,15 +1674,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [over,setOver]=useState(null);
   const [openCard,setOpenCard]=useState(null);
   // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
-  const _openCardId=useRef(null);
-  useEffect(()=>{_openCardId.current=openCard?.id||null;},[openCard]);
-  useEffect(()=>{
-    if(!_openCardId.current)return;
-    const updated=(tasks||[]).find(t=>t.id===_openCardId.current);
-    if(updated&&JSON.stringify(updated)!==JSON.stringify(openCard)){
-      setOpenCard(updated);
-    }
-  },[tasks]);
+  // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
+  useOpenCardSync(openCard,setOpenCard,tasks);
   const [quickCreate,setQuickCreate]=useState(null); // {colId} — seletor rápido
   const [viewMode,setViewMode]=useState("cartao");
   const [filterUser,setFilterUser]=useState("todos");
@@ -1691,7 +1689,20 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [showPixelsIA,setShowPixelsIA]=useState(false);
   const [editingColId,setEditingColId]=useState(null);
   const [editingColLabel,setEditingColLabel]=useState("");
-  const [cols,setCols]=useState(KANBAN_COLS);
+  const [cols,setCols]=useState(()=>{
+    try{
+      const saved=localStorage.getItem("pixels-cols-v1");
+      if(saved){
+        const parsed=JSON.parse(saved);
+        if(Array.isArray(parsed)&&parsed.length>0)return parsed;
+      }
+    }catch(e){}
+    return KANBAN_COLS;
+  });
+  // Persiste colunas sempre que mudam
+  useEffect(()=>{
+    try{localStorage.setItem("pixels-cols-v1",JSON.stringify(cols));}catch(e){}
+  },[cols]);
   const [showNewCol,setShowNewCol]=useState(false);
   const [newColLabel,setNewColLabel]=useState("");
   const [newColColor,setNewColColor]=useState("#a140ff");
@@ -1799,7 +1810,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.deletedAt)return false;
     // Admin/sócio vê tudo; colaborador só vê os seus
     if(!isAdmin&&!isMyTask(t))return false;
-    if(filterUser!=="todos"&&t.assignee!==filterUser)return false;
+    if(filterUser!=="todos"&&t.assignee!==filterUser&&!(Array.isArray(t.assignees)&&t.assignees.includes(filterUser)))return false;
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
     if(filterClient!=="todos"&&t.client!==filterClient)return false;
     if(filterClient==="bioter"&&filterBioterUnit!=="todos"&&t.bioterUnit!==filterBioterUnit)return false;
@@ -1889,7 +1900,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         <QuickCreateBody colId={quickCreate.colId} extraProps={quickCreate.extraProps} onConfirm={(assigneeId,title)=>{setQuickCreate(null);createTask(quickCreate.colId,assigneeId,title,quickCreate.extraProps);}} onCancel={()=>setQuickCreate(null)}/>
       </div>
     </div>}
-    {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={effectiveUser||CURRENT_USER} canDelete={canDelete} onTrash={id=>{setOpenCard(null);setShowTrashConfirm(id);}}/>}
+    {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={effectiveUser||CURRENT_USER} canDelete={canDelete} onTrash={id=>{setOpenCard(null);setShowTrashConfirm(id);}} cardPerms={myPerms}/>}
     {showTrashConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:40,marginBottom:12}}>🗑</div>
@@ -1939,8 +1950,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               sb.from("tasks").select("*").then(({data,error})=>{
                 if(!error&&data&&data.length>0){
                   const parsed=data.map(row=>({...row.data,id:row.id}));
-                  // Usa propSetTasks para atualizar o estado global
-                  (propSetTasks||setTasks)(parsed);
+                  // setTasks já é propSetTasks (global) ou setLocalTasks
+                  setTasks(parsed);
                   try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
                 }
                 setTimeout(()=>setSyncing(false),800);
@@ -2279,11 +2290,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           <span style={{fontSize:20}}>🗑</span>
           <div style={{color:C.ts,fontSize:12}}>Cartões excluídos são mantidos por <strong style={{color:C.rd}}>30 dias</strong> antes de serem removidos permanentemente.</div>
         </div>
-        {(myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)))).length===0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:28,textAlign:"center"}}>
+        {(()=>{const trashVisible=myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)));return(<>
+        {trashVisible.length===0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:28,textAlign:"center"}}>
           <div style={{fontSize:40,marginBottom:8}}>✅</div>
           <div style={{color:C.ts,fontSize:14}}>Lixeira vazia</div>
         </div>}
-        {(myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)))).map(t=>{
+        {trashVisible.map(t=>{
           const days=trashDaysLeft(t);
           const cl=CLIENTS.find(c=>c.id===t.client);
           return <div key={t.id} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,opacity:.7}}>
@@ -2309,22 +2321,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
    Mostra cards com status "agendado" pelo publishDate
    Filtro: todos os clientes + unidades Bioter
 ──────────────────────────────────────────────── */
-function PageCalendarioPublicacoes({isMob, tasks}){
+function PageCalendarioPublicacoes({isMob, tasks, setTasks}){
   const TASKS = tasks||[];
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
   // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
-  const _openCardId=useRef(null);
-  useEffect(()=>{_openCardId.current=openCard?.id||null;},[openCard]);
-  useEffect(()=>{
-    if(!_openCardId.current)return;
-    const updated=(tasks||[]).find(t=>t.id===_openCardId.current);
-    if(updated&&JSON.stringify(updated)!==JSON.stringify(openCard)){
-      setOpenCard(updated);
-    }
-  },[tasks]);
+  // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
+  useOpenCardSync(openCard,setOpenCard,tasks);
 
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -2562,15 +2567,15 @@ function PageCalendarioPublicacoes({isMob, tasks}){
         })}
       </div>
 
-      {/* ── Modal do card ── */}
+      {/* ── Modal do card — somente leitura no calendário ── */}
       {openCard&&(
         <CardModal
           task={openCard}
           tasks={TASKS}
-          setTasks={()=>{}}
+          setTasks={setTasks}
           onClose={()=>setOpenCard(null)}
           currentUser={CURRENT_USER}
-          cardPerms={{}}
+          cardPerms={{verBriefingCard:true}}
         />
       )}
     </div>
@@ -2652,7 +2657,15 @@ const isImg = a => a && a.type && a.type.startsWith("image/");
 const isVid = a => a && a.type && a.type.startsWith("video/");
 const isAud = a => a && a.type && (a.type.startsWith("audio/") || (a.name && a.name.endsWith(".webm")));
 
-function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms,canDelete,onTrash}){
+function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
+  // Wrapper de onClose que limpa o stream de áudio se estiver ativo
+  const onClose=()=>{
+    if(window._activeAudioStream){
+      try{window._activeAudioStream.getTracks().forEach(t=>t.stop());}catch(e){}
+      window._activeAudioStream=null;
+    }
+    _onClose();
+  };
   const user=currentUser||CURRENT_USER;
   const col=KANBAN_COLS.find(c=>c.id===task.status);
   const [title,setTitle]=useState(task.title||"");
@@ -2687,12 +2700,39 @@ function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms,canDelete,
   const [publishDate,setPublishDate]=useState(task.publishDate||"");
   const [publishTime,setPublishTime]=useState(task.publishTime||"09:00");
   const [caption,setCaption]=useState(task.caption||"");
+
+  // Re-sincroniza estados quando outra sessão edita este cartão via realtime
+  // Só atualiza campos que o usuário NÃO modificou (evita sobrescrever edições em andamento)
+  const _taskIdRef=useRef(task.id);
+  useEffect(()=>{
+    // Se é um cartão diferente (não deveria acontecer, mas por segurança)
+    if(task.id!==_taskIdRef.current){
+      _taskIdRef.current=task.id;
+      setTitle(task.title||"");
+      setDesc(task.desc||"");
+      setAssignees(Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:task.assignee?[task.assignee]:[]);
+      setWatchers(task.watchers||[]);
+      setSector(task.sector||"design");
+      setClient(task.client||"");
+      setPriority(task.priority||"media");
+      setDeadline(task.deadline||"");
+      setComments(task.comments||[]);
+      setAttachments(task.files||[]);
+      setCover(task.cover||null);
+      setBioterUnit(task.bioterUnit||"chapeco");
+      setChecklist(task.checklist||[]);
+      setPublishDate(task.publishDate||"");
+      setPublishTime(task.publishTime||"09:00");
+      setCaption(task.caption||"");
+    }
+  },[task]);
   const isAgendado=task.status==="agendado";
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
   const fileInputRef=useRef(null);
   const isAssigned=(Array.isArray(task.assignees)?task.assignees:task.assignee?[task.assignee]:[]).includes(user.id);
-  const userPerms=(()=>{try{const s=localStorage.getItem("pixels-perms-"+user.id);return s?{...DEFAULT_PERMS,...(ACCESS_STORE[user.id]||{}),...JSON.parse(s)}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);}catch(e){return ACCESS_STORE[user.id]||DEFAULT_PERMS;}})();
+  // Usa cardPerms (livePerms injetado pelo pai) — sempre atualizado em tempo real
+  const userPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
   const canEdit=(userPerms.editarDemanda||user.level<=2)||isAssigned;
 
   const nowFmt=()=>{const d=new Date();return d.toLocaleDateString("pt-BR")+` às ${d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`;};
@@ -2718,7 +2758,9 @@ function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms,canDelete,
   },[hasChanges,onClose]);
 
   const save=()=>{
-    const tl=[...(task.timeline||[])];
+    // Pega timeline atual da lista (não da prop task que pode estar stale)
+    const currentTask=tasks.find(t=>t.id===task.id)||task;
+    const tl=[...(currentTask.timeline||[])];
     const changed=[];
     if(title!==task.title)changed.push("título");
     if(desc!==task.desc)changed.push("descrição");
@@ -2736,7 +2778,8 @@ function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms,canDelete,
   };
 
   const handleConclusionConfirm=()=>{
-    const tl=[...(task.timeline||[])];
+    const currentTask=tasks.find(t=>t.id===task.id)||task;
+    const tl=[...(currentTask.timeline||[])];
     tl.push({type:"status",fromLabel:"Em Execução",toLabel:"Concluído p/ Avaliação",from:"execucao",to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
     setTasks(prev=>prev.map(t=>t.id===task.id?{...t,status:"avaliacao",colEnteredAt:new Date().toISOString(),timeline:tl,checklist,desc,title,assignee:assignees[0],assignees,sector,client,priority,deadline,cover,files:attachments,comments}:t));
     setConclusionStep(null);
@@ -2750,9 +2793,12 @@ function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms,canDelete,
       const mentions=(txt.match(/@([\w]+)/g)||[]).map(m=>m.slice(1).toLowerCase());
       const mentionedIds=TEAM.filter(u=>mentions.some(m=>u.name.toLowerCase().startsWith(m)||u.id.toLowerCase().startsWith(m))).map(u=>u.id);
       const c={id:Date.now(),user:user.name,av:user.av,color:user.color,text:txt,type:type||"text",time:nowFmt(),mentions:mentionedIds};
-      setComments(p=>[...p,c]);
+      const newComments=[...comments,c];
+      setComments(newComments);
       if(!type)setComment("");
-    }catch(e){console.warn("addComment error:",e);}
+      // Persiste o comentário imediatamente — não espera save()
+      setTasks(prev=>prev.map(t=>t.id===task.id?{...t,comments:newComments}:t));
+    }catch(e){}
   };
 
   const handleFileUpload=(e)=>{
@@ -2772,6 +2818,9 @@ function CardModal({task,tasks,setTasks,onClose,currentUser,cardPerms,canDelete,
   const startRec=async()=>{
     try{
       const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+      // Registra stream para cleanup ao fechar o modal
+      if(window._activeAudioStream){try{window._activeAudioStream.getTracks().forEach(t=>t.stop());}catch(e){}}
+      window._activeAudioStream=stream;
       const mr=new MediaRecorder(stream);const chunks=[];
       mr.ondataavailable=e=>chunks.push(e.data);
       mr.onstop=()=>{setAudioURL(URL.createObjectURL(new Blob(chunks,{type:"audio/webm"})));stream.getTracks().forEach(t=>t.stop());};
@@ -17943,6 +17992,8 @@ function LoginScreen({onLoginCollaborator, onLoginClient}){
     if(!email.trim()||!password){setError("Preencha e-mail e senha.");return;}
     setLoading(true);setError("");
     try{
+      // Limpa cache de tasks antes de logar — evita que novo usuário herde cache do anterior
+      try{localStorage.removeItem("pixels-tasks-v3");}catch(e){}
       const {data,error:authError}=await _sb.auth.signInWithPassword({
         email:email.trim().toLowerCase(), password
       });
@@ -18079,27 +18130,7 @@ export default function AgencyOS(){
   const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
   const myPerms=getPerms(CURRENT_USER.id);
 
-  // Carrega permissões do Supabase (fonte de verdade)
-  useEffect(()=>{
-    if(authState!=="app")return;
-    _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
-      if(!error&&data){
-        data.forEach(profile=>{
-          const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
-          if(!u)return;
-          let perms;
-          if(profile.permissions&&Object.keys(profile.permissions).length>0){
-            perms={...DEFAULT_PERMS,...profile.permissions};
-          }else{
-            perms={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
-          }
-          ACCESS_STORE[u.id]=perms;
-          setLivePerms(p=>({...p,[u.id]:perms}));
-          try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
-        });
-      }
-    }).catch(e=>console.warn("load perms:",e));
-  },[authState]);
+
 
 
   // ─────────────────────────────────────────────────────────────────
@@ -18159,7 +18190,6 @@ export default function AgencyOS(){
       );
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
-        console.log("✅ Tasks carregadas:", data.length);
         _applyTasks(data);
         setStorageLoaded(true);
       } else if (attempt < 3) {
@@ -18207,11 +18237,13 @@ export default function AgencyOS(){
         return;
       }
       if (session) {
-        // Guarda a sessão com token válido ANTES de qualquer outra operação
         _sessionRef.current = session;
         await refreshProfile(session.user.id);
-        // Busca tasks imediatamente com token garantido
-        _fetchTasksWithToken(session.access_token);
+        // Busca tasks com token garantido (flag evita duplo fetch com initSession)
+        if (!tasksFetched) {
+          tasksFetched = true;
+          _fetchTasksWithToken(session.access_token);
+        }
       }
     });
 
@@ -18225,20 +18257,23 @@ export default function AgencyOS(){
 
     // Quando authState já começa como "app" do cache, _sessionRef pode estar null
     // até o onAuthStateChange disparar. Usamos getSession() como fallback imediato.
+    // Evita duplo fetch: flag compartilhada entre initSession e onAuthStateChange
+    let tasksFetched = false;
     const initSession = async () => {
       if (_sessionRef.current) {
-        // Já temos sessão (login acabou de acontecer) — busca tasks imediatamente
-        _fetchTasksWithToken(_sessionRef.current.access_token);
+        // onAuthStateChange já populou _sessionRef e já buscou tasks — nada a fazer
         return;
       }
-      // authState veio do cache — pega sessão do Supabase
+      // authState veio do cache mas onAuthStateChange ainda não disparou
+      // Pega sessão diretamente para não ficar sem token
       try {
         const { data: { session } } = await _sb.auth.getSession();
-        if (session && !cancelled) {
+        if (session && !cancelled && !tasksFetched) {
+          tasksFetched = true;
           _sessionRef.current = session;
           _fetchTasksWithToken(session.access_token);
         }
-      } catch(e) { console.warn("initSession:", e); }
+      } catch(e) {}
     };
     initSession();
 
@@ -18282,9 +18317,9 @@ export default function AgencyOS(){
         })
         .subscribe(status => {
           if (cancelled) return;
-          if (status === "SUBSCRIBED") console.log("✅ Realtime: conectado");
+          if (status === "SUBSCRIBED")
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            console.warn("⚠ Realtime: " + status + " — reconectando...");
+          if(!cancelled)setTimeout(subscribeRealtime,3000);
             if (!cancelled) setTimeout(subscribeRealtime, 3000);
           }
         });
@@ -18304,6 +18339,7 @@ export default function AgencyOS(){
   useEffect(()=>{
     if(authState!=="app")return;
     const pollPerms=()=>{
+      if(!_sessionRef.current)return; // não roda sem sessão ativa
       _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
         if(!error&&data){
           data.forEach(profile=>{
@@ -18338,22 +18374,35 @@ export default function AgencyOS(){
   // Helper para salvar tasks no Supabase — com retry automático
   const syncTasksToSupabase=async(tasks,retryCount=0)=>{
     if(!tasks||tasks.length===0)return;
+    // Usa raw fetch com token do _sessionRef — evita race condition do _sb interno
+    const session=_sessionRef.current;
+    if(!session){
+      // Sem sessão: aguarda e tenta de novo (max 1 retry)
+      if(retryCount===0)setTimeout(()=>syncTasksToSupabase(tasks,1),1500);
+      return;
+    }
     try{
       const rows=tasks.map(t=>{
         const {id,...rest}=t;
         return {id:String(id),data:{...rest,files:(t.files||[]).map(({url,...r})=>r)}};
       });
-      const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
-      if(error){
-        console.warn("syncTasksToSupabase error:",error);
-        // Retry uma vez após 2s
-        if(retryCount===0){
-          setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
+      const res=await fetch(
+        import.meta.env.VITE_SUPABASE_URL+"/rest/v1/tasks",
+        {method:"POST",
+         headers:{
+           "apikey":import.meta.env.VITE_SUPABASE_ANON_KEY,
+           "Authorization":"Bearer "+session.access_token,
+           "Content-Type":"application/json",
+           "Prefer":"resolution=merge-duplicates"
+         },
+         body:JSON.stringify(rows)
         }
+      );
+      if(!res.ok&&retryCount===0){
+        setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
       }
     }catch(e){
-      console.warn("syncTasksToSupabase exception:",e);
-      if(retryCount===0) setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
+      if(retryCount===0)setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
     }
   };
 
@@ -18361,7 +18410,7 @@ export default function AgencyOS(){
   useEffect(()=>{
     const check=()=>{
       const now=new Date();
-      setGlobalTasksRaw(prev=>{
+      setGlobalTasks(prev=>{
         let changed=false;
         const next=prev.map(t=>{
           if(t.deletedAt||t.status!=="agendado"||!t.publishDate)return t;
