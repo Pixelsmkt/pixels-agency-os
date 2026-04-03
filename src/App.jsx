@@ -18223,6 +18223,25 @@ export default function AgencyOS(){
     if (authState !== "app") return;
     let cancelled = false;
 
+    // Quando authState já começa como "app" do cache, _sessionRef pode estar null
+    // até o onAuthStateChange disparar. Usamos getSession() como fallback imediato.
+    const initSession = async () => {
+      if (_sessionRef.current) {
+        // Já temos sessão (login acabou de acontecer) — busca tasks imediatamente
+        _fetchTasksWithToken(_sessionRef.current.access_token);
+        return;
+      }
+      // authState veio do cache — pega sessão do Supabase
+      try {
+        const { data: { session } } = await _sb.auth.getSession();
+        if (session && !cancelled) {
+          _sessionRef.current = session;
+          _fetchTasksWithToken(session.access_token);
+        }
+      } catch(e) { console.warn("initSession:", e); }
+    };
+    initSession();
+
     // Polling usa o token do _sessionRef (sempre atualizado pelo onAuthStateChange)
     const poll = async () => {
       const session = _sessionRef.current;
