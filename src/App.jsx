@@ -18105,7 +18105,14 @@ export default function AgencyOS(){
   });
   const [notifs,setNotifs]=useState(NOTIF_STORE.items);
   const [storageLoaded,setStorageLoaded]=useState(()=>{
-    try{const s=localStorage.getItem("pixels-tasks-v3");return !!(s&&JSON.parse(s)?.length>0);}catch(e){return false;}
+    // Inicia true se há tasks em cache OU se não há sessão (vai para login)
+    try{
+      const hasCache=!!(localStorage.getItem("pixels-tasks-v3")&&JSON.parse(localStorage.getItem("pixels-tasks-v3"))?.length>0);
+      const hasSession=!!localStorage.getItem("pixels-sb-auth");
+      // Se não tem sessão salva, não vai ficar esperando tasks — libera tela
+      if(!hasSession)return true;
+      return hasCache;
+    }catch(e){return false;}
   });
 
   const TASKS_KEY="pixels-tasks-v3";
@@ -18259,21 +18266,33 @@ export default function AgencyOS(){
     // até o onAuthStateChange disparar. Usamos getSession() como fallback imediato.
     // Evita duplo fetch: flag compartilhada entre initSession e onAuthStateChange
     let tasksFetched = false;
+
+    // Timeout de segurança: se após 10s nada carregou, libera a tela de "Carregando..."
+    const safetyTimer = setTimeout(() => { if (!cancelled) setStorageLoaded(true); }, 10000);
+
     const initSession = async () => {
       if (_sessionRef.current) {
         // onAuthStateChange já populou _sessionRef e já buscou tasks — nada a fazer
+        clearTimeout(safetyTimer);
         return;
       }
-      // authState veio do cache mas onAuthStateChange ainda não disparou
-      // Pega sessão diretamente para não ficar sem token
       try {
         const { data: { session } } = await _sb.auth.getSession();
-        if (session && !cancelled && !tasksFetched) {
+        if (cancelled) return;
+        if (session && !tasksFetched) {
           tasksFetched = true;
           _sessionRef.current = session;
           _fetchTasksWithToken(session.access_token);
+        } else if (!session) {
+          // Sem sessão válida — libera a tela imediatamente
+          clearTimeout(safetyTimer);
+          setStorageLoaded(true);
         }
-      } catch(e) {}
+      } catch(e) {
+        // Erro de rede — libera a tela para não travar
+        clearTimeout(safetyTimer);
+        if (!cancelled) setStorageLoaded(true);
+      }
     };
     initSession();
 
@@ -18329,6 +18348,7 @@ export default function AgencyOS(){
 
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimer);
       clearInterval(pollInterval);
       if (currentChannel) { try { _sb.removeChannel(currentChannel); } catch(e) {} }
     };
