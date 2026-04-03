@@ -18020,6 +18020,88 @@ export default function AgencyOS(){
   const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
   const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
 
+  // ── CURRENT_USER — derivado de currentProfile ──
+  const _resolveUser=(profile)=>{
+    if(!profile)return null;
+    return TEAM.find(u=>u.id===profile.team_id||u.name===profile.name)||null;
+  };
+  const loggedTeamUser=_resolveUser(currentProfile)||TEAM[0];
+  const CURRENT_USER=loggedTeamUser;
+  window._pixelsUser=CURRENT_USER.id;
+
+  const [loggedUser,setLoggedUser]=useState(CURRENT_USER.id);
+  useEffect(()=>{
+    const u=_resolveUser(currentProfile);
+    if(u&&u.id!==loggedUser){window._pixelsUser=u.id;setLoggedUser(u.id);}
+  },[currentProfile]);
+
+  // ── UI STATE ──
+  const [themeKey,setThemeKey]=useState(_themeKey);
+  const [page,setPage]=useState("demandas");
+  const [expanded,setExpanded]=useState({});
+  const [notifDrawer,setNotifDrawer]=useState(false);
+  const [isMob,setIsMob]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
+  const [sideOpen,setSideOpen]=useState(false);
+  const [activeCl,setActiveCl]=useState(null);
+
+  // ── TASKS — inicializa do cache local imediatamente ──
+  const [globalTasks,setGlobalTasksRaw]=useState(()=>{
+    try{
+      const s=localStorage.getItem("pixels-tasks-v3");
+      if(s){const p=JSON.parse(s);if(Array.isArray(p)&&p.length>0)return p;}
+    }catch(e){}
+    return TASKS_INIT;
+  });
+  const [notifs,setNotifs]=useState(NOTIF_STORE.items);
+  const [storageLoaded,setStorageLoaded]=useState(()=>{
+    try{const s=localStorage.getItem("pixels-tasks-v3");return !!(s&&JSON.parse(s)?.length>0);}catch(e){return false;}
+  });
+
+  const TASKS_KEY="pixels-tasks-v3";
+  const FILES_KEY_PREFIX="pixels-files-";
+
+  // ── PERMISSIONS — localStorage + Supabase sync ──
+  const [livePerms,setLivePerms]=useState(()=>{
+    const base={...ACCESS_STORE};
+    try{
+      TEAM.forEach(u=>{
+        const s=localStorage.getItem("pixels-perms-"+u.id);
+        if(s){
+          const saved=JSON.parse(s);
+          const merged={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...saved};
+          if(u.level>1&&!ACCESS_STORE[u.id]?.verTodosKanban){merged.verTodosKanban=false;}
+          base[u.id]=merged;
+        }
+      });
+    }catch(e){}
+    return base;
+  });
+  const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
+  const myPerms=getPerms(CURRENT_USER.id);
+
+  // Carrega permissões do Supabase (fonte de verdade)
+  useEffect(()=>{
+    if(authState!=="app")return;
+    _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
+      if(!error&&data){
+        data.forEach(profile=>{
+          const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
+          if(!u)return;
+          let perms;
+          if(profile.permissions&&Object.keys(profile.permissions).length>0){
+            perms={...DEFAULT_PERMS,...profile.permissions};
+          }else{
+            perms={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
+          }
+          ACCESS_STORE[u.id]=perms;
+          setLivePerms(p=>({...p,[u.id]:perms}));
+          try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
+        });
+      }
+    }).catch(e=>console.warn("load perms:",e));
+  },[authState]);
+
+
   // ─────────────────────────────────────────────────────────────────
   // AUTH + TASKS: bloco unificado
   //
