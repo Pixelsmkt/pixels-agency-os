@@ -18160,14 +18160,15 @@ export default function AgencyOS(){
     setGlobalTasksRaw(prev => {
       // Mescla: Supabase é fonte de verdade para cards existentes,
       // mas mantém cards locais que ainda não foram confirmados no Supabase
-      const supabaseIds = new Set(fromSupabase.map(t => t.id));
-      // Cards locais que não estão no Supabase: criados recentemente (sync pendente)
-      const localPending = prev.filter(t => !supabaseIds.has(t.id));
-      // Para cards que existem em ambos: usa versão do Supabase,
-      // mas se o local tem deletedAt mais recente, mantém o local (exclusão pendente)
+      // Normaliza IDs para string — mkId() retorna number, Supabase retorna string
+      const supabaseIds = new Set(fromSupabase.map(t => String(t.id)));
+      // Cards locais que ainda não chegaram ao Supabase (sync pendente)
+      const localPending = prev.filter(t => !supabaseIds.has(String(t.id)));
+      // Para cards em ambos: usa versão do Supabase (mais recente)
+      // Exceção: se local tem deletedAt mas Supabase não, respeita exclusão local
       const reconciled = fromSupabase.map(sb => {
-        const local = prev.find(l => l.id === sb.id);
-        if (local && local.deletedAt && !sb.deletedAt) return local; // exclusão local pendente
+        const local = prev.find(l => String(l.id) === String(sb.id));
+        if (local && local.deletedAt && !sb.deletedAt) return local;
         return sb;
       });
       const merged = [...reconciled, ...localPending];
@@ -18177,9 +18178,9 @@ export default function AgencyOS(){
   }, []);
 
   const _applyRealtimeRow = useCallback((row) => {
-    const incoming = {...row.data, id: row.id};
+    const incoming = {...row.data, id: String(row.id)};
     setGlobalTasksRaw(prev => {
-      const exists = prev.find(x => x.id === incoming.id);
+      const exists = prev.find(x => String(x.id) === String(incoming.id));
       const next = exists
         ? prev.map(x => x.id === incoming.id ? {...incoming, files: exists.files || incoming.files || []} : x)
         : [...prev, incoming];
@@ -18190,7 +18191,7 @@ export default function AgencyOS(){
 
   const _removeTask = useCallback((id) => {
     setGlobalTasksRaw(prev => {
-      const next = prev.filter(x => x.id !== id);
+      const next = prev.filter(x => String(x.id) !== String(id));
       try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(next.map(t => ({...t, files: (t.files||[]).map(({url,...r})=>r)})))); } catch(e) {}
       return next;
     });
@@ -18409,31 +18410,13 @@ export default function AgencyOS(){
   // Helper para salvar tasks no Supabase — com retry automático
   const syncTasksToSupabase=async(tasks,retryCount=0)=>{
     if(!tasks||tasks.length===0)return;
-    // Usa raw fetch com token do _sessionRef — evita race condition do _sb interno
-    const session=_sessionRef.current;
-    if(!session){
-      // Sem sessão: aguarda e tenta de novo (max 1 retry)
-      if(retryCount===0)setTimeout(()=>syncTasksToSupabase(tasks,1),1500);
-      return;
-    }
     try{
       const rows=tasks.map(t=>{
         const {id,...rest}=t;
         return {id:String(id),data:{...rest,files:(t.files||[]).map(({url,...r})=>r)}};
       });
-      const res=await fetch(
-        import.meta.env.VITE_SUPABASE_URL+"/rest/v1/tasks",
-        {method:"POST",
-         headers:{
-           "apikey":import.meta.env.VITE_SUPABASE_ANON_KEY,
-           "Authorization":"Bearer "+session.access_token,
-           "Content-Type":"application/json",
-           "Prefer":"resolution=merge-duplicates"
-         },
-         body:JSON.stringify(rows)
-        }
-      );
-      if(!res.ok&&retryCount===0){
+      const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
+      if(error&&retryCount===0){
         setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
       }
     }catch(e){
