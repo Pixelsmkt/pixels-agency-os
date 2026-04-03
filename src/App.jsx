@@ -18099,7 +18099,13 @@ export default function AgencyOS(){
   const [globalTasks,setGlobalTasksRaw]=useState(()=>{
     try{
       const s=localStorage.getItem("pixels-tasks-v3");
-      if(s){const p=JSON.parse(s);if(Array.isArray(p)&&p.length>0)return p;}
+      if(s){
+        const p=JSON.parse(s);
+        if(Array.isArray(p)&&p.length>0){
+          // Normaliza IDs para string ao carregar do cache
+          return p.map(t=>t.id&&typeof t.id!=="string"?{...t,id:String(t.id)}:t);
+        }
+      }
     }catch(e){}
     return TASKS_INIT;
   });
@@ -18156,7 +18162,7 @@ export default function AgencyOS(){
   // Funções de aplicação de tasks — usadas por fetch inicial, polling e realtime
   const _applyTasks = useCallback((rows) => {
     if (!rows || rows.length === 0) return;
-    const fromSupabase = rows.map(row => ({...row.data, id: row.id}));
+    const fromSupabase = rows.map(row => ({...row.data, id: String(row.id)}));
     setGlobalTasksRaw(prev => {
       // Mescla: Supabase é fonte de verdade para cards existentes,
       // mas mantém cards locais que ainda não foram confirmados no Supabase
@@ -18462,16 +18468,17 @@ export default function AgencyOS(){
 
   const setGlobalTasks=(updater)=>{
     setGlobalTasksRaw(prev=>{
-      const next=typeof updater==="function"?updater(prev):updater;
+      const rawNext=typeof updater==="function"?updater(prev):updater;
+      // Normaliza todos os IDs para string — evita incompatibilidade number vs string com Supabase
+      const next=rawNext.map(t=>t.id&&typeof t.id!=="string"?{...t,id:String(t.id)}:t);
 
-      // Detecta tarefas alteradas
+      // Detecta tarefas alteradas (compara IDs como string)
       const changed=next.filter(t=>{
-        const old=prev.find(p=>p.id===t.id);
+        const old=prev.find(p=>String(p.id)===String(t.id));
         return !old||JSON.stringify({...old,files:[]})!==JSON.stringify({...t,files:[]});
       });
 
       if(changed.length>0){
-        // Sync imediato ao Supabase
         syncTasksToSupabase(changed);
       }
 
@@ -18481,7 +18488,7 @@ export default function AgencyOS(){
         try{
           const meta=next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}));
           localStorage.setItem(TASKS_KEY,JSON.stringify(meta));
-        }catch(e){console.warn("Tasks localStorage save:",e);}
+        }catch(e){}
       },300);
 
       return next;
