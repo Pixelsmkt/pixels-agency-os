@@ -18156,9 +18156,24 @@ export default function AgencyOS(){
   // Funções de aplicação de tasks — usadas por fetch inicial, polling e realtime
   const _applyTasks = useCallback((rows) => {
     if (!rows || rows.length === 0) return;
-    const parsed = rows.map(row => ({...row.data, id: row.id}));
-    setGlobalTasksRaw(parsed);
-    try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(parsed)); } catch(e) {}
+    const fromSupabase = rows.map(row => ({...row.data, id: row.id}));
+    setGlobalTasksRaw(prev => {
+      // Mescla: Supabase é fonte de verdade para cards existentes,
+      // mas mantém cards locais que ainda não foram confirmados no Supabase
+      const supabaseIds = new Set(fromSupabase.map(t => t.id));
+      // Cards locais que não estão no Supabase: criados recentemente (sync pendente)
+      const localPending = prev.filter(t => !supabaseIds.has(t.id));
+      // Para cards que existem em ambos: usa versão do Supabase,
+      // mas se o local tem deletedAt mais recente, mantém o local (exclusão pendente)
+      const reconciled = fromSupabase.map(sb => {
+        const local = prev.find(l => l.id === sb.id);
+        if (local && local.deletedAt && !sb.deletedAt) return local; // exclusão local pendente
+        return sb;
+      });
+      const merged = [...reconciled, ...localPending];
+      try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(merged)); } catch(e) {}
+      return merged;
+    });
   }, []);
 
   const _applyRealtimeRow = useCallback((row) => {
@@ -18317,7 +18332,7 @@ export default function AgencyOS(){
       } catch(e) {}
     };
 
-    const pollInterval = setInterval(poll, 5000);
+    const pollInterval = setInterval(poll, 3000);
 
     // Realtime — atualizações instantâneas
     let currentChannel = null;
