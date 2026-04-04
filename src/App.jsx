@@ -109,7 +109,7 @@ function saveLiveClient(id,partial){
 // ======= 00_globals.jsx =======
 // Módulo de framework: temas, perms, componentes base, navegação
 // Não contém dados de negócio — ver 00_clientes_data.jsx e 00_mindmap_data.jsx
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as recharts from "recharts";
 
 // Global mobile styles
@@ -441,6 +441,15 @@ function taskUrgencyLevel(t){
 // Cor correspondente ao nível de urgência
 function getUrgencyColor(level){
   return(["#e53e3e","#f97316",C.yw,C.gr])[level]??C.gr;
+}
+
+/* ─── FUNÇÃO: trashDaysLeft ─────────────────── */
+// Retorna quantos dias restam antes de um card na lixeira ser excluído (30 dias)
+function trashDaysLeft(t){
+  if(!t?.deletedAt) return 30;
+  const deleted=new Date(t.deletedAt);
+  const expires=new Date(deleted.getTime()+30*24*60*60*1000);
+  return Math.max(0,Math.ceil((expires-new Date())/86400000));
 }
 
 /* ─── COMPONENTE: ClientLogo ─────────────────── */
