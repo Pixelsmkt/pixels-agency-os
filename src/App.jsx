@@ -11433,7 +11433,7 @@ function PageConexoes({isMob}){
 }
 
 /* ── BarChart — fora do componente para evitar remount ── */
-function BarChart({items,colorKey="valor"}){
+function BarChartV({items,colorKey="valor"}){
   const max=Math.max(...items.map(i=>i[colorKey]),1);
   return(<div style={{display:"flex",flexDirection:"column",gap:5}}>
     {[...items].sort((a,b)=>b[colorKey]-a[colorKey]).slice(0,6).map((item,i)=>{
@@ -11868,21 +11868,21 @@ function PageMapeamento(){
                 {selected.type==="country"&&selected.name==="Brazil"&&(
                   <>
                     <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:10}}>Receita por Estado</div>
-                    <BarChart items={Object.values(byEstado).filter(e=>e.pais==="Brasil")} colorKey="valor"/>
+                    <BarChartV items={Object.values(byEstado).filter(e=>e.pais==="Brasil")} colorKey="valor"/>
                   </>
                 )}
                 {selected.type==="country"&&selected.name!=="Brazil"&&(
                   <>
                     <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:10}}>Cidades</div>
-                    <BarChart items={selected.data.cidades||[]} colorKey="valor"/>
+                    <BarChartV items={selected.data.cidades||[]} colorKey="valor"/>
                   </>
                 )}
                 {selected.type==="state"&&(
                   <>
                     <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:10}}>Receita por Cidade</div>
-                    <BarChart items={selected.data.cidades||[]} colorKey="valor"/>
+                    <BarChartV items={selected.data.cidades||[]} colorKey="valor"/>
                     <div style={{color:C.tx,fontWeight:700,fontSize:13,marginTop:16,marginBottom:10}}>Vendas por Cidade</div>
-                    <BarChart items={selected.data.cidades||[]} colorKey="vendas"/>
+                    <BarChartV items={selected.data.cidades||[]} colorKey="vendas"/>
                   </>
                 )}
               </>
