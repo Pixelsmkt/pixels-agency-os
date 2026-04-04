@@ -6589,7 +6589,7 @@ const {
   Bar:RBar,Line:RLine,Area:RArea,
   XAxis,YAxis,CartesianGrid,
   Tooltip:RTooltip,Legend:RLegend,
-  ResponsiveContainer
+  ResponsiveContainer}=recharts;
 
 // ======= 03_clientes2.jsx =======
 // Entrada da seção Clientes: PageClientes + NovoClienteModal + calcScore + Sparkline
