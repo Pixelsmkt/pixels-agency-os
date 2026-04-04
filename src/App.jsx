@@ -17973,6 +17973,21 @@ const TASKS_CACHE_KEY   = "pixels-tasks-v3";
 const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+
+// ── Lê sessão diretamente do localStorage — sem deadlock do Supabase client ──
+const getStoredSession = () => {
+  try{
+    const raw = localStorage.getItem("pixels-sb-auth");
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    const session = parsed?.currentSession || parsed;
+    if(!session?.access_token) return null;
+    // Verifica se não expirou
+    if(session.expires_at && session.expires_at < Date.now()/1000) return null;
+    return session;
+  }catch{return null;}
+};
+
 // ── Conversores schema flat ↔ task object ────────────────────
 // Supabase row → objeto usado no app (camelCase)
 const rowToTask = (r) => ({
@@ -18323,22 +18338,18 @@ export default function AgencyOS(){
       }
     });
 
-    // Fallback: authState veio do cache mas onAuthStateChange ainda não disparou
-    const fallback = async () => {
-      if(sessionRef.current) return; // já tem sessão
-      try{
-        const {data:{session}} = await _sb.auth.getSession();
-        if(session&&!fetched){
-          fetched=true;
-          sessionRef.current=session;
-          fetchTasksWithToken(session.access_token);
-        } else if(!session){
-          clearTimeout(safetyTimer);
-          setStorageLoaded(true);
-        }
-      }catch{clearTimeout(safetyTimer);setStorageLoaded(true);}
-    };
-    setTimeout(fallback,100);
+    // Se onAuthStateChange não disparou ainda, lê sessão do localStorage diretamente
+    if(!sessionRef.current){
+      const stored = getStoredSession();
+      if(stored&&!fetched){
+        fetched=true;
+        sessionRef.current=stored;
+        fetchTasksWithToken(stored.access_token);
+      } else if(!stored){
+        clearTimeout(safetyTimer);
+        setStorageLoaded(true);
+      }
+    }
 
     return()=>{clearTimeout(safetyTimer);subscription.unsubscribe();};
   },[]);
@@ -18350,14 +18361,11 @@ export default function AgencyOS(){
 
     // Garante que sessionRef está populado antes do primeiro poll
     // (pode ser null se authState veio do cache e onAuthStateChange ainda não disparou)
-    const ensureSession = async () => {
-      if(sessionRef.current) return;
-      try{
-        const {data:{session}} = await _sb.auth.getSession();
-        if(session&&!cancelled) sessionRef.current=session;
-      }catch{}
-    };
-    ensureSession();
+    // Popula sessionRef do localStorage se ainda não foi populado pelo onAuthStateChange
+    if(!sessionRef.current){
+      const stored = getStoredSession();
+      if(stored&&!cancelled) sessionRef.current=stored;
+    }
 
     // Fetch do Supabase usando token da sessão
     const pollFetch = async () => {
