@@ -13404,8 +13404,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>
                 <button onClick={addComment} style={{background:"#0f172a",border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,flexShrink:0}}>↑</button>
               </div>
-            </div>
-            }{/* fim Comentários */}
+            </div>}
           </div>
 
           {/* FILES */}
