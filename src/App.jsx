@@ -18198,23 +18198,16 @@ export default function AgencyOS(){
     if (!rows || rows.length === 0) return;
     const fromSupabase = rows.map(row => _rowToTask(row));
     setGlobalTasksRaw(prev => {
-      // Mescla: Supabase é fonte de verdade para cards existentes,
-      // mas mantém cards locais que ainda não foram confirmados no Supabase
-      // Normaliza IDs para string — mkId() retorna number, Supabase retorna string
-      const supabaseIds = new Set(fromSupabase.map(t => String(t.id)));
-      // Cards locais que ainda não chegaram ao Supabase (sync pendente)
-      const localPending = prev.filter(t => !supabaseIds.has(String(t.id)));
-      // Para cards em ambos: usa versão do Supabase
-      // Exceções: (1) card tem mudança local pendente → usa local
-      //           (2) local tem deletedAt → respeita exclusão local
-      const reconciled = fromSupabase.map(sb => {
+      // Poll só chega aqui quando não há sync pendente (_pendingSyncIds.size === 0)
+      // Supabase é a fonte de verdade — aplica direto
+      // Preserva files locais (não são sincronizados via URL)
+      const merged = fromSupabase.map(sb => {
         const local = prev.find(l => String(l.id) === String(sb.id));
-        if (!local) return sb;
-        if (local.deletedAt && !sb.deletedAt) return local; // exclusão local pendente
-        if (_pendingSyncIds.current.has(String(sb.id))) return local; // edição local pendente
-        return sb; // Supabase confirmou — usa versão do Supabase
+        if (local && local.files && local.files.length > 0) {
+          return {...sb, files: local.files};
+        }
+        return sb;
       });
-      const merged = [...reconciled, ...localPending];
       try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(merged)); } catch(e) {}
       return merged;
     });
@@ -18360,6 +18353,9 @@ export default function AgencyOS(){
     const poll = async () => {
       const session = _sessionRef.current;
       if (!session || cancelled) return;
+      // Se há cards com sync pendente, aguarda confirmação antes de aplicar
+      // Evita que o poll sobrescreva cards recém criados/editados
+      if (_pendingSyncIds.current.size > 0) return;
       try {
         const res = await fetch(
           import.meta.env.VITE_SUPABASE_URL + "/rest/v1/tasks?select=*",
