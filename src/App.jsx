@@ -13673,9 +13673,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </button>;
               })}
             </div>}
-          </div>
-
-          }}{/* fim Responsáveis */}
+          </div>}
 
           {/* Monitorando — dropdown estilo select */}
           {!isAgendado&&TEAM.filter(u=>!assignees.includes(u.id)).length>0&&<div style={{position:"relative"}}>
@@ -13705,8 +13703,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               })}
             </div>}
           </div>}
-
-          }}{/* fim Monitorando */}
 
           {/* Cliente */}
           {!isAgendado&&<div>
