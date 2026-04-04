@@ -112,10 +112,6 @@ function saveLiveClient(id,partial){
 import { useState, useEffect, useRef, useCallback } from "react";
 import * as recharts from "recharts";
 
-// ======= 00_globals.jsx =======
-import { useState, useEffect, useRef, useCallback } from "react";
-import * as recharts from "recharts";
-
 // Global mobile styles
 const MOBILE_CSS=`
   *{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
@@ -459,7 +455,7 @@ const CLIENT_MINDMAP = {
       {...MM_BRANCHES.video, children:[{id:"a",label:"Tour de obras"}, {id:"b",label:"Cases de entrega"}, {id:"c",label:"Depoimentos"}, {id:"d",label:"Reels 15s"}]},
       {...MM_BRANCHES.seo, children:[{id:"a",label:"On-page construtoras"}, {id:"b",label:"Blog corporativo"}, {id:"c",label:"Link building"}, {id:"d",label:"Core Web Vitals"}]},
     ]
-  }},
+  },
   bioter: {
     center: "Grupo Bioter",
     branches: [
@@ -470,7 +466,7 @@ const CLIENT_MINDMAP = {
       {...MM_BRANCHES.video, children:[{id:"a",label:"Institucional 2min"}, {id:"b",label:"Tour por unidade"}, {id:"c",label:"Reels de produto"}, {id:"d",label:"Depoimento produtor"}]},
       {...MM_BRANCHES.unidades, children:[{id:"a",label:"Chapecó/SC"}, {id:"b",label:"Toledo/PR"}, {id:"c",label:"Castro/PR"}, {id:"d",label:"Uberlândia/MG"}, {id:"e",label:"Glória/MS"}, {id:"f",label:"Paraguay 🇵🇾"}]},
     ]
-  }},
+  },
   arabuta: {
     center: "Arabutã Pré-Moldados",
     branches: [
@@ -481,7 +477,7 @@ const CLIENT_MINDMAP = {
       {...MM_BRANCHES.video, children:[{id:"a",label:"Tour da fábrica"}, {id:"b",label:"Reels produto"}, {id:"c",label:"Obra entregue"}, {id:"d",label:"Depoimento cliente"}]},
       {...MM_BRANCHES.seo, children:[{id:"a",label:"Pré-moldados SC"}, {id:"b",label:"Landing page obras"}, {id:"c",label:"Blog construção"}, {id:"d",label:"Core Web Vitals"}]},
     ]
-  }},
+  },
   climaves: {
     center: "Climaves",
     branches: [
@@ -492,7 +488,7 @@ const CLIENT_MINDMAP = {
       {...MM_BRANCHES.video, children:[{id:"a",label:"Produto instalado"}, {id:"b",label:"Reels inverno"}, {id:"c",label:"Tutorial uso"}, {id:"d",label:"Depoimento cliente"}]},
       {...MM_BRANCHES.agro, children:[{id:"a",label:"Climatização aviária"}, {id:"b",label:"Soluções suinocultura"}, {id:"c",label:"Conteúdo técnico"}, {id:"d",label:"Feiras do setor"}]},
     ]
-  }},
+  },
   vetservice: {
     center: "VetService",
     branches: [
@@ -503,7 +499,7 @@ const CLIENT_MINDMAP = {
       {...MM_BRANCHES.video, children:[{id:"a",label:"Procedimento vet"}, {id:"b",label:"Depoimento produtor"}, {id:"c",label:"Reels saúde animal"}, {id:"d",label:"Institucional"}]},
       {...MM_BRANCHES.leite, children:[{id:"a",label:"Monitoramento rebanho"}, {id:"b",label:"Nutrição bovina"}, {id:"c",label:"Produtividade leiteira"}, {id:"d",label:"Tecnologia no campo"}]},
     ]
-  }},
+  },
 };
 
 // ======= 01_dashboard.jsx =======
