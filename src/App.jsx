@@ -8239,6 +8239,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:null}:t));
   };
 
+  // Exclusão permanente — só admins (level 1). Deleta arquivos do Storage.
+  const permanentDelete=async(id)=>{
+    const t=(tasks||[]).find(x=>x.id===id);
+    if(t){
+      const paths=(t.files||[]).filter(f=>f.storagePath).map(f=>f.storagePath);
+      if(paths.length>0){
+        try{await window._sb.storage.from("pixels-files").remove(paths);}catch(e){console.warn("Storage delete:",e);}
+      }
+    }
+    setTasks(p=>p.filter(x=>x.id!==id));
+  };
+
   // trashDaysLeft: usando versão de 00_globals
 
   // Calendar helpers
@@ -8657,9 +8669,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   <div style={{color:C.tx,fontWeight:600,fontSize:13,textDecoration:"line-through"}}>{t.title}</div>
                   <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
                 </div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                   <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
                   {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
+                  {CURRENT_USER.level===1&&<button onClick={()=>{if(window.confirm("Excluir permanentemente? Esta ação não pode ser desfeita."))permanentDelete(t.id);}} style={{background:C.rd+"22",border:`1px solid ${C.rd}44`,borderRadius:8,padding:"5px 12px",color:C.rd,fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Excluir definitivamente</button>}
                 </div>
               </div>;
             })}
