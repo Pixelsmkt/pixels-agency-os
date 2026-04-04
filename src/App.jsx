@@ -13368,9 +13368,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>
                 {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:15,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
               </div>)}
-            </div>
-
-            }{/* fim Áudios Orientação */}
+            </div>}
 
             {/* ── COMENTÁRIOS ── */}
             {!isAgendado&&<div>
