@@ -7183,8 +7183,8 @@ function PageClientes({isMob, tasks}){
 // Depende de: 00_globals, 00_clientes_data, 11_cardmodal (CardModal)
 // Posição no bundle: após 04_demandas
 
-function PageCalendarioPublicacoes({isMob, tasks, setTasks}){
-  const tasks = tasks||[];
+function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
+  const tasks = propTasks||[];
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
@@ -10018,24 +10018,6 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
       desc:"Comunicados e avisos da agência para a equipe",
     },
   ];
-
-    <div onClick={()=>markRead(n.id)}
-      style={{display:"flex",gap:10,alignItems:"flex-start",padding:"11px 14px",borderBottom:`1px solid ${C.b1}`,cursor:"pointer",background:n.read?"transparent":color+"08",transition:"background .12s"}}
-      onMouseEnter={e=>e.currentTarget.style.background=C.b1+"88"}
-      onMouseLeave={e=>e.currentTarget.style.background=n.read?"transparent":color+"08"}>
-      <div style={{width:34,height:34,borderRadius:10,background:color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{n.icon}</div>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:6}}>
-          <span style={{color:C.tx,fontWeight:n.read?500:700,fontSize:12,lineHeight:1.3}}>{n.title}</span>
-          {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:color,flexShrink:0,marginTop:3}}/>}
-        </div>
-        <div style={{color:C.ts,fontSize:11,marginTop:3,lineHeight:1.5}}>{n.body}</div>
-        <div style={{color:C.td,fontSize:10,marginTop:4,display:"flex",gap:6}}>
-          <span>{n.at}</span><span>·</span><span>{n.user}</span>
-        </div>
-      </div>
-    </div>
-  );
 
   const totalUnread=ALL_NOTIFS.filter(n=>!n.read).length;
 
