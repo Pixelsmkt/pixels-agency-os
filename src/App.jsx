@@ -18170,12 +18170,15 @@ export default function AgencyOS(){
       const supabaseIds = new Set(fromSupabase.map(t => String(t.id)));
       // Cards locais que ainda não chegaram ao Supabase (sync pendente)
       const localPending = prev.filter(t => !supabaseIds.has(String(t.id)));
-      // Para cards em ambos: usa versão do Supabase (mais recente)
-      // Exceção: se local tem deletedAt mas Supabase não, respeita exclusão local
+      // Para cards em ambos: usa versão do Supabase
+      // Exceções: (1) card tem mudança local pendente → usa local
+      //           (2) local tem deletedAt → respeita exclusão local
       const reconciled = fromSupabase.map(sb => {
         const local = prev.find(l => String(l.id) === String(sb.id));
-        if (local && local.deletedAt && !sb.deletedAt) return local;
-        return sb;
+        if (!local) return sb;
+        if (local.deletedAt && !sb.deletedAt) return local; // exclusão local pendente
+        if (_pendingSyncIds.current.has(String(sb.id))) return local; // edição local pendente
+        return sb; // Supabase confirmou — usa versão do Supabase
       });
       const merged = [...reconciled, ...localPending];
       try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(merged)); } catch(e) {}
@@ -18342,7 +18345,25 @@ export default function AgencyOS(){
 
     const pollInterval = setInterval(poll, 3000);
 
-    // Realtime — atualizações instantâneas
+    // ── BROADCAST: sincronização instantânea entre sessões (~100ms) ──
+    // Quando alguém salva um card, avisa todos os outros para fazer fetch imediato.
+    // Resolve o limite de 1MB do postgres_changes com JSONB grande.
+    let broadcastChannel = null;
+    const setupBroadcast = () => {
+      if (cancelled) return;
+      broadcastChannel = _sb.channel("pixels-tasks-sync")
+        .on("broadcast", {event: "tasks-changed"}, async () => {
+          if (!cancelled) await poll(); // fetch imediato ao receber broadcast
+        })
+        .subscribe(status => {
+          if (!cancelled && status === "SUBSCRIBED") {
+            window._pixelsBroadcastChannel = broadcastChannel;
+          }
+        });
+    };
+    setupBroadcast();
+
+    // ── REALTIME postgres_changes: fallback para cards pequenos ──
     let currentChannel = null;
     const subscribeRealtime = () => {
       if (cancelled) return;
@@ -18359,9 +18380,7 @@ export default function AgencyOS(){
         })
         .subscribe(status => {
           if (cancelled) return;
-          if (status === "SUBSCRIBED")
           if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-          if(!cancelled)setTimeout(subscribeRealtime,3000);
             if (!cancelled) setTimeout(subscribeRealtime, 3000);
           }
         });
@@ -18373,6 +18392,8 @@ export default function AgencyOS(){
       cancelled = true;
       clearTimeout(safetyTimer);
       clearInterval(pollInterval);
+      window._pixelsBroadcastChannel = null;
+      if (broadcastChannel) { try { _sb.removeChannel(broadcastChannel); } catch(e) {} }
       if (currentChannel) { try { _sb.removeChannel(currentChannel); } catch(e) {} }
     };
   }, [authState]);
@@ -18425,6 +18446,14 @@ export default function AgencyOS(){
       const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
       if(error&&retryCount===0){
         setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
+      }else if(!error){
+        // Supabase confirmou — remove IDs do pending set
+        rows.forEach(r=>_pendingSyncIds.current.delete(String(r.id)));
+        // Avisa todos os outros usuários via broadcast para fazer fetch imediato
+        try{
+          const ch=window._pixelsBroadcastChannel;
+          if(ch) ch.send({type:"broadcast",event:"tasks-changed",payload:{ts:Date.now()}});
+        }catch(e){}
       }
     }catch(e){
       if(retryCount===0)setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
@@ -18462,6 +18491,7 @@ export default function AgencyOS(){
 
   // Ref compartilhado entre useEffect([]) e useEffect([authState]) para evitar duplo fetch
   const _tasksFetchedRef = useRef(false);
+  const _pendingSyncIds = useRef(new Set()); // IDs com mudanças locais aguardando confirmação do Supabase
 
   // ── Save — called on every change, saves ALL fields ──
   const saveTimer=useRef(null);
@@ -18483,6 +18513,8 @@ export default function AgencyOS(){
       });
 
       if(changed.length>0){
+        // Marca IDs como pendentes — o merge vai preferir versão local até Supabase confirmar
+        changed.forEach(t=>_pendingSyncIds.current.add(String(t.id)));
         syncTasksToSupabase(changed);
       }
 
