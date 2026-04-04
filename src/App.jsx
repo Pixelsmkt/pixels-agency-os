@@ -12696,16 +12696,26 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }catch(e){}
   };
 
-  const handleFileUpload=(e)=>{
-    Array.from(e.target.files||[]).forEach(file=>{
-      const reader=new FileReader();
-      reader.onload=ev=>{
-        const att={id:Date.now()+Math.random(),name:file.name,type:file.type,url:ev.target.result,size:file.size,addedAt:nowFmt(),addedBy:user.name};
-        setAttachments(p=>[...p,att]);
-      };
-      reader.readAsDataURL(file);
-    });
+  const handleFileUpload=async(e)=>{
+    const files=Array.from(e.target.files||[]);
     e.target.value="";
+    for(const file of files){
+      const ext=file.name.split(".").pop();
+      const path=`tasks/${task.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const tempId=Date.now()+Math.random();
+      setAttachments(p=>[...p,{id:tempId,name:file.name,type:file.type,size:file.size,url:null,uploading:true,addedAt:nowFmt(),addedBy:user.name}]);
+      try{
+        const sb=window._sb;
+        const{error}=await sb.storage.from("pixels-files").upload(path,file,{upsert:false});
+        if(error)throw error;
+        const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+        setAttachments(p=>p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,storagePath:path}:a));
+      }catch(err){
+        console.error("Upload erro:",err);
+        setAttachments(p=>p.filter(a=>a.id!==tempId));
+        alert("Erro ao fazer upload de "+file.name+". Tente novamente.");
+      }
+    }
   };
 
   const removeAttachment=(id)=>setAttachments(p=>p.filter(a=>a.id!==id));
@@ -13252,6 +13262,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {attachments.length===0&&<div style={{textAlign:"center",padding:"32px 0",color:"#cbd5e1"}}>
                 <div style={{fontSize:32,marginBottom:8}}>📎</div>
                 <div style={{fontSize:12}}>Nenhum arquivo ainda</div>
+              </div>}
+
+              {attachments.some(a=>a.uploading)&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"8px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                <div style={{fontSize:14}}>⏳</div>
+                <div style={{flex:1}}>
+                  <div style={{color:"#1d4ed8",fontSize:11,fontWeight:700}}>Enviando {attachments.filter(a=>a.uploading).length} arquivo(s)...</div>
+                  <div style={{color:"#93c5fd",fontSize:10}}>Aguarde antes de salvar</div>
+                </div>
               </div>}
 
               {imgAttachments.length>0&&<>
@@ -14581,7 +14599,7 @@ const taskToRow = (t) => ({
   watchers:       t.watchers     || [],
   tags:           t.tags         || [],
   comments:       t.comments     || [],
-  files:          (t.files||[]).map(({url,...r})=>r),
+  files:          (t.files||[]).map(({url,...r})=>url&&url.startsWith("data:")?r:{...r,url}),
   timeline:       t.timeline     || [],
   checklist:      t.checklist    || [],
   caption:        t.caption      || "",
@@ -14819,7 +14837,7 @@ export default function AgencyOS(){
       }
       clearTimeout(saveTimer.current);
       saveTimer.current=setTimeout(()=>{
-        ls.set(TASKS_KEY,next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)})));
+        ls.set(TASKS_KEY,next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>url&&url.startsWith("data:")?r:{...r,url})})));
       },300);
       return next;
     });
@@ -14903,7 +14921,9 @@ export default function AgencyOS(){
               const loc=prev.find(l=>String(l.id)===String(sb.id));
               if(!loc) return sb;
               if(pendingRef.current.has(String(sb.id))) return loc;
-              return loc.files?.length>0?{...sb,files:loc.files}:sb;
+              // Prefere files do Supabase se tiver urls do Storage; senão mantém local
+              const sbHasStorageFiles=(sb.files||[]).some(f=>f.url&&!f.url.startsWith("data:"));
+              return sbHasStorageFiles?sb:(loc.files?.length>0?{...sb,files:loc.files}:sb);
             }),
             ...localOnly
           ];
@@ -14929,7 +14949,7 @@ export default function AgencyOS(){
           setTasksRaw(prev=>{
             const exists=prev.find(x=>String(x.id)===String(incoming.id));
             const next=exists
-              ?prev.map(x=>String(x.id)===String(incoming.id)?{...incoming,files:exists.files||[]}:x)
+              ?prev.map(x=>String(x.id)===String(incoming.id)?{...incoming,files:(incoming.files||[]).length>0?incoming.files:exists.files||[]}:x)
               :[...prev,incoming];
             ls.set(TASKS_KEY,next);
             return next;
