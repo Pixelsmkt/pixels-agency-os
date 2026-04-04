@@ -1940,29 +1940,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
           {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Lixeira</button>}
           {/* Botão de refresh manual */}
-          {(()=>{
-            const [syncing,setSyncing]=useState(false);
-            return <button onClick={()=>{
-              if(syncing)return;
-              setSyncing(true);
-              const sb=window._sb||null;
-              if(!sb){window.location.reload();return;}
-              sb.from("tasks").select("*").then(({data,error})=>{
-                if(!error&&data&&data.length>0){
-                  const parsed=data.map(row=>({...row.data,id:row.id}));
-                  // setTasks já é propSetTasks (global) ou setLocalTasks
-                  setTasks(parsed);
-                  try{localStorage.setItem("pixels-tasks-v3",JSON.stringify(parsed));}catch(e){}
-                }
-                setTimeout(()=>setSyncing(false),800);
-              }).catch(()=>setSyncing(false));
+          <button onClick={()=>{
+              const ch=window._broadcastChannel;
+              if(ch){ch.send({type:"broadcast",event:"sync",payload:{ts:Date.now()}});}
+              else{window.location.reload();}
             }} title="Sincronizar agora"
-              style={{background:syncing?C.a+"22":C.b1,border:`1px solid ${syncing?C.a:C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:syncing?"wait":"pointer",color:syncing?C.a:C.ts,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
-              onMouseEnter={e=>{if(!syncing){e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a;}}}
-              onMouseLeave={e=>{if(!syncing){e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}}>
-              <span style={{display:"inline-block",animation:syncing?"spin 0.8s linear infinite":"none"}}>↻</span>
-            </button>;
-          })()}
+            style={{background:C.b1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:"pointer",color:C.ts,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
+            onMouseEnter={e=>{e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a;}}
+            onMouseLeave={e=>{e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+            ↻
+          </button>
           {myPerms.criarDemanda&&<button onClick={()=>{
             if(myPerms.novaColuna&&viewMode==="cartao"){setShowNewCol(true);}
             else{addNewTask("demanda");}
@@ -18344,6 +18331,17 @@ export default function AgencyOS(){
     if(authState!=="app") return;
     let cancelled=false;
 
+    // Garante que sessionRef está populado antes do primeiro poll
+    // (pode ser null se authState veio do cache e onAuthStateChange ainda não disparou)
+    const ensureSession = async () => {
+      if(sessionRef.current) return;
+      try{
+        const {data:{session}} = await _sb.auth.getSession();
+        if(session&&!cancelled) sessionRef.current=session;
+      }catch{}
+    };
+    ensureSession();
+
     // Fetch do Supabase usando token da sessão
     const pollFetch = async () => {
       const session = sessionRef.current;
@@ -18370,12 +18368,19 @@ export default function AgencyOS(){
       }catch{}
     };
 
+    setTimeout(pollFetch, 500); // primeiro poll logo após setup
     const pollInterval = setInterval(pollFetch, 3000);
 
     // Broadcast — aviso instantâneo entre sessões (~100ms)
     const bch = _sb.channel("pixels-sync")
-      .on("broadcast",{event:"sync"},async()=>{if(!cancelled)await pollFetch();})
-      .subscribe(s=>{if(!cancelled&&s==="SUBSCRIBED")window._broadcastChannel=bch;});
+      .on("broadcast",{event:"sync"},async()=>{
+          if(cancelled)return;
+          await ensureSession();
+          await pollFetch();
+        })
+      .subscribe();
+    // Expõe o canal imediatamente (não espera SUBSCRIBED)
+    window._broadcastChannel=bch;
 
     // Realtime postgres_changes — complementar ao broadcast
     const rch = _sb.channel("pixels-realtime-"+Date.now())
