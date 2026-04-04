@@ -14983,7 +14983,7 @@ export default function AgencyOS(){
     });
     return base;
   });
-  const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
+  const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};return{...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})};};
   const myPerms=getPerms(CURRENT_USER.id);
 
   // ── Fetch tasks do Supabase ───────────────────────────────
