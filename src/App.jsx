@@ -729,13 +729,55 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   const hour=now.getHours();
   const greeting=hour<12?"Bom dia":hour<18?"Boa tarde":"Boa noite";
 
+  const COVER_COLORS=["#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777","#1e293b","#0f172a"];
+  const [coverColor,setCoverColor]=useState(()=>{
+    try{const s=localStorage.getItem("pixels-covercolor-"+CURRENT_USER.id);return s||CURRENT_USER.color||"#7c3aed";}catch{return CURRENT_USER.color||"#7c3aed";}
+  });
+  const [showColorPicker,setShowColorPicker]=useState(false);
+  const saveCoverColor=(c)=>{setCoverColor(c);setShowColorPicker(false);try{localStorage.setItem("pixels-covercolor-"+CURRENT_USER.id,c);}catch(e){}};
+  const photo=getProfilePhoto(CURRENT_USER.id);
+
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    {/* Header */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
-      <div>
-        <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>{greeting}, {CURRENT_USER.name.split(" ")[0]} 👋</div>
-        <div style={{color:C.ts,fontSize:12,marginTop:3}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · {urgent.length>0?<><span style={{color:C.rd,fontWeight:700}}>{urgent.length} urgente{urgent.length>1?"s":""}</span> esperando ação</>:"Tudo sob controle"}</div>
+    {/* ── CAPA DO PERFIL ── */}
+    <div style={{boxShadow:"0 4px 24px rgba(0,0,0,0.15)",position:"relative",marginBottom:8}}>
+      {/* Fundo gradiente */}
+      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}99)`,height:isMob?100:140,width:"100%",position:"relative",borderRadius:"20px 20px 0 0"}}>
+        {/* Botão trocar cor */}
+        <button onClick={()=>setShowColorPicker(v=>!v)}
+          style={{position:"absolute",top:12,right:12,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",backdropFilter:"blur(4px)"}}>
+          🎨 Cor da capa
+        </button>
+        {/* Picker de cores */}
+        {showColorPicker&&<div style={{position:"absolute",top:44,right:12,background:C.card,borderRadius:14,padding:12,boxShadow:"0 8px 24px rgba(0,0,0,0.2)",display:"flex",gap:8,flexWrap:"wrap",maxWidth:220,zIndex:10}}>
+          {COVER_COLORS.map(cor=>(
+            <button key={cor} onClick={()=>saveCoverColor(cor)}
+              style={{width:32,height:32,borderRadius:8,background:cor,border:coverColor===cor?"3px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all .15s",boxShadow:coverColor===cor?"0 0 0 2px "+cor:"none"}}/>
+          ))}
+        </div>}
       </div>
+      {/* Foto + info */}
+      <div style={{background:C.card,padding:isMob?"0 16px 20px":"0 24px 24px",position:"relative",borderRadius:"0 0 20px 20px"}}>
+        <div style={{display:"flex",alignItems:"flex-end",gap:20,position:"relative",top:-50}}>
+          {/* Foto grande */}
+          <div style={{width:isMob?90:120,height:isMob?90:120,borderRadius:"50%",border:"4px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
+            {photo
+              ?<img src={photo} alt={CURRENT_USER.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?36:48}}>{CURRENT_USER.av}</span>
+            }
+          </div>
+          {/* Nome e cargo */}
+          <div style={{paddingBottom:8,flex:1,minWidth:0}}>
+            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?18:24,letterSpacing:-0.5}}>{CURRENT_USER.name}</div>
+            <div style={{color:C.ts,fontSize:13,marginTop:2}}>{CURRENT_USER.role}</div>
+            <div style={{color:C.td,fontSize:11,marginTop:4}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · {urgent.length>0?<span style={{color:C.rd,fontWeight:700}}>{urgent.length} urgente{urgent.length>1?"s":""}</span>:"Tudo sob controle"}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Header legado — substituído pela capa acima */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginTop:-8}}>
+      <div/>
       <div style={{display:"flex",gap:6}}>
         {urgent.length>0&&<div style={{background:"#fff5f5",border:"1px solid #fecaca",borderRadius:10,padding:"6px 14px",color:"#e53e3e",fontWeight:700,fontSize:12,display:"flex",alignItems:"center",gap:6}}>
           🔥 {urgent.length} urgente{urgent.length>1?"s":""}
@@ -15006,7 +15048,7 @@ export default function AgencyOS(){
   },[currentProfile,loggedUser]);
 
   const [themeKey,setThemeKey]     = useState(_themeKey);
-  const [page,setPage]             = useState("demandas");
+  const [page,setPage]             = useState("meudash");
   const [expanded,setExpanded]     = useState({});
   const [notifDrawer,setNotifDrawer] = useState(false);
   const [isMob,setIsMob]           = useState(()=>window.innerWidth<768);
