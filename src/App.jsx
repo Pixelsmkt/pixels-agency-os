@@ -17982,10 +17982,90 @@ const _sb = __createSupabaseClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY,
   {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage,storageKey:"pixels-sb-auth"}}
 );
-// Expõe _sb globalmente para uso no botão de refresh manual do Kanban
 window._sb = _sb;
 
-function LoginScreen({onLoginCollaborator, onLoginClient}){
+// ── Constantes ───────────────────────────────────────────────
+const PROFILE_CACHE_KEY = "pixels-profile-cache";
+const TASKS_CACHE_KEY   = "pixels-tasks-v3";
+const SUPABASE_URL      = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// ── Conversores schema flat ↔ task object ────────────────────
+// Supabase row → objeto usado no app (camelCase)
+const rowToTask = (r) => ({
+  id:           String(r.id),
+  title:        r.title        || "Nova Demanda",
+  status:       r.status       || "demanda",
+  assignee:     r.assignee     || "",
+  sector:       r.sector       || "design",
+  client:       r.client       || "",
+  priority:     r.priority     || "media",
+  deadline:     r.deadline     || "",
+  startDate:    r.start_date   || "",
+  completedAt:  r.completed_at || "",
+  cover:        r.cover        || null,
+  deletedAt:    r.deleted_at   || null,
+  colEnteredAt: r.col_entered_at || null,
+  createdAt:    r.created_at   || "",
+  createdBy:    r.created_by   || "",
+  publishDate:  r.publish_date || "",
+  publishTime:  r.publish_time || "09:00",
+  bioterUnit:   r.bioter_unit  || "",
+  score:        r.score        || null,
+  ajustar:      r.ajustar      || false,
+  isAlteracao:  r.is_alteracao || false,
+  assignees:    Array.isArray(r.assignees)  ? r.assignees  : [],
+  watchers:     Array.isArray(r.watchers)   ? r.watchers   : [],
+  tags:         Array.isArray(r.tags)       ? r.tags       : [],
+  comments:     Array.isArray(r.comments)   ? r.comments   : [],
+  files:        Array.isArray(r.files)      ? r.files      : [],
+  timeline:     Array.isArray(r.timeline)   ? r.timeline   : [],
+  checklist:    Array.isArray(r.checklist)  ? r.checklist  : [],
+  caption:      r.caption      || "",
+  desc:         r.description  || "",
+});
+
+// Objeto do app → row para upsert no Supabase (snake_case)
+const taskToRow = (t) => ({
+  id:             String(t.id),
+  title:          t.title        || "Nova Demanda",
+  status:         t.status       || "demanda",
+  assignee:       t.assignee     || "",
+  sector:         t.sector       || "design",
+  client:         t.client       || "",
+  priority:       t.priority     || "media",
+  deadline:       t.deadline     || null,
+  start_date:     t.startDate    || null,
+  completed_at:   t.completedAt  || null,
+  cover:          t.cover        || null,
+  deleted_at:     t.deletedAt    || null,
+  col_entered_at: t.colEnteredAt || null,
+  created_at:     t.createdAt    || "",
+  created_by:     t.createdBy    || "",
+  publish_date:   t.publishDate  || null,
+  publish_time:   t.publishTime  || "09:00",
+  bioter_unit:    t.bioterUnit   || "",
+  score:          t.score        || null,
+  ajustar:        !!t.ajustar,
+  is_alteracao:   !!t.isAlteracao,
+  assignees:      t.assignees    || [],
+  watchers:       t.watchers     || [],
+  tags:           t.tags         || [],
+  comments:       t.comments     || [],
+  files:          (t.files||[]).map(({url,...rest})=>rest),
+  timeline:       t.timeline     || [],
+  checklist:      t.checklist    || [],
+  caption:        t.caption      || "",
+  description:    t.desc         || "",
+});
+
+// ── Helpers de cache ─────────────────────────────────────────
+const cacheGet  = (key) => { try{const s=localStorage.getItem(key);return s?JSON.parse(s):null;}catch{return null;} };
+const cacheSet  = (key,val) => { try{localStorage.setItem(key,JSON.stringify(val));}catch{} };
+const cacheDel  = (key) => { try{localStorage.removeItem(key);}catch{} };
+
+// ── LoginScreen ───────────────────────────────────────────────
+function LoginScreen({onLoginCollaborator,onLoginClient}){
   const [email,setEmail]=useState("");
   const [password,setPassword]=useState("");
   const [error,setError]=useState("");
@@ -17996,29 +18076,25 @@ function LoginScreen({onLoginCollaborator, onLoginClient}){
     if(!email.trim()||!password){setError("Preencha e-mail e senha.");return;}
     setLoading(true);setError("");
     try{
-      // Limpa cache de tasks antes de logar — evita que novo usuário herde cache do anterior
-      try{localStorage.removeItem("pixels-tasks-v3");}catch(e){}
-      const {data,error:authError}=await _sb.auth.signInWithPassword({
-        email:email.trim().toLowerCase(), password
-      });
-      if(authError){setError("E-mail ou senha incorretos.");setLoading(false);return;}
-      const uid=data.user.id;
-      const {data:profile,error:profErr}=await _sb.from("profiles").select("*").eq("id",uid).single();
-      if(profErr||!profile){setError("Perfil não encontrado. Contate o administrador.");await _sb.auth.signOut();setLoading(false);return;}
-      if(profile.user_type==="client"){onLoginClient(profile);}
-      else{onLoginCollaborator(profile);}
-    }catch(err){setError("Erro de conexão. Verifique sua internet.");setLoading(false);}
+      // Limpa cache de tasks — novo usuário não herda cache do anterior
+      cacheDel(TASKS_CACHE_KEY);
+      const {data,error:authErr}=await _sb.auth.signInWithPassword({email:email.trim().toLowerCase(),password});
+      if(authErr){setError("E-mail ou senha incorretos.");setLoading(false);return;}
+      const {data:profile,error:profErr}=await _sb.from("profiles").select("*").eq("id",data.user.id).single();
+      if(profErr||!profile){setError("Perfil não encontrado.");await _sb.auth.signOut();setLoading(false);return;}
+      if(profile.user_type==="client") onLoginClient(profile);
+      else onLoginCollaborator(profile);
+    }catch{setError("Erro de conexão. Verifique sua internet.");setLoading(false);}
   };
 
   const handleForgotPassword=async()=>{
     if(!email.trim()){setError("Digite seu e-mail acima primeiro.");return;}
     const {error}=await _sb.auth.resetPasswordForEmail(email.trim(),{redirectTo:window.location.origin});
-    if(error){setError("Erro ao enviar e-mail. Verifique o endereço.");}
-    else{setError("");alert("E-mail de recuperação enviado! Verifique sua caixa de entrada.");}
+    if(error) setError("Erro ao enviar e-mail.");
+    else{setError("");alert("E-mail de recuperação enviado!");}
   };
 
-
-  return (
+  return(
     <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Outfit','DM Sans',system-ui,sans-serif"}}>
       <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:400,height:400,borderRadius:"50%",background:C.a,opacity:.04,filter:"blur(80px)",pointerEvents:"none"}}/>
       <div style={{width:"100%",maxWidth:380,padding:"0 20px"}}>
@@ -18031,21 +18107,21 @@ function LoginScreen({onLoginCollaborator, onLoginClient}){
           <div style={{marginBottom:14}}>
             <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>E-mail</div>
             <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} onKeyDown={e=>{if(e.key==="Enter")handleLogin();}} placeholder="seu@email.com" autoComplete="email"
-              style={{width:"100%",background:C.s1,border:"1px solid "+(error?C.rd:C.b1),borderRadius:10,padding:"10px 14px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"}}/>
+              style={{width:"100%",background:C.s1,border:"1px solid "+(error?C.rd:C.b1),borderRadius:10,padding:"10px 14px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
           </div>
           <div style={{marginBottom:20}}>
             <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Senha</div>
             <div style={{position:"relative"}}>
               <input type={showPass?"text":"password"} value={password} onChange={e=>{setPassword(e.target.value);setError("");}} onKeyDown={e=>{if(e.key==="Enter")handleLogin();}} placeholder="Digite sua senha..." autoComplete="current-password"
-                style={{width:"100%",background:C.s1,border:"1px solid "+(error?C.rd:C.b1),borderRadius:10,padding:"10px 44px 10px 14px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"}}/>
-              <button onClick={()=>setShowPass(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:14,padding:0,lineHeight:1}}>
+                style={{width:"100%",background:C.s1,border:"1px solid "+(error?C.rd:C.b1),borderRadius:10,padding:"10px 44px 10px 14px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+              <button onClick={()=>setShowPass(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:14,padding:0}}>
                 {showPass?"🙈":"👁"}
               </button>
             </div>
             {error&&<div style={{color:C.rd,fontSize:11,marginTop:5,fontWeight:600}}>{error}</div>}
           </div>
           <button onClick={handleLogin} disabled={loading||!email.trim()||!password}
-            style={{width:"100%",background:(!loading&&email.trim()&&password)?"linear-gradient(135deg,"+C.a+","+C.aD+")":C.b1,color:(!loading&&email.trim()&&password)?"#fff":C.td,border:"none",borderRadius:12,padding:"12px 0",fontWeight:800,fontSize:14,cursor:"pointer",boxShadow:(!loading&&email.trim()&&password)?"0 4px 20px "+C.a+"40":"none",transition:"all .2s",letterSpacing:.3}}>
+            style={{width:"100%",background:(!loading&&email.trim()&&password)?"linear-gradient(135deg,"+C.a+","+C.aD+")":C.b1,color:(!loading&&email.trim()&&password)?"#fff":C.td,border:"none",borderRadius:12,padding:"12px 0",fontWeight:800,fontSize:14,cursor:"pointer",transition:"all .2s"}}>
             {loading?"Entrando...":"Entrar"}
           </button>
           <div style={{textAlign:"center",marginTop:14}}>
@@ -18060,481 +18136,317 @@ function LoginScreen({onLoginCollaborator, onLoginClient}){
   );
 }
 
+// ── AgencyOS — componente principal ──────────────────────────
 export default function AgencyOS(){
-  // ── AUTH STATE — inicializa do cache síncrono para evitar "Carregando..." no F5 ──
-  const PROFILE_CACHE_KEY="pixels-profile-cache";
 
-  // Lê cache síncrono antes de qualquer chamada ao Supabase
-  const _getCachedProfile=()=>{
-    try{const r=localStorage.getItem(PROFILE_CACHE_KEY);return r?JSON.parse(r):null;}catch(e){return null;}
-  };
-  const _cachedProfile=_getCachedProfile();
-  const _initState=_cachedProfile?(_cachedProfile.user_type==="client"?"portal":"app"):"loading";
+  // ── Auth state ───────────────────────────────────────────────
+  const cachedProfile = cacheGet(PROFILE_CACHE_KEY);
+  const initAuthState = cachedProfile ? (cachedProfile.user_type==="client"?"portal":"app") : "loading";
 
-  const [authState,setAuthState]=useState(_initState);
-  const [currentProfile,setCurrentProfile]=useState(_cachedProfile&&_cachedProfile.user_type!=="client"?_cachedProfile:null);
-  const [clientPortalData,setClientPortalData]=useState(_cachedProfile&&_cachedProfile.user_type==="client"?_cachedProfile:null);
+  const [authState,setAuthState]         = useState(initAuthState);
+  const [currentProfile,setCurrentProfile] = useState(cachedProfile?.user_type!=="client" ? cachedProfile : null);
+  const [clientPortalData,setClientPortalData] = useState(cachedProfile?.user_type==="client" ? cachedProfile : null);
 
-  // ── CURRENT_USER — derivado de currentProfile ──
-  const _resolveUser=(profile)=>{
-    if(!profile)return null;
-    return TEAM.find(u=>u.id===profile.team_id||u.name===profile.name)||null;
-  };
-  const loggedTeamUser=_resolveUser(currentProfile)||TEAM[0];
-  const CURRENT_USER=loggedTeamUser;
-  window._pixelsUser=CURRENT_USER.id;
+  // ── Current user derivado do profile ─────────────────────────
+  const resolveUser = (profile) => profile
+    ? (TEAM.find(u=>u.id===profile.team_id||u.name===profile.name)||null)
+    : null;
 
-  const [loggedUser,setLoggedUser]=useState(CURRENT_USER.id);
+  const loggedTeamUser = resolveUser(currentProfile) || TEAM[0];
+  const CURRENT_USER   = loggedTeamUser;
+  window._pixelsUser   = CURRENT_USER.id;
+
+  const [loggedUser,setLoggedUser] = useState(CURRENT_USER.id);
   useEffect(()=>{
-    const u=_resolveUser(currentProfile);
+    const u=resolveUser(currentProfile);
     if(u&&u.id!==loggedUser){window._pixelsUser=u.id;setLoggedUser(u.id);}
   },[currentProfile]);
 
-  // ── UI STATE ──
-  const [themeKey,setThemeKey]=useState(_themeKey);
-  const [page,setPage]=useState("demandas");
-  const [expanded,setExpanded]=useState({});
-  const [notifDrawer,setNotifDrawer]=useState(false);
-  const [isMob,setIsMob]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
-  const [sideOpen,setSideOpen]=useState(false);
-  const [activeCl,setActiveCl]=useState(null);
+  // ── UI state ─────────────────────────────────────────────────
+  const [themeKey,setThemeKey]     = useState(_themeKey);
+  const [page,setPage]             = useState("demandas");
+  const [expanded,setExpanded]     = useState({});
+  const [notifDrawer,setNotifDrawer] = useState(false);
+  const [isMob,setIsMob]           = useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
+  const [sideOpen,setSideOpen]     = useState(false);
+  const [activeCl,setActiveCl]     = useState(null);
+  const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
+  const [viewingAs,setViewingAs]   = useState(null);
 
-  // ── TASKS — inicializa do cache local imediatamente ──
-  const [globalTasks,setGlobalTasksRaw]=useState(()=>{
-    try{
-      const s=localStorage.getItem("pixels-tasks-v3");
-      if(s){
-        const p=JSON.parse(s);
-        if(Array.isArray(p)&&p.length>0){
-          // Normaliza IDs para string ao carregar do cache
-          return p.map(t=>t.id&&typeof t.id!=="string"?{...t,id:String(t.id)}:t);
-        }
-      }
-    }catch(e){}
-    return []; // Sem tasks hardcoded — Supabase é a fonte de verdade
-  });
-  const [notifs,setNotifs]=useState(NOTIF_STORE.items);
-  const [storageLoaded,setStorageLoaded]=useState(()=>{
-    // Inicia true se há tasks em cache OU se não há sessão (vai para login)
-    try{
-      const hasCache=!!(localStorage.getItem("pixels-tasks-v3")&&JSON.parse(localStorage.getItem("pixels-tasks-v3"))?.length>0);
-      const hasSession=!!localStorage.getItem("pixels-sb-auth");
-      // Se não tem sessão salva, não vai ficar esperando tasks — libera tela
-      if(!hasSession)return true;
-      return hasCache;
-    }catch(e){return false;}
+  useEffect(()=>{
+    const h=()=>setIsMob(window.innerWidth<768);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
+  },[]);
+
+  // ── Tasks state ───────────────────────────────────────────────
+  const [globalTasks,setGlobalTasksRaw] = useState(()=>{
+    const cached = cacheGet(TASKS_CACHE_KEY);
+    if(Array.isArray(cached)&&cached.length>0) return cached;
+    return [];
   });
 
-  const TASKS_KEY="pixels-tasks-v3";
-  const FILES_KEY_PREFIX="pixels-files-";
+  const [storageLoaded,setStorageLoaded] = useState(()=>{
+    // Inicia true se tem cache OU se não tem sessão (vai para login direto)
+    const hasCache = !!(cacheGet(TASKS_CACHE_KEY)?.length>0);
+    const hasSession = !!localStorage.getItem("pixels-sb-auth");
+    return hasCache || !hasSession;
+  });
 
-  // ── PERMISSIONS — localStorage + Supabase sync ──
-  const [livePerms,setLivePerms]=useState(()=>{
+  // ── Refs compartilhados ───────────────────────────────────────
+  const sessionRef    = useRef(null);   // sessão atual com token
+  const pendingIds    = useRef(new Set()); // IDs aguardando confirmação do Supabase
+  const saveTimer     = useRef(null);
+  const fileTimers    = useRef({});
+
+  // ── Permissions ───────────────────────────────────────────────
+  const [livePerms,setLivePerms] = useState(()=>{
     const base={...ACCESS_STORE};
-    try{
-      TEAM.forEach(u=>{
-        const s=localStorage.getItem("pixels-perms-"+u.id);
-        if(s){
-          const saved=JSON.parse(s);
-          const merged={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...saved};
-          if(u.level>1&&!ACCESS_STORE[u.id]?.verTodosKanban){merged.verTodosKanban=false;}
-          base[u.id]=merged;
-        }
-      });
-    }catch(e){}
+    TEAM.forEach(u=>{
+      const saved=cacheGet("pixels-perms-"+u.id);
+      if(saved){
+        const merged={...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...saved};
+        if(u.level>1&&!ACCESS_STORE[u.id]?.verTodosKanban) merged.verTodosKanban=false;
+        base[u.id]=merged;
+      }
+    });
     return base;
   });
   const getPerms=(uid)=>({...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})});
   const myPerms=getPerms(CURRENT_USER.id);
 
-
-
-
-  // ─────────────────────────────────────────────────────────────────
-  // AUTH + TASKS: bloco unificado
-  //
-  // SOLUÇÃO DEFINITIVA para o problema do token:
-  // - onAuthStateChange entrega a sessão com o access_token garantido
-  // - Guardamos esse token em _sessionRef
-  // - Todas as buscas de tasks usam fetch() direto com esse token
-  //   (não usa _sb.from() que tem race condition com o auth interno)
-  // ─────────────────────────────────────────────────────────────────
-
-  // Ref que guarda a sessão ativa (preenchida pelo onAuthStateChange)
-  const _sessionRef = useRef(null);
-
-  // Funções de aplicação de tasks — usadas por fetch inicial, polling e realtime
-  // Converte linha do novo schema flat → objeto task usado no app
-  const _rowToTask = (row) => ({
-    id:           String(row.id),
-    title:        row.title || 'Nova Demanda',
-    status:       row.status || 'demanda',
-    assignee:     row.assignee || '',
-    sector:       row.sector || 'design',
-    client:       row.client || '',
-    priority:     row.priority || 'media',
-    deadline:     row.deadline || '',
-    startDate:    row.start_date || '',
-    completedAt:  row.completed_at || '',
-    cover:        row.cover || null,
-    deletedAt:    row.deleted_at || null,
-    colEnteredAt: row.col_entered_at || null,
-    createdAt:    row.created_at || '',
-    createdBy:    row.created_by || '',
-    publishDate:  row.publish_date || '',
-    publishTime:  row.publish_time || '09:00',
-    bioterUnit:   row.bioter_unit || '',
-    score:        row.score || null,
-    ajustar:      row.ajustar || false,
-    isAlteracao:  row.is_alteracao || false,
-    assignees:    row.assignees || [],
-    watchers:     row.watchers || [],
-    tags:         row.tags || [],
-    comments:     row.comments || [],
-    files:        row.files || [],
-    timeline:     row.timeline || [],
-    checklist:    row.checklist || [],
-    caption:      row.caption || '',
-    desc:         row.description || '',
-  });
-
-  const _applyTasks = useCallback((rows) => {
-    if (!rows || rows.length === 0) return;
-    const fromSupabase = rows.map(row => _rowToTask(row));
-    setGlobalTasksRaw(prev => {
-      // Poll só chega aqui quando não há sync pendente (_pendingSyncIds.size === 0)
-      // Supabase é a fonte de verdade — aplica direto
-      // Preserva files locais (não são sincronizados via URL)
-      const merged = fromSupabase.map(sb => {
-        const local = prev.find(l => String(l.id) === String(sb.id));
-        if (local && local.files && local.files.length > 0) {
-          return {...sb, files: local.files};
-        }
-        return sb;
+  // ── Fetch tasks via raw fetch (sem race condition do _sb interno) ──
+  const fetchTasksWithToken = async (token, attempt=0) => {
+    if(!token) return;
+    try{
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/tasks?select=*`,{
+        headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+token}
       });
-      try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(merged)); } catch(e) {}
-      return merged;
-    });
-  }, []);
-
-  const _applyRealtimeRow = useCallback((row) => {
-    const incoming = _rowToTask(row);
-    setGlobalTasksRaw(prev => {
-      const exists = prev.find(x => String(x.id) === String(incoming.id));
-      const next = exists
-        ? prev.map(x => x.id === incoming.id ? {...incoming, files: exists.files || incoming.files || []} : x)
-        : [...prev, incoming];
-      try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(next.map(t => ({...t, files: (t.files||[]).map(({url,...r})=>r)})))); } catch(e) {}
-      return next;
-    });
-  }, []);
-
-  const _removeTask = useCallback((id) => {
-    setGlobalTasksRaw(prev => {
-      const next = prev.filter(x => String(x.id) !== String(id));
-      try { localStorage.setItem("pixels-tasks-v3", JSON.stringify(next.map(t => ({...t, files: (t.files||[]).map(({url,...r})=>r)})))); } catch(e) {}
-      return next;
-    });
-  }, []);
-
-  // Fetch tasks usando raw fetch() com o token da sessão
-  // Isso evita completamente qualquer race condition do cliente Supabase
-  const _fetchTasksWithToken = useCallback(async (token, attempt = 0) => {
-    if (!token) return;
-    try {
-      const res = await fetch(
-        import.meta.env.VITE_SUPABASE_URL + "/rest/v1/tasks?select=*",
-        { headers: {
-            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-            "Authorization": "Bearer " + token,
-            "Content-Type": "application/json"
-          }
-        }
-      );
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        _applyTasks(data);
+      if(Array.isArray(data)&&data.length>0){
+        const tasks = data.map(rowToTask);
+        setGlobalTasksRaw(tasks);
+        cacheSet(TASKS_CACHE_KEY, tasks);
         setStorageLoaded(true);
-      } else if (attempt < 3) {
-        // Retry rápido caso o token demore a propagar
-        setTimeout(() => _fetchTasksWithToken(token, attempt + 1), 600);
+      } else if(attempt<3){
+        setTimeout(()=>fetchTasksWithToken(token,attempt+1), 600);
       } else {
         setStorageLoaded(true);
       }
-    } catch(e) {
-      console.warn("fetchTasks erro:", e);
-      if (attempt < 3) setTimeout(() => _fetchTasksWithToken(token, attempt + 1), 1000);
+    }catch{
+      if(attempt<3) setTimeout(()=>fetchTasksWithToken(token,attempt+1), 1000);
       else setStorageLoaded(true);
-    }
-  }, [_applyTasks]);
-
-  // Verificar sessão ao montar — valida o cache e escuta mudanças
-  useEffect(() => {
-    const refreshProfile = async (userId) => {
-      try {
-        const {data: profile} = await _sb.from("profiles").select("*").eq("id", userId).single();
-        if (profile) {
-          localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
-          if (profile.user_type === "client") { setClientPortalData(profile); setAuthState("portal"); }
-          else { setCurrentProfile(profile); setAuthState("app"); }
-        } else {
-          localStorage.removeItem(PROFILE_CACHE_KEY);
-          setAuthState("login"); setCurrentProfile(null); setClientPortalData(null);
-        }
-      } catch(e) {
-        console.warn("refreshProfile error:", e);
-        if (!_getCachedProfile()) setAuthState("login");
-      }
-    };
-
-    const fallbackTimer = setTimeout(() => {
-      if (!_getCachedProfile()) setAuthState("login");
-    }, 8000);
-
-    const {data: {subscription}} = _sb.auth.onAuthStateChange(async (event, session) => {
-      clearTimeout(fallbackTimer);
-      if (event === "SIGNED_OUT" || (!session && (event === "INITIAL_SESSION" || event === "TOKEN_REFRESHED"))) {
-        _sessionRef.current = null;
-        localStorage.removeItem(PROFILE_CACHE_KEY);
-        setAuthState("login"); setCurrentProfile(null); setClientPortalData(null);
-        return;
-      }
-      if (session) {
-        _sessionRef.current = session;
-        await refreshProfile(session.user.id);
-        // Busca tasks com token garantido (flag evita duplo fetch com initSession)
-        if (!_tasksFetchedRef.current) {
-          _tasksFetchedRef.current = true;
-          _fetchTasksWithToken(session.access_token);
-        }
-      }
-    });
-
-    return () => { clearTimeout(fallbackTimer); subscription.unsubscribe(); };
-  }, []);
-
-  // ── Polling de tasks a cada 5s — backbone de sincronização entre sessões ──
-  useEffect(() => {
-    if (authState !== "app") return;
-    let cancelled = false;
-
-    // Quando authState já começa como "app" do cache, _sessionRef pode estar null
-    // até o onAuthStateChange disparar. Usamos getSession() como fallback imediato.
-    // Evita duplo fetch: flag compartilhada entre initSession e onAuthStateChange
-    // Usa ref compartilhado — evita duplo fetch com onAuthStateChange
-    _tasksFetchedRef.current = false;
-
-    // Timeout de segurança: se após 10s nada carregou, libera a tela de "Carregando..."
-    const safetyTimer = setTimeout(() => { if (!cancelled) setStorageLoaded(true); }, 10000);
-
-    const initSession = async () => {
-      if (_sessionRef.current) {
-        // onAuthStateChange já populou _sessionRef e já buscou tasks — nada a fazer
-        clearTimeout(safetyTimer);
-        return;
-      }
-      try {
-        const { data: { session } } = await _sb.auth.getSession();
-        if (cancelled) return;
-        if (session && !_tasksFetchedRef.current) {
-          _tasksFetchedRef.current = true;
-          _sessionRef.current = session;
-          _fetchTasksWithToken(session.access_token);
-        } else if (!session) {
-          // Sem sessão válida — libera a tela imediatamente
-          clearTimeout(safetyTimer);
-          setStorageLoaded(true);
-        }
-      } catch(e) {
-        // Erro de rede — libera a tela para não travar
-        clearTimeout(safetyTimer);
-        if (!cancelled) setStorageLoaded(true);
-      }
-    };
-    initSession();
-
-    // Polling usa o token do _sessionRef (sempre atualizado pelo onAuthStateChange)
-    const poll = async () => {
-      const session = _sessionRef.current;
-      if (!session || cancelled) return;
-      // Se há cards com sync pendente, aguarda confirmação antes de aplicar
-      // Evita que o poll sobrescreva cards recém criados/editados
-      if (_pendingSyncIds.current.size > 0) return;
-      try {
-        const res = await fetch(
-          import.meta.env.VITE_SUPABASE_URL + "/rest/v1/tasks?select=*",
-          { headers: {
-              "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-              "Authorization": "Bearer " + session.access_token
-            }
-          }
-        );
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data) && data.length > 0) {
-          _applyTasks(data);
-          setStorageLoaded(true);
-        }
-      } catch(e) {}
-    };
-
-    const pollInterval = setInterval(poll, 3000);
-
-    // ── BROADCAST: sincronização instantânea entre sessões (~100ms) ──
-    // Quando alguém salva um card, avisa todos os outros para fazer fetch imediato.
-    // Resolve o limite de 1MB do postgres_changes com JSONB grande.
-    let broadcastChannel = null;
-    const setupBroadcast = () => {
-      if (cancelled) return;
-      broadcastChannel = _sb.channel("pixels-tasks-sync")
-        .on("broadcast", {event: "tasks-changed"}, async () => {
-          if (!cancelled) await poll(); // fetch imediato ao receber broadcast
-        })
-        .subscribe(status => {
-          if (!cancelled && status === "SUBSCRIBED") {
-            window._pixelsBroadcastChannel = broadcastChannel;
-          }
-        });
-    };
-    setupBroadcast();
-
-    // ── REALTIME postgres_changes: fallback para cards pequenos ──
-    let currentChannel = null;
-    const subscribeRealtime = () => {
-      if (cancelled) return;
-      if (currentChannel) { try { _sb.removeChannel(currentChannel); } catch(e) {} }
-      const ch = _sb.channel("tasks-rt-" + Date.now())
-        .on("postgres_changes", {event: "*", schema: "public", table: "tasks"}, payload => {
-          if (cancelled) return;
-          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
-            _applyRealtimeRow(payload.new);
-          }
-          if (payload.eventType === "DELETE") {
-            _removeTask(payload.old.id);
-          }
-        })
-        .subscribe(status => {
-          if (cancelled) return;
-          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            if (!cancelled) setTimeout(subscribeRealtime, 3000);
-          }
-        });
-      currentChannel = ch;
-    };
-    subscribeRealtime();
-
-    return () => {
-      cancelled = true;
-      clearTimeout(safetyTimer);
-      clearInterval(pollInterval);
-      window._pixelsBroadcastChannel = null;
-      if (broadcastChannel) { try { _sb.removeChannel(broadcastChannel); } catch(e) {} }
-      if (currentChannel) { try { _sb.removeChannel(currentChannel); } catch(e) {} }
-    };
-  }, [authState]);
-
-
-  // Polling de permissões — garante sync em tempo real entre todos os browsers
-  useEffect(()=>{
-    if(authState!=="app")return;
-    const pollPerms=()=>{
-      if(!_sessionRef.current)return; // não roda sem sessão ativa
-      _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
-        if(!error&&data){
-          data.forEach(profile=>{
-            const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
-            if(!u)return;
-            // Sempre usa Supabase como fonte de verdade
-            // Se Supabase tem perms salvas → usa elas; senão → usa ACCESS_STORE padrão
-            const supaPerms=profile.permissions&&Object.keys(profile.permissions).length>0
-              ?profile.permissions:null;
-            const perms=supaPerms
-              ?{...DEFAULT_PERMS,...supaPerms}
-              :{...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
-            // Limpa qualquer verTodosKanban indevido para não-sócios
-            if(u.level>1) perms.verTodosKanban=supaPerms?.verTodosKanban||ACCESS_STORE[u.id]?.verTodosKanban||false;
-            const current=JSON.stringify(livePerms[u.id]||{});
-            const incoming=JSON.stringify(perms);
-            if(current!==incoming){
-              ACCESS_STORE[u.id]=perms;
-              setLivePerms(p=>({...p,[u.id]:perms}));
-              try{localStorage.setItem(`pixels-perms-${u.id}`,JSON.stringify(perms));}catch(e){}
-            }
-          });
-        }
-      }).catch(()=>{});
-    };
-    // Roda imediatamente e depois a cada 15s
-    pollPerms();
-    const interval=setInterval(pollPerms,15000);
-    return()=>clearInterval(interval);
-  },[authState]);
-
-  // Helper para salvar tasks no Supabase — com retry automático
-  // Converte objeto task do app → linha do novo schema flat
-  const _taskToRow = (t) => ({
-    id:           String(t.id),
-    title:        t.title || 'Nova Demanda',
-    status:       t.status || 'demanda',
-    assignee:     t.assignee || '',
-    sector:       t.sector || 'design',
-    client:       t.client || '',
-    priority:     t.priority || 'media',
-    deadline:     t.deadline || '',
-    start_date:   t.startDate || '',
-    completed_at: t.completedAt || '',
-    cover:        t.cover || null,
-    deleted_at:   t.deletedAt || null,
-    col_entered_at: t.colEnteredAt || null,
-    created_at:   t.createdAt || '',
-    created_by:   t.createdBy || '',
-    publish_date: t.publishDate || '',
-    publish_time: t.publishTime || '09:00',
-    bioter_unit:  t.bioterUnit || '',
-    score:        t.score || null,
-    ajustar:      t.ajustar || false,
-    is_alteracao: t.isAlteracao || false,
-    assignees:    t.assignees || [],
-    watchers:     t.watchers || [],
-    tags:         t.tags || [],
-    comments:     t.comments || [],
-    files:        (t.files||[]).map(({url,...r})=>r),
-    timeline:     t.timeline || [],
-    checklist:    t.checklist || [],
-    caption:      t.caption || '',
-    description:  t.desc || '',
-  });
-
-  const syncTasksToSupabase=async(tasks,retryCount=0)=>{
-    if(!tasks||tasks.length===0)return;
-    try{
-      const rows=tasks.map(t=>_taskToRow(t));
-      const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
-      if(error&&retryCount===0){
-        setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
-      }else if(!error){
-        // Supabase confirmou — remove IDs do pending set
-        rows.forEach(r=>_pendingSyncIds.current.delete(String(r.id)));
-        // Avisa todos os outros usuários via broadcast para fazer fetch imediato
-        try{
-          const ch=window._pixelsBroadcastChannel;
-          if(ch) ch.send({type:"broadcast",event:"tasks-changed",payload:{ts:Date.now()}});
-        }catch(e){}
-      }
-    }catch(e){
-      if(retryCount===0)setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
     }
   };
 
-  // ── Auto-publish: check every minute if scheduled cards are due ──
+  // ── Sync task para Supabase + broadcast ───────────────────────
+  const syncToSupabase = async (tasks, retry=0) => {
+    if(!tasks||tasks.length===0) return;
+    try{
+      const rows = tasks.map(taskToRow);
+      const {error} = await _sb.from("tasks").upsert(rows,{onConflict:"id"});
+      if(error){
+        if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),2000);
+        return;
+      }
+      // Confirmado — remove do pending e avisa outros via broadcast
+      rows.forEach(r=>pendingIds.current.delete(String(r.id)));
+      try{
+        const ch = window._broadcastChannel;
+        if(ch) ch.send({type:"broadcast",event:"sync",payload:{ts:Date.now()}});
+      }catch{}
+    }catch{
+      if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),2000);
+    }
+  };
+
+  // ── setGlobalTasks — wrapper que normaliza, persiste e sincroniza ──
+  const setGlobalTasks = (updater) => {
+    setGlobalTasksRaw(prev=>{
+      const raw = typeof updater==="function" ? updater(prev) : updater;
+      // Normaliza IDs para string
+      const next = raw.map(t=>({...t,id:String(t.id)}));
+      // Detecta mudanças
+      const changed = next.filter(t=>{
+        const old = prev.find(p=>String(p.id)===String(t.id));
+        return !old || JSON.stringify({...old,files:[]})!==JSON.stringify({...t,files:[]});
+      });
+      if(changed.length>0){
+        changed.forEach(t=>pendingIds.current.add(String(t.id)));
+        syncToSupabase(changed);
+      }
+      // Cache local com debounce
+      clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(()=>{
+        cacheSet(TASKS_CACHE_KEY, next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)})));
+      },300);
+      return next;
+    });
+  };
+
+  // ── Auth useEffect — sessão + tasks iniciais ──────────────────
+  useEffect(()=>{
+    let fetched = false;
+
+    const refreshProfile = async (userId) => {
+      try{
+        const {data:profile} = await _sb.from("profiles").select("*").eq("id",userId).single();
+        if(profile){
+          cacheSet(PROFILE_CACHE_KEY,profile);
+          if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
+          else{setCurrentProfile(profile);setAuthState("app");}
+        }else{
+          cacheDel(PROFILE_CACHE_KEY);
+          setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
+        }
+      }catch{if(!cacheGet(PROFILE_CACHE_KEY))setAuthState("login");}
+    };
+
+    const safetyTimer = setTimeout(()=>setStorageLoaded(true), 10000);
+
+    const {data:{subscription}} = _sb.auth.onAuthStateChange(async(event,session)=>{
+      clearTimeout(safetyTimer);
+      if(event==="SIGNED_OUT"||(!session&&(event==="INITIAL_SESSION"||event==="TOKEN_REFRESHED"))){
+        sessionRef.current=null;
+        cacheDel(PROFILE_CACHE_KEY);
+        setAuthState("login");setCurrentProfile(null);setClientPortalData(null);
+        return;
+      }
+      if(session){
+        sessionRef.current=session;
+        await refreshProfile(session.user.id);
+        if(!fetched){fetched=true;fetchTasksWithToken(session.access_token);}
+      }
+    });
+
+    // Fallback: authState veio do cache mas onAuthStateChange ainda não disparou
+    const fallback = async () => {
+      if(sessionRef.current) return; // já tem sessão
+      try{
+        const {data:{session}} = await _sb.auth.getSession();
+        if(session&&!fetched){
+          fetched=true;
+          sessionRef.current=session;
+          fetchTasksWithToken(session.access_token);
+        } else if(!session){
+          clearTimeout(safetyTimer);
+          setStorageLoaded(true);
+        }
+      }catch{clearTimeout(safetyTimer);setStorageLoaded(true);}
+    };
+    setTimeout(fallback,100);
+
+    return()=>{clearTimeout(safetyTimer);subscription.unsubscribe();};
+  },[]);
+
+  // ── Polling + Broadcast + Realtime ───────────────────────────
+  useEffect(()=>{
+    if(authState!=="app") return;
+    let cancelled=false;
+
+    // Fetch do Supabase usando token da sessão
+    const pollFetch = async () => {
+      const session = sessionRef.current;
+      if(!session||cancelled) return;
+      if(pendingIds.current.size>0) return; // aguarda confirmações pendentes
+      try{
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/tasks?select=*`,{
+          headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+session.access_token}
+        });
+        const data = await res.json();
+        if(!cancelled&&Array.isArray(data)&&data.length>0){
+          const tasks = data.map(rowToTask);
+          setGlobalTasksRaw(prev=>{
+            // Preserva files locais (não sincronizados via URL)
+            const merged = tasks.map(sb=>{
+              const local = prev.find(l=>String(l.id)===String(sb.id));
+              return (local&&local.files?.length>0) ? {...sb,files:local.files} : sb;
+            });
+            cacheSet(TASKS_CACHE_KEY,merged);
+            return merged;
+          });
+          setStorageLoaded(true);
+        }
+      }catch{}
+    };
+
+    const pollInterval = setInterval(pollFetch, 3000);
+
+    // Broadcast — aviso instantâneo entre sessões (~100ms)
+    const bch = _sb.channel("pixels-sync")
+      .on("broadcast",{event:"sync"},async()=>{if(!cancelled)await pollFetch();})
+      .subscribe(s=>{if(!cancelled&&s==="SUBSCRIBED")window._broadcastChannel=bch;});
+
+    // Realtime postgres_changes — complementar ao broadcast
+    const rch = _sb.channel("pixels-realtime-"+Date.now())
+      .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
+        if(cancelled)return;
+        if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
+          const incoming=rowToTask(payload.new);
+          setGlobalTasksRaw(prev=>{
+            const exists=prev.find(x=>String(x.id)===String(incoming.id));
+            const next=exists
+              ? prev.map(x=>String(x.id)===String(incoming.id)?{...incoming,files:exists.files||[]}:x)
+              : [...prev,incoming];
+            cacheSet(TASKS_CACHE_KEY,next);
+            return next;
+          });
+        }
+        if(payload.eventType==="DELETE"){
+          const delId=String(payload.old.id);
+          setGlobalTasksRaw(prev=>{
+            const next=prev.filter(x=>String(x.id)!==delId);
+            cacheSet(TASKS_CACHE_KEY,next);
+            return next;
+          });
+        }
+      })
+      .subscribe();
+
+    return()=>{
+      cancelled=true;
+      clearInterval(pollInterval);
+      window._broadcastChannel=null;
+      try{_sb.removeChannel(bch);}catch{}
+      try{_sb.removeChannel(rch);}catch{}
+    };
+  },[authState]);
+
+  // ── Polling de permissões ─────────────────────────────────────
+  useEffect(()=>{
+    if(authState!=="app") return;
+    const poll=()=>{
+      if(!sessionRef.current) return;
+      _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
+        if(error||!data) return;
+        data.forEach(profile=>{
+          const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
+          if(!u) return;
+          const sp=profile.permissions&&Object.keys(profile.permissions).length>0?profile.permissions:null;
+          const perms=sp?{...DEFAULT_PERMS,...sp}:{...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
+          if(u.level>1) perms.verTodosKanban=sp?.verTodosKanban||ACCESS_STORE[u.id]?.verTodosKanban||false;
+          if(JSON.stringify(livePerms[u.id]||{})!==JSON.stringify(perms)){
+            ACCESS_STORE[u.id]=perms;
+            setLivePerms(p=>({...p,[u.id]:perms}));
+            cacheSet("pixels-perms-"+u.id,perms);
+          }
+        });
+      }).catch(()=>{});
+    };
+    poll();
+    const iv=setInterval(poll,15000);
+    return()=>clearInterval(iv);
+  },[authState]);
+
+  // ── Auto-publish de cards agendados ──────────────────────────
   useEffect(()=>{
     const check=()=>{
       const now=new Date();
       setGlobalTasks(prev=>{
         let changed=false;
         const next=prev.map(t=>{
-          if(t.deletedAt||t.status!=="agendado"||!t.publishDate)return t;
-          const time=t.publishTime||"00:00";
-          const scheduled=new Date(t.publishDate+"T"+time+":00");
+          if(t.deletedAt||t.status!=="agendado"||!t.publishDate) return t;
+          const scheduled=new Date(t.publishDate+"T"+(t.publishTime||"00:00")+":00");
           if(scheduled<=now){
             changed=true;
             const entry={type:"status",fromLabel:"Agendado",toLabel:"Publicado",from:"agendado",to:"publicado",at:now.toISOString(),atFmt:now.toLocaleDateString("pt-BR")+" "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),user:"Sistema"};
@@ -18542,68 +18454,35 @@ export default function AgencyOS(){
           }
           return t;
         });
-        if(changed){
-          // Notify that publication happened
-          setNotifs(p=>[{id:"autopub_"+Date.now(),read:false,type:"publicado",icon:"📢",title:"Publicação automática realizada!",body:"Um ou mais conteúdos foram marcados como Publicados automaticamente.",user:"Sistema",at:"Agora"},...p]);
-        }
+        if(changed) setNotifs(p=>[{id:"autopub_"+Date.now(),read:false,type:"publicado",icon:"📢",title:"Publicação automática!",body:"Cards agendados foram publicados.",user:"Sistema",at:"Agora"},...p]);
         return changed?next:prev;
       });
     };
-    check(); // run immediately on mount
-    const interval=setInterval(check,60000); // then every 60s
-    return ()=>clearInterval(interval);
+    check();
+    const iv=setInterval(check,60000);
+    return()=>clearInterval(iv);
   },[]);
 
-  // Ref compartilhado entre useEffect([]) e useEffect([authState]) para evitar duplo fetch
-  const _tasksFetchedRef = useRef(false);
-  const _pendingSyncIds = useRef(new Set()); // IDs com mudanças locais aguardando confirmação do Supabase
-
-  // ── Save — called on every change, saves ALL fields ──
-  const saveTimer=useRef(null);
-  const filesSaveTimers=useRef({});
-
-  // ID do cliente para ignorar updates do próprio usuario no realtime
-  const _clientId=useRef("client-"+Math.random().toString(36).slice(2));
-
-  const setGlobalTasks=(updater)=>{
-    setGlobalTasksRaw(prev=>{
-      const rawNext=typeof updater==="function"?updater(prev):updater;
-      // Normaliza todos os IDs para string — evita incompatibilidade number vs string com Supabase
-      const next=rawNext.map(t=>t.id&&typeof t.id!=="string"?{...t,id:String(t.id)}:t);
-
-      // Detecta tarefas alteradas (compara IDs como string)
-      const changed=next.filter(t=>{
-        const old=prev.find(p=>String(p.id)===String(t.id));
-        return !old||JSON.stringify({...old,files:[]})!==JSON.stringify({...t,files:[]});
-      });
-
-      if(changed.length>0){
-        // Marca IDs como pendentes — o merge vai preferir versão local até Supabase confirmar
-        changed.forEach(t=>_pendingSyncIds.current.add(String(t.id)));
-        syncTasksToSupabase(changed);
-      }
-
-      // Salva no localStorage
-      if(saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current=setTimeout(()=>{
-        try{
-          const meta=next.map(t=>({...t,files:(t.files||[]).map(({url,...r})=>r)}));
-          localStorage.setItem(TASKS_KEY,JSON.stringify(meta));
-        }catch(e){}
-      },300);
-
-      return next;
-    });
+  // ── Logout ────────────────────────────────────────────────────
+  const handleLogout=async()=>{
+    sessionRef.current=null;
+    pendingIds.current.clear();
+    cacheDel(TASKS_CACHE_KEY);
+    cacheDel(PROFILE_CACHE_KEY);
+    TEAM.forEach(u=>cacheDel("pixels-perms-"+u.id));
+    setAuthState("login");
+    setCurrentProfile(null);
+    setClientPortalData(null);
+    setGlobalTasksRaw([]);
+    await _sb.auth.signOut();
   };
 
-  // "View as" — simulate another user's view
-  const [viewingAs,setViewingAs]=useState(null); // userId or null
-  const effectiveUser=viewingAs?TEAM.find(u=>u.id===viewingAs)||CURRENT_USER:CURRENT_USER;
-  const effectivePerms=viewingAs?getPerms(viewingAs):myPerms;
-  const isSocio=effectiveUser.level===1; // usa o usuário efetivo, não o logado
+  // ── Permissões efectivas (View As) ────────────────────────────
+  const effectiveUser  = viewingAs ? TEAM.find(u=>u.id===viewingAs)||CURRENT_USER : CURRENT_USER;
+  const effectivePerms = viewingAs ? getPerms(viewingAs) : myPerms;
+  const isSocio        = effectiveUser.level===1;
 
-  // Permission-gated NAV
-  const NAV_FULL=NAV;
+  // ── Navegação ─────────────────────────────────────────────────
   const canSee=(n,p)=>{
     switch(n.id){
       case "meudash":              return p.verDashboard;
@@ -18650,202 +18529,130 @@ export default function AgencyOS(){
       default:                     return true;
     }
   };
-  const NAV_VISIBLE=NAV_FULL.filter((n,i,arr)=>{
+  const NAV_VISIBLE=NAV.filter((n,i,arr)=>{
     if(n.type==="divider"){
       const rest=arr.slice(i+1);
-      const nextDivIdx=rest.findIndex(x=>x.type==="divider");
-      const group=nextDivIdx===-1?rest:rest.slice(0,nextDivIdx);
-      return group.some(x=>canSee(x,effectivePerms));
+      const nxt=rest.findIndex(x=>x.type==="divider");
+      const grp=nxt===-1?rest:rest.slice(0,nxt);
+      return grp.some(x=>canSee(x,effectivePerms));
     }
     return canSee(n,effectivePerms);
   });
 
   const unreadNotifs=notifs.filter(n=>!n.read).length;
 
-  useEffect(()=>{const h=()=>setIsMob(window.innerWidth<768);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);
-  const goClient=id=>{setActiveCl(id);setPage("clientes");setSideOpen(false);};
-  const nav=id=>{setPage(id);setActiveCl(null);setSideOpen(false);};
+  const nav=(id)=>{setPage(id);setActiveCl(null);setSideOpen(false);};
+  const goClient=(id)=>{setActiveCl(id);setPage("clientes");setSideOpen(false);};
 
+  const cur=NAV.find(n=>n.id===page)||(NAV.flatMap(n=>n.children||[]).find(c=>c.id===page));
+
+  // ── renderPage ────────────────────────────────────────────────
   const renderPage=()=>{
     if(page==="clientes"&&activeCl){
       const cl=CLIENTS.find(c=>c.id===activeCl);
-      if(cl) return <div style={{padding:4}}><button onClick={()=>setActiveCl(null)} style={{background:C.b1,border:"none",borderRadius:10,padding:"8px 14px",color:C.ts,cursor:"pointer",fontSize:12,fontWeight:700,marginBottom:16}}>← Voltar</button><div style={{color:C.tx,fontWeight:900,fontSize:20,marginBottom:8}}>{cl.name}</div><div style={{color:C.ts,fontSize:13}}>{cl.sector} · {cl.manager} · Saude: <span style={{color:hc(cl.health),fontWeight:700}}>{cl.health}%</span></div><div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginTop:16}}><Tile label="ROAS Meta" val={cl.meta.roas+"x"} color={cl.meta.roas>=4?C.gr:C.yw}/><Tile label="ROAS Google" val={cl.google.roas+"x"} color={cl.google.roas>=4?C.gr:C.yw}/><Tile label="Leads" val={cl.meta.leads+cl.google.leads} color={C.bl}/></div></div>;
+      if(cl) return <div style={{padding:4}}><button onClick={()=>setActiveCl(null)} style={{background:C.b1,border:"none",borderRadius:10,padding:"8px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:12,marginBottom:16}}>← Voltar</button><PageCliente cl={cl} isMob={isMob} tasks={globalTasks} setTasks={setGlobalTasks}/></div>;
     }
     const p={isMob,perms:effectivePerms,viewingAs,setViewingAs};
     switch(page){
-      case "meudash":             return effectiveUser.dash==="partner"
-          ? <PageDashboard {...p} onClient={goClient} tasks={globalTasks} setTasks={setGlobalTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav}/>
-          : <div style={{padding:"0 0 40px"}}>
-              <RenderDash user={effectiveUser} isViewing={!!viewingAs} tasks={globalTasks} setTasks={setGlobalTasks} notifs={notifs}/>
-            </div>;
       case "clientes":            return effectivePerms.verClientes?<PageClientes isMob={isMob} perms={effectivePerms} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
+      case "meudash":             return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={globalTasks} setTasks={setGlobalTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav}/>:<NoPerm/>;
+      case "meudash_prioridade":
       case "demandas":
       case "demandas_kanban":     return effectivePerms.verDemandas?<PageDemandas {...p} tasks={globalTasks} setTasks={setGlobalTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
       case "demandas_cal_pub":    return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
       case "chat":                return effectivePerms.verChat?<PageChat {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "aprovacoes":             return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={globalTasks} setTasks={setGlobalTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
-      case "aprovacoes_copys":       return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={globalTasks} setTasks={setGlobalTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
-      case "aprovacoes_publicacao":  return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={globalTasks} setTasks={setGlobalTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
-      case "notificacoes":        return <PageNotificacoes {...p} notifs={notifs} setNotifs={setNotifs}/>;
+      case "aprovacoes":
+      case "aprovacoes_copys":    return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={globalTasks} setTasks={setGlobalTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
+      case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={globalTasks} setTasks={setGlobalTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
+      case "analises":
+      case "analises_producao":   return (effectivePerms.verAnalises||isSocio)?<PageAnalises {...p} tasks={globalTasks}/>:<NoPerm/>;
+      case "analises_gargalos":   return (effectivePerms.verAnalises||isSocio)?<PageGargalos {...p} tasks={globalTasks}/>:<NoPerm/>;
+      case "relatorios":          return (effectivePerms.verAnalises||isSocio)?<PageRelatorios {...p} tasks={globalTasks}/>:<NoPerm/>;
+      case "gestao":
+      case "contratos_lista":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestao {...p}/>:<NoPerm/>;
+      case "ia":
+      case "ia_diagnostico":      return (effectivePerms.pixelsIA||isSocio)?<PageIA {...p} tasks={globalTasks}/>:<NoPerm/>;
       case "acessos":             return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "interno":             return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "interno_calendario":  return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "interno_pontuacao":   return (effectivePerms.verInterno||isSocio)?<PagePontuacao {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "interno_mapeamento":  return (effectivePerms.verInterno||isSocio)?<PageMapeamento {...p}/>:<NoPerm/>;
-      case "interno_conexoes":    return (effectivePerms.verInterno||isSocio)?<PageConexoes {...p}/>:<NoPerm/>;
-      case "interno_360":         return (effectivePerms.verInterno||isSocio)?<PageAvaliacao360 {...p}/>:<NoPerm/>;
-      case "interno_carreira":    return (effectivePerms.verInterno||isSocio)?<PageCarreira {...p}/>:<NoPerm/>;
-      case "relatorios":          return (effectivePerms.verAnalises||isSocio)?<PageRelatorio {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "analises":            return (effectivePerms.verAnalises||isSocio)?<PageAnalitico {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="producao"/>:<NoPerm/>;
-      case "analises_producao":   return (effectivePerms.verAnalises||isSocio)?<PageAnalitico {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="producao"/>:<NoPerm/>;
-      case "analises_gargalos":   return (effectivePerms.verAnalises||isSocio)?<PageAnalitico {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="gargalos"/>:<NoPerm/>;
-      case "portal":              return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "portal_demandas":     return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="demandas"/>:<NoPerm/>;
-      case "portal_dashboard":    return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="dashboard"/>:<NoPerm/>;
-      case "portal_calendario":   return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="calendario"/>:<NoPerm/>;
-      case "portal_publicacoes":  return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="publicacoes"/>:<NoPerm/>;
-      case "portal_analises":     return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="analises"/>:<NoPerm/>;
-      case "portal_faturamento":  return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="faturamento"/>:<NoPerm/>;
-      case "portal_chat":         return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="chat"/>:<NoPerm/>;
-      case "portal_criativos":    return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="demandas"/>:<NoPerm/>;
-      case "gestao":              return (effectivePerms.verFinanceiro||isSocio)?<PageContratos {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "contratos_lista":     return (effectivePerms.verFinanceiro||isSocio)?<PageContratos {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="contratos"/>:<NoPerm/>;
-      case "contratos_ltv":       return (effectivePerms.verFinanceiro||isSocio)?<PageContratos {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="ltv"/>:<NoPerm/>;
-      case "contratos_projecao":  return (effectivePerms.verFinanceiro||isSocio)?<PageContratos {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="projecao"/>:<NoPerm/>;
-      case "capacidade_alocacao": return (effectivePerms.verFinanceiro||isSocio)?<PageCapacidade {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="alocacao"/>:<NoPerm/>;
-      case "capacidade_onboarding":return (effectivePerms.verFinanceiro||isSocio)?<PageCapacidade {...p} tasks={globalTasks} setTasks={setGlobalTasks} initTab="onboarding"/>:<NoPerm/>;
-      case "ia":                  return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "ia_diagnostico":      return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "ia_churn":            return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "ia_playbooks":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      case "ia_biblioteca":       return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={globalTasks} setTasks={setGlobalTasks}/>:<NoPerm/>;
-      default:                    return <PageDemandas {...p}/>;
+      case "interno":
+      case "interno_calendario":  return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={globalTasks}/>:<NoPerm/>;
+      case "notificacoes":        return <PageNotificacoes notifs={notifs} setNotifs={setNotifs}/>;
+      default:                    return <NoPerm/>;
     }
   };
 
-  const cur=NAV.find(n=>n.id===page)||NAV.flatMap(n=>n.children||[]).find(n=>n.id===page);
-
-  // ── Block render until storage is fully loaded ──
-
-  const handleLogout = async () => {
-    // 1. Limpa ref de sessão
-    _sessionRef.current = null;
-    // 2. Limpa todo o cache local
-    try {
-      localStorage.removeItem("pixels-tasks-v3");
-      localStorage.removeItem("pixels-profile-cache");
-      TEAM.forEach(u => { try { localStorage.removeItem("pixels-perms-" + u.id); } catch(e) {} });
-    } catch(e) {}
-    // 3. Reset imediato do estado React
-    setAuthState("login");
-    setCurrentProfile(null);
-    setClientPortalData(null);
-    setGlobalTasksRaw([]);
-    // 4. Signout no Supabase
-    await _sb.auth.signOut();
-  };
-
-  // 1. Auth loading
-  if(authState==="loading")return(
-    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16}}>
-      <div style={{width:48,height:48,borderRadius:16,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>⬡</div>
-      <div style={{color:C.td,fontSize:13}}>Carregando...</div>
+  // ── Telas de auth ─────────────────────────────────────────────
+  if(authState==="loading") return(
+    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+      <div style={{width:54,height:54,borderRadius:16,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>⬡</div>
+      <div style={{color:C.ts,fontSize:13,fontWeight:600}}>Carregando...</div>
+      <div style={{width:180,height:4,borderRadius:99,background:C.b1,overflow:"hidden"}}>
+        <div style={{width:"60%",height:"100%",borderRadius:99,background:C.a,animation:"pulse 1.5s ease-in-out infinite"}}/>
+      </div>
     </div>
   );
 
-  // 2. Login
-  if(authState==="login")return(
+  if(authState==="login") return(
     <LoginScreen
-      onLoginCollaborator={(profile)=>{setCurrentProfile(profile);setAuthState("app");}}
-      onLoginClient={(profile)=>{setClientPortalData(profile);setAuthState("portal");}}
+      onLoginCollaborator={(profile)=>{cacheSet(PROFILE_CACHE_KEY,profile);setCurrentProfile(profile);setAuthState("app");}}
+      onLoginClient={(profile)=>{cacheSet(PROFILE_CACHE_KEY,profile);setClientPortalData(profile);setAuthState("portal");}}
     />
   );
 
-  // 3. Portal do cliente
-  if(authState==="portal")return(
-    <div style={{fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",background:C.bg,minHeight:"100vh",padding:20}}>
-      <div style={{maxWidth:1200,margin:"0 auto"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⬡</div>
-            <div style={{color:C.tx,fontWeight:800,fontSize:16}}>Pixels Agency OS</div>
-          </div>
-          <button onClick={handleLogout} style={{background:"none",border:"1px solid "+C.b1,borderRadius:9,padding:"7px 14px",color:C.ts,cursor:"pointer",fontSize:12,fontWeight:600}}>⏻ Sair</button>
-        </div>
-        <PagePortalCliente isMob={window.innerWidth<768} tasks={[]} setTasks={()=>{}}/>
-      </div>
-    </div>
-  );
+  if(authState==="portal"&&clientPortalData) return <PortalCliente profile={clientPortalData} onLogout={handleLogout}/>;
 
-  // 4. Dados salvos carregando
-  if(!storageLoaded)return(
-    <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",background:C.bg,flexDirection:"column",gap:16}}>
-      <div style={{width:40,height:40,borderRadius:12,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⬡</div>
+  if(!storageLoaded) return(
+    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
+      <div style={{width:54,height:54,borderRadius:16,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>⬡</div>
       <div style={{color:C.ts,fontSize:13,fontWeight:600}}>Carregando dados...</div>
-      <div style={{width:160,height:3,background:C.b1,borderRadius:99,overflow:"hidden"}}>
-        <div style={{width:"60%",height:"100%",background:C.a,borderRadius:99,animation:"progress 1s ease-in-out infinite alternate"}}/>
+      <div style={{width:180,height:4,borderRadius:99,background:C.b1,overflow:"hidden"}}>
+        <div style={{width:"40%",height:"100%",borderRadius:99,background:C.a,animation:"pulse 1.5s ease-in-out infinite"}}/>
       </div>
-      <style>{`@keyframes progress{from{width:20%}to{width:90%}}`}</style>
     </div>
   );
 
-  return <div style={{display:"flex",height:"100vh",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",color:C.tx,overflow:"hidden"}}>
-    <style>{MOBILE_CSS}</style>
-    {/* Mobile overlay */}
-    {isMob&&sideOpen&&<div onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:40,backdropFilter:"blur(2px)"}}/>}
+  // ── Notif drawer ──────────────────────────────────────────────
+  const markRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));
 
-    {/* Notification Drawer */}
-    {notifDrawer&&<div onClick={()=>setNotifDrawer(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:100,backdropFilter:"blur(2px)"}}/>}
-    {notifDrawer&&<div onClick={e=>e.stopPropagation()} style={{position:"fixed",top:0,right:0,bottom:0,width:360,background:C.card,borderLeft:"1px solid "+C.b1,zIndex:101,display:"flex",flexDirection:"column",boxShadow:"-8px 0 32px rgba(0,0,0,0.2)",overflowY:"auto"}}>
-      <div style={{padding:"18px 18px 14px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-        <div>
-          <div style={{color:C.tx,fontWeight:900,fontSize:16}}>Notificacoes</div>
-          {unreadNotifs>0&&<div style={{color:C.td,fontSize:11,marginTop:2}}>{unreadNotifs} nao lida(s)</div>}
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {unreadNotifs>0&&<button onClick={()=>{setNotifs(p=>p.map(n=>({...n,read:true})));}} style={{background:"none",border:"1px solid "+C.b1,borderRadius:7,padding:"4px 10px",color:C.ts,fontSize:10,fontWeight:600,cursor:"pointer"}}>Marcar todas</button>}
-          <button onClick={()=>setNotifDrawer(false)} style={{background:"none",border:"none",color:C.td,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
-        </div>
+  return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",position:"relative"}}>
+    {/* Notif drawer overlay */}
+    {notifDrawer&&<div style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.5)"}} onClick={()=>{setNotifDrawer(false);markRead();}}/>}
+    {notifDrawer&&<div style={{position:"fixed",top:0,right:0,bottom:0,width:340,background:C.card,borderLeft:"1px solid "+C.b1,zIndex:101,display:"flex",flexDirection:"column",boxShadow:"-8px 0 32px rgba(0,0,0,0.2)"}}>
+      <div style={{padding:"18px 20px",borderBottom:"1px solid "+C.b1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{color:C.tx,fontWeight:800,fontSize:15}}>Notificações</div>
+        <button onClick={()=>{setNotifDrawer(false);markRead();}} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18}}>✕</button>
       </div>
-      <div style={{flex:1,padding:"8px 0"}}>
-        {(notifs||[]).length===0&&<div style={{textAlign:"center",padding:40,color:C.td,fontSize:13}}>Sem notificacoes</div>}
-        {(notifs||[]).map(n=>(
-          <div key={n.id} onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))}
-            style={{display:"flex",gap:12,padding:"12px 18px",borderBottom:"1px solid "+C.b1+"44",cursor:"pointer",background:n.read?"transparent":C.a+"06",transition:"background .1s"}}
-            onMouseEnter={e=>e.currentTarget.style.background=C.b1+"44"}
-            onMouseLeave={e=>e.currentTarget.style.background=n.read?"transparent":C.a+"06"}>
-            <div style={{width:36,height:36,borderRadius:10,background:C.a+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>{n.icon||"🔔"}</div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-                <span style={{color:C.tx,fontWeight:n.read?500:700,fontSize:12,lineHeight:1.3}}>{n.title}</span>
-                {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:C.a,flexShrink:0,marginTop:3}}/>}
+      <div style={{flex:1,overflowY:"auto",padding:"10px 0"}}>
+        {notifs.length===0&&<div style={{padding:24,textAlign:"center",color:C.td,fontSize:13}}>Nenhuma notificação</div>}
+        {notifs.slice(0,30).map(n=>(
+          <div key={n.id} style={{padding:"12px 20px",borderBottom:"1px solid "+C.b1+"44",background:n.read?"transparent":C.a+"08"}}>
+            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+              <span style={{fontSize:18,flexShrink:0}}>{n.icon||"🔔"}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:C.tx,fontWeight:600,fontSize:13,marginBottom:2}}>{n.title}</div>
+                {n.body&&<div style={{color:C.ts,fontSize:12,lineHeight:1.5}}>{n.body}</div>}
+                <div style={{color:C.td,fontSize:10,marginTop:4}}>{n.at}</div>
               </div>
-              <div style={{color:C.ts,fontSize:11,marginTop:3,lineHeight:1.5}}>{n.body}</div>
-              <div style={{color:C.td,fontSize:10,marginTop:4}}>{n.at} · {n.user}</div>
+              {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:C.a,flexShrink:0,marginTop:4}}/>}
             </div>
           </div>
         ))}
       </div>
     </div>}
 
-    {/* Sidebar — desktop always visible, mobile drawer */}
-    <aside style={{width:210,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none"}}>
-      <div style={{padding:"18px 14px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
+    {/* Sidebar */}
+    <aside style={{width:210,background:C.s1,borderRight:"1px solid "+C.b1,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none"}}>
+      <div style={{padding:"18px 14px",borderBottom:"1px solid "+C.b1,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:34,height:34,borderRadius:12,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⬡</div>
+          <div style={{width:34,height:34,borderRadius:12,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⬡</div>
           <div><div style={{color:C.tx,fontWeight:900,fontSize:14,letterSpacing:-.5}}>Pixels</div><div style={{color:C.td,fontSize:9,letterSpacing:1}}>Agency OS · PRO</div></div>
           {isMob&&<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>}
         </div>
       </div>
       <nav style={{flex:1,padding:"10px 8px",overflowY:"auto"}}>
-        {/* "Viewing as" banner */}
-        {viewingAs&&<div style={{background:C.or+"22",border:`1px solid ${C.or}44`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
+        {viewingAs&&<div style={{background:C.or+"22",border:"1px solid "+C.or+"44",borderRadius:9,padding:"7px 10px",marginBottom:8}}>
           <div style={{color:C.or,fontWeight:700,fontSize:10}}>👁 Visualizando como</div>
           <div style={{color:C.tx,fontWeight:700,fontSize:12,marginTop:2}}>{effectiveUser.name}</div>
-          <button onClick={()=>{setViewingAs(null);nav("acessos");}}
-            style={{background:C.or,color:"#fff",border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer",marginTop:4}}>
-            ✕ Sair da visualização
-          </button>
+          <button onClick={()=>{setViewingAs(null);nav("acessos");}} style={{background:C.or,color:"#fff",border:"none",borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700,cursor:"pointer",marginTop:4}}>✕ Sair</button>
         </div>}
         {NAV_VISIBLE.map((n,idx)=>{
           if(n.type==="divider") return(
@@ -18859,12 +18666,8 @@ export default function AgencyOS(){
           const isExpanded=hasChildren?(expanded[n.id]!==undefined?expanded[n.id]:isActive):false;
           return(<div key={n.id}>
             <button onClick={()=>{
-              if(hasChildren){
-                setExpanded(prev=>({...prev,[n.id]:!isExpanded}));
-                if(!isExpanded) nav(n.children[0].id);
-              } else {
-                nav(n.id);
-              }
+              if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded)nav(n.children[0].id);}
+              else nav(n.id);
             }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 10px",borderRadius:10,border:"none",background:isActive?C.ag:"none",color:isActive?C.a:C.ts,cursor:"pointer",fontWeight:isActive?700:500,fontSize:12,marginBottom:2,textAlign:"left",transition:"all .15s"}}>
               <span style={{display:"flex",alignItems:"center",gap:9}}><span style={{fontSize:15}}>{n.icon}</span>{n.label}</span>
               <span style={{display:"flex",alignItems:"center",gap:4}}>
@@ -18872,44 +18675,42 @@ export default function AgencyOS(){
                 {hasChildren&&<span style={{color:C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
               </span>
             </button>
-            {hasChildren&&isExpanded&&(<div style={{marginLeft:12,borderLeft:"2px solid "+C.a+"33",paddingLeft:8,marginBottom:4}}>
+            {hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:"2px solid "+C.a+"33",paddingLeft:8,marginBottom:4}}>
               {n.children.map(child=>(
                 <button key={child.id} onClick={()=>nav(child.id)}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:400,fontSize:11,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
                   <span style={{fontSize:12}}>{child.icon}</span>{child.label}
                 </button>
               ))}
-            </div>)}
+            </div>}
           </div>);
         })}
       </nav>
-      <div style={{padding:"10px 14px",borderTop:`1px solid ${C.b1}`,flexShrink:0}}>
-        {/* Theme switcher */}
+      <div style={{padding:"10px 14px",borderTop:"1px solid "+C.b1,flexShrink:0}}>
         <div style={{display:"flex",gap:4,marginBottom:10}}>
           {Object.entries(THEMES).map(([key,t])=>(
-            <button key={key} onClick={()=>{applyTheme(key);setThemeKey(key);}}
-              title={t.name}
+            <button key={key} onClick={()=>{applyTheme(key);setThemeKey(key);}} title={t.name}
               style={{flex:1,background:_themeKey===key?C.a+"22":"none",border:"1px solid "+(_themeKey===key?C.a:C.b1),borderRadius:8,padding:"5px 0",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
               <span style={{fontSize:14,color:_themeKey===key?C.a:C.td}}>{t.icon}</span>
               <span style={{fontSize:8,color:_themeKey===key?C.a:C.td,fontWeight:_themeKey===key?700:400}}>{t.name}</span>
             </button>
           ))}
         </div>
-        {/* User row */}
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={30} status="online"/>
-          <div style={{flex:1,minWidth:0}}><div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{CURRENT_USER.name}</div><div style={{color:C.td,fontSize:10}}>{CURRENT_USER.role}</div></div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{CURRENT_USER.name}</div>
+            <div style={{color:C.td,fontSize:10}}>{CURRENT_USER.role}</div>
+          </div>
           <button onClick={()=>setNotifDrawer(v=>!v)} title="Notificações"
-            style={{position:"relative",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:15,padding:2,lineHeight:1,flexShrink:0,transition:"color .15s"}}
-            onMouseEnter={e=>e.currentTarget.style.color=C.a}
-            onMouseLeave={e=>e.currentTarget.style.color=C.td}>
+            style={{position:"relative",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:15,padding:2,lineHeight:1,flexShrink:0}}
+            onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color=C.td}>
             🔔
             {unreadNotifs>0&&<div style={{position:"absolute",top:-4,right:-4,background:C.rd,color:"#fff",borderRadius:99,padding:"0 3px",fontSize:7,fontWeight:900,minWidth:12,textAlign:"center",lineHeight:"12px"}}>{unreadNotifs}</div>}
           </button>
           <button onClick={handleLogout} title="Sair"
-            style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:15,padding:2,lineHeight:1,flexShrink:0,transition:"color .15s"}}
-            onMouseEnter={e=>e.currentTarget.style.color=C.rd}
-            onMouseLeave={e=>e.currentTarget.style.color=C.td}>
+            style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:15,padding:2,lineHeight:1,flexShrink:0}}
+            onMouseEnter={e=>e.currentTarget.style.color=C.rd} onMouseLeave={e=>e.currentTarget.style.color=C.td}>
             ⏻
           </button>
         </div>
@@ -18918,8 +18719,7 @@ export default function AgencyOS(){
 
     {/* Main content */}
     <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden"}}>
-      {/* Mobile top bar */}
-      {isMob&&<div style={{background:C.s1,borderBottom:`1px solid ${C.b1}`,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexShrink:0,position:"sticky",top:0,zIndex:30}}>
+      {isMob&&<div style={{background:C.s1,borderBottom:"1px solid "+C.b1,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexShrink:0,position:"sticky",top:0,zIndex:30}}>
         <button onClick={()=>setSideOpen(v=>!v)} style={{background:"none",border:"none",color:C.tx,fontSize:22,cursor:"pointer",padding:"2px 4px",lineHeight:1,flexShrink:0}}>☰</button>
         <div style={{flex:1,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
           <span style={{fontSize:16,flexShrink:0}}>{cur?.icon}</span>
@@ -18934,20 +18734,12 @@ export default function AgencyOS(){
         </div>
       </div>}
 
-      {/* Page content */}
       <main style={{flex:1,overflowY:"auto",padding:isMob?"12px 12px 80px":"24px",WebkitOverflowScrolling:"touch"}}>
         {renderPage()}
       </main>
 
-      {/* Mobile bottom nav */}
-      {isMob&&<nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.s1,borderTop:`1px solid ${C.b1}`,display:"flex",padding:"6px 0 env(safe-area-inset-bottom,8px)",flexShrink:0,zIndex:30,boxShadow:"0 -2px 12px rgba(0,0,0,0.1)"}}>
-        {[
-          {id:"meudash",    icon:"🎯", label:"Dashboard"},
-          {id:"demandas",   icon:"◈",  label:"Demandas"},
-          {id:"aprovacoes", icon:"◇",  label:"Aprovações"},
-          {id:"chat",       icon:"◐",  label:"Chat"},
-          {id:"clientes",   icon:"◉",  label:"Clientes"},
-        ].map(n=>(
+      {isMob&&<nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.s1,borderTop:"1px solid "+C.b1,display:"flex",padding:"6px 0 env(safe-area-inset-bottom,8px)",flexShrink:0,zIndex:30,boxShadow:"0 -2px 12px rgba(0,0,0,0.1)"}}>
+        {[{id:"meudash",icon:"🎯",label:"Dashboard"},{id:"demandas",icon:"◈",label:"Demandas"},{id:"aprovacoes",icon:"◇",label:"Aprovações"},{id:"chat",icon:"◐",label:"Chat"},{id:"clientes",icon:"◉",label:"Clientes"}].map(n=>(
           <button key={n.id} onClick={()=>nav(n.id)}
             style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"5px 2px",color:page===n.id?C.a:C.td,position:"relative",transition:"color .12s"}}>
             <span style={{fontSize:18,lineHeight:1}}>{n.icon}</span>
@@ -18955,8 +18747,7 @@ export default function AgencyOS(){
             {page===n.id&&<div style={{position:"absolute",top:-1,left:"50%",transform:"translateX(-50%)",width:20,height:2,background:C.a,borderRadius:99}}/>}
           </button>
         ))}
-        <button onClick={()=>setSideOpen(true)}
-          style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"5px 2px",color:C.td}}>
+        <button onClick={()=>setSideOpen(true)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"5px 2px",color:C.td}}>
           <span style={{fontSize:18,lineHeight:1}}>⋯</span>
           <span style={{fontSize:9,fontWeight:400,lineHeight:1}}>Mais</span>
         </button>
