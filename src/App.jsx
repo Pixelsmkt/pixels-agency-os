@@ -15334,13 +15334,13 @@ export default function AgencyOS(){
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "analises":
-      case "analises_producao":     return (effectivePerms.verAnalises||isSocio)?<PageAnalises {...p} tasks={tasks}/>:<NoPerm/>;
-      case "analises_gargalos":     return (effectivePerms.verAnalises||isSocio)?<PageGargalos {...p} tasks={tasks}/>:<NoPerm/>;
-      case "relatorios":            return (effectivePerms.verAnalises||isSocio)?<PageRelatorios {...p} tasks={tasks}/>:<NoPerm/>;
+      case "analises_producao":     return (effectivePerms.verAnalises||isSocio)?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
+      case "analises_gargalos":     return (effectivePerms.verAnalises||isSocio)?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
+      case "relatorios":            return (effectivePerms.verAnalises||isSocio)?<PageRelatorio {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao":
-      case "contratos_lista":       return (effectivePerms.verFinanceiro||isSocio)?<PageGestao {...p}/>:<NoPerm/>;
+      case "contratos_lista":       return (effectivePerms.verFinanceiro||isSocio)?<PageContratos {...p}/>:<NoPerm/>;
       case "ia":
-      case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIA {...p} tasks={tasks}/>:<NoPerm/>;
+      case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
       case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "interno":
       case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
