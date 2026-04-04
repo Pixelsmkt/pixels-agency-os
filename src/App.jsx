@@ -10548,7 +10548,38 @@ function CollabProfilePage({user,profile,onSave,onClose}){
   const [objetivos,setObjetivos]=useState(p.objetivos||"");
   const [obs,setObs]=useState(p.obs||"");
 
-  const handlePhoto=e=>{const file=e.target.files?.[0];if(!file)return;const r=new FileReader();r.onload=ev=>setPhoto(ev.target.result);r.readAsDataURL(file);};
+  const [uploadingPhoto,setUploadingPhoto]=useState(false);
+  const handlePhoto=async(e)=>{
+    const file=e.target.files?.[0];
+    if(!file)return;
+    e.target.value="";
+    setUploadingPhoto(true);
+    try{
+      const sb=window._sb;
+      const ext=file.name.split(".").pop()||"jpg";
+      const path=`avatars/${user.id}-${Date.now()}.${ext}`;
+      const{error}=await sb.storage.from("pixels-files").upload(path,file,{upsert:true});
+      if(error)throw error;
+      const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+      setPhoto(data.publicUrl);
+    }catch(err){
+      console.error("Erro upload foto:",err);
+      // Fallback: usar base64 comprimido via canvas
+      const canvas=document.createElement("canvas");
+      const img=new Image();
+      img.onload=()=>{
+        const MAX=400;
+        const ratio=Math.min(MAX/img.width,MAX/img.height,1);
+        canvas.width=Math.round(img.width*ratio);
+        canvas.height=Math.round(img.height*ratio);
+        canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+        setPhoto(canvas.toDataURL("image/jpeg",0.75));
+      };
+      img.src=URL.createObjectURL(file);
+    }finally{
+      setUploadingPhoto(false);
+    }
+  };
 
   const save=()=>{
     onSave(user.id,{nome,funcao,telefone,email,nascimento,photo,cidade,estado,camiseta,calcado,smartphone,time,estadoCivil,filhos,comidas,bebida,hobbies,musica,series,filmes,viagens,pets,curiosidades,medoOuFobia,superpoder,talento,licoesAprendidas,bio,habilidades,objetivos,obs});
@@ -10561,7 +10592,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
 
         <div style={{background:"linear-gradient(135deg,"+user.color+","+user.color+"88)",padding:"20px 24px",borderRadius:"20px 20px 0 0",display:"flex",alignItems:"center",gap:16,position:"sticky",top:0,zIndex:5}}>
           <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",border:"2px solid rgba(255,255,255,0.5)",overflow:"hidden",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
-            {photo?(<img src={photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>):(<span style={{color:"#fff",fontWeight:900,fontSize:26}}>{user.av}</span>)}
+            {uploadingPhoto?<span style={{color:"#fff",fontSize:20}}>⏳</span>:photo?(<img src={photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>):(<span style={{color:"#fff",fontWeight:900,fontSize:26}}>{user.av}</span>)}
             <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.4)",padding:"3px",textAlign:"center",fontSize:9,color:"#fff"}}>📷</div>
           </div>
           <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} style={{display:"none"}}/>
