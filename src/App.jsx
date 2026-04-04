@@ -12711,10 +12711,7 @@ const thumbUrl=(url,w=300,q=60)=>{
 
 // Gera URL de miniatura via Supabase Image Transform (só para URLs do Storage)
 // Miniatura: 300px, qualidade 60% — original abre no click
-const thumbUrl = (url, w=300, q=60) => {
-  if(!url || url.startsWith("data:")) return url;
-  return url.replace("/object/public/", "/render/image/public/") + `?width=${w}&quality=${q}&resize=cover`;
-};
+
 const isVid = a => a && a.type && a.type.startsWith("video/");
 const isAud = a => a && a.type && (a.type.startsWith("audio/") || (a.name && a.name.endsWith(".webm")));
 
