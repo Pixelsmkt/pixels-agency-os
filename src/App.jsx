@@ -18225,6 +18225,9 @@ export default function AgencyOS(){
   // ── Sync task para Supabase + broadcast ───────────────────────
   const syncToSupabase = async (tasks, retry=0) => {
     if(!tasks||tasks.length===0) return;
+    // Safety: limpa pendingIds após 10s independente do resultado
+    const ids = tasks.map(t=>String(t.id));
+    setTimeout(()=>ids.forEach(id=>pendingIds.current.delete(id)), 10000);
     try{
       const rows = tasks.map(taskToRow);
       const {error} = await _sb.from("tasks").upsert(rows,{onConflict:"id"});
@@ -18338,20 +18341,31 @@ export default function AgencyOS(){
     const pollFetch = async () => {
       const session = sessionRef.current;
       if(!session||cancelled) return;
-      if(pendingIds.current.size>0) return; // aguarda confirmações pendentes
       try{
         const res = await fetch(`${SUPABASE_URL}/rest/v1/tasks?select=*`,{
           headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+session.access_token}
         });
         const data = await res.json();
         if(!cancelled&&Array.isArray(data)&&data.length>0){
-          const tasks = data.map(rowToTask);
+          const fromSupa = data.map(rowToTask);
           setGlobalTasksRaw(prev=>{
-            // Preserva files locais (não sincronizados via URL)
-            const merged = tasks.map(sb=>{
-              const local = prev.find(l=>String(l.id)===String(sb.id));
-              return (local&&local.files?.length>0) ? {...sb,files:local.files} : sb;
-            });
+            // Merge: Supabase é fonte de verdade
+            // Cards em pendingIds: usa versão local (edição ainda não confirmada)
+            // Outros: usa versão do Supabase
+            const supaIds = new Set(fromSupa.map(t=>String(t.id)));
+            // Cards locais ainda não chegaram ao Supabase (criados agora)
+            const localOnly = prev.filter(t=>!supaIds.has(String(t.id)));
+            const merged = [
+              ...fromSupa.map(sb=>{
+                const local = prev.find(l=>String(l.id)===String(sb.id));
+                if(!local) return sb;
+                // Se ainda pendente: usa local; senão usa Supabase
+                if(pendingIds.current.has(String(sb.id))) return {...local};
+                // Preserva files locais
+                return local?.files?.length>0 ? {...sb,files:local.files} : sb;
+              }),
+              ...localOnly
+            ];
             cacheSet(TASKS_CACHE_KEY,merged);
             return merged;
           });
