@@ -15427,6 +15427,21 @@ export default function AgencyOS(){
           {isMob&&<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>}
         </div>
       </div>
+      {/* ── Perfil no topo da sidebar ── */}
+      <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
+        <button onClick={()=>nav("acessos")}
+          style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"9px 12px",cursor:"pointer",transition:"all .15s",textAlign:"left"}}
+          onMouseEnter={e=>e.currentTarget.style.background=C.a+"18"}
+          onMouseLeave={e=>e.currentTarget.style.background=C.s1}>
+          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={32} status="online"/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{CURRENT_USER.name}</div>
+            <div style={{color:C.td,fontSize:10}}>{CURRENT_USER.role}</div>
+          </div>
+          <span style={{color:C.td,fontSize:11}}>✏️</span>
+        </button>
+      </div>
+
       <nav style={{flex:1,padding:"10px 8px",overflowY:"auto"}}>
         {viewingAs&&<div style={{background:C.or+"22",border:`1px solid ${C.or}44`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
           <div style={{color:C.or,fontWeight:700,fontSize:10}}>👁 Visualizando como</div>
@@ -15476,11 +15491,6 @@ export default function AgencyOS(){
           ))}
         </div>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={30} status="online"/>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{CURRENT_USER.name}</div>
-            <div style={{color:C.td,fontSize:10}}>{CURRENT_USER.role}</div>
-          </div>
           <button onClick={()=>setNotifDrawer(v=>!v)} title="Notificações"
             style={{position:"relative",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:15,padding:2,lineHeight:1,flexShrink:0}}
             onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color=C.td}>
