@@ -17960,10 +17960,11 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
 
 
 // ======= 12_estrutura.jsx =======
+const _noOpLock = async (name, acquireTimeout, fn) => await fn();
 const _sb = __createSupabaseClient(
   import.meta.env.VITE_SUPABASE_URL,
   import.meta.env.VITE_SUPABASE_ANON_KEY,
-  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage,storageKey:"pixels-sb-auth"}}
+  {auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false,storage:window.localStorage,storageKey:"pixels-sb-auth",lock:_noOpLock}}
 );
 window._sb = _sb;
 
@@ -18078,8 +18079,14 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
       cacheDel(TASKS_CACHE_KEY);
       const {data,error:authErr}=await _sb.auth.signInWithPassword({email:email.trim().toLowerCase(),password});
       if(authErr){setError("E-mail ou senha incorretos.");setLoading(false);return;}
-      const {data:profile,error:profErr}=await _sb.from("profiles").select("*").eq("id",data.user.id).single();
-      if(profErr||!profile){setError("Perfil não encontrado.");await _sb.auth.signOut();setLoading(false);return;}
+      // Usa raw fetch para não deadlock o _sb client logo após o login
+      const token = data.session?.access_token;
+      const profRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${data.user.id}&select=*`,{
+        headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+token}
+      });
+      const profArr = await profRes.json();
+      const profile = Array.isArray(profArr) ? profArr[0] : null;
+      if(!profile){setError("Perfil não encontrado.");await _sb.auth.signOut();setLoading(false);return;}
       if(profile.user_type==="client") onLoginClient(profile);
       else onLoginCollaborator(profile);
     }catch{setError("Erro de conexão. Verifique sua internet.");setLoading(false);}
@@ -18323,7 +18330,9 @@ export default function AgencyOS(){
 
     const safetyTimer = setTimeout(()=>setStorageLoaded(true), 10000);
 
-    const {data:{subscription}} = _sb.auth.onAuthStateChange(async(event,session)=>{
+    // IMPORTANTE: callback NÃO pode ser async — causa deadlock no Supabase client
+    // Operações async são disparadas com setTimeout fora do lock
+    const {data:{subscription}} = _sb.auth.onAuthStateChange((event,session)=>{
       clearTimeout(safetyTimer);
       if(event==="SIGNED_OUT"||(!session&&(event==="INITIAL_SESSION"||event==="TOKEN_REFRESHED"))){
         sessionRef.current=null;
@@ -18333,8 +18342,11 @@ export default function AgencyOS(){
       }
       if(session){
         sessionRef.current=session;
-        await refreshProfile(session.user.id, session.access_token);
-        if(!fetched){fetched=true;fetchTasksWithToken(session.access_token);}
+        // setTimeout(0) dispara fora do lock do onAuthStateChange
+        setTimeout(()=>{
+          refreshProfile(session.user.id, session.access_token);
+          if(!fetched){fetched=true;fetchTasksWithToken(session.access_token);}
+        },0);
       }
     });
 
