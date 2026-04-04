@@ -426,6 +426,23 @@ function useOpenCardSync(openCard, setOpenCard, tasks){
   },[tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
+/* ─── URGÊNCIA DE TAREFAS ────────────────────── */
+// Retorna nível de urgência: 0=atrasado | 1=urgente | 2=atenção | 3=no prazo
+function taskUrgencyLevel(t){
+  if(!t||["aprovado","agendado","publicado","pausado"].includes(t.status))return 3;
+  const d=t.deadline?daysLeft(t.deadline):null;
+  if(d===null)return 3;
+  if(d<0)return 0;   // atrasado
+  if(d<=1)return 1;  // urgente (hoje ou amanhã)
+  if(d<=3)return 2;  // atenção
+  return 3;          // no prazo
+}
+
+// Cor correspondente ao nível de urgência
+function getUrgencyColor(level){
+  return(["#e53e3e","#f97316",C.yw,C.gr])[level]??C.gr;
+}
+
 // ======= 00_mindmap_data.jsx =======
 // Dados estratégicos e mapas mentais de todos os clientes
 // Depende de: 00_globals.jsx (C para cores)
