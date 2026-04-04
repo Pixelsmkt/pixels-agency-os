@@ -1502,7 +1502,7 @@ const LISTA_ORDER = ["publicado","agendado","aprovado","avaliacao","execucao","r
 // Integrações de mídia: Meta + Google auth hooks, painéis RealData, ClienteDashboard, ClienteConcorrencia
 // Depende de: 03_cliente_ferramentas (helpers de dados)
 
-}=recharts;
+const {LineChart,BarChart,AreaChart,PieChart,Pie,Cell,XAxis,YAxis,CartesianGrid,ResponsiveContainer}=recharts;
 
 // Simulate 8-week trend data per client
 const genTrend=(base,variance=0.15,weeks=8)=>Array.from({length:weeks},(_, i)=>{
