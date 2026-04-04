@@ -18225,18 +18225,33 @@ export default function AgencyOS(){
   // ── Sync task para Supabase + broadcast ───────────────────────
   const syncToSupabase = async (tasks, retry=0) => {
     if(!tasks||tasks.length===0) return;
+    const session = sessionRef.current;
+    if(!session){
+      if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),1000);
+      return;
+    }
     // Safety: limpa pendingIds após 10s independente do resultado
     const ids = tasks.map(t=>String(t.id));
     setTimeout(()=>ids.forEach(id=>pendingIds.current.delete(id)), 10000);
     try{
       const rows = tasks.map(taskToRow);
-      const {error} = await _sb.from("tasks").upsert(rows,{onConflict:"id"});
-      if(error){
-        if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),2000);
-        return;
+      // Usa raw fetch com token garantido — evita bug do _sb client sem sessão
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/tasks`,{
+        method:"POST",
+        headers:{
+          "apikey":SUPABASE_ANON_KEY,
+          "Authorization":"Bearer "+session.access_token,
+          "Content-Type":"application/json",
+          "Prefer":"resolution=merge-duplicates,return=minimal"
+        },
+        body:JSON.stringify(rows)
+      });
+      if(res.ok){
+        // Confirmado — remove do pending
+        ids.forEach(id=>pendingIds.current.delete(id));
+      }else if(retry===0){
+        setTimeout(()=>syncToSupabase(tasks,1),2000);
       }
-      // Confirmado — remove do pending
-      rows.forEach(r=>pendingIds.current.delete(String(r.id)));
     }catch{
       if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),2000);
     }
@@ -18270,9 +18285,16 @@ export default function AgencyOS(){
   useEffect(()=>{
     let fetched = false;
 
-    const refreshProfile = async (userId) => {
+    const refreshProfile = async (userId, token) => {
       try{
-        const {data:profile} = await _sb.from("profiles").select("*").eq("id",userId).single();
+        const authToken = token || sessionRef.current?.access_token;
+        if(!authToken) return;
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/profiles?id=eq.${userId}&select=*`,{
+          headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+authToken}
+        });
+        const arr = await res.json();
+        const profile = Array.isArray(arr) ? arr[0] : null;
+        if(true){
         if(profile){
           cacheSet(PROFILE_CACHE_KEY,profile);
           if(profile.user_type==="client"){setClientPortalData(profile);setAuthState("portal");}
@@ -18296,7 +18318,7 @@ export default function AgencyOS(){
       }
       if(session){
         sessionRef.current=session;
-        await refreshProfile(session.user.id);
+        await refreshProfile(session.user.id, session.access_token);
         if(!fetched){fetched=true;fetchTasksWithToken(session.access_token);}
       }
     });
@@ -18413,10 +18435,16 @@ export default function AgencyOS(){
   // ── Polling de permissões ─────────────────────────────────────
   useEffect(()=>{
     if(authState!=="app") return;
-    const poll=()=>{
-      if(!sessionRef.current) return;
-      _sb.from("profiles").select("id,team_id,name,permissions").then(({data,error})=>{
-        if(error||!data) return;
+    const poll=async()=>{
+      const session=sessionRef.current;
+      if(!session) return;
+      try{
+        const res=await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id,team_id,name,permissions`,{
+          headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+session.access_token}
+        });
+        const data=await res.json();
+        if(!Array.isArray(data)) return;
+        {const error=null;
         data.forEach(profile=>{
           const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
           if(!u) return;
@@ -18429,7 +18457,8 @@ export default function AgencyOS(){
             cacheSet("pixels-perms-"+u.id,perms);
           }
         });
-      }).catch(()=>{});
+        }}
+      }catch{}
     };
     poll();
     const iv=setInterval(poll,15000);
