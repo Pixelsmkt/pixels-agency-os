@@ -9629,6 +9629,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const [audioURL,setAudioURL]=useState(null);
   const [recSeconds,setRecSeconds]=useState(0);
   const [aiLoading,setAiLoading]=useState(false);
+  const [isSubmitting,setIsSubmitting]=useState(false);
   const [aiTranscript,setAiTranscript]=useState("");
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
@@ -9708,6 +9709,8 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const annotatedCount=drawings.filter(Boolean).length+(canvasRef.current&&!drawings[activeIdx]?1:0);
 
   const handleReject=()=>{
+    if(isSubmitting)return; // Evita duplo clique
+    setIsSubmitting(true);
     // Save current canvas state first
     let finalDrawings=[...drawings];
     if(canvasRef.current){
@@ -9751,19 +9754,41 @@ function PublicacaoEditModal({task, onClose, onReject}){
 
     // Collect entries that have a drawing
     const entries=finalDrawings.map((d,i)=>d?{d,bg:allImgs[i]||null,i}:null).filter(Boolean);
-    if(entries.length===0){onReject(task,feedback,[],audioFiles,comments);return;}
+    if(entries.length===0){onReject(task,feedback,[],audioFiles,comments);setIsSubmitting(false);return;}
 
     let done=0;
     const result=new Array(entries.length).fill(null);
+    const uploadAnnotation=async(base64,filename)=>{
+      try{
+        const sb=window._sb;
+        // Converter base64 para Blob
+        const byteStr=atob(base64.split(",")[1]);
+        const arr=new Uint8Array(byteStr.length);
+        for(let i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
+        const blob=new Blob([arr],{type:"image/png"});
+        const path="annotations/"+task.id+"/"+Date.now()+"-"+filename;
+        const{error}=await sb.storage.from("pixels-files").upload(path,blob,{upsert:true,contentType:"image/png"});
+        if(error)throw error;
+        const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+        return{url:data.publicUrl,storagePath:path};
+      }catch(e){
+        console.warn("Upload anotação falhou, usando base64:",e);
+        return{url:base64,storagePath:null};
+      }
+    };
     entries.forEach((e,pos)=>{
-      compose(e.bg,e.d,(merged)=>{
-        if(merged) result[pos]={
-          id:Date.now()+pos,
-          name:"Ajuste_Arte"+(e.i+1)+"_"+nowStr.replace(/\//g,"-")+".png",
-          type:"image/png",url:merged,size:0,
-          addedAt:nowStr,addedBy:CURRENT_USER.name,isAnnotation:true,
-        };
-        if(++done===entries.length) onReject(task,feedback,result.filter(Boolean),audioFiles,comments);
+      compose(e.bg,e.d,async(merged)=>{
+        if(merged){
+          const fname="Ajuste_Arte"+(e.i+1)+"_"+nowStr.replace(/\//g,"-")+".png";
+          const{url,storagePath}=await uploadAnnotation(merged,fname);
+          result[pos]={
+            id:Date.now()+pos,
+            name:fname,
+            type:"image/png",url,storagePath,size:0,
+            addedAt:nowStr,addedBy:CURRENT_USER.name,isAnnotation:true,
+          };
+        }
+        if(++done===entries.length){setIsSubmitting(false);onReject(task,feedback,result.filter(Boolean),audioFiles,comments);}
       });
     });
   };
@@ -9870,9 +9895,9 @@ function PublicacaoEditModal({task, onClose, onReject}){
           </div>
 
           <div style={{marginTop:"auto",display:"flex",flexDirection:"column",gap:7}}>
-            <button onClick={handleReject}
-              style={{width:"100%",background:C.or,color:"#fff",border:"none",borderRadius:11,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 12px rgba(234,88,12,0.35)"}}>
-              Solicitar Ajuste
+            <button onClick={handleReject} disabled={isSubmitting}
+              style={{width:"100%",background:isSubmitting?C.ts:C.or,color:"#fff",border:"none",borderRadius:11,padding:"11px 0",fontWeight:800,fontSize:13,cursor:isSubmitting?"not-allowed":"pointer",boxShadow:isSubmitting?"none":"0 4px 12px rgba(234,88,12,0.35)",transition:"all .2s"}}>
+              {isSubmitting?"⏳ Enviando anotações...":"Solicitar Ajuste"}
             </button>
             <button onClick={onClose}
               style={{width:"100%",background:C.b1,color:C.ts,border:"none",borderRadius:11,padding:"9px 0",fontWeight:600,fontSize:12,cursor:"pointer"}}>
