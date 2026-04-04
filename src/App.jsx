@@ -1940,11 +1940,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
           {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Lixeira</button>}
           {/* Botão de refresh manual */}
-          <button onClick={()=>{
-              const ch=window._broadcastChannel;
-              if(ch){ch.send({type:"broadcast",event:"sync",payload:{ts:Date.now()}});}
-              else{window.location.reload();}
-            }} title="Sincronizar agora"
+          <button onClick={()=>window.location.reload()} title="Recarregar dados"
             style={{background:C.b1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:"pointer",color:C.ts,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
             onMouseEnter={e=>{e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a;}}
             onMouseLeave={e=>{e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
@@ -18236,12 +18232,8 @@ export default function AgencyOS(){
         if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),2000);
         return;
       }
-      // Confirmado — remove do pending e avisa outros via broadcast
+      // Confirmado — remove do pending
       rows.forEach(r=>pendingIds.current.delete(String(r.id)));
-      try{
-        const ch = window._broadcastChannel;
-        if(ch) ch.send({type:"broadcast",event:"sync",payload:{ts:Date.now()}});
-      }catch{}
     }catch{
       if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),2000);
     }
@@ -18369,20 +18361,9 @@ export default function AgencyOS(){
     };
 
     setTimeout(pollFetch, 500); // primeiro poll logo após setup
-    const pollInterval = setInterval(pollFetch, 3000);
+    const pollInterval = setInterval(pollFetch, 2000);
 
-    // Broadcast — aviso instantâneo entre sessões (~100ms)
-    const bch = _sb.channel("pixels-sync")
-      .on("broadcast",{event:"sync"},async()=>{
-          if(cancelled)return;
-          await ensureSession();
-          await pollFetch();
-        })
-      .subscribe();
-    // Expõe o canal imediatamente (não espera SUBSCRIBED)
-    window._broadcastChannel=bch;
-
-    // Realtime postgres_changes — complementar ao broadcast
+    // Realtime postgres_changes — sincronização entre sessões
     const rch = _sb.channel("pixels-realtime-"+Date.now())
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
         if(cancelled)return;
@@ -18411,8 +18392,6 @@ export default function AgencyOS(){
     return()=>{
       cancelled=true;
       clearInterval(pollInterval);
-      window._broadcastChannel=null;
-      try{_sb.removeChannel(bch);}catch{}
       try{_sb.removeChannel(rch);}catch{}
     };
   },[authState]);
