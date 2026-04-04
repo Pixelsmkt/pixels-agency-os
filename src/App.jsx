@@ -12561,6 +12561,13 @@ const BRIEFING_CAMPOS=[
 ];
 
 const isImg = a => a && a.type && a.type.startsWith("image/");
+
+// Gera URL de miniatura via Supabase Image Transform (só para URLs do Storage)
+// Miniatura: 300px, qualidade 60% — original abre no click
+const thumbUrl = (url, w=300, q=60) => {
+  if(!url || url.startsWith("data:")) return url;
+  return url.replace("/object/public/", "/render/image/public/") + `?width=${w}&quality=${q}&resize=cover`;
+};
 const isVid = a => a && a.type && a.type.startsWith("video/");
 const isAud = a => a && a.type && (a.type.startsWith("audio/") || (a.name && a.name.endsWith(".webm")));
 
@@ -13290,7 +13297,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
                   {imgAttachments.map((a,i)=>(
                     <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",aspectRatio:"1"}}>
-                      <img src={a.url} alt={a.name}
+                      <img src={thumbUrl(a.url)} alt={a.name}
+                        loading="lazy"
                         onClick={()=>{
                           const w=window.open("","_blank","width=900,height=700");
                           if(w){w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${a.url}" style="max-width:100%;max-height:100vh;object-fit:contain"/></body></html>`);w.document.close();}
@@ -13369,7 +13377,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 10px",cursor:"grab"}}>
                         <span style={{color:"#cbd5e1",fontSize:16}}>⠿</span>
                         <span style={{background:"#6366f1",color:"#fff",borderRadius:5,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0}}>#{i+1}</span>
-                        <img src={a.url} alt="" style={{width:44,height:44,objectFit:"cover",borderRadius:6,flexShrink:0}}/>
+                        <img src={thumbUrl(a.url,100,70)} alt="" loading="lazy" style={{width:44,height:44,objectFit:"cover",borderRadius:6,flexShrink:0}}/>
                         <div style={{flex:1,minWidth:0,color:"#334155",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                       </div>
                     ))}
