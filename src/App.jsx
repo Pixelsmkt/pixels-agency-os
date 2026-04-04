@@ -12748,7 +12748,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
   const [recSeconds,setRecSeconds]=useState(0);
-  const [activeTab,setActiveTab]=useState(task.status==="agendado"?"legenda":"desc");
+  const [activeTab,setActiveTab]=useState((task.status==="agendado"||task.status==="publicado")?"legenda":"desc");
   const [checklist,setChecklist]=useState(task.checklist||[]);
   const [newCheckItem,setNewCheckItem]=useState("");
   const [showUnsavedDialog,setShowUnsavedDialog]=useState(false);
@@ -12784,7 +12784,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setCaption(task.caption||"");
     }
   },[task]);
-  const isAgendado=task.status==="agendado";
+  const isAgendado=task.status==="agendado"||task.status==="publicado";
   const notifyAgendado=(t)=>{
     try{NOTIF_STORE.items.unshift({id:"notif-ag-"+Date.now(),type:"agendado",category:"demanda",icon:"📅",title:"Publicação Agendada",body:`📅 "${t.title}" foi agendado para ${t.publishDate||"data não definida"}${t.publishTime?" às "+t.publishTime:""}.`,read:false,at:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name});}catch(e){}
   };
