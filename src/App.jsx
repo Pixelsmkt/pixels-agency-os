@@ -282,7 +282,7 @@ const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
   ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,colAjuste:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true},
-  erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
+  erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
   andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
   guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
   joao:    {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
@@ -8222,10 +8222,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
   // Sócios: abre seletor de responsável. Colaboradores: cria direto para si
   const addNewTask=(colId,extraProps={})=>{
+    // Regra: todo cartão novo entra obrigatoriamente em Copys ("demanda")
+    const targetCol="demanda";
     if(activeUser.level===1){
-      setQuickCreate({colId,extraProps});
+      setQuickCreate({colId:targetCol,extraProps});
     }else{
-      createTask(colId,activeUserId,"Nova Demanda",extraProps);
+      createTask(targetCol,activeUserId,"Nova Demanda",extraProps);
     }
   };
 
@@ -8306,7 +8308,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const moveTask=(id,toColId)=>{
     setTasks(p=>p.map(t=>{
       if(t.id!==id)return t;
-      if(t.status==="demanda"&&toColId==="recebida"){alert("Esta copy precisa ser aprovada em \"Aprovações\" antes de virar Demanda.");return t;}
+      if(t.status==="demanda"){
+        // Copys nunca podem ser arrastadas — saem APENAS pelo fluxo de aprovação
+        alert("Este cartão está em Copys e precisa ser aprovado pelos gestores antes de prosseguir. Acesse o menu Aprovações.");
+        return t;
+      }
       const fromIdx=cols.findIndex(c=>c.id===t.status);
       const toIdx=cols.findIndex(c=>c.id===toColId);
       // Enforce one-column-at-a-time (allow any direction but only ±1)
@@ -8685,7 +8691,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               })}
 
               {/* Add card dentro da coluna */}
-              {canCreate&&<button
+              {canCreate&&col.id==="demanda"&&<button
                 onClick={()=>addNewTask(col.id)}
                 style={{background:"none",border:"1px dashed transparent",borderRadius:8,padding:"7px 0",color:"transparent",cursor:"pointer",fontSize:11,marginTop:2,textAlign:"left",paddingLeft:8,transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=C.b2;e.currentTarget.style.color=C.td;}}
