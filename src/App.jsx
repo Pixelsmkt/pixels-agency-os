@@ -10779,10 +10779,21 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
   const [viewDash,setViewDash]=useState(null);
   const [editCollab,setEditCollab]=useState(null);
   const [editProfile,setEditProfile]=useState(null);
+
   const [search,setSearch]=useState("");
   const [filterLevel,setFilterLevel]=useState(0);
   const isPartner=CURRENT_USER.level===1;
-  const [collabProfiles,setCollabProfiles]=useState({});
+  const [collabProfiles,setCollabProfiles]=useState(()=>{
+    // Carrega perfis salvos do localStorage (incluindo edições feitas via sidebar)
+    const out={};
+    TEAM.forEach(u=>{
+      try{
+        const s=localStorage.getItem("pixels-selfprofile-"+u.id);
+        if(s)out[u.id]=JSON.parse(s);
+      }catch(e){}
+    });
+    return out;
+  });
 
   const [mainTab,setMainTab]=useState("equipe");
 
@@ -10857,7 +10868,10 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
     {profileUser&&(<CollabProfilePage
       user={profileUser}
       profile={collabProfiles[editProfile]}
-      onSave={(uid,data)=>setCollabProfiles(p=>({...p,[uid]:data}))}
+      onSave={(uid,data)=>{
+        setCollabProfiles(p=>({...p,[uid]:data}));
+        try{localStorage.setItem("pixels-selfprofile-"+uid,JSON.stringify(data));}catch(e){}
+      }}
       onClose={()=>setEditProfile(null)}
     />)}
 
@@ -14965,6 +14979,10 @@ export default function AgencyOS(){
   const [loggedUser,setLoggedUser] = useState(CURRENT_USER.id);
   useEffect(()=>{ window._pixelsUser=CURRENT_USER.id; },[CURRENT_USER.id]);
   useEffect(()=>{
+    window._openMyProfile=()=>setShowSelfProfile(true);
+    return()=>{delete window._openMyProfile;};
+  },[]);
+  useEffect(()=>{
     const u=resolveUser(currentProfile);
     if(u&&u.id!==loggedUser){window._pixelsUser=u.id;setLoggedUser(u.id);}
   },[currentProfile,loggedUser]);
@@ -14975,6 +14993,10 @@ export default function AgencyOS(){
   const [notifDrawer,setNotifDrawer] = useState(false);
   const [isMob,setIsMob]           = useState(()=>window.innerWidth<768);
   const [sideOpen,setSideOpen]     = useState(false);
+  const [showSelfProfile,setShowSelfProfile] = useState(false);
+  const [selfProfileData,setSelfProfileData] = useState(()=>{
+    try{return JSON.parse(localStorage.getItem("pixels-selfprofile-"+CURRENT_USER.id)||"null");}catch{return null;}
+  });
   const [activeCl,setActiveCl]     = useState(null);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
   const [viewingAs,setViewingAs]   = useState(null);
@@ -15394,6 +15416,15 @@ export default function AgencyOS(){
   const markRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));
 
   return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",position:"relative"}}>
+    {showSelfProfile&&<CollabProfilePage
+      user={CURRENT_USER}
+      profile={selfProfileData}
+      onSave={(uid,data)=>{
+        setSelfProfileData(data);
+        try{localStorage.setItem("pixels-selfprofile-"+uid,JSON.stringify(data));}catch(e){}
+      }}
+      onClose={()=>setShowSelfProfile(false)}
+    />}
 
     {notifDrawer&&<div style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.5)"}} onClick={()=>{setNotifDrawer(false);markRead();}}/>}
     {notifDrawer&&<div style={{position:"fixed",top:0,right:0,bottom:0,width:340,background:C.card,borderLeft:`1px solid ${C.b1}`,zIndex:101,display:"flex",flexDirection:"column",boxShadow:"-8px 0 32px rgba(0,0,0,0.2)"}}>
@@ -15429,7 +15460,7 @@ export default function AgencyOS(){
       </div>
       {/* ── Perfil no topo da sidebar ── */}
       <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
-        <button onClick={()=>nav("acessos")}
+        <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
           style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"9px 12px",cursor:"pointer",transition:"all .15s",textAlign:"left"}}
           onMouseEnter={e=>e.currentTarget.style.background=C.a+"18"}
           onMouseLeave={e=>e.currentTarget.style.background=C.s1}>
