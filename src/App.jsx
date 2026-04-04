@@ -317,12 +317,18 @@ const mkTimelineEntry=(fromId,toId,cols)=>{
 };
 
 /* ─── COMPONENTES GLOBAIS ────────────────── */
-const Av=({l,color,size=32,status})=>(
-  <div style={{position:"relative",flexShrink:0,width:size,height:size}}>
-    <div style={{width:size,height:size,borderRadius:"50%",background:color||C.a,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:Math.round(size*0.38),userSelect:"none"}}>{l}</div>
-    {status&&<div style={{position:"absolute",bottom:0,right:0,width:Math.round(size*0.28),height:Math.round(size*0.28),borderRadius:"50%",background:status==="online"?C.gr:status==="ausente"?C.yw:"#94a3b8",border:`${Math.max(1,Math.round(size*0.06))}px solid ${C.bg}`}}/>}
-  </div>
-);
+const Av=({l,color,size=32,status,uid})=>{
+  const photo=uid?getProfilePhoto(uid):null;
+  return(
+    <div style={{position:"relative",flexShrink:0,width:size,height:size}}>
+      {photo
+        ?<img src={photo} alt={l} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",display:"block"}}/>
+        :<div style={{width:size,height:size,borderRadius:"50%",background:color||C.a,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:Math.round(size*0.38),userSelect:"none"}}>{l}</div>
+      }
+      {status&&<div style={{position:"absolute",bottom:0,right:0,width:Math.round(size*0.28),height:Math.round(size*0.28),borderRadius:"50%",background:status==="online"?C.gr:status==="ausente"?C.yw:"#94a3b8",border:`${Math.max(1,Math.round(size*0.06))}px solid ${C.bg}`}}/>}
+    </div>
+  );
+};
 
 const Card=({children,style,glow,onClick})=>(
   <div onClick={onClick} style={{background:C.card,borderRadius:16,border:glow?`1px solid ${glow}44`:`1px solid ${C.b1}`,transition:"box-shadow .15s",cursor:onClick?"pointer":undefined,...style}}>
@@ -441,6 +447,18 @@ function taskUrgencyLevel(t){
 // Cor correspondente ao nível de urgência
 function getUrgencyColor(level){
   return(["#e53e3e","#f97316",C.yw,C.gr])[level]??C.gr;
+}
+
+/* ─── HELPER: getProfilePhoto ───────────────── */
+// Busca foto do localStorage para qualquer userId
+function getProfilePhoto(uid){
+  if(!uid) return null;
+  try{
+    const s=localStorage.getItem("pixels-selfprofile-"+uid);
+    if(!s) return null;
+    const p=JSON.parse(s);
+    return p?.photo||null;
+  }catch(e){return null;}
 }
 
 /* ─── FUNÇÃO: trashDaysLeft ─────────────────── */
@@ -571,7 +589,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks}){
   const allActive=allTasks.filter(t=>!t.deletedAt);
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
     <div style={{display:"flex",alignItems:"center",gap:14}}>
-      <Av l={user.av} color={user.color} size={52} status={user.status}/>
+      <Av l={user.av} color={user.color} size={52} status={user.status} uid={user.id}/>
       <div><div style={{color:C.tx,fontWeight:900,fontSize:22}}>{isViewing?"Dashboard de ":"Olá, "}{user.name} 👁</div><div style={{color:C.ts,fontSize:13,marginTop:2}}>{user.role} · visão completa</div></div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
@@ -7785,7 +7803,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
         <div style={{fontSize:56,marginBottom:16}}>🎉</div>
         <div style={{color:C.gr,fontWeight:900,fontSize:22,marginBottom:8}}>{createdCards.length} cartão{createdCards.length>1?"s":""} criado{createdCards.length>1?"s":""}!</div>
         <div style={{color:C.ts,fontSize:13,marginBottom:24}}>Demandas adicionadas ao quadro.</div>
-        {createdCards.map(c=>{const u=TEAM.find(x=>x.id===c.assignee);return <div key={c.id} style={{background:C.s1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:8}}>{u&&<Av l={u.av} color={u.color} size={30}/>}<div style={{flex:1,textAlign:"left"}}><div style={{color:C.tx,fontSize:12,fontWeight:600}}>{c.title}</div><div style={{color:C.ts,fontSize:10,marginTop:2}}>{u?.name}</div></div><Chip color={C.gr} sm>criado</Chip></div>;})}
+        {createdCards.map(c=>{const u=TEAM.find(x=>x.id===c.assignee);return <div key={c.id} style={{background:C.s1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:8}}>{u&&<Av l={u.av} color={u.color} size={30} uid={u.id}/>}<div style={{flex:1,textAlign:"left"}}><div style={{color:C.tx,fontSize:12,fontWeight:600}}>{c.title}</div><div style={{color:C.ts,fontSize:10,marginTop:2}}>{u?.name}</div></div><Chip color={C.gr} sm>criado</Chip></div>;})}
         <button onClick={onClose} style={{background:"#fff",color:C.a,border:`2px solid ${C.a}`,borderRadius:12,padding:"12px 32px",fontWeight:700,cursor:"pointer",fontSize:14,marginTop:8}}>Fechar</button>
       </div>}
     </div>
@@ -15464,7 +15482,7 @@ export default function AgencyOS(){
           style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"9px 12px",cursor:"pointer",transition:"all .15s",textAlign:"left"}}
           onMouseEnter={e=>e.currentTarget.style.background=C.a+"18"}
           onMouseLeave={e=>e.currentTarget.style.background=C.s1}>
-          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={32} status="online"/>
+          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={32} status="online" uid={CURRENT_USER.id}/>
           <div style={{flex:1,minWidth:0}}>
             <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{CURRENT_USER.name}</div>
             <div style={{color:C.td,fontSize:10}}>{CURRENT_USER.role}</div>
@@ -15547,7 +15565,7 @@ export default function AgencyOS(){
             🔔
             {unreadNotifs>0&&<div style={{position:"absolute",top:-2,right:-2,background:C.rd,color:"#fff",borderRadius:99,padding:"0 4px",fontSize:8,fontWeight:900,minWidth:14,textAlign:"center",lineHeight:"14px"}}>{unreadNotifs}</div>}
           </button>
-          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={28} status="online"/>
+          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={28} status="online" uid={CURRENT_USER.id}/>
         </div>
       </div>}
       <main style={{flex:1,overflowY:"auto",padding:isMob?"12px 12px 80px":"24px",WebkitOverflowScrolling:"touch"}}>
