@@ -12730,7 +12730,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
   const [recSeconds,setRecSeconds]=useState(0);
-  const [activeTab,setActiveTab]=useState("desc");
+  const [activeTab,setActiveTab]=useState(task.status==="agendado"?"legenda":"desc");
   const [checklist,setChecklist]=useState(task.checklist||[]);
   const [newCheckItem,setNewCheckItem]=useState("");
   const [showUnsavedDialog,setShowUnsavedDialog]=useState(false);
@@ -12767,6 +12767,26 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
   },[task]);
   const isAgendado=task.status==="agendado";
+
+  // Notifica admins quando card é salvo como agendado
+  const notifyAgendado=(t)=>{
+    const admins=TEAM.filter(u=>u.level===1);
+    const msg=`📅 "${t.title}" foi agendado para ${t.publishDate||"data não definida"}${t.publishTime?" às "+t.publishTime:""}.`;
+    // Adiciona notificação ao NOTIF_STORE global
+    try{
+      NOTIF_STORE.items.unshift({
+        id:"notif-ag-"+Date.now(),
+        type:"agendado",
+        category:"demanda",
+        icon:"📅",
+        title:"Publicação Agendada",
+        body:msg,
+        read:false,
+        at:new Date().toLocaleDateString("pt-BR"),
+        user:CURRENT_USER.name,
+      });
+    }catch(e){}
+  };
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
   const fileInputRef=useRef(null);
@@ -12814,7 +12834,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(caption!==task.caption)changed.push("texto da legenda");
     if(JSON.stringify(checklist)!==JSON.stringify(task.checklist||[]))changed.push("checklist");
     if(changed.length>0)tl.push({type:"edit",label:`Editado: ${changed.join(", ")}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
-    setTasks(prev=>prev.map(t=>t.id===task.id?{...t,title,desc,comments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:attachments,timeline:tl,checklist}:t));
+    const updated={...task,title,desc,comments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:attachments,timeline:tl,checklist};
+    setTasks(prev=>prev.map(t=>t.id===task.id?updated:t));
+    // Notificar admins se card acabou de ser agendado
+    if(updated.status==="agendado"&&task.status!=="agendado")notifyAgendado(updated);
     onClose();
   };
 
@@ -13103,7 +13126,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
         {/* TABS */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9"}}>
-          {[["desc","Descrição"],["legenda","📝 Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],["activity","Histórico"]].map(([id,lbl])=>(
+          {([["desc","Descrição"],["legenda","📝 Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#94a3b8",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1}}>
               {lbl}
@@ -13297,7 +13320,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>
 
             {/* ── ÁUDIOS DE ORIENTAÇÃO ── */}
-            <div>
+            {!isAgendado&&<div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                 <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>
                   🎙 Áudios de Orientação {audAttachments.length>0&&<span style={{color:"#94a3b8",fontWeight:400}}>({audAttachments.length})</span>}
@@ -13330,9 +13353,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>)}
             </div>
 
+            }{/* fim Áudios Orientação */}
+
             {/* ── COMENTÁRIOS ── */}
-            <div>
-              <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Comentários</div>
+            {!isAgendado&&<div>
+              {!isAgendado&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Comentários</div>}
               {comments.length===0&&<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"16px 0"}}>Sem comentários ainda</div>}
               {comments.map(c=><div key={c.id} style={{display:"flex",gap:10,marginBottom:14}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11,flexShrink:0}}>{c.av}</div>
@@ -13363,7 +13388,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <button onClick={addComment} style={{background:"#0f172a",border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,flexShrink:0}}>↑</button>
               </div>
             </div>
-          </div>}
+            }{/* fim Comentários */}
+          </div>
 
           {/* FILES */}
           {/* ── LEGENDA / CAPTION TAB ── */}
@@ -13611,15 +13637,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* ══ FIM AGENDADO ══ */}
 
           {/* Setor (oculto quando agendado) */}
-          <div>
+          {!isAgendado&&<div>
             <label style={LB}>Setor</label>
             <select value={sector} onChange={e=>setSector(e.target.value)} disabled={!canEdit} style={SI}>
               {SECTORS.map(s=><option key={s} value={s}>{SECTOR_LABELS[s]}</option>)}
             </select>
-          </div>
+          </div>}
 
           {/* Responsáveis — dropdown estilo select */}
-          <div style={{position:"relative"}}>
+          {!isAgendado&&<div style={{position:"relative"}}>
             <label style={LB}>👤 Responsáveis</label>
             <button onClick={()=>{if(canEdit){setShowAssigneesPicker(v=>!v);setShowWatchersPicker(false);}}}
               style={{...SI,display:"flex",alignItems:"center",gap:6,cursor:canEdit?"pointer":"default",textAlign:"left",padding:"7px 10px"}}>
@@ -13649,8 +13675,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>}
           </div>
 
+          }}{/* fim Responsáveis */}
+
           {/* Monitorando — dropdown estilo select */}
-          {TEAM.filter(u=>!assignees.includes(u.id)).length>0&&<div style={{position:"relative"}}>
+          {!isAgendado&&TEAM.filter(u=>!assignees.includes(u.id)).length>0&&<div style={{position:"relative"}}>
             <label style={LB}>👁 Monitorando</label>
             <button onClick={()=>{if(canEdit){setShowWatchersPicker(v=>!v);setShowAssigneesPicker(false);}}}
               style={{...SI,display:"flex",alignItems:"center",gap:6,cursor:canEdit?"pointer":"default",textAlign:"left",padding:"7px 10px"}}>
@@ -13678,8 +13706,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>}
           </div>}
 
+          }}{/* fim Monitorando */}
+
           {/* Cliente */}
-          <div>
+          {!isAgendado&&<div>
             <label style={LB}>Cliente</label>
             <select value={client} onChange={e=>setClient(e.target.value)} disabled={!canEdit} style={SI}>
               <option value="">— Sem cliente —</option>
@@ -13692,8 +13722,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </>}
           </div>
 
+          }{/* fim Cliente */}
+
           {/* Prioridade + Prazo */}
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div>
               <label style={LB}>Prioridade</label>
               <select value={priority} onChange={e=>setPriority(e.target.value)} disabled={!canEdit}
@@ -13708,6 +13740,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)} disabled={!canEdit} style={SI}/>
             </div>
           </div>
+
+          }{/* fim Prioridade+Prazo */}
 
           {/* Meta info */}
           {(task.createdAt||task.id)&&<div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,display:"flex",flexDirection:"column",gap:4}}>
