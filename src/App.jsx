@@ -741,7 +741,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     {/* ── CAPA DO PERFIL ── */}
     <div style={{boxShadow:"0 4px 24px rgba(0,0,0,0.15)",position:"relative",marginBottom:8}}>
       {/* Fundo gradiente */}
-      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}99)`,height:isMob?100:140,width:"100%",position:"relative",borderRadius:"20px 20px 0 0"}}>
+      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}99)`,height:isMob?120:160,width:"100%",position:"relative",borderRadius:"20px 20px 0 0"}}>
         {/* Botão trocar cor */}
         <button onClick={()=>setShowColorPicker(v=>!v)}
           style={{position:"absolute",top:12,right:12,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",backdropFilter:"blur(4px)"}}>
@@ -757,12 +757,12 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
       </div>
       {/* Foto + info */}
       <div style={{background:C.card,padding:isMob?"0 16px 20px":"0 24px 24px",position:"relative",borderRadius:"0 0 20px 20px"}}>
-        <div style={{display:"flex",alignItems:"flex-end",gap:20,position:"relative",top:-50}}>
+        <div style={{display:"flex",alignItems:"flex-end",gap:20,position:"relative",top:-70}}>
           {/* Foto grande */}
-          <div style={{width:isMob?90:120,height:isMob?90:120,borderRadius:"50%",border:"4px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
+          <div style={{width:isMob?120:200,height:isMob?120:200,borderRadius:"50%",border:"4px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
             {photo
               ?<img src={photo} alt={CURRENT_USER.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?36:48}}>{CURRENT_USER.av}</span>
+              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?48:72}}>{CURRENT_USER.av}</span>
             }
           </div>
           {/* Nome e cargo */}
