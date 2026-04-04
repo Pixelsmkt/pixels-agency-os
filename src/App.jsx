@@ -17981,11 +17981,8 @@ const getStoredSession = () => {
     const raw = localStorage.getItem("pixels-sb-auth");
     if(!raw) return null;
     const parsed = JSON.parse(raw);
-    const session = parsed?.currentSession || parsed;
-    if(!session?.access_token) return null;
-    // Verifica se não expirou
-    if(session.expires_at && session.expires_at < Date.now()/1000) return null;
-    return session;
+    // Supabase armazena em currentSession ou direto na raiz
+    return parsed?.currentSession || parsed?.access_token ? (parsed?.currentSession || parsed) : null;
   }catch{return null;}
 };
 
@@ -18270,16 +18267,15 @@ export default function AgencyOS(){
         body:JSON.stringify(rows)
       });
       if(res.ok){
-        // Aguarda 5s antes de remover do pending
-        // Supabase pode levar alguns segundos para propagar a escrita
-        // Sem esse delay, o poll imediato lê dado antigo e reverte o card
-        setTimeout(()=>{
-          ids.forEach(id=>pendingIds.current.delete(id));
-        }, 5000);
-      }else if(retry===0){
-        setTimeout(()=>syncToSupabase(tasks,1),2000);
+        // Aguarda 5s: Supabase demora para propagar — poll imediato traria dado antigo
+        setTimeout(()=>ids.forEach(id=>pendingIds.current.delete(id)), 5000);
+      }else{
+        const errText = await res.text().catch(()=>"");
+        console.warn("[Pixels] Sync falhou:",res.status, errText);
+        if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),2000);
       }
-    }catch{
+    }catch(e){
+      console.warn("[Pixels] Sync erro:", e.message);
       if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),2000);
     }
   };
@@ -18386,42 +18382,46 @@ export default function AgencyOS(){
 
     // Fetch do Supabase usando token da sessão
     const pollFetch = async () => {
-      // Usa sessionRef ou lê do localStorage como fallback
       const session = sessionRef.current || getStoredSession();
       if(!session||cancelled) return;
-      // Se veio do localStorage, atualiza o ref para os próximos polls
-      if(!sessionRef.current && session) sessionRef.current = session;
+      if(!sessionRef.current) sessionRef.current = session;
       try{
-        const res = await fetch(`${SUPABASE_URL}/rest/v1/tasks?select=*`,{
+        const res = await fetch(`${SUPABASE_URL}/rest/v1/tasks?select=*&order=updated_at.desc`,{
           headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+session.access_token}
         });
-        const data = await res.json();
-        if(!cancelled&&Array.isArray(data)&&data.length>0){
-          const fromSupa = data.map(rowToTask);
-          setGlobalTasksRaw(prev=>{
-            // Merge: Supabase é fonte de verdade
-            // Cards em pendingIds: usa versão local (edição ainda não confirmada)
-            // Outros: usa versão do Supabase
-            const supaIds = new Set(fromSupa.map(t=>String(t.id)));
-            // Cards locais ainda não chegaram ao Supabase (criados agora)
-            const localOnly = prev.filter(t=>!supaIds.has(String(t.id)));
-            const merged = [
-              ...fromSupa.map(sb=>{
-                const local = prev.find(l=>String(l.id)===String(sb.id));
-                if(!local) return sb;
-                // Se ainda pendente: usa local; senão usa Supabase
-                if(pendingIds.current.has(String(sb.id))) return {...local};
-                // Preserva files locais
-                return local?.files?.length>0 ? {...sb,files:local.files} : sb;
-              }),
-              ...localOnly
-            ];
-            cacheSet(TASKS_CACHE_KEY,merged);
-            return merged;
-          });
-          setStorageLoaded(true);
+        if(res.status===401){
+          // Token expirado — força refresh via onAuthStateChange
+          console.warn("[Pixels] Token expirado, aguardando refresh...");
+          sessionRef.current = null;
+          return;
         }
-      }catch{}
+        const data = await res.json();
+        if(!cancelled&&Array.isArray(data)){
+          if(data.length>0){
+            const fromSupa = data.map(rowToTask);
+            setGlobalTasksRaw(prev=>{
+              const supaIds = new Set(fromSupa.map(t=>String(t.id)));
+              const localOnly = prev.filter(t=>!supaIds.has(String(t.id)));
+              const merged = [
+                ...fromSupa.map(sb=>{
+                  const local = prev.find(l=>String(l.id)===String(sb.id));
+                  if(!local) return sb;
+                  if(pendingIds.current.has(String(sb.id))) return {...local};
+                  return local?.files?.length>0 ? {...sb,files:local.files} : sb;
+                }),
+                ...localOnly
+              ];
+              cacheSet(TASKS_CACHE_KEY,merged);
+              return merged;
+            });
+            setStorageLoaded(true);
+          }
+        }else if(data?.message){
+          console.warn("[Pixels] Supabase erro no poll:", data.message);
+        }
+      }catch(e){
+        console.warn("[Pixels] Poll falhou:", e.message);
+      }
     };
 
     // Popula sessionRef do localStorage antes do primeiro poll
