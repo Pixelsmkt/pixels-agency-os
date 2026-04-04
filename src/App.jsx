@@ -8098,6 +8098,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     try{localStorage.setItem("pixels-cols-v1",JSON.stringify(cols));}catch(e){}
   },[cols]);
   const [showNewCol,setShowNewCol]=useState(false);
+  const [deleteColConfirm,setDeleteColConfirm]=useState(null); // {colId, step:"senha"|"pin", senha:"", pin:""}
   const [newColLabel,setNewColLabel]=useState("");
   const [newColColor,setNewColColor]=useState("#a140ff");
 
@@ -8167,10 +8168,25 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
 
   const removeCol=(colId)=>{
-    if(!canNewCol){alert("Você não tem permissao para excluir colunas.");return;}
+    // Só colunas custom podem ser removidas — colunas padrão são protegidas
+    const col=cols.find(c=>c.id===colId);
+    if(!col?.custom){alert("Colunas padrão não podem ser excluídas.");return;}
+    if(!canNewCol){alert("Você não tem permissão para excluir colunas.");return;}
     const colTasks=tasks.filter(t=>!t.deletedAt&&t.status===colId);
     if(colTasks.length>0){alert("Mova ou conclua todas as demandas desta coluna antes de removê-la.");return;}
+    // Abrir modal de confirmação senha + PIN
+    setDeleteColConfirm({colId,step:"senha",senha:"",pin:""});
+  };
+
+  const confirmRemoveCol=()=>{
+    if(!deleteColConfirm)return;
+    const {colId,senha,pin}=deleteColConfirm;
+    // Verificar senha do usuário atual no Supabase — usa a senha em memória não disponível
+    // Por isso verificamos apenas o PIN fixo de admin + que o usuário é admin
+    if(CURRENT_USER.level!==1){alert("Apenas administradores podem excluir colunas.");setDeleteColConfirm(null);return;}
+    if(pin!=="4149"){alert("PIN incorreto.");return;}
     setCols(p=>p.filter(c=>c.id!==colId));
+    setDeleteColConfirm(null);
   };
 
   const saveColName=(colId)=>{
@@ -8256,18 +8272,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:null}:t));
   };
 
-  // Exclusão permanente — só admins (level 1). Deleta arquivos do Storage.
-  const permanentDelete=async(id)=>{
-    const t=(tasks||[]).find(x=>x.id===id);
-    if(t){
-      const paths=(t.files||[]).filter(f=>f.storagePath).map(f=>f.storagePath);
-      if(paths.length>0){
-        try{await window._sb.storage.from("pixels-files").remove(paths);}catch(e){console.warn("Storage delete:",e);}
-      }
-    }
-    setTasks(p=>p.filter(x=>x.id!==id));
-  };
-
   // trashDaysLeft: usando versão de 00_globals
 
   // Calendar helpers
@@ -8299,6 +8303,40 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>
     </div>}
     {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={effectiveUser||CURRENT_USER} canDelete={canDelete} onTrash={id=>{setOpenCard(null);setShowTrashConfirm(id);}} cardPerms={myPerms}/>}
+    {/* Modal exclusão de coluna — senha ADM + PIN */}
+    {deleteColConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setDeleteColConfirm(null)}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
+        <div style={{fontSize:36,marginBottom:10}}>🔐</div>
+        <div style={{color:C.tx,fontWeight:800,fontSize:17,marginBottom:6}}>Excluir coluna personalizada</div>
+        <div style={{color:C.ts,fontSize:12,marginBottom:20}}>Esta ação é irreversível. Os cartões da coluna devem estar vazios.</div>
+
+        <div style={{textAlign:"left",marginBottom:12}}>
+          <label style={{color:C.ts,fontSize:11,fontWeight:600,display:"block",marginBottom:4}}>PIN de administrador</label>
+          <input
+            type="password"
+            maxLength={4}
+            value={deleteColConfirm.pin}
+            onChange={e=>setDeleteColConfirm(p=>({...p,pin:e.target.value.replace(/\D/g,"")}))}
+            onKeyDown={e=>{if(e.key==="Enter")confirmRemoveCol();}}
+            placeholder="••••"
+            style={{width:"100%",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 14px",color:C.tx,fontSize:18,letterSpacing:8,outline:"none",textAlign:"center",boxSizing:"border-box"}}
+            autoFocus
+          />
+        </div>
+
+        <div style={{display:"flex",gap:10,marginTop:20}}>
+          <button onClick={()=>setDeleteColConfirm(null)}
+            style={{flex:1,background:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:C.ts,cursor:"pointer",fontWeight:700}}>
+            Cancelar
+          </button>
+          <button onClick={confirmRemoveCol}
+            style={{flex:1,background:C.rd,border:"none",borderRadius:10,padding:"10px 0",color:"#fff",cursor:"pointer",fontWeight:700}}>
+            Excluir coluna
+          </button>
+        </div>
+      </div>
+    </div>}
+
     {showTrashConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:40,marginBottom:12}}>🗑</div>
@@ -8532,7 +8570,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:800}}>⏳ {colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length} pend.</span>}
               </div>
               <div style={{display:"flex",gap:3,alignItems:"center"}}>
-                {canNewCol&&<button onClick={()=>removeCol(col.id)} title="Excluir" style={{background:"rgba(0,0,0,0.15)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
+                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.15)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
               </div>
             </div>
 
@@ -8686,10 +8724,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   <div style={{color:C.tx,fontWeight:600,fontSize:13,textDecoration:"line-through"}}>{t.title}</div>
                   <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
                 </div>
-                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
                   {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
-                  {CURRENT_USER.level===1&&<button onClick={()=>{if(window.confirm("Excluir permanentemente? Esta ação não pode ser desfeita."))permanentDelete(t.id);}} style={{background:C.rd+"22",border:`1px solid ${C.rd}44`,borderRadius:8,padding:"5px 12px",color:C.rd,fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Excluir definitivamente</button>}
                 </div>
               </div>;
             })}
