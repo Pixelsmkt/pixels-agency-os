@@ -2290,25 +2290,29 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           <span style={{fontSize:20}}>🗑</span>
           <div style={{color:C.ts,fontSize:12}}>Cartões excluídos são mantidos por <strong style={{color:C.rd}}>30 dias</strong> antes de serem removidos permanentemente.</div>
         </div>
-        {(()=>{const trashVisible=myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)));return(<>
-        {trashVisible.length===0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:28,textAlign:"center"}}>
-          <div style={{fontSize:40,marginBottom:8}}>✅</div>
-          <div style={{color:C.ts,fontSize:14}}>Lixeira vazia</div>
-        </div>}
-        {trashVisible.map(t=>{
-          const days=trashDaysLeft(t);
-          const cl=CLIENTS.find(c=>c.id===t.client);
-          return <div key={t.id} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,opacity:.7}}>
-            <div>
-              <div style={{color:C.tx,fontWeight:600,fontSize:13,textDecoration:"line-through"}}>{t.title}</div>
-              <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
-            </div>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
-              {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
-            </div>
-          </div>;
-        })}
+        {(()=>{
+          const trashVisible=myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)));
+          return <>
+            {trashVisible.length===0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:28,textAlign:"center"}}>
+              <div style={{fontSize:40,marginBottom:8}}>✅</div>
+              <div style={{color:C.ts,fontSize:14}}>Lixeira vazia</div>
+            </div>}
+            {trashVisible.map(t=>{
+              const days=trashDaysLeft(t);
+              const cl=CLIENTS.find(c=>c.id===t.client);
+              return <div key={t.id} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,opacity:.7}}>
+                <div>
+                  <div style={{color:C.tx,fontWeight:600,fontSize:13,textDecoration:"line-through"}}>{t.title}</div>
+                  <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
+                  {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
+                </div>
+              </div>;
+            })}
+          </>;
+        })()}
       </div>}
     </div>
   </>;
