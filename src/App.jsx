@@ -18160,9 +18160,43 @@ export default function AgencyOS(){
   const _sessionRef = useRef(null);
 
   // Funções de aplicação de tasks — usadas por fetch inicial, polling e realtime
+  // Converte linha do novo schema flat → objeto task usado no app
+  const _rowToTask = (row) => ({
+    id:           String(row.id),
+    title:        row.title || 'Nova Demanda',
+    status:       row.status || 'demanda',
+    assignee:     row.assignee || '',
+    sector:       row.sector || 'design',
+    client:       row.client || '',
+    priority:     row.priority || 'media',
+    deadline:     row.deadline || '',
+    startDate:    row.start_date || '',
+    completedAt:  row.completed_at || '',
+    cover:        row.cover || null,
+    deletedAt:    row.deleted_at || null,
+    colEnteredAt: row.col_entered_at || null,
+    createdAt:    row.created_at || '',
+    createdBy:    row.created_by || '',
+    publishDate:  row.publish_date || '',
+    publishTime:  row.publish_time || '09:00',
+    bioterUnit:   row.bioter_unit || '',
+    score:        row.score || null,
+    ajustar:      row.ajustar || false,
+    isAlteracao:  row.is_alteracao || false,
+    assignees:    row.assignees || [],
+    watchers:     row.watchers || [],
+    tags:         row.tags || [],
+    comments:     row.comments || [],
+    files:        row.files || [],
+    timeline:     row.timeline || [],
+    checklist:    row.checklist || [],
+    caption:      row.caption || '',
+    desc:         row.description || '',
+  });
+
   const _applyTasks = useCallback((rows) => {
     if (!rows || rows.length === 0) return;
-    const fromSupabase = rows.map(row => ({...row.data, id: String(row.id)}));
+    const fromSupabase = rows.map(row => _rowToTask(row));
     setGlobalTasksRaw(prev => {
       // Mescla: Supabase é fonte de verdade para cards existentes,
       // mas mantém cards locais que ainda não foram confirmados no Supabase
@@ -18187,7 +18221,7 @@ export default function AgencyOS(){
   }, []);
 
   const _applyRealtimeRow = useCallback((row) => {
-    const incoming = {...row.data, id: String(row.id)};
+    const incoming = _rowToTask(row);
     setGlobalTasksRaw(prev => {
       const exists = prev.find(x => String(x.id) === String(incoming.id));
       const next = exists
@@ -18436,13 +18470,44 @@ export default function AgencyOS(){
   },[authState]);
 
   // Helper para salvar tasks no Supabase — com retry automático
+  // Converte objeto task do app → linha do novo schema flat
+  const _taskToRow = (t) => ({
+    id:           String(t.id),
+    title:        t.title || 'Nova Demanda',
+    status:       t.status || 'demanda',
+    assignee:     t.assignee || '',
+    sector:       t.sector || 'design',
+    client:       t.client || '',
+    priority:     t.priority || 'media',
+    deadline:     t.deadline || '',
+    start_date:   t.startDate || '',
+    completed_at: t.completedAt || '',
+    cover:        t.cover || null,
+    deleted_at:   t.deletedAt || null,
+    col_entered_at: t.colEnteredAt || null,
+    created_at:   t.createdAt || '',
+    created_by:   t.createdBy || '',
+    publish_date: t.publishDate || '',
+    publish_time: t.publishTime || '09:00',
+    bioter_unit:  t.bioterUnit || '',
+    score:        t.score || null,
+    ajustar:      t.ajustar || false,
+    is_alteracao: t.isAlteracao || false,
+    assignees:    t.assignees || [],
+    watchers:     t.watchers || [],
+    tags:         t.tags || [],
+    comments:     t.comments || [],
+    files:        (t.files||[]).map(({url,...r})=>r),
+    timeline:     t.timeline || [],
+    checklist:    t.checklist || [],
+    caption:      t.caption || '',
+    description:  t.desc || '',
+  });
+
   const syncTasksToSupabase=async(tasks,retryCount=0)=>{
     if(!tasks||tasks.length===0)return;
     try{
-      const rows=tasks.map(t=>{
-        const {id,...rest}=t;
-        return {id:String(id),data:{...rest,files:(t.files||[]).map(({url,...r})=>r)}};
-      });
+      const rows=tasks.map(t=>_taskToRow(t));
       const {error}=await _sb.from("tasks").upsert(rows,{onConflict:"id"});
       if(error&&retryCount===0){
         setTimeout(()=>syncTasksToSupabase(tasks,1),2000);
