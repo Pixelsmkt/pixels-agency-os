@@ -1502,7 +1502,7 @@ const LISTA_ORDER = ["publicado","agendado","aprovado","avaliacao","execucao","r
 // Integrações de mídia: Meta + Google auth hooks, painéis RealData, ClienteDashboard, ClienteConcorrencia
 // Depende de: 03_cliente_ferramentas (helpers de dados)
 
-const {LineChart,BarChart,AreaChart,PieChart,Pie,Cell,XAxis,YAxis,CartesianGrid,ResponsiveContainer}=recharts;
+const {LineChart,BarChart,AreaChart,PieChart,Pie,Cell,Bar:RBar,Line:RLine,Area:RArea,XAxis,YAxis,CartesianGrid,Tooltip:RTooltip,Legend:RLegend,ResponsiveContainer}=recharts;
 
 // Simulate 8-week trend data per client
 const genTrend=(base,variance=0.15,weeks=8)=>Array.from({length:weeks},(_, i)=>{
@@ -6583,13 +6583,6 @@ function CDrive({cl}){
 }
 
 /* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
-const {
-  LineChart,BarChart,AreaChart,PieChart,
-  Pie,Cell,
-  Bar:RBar,Line:RLine,Area:RArea,
-  XAxis,YAxis,CartesianGrid,
-  Tooltip:RTooltip,Legend:RLegend,
-  ResponsiveContainer}=recharts;
 
 // ======= 03_clientes2.jsx =======
 // Entrada da seção Clientes: PageClientes + NovoClienteModal + calcScore + Sparkline
