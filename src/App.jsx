@@ -18247,14 +18247,15 @@ export default function AgencyOS(){
   // ── Sync task para Supabase + broadcast ───────────────────────
   const syncToSupabase = async (tasks, retry=0) => {
     if(!tasks||tasks.length===0) return;
-    const session = sessionRef.current;
+    const session = sessionRef.current || getStoredSession();
+    if(session && !sessionRef.current) sessionRef.current = session;
     if(!session){
       if(retry===0) setTimeout(()=>syncToSupabase(tasks,1),1000);
       return;
     }
     // Safety: limpa pendingIds após 10s independente do resultado
     const ids = tasks.map(t=>String(t.id));
-    setTimeout(()=>ids.forEach(id=>pendingIds.current.delete(id)), 10000);
+    setTimeout(()=>ids.forEach(id=>pendingIds.current.delete(id)), 8000);
     try{
       const rows = tasks.map(taskToRow);
       // Usa raw fetch com token garantido — evita bug do _sb client sem sessão
@@ -18269,8 +18270,12 @@ export default function AgencyOS(){
         body:JSON.stringify(rows)
       });
       if(res.ok){
-        // Confirmado — remove do pending
-        ids.forEach(id=>pendingIds.current.delete(id));
+        // Aguarda 5s antes de remover do pending
+        // Supabase pode levar alguns segundos para propagar a escrita
+        // Sem esse delay, o poll imediato lê dado antigo e reverte o card
+        setTimeout(()=>{
+          ids.forEach(id=>pendingIds.current.delete(id));
+        }, 5000);
       }else if(retry===0){
         setTimeout(()=>syncToSupabase(tasks,1),2000);
       }
@@ -18381,8 +18386,11 @@ export default function AgencyOS(){
 
     // Fetch do Supabase usando token da sessão
     const pollFetch = async () => {
-      const session = sessionRef.current;
+      // Usa sessionRef ou lê do localStorage como fallback
+      const session = sessionRef.current || getStoredSession();
       if(!session||cancelled) return;
+      // Se veio do localStorage, atualiza o ref para os próximos polls
+      if(!sessionRef.current && session) sessionRef.current = session;
       try{
         const res = await fetch(`${SUPABASE_URL}/rest/v1/tasks?select=*`,{
           headers:{"apikey":SUPABASE_ANON_KEY,"Authorization":"Bearer "+session.access_token}
@@ -18416,6 +18424,11 @@ export default function AgencyOS(){
       }catch{}
     };
 
+    // Popula sessionRef do localStorage antes do primeiro poll
+    if(!sessionRef.current){
+      const stored = getStoredSession();
+      if(stored) sessionRef.current = stored;
+    }
     setTimeout(pollFetch, 500); // primeiro poll logo após setup
     const pollInterval = setInterval(pollFetch, 2000);
 
