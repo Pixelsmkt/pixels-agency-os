@@ -8184,7 +8184,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     // Verificar senha do usuário atual no Supabase — usa a senha em memória não disponível
     // Por isso verificamos apenas o PIN fixo de admin + que o usuário é admin
     if(CURRENT_USER.level!==1){alert("Apenas administradores podem excluir colunas.");setDeleteColConfirm(null);return;}
-    if(pin!=="4149"){alert("PIN incorreto.");return;}
+    if(pin!=="2125"){alert("PIN incorreto.");return;}
     setCols(p=>p.filter(c=>c.id!==colId));
     setDeleteColConfirm(null);
   };
