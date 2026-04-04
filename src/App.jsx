@@ -443,6 +443,23 @@ function getUrgencyColor(level){
   return(["#e53e3e","#f97316",C.yw,C.gr])[level]??C.gr;
 }
 
+/* ─── COMPONENTE: ClientLogo ─────────────────── */
+// Renderiza logo do cliente (base64) ou fallback com abbr colorida
+// size: "xs"=18px | "sm"=28px | "md"=36px | "lg"=48px
+const CLIENT_LOGO_SIZES={xs:18,sm:28,md:36,lg:48};
+function ClientLogo({clientId,size="sm"}){
+  const h=CLIENT_LOGO_SIZES[size]||28;
+  const cl=CLIENTS.find(c=>c.id===clientId);
+  if(!cl)return null;
+  if(CLIENT_LOGOS[clientId]){
+    return <img src={CLIENT_LOGOS[clientId]} alt={cl.name}
+      style={{height:h,maxWidth:h*4,objectFit:"contain",display:"block"}}/>;
+  }
+  return <span style={{color:cl.color,fontWeight:700,fontSize:Math.round(h*0.55),
+    background:cl.color+"18",borderRadius:4,padding:"1px 5px",lineHeight:1.4,
+    display:"inline-block"}}>{cl.abbr}</span>;
+}
+
 // ======= 00_mindmap_data.jsx =======
 // Dados estratégicos e mapas mentais de todos os clientes
 // Depende de: 00_globals.jsx (C para cores)
