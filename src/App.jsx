@@ -12704,6 +12704,10 @@ const BRIEFING_CAMPOS=[
 ];
 
 const isImg = a => a && a.type && a.type.startsWith("image/");
+const thumbUrl=(url,w=300,q=60)=>{
+  if(!url||url.startsWith("data:"))return url;
+  return url.replace("/object/public/","/render/image/public/")+`?width=${w}&quality=${q}&resize=cover`;
+};
 
 // Gera URL de miniatura via Supabase Image Transform (só para URLs do Storage)
 // Miniatura: 300px, qualidade 60% — original abre no click
@@ -12784,25 +12788,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
   },[task]);
   const isAgendado=task.status==="agendado";
-
-  // Notifica admins quando card é salvo como agendado
   const notifyAgendado=(t)=>{
-    const admins=TEAM.filter(u=>u.level===1);
-    const msg=`📅 "${t.title}" foi agendado para ${t.publishDate||"data não definida"}${t.publishTime?" às "+t.publishTime:""}.`;
-    // Adiciona notificação ao NOTIF_STORE global
-    try{
-      NOTIF_STORE.items.unshift({
-        id:"notif-ag-"+Date.now(),
-        type:"agendado",
-        category:"demanda",
-        icon:"📅",
-        title:"Publicação Agendada",
-        body:msg,
-        read:false,
-        at:new Date().toLocaleDateString("pt-BR"),
-        user:CURRENT_USER.name,
-      });
-    }catch(e){}
+    try{NOTIF_STORE.items.unshift({id:"notif-ag-"+Date.now(),type:"agendado",category:"demanda",icon:"📅",title:"Publicação Agendada",body:`📅 "${t.title}" foi agendado para ${t.publishDate||"data não definida"}${t.publishTime?" às "+t.publishTime:""}.`,read:false,at:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name});}catch(e){}
   };
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
@@ -12853,7 +12840,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(changed.length>0)tl.push({type:"edit",label:`Editado: ${changed.join(", ")}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
     const updated={...task,title,desc,comments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:attachments,timeline:tl,checklist};
     setTasks(prev=>prev.map(t=>t.id===task.id?updated:t));
-    // Notificar admins se card acabou de ser agendado
     if(updated.status==="agendado"&&task.status!=="agendado")notifyAgendado(updated);
     onClose();
   };
@@ -12904,7 +12890,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
   };
 
-  const removeAttachment=(id)=>setAttachments(p=>p.filter(a=>a.id!==id));
+  const removeAttachment=(id)=>{
+    const att=attachments.find(a=>a.id===id);
+    if(att?.storagePath){try{window._sb.storage.from("pixels-files").remove([att.storagePath]);}catch(e){}}
+    setAttachments(p=>p.filter(a=>a.id!==id));
+  };
 
   const startRec=async()=>{
     try{
@@ -13336,7 +13326,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>}
             </div>
 
-            {/* ── ÁUDIOS DE ORIENTAÇÃO ── */}
             {!isAgendado&&<div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                 <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>
@@ -13370,9 +13359,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>)}
             </div>}
 
-            {/* ── COMENTÁRIOS ── */}
             {!isAgendado&&<div>
-              {!isAgendado&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Comentários</div>}
+              <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Comentários</div>
               {comments.length===0&&<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"16px 0"}}>Sem comentários ainda</div>}
               {comments.map(c=><div key={c.id} style={{display:"flex",gap:10,marginBottom:14}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11,flexShrink:0}}>{c.av}</div>
@@ -13403,7 +13391,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <button onClick={addComment} style={{background:"#0f172a",border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,flexShrink:0}}>↑</button>
               </div>
             </div>}
-          </div>
+          </div>}
 
           {/* FILES */}
           {/* ── LEGENDA / CAPTION TAB ── */}
@@ -13456,6 +13444,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   <div style={{color:"#1d4ed8",fontSize:11,fontWeight:700}}>Enviando {attachments.filter(a=>a.uploading).length} arquivo(s)...</div>
                   <div style={{color:"#93c5fd",fontSize:10}}>Aguarde antes de salvar</div>
                 </div>
+              </div>}
+              {attachments.some(a=>a.uploading)&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"8px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                <div style={{fontSize:14}}>⏳</div>
+                <div><div style={{color:"#1d4ed8",fontSize:11,fontWeight:700}}>Enviando {attachments.filter(a=>a.uploading).length} arquivo(s)...</div>
+                <div style={{color:"#93c5fd",fontSize:10}}>Aguarde antes de salvar</div></div>
               </div>}
 
               {imgAttachments.length>0&&<>
@@ -13650,7 +13643,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           </>)}
           {/* ══ FIM AGENDADO ══ */}
 
-          {/* Setor (oculto quando agendado) */}
           {!isAgendado&&<div>
             <label style={LB}>Setor</label>
             <select value={sector} onChange={e=>setSector(e.target.value)} disabled={!canEdit} style={SI}>
@@ -13658,7 +13650,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </select>
           </div>}
 
-          {/* Responsáveis — dropdown estilo select */}
           {!isAgendado&&<div style={{position:"relative"}}>
             <label style={LB}>👤 Responsáveis</label>
             <button onClick={()=>{if(canEdit){setShowAssigneesPicker(v=>!v);setShowWatchersPicker(false);}}}
@@ -13689,7 +13680,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>}
           </div>}
 
-          {/* Monitorando — dropdown estilo select */}
+          {/* Monitorando */}
           {!isAgendado&&TEAM.filter(u=>!assignees.includes(u.id)).length>0&&<div style={{position:"relative"}}>
             <label style={LB}>👁 Monitorando</label>
             <button onClick={()=>{if(canEdit){setShowWatchersPicker(v=>!v);setShowAssigneesPicker(false);}}}
@@ -13730,11 +13721,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 {BIOTER_UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
               </select>
             </>}
-          </div>
+          </div>}
 
-          }{/* fim Cliente */}
-
-          {/* Prioridade + Prazo */}
+          {/* Prioridade+Prazo */}
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div>
               <label style={LB}>Prioridade</label>
@@ -13749,11 +13738,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <label style={LB}>Prazo</label>
               <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)} disabled={!canEdit} style={SI}/>
             </div>
-          </div>
-
-          }{/* fim Prioridade+Prazo */}
-
-          {/* Meta info */}
+          </div>}
           {(task.createdAt||task.id)&&<div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,display:"flex",flexDirection:"column",gap:4}}>
             <div style={{color:"#cbd5e1",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>Informações</div>
             <div style={{color:"#94a3b8",fontSize:10}}>ID: #{task.id}</div>
