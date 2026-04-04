@@ -10666,7 +10666,7 @@ const PORTAL_MODULES=[
   {id:"faturamento", label:"Faturamento",             icon:"💰", desc:"Contratos e faturas"},
 ];
 
-const MAIN_TABS=[["equipe","👥 Equipe & Colaboradores"],["clientes","🏢 Clientes do Portal"]];
+const MAIN_TABS=[["equipe","👥 Equipe & Colaboradores"],["clientes","🏢 Clientes do Portal"],["storage","🗂 Storage"]];
 
 const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status","Ações"];
 
@@ -11095,8 +11095,134 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
         </div>
       )}
 
+      {/* Tab Storage — só admins */}
+      {mainTab==="storage"&&isPartner&&<StorageManager tasks={tasks}/>}
+
     </div>
   </>);
+}
+
+/* ─── STORAGE MANAGER ─────────────────────────── */
+function StorageManager({tasks}){
+  const [scanning,setScanning]=useState(false);
+  const [orphans,setOrphans]=useState(null); // null=não escaneado, []=escaneado
+  const [deleting,setDeleting]=useState(false);
+  const [log,setLog]=useState([]);
+
+  const scan=async()=>{
+    setScanning(true);
+    setOrphans(null);
+    setLog([]);
+    try{
+      const sb=window._sb;
+
+      // 1. Coletar todos os storagePaths válidos de tasks ativos + lixeira
+      const validPaths=new Set();
+      (tasks||[]).forEach(t=>{
+        (t.files||[]).forEach(f=>{
+          if(f.storagePath)validPaths.add(f.storagePath);
+        });
+      });
+
+      // 2. Listar arquivos no bucket — pasta tasks/
+      const{data:items,error}=await sb.storage.from("pixels-files").list("tasks",{limit:1000,offset:0});
+      if(error)throw error;
+
+      // 3. Para cada subpasta (id do task), listar arquivos
+      const found=[];
+      for(const folder of (items||[])){
+        const{data:files}=await sb.storage.from("pixels-files").list(`tasks/${folder.name}`,{limit:100});
+        for(const file of (files||[])){
+          const path=`tasks/${folder.name}/${file.name}`;
+          if(!validPaths.has(path)){
+            found.push({path,name:file.name,folder:folder.name,size:file.metadata?.size||0});
+          }
+        }
+      }
+      setOrphans(found);
+    }catch(e){
+      setLog([`Erro ao escanear: ${e.message}`]);
+    }
+    setScanning(false);
+  };
+
+  const deleteOrphans=async()=>{
+    if(!orphans||orphans.length===0)return;
+    setDeleting(true);
+    const newLog=[];
+    try{
+      const sb=window._sb;
+      const paths=orphans.map(o=>o.path);
+      const{error}=await sb.storage.from("pixels-files").remove(paths);
+      if(error)throw error;
+      newLog.push(`✅ ${paths.length} arquivo(s) deletado(s) com sucesso.`);
+      setOrphans([]);
+    }catch(e){
+      newLog.push(`❌ Erro ao deletar: ${e.message}`);
+    }
+    setLog(newLog);
+    setDeleting(false);
+  };
+
+  const fmtSize=b=>b>1048576?(b/1048576).toFixed(1)+"MB":b>1024?(b/1024).toFixed(0)+"KB":b+"B";
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    {/* Header */}
+    <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"18px 20px"}}>
+      <div style={{color:C.tx,fontWeight:800,fontSize:16,marginBottom:4}}>🗂 Gerenciador de Storage</div>
+      <div style={{color:C.ts,fontSize:12}}>Escaneia o bucket <strong>pixels-files</strong> e identifica arquivos órfãos — arquivos que não pertencem a nenhum cartão ativo ou na lixeira.</div>
+    </div>
+
+    {/* Aviso */}
+    <div style={{background:C.yw+"18",border:"1px solid "+C.yw+"44",borderRadius:12,padding:"12px 16px",display:"flex",gap:10,alignItems:"flex-start"}}>
+      <span style={{fontSize:18}}>⚠️</span>
+      <div style={{color:C.ts,fontSize:12}}>
+        <strong style={{color:C.tx}}>Atenção:</strong> Revise a lista antes de deletar. Esta ação é <strong>irreversível</strong>. Arquivos de cartões na lixeira são preservados.
+      </div>
+    </div>
+
+    {/* Botão escanear */}
+    <button onClick={scan} disabled={scanning||deleting}
+      style={{background:C.a,color:"#fff",border:"none",borderRadius:12,padding:"12px 24px",fontWeight:700,fontSize:14,cursor:scanning?"wait":"pointer",opacity:scanning?0.7:1,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+      {scanning?"⏳ Escaneando bucket...":"🔍 Escanear Storage"}
+    </button>
+
+    {/* Resultado */}
+    {orphans!==null&&<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
+      <div style={{padding:"14px 18px",borderBottom:"1px solid "+C.b1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <span style={{color:C.tx,fontWeight:700,fontSize:14}}>
+            {orphans.length===0?"✅ Nenhum arquivo órfão encontrado":`🗑 ${orphans.length} arquivo(s) órfão(s) encontrado(s)`}
+          </span>
+          {orphans.length>0&&<div style={{color:C.ts,fontSize:11,marginTop:2}}>
+            Total: {fmtSize(orphans.reduce((s,o)=>s+o.size,0))}
+          </div>}
+        </div>
+        {orphans.length>0&&<button onClick={()=>{if(window.confirm(`Deletar permanentemente ${orphans.length} arquivo(s) órfão(s)? Esta ação não pode ser desfeita.`))deleteOrphans();}}
+          disabled={deleting}
+          style={{background:C.rd,color:"#fff",border:"none",borderRadius:9,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:deleting?"wait":"pointer",opacity:deleting?0.7:1}}>
+          {deleting?"⏳ Deletando...":"🗑 Deletar todos os órfãos"}
+        </button>}
+      </div>
+
+      {orphans.length>0&&<div style={{maxHeight:320,overflowY:"auto"}}>
+        {orphans.map((o,i)=>(
+          <div key={o.path} style={{padding:"10px 18px",borderBottom:i<orphans.length-1?"1px solid "+C.b1+"44":"none",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
+            <div style={{minWidth:0}}>
+              <div style={{color:C.tx,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.name}</div>
+              <div style={{color:C.td,fontSize:10,marginTop:2}}>tasks/{o.folder}/</div>
+            </div>
+            <span style={{color:C.ts,fontSize:11,flexShrink:0}}>{fmtSize(o.size)}</span>
+          </div>
+        ))}
+      </div>}
+    </div>}
+
+    {/* Log */}
+    {log.length>0&&<div style={{background:C.s1,borderRadius:10,padding:"12px 16px"}}>
+      {log.map((l,i)=><div key={i} style={{color:C.ts,fontSize:12}}>{l}</div>)}
+    </div>}
+  </div>;
 }
 
 // ======= 10_interno.jsx =======
