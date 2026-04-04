@@ -411,6 +411,21 @@ const NAV=[
   ]},
 ];
 
+/* ─── HOOK: useOpenCardSync ─────────────────── */
+// Mantém o card aberto sincronizado com a versão mais recente de tasks.
+// Usado em 04_calendario e 04_demandas para atualizar o modal em tempo real.
+function useOpenCardSync(openCard, setOpenCard, tasks){
+  useEffect(()=>{
+    if(!openCard)return;
+    const updated=(tasks||[]).find(t=>t.id===openCard.id);
+    if(!updated){
+      setOpenCard(null); // card foi deletado
+    } else if(updated!==openCard){
+      setOpenCard(updated); // sincroniza com versão mais recente
+    }
+  },[tasks]); // eslint-disable-line react-hooks/exhaustive-deps
+}
+
 // ======= 00_mindmap_data.jsx =======
 // Dados estratégicos e mapas mentais de todos os clientes
 // Depende de: 00_globals.jsx (C para cores)
