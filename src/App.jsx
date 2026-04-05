@@ -14463,8 +14463,11 @@ export default function AgencyOS(){
           const u=TEAM.find(t=>t.id===profile.team_id||t.name===profile.name);
           if(!u) return;
           const sp=profile.permissions&&Object.keys(profile.permissions).length>0?profile.permissions:null;
-          const perms=sp?{...DEFAULT_PERMS,...sp}:{...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
-          if(u.level>1) perms.verTodosKanban=sp?.verTodosKanban||ACCESS_STORE[u.id]?.verTodosKanban||false;
+          // Base: DEFAULT_PERMS + ACCESS_STORE hardcoded; Supabase sobrescreve o que foi explicitamente salvo
+          const perms=sp
+            ?{...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{}),...sp}
+            :{...DEFAULT_PERMS,...(ACCESS_STORE[u.id]||{})};
+          if(u.level>1) perms.verTodosKanban=sp?.verTodosKanban!==undefined?sp.verTodosKanban:(ACCESS_STORE[u.id]?.verTodosKanban||false);
           if(JSON.stringify(livePerms[u.id]||{})!==JSON.stringify(perms)){
             ACCESS_STORE[u.id]=perms;
             setLivePerms(p=>({...p,[u.id]:perms}));
@@ -14614,6 +14617,15 @@ export default function AgencyOS(){
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
       case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "portal":
+      case "portal_dashboard":
+      case "portal_demandas":
+      case "portal_calendario":
+      case "portal_publicacoes":
+      case "portal_analises":
+      case "portal_faturamento":
+      case "portal_chat":
+      case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno":
       case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "notificacoes":          return <PageNotificacoes notifs={notifs} setNotifs={setNotifs}/>;
