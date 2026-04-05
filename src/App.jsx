@@ -15336,19 +15336,25 @@ export default function AgencyOS(){
     </div>}
 
     <aside style={{width:sideCollapsed&&!isMob?56:210,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"width .25s ease, left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none",overflow:"hidden"}}>
+      {/* ── Botão retrair/expandir — flutuante no meio da borda direita ── */}
+      {!isMob&&<button onClick={toggleCollapse} title={sideCollapsed?"Expandir menu":"Recolher menu"}
+        style={{position:"absolute",right:-14,top:"50%",transform:"translateY(-50%)",zIndex:60,
+          width:28,height:28,borderRadius:"50%",
+          background:C.a,border:`2px solid ${C.s1}`,
+          color:"#fff",cursor:"pointer",fontSize:16,fontWeight:900,
+          display:"flex",alignItems:"center",justifyContent:"center",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.25)",
+          transition:"transform .25s, background .15s",
+        }}
+        onMouseEnter={e=>{e.currentTarget.style.background=C.aD;}}
+        onMouseLeave={e=>{e.currentTarget.style.background=C.a;}}>
+        <span style={{display:"inline-block",transition:"transform .25s",transform:sideCollapsed?"rotate(0deg)":"rotate(180deg)",lineHeight:1}}>›</span>
+      </button>}
       <div style={{padding:"14px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}>
           <div style={{width:32,height:32,borderRadius:10,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>⬡</div>
           {(!sideCollapsed||isMob)&&<div style={{flex:1,minWidth:0}}><div style={{color:C.tx,fontWeight:900,fontSize:13,letterSpacing:-.5,overflow:"hidden",whiteSpace:"nowrap"}}>Pixels</div><div style={{color:C.td,fontSize:9,letterSpacing:1}}>Agency OS · PRO</div></div>}
-          {isMob
-            ?<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>
-            :<button onClick={toggleCollapse} title={sideCollapsed?"Expandir menu":"Recolher menu"}
-              style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"4px",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"transform .25s",transform:sideCollapsed?"rotate(180deg)":"rotate(0deg)"}}
-              onMouseEnter={e=>e.currentTarget.style.color=C.a}
-              onMouseLeave={e=>e.currentTarget.style.color=C.td}>
-              ‹
-            </button>
-          }
+          {isMob&&<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>}
         </div>
       </div>
       {/* ── Perfil no topo da sidebar ── */}
