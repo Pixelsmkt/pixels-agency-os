@@ -712,83 +712,104 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   const saveCoverColor=(c)=>{setCoverColor(c);setShowColorPicker(false);try{localStorage.setItem("pixels-covercolor-"+CURRENT_USER.id,c);}catch(e){}};
   const photo=getProfilePhoto(CURRENT_USER.id);
 
+  const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(CURRENT_USER.id));
+
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
     {/* ── CAPA DO PERFIL ── */}
-    <div style={{boxShadow:"0 4px 24px rgba(0,0,0,0.15)",position:"relative",marginBottom:8}}>
-      {/* Fundo gradiente */}
-      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}99)`,height:isMob?140:180,width:"100%",position:"relative",borderRadius:"20px 20px 0 0"}}>
+    <div style={{boxShadow:"0 4px 24px rgba(0,0,0,0.15)",position:"relative",marginBottom:8,borderRadius:20}}>
 
-        {/* Botão editar perfil — esquerda */}
-        <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
-          style={{position:"absolute",top:14,left:14,background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.35)",borderRadius:10,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",gap:5}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Editar perfil
-        </button>
+      {/* ── PARTE COLORIDA ── */}
+      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?160:220,width:"100%",position:"relative",borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",justifyContent:"flex-end",padding:"0 0 32px 0"}}>
 
-        {/* Sino + contadores — direita */}
-        <div style={{position:"absolute",top:14,right:14,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
-          {/* Sino */}
-          <button onClick={()=>onNotif&&onNotif()}
-            style={{position:"relative",background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,width:42,height:42,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",backdropFilter:"blur(4px)"}}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-              <path d="M13.73 21a2 2 0 01-3.46 0"/>
-            </svg>
-            {unread>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#ef4444",color:"#fff",borderRadius:99,minWidth:18,height:18,fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unread}</span>}
+        {/* Coluna esquerda: editar + cor da capa */}
+        <div style={{position:"absolute",top:14,left:14,display:"flex",flexDirection:"column",gap:6}}>
+          <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
+            style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:9,padding:"6px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Editar perfil
           </button>
-          {/* Contadores do mês */}
-          <div style={{background:"rgba(0,0,0,0.25)",backdropFilter:"blur(8px)",borderRadius:12,padding:"8px 14px",textAlign:"center",border:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{color:"rgba(255,255,255,0.7)",fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:4}}>Demandas do mês</div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{textAlign:"center"}}>
-                <div style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{conclMes}</div>
-                <div style={{color:"rgba(255,255,255,0.6)",fontSize:9,marginTop:2}}>concl.</div>
-              </div>
-              <div style={{color:"rgba(255,255,255,0.4)",fontSize:20,fontWeight:300}}>/</div>
-              <div style={{textAlign:"center"}}>
-                <div style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{solic}</div>
-                <div style={{color:"rgba(255,255,255,0.6)",fontSize:9,marginTop:2}}>solic.</div>
-              </div>
-            </div>
-            {/* Badges em aberto e atrasadas */}
-            <div style={{display:"flex",gap:4,marginTop:8,justifyContent:"center",flexWrap:"wrap"}}>
-              {emAberto>0&&<span style={{background:"rgba(255,255,255,0.15)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700}}>{emAberto} em aberto</span>}
-              {late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(CURRENT_USER.id)).length>0&&<span style={{background:"rgba(239,68,68,0.4)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700}}>{late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(CURRENT_USER.id)).length} atrasada{late.length>1?"s":""}</span>}
-            </div>
-          </div>
+          <button onClick={()=>setShowColorPicker(v=>!v)}
+            style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"6px 14px",color:"rgba(255,255,255,0.85)",fontSize:12,fontWeight:600,cursor:"pointer",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="rgba(255,255,255,0.85)"/><circle cx="17.5" cy="10.5" r=".5" fill="rgba(255,255,255,0.85)"/><circle cx="8.5" cy="7.5" r=".5" fill="rgba(255,255,255,0.85)"/><circle cx="6.5" cy="12.5" r=".5" fill="rgba(255,255,255,0.85)"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+            Cor da capa
+          </button>
+          {showColorPicker&&<div style={{background:C.card,borderRadius:14,padding:12,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",display:"flex",gap:8,flexWrap:"wrap",maxWidth:200,zIndex:10}}>
+            {COVER_COLORS.map(cor=>(
+              <button key={cor} onClick={()=>saveCoverColor(cor)}
+                style={{width:28,height:28,borderRadius:7,background:cor,border:coverColor===cor?"3px solid "+C.a:"2px solid transparent",cursor:"pointer",transition:"all .15s"}}/>
+            ))}
+          </div>}
         </div>
 
-        {/* Botão trocar cor */}
-        <button onClick={()=>setShowColorPicker(v=>!v)}
-          style={{position:"absolute",bottom:14,left:"50%",transform:"translateX(-50%)",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,padding:"3px 10px",color:"rgba(255,255,255,0.7)",fontSize:10,fontWeight:600,cursor:"pointer"}}>
-          🎨
+        {/* Sino — direita */}
+        <button onClick={()=>onNotif&&onNotif()}
+          style={{position:"absolute",top:14,right:14,background:"#f97316",border:"none",borderRadius:14,padding:"8px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(249,115,22,0.5)"}}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+            <path d="M13.73 21a2 2 0 01-3.46 0"/>
+          </svg>
+          {unread>0&&<span style={{color:"#fff",fontSize:20,fontWeight:900,lineHeight:1}}>{unread}</span>}
         </button>
-        {showColorPicker&&<div style={{position:"absolute",bottom:40,left:"50%",transform:"translateX(-50%)",background:C.card,borderRadius:14,padding:12,boxShadow:"0 8px 24px rgba(0,0,0,0.2)",display:"flex",gap:8,flexWrap:"wrap",maxWidth:220,zIndex:10}}>
-          {COVER_COLORS.map(cor=>(
-            <button key={cor} onClick={()=>saveCoverColor(cor)}
-              style={{width:32,height:32,borderRadius:8,background:cor,border:coverColor===cor?"3px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all .15s",boxShadow:coverColor===cor?"0 0 0 2px "+cor:"none"}}/>
-          ))}
-        </div>}
+
+        {/* Bom dia — centralizado na capa colorida */}
+        <div style={{textAlign:"center",paddingBottom:8}}>
+          <div style={{color:"rgba(255,255,255,0.95)",fontWeight:800,fontSize:isMob?28:36,letterSpacing:-.5,textShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>{greeting}</div>
+        </div>
       </div>
 
-      {/* Foto + info */}
-      <div style={{background:C.card,padding:isMob?"0 16px 20px":"0 24px 24px",position:"relative",borderRadius:"0 0 20px 20px"}}>
-        <div style={{display:"flex",alignItems:"flex-end",gap:20,position:"relative",top:-80}}>
+      {/* ── PARTE BRANCA ── */}
+      <div style={{background:C.card,padding:isMob?"0 20px 24px":"0 32px 28px",position:"relative",borderRadius:"0 0 20px 20px"}}>
+        <div style={{display:"flex",alignItems:"flex-end",gap:24,position:"relative",top:-90}}>
+
           {/* Foto grande */}
-          <div style={{width:isMob?100:160,height:isMob?100:160,borderRadius:"50%",border:"4px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
+          <div style={{width:isMob?110:180,height:isMob?110:180,borderRadius:"50%",border:"5px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
             {photo
               ?<img src={photo} alt={CURRENT_USER.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?40:60}}>{CURRENT_USER.av}</span>
+              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?44:68}}>{CURRENT_USER.av}</span>
             }
           </div>
-          {/* Nome e cargo */}
-          <div style={{paddingBottom:12,flex:1,minWidth:0}}>
-            <div style={{color:C.td,fontSize:12,fontWeight:600,marginBottom:2}}>{greeting}</div>
-            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?24:32,letterSpacing:-1,lineHeight:1.1}}>{CURRENT_USER.name}</div>
-            <div style={{color:C.ts,fontSize:13,marginTop:4,fontWeight:500}}>{CURRENT_USER.role}</div>
-            <div style={{color:C.td,fontSize:11,marginTop:4}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
+
+          {/* Nome + cargo + data */}
+          <div style={{flex:1,minWidth:0,paddingBottom:8}}>
+            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?32:48,letterSpacing:-1.5,lineHeight:1,marginBottom:6}}>{CURRENT_USER.name}</div>
+            <div style={{color:C.ts,fontSize:14,fontWeight:600,marginBottom:4}}>{CURRENT_USER.role}</div>
+            <div style={{color:C.td,fontSize:12}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
           </div>
+
+          {/* Demandas do mês + badges */}
+          {!isMob&&<div style={{flexShrink:0,textAlign:"right",paddingBottom:8}}>
+            <div style={{color:C.td,fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:6}}>Demandas do mês</div>
+            <div style={{display:"flex",alignItems:"flex-end",gap:6,justifyContent:"flex-end"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{color:C.tx,fontWeight:900,fontSize:40,lineHeight:1}}>{conclMes}</div>
+                <div style={{color:C.td,fontSize:10,marginTop:2}}>concluídas</div>
+              </div>
+              <div style={{color:C.td,fontSize:28,fontWeight:300,marginBottom:8}}>/</div>
+              <div style={{textAlign:"center"}}>
+                <div style={{color:C.tx,fontWeight:900,fontSize:40,lineHeight:1}}>{solic}</div>
+                <div style={{color:C.td,fontSize:10,marginTop:2}}>solicitadas</div>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:6,marginTop:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
+              {emAberto>0&&<span style={{background:C.a+"18",color:C.a,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700}}>{emAberto} em aberto</span>}
+              {lateMes.length>0&&<span style={{background:"#ef444418",color:"#ef4444",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700}}>{lateMes.length} atrasada{lateMes.length>1?"s":""}</span>}
+            </div>
+          </div>}
         </div>
+
+        {/* Mobile: demandas abaixo */}
+        {isMob&&<div style={{display:"flex",justifyContent:"space-between",marginTop:-16,paddingTop:8,borderTop:`1px solid ${C.b1}`}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{color:C.tx,fontWeight:900,fontSize:28}}>{conclMes}</div>
+            <div style={{color:C.td,fontSize:9}}>concluídas</div>
+          </div>
+          <div style={{color:C.td,fontSize:20,alignSelf:"center"}}>/</div>
+          <div style={{textAlign:"center"}}>
+            <div style={{color:C.tx,fontWeight:900,fontSize:28}}>{solic}</div>
+            <div style={{color:C.td,fontSize:9}}>solicitadas</div>
+          </div>
+          {emAberto>0&&<span style={{background:C.a+"18",color:C.a,borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,alignSelf:"center"}}>{emAberto} em aberto</span>}
+        </div>}
       </div>
     </div>
 
