@@ -7315,6 +7315,23 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 }
 
 // ======= 04_demandas.jsx =======
+
+// Dropdown de filtro — definido fora do render para manter estado entre renders
+function KanbanDropdown({label,icon,active,children}){
+  const [open,setOpen]=useState(false);
+  return <div style={{position:"relative"}}>
+    <button onMouseDown={e=>{e.stopPropagation();setOpen(v=>!v);}}
+      style={{display:"flex",alignItems:"center",gap:6,background:active?C.a:C.card,color:active?"#fff":C.ts,border:`1px solid ${active?C.a:C.b1}`,borderRadius:20,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",boxShadow:active?"0 2px 8px rgba(161,64,255,0.3)":"none"}}>
+      {icon&&<span>{icon}</span>}{label}<span style={{fontSize:9,marginLeft:2}}>{open?"▲":"▼"}</span>
+    </button>
+    {open&&<>
+      <div style={{position:"fixed",inset:0,zIndex:98}} onMouseDown={()=>setOpen(false)}/>
+      <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"6px 0",zIndex:99,minWidth:180,boxShadow:"0 8px 24px rgba(0,0,0,0.2)"}} onMouseDown={e=>e.stopPropagation()}>
+        {children(()=>setOpen(false))}
+      </div>
+    </>}
+  </div>;
+}
 // Kanban de demandas: PageDemandas + PixelsIAModal + ScanModal + QuickCreateBody
 // ListaView → 04_lista_view.jsx | Calendário → 04_calendario.jsx
 // Depende de: 00_globals, 11_cardmodal (CardModal), 04_lista_view (ListaView)
@@ -8241,34 +8258,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           {id:"texto",    label:"Copywriting",     icon:"✍"},
         ];
 
-        const Dropdown=({label,icon,active,children})=>{
-          const [open,setOpen]=useState(false);
-          return <div style={{position:"relative"}}>
-            <button onClick={()=>setOpen(v=>!v)}
-              style={{display:"flex",alignItems:"center",gap:6,background:active?C.a:C.card,color:active?"#fff":C.ts,border:`1px solid ${active?C.a:C.b1}`,borderRadius:20,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",boxShadow:active?"0 2px 8px rgba(161,64,255,0.3)":"none"}}>
-              {icon&&<span>{icon}</span>}{label}<span style={{fontSize:9,marginLeft:2}}>{open?"▲":"▼"}</span>
-            </button>
-            {open&&<>
-              <div style={{position:"fixed",inset:0,zIndex:98}} onClick={()=>setOpen(false)}/>
-              <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"6px 0",zIndex:99,minWidth:180,boxShadow:"0 8px 24px rgba(0,0,0,0.2)"}}>
-                {children(()=>setOpen(false))}
-              </div>
-            </>}
-          </div>;
-        };
-
         return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {/* ── SETOR ── só quem tem filtroSetor */}
-          {myPerms.filtroSetor&&<Dropdown label={filterSector==="todos_setores"?"Setor":SETORES.find(s=>s.id===filterSector)?.label||"Setor"} icon="🗂" active={filterSector!=="todos_setores"}>
+          {myPerms.filtroSetor&&<KanbanDropdown label={filterSector==="todos_setores"?"Setor":SETORES.find(s=>s.id===filterSector)?.label||"Setor"} icon="🗂" active={filterSector!=="todos_setores"}>
             {(close)=>SETORES.map(s=><button key={s.id} onClick={()=>{setFilterSector(s.id);close();}}
               style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterSector===s.id?C.ag:"transparent",border:"none",color:filterSector===s.id?C.a:C.tx,fontSize:12,fontWeight:filterSector===s.id?700:500,cursor:"pointer",textAlign:"left"}}>
               {s.icon&&<span>{s.icon}</span>}{s.label}
               {filterSector===s.id&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
             </button>)}
-          </Dropdown>}
+          </KanbanDropdown>}
 
           {/* ── PERFIL ── só quem tem filtroPerfil e verTodosKanban */}
-          {myPerms.filtroPerfil&&canSeeAll&&<Dropdown label={filterUser==="todos"?"Perfil":TEAM.find(u=>u.id===filterUser)?.name||"Perfil"} icon="👤" active={filterUser!=="todos"}>
+          {myPerms.filtroPerfil&&canSeeAll&&<KanbanDropdown label={filterUser==="todos"?"Perfil":TEAM.find(u=>u.id===filterUser)?.name||"Perfil"} icon="👤" active={filterUser!=="todos"}>
             {(close)=>allowedUsers.map(f=>{
               const u=TEAM.find(x=>x.id===f);
               const active=filterUser===f;
@@ -8279,10 +8280,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
               </button>;
             })}
-          </Dropdown>}
+          </KanbanDropdown>}
 
           {/* ── CLIENTE ── só quem tem filtroCliente */}
-          {myPerms.filtroCliente&&<Dropdown label={filterClient==="todos"?"Cliente":CLIENTS.find(c=>c.id===filterClient)?.abbr||"Cliente"} icon="🏢" active={filterClient!=="todos"}>
+          {myPerms.filtroCliente&&<KanbanDropdown label={filterClient==="todos"?"Cliente":CLIENTS.find(c=>c.id===filterClient)?.abbr||"Cliente"} icon="🏢" active={filterClient!=="todos"}>
             {(close)=>[{id:"todos",name:"Todos os clientes",color:C.a},...CLIENTS].map(cl=>{
               const active=filterClient===cl.id;
               return <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");close();}}
@@ -8292,7 +8293,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
               </button>;
             })}
-          </Dropdown>}
+          </KanbanDropdown>}
 
           {/* Bioter unit sub-filter */}
           {filterClient==="bioter"&&myPerms.filtroCliente&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
