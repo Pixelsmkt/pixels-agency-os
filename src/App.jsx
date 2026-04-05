@@ -365,55 +365,55 @@ const NOTIF_STORE={
 
 /* ─── NAV ────────────────────────────────── */
 const NAV=[
-  {id:"meudash",    icon:"🎯",label:"Meu Dashboard"},
+  {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
     {id:"demandas_kanban",  icon:"◈", label:"Fluxo de Demandas"},
-    {id:"demandas_cal_pub", icon:"📅",label:"Calendário de Publicações"},
+    {id:"demandas_cal_pub", icon:"▦", label:"Calendário de Publicações"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
-    {id:"aprovacoes_copys",      icon:"✍", label:"Aprovação de Copys"},
-    {id:"aprovacoes_publicacao", icon:"📤",label:"Aprovação de Publicação"},
+    {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de Copys"},
+    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Publicação"},
   ]},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
-  {id:"analises",   icon:"📊",label:"Análises",children:[
-    {id:"analises_producao", icon:"📈",label:"Produção"},
-    {id:"analises_gargalos", icon:"⚠", label:"Gargalos"},
-    {id:"relatorios",        icon:"📋",label:"Relatórios"},
+  {id:"analises",   icon:"◫", label:"Análises",children:[
+    {id:"analises_producao", icon:"▲", label:"Produção"},
+    {id:"analises_gargalos", icon:"◬", label:"Gargalos"},
+    {id:"relatorios",        icon:"▤", label:"Relatórios"},
   ]},
-  {id:"ia",         icon:"🧠",label:"Pixels IA",children:[
-    {id:"ia_diagnostico",icon:"🔬",label:"Diagnóstico"},
-    {id:"ia_churn",      icon:"⚠", label:"Alerta Churn"},
-    {id:"ia_playbooks",  icon:"📖",label:"Playbooks"},
-    {id:"ia_biblioteca", icon:"💡",label:"Biblioteca"},
+  {id:"ia",         icon:"◎", label:"Pixels IA",children:[
+    {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
+    {id:"ia_churn",      icon:"◬", label:"Alerta Churn"},
+    {id:"ia_playbooks",  icon:"▦", label:"Playbooks"},
+    {id:"ia_biblioteca", icon:"◇", label:"Biblioteca"},
   ]},
   {type:"divider",label:"PORTAL"},
-  {id:"portal",     icon:"🌐",label:"Portal Cliente",children:[
-    {id:"portal_dashboard",  icon:"🎯",label:"Dashboard"},
+  {id:"portal",     icon:"◯", label:"Portal Cliente",children:[
+    {id:"portal_dashboard",  icon:"⊡", label:"Dashboard"},
     {id:"portal_demandas",   icon:"◈", label:"Demandas"},
-    {id:"portal_calendario", icon:"📅",label:"Calendário"},
-    {id:"portal_publicacoes",icon:"✅",label:"Publicações"},
-    {id:"portal_analises",   icon:"📊",label:"Análises"},
-    {id:"portal_faturamento",icon:"💰",label:"Faturamento"},
-    {id:"portal_chat",       icon:"💬",label:"Chat"},
+    {id:"portal_calendario", icon:"▦", label:"Calendário"},
+    {id:"portal_publicacoes",icon:"▷", label:"Publicações"},
+    {id:"portal_analises",   icon:"◫", label:"Análises"},
+    {id:"portal_faturamento",icon:"◫", label:"Faturamento"},
+    {id:"portal_chat",       icon:"◐", label:"Chat"},
   ]},
   {type:"divider",label:"ADMIN"},
-  {id:"gestao",     icon:"⚙", label:"Gestão",children:[
-    {id:"contratos_lista",      icon:"📄",label:"Contratos"},
-    {id:"contratos_ltv",        icon:"💎",label:"LTV"},
-    {id:"contratos_projecao",   icon:"📈",label:"Projeção"},
-    {id:"capacidade_alocacao",  icon:"📊",label:"Alocação"},
-    {id:"capacidade_onboarding",icon:"✅",label:"Onboarding"},
+  {id:"gestao",     icon:"◎", label:"Gestão",children:[
+    {id:"contratos_lista",      icon:"▤", label:"Contratos"},
+    {id:"contratos_ltv",        icon:"◈", label:"LTV"},
+    {id:"contratos_projecao",   icon:"▲", label:"Projeção"},
+    {id:"capacidade_alocacao",  icon:"◫", label:"Alocação"},
+    {id:"capacidade_onboarding",icon:"◇", label:"Onboarding"},
   ]},
-  {id:"acessos",    icon:"🔐",label:"Acessos"},
-  {id:"interno",    icon:"◬", label:"Interno",children:[
-    {id:"interno_calendario", icon:"📅",label:"Calendário"},
-    {id:"interno_pontuacao",  icon:"⭐",label:"Pontuação"},
-    {id:"interno_mapeamento", icon:"🗺", label:"Mapeamento"},
-    {id:"interno_conexoes",   icon:"🔐",label:"Conexão e Contas"},
-    {id:"interno_360",        icon:"🔄",label:"Avaliação 360"},
-    {id:"interno_carreira",   icon:"🏆",label:"Histórico Carreira"},
+  {id:"acessos",    icon:"◬", label:"Acessos"},
+  {id:"interno",    icon:"◭", label:"Interno",children:[
+    {id:"interno_calendario", icon:"▦", label:"Calendário"},
+    {id:"interno_pontuacao",  icon:"◈", label:"Pontuação"},
+    {id:"interno_mapeamento", icon:"◉", label:"Mapeamento"},
+    {id:"interno_conexoes",   icon:"◬", label:"Conexão e Contas"},
+    {id:"interno_360",        icon:"◎", label:"Avaliação 360"},
+    {id:"interno_carreira",   icon:"▲", label:"Histórico Carreira"},
   ]},
 ];
 
@@ -14765,7 +14765,7 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
 }
 
 const MOBILE_NAV=[
-  {id:"meudash",   icon:"🎯",label:"Dashboard"},
+  {id:"meudash",   icon:"⊡",label:"Dashboard"},
   {id:"demandas",  icon:"◈", label:"Demandas"},
   {id:"aprovacoes",icon:"◇", label:"Aprovações"},
   {id:"chat",      icon:"◐", label:"Chat"},
@@ -15200,6 +15200,13 @@ export default function AgencyOS(){
       default:                     return true;
     }
   };
+  // Pendências de aprovação — para destaque laranja no menu
+  const pendingAprovacoes=tasks.filter(t=>
+    !t.deletedAt&&(
+      t.status==="avaliacao"||(t.status==="demanda"&&!t.ajustar)
+    )
+  ).length;
+
   const NAV_VISIBLE=NAV.filter((n,i,arr)=>{
     if(n.type==="divider"){
       const rest=arr.slice(i+1);
@@ -15343,11 +15350,12 @@ export default function AgencyOS(){
             <button onClick={()=>{
               if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded)nav(n.children[0].id);}
               else nav(n.id);
-            }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 10px",borderRadius:10,border:"none",background:isActive?C.ag:"none",color:isActive?C.a:C.ts,cursor:"pointer",fontWeight:isActive?700:500,fontSize:12,marginBottom:2,textAlign:"left",transition:"all .15s"}}>
+            }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 10px",borderRadius:10,border:"none",background:n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive?"#f97316":isActive?C.ag:"none",color:n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive?"#fff":isActive?C.a:C.ts,cursor:"pointer",fontWeight:isActive||( n.id==="aprovacoes"&&pendingAprovacoes>0)?700:500,fontSize:12,marginBottom:2,textAlign:"left",transition:"all .15s"}}>
               <span style={{display:"flex",alignItems:"center",gap:9}}><span style={{fontSize:15}}>{n.icon}</span>{n.label}</span>
               <span style={{display:"flex",alignItems:"center",gap:4}}>
                 {n.id==="notificacoes"&&unreadNotifs>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{unreadNotifs}</span>}
-                {hasChildren&&<span style={{color:C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
+                {n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive&&<span style={{background:"rgba(255,255,255,0.25)",color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{pendingAprovacoes}</span>}
+                {hasChildren&&<span style={{color:n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive?"rgba(255,255,255,0.8)":C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
               </span>
             </button>
             {hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
