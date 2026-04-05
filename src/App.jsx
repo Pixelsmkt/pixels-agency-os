@@ -15335,20 +15335,20 @@ export default function AgencyOS(){
       </div>
     </div>}
 
-    <aside style={{width:sideCollapsed&&!isMob?56:210,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"width .25s ease, left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none",overflow:"hidden"}}>
-      {/* ── Botão retrair/expandir — flutuante no meio da borda direita ── */}
+    <aside style={{width:sideCollapsed&&!isMob?56:210,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"width .25s ease, left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none"}}>
+      {/* ── Botão retrair/expandir — metade dentro, metade fora ── */}
       {!isMob&&<button onClick={toggleCollapse} title={sideCollapsed?"Expandir menu":"Recolher menu"}
-        style={{position:"absolute",right:-14,top:"50%",transform:"translateY(-50%)",zIndex:60,
-          width:28,height:28,borderRadius:"50%",
-          background:C.a,border:`2px solid ${C.s1}`,
-          color:"#fff",cursor:"pointer",fontSize:16,fontWeight:900,
+        style={{position:"absolute",right:-16,top:"50%",transform:"translateY(-50%)",zIndex:60,
+          width:32,height:32,borderRadius:"50%",
+          background:C.a,border:`2.5px solid ${C.s1}`,
+          color:"#fff",cursor:"pointer",fontSize:18,fontWeight:900,
           display:"flex",alignItems:"center",justifyContent:"center",
-          boxShadow:"0 2px 8px rgba(0,0,0,0.25)",
-          transition:"transform .25s, background .15s",
+          boxShadow:"0 2px 12px rgba(0,0,0,0.3)",
+          transition:"background .15s",
         }}
-        onMouseEnter={e=>{e.currentTarget.style.background=C.aD;}}
-        onMouseLeave={e=>{e.currentTarget.style.background=C.a;}}>
-        <span style={{display:"inline-block",transition:"transform .25s",transform:sideCollapsed?"rotate(0deg)":"rotate(180deg)",lineHeight:1}}>›</span>
+        onMouseEnter={e=>e.currentTarget.style.background=C.aD}
+        onMouseLeave={e=>e.currentTarget.style.background=C.a}>
+        <span style={{display:"inline-block",transition:"transform .3s",transform:sideCollapsed?"rotate(0deg)":"rotate(180deg)",lineHeight:1,marginRight:sideCollapsed?0:0}}>›</span>
       </button>}
       <div style={{padding:"14px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}>
@@ -15375,7 +15375,7 @@ export default function AgencyOS(){
         </button>
       </div>
 
-      <nav style={{flex:1,padding:"10px 8px",overflowY:"auto"}}>
+      <nav style={{flex:1,padding:"10px 8px",overflowY:"auto",overflowX:"hidden"}}>
         {viewingAs&&<div style={{background:C.or+"22",border:`1px solid ${C.or}44`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
           <div style={{color:C.or,fontWeight:700,fontSize:10}}>👁 Visualizando como</div>
           <div style={{color:C.tx,fontWeight:700,fontSize:12,marginTop:2}}>{effectiveUser.name}</div>
