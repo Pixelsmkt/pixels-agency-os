@@ -7227,7 +7227,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     agendado:  !!myPerms.colAgendado,
     publicado: !!myPerms.colPublicado,
     pausado:   !!myPerms.colPausado,
-    ajuste:    !!myPerms.colAjuste,
   };
   // isAdmin: sócios e quem tem verTodosKanban veem tudo
   const isAdmin=myPerms.verTodosKanban||activeUser.level===1;
@@ -9420,13 +9419,14 @@ const PERM_GROUPS=[
     {key:"filtroPerfil",     label:"Filtro por Perfil",       desc:"Pode filtrar por colaborador"},
   ]},
   {group:"Colunas do Kanban",items:[
-    {key:"colCopys",         label:"Coluna Copys",            desc:"Acesso à coluna de Copys"},
-    {key:"colAvaliacao",     label:"Coluna Avaliação",        desc:"Acesso à coluna de Avaliação"},
-    {key:"colAprovado",      label:"Coluna Aprovado",         desc:"Acesso à coluna Aprovado"},
-    {key:"colAgendado",      label:"Coluna Agendado",         desc:"Acesso à coluna Agendado"},
-    {key:"colPublicado",     label:"Coluna Publicado",        desc:"Acesso à coluna Publicado"},
-    {key:"colPausado",       label:"Coluna Pausado",          desc:"Acesso à coluna Pausado"},
-    {key:"colAjuste",        label:"Coluna Ajuste",           desc:"Acesso à coluna de Ajuste"},
+    {key:"colCopys",     label:"Copys",                    desc:"Acesso à coluna Copys — onde entram as novas demandas"},
+    {key:"colDemanda",   label:"Demanda",                  desc:"Acesso à coluna Demanda — cards recebidos"},
+    {key:"colExecucao",  label:"Em Execução",              desc:"Acesso à coluna Em Execução — trabalho em andamento"},
+    {key:"colAvaliacao", label:"Concluído p/ Avaliação",   desc:"Acesso à coluna de Avaliação — aguardando aprovação"},
+    {key:"colAprovado",  label:"Aprovado",                 desc:"Acesso à coluna Aprovado — entregas finalizadas"},
+    {key:"colAgendado",  label:"Agendado",                 desc:"Acesso à coluna Agendado — publicações programadas"},
+    {key:"colPublicado", label:"Publicado",                desc:"Acesso à coluna Publicado — já no ar"},
+    {key:"colPausado",   label:"Pausado",                  desc:"Acesso à coluna Pausado — demandas suspensas"},
   ]},
   {group:"Aprovações",items:[
     {key:"verAprovacoes",    label:"Ver Aprovações",          desc:"Acesso ao módulo de aprovações"},
