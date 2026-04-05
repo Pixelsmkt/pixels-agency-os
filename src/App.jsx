@@ -15354,8 +15354,7 @@ export default function AgencyOS(){
       {/* ── Perfil no topo da sidebar ── */}
       <div style={{padding:"10px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
         <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
-          title={sideCollapsed&&!isMob?CURRENT_USER.name+"
-"+CURRENT_USER.role:undefined}
+          title={sideCollapsed&&!isMob?CURRENT_USER.name+" · "+CURRENT_USER.role:undefined}
           style={{width:"100%",display:"flex",alignItems:"center",gap:8,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",transition:"all .15s",textAlign:"left",justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}
           onMouseEnter={e=>e.currentTarget.style.background=C.a+"18"}
           onMouseLeave={e=>e.currentTarget.style.background=C.s1}>
