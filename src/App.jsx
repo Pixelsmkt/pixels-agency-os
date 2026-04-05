@@ -274,6 +274,12 @@ const DEFAULT_PERMS={
   pixelsIA:false, escanear:false, verCalendario:true, verBriefingCard:false,
   // Notificações
   verNotificacoes:true, verInterno:false,
+  // Interno — sub-páginas
+  verMapeamento:false, verConexoes:false, verPontuacao:false, verCarreira:false, verAvaliacao360:false,
+  // Análises — sub-páginas
+  verAnaliseProd:false, verAnaliseGarg:false, verRelatorio:false,
+  // Acessos
+  editarAcessos:false,
 };
 
 const PARTNER_PERMS=Object.keys(DEFAULT_PERMS).reduce((a,k)=>({...a,[k]:true}),{});
@@ -9400,68 +9406,120 @@ function PageFinanceiro({isMob}){
 }
 
 // ======= 09_acessos.jsx =======
-// Grupos de permissões para o modal de gerenciamento
-const PERM_GROUPS=[
-  {group:"Dashboard & Demandas",items:[
-    {key:"verDashboard",     label:"Ver Dashboard",          desc:"Acesso à página inicial do dashboard"},
-    {key:"verDemandas",      label:"Ver Demandas",            desc:"Acesso ao kanban de demandas"},
-    {key:"criarDemanda",     label:"Criar Demandas",          desc:"Pode criar novos cartões"},
-    {key:"editarDemanda",    label:"Editar Demandas",         desc:"Pode editar cartões existentes"},
-    {key:"excluirDemanda",   label:"Excluir Demandas",        desc:"Pode mover cartões para lixeira"},
-    {key:"arrastarCards",    label:"Arrastar Cards",          desc:"Pode mover cards entre colunas"},
-    {key:"verTodosKanban",   label:"Ver Todos no Kanban",     desc:"Vê cards de todos os usuários"},
-    {key:"novaColuna",       label:"Nova Coluna",             desc:"Pode criar colunas customizadas"},
-    {key:"verLixeira",       label:"Ver Lixeira",             desc:"Acesso à lixeira de cartões"},
-  ]},
-  {group:"Filtros",items:[
-    {key:"filtroSetor",      label:"Filtro por Setor",        desc:"Pode filtrar demandas por setor"},
-    {key:"filtroCliente",    label:"Filtro por Cliente",      desc:"Pode filtrar por cliente"},
-    {key:"filtroPerfil",     label:"Filtro por Perfil",       desc:"Pode filtrar por colaborador"},
-  ]},
-  {group:"Colunas do Kanban",items:[
-    {key:"colCopys",     label:"Copys",                    desc:"Acesso à coluna Copys — onde entram as novas demandas"},
-    {key:"colDemanda",   label:"Demanda",                  desc:"Acesso à coluna Demanda — cards recebidos"},
-    {key:"colExecucao",  label:"Em Execução",              desc:"Acesso à coluna Em Execução — trabalho em andamento"},
-    {key:"colAvaliacao", label:"Concluído p/ Avaliação",   desc:"Acesso à coluna de Avaliação — aguardando aprovação"},
-    {key:"colAprovado",  label:"Aprovado",                 desc:"Acesso à coluna Aprovado — entregas finalizadas"},
-    {key:"colAgendado",  label:"Agendado",                 desc:"Acesso à coluna Agendado — publicações programadas"},
-    {key:"colPublicado", label:"Publicado",                desc:"Acesso à coluna Publicado — já no ar"},
-    {key:"colPausado",   label:"Pausado",                  desc:"Acesso à coluna Pausado — demandas suspensas"},
-  ]},
-  {group:"Aprovações",items:[
-    {key:"verAprovacoes",    label:"Ver Aprovações",          desc:"Acesso ao módulo de aprovações"},
-    {key:"verAprCopys",      label:"Aprovar Copys",           desc:"Pode visualizar copys para aprovação"},
-    {key:"verAprPublicacao", label:"Aprovar Publicações",     desc:"Pode aprovar publicações agendadas"},
-    {key:"aprovar",          label:"Botão Aprovar",           desc:"Pode clicar em Aprovar / Solicitar Ajuste"},
-  ]},
-  {group:"Clientes",items:[
-    {key:"verClientes",      label:"Ver Clientes",            desc:"Acesso à aba de clientes"},
-    {key:"verDadosCliente",  label:"Ver Dados do Cliente",    desc:"Vê informações completas do cliente"},
-    {key:"verMetricas",      label:"Ver Métricas",            desc:"Acesso às métricas de performance"},
-    {key:"verConcorrencia",  label:"Ver Concorrência",        desc:"Acesso à análise de concorrentes"},
-    {key:"verMindmap",       label:"Ver Mindmap",             desc:"Acesso ao mapa estratégico"},
-    {key:"verLinksCliente",  label:"Ver Links do Cliente",    desc:"Acesso aos links e acessos do cliente"},
-  ]},
-  {group:"Chat",items:[
-    {key:"verChat",          label:"Ver Chat",                desc:"Acesso ao módulo de chat"},
-    {key:"enviarMensagem",   label:"Enviar Mensagens",        desc:"Pode enviar mensagens no chat"},
-    {key:"verCanalGeral",    label:"Canal Geral",             desc:"Acesso ao canal geral"},
-    {key:"verCanalDesign",   label:"Canal Design",            desc:"Acesso ao canal de design"},
-    {key:"verCanalVideo",    label:"Canal Vídeo",             desc:"Acesso ao canal de vídeo"},
-    {key:"verCanalTrafego",  label:"Canal Tráfego",           desc:"Acesso ao canal de tráfego"},
-    {key:"verCanalSocial",   label:"Canal Social Media",      desc:"Acesso ao canal de social media"},
-  ]},
-  {group:"Admin & Ferramentas",items:[
-    {key:"verAcessos",       label:"Ver Acessos",             desc:"Acesso ao módulo de acessos"},
-    {key:"verFinanceiro",    label:"Ver Financeiro",          desc:"Acesso ao módulo financeiro"},
-    {key:"verAnalises",      label:"Ver Análises",            desc:"Acesso ao módulo de análises"},
-    {key:"verPortal",        label:"Ver Portal Cliente",      desc:"Acesso ao portal do cliente"},
-    {key:"verInterno",       label:"Ver Interno",             desc:"Acesso ao módulo interno"},
-    {key:"pixelsIA",         label:"Pixels IA",               desc:"Acesso à Pixels IA"},
-    {key:"escanear",         label:"Escanear Storage",        desc:"Pode escanear o Storage"},
-    {key:"verBriefingCard",  label:"Ver Briefing",            desc:"Vê o briefing dentro dos cards"},
-  ]},
+// Grupos de permissões organizados por módulo (abas)
+const PERM_TABS=[
+  {id:"dashboard",    icon:"🎯", label:"Dashboard",        color:"#7c3aed"},
+  {id:"demandas",     icon:"◈",  label:"Demandas",          color:"#2563eb"},
+  {id:"aprovacoes",   icon:"◇",  label:"Aprovações",        color:"#16a34a"},
+  {id:"chat",         icon:"◐",  label:"Chat",              color:"#0891b2"},
+  {id:"clientes",     icon:"◉",  label:"Clientes",          color:"#d97706"},
+  {id:"analises",     icon:"◫",  label:"Análises",          color:"#7c3aed"},
+  {id:"ia",           icon:"⚡",  label:"Pixels IA",         color:"#f97316"},
+  {id:"portal",       icon:"🌐", label:"Portal Cliente",    color:"#0d9488"},
+  {id:"gestao",       icon:"◈",  label:"Gestão",            color:"#dc2626"},
+  {id:"acessos",      icon:"🔒", label:"Acessos",           color:"#475569"},
+  {id:"interno",      icon:"◐",  label:"Interno",           color:"#7c3aed"},
 ];
+
+const PERM_GROUPS={
+  dashboard:[
+    {key:"verDashboard",      label:"Ver Dashboard",              desc:"Acesso à página inicial do dashboard"},
+    {key:"verDashOutros",     label:"Ver Dashboard de Outros",    desc:"Pode ver o dashboard de outros colaboradores"},
+  ],
+  demandas:[
+    {section:"Acesso Geral"},
+    {key:"verDemandas",       label:"Ver Demandas",               desc:"Acesso ao módulo de demandas"},
+    {key:"criarDemanda",      label:"Criar Demandas",             desc:"Pode criar novos cartões"},
+    {key:"editarDemanda",     label:"Editar Demandas",            desc:"Pode editar cartões existentes"},
+    {key:"excluirDemanda",    label:"Excluir Demandas",           desc:"Pode mover cartões para lixeira"},
+    {key:"arrastarCards",     label:"Arrastar Cards",             desc:"Pode mover cards entre colunas"},
+    {key:"verTodosKanban",    label:"Ver Todos no Kanban",        desc:"Vê cards de todos, não só os seus"},
+    {key:"verLixeira",        label:"Ver Lixeira",                desc:"Acesso à lixeira de cartões"},
+    {key:"novaColuna",        label:"Nova Coluna",                desc:"Pode criar colunas customizadas"},
+    {section:"Filtros"},
+    {key:"filtroSetor",       label:"Filtro por Setor",           desc:"Pode filtrar demandas por setor"},
+    {key:"filtroCliente",     label:"Filtro por Cliente",         desc:"Pode filtrar por cliente"},
+    {key:"filtroPerfil",      label:"Filtro por Colaborador",     desc:"Pode filtrar por perfil"},
+    {section:"Colunas Visíveis"},
+    {key:"colCopys",          label:"Copys",                      desc:"Coluna onde entram novas demandas de copy"},
+    {key:"colDemanda",        label:"Demanda",                    desc:"Coluna de demandas recebidas"},
+    {key:"colExecucao",       label:"Em Execução",                desc:"Coluna de trabalho em andamento"},
+    {key:"colAvaliacao",      label:"Concluído p/ Avaliação",     desc:"Coluna aguardando aprovação"},
+    {key:"colAprovado",       label:"Aprovado",                   desc:"Coluna de entregas aprovadas"},
+    {key:"colAgendado",       label:"Agendado",                   desc:"Coluna de publicações programadas"},
+    {key:"colPublicado",      label:"Publicado",                  desc:"Coluna de conteúdos publicados"},
+    {key:"colPausado",        label:"Pausado",                    desc:"Coluna de demandas pausadas"},
+    {section:"Calendário de Publicações"},
+    {key:"verCalPub",         label:"Calendário de Publicações",  desc:"Acesso ao calendário de publicações"},
+  ],
+  aprovacoes:[
+    {key:"verAprovacoes",     label:"Acessar Aprovações",         desc:"Acesso ao módulo de aprovações"},
+    {key:"verAprCopys",       label:"Aba Copys",                  desc:"Ver copys aguardando aprovação"},
+    {key:"verAprPublicacao",  label:"Aba Publicação",             desc:"Ver publicações agendadas para aprovar"},
+    {key:"verAprAjuste",      label:"Aba Ajustes Solicitados",    desc:"Ver cards marcados para ajuste"},
+    {key:"aprovar",           label:"Botão Aprovar",              desc:"Pode aprovar ou solicitar ajuste"},
+  ],
+  chat:[
+    {key:"verChat",                         label:"Acessar Chat",             desc:"Acesso ao módulo de chat"},
+    {key:"enviarMensagem",                  label:"Enviar Mensagens",         desc:"Pode enviar mensagens"},
+    {section:"Canais Internos"},
+    {key:"verCanalGeral",                   label:"Canal Geral",              desc:"Acesso ao canal geral"},
+    {key:"verCanalDesign",                  label:"Canal Design",             desc:"Acesso ao canal de design"},
+    {key:"verCanalVideo",                   label:"Canal Vídeo",              desc:"Acesso ao canal de vídeo"},
+    {key:"verCanalTrafego",                 label:"Canal Tráfego",            desc:"Acesso ao canal de tráfego"},
+    {key:"verCanalSocial",                  label:"Canal Social Media",       desc:"Acesso ao canal de social media"},
+    {key:"verCanalAlertas",                 label:"Canal Alertas",            desc:"Acesso ao canal de alertas"},
+    {section:"Canais de Clientes"},
+    {key:"verCanalTodosClientes",           label:"Todos os Canais de Clientes",  desc:"Acesso a todos os canais de clientes"},
+    {key:"verCanalCliente_bioter",          label:"Canal Bioter",             desc:"Canal exclusivo do cliente Bioter"},
+    {key:"verCanalCliente_arabuta",         label:"Canal Arabuta",            desc:"Canal exclusivo do cliente Arabuta"},
+    {key:"verCanalCliente_climaves",        label:"Canal Climaves",           desc:"Canal exclusivo do cliente Climaves"},
+    {key:"verCanalCliente_construschorr",   label:"Canal Construschorr",      desc:"Canal exclusivo do cliente Construschorr"},
+    {key:"verCanalCliente_vetservice",      label:"Canal Vet Service",        desc:"Canal exclusivo do cliente Vet Service"},
+  ],
+  clientes:[
+    {key:"verClientes",       label:"Acessar Clientes",           desc:"Acesso à lista de clientes"},
+    {section:"Informações do Cliente"},
+    {key:"verDadosCliente",   label:"Dados do Cliente",           desc:"Ver informações e detalhes do cliente"},
+    {key:"verMetricas",       label:"Métricas",                   desc:"Ver métricas de performance"},
+    {key:"verMindmap",        label:"Mapa Mental",                desc:"Acesso ao mapa estratégico do cliente"},
+    {key:"verConcorrencia",   label:"Concorrência",               desc:"Ver análise de concorrentes"},
+    {key:"verLinksCliente",   label:"Links & Acessos",            desc:"Ver links e acessos do cliente"},
+  ],
+  analises:[
+    {key:"verAnalises",       label:"Acessar Análises",           desc:"Acesso ao módulo de análises"},
+    {section:"Sub-páginas"},
+    {key:"verAnaliseProd",    label:"Produção",                   desc:"Ver análise de produção da equipe"},
+    {key:"verAnaliseGarg",    label:"Gargalos",                   desc:"Ver análise de gargalos"},
+    {key:"verRelatorio",      label:"Relatórios",                 desc:"Ver relatórios de desempenho"},
+  ],
+  ia:[
+    {key:"pixelsIA",          label:"Acessar Pixels IA",          desc:"Acesso à inteligência artificial"},
+    {key:"escanear",          label:"Escanear Storage",           desc:"Pode escanear o Storage de arquivos"},
+    {key:"verBriefingCard",   label:"Ver Briefing no Card",       desc:"Vê o briefing dentro dos cartões"},
+  ],
+  portal:[
+    {key:"verPortal",         label:"Acessar Portal do Cliente",  desc:"Acesso ao portal do cliente"},
+  ],
+  gestao:[
+    {key:"verFinanceiro",     label:"Financeiro / DRE",           desc:"Acesso ao módulo financeiro"},
+    {key:"verDRECompleto",    label:"DRE Completo",               desc:"Ver DRE com todos os dados"},
+    {key:"verContratos",      label:"Contratos",                  desc:"Acesso ao módulo de contratos"},
+  ],
+  acessos:[
+    {key:"verAcessos",        label:"Ver Acessos",                desc:"Acesso ao módulo de gerenciamento"},
+    {key:"editarAcessos",     label:"Editar Permissões",          desc:"Pode alterar permissões de outros"},
+  ],
+  interno:[
+    {key:"verInterno",        label:"Acessar Interno",            desc:"Acesso ao módulo interno"},
+    {section:"Sub-páginas"},
+    {key:"verMapeamento",     label:"Mapeamento de Clientes",     desc:"Ver o mapa de clientes"},
+    {key:"verConexoes",       label:"Conexões & Credenciais",     desc:"Ver credenciais e conexões"},
+    {key:"verPontuacao",      label:"Pontuação de Equipe",        desc:"Ver ranking e pontuação"},
+    {key:"verCarreira",       label:"Histórico de Carreira",      desc:"Ver histórico de carreira"},
+    {key:"verAvaliacao360",   label:"Avaliação 360",              desc:"Ver avaliações da equipe"},
+  ],
+};
 
 function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks}){
   // Prioridade: livePerms (localStorage) → ACCESS_STORE (padrão hardcoded) → DEFAULT_PERMS
@@ -9471,6 +9529,7 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
     ...(livePerms?.[user.id]||{}),
   }));
   const [saved,setSaved]=useState(false);
+  const [activeTab,setActiveTab]=useState("dashboard");
   const savedTimer=useRef(null);
   const isPartnerUser=user.level===1;
 
@@ -9554,32 +9613,42 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
         </div>)}
       </div>
 
-      {/* Permissions */}
-      <div style={{padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:14}}>
+      {/* Tab Navigation */}
+      <div style={{display:"flex",gap:0,overflowX:"auto",borderBottom:`1px solid ${C.b1}`,background:C.s1,flexShrink:0}}>
+        {PERM_TABS.map(tab=>{
+          const items=PERM_GROUPS[tab.id]||[];
+          const activeItems=items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key]));
+          const totalKeys=items.filter(i=>i.key).length;
+          const isActive=activeTab===tab.id;
+          return <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
+            style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"10px 14px",background:isActive?C.card:"transparent",border:"none",borderBottom:isActive?`2px solid ${tab.color}`:"2px solid transparent",color:isActive?tab.color:C.ts,cursor:"pointer",whiteSpace:"nowrap",transition:"all .12s",flexShrink:0,marginBottom:-1}}>
+            <span style={{fontSize:14}}>{tab.icon}</span>
+            <span style={{fontSize:10,fontWeight:isActive?700:500}}>{tab.label}</span>
+            {totalKeys>0&&<span style={{fontSize:8,color:isActive?tab.color:C.td}}>{activeItems.length}/{totalKeys}</span>}
+          </button>;
+        })}
+      </div>
+
+      {/* Permissions — aba ativa */}
+      <div style={{padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flex:1}}>
         {isPartnerUser&&<div style={{background:C.a+"18",border:`1px solid ${C.a}44`,borderRadius:12,padding:"10px 14px",color:C.a,fontSize:12,fontWeight:600}}>⚡ Sócios têm acesso total e irrestrito ao sistema.</div>}
 
-        {PERM_GROUPS.map(g=>(
-          <div key={g.group}>
-            <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8,paddingBottom:6,borderBottom:`1px solid ${C.b1}`}}>{g.group}</div>
-            <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {g.items.map(item=>{
-                const on=isPartnerUser?true:(perms[item.key]||false);
-                return <div key={item.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 12px",background:on?user.color+"10":C.s1,borderRadius:10,border:`1px solid ${on?user.color+"44":C.b1}`,transition:"all .15s"}}>
-                  <div>
-                    <div style={{color:on?C.tx:C.ts,fontSize:13,fontWeight:on?700:500}}>{item.label}</div>
-                    <div style={{color:C.td,fontSize:10,marginTop:1}}>{item.desc}</div>
-                  </div>
-                  <div onClick={()=>toggle(item.key)}
-                    style={{width:42,height:24,borderRadius:99,background:on?user.color:C.b2,cursor:isPartnerUser?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
-                    <div style={{position:"absolute",top:3,left:on?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
-                  </div>
-                </div>;
-              })}
+        {(PERM_GROUPS[activeTab]||[]).map((item,idx)=>{
+          if(item.section) return <div key={idx} style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginTop:idx>0?8:0,paddingBottom:6,borderBottom:`1px solid ${C.b1}`}}>{item.section}</div>;
+          const on=isPartnerUser?true:(perms[item.key]||false);
+          const tabColor=PERM_TABS.find(t=>t.id===activeTab)?.color||user.color;
+          return <div key={item.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:on?tabColor+"10":C.s1,borderRadius:10,border:`1px solid ${on?tabColor+"33":C.b1}`,transition:"all .15s",cursor:isPartnerUser?"default":"pointer"}} onClick={()=>toggle(item.key)}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:on?C.tx:C.ts,fontSize:13,fontWeight:on?700:500}}>{item.label}</div>
+              <div style={{color:C.td,fontSize:10,marginTop:1}}>{item.desc}</div>
             </div>
-          </div>
-        ))}
+            <div style={{width:42,height:24,borderRadius:99,background:on?tabColor:C.b2,cursor:isPartnerUser?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0,marginLeft:12}}>
+              <div style={{position:"absolute",top:3,left:on?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
+            </div>
+          </div>;
+        })}
 
-        <button onClick={save} disabled={saved} style={{background:`linear-gradient(135deg,${user.color},${user.color}88)`,color:"#fff",border:"none",borderRadius:12,padding:"14px 0",fontWeight:900,fontSize:15,cursor:saved?"default":"pointer",boxShadow:`0 4px 18px ${user.color}40`,marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:saved?0.8:1}}>
+        <button onClick={save} disabled={saved} style={{background:`linear-gradient(135deg,${user.color},${user.color}88)`,color:"#fff",border:"none",borderRadius:12,padding:"14px 0",fontWeight:900,fontSize:15,cursor:saved?"default":"pointer",boxShadow:`0 4px 18px ${user.color}40`,marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:saved?0.8:1}}>
           {saved?<>✓ Permissões Salvas!</>:<>💾 Salvar Permissões</>}
         </button>
       </div>
