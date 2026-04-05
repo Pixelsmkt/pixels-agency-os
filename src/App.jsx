@@ -12884,9 +12884,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     return[user.id];
   });
   const [watchers,setWatchers]=useState(task.watchers||[]);
-  const [sector,setSector]=useState(task.sector||"");
+  const [sector,setSector]=useState((task.sector&&task.sector!=="design")?task.sector:"");
   const [client,setClient]=useState(task.client||"");
-  const [priority,setPriority]=useState(task.priority||"");
+  const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
   const [deadline,setDeadline]=useState(task.deadline||"");
   const [comments,setComments]=useState(task.comments||[]);
   const [comment,setComment]=useState("");
@@ -12933,9 +12933,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setDesc(task.desc||"");
       setAssignees(Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:task.assignee?[task.assignee]:[]);
       setWatchers(task.watchers||[]);
-      setSector(task.sector||"");
+      setSector((task.sector&&task.sector!=="design")?task.sector:"");
       setClient(task.client||"");
-      setPriority(task.priority||"");
+      setPriority((task.priority&&task.priority!=="media")?task.priority:"");
       setDeadline(task.deadline||"");
       setComments(task.comments||[]);
       setAttachments(task.files||[]);
