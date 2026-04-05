@@ -15338,17 +15338,20 @@ export default function AgencyOS(){
     <aside style={{width:sideCollapsed&&!isMob?56:210,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"width .25s ease, left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none"}}>
       {/* ── Botão retrair/expandir — metade dentro, metade fora ── */}
       {!isMob&&<button onClick={toggleCollapse} title={sideCollapsed?"Expandir menu":"Recolher menu"}
-        style={{position:"absolute",right:-16,top:"50%",transform:"translateY(-50%)",zIndex:60,
-          width:32,height:32,borderRadius:"50%",
-          background:C.a,border:`2.5px solid ${C.s1}`,
-          color:"#fff",cursor:"pointer",fontSize:18,fontWeight:900,
-          display:"flex",alignItems:"center",justifyContent:"center",
+        style={{position:"absolute",right:-18,top:"50%",transform:"translateY(-50%)",zIndex:60,
+          width:36,height:36,borderRadius:"50%",
+          background:C.a,border:`3px solid ${C.s1}`,
+          color:"#fff",cursor:"pointer",
+          display:"flex",alignItems:"center",justifyContent:"center",padding:0,
           boxShadow:"0 2px 12px rgba(0,0,0,0.3)",
           transition:"background .15s",
         }}
         onMouseEnter={e=>e.currentTarget.style.background=C.aD}
         onMouseLeave={e=>e.currentTarget.style.background=C.a}>
-        <span style={{display:"inline-block",transition:"transform .3s",transform:sideCollapsed?"rotate(0deg)":"rotate(180deg)",lineHeight:1,marginRight:sideCollapsed?0:0}}>›</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{display:"block",transition:"transform .3s",transform:sideCollapsed?"rotate(0deg)":"rotate(180deg)"}}>
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
       </button>}
       <div style={{padding:"14px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}>
