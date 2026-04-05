@@ -615,10 +615,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks}){
   const late=allTasks.filter(t=>!t.deletedAt&&t.status!=="aprovado"&&daysLeft(t.deadline)<0);
   const allActive=allTasks.filter(t=>!t.deletedAt);
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div style={{display:"flex",alignItems:"center",gap:14}}>
-      <Av l={user.av} color={user.color} size={52} status={user.status} uid={user.id}/>
-      <div><div style={{color:C.tx,fontWeight:900,fontSize:22}}>{isViewing?"Dashboard de ":"Olá, "}{user.name} 👁</div><div style={{color:C.ts,fontSize:13,marginTop:2}}>{user.role} · visão completa</div></div>
-    </div>
+    {isViewing&&<div style={{background:C.a+"15",border:`1px solid ${C.a}33`,borderRadius:10,padding:"8px 14px",display:"flex",alignItems:"center",gap:10}}>
+      <Av l={user.av} color={user.color} size={28} uid={user.id}/>
+      <div style={{color:C.a,fontWeight:700,fontSize:12}}>👁 Visualizando como {user.name}</div>
+    </div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
       <Tile label="MRR Total"  val={f$(mrr)}       color={C.gr}  trend={8}/>
       <Tile label="ROAS Médio" val={avgRoas+"x"}    color={C.a}   trend={12}/>
@@ -667,11 +667,42 @@ const DashGestor=DashColaborador;
 const DashDesigner=DashColaborador;
 const DashEditor=DashColaborador;
 
-function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo}){
+function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif}){
   const allTasks=propTasks||[];
   const active=allTasks.filter(t=>!t.deletedAt);
   const urgent=active.filter(t=>taskUrgencyLevel(t)===0);
+  const late=active.filter(t=>taskUrgencyLevel(t)===1);
   const now=new Date();
+  const hour=now.getHours();
+  const greeting=hour<12?"Bom dia ☀️":hour<18?"Boa tarde 🌤️":"Boa noite 🌙";
+  const unread=(notifs||[]).filter(n=>!n.read).length;
+
+  // Demandas do mês atual
+  const mesAtual=now.getMonth();
+  const anoAtual=now.getFullYear();
+  const isCEO=CURRENT_USER.level===1;
+  // Concluídas do mês — aprovadas com completedAt no mês
+  const conclMes=active.filter(t=>{
+    if(t.status!=="aprovado"||!t.completedAt)return false;
+    if(!isCEO&&!((t.assignees||[t.assignee]).includes(CURRENT_USER.id)))return false;
+    const d=new Date(t.completedAt);
+    return d.getMonth()===mesAtual&&d.getFullYear()===anoAtual;
+  }).length;
+  // Solicitadas do mês — criadas no mês
+  const solic=active.filter(t=>{
+    if(!isCEO&&!((t.assignees||[t.assignee]).includes(CURRENT_USER.id)))return false;
+    if(!t.createdAt)return false;
+    // createdAt é string pt-BR ou ISO
+    try{
+      const d=new Date(t.createdAt.includes("/")?t.createdAt.split("/").reverse().join("-"):t.createdAt);
+      return d.getMonth()===mesAtual&&d.getFullYear()===anoAtual;
+    }catch{return false;}
+  }).length;
+  // Em aberto
+  const emAberto=active.filter(t=>{
+    if(isCEO)return t.status!=="aprovado";
+    return t.status!=="aprovado"&&(t.assignees||[t.assignee]).includes(CURRENT_USER.id);
+  }).length;
 
   const COVER_COLORS=["#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777","#1e293b","#0f172a"];
   const [coverColor,setCoverColor]=useState(()=>{
@@ -685,35 +716,77 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     {/* ── CAPA DO PERFIL ── */}
     <div style={{boxShadow:"0 4px 24px rgba(0,0,0,0.15)",position:"relative",marginBottom:8}}>
       {/* Fundo gradiente */}
-      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}99)`,height:isMob?120:160,width:"100%",position:"relative",borderRadius:"20px 20px 0 0"}}>
+      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}99)`,height:isMob?140:180,width:"100%",position:"relative",borderRadius:"20px 20px 0 0"}}>
+
+        {/* Botão editar perfil — esquerda */}
+        <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
+          style={{position:"absolute",top:14,left:14,background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.35)",borderRadius:10,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",gap:5}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Editar perfil
+        </button>
+
+        {/* Sino + contadores — direita */}
+        <div style={{position:"absolute",top:14,right:14,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+          {/* Sino */}
+          <button onClick={()=>onNotif&&onNotif()}
+            style={{position:"relative",background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,width:42,height:42,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",backdropFilter:"blur(4px)"}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 01-3.46 0"/>
+            </svg>
+            {unread>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#ef4444",color:"#fff",borderRadius:99,minWidth:18,height:18,fontSize:9,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px"}}>{unread}</span>}
+          </button>
+          {/* Contadores do mês */}
+          <div style={{background:"rgba(0,0,0,0.25)",backdropFilter:"blur(8px)",borderRadius:12,padding:"8px 14px",textAlign:"center",border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{color:"rgba(255,255,255,0.7)",fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:4}}>Demandas do mês</div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{conclMes}</div>
+                <div style={{color:"rgba(255,255,255,0.6)",fontSize:9,marginTop:2}}>concl.</div>
+              </div>
+              <div style={{color:"rgba(255,255,255,0.4)",fontSize:20,fontWeight:300}}>/</div>
+              <div style={{textAlign:"center"}}>
+                <div style={{color:"#fff",fontWeight:900,fontSize:24,lineHeight:1}}>{solic}</div>
+                <div style={{color:"rgba(255,255,255,0.6)",fontSize:9,marginTop:2}}>solic.</div>
+              </div>
+            </div>
+            {/* Badges em aberto e atrasadas */}
+            <div style={{display:"flex",gap:4,marginTop:8,justifyContent:"center",flexWrap:"wrap"}}>
+              {emAberto>0&&<span style={{background:"rgba(255,255,255,0.15)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700}}>{emAberto} em aberto</span>}
+              {late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(CURRENT_USER.id)).length>0&&<span style={{background:"rgba(239,68,68,0.4)",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700}}>{late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(CURRENT_USER.id)).length} atrasada{late.length>1?"s":""}</span>}
+            </div>
+          </div>
+        </div>
+
         {/* Botão trocar cor */}
         <button onClick={()=>setShowColorPicker(v=>!v)}
-          style={{position:"absolute",top:12,right:12,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",backdropFilter:"blur(4px)"}}>
-          🎨 Cor da capa
+          style={{position:"absolute",bottom:14,left:"50%",transform:"translateX(-50%)",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:8,padding:"3px 10px",color:"rgba(255,255,255,0.7)",fontSize:10,fontWeight:600,cursor:"pointer"}}>
+          🎨
         </button>
-        {/* Picker de cores */}
-        {showColorPicker&&<div style={{position:"absolute",top:44,right:12,background:C.card,borderRadius:14,padding:12,boxShadow:"0 8px 24px rgba(0,0,0,0.2)",display:"flex",gap:8,flexWrap:"wrap",maxWidth:220,zIndex:10}}>
+        {showColorPicker&&<div style={{position:"absolute",bottom:40,left:"50%",transform:"translateX(-50%)",background:C.card,borderRadius:14,padding:12,boxShadow:"0 8px 24px rgba(0,0,0,0.2)",display:"flex",gap:8,flexWrap:"wrap",maxWidth:220,zIndex:10}}>
           {COVER_COLORS.map(cor=>(
             <button key={cor} onClick={()=>saveCoverColor(cor)}
               style={{width:32,height:32,borderRadius:8,background:cor,border:coverColor===cor?"3px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all .15s",boxShadow:coverColor===cor?"0 0 0 2px "+cor:"none"}}/>
           ))}
         </div>}
       </div>
+
       {/* Foto + info */}
       <div style={{background:C.card,padding:isMob?"0 16px 20px":"0 24px 24px",position:"relative",borderRadius:"0 0 20px 20px"}}>
-        <div style={{display:"flex",alignItems:"flex-end",gap:20,position:"relative",top:-70}}>
+        <div style={{display:"flex",alignItems:"flex-end",gap:20,position:"relative",top:-80}}>
           {/* Foto grande */}
-          <div style={{width:isMob?120:200,height:isMob?120:200,borderRadius:"50%",border:"4px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
+          <div style={{width:isMob?100:160,height:isMob?100:160,borderRadius:"50%",border:"4px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 16px rgba(0,0,0,0.2)"}}>
             {photo
               ?<img src={photo} alt={CURRENT_USER.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?48:72}}>{CURRENT_USER.av}</span>
+              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?40:60}}>{CURRENT_USER.av}</span>
             }
           </div>
           {/* Nome e cargo */}
-          <div style={{paddingBottom:8,flex:1,minWidth:0}}>
-            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?18:24,letterSpacing:-0.5}}>{CURRENT_USER.name}</div>
-            <div style={{color:C.ts,fontSize:13,marginTop:2}}>{CURRENT_USER.role}</div>
-            <div style={{color:C.td,fontSize:11,marginTop:4}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})} · {urgent.length>0?<span style={{color:C.rd,fontWeight:700}}>{urgent.length} urgente{urgent.length>1?"s":""}</span>:"Tudo sob controle"}</div>
+          <div style={{paddingBottom:12,flex:1,minWidth:0}}>
+            <div style={{color:C.td,fontSize:12,fontWeight:600,marginBottom:2}}>{greeting}</div>
+            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?24:32,letterSpacing:-1,lineHeight:1.1}}>{CURRENT_USER.name}</div>
+            <div style={{color:C.ts,fontSize:13,marginTop:4,fontWeight:500}}>{CURRENT_USER.role}</div>
+            <div style={{color:C.td,fontSize:11,marginTop:4}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
           </div>
         </div>
       </div>
@@ -15255,7 +15328,7 @@ export default function AgencyOS(){
     switch(page){
       case "clientes":              return effectivePerms.verClientes?<PageClientes isMob={isMob} perms={effectivePerms} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "meudash":
-      case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav}/>:<NoPerm/>;
+      case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)}/>:<NoPerm/>;
       case "demandas":
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
