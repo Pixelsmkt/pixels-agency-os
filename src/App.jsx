@@ -363,6 +363,43 @@ const NOTIF_STORE={
   ]
 };
 
+
+/* ─── Ícones SVG outline para o menu ─────── */
+const NavIcon=({id,size=18,color="currentColor"})=>{
+  const s={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"};
+  const icons={
+    // Casa — Dashboard
+    meudash:<svg {...s}><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>,
+    // Kanban — Demandas
+    demandas:<svg {...s}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>,
+    // Check num círculo — Aprovações
+    aprovacoes:<svg {...s}><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-5"/></svg>,
+    // Balão de diálogo — Chat
+    chat:<svg {...s}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
+    // Edifício — Clientes
+    clientes:<svg {...s}><rect x="2" y="7" width="20" height="15" rx="1"/><path d="M16 22V7M8 22V7"/><path d="M2 12h20"/><path d="M7 3h10l2 4H5l2-4z"/></svg>,
+    // Gráfico de barras — Análises
+    analises:<svg {...s}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>,
+    // Faísca — Pixels IA
+    ia:<svg {...s}><path d="M13 2L4.09 12.26a1 1 0 00.92 1.74H11l-1 8 8.91-10.26a1 1 0 00-.92-1.74H13l1-8z"/></svg>,
+    // Briefcase — Gestão
+    gestao:<svg {...s}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
+    // Cadeado — Acessos
+    acessos:<svg {...s}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/><circle cx="12" cy="16" r="1" fill={color}/></svg>,
+    // Bloco de notas — Interno
+    interno:<svg {...s}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>,
+    // Monitor — Portal
+    portal:<svg {...s}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>,
+    // Estrela / notif — Notificações
+    notificacoes:<svg {...s}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
+    // Gráfico — Financeiro
+    financeiro:<svg {...s}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6"/></svg>,
+  };
+  // fallback: quadrado simples
+  const el=icons[id]||(<svg {...s}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>);
+  return el;
+};
+
 /* ─── NAV ────────────────────────────────── */
 const NAV=[
   {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
@@ -14828,6 +14865,14 @@ export default function AgencyOS(){
   const [notifDrawer,setNotifDrawer] = useState(false);
   const [isMob,setIsMob]           = useState(()=>window.innerWidth<768);
   const [sideOpen,setSideOpen]     = useState(false);
+  const [sideCollapsed,setSideCollapsed] = useState(()=>{
+    try{return localStorage.getItem("pixels-sidebar-collapsed")==="1";}catch{return false;}
+  });
+  const toggleCollapse=()=>setSideCollapsed(v=>{
+    const next=!v;
+    try{localStorage.setItem("pixels-sidebar-collapsed",next?"1":"0");}catch(e){}
+    return next;
+  });
   const [showSelfProfile,setShowSelfProfile] = useState(false);
   const [selfProfileData,setSelfProfileData] = useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-selfprofile-"+CURRENT_USER.id)||"null");}catch{return null;}
@@ -15307,26 +15352,38 @@ export default function AgencyOS(){
       </div>
     </div>}
 
-    <aside style={{width:210,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none"}}>
-      <div style={{padding:"18px 14px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:34,height:34,borderRadius:12,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⬡</div>
-          <div><div style={{color:C.tx,fontWeight:900,fontSize:14,letterSpacing:-.5}}>Pixels</div><div style={{color:C.td,fontSize:9,letterSpacing:1}}>Agency OS · PRO</div></div>
-          {isMob&&<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>}
+    <aside style={{width:sideCollapsed&&!isMob?56:210,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"width .25s ease, left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none",overflow:"hidden"}}>
+      <div style={{padding:"14px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}>
+          <div style={{width:32,height:32,borderRadius:10,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>⬡</div>
+          {(!sideCollapsed||isMob)&&<div style={{flex:1,minWidth:0}}><div style={{color:C.tx,fontWeight:900,fontSize:13,letterSpacing:-.5,overflow:"hidden",whiteSpace:"nowrap"}}>Pixels</div><div style={{color:C.td,fontSize:9,letterSpacing:1}}>Agency OS · PRO</div></div>}
+          {isMob
+            ?<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>
+            :<button onClick={toggleCollapse} title={sideCollapsed?"Expandir menu":"Recolher menu"}
+              style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"4px",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"transform .25s",transform:sideCollapsed?"rotate(180deg)":"rotate(0deg)"}}
+              onMouseEnter={e=>e.currentTarget.style.color=C.a}
+              onMouseLeave={e=>e.currentTarget.style.color=C.td}>
+              ‹
+            </button>
+          }
         </div>
       </div>
       {/* ── Perfil no topo da sidebar ── */}
-      <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
+      <div style={{padding:"10px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
         <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
-          style={{width:"100%",display:"flex",alignItems:"center",gap:10,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"9px 12px",cursor:"pointer",transition:"all .15s",textAlign:"left"}}
+          title={sideCollapsed&&!isMob?CURRENT_USER.name+"
+"+CURRENT_USER.role:undefined}
+          style={{width:"100%",display:"flex",alignItems:"center",gap:8,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",transition:"all .15s",textAlign:"left",justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}
           onMouseEnter={e=>e.currentTarget.style.background=C.a+"18"}
           onMouseLeave={e=>e.currentTarget.style.background=C.s1}>
-          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={32} status="online" uid={CURRENT_USER.id}/>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{CURRENT_USER.name}</div>
-            <div style={{color:C.td,fontSize:10}}>{CURRENT_USER.role}</div>
-          </div>
-          <span style={{color:C.td,fontSize:11}}>✏️</span>
+          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={30} status="online" uid={CURRENT_USER.id}/>
+          {(!sideCollapsed||isMob)&&<>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{CURRENT_USER.name}</div>
+              <div style={{color:C.td,fontSize:10}}>{CURRENT_USER.role}</div>
+            </div>
+            <span style={{color:C.td,fontSize:11}}>✏️</span>
+          </>}
         </button>
       </div>
 
@@ -15339,30 +15396,40 @@ export default function AgencyOS(){
         {NAV_VISIBLE.map((n)=>{
           if(n.type==="divider") return(
             <div key={"div_"+n.label} style={{padding:"12px 10px 4px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{color:C.td,fontSize:9,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase"}}>{n.label}</span>
-              <div style={{flex:1,height:1,background:C.b1}}/>
+              {(!sideCollapsed||isMob)&&<span style={{color:C.td,fontSize:9,fontWeight:800,letterSpacing:"0.12em",textTransform:"uppercase"}}>{n.label}</span>}
+              {(!sideCollapsed||isMob)&&<div style={{flex:1,height:1,background:C.b1}}/>}
+              {sideCollapsed&&!isMob&&<div style={{width:"100%",height:1,background:C.b1}}/>}
             </div>
           );
           const isActive=page===n.id||(n.children&&n.children.some(c=>c.id===page));
           const hasChildren=n.children&&n.children.length>0;
           const isExpanded=hasChildren?(expanded[n.id]!==undefined?expanded[n.id]:isActive):false;
+          const isAprOrange=n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive;
+          const btnBg=isAprOrange?"#f97316":isActive?C.ag:"none";
+          const btnColor=isAprOrange?"#fff":isActive?C.a:C.ts;
           return(<div key={n.id}>
             <button onClick={()=>{
+              if(sideCollapsed&&!isMob){setSideCollapsed(false);try{localStorage.setItem("pixels-sidebar-collapsed","0");}catch(e){}}
               if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded)nav(n.children[0].id);}
               else nav(n.id);
-            }} style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 10px",borderRadius:10,border:"none",background:n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive?"#f97316":isActive?C.ag:"none",color:n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive?"#fff":isActive?C.a:C.ts,cursor:"pointer",fontWeight:isActive||( n.id==="aprovacoes"&&pendingAprovacoes>0)?700:500,fontSize:12,marginBottom:2,textAlign:"left",transition:"all .15s"}}>
-              <span style={{display:"flex",alignItems:"center",gap:9}}><span style={{fontSize:15}}>{n.icon}</span>{n.label}</span>
-              <span style={{display:"flex",alignItems:"center",gap:4}}>
-                {n.id==="notificacoes"&&unreadNotifs>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{unreadNotifs}</span>}
-                {n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive&&<span style={{background:"rgba(255,255,255,0.25)",color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{pendingAprovacoes}</span>}
-                {hasChildren&&<span style={{color:n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive?"rgba(255,255,255,0.8)":C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
+            }}
+            title={sideCollapsed&&!isMob?n.label:undefined}
+            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:sideCollapsed&&!isMob?"center":"space-between",padding:"9px 8px",borderRadius:10,border:"none",background:btnBg,color:btnColor,cursor:"pointer",fontWeight:isActive||isAprOrange?700:500,fontSize:12,marginBottom:2,textAlign:"left",transition:"all .15s"}}>
+              <span style={{display:"flex",alignItems:"center",gap:8}}>
+                <NavIcon id={n.id} size={18} color={btnColor}/>
+                {(!sideCollapsed||isMob)&&<span>{n.label}</span>}
               </span>
+              {(!sideCollapsed||isMob)&&<span style={{display:"flex",alignItems:"center",gap:4}}>
+                {n.id==="notificacoes"&&unreadNotifs>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{unreadNotifs}</span>}
+                {isAprOrange&&<span style={{background:"rgba(255,255,255,0.25)",color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{pendingAprovacoes}</span>}
+                {hasChildren&&<span style={{color:isAprOrange?"rgba(255,255,255,0.8)":C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
+              </span>}
             </button>
-            {hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
+            {(!sideCollapsed||isMob)&&hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
               {n.children.map(child=>(
                 <button key={child.id} onClick={()=>nav(child.id)}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:400,fontSize:11,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
-                  <span style={{fontSize:12}}>{child.icon}</span>{child.label}
+                  <NavIcon id={child.id} size={14} color={page===child.id?C.a:C.ts}/><span style={{marginLeft:2}}>{child.label}</span>
                 </button>
               ))}
             </div>}
@@ -15370,7 +15437,7 @@ export default function AgencyOS(){
         })}
       </nav>
       <div style={{padding:"10px 14px",borderTop:`1px solid ${C.b1}`,flexShrink:0}}>
-        <div style={{display:"flex",gap:4,marginBottom:10}}>
+        {(!sideCollapsed||isMob)&&<div style={{display:"flex",gap:4,marginBottom:10}}>
           {Object.entries(THEMES).map(([key,t])=>(
             <button key={key} onClick={()=>{applyTheme(key);setThemeKey(key);}} title={t.name}
               style={{flex:1,background:themeKey===key?C.a+"22":"none",border:`1px solid ${themeKey===key?C.a:C.b1}`,borderRadius:8,padding:"5px 0",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
@@ -15378,7 +15445,7 @@ export default function AgencyOS(){
               <span style={{fontSize:8,color:themeKey===key?C.a:C.td,fontWeight:themeKey===key?700:400}}>{t.name}</span>
             </button>
           ))}
-        </div>
+        </div>}
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <button onClick={()=>setNotifDrawer(v=>!v)} title="Notificações"
             style={{position:"relative",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:15,padding:2,lineHeight:1,flexShrink:0}}
