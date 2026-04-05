@@ -7666,7 +7666,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
     const base={
       title:aiResult.titulo||"Demanda Pixels IA",
       desc:`${aiResult.descricao||""}\n\n📐 Formato: ${aiResult.formato||""}\n🎯 Objetivo: ${aiResult.objetivo||""}\n⚠ Atenção: ${aiResult.pontos_atencao||""}`,
-      client:client||"interno",sector:"design",priority,status:"demanda",
+      client:client||"interno",sector:"",priority:"",status:"demanda",
       startDate:new Date().toISOString().split("T")[0],deadline,
       completedAt:null,score:null,tags:[...(aiResult.tags||[]),"pixels-ia"],
       comments:[{id:Date.now(),user:"Pixels IA",av:"⚡",color:C.a,text:`💡 Ideia: "${idea||"Áudio enviado"}"`,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}],
@@ -8197,7 +8197,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const newTask={
       id:mkId(),title:titleStr||"Nova Demanda",desc:"",
       assignee:respId,assignees:[respId],watchers:[],
-      client:"",sector:"design",priority:"media",status:colId,
+      client:"",sector:"",priority:"",status:colId,
       startDate:now.toISOString().split("T")[0],
       deadline:new Date(Date.now()+7*86400000).toISOString().split("T")[0],
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
@@ -12806,78 +12806,29 @@ function PagePontuacao({tasks}){
 
 // ======= 11_cardmodal.jsx =======
 
-// Aplica formatação markdown na seleção da textarea
-function applyFmt(ta,before,after,onChange){
-  if(!ta)return;
-  const s=ta.selectionStart;const e=ta.selectionEnd;
-  const val=ta.value;
-  const sel=val.substring(s,e);
-  const ins=before+(sel||"texto")+after;
-  const nv=val.substring(0,s)+ins+val.substring(e);
-  onChange(nv);
-  setTimeout(()=>{
-    ta.focus();
-    const newCur=s+before.length+(sel?sel.length:"texto".length);
-    ta.setSelectionRange(sel?s+before.length:s+before.length,newCur);
-  },10);
-}
-
-function RichToolbar({taRef,onChange}){
-  const btn=(icon,before,after,title)=>(
-    <button type="button" title={title} onClick={()=>applyFmt(taRef.current,before,after,onChange)}
-      style={{background:"none",border:"none",borderRadius:6,padding:"4px 7px",cursor:"pointer",color:"#64748b",fontSize:13,fontWeight:700,lineHeight:1}}
+function RichToolbar({elRef}){
+  const exec=(cmd,val)=>{
+    if(elRef.current){elRef.current.focus();}
+    try{document.execCommand(cmd,false,val||null);}catch(e){}
+  };
+  const btn=(content,cmd,val,title)=>(
+    <button type="button" title={title}
+      onMouseDown={e=>{e.preventDefault();exec(cmd,val);}}
+      style={{background:"none",border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 8px",cursor:"pointer",color:"#475569",fontSize:12,fontWeight:700,lineHeight:1.4,minWidth:28}}
       onMouseEnter={e=>e.currentTarget.style.background="#f1f5f9"}
       onMouseLeave={e=>e.currentTarget.style.background="none"}>
-      {icon}
+      {content}
     </button>
   );
-  const addChecklist=()=>{
-    const ta=taRef.current;if(!ta)return;
-    const s=ta.selectionStart;const val=ta.value;
-    const ins="\n☐ Item\n☐ Item\n";
-    const nv=val.slice(0,s)+ins+val.slice(s);
-    onChange(nv);
-    setTimeout(()=>{ta.focus();ta.setSelectionRange(s+3,s+7);},0);
-  };
-  return <div style={{display:"flex",gap:2,padding:"4px 8px",background:"#f8fafc",borderRadius:"8px 8px 0 0",borderBottom:"1px solid #e2e8f0",flexWrap:"wrap"}}>
-    {btn(<b>B</b>,"**","**","Negrito")}
-    {btn(<i>I</i>,"_","_","Itálico")}
-    {btn(<s>S</s>,"~~","~~","Tachado")}
-    {btn("🔗","[","](url)","Link")}
-    <div style={{width:1,background:"#e2e8f0",margin:"2px 4px"}}/>
-    {btn("H1","# ","","Título")}
-    {btn("H2","## ","","Subtítulo")}
-    {btn("—","---\n","","Divisor")}
-    <div style={{width:1,background:"#e2e8f0",margin:"2px 4px"}}/>
-    <button type="button" title="Checklist" onClick={addChecklist}
-      style={{background:"none",border:"none",borderRadius:6,padding:"4px 7px",cursor:"pointer",color:"#64748b",fontSize:12,fontWeight:700}}
-      onMouseEnter={e=>e.currentTarget.style.background="#f1f5f9"}
-      onMouseLeave={e=>e.currentTarget.style.background="none"}>
-      ☑ Lista
-    </button>
-    {btn("• ","- ","","Bullet")}
-    {btn("1. ","1. ","","Numerada")}
+  return <div style={{display:"flex",gap:4,padding:"5px 10px",background:"#f8fafc",borderRadius:"8px 8px 0 0",borderBottom:"1px solid #e2e8f0",flexWrap:"wrap",alignItems:"center"}}>
+    {btn(<b style={{fontWeight:900}}>N</b>,"bold",null,"Negrito")}
+    {btn(<i>I</i>,"italic",null,"Itálico")}
+    {btn(<u>S</u>,"underline",null,"Sublinhado")}
+    <div style={{width:1,background:"#e2e8f0",margin:"0 2px",height:16}}/>
+    {btn("• ","insertUnorderedList",null,"Lista")}
+    {btn("1.","insertOrderedList",null,"Numerada")}
   </div>;
 }
-
-const renderDesc=(text)=>{
-  if(!text)return null;
-  return text.split("\n").map((line,i)=>{
-    if(line.startsWith("# "))return <div key={i} style={{fontWeight:800,fontSize:15,color:"#1e293b",marginTop:4}}>{line.slice(2)}</div>;
-    if(line.startsWith("## "))return <div key={i} style={{fontWeight:700,fontSize:13,color:"#334155",marginTop:3}}>{line.slice(3)}</div>;
-    if(line==="---")return <hr key={i} style={{border:"none",borderTop:"1px solid #e2e8f0",margin:"6px 0"}}/>;
-    if(line.startsWith("☐ ")||line.startsWith("☑ ")){
-      const done=line.startsWith("☑ ");
-      return <div key={i} style={{display:"flex",alignItems:"center",gap:6,margin:"2px 0"}}>
-        <span style={{fontSize:14,color:done?"#22c55e":"#94a3b8"}}>{done?"☑":"☐"}</span>
-        <span style={{color:done?"#94a3b8":"#334155",textDecoration:done?"line-through":"none",fontSize:12}}>{line.slice(2)}</span>
-      </div>;
-    }
-    if(line.startsWith("- "))return <div key={i} style={{display:"flex",gap:6,margin:"1px 0"}}><span style={{color:"#94a3b8",fontSize:11,marginTop:2}}>•</span><span style={{color:"#475569",fontSize:12}}>{line.slice(2)}</span></div>;
-    let parts=line.replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/_(.+?)_/g,"<i>$1</i>").replace(/~~(.+?)~~/g,"<s>$1</s>");
-    return <div key={i} style={{color:"#475569",fontSize:12,lineHeight:1.6,minHeight:4}} dangerouslySetInnerHTML={{__html:parts||"&nbsp;"}}/>;
-  });
-};
 
 /* ─── Constantes e helpers de módulo — CardModal ─── */
 const nowFmt=()=>{const d=new Date();return d.toLocaleDateString("pt-BR")+` às ${d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`;};
@@ -12956,12 +12907,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
     return 2026;
   });
-  const [calMonth,setCalMonth]=useState(()=>{
-    if(typeof deadline==="string"&&deadline.length===10){
-      const [y,m]=deadline.split("-");return new Date(parseInt(y),parseInt(m)-1,1);
-    }
-    return new Date(2026,new Date().getMonth(),1);
-  });
   const [bioterUnit,setBioterUnit]=useState(task.bioterUnit||"chapeco");
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
@@ -12972,8 +12917,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [showUnsavedDialog,setShowUnsavedDialog]=useState(false);
   const [lightbox,setLightbox]=useState(null); // {url, name}
   const [conclusionStep,setConclusionStep]=useState(null);
-  const [isEditingText,setIsEditingText]=useState(false);
-  const backdropClickRef=useRef(0); // conta cliques no backdrop enquanto editando
   const [showAssigneesPicker,setShowAssigneesPicker]=useState(false);
   const [publishDate,setPublishDate]=useState(task.publishDate||"");
   const [publishTime,setPublishTime]=useState(task.publishTime||"09:00");
@@ -13013,6 +12956,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const fileInputRef=useRef(null);
   const descRef=useRef(null);
   const captionRef=useRef(null);
+  // Inicializa contenteditable com conteúdo salvo (sem dangerouslySetInnerHTML)
+  useEffect(()=>{
+    if(descRef.current&&desc&&!descRef.current.innerHTML){
+      descRef.current.innerHTML=desc;
+    }
+    if(captionRef.current&&caption&&!captionRef.current.innerHTML){
+      captionRef.current.innerHTML=caption;
+    }
+  },[]);
   const isAssigned=(Array.isArray(task.assignees)?task.assignees:task.assignee?[task.assignee]:[]).includes(user.id);
   // Usa cardPerms (livePerms injetado pelo pai) — sempre atualizado em tempo real
   const userPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
@@ -13037,15 +12989,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   },[title,desc,assignees,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,task]);
 
   const handleClose=useCallback(()=>{
-    // Se há campo de texto ativo dentro do modal, primeiro clique só tira foco
-    const active=document.activeElement;
-    if(active&&(active.tagName==="TEXTAREA"||active.tagName==="INPUT")&&active.closest("[data-cardmodal]")){
-      active.blur();
-      return;
-    }
     if(hasChanges()){setShowUnsavedDialog(true);}
     else{onClose();}
-  },[hasChanges,onClose,isEditingText]);
+  },[hasChanges,onClose]);
 
   const save=()=>{
     // Validações obrigatórias
@@ -13184,10 +13130,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     setShowMovePrompt(false);
   };
 
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto",backdropFilter:"blur(6px)"}} onClick={handleClose}>
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto",backdropFilter:"blur(6px)"}} onMouseDown={handleClose}>
 
     {/* ── MOVER PARA EM EXECUÇÃO ── */}
-    {showMovePrompt&&<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}>
+    {showMovePrompt&&<div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}>
       <div style={{background:"#fff",borderRadius:20,padding:"32px 36px",maxWidth:400,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.3)",textAlign:"center"}}>
         <div style={{width:56,height:56,borderRadius:18,background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 16px"}}>⚡</div>
         <div style={{color:"#0f172a",fontWeight:900,fontSize:18,marginBottom:8,letterSpacing:-.3}}>Mover para Em Execucao</div>
@@ -13220,7 +13166,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>}
 
-    {showUnsavedDialog&&<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
+    {showUnsavedDialog&&<div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
       <div style={{background:"#fff",borderRadius:18,padding:"28px 32px",maxWidth:360,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.25)",textAlign:"center"}}>
         <div style={{fontSize:32,marginBottom:12}}>💾</div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:8}}>Deseja salvar sua alteração?</div>
@@ -13239,7 +13185,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     </div>}
 
     {/* ── CONCLUSION STEP 1 ── */}
-    {conclusionStep===1&&<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
+    {conclusionStep===1&&<div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
       <div style={{background:"#fff",borderRadius:18,padding:"28px 32px",maxWidth:380,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.25)",textAlign:"center"}}>
         <div style={{fontSize:36,marginBottom:12}}>✅</div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:8}}>Tem certeza que concluiu a demanda?</div>
@@ -13258,7 +13204,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     </div>}
 
     {/* ── CONCLUSION STEP 2 ── */}
-    {conclusionStep===2&&<div onClick={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
+    {conclusionStep===2&&<div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
       <div style={{background:"#fff",borderRadius:18,padding:"28px 32px",maxWidth:380,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.25)",textAlign:"center"}}>
         <div style={{fontSize:36,marginBottom:12}}>📤</div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:8}}>Posso encaminhar o cartão para avaliação?</div>
@@ -13276,7 +13222,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>}
 
-    <div data-cardmodal onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:8}}>
+    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:8}}>
 
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
@@ -13482,13 +13428,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               );
             })()}
             <div>
-              {canEdit&&<RichToolbar taRef={descRef} onChange={setDesc}/>}
-              <textarea value={desc} onChange={e=>setDesc(e.target.value)} disabled={!canEdit} rows={9}
+              {canEdit&&<RichToolbar elRef={descRef}/>}
+              <div
                 ref={descRef}
-                onFocus={()=>setIsEditingText(true)}
-                onBlur={()=>setIsEditingText(false)}
-                placeholder="Descrição, briefing, detalhes da demanda..."
-                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,resize:"vertical",outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:160,background:"#f8fafc"}}/>
+                contentEditable={canEdit}
+                suppressContentEditableWarning
+                onBlur={e=>setDesc(e.currentTarget.innerHTML)}
+                onMouseDown={e=>e.stopPropagation()}
+                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
               {canEdit&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
                 <button onClick={save}
                   style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 20px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
@@ -13656,20 +13603,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>Legenda da publicação</span>
                 {caption&&<span style={{marginLeft:"auto",background:"#dcfce7",color:"#16a34a",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700}}>✓ Preenchida</span>}
               </div>
-              {canEdit&&<RichToolbar taRef={captionRef} onChange={setCaption}/>}
-              <textarea
-                value={caption}
-                onChange={e=>setCaption(e.target.value)}
-                disabled={!canEdit}
+              {canEdit&&<RichToolbar elRef={captionRef}/>}
+              <div
                 ref={captionRef}
-                onFocus={()=>setIsEditingText(true)}
-                onBlur={()=>setIsEditingText(false)}
-                placeholder={"Escreva aqui a legenda final que será publicada nas redes sociais do cliente...\n\nExemplo:\n🌿 Sua saúde começa no campo!\n\nConheça nossa linha completa de produtos...\n\n#hashtag1 #hashtag2"}
-                rows={10}
-                style={{width:"100%",border:"none",padding:"14px 16px",color:"#1e293b",fontSize:13,lineHeight:1.8,resize:"vertical",outline:"none",fontFamily:"inherit",boxSizing:"border-box",minHeight:220,background:"transparent"}}/>
+                contentEditable={canEdit}
+                suppressContentEditableWarning
+                onBlur={e=>setCaption(e.currentTarget.innerHTML)}
+                onMouseDown={e=>e.stopPropagation()}
+                style={{width:"100%",border:"none",padding:"14px 16px",color:"#1e293b",fontSize:13,lineHeight:1.8,outline:"none",fontFamily:"inherit",boxSizing:"border-box",minHeight:220,background:"transparent",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{color:"#94a3b8",fontSize:10}}>{caption.length} caracteres</span>
+              <span style={{color:"#94a3b8",fontSize:10}}>{caption.replace(/<[^>]*>/g,"").length} caracteres</span>
               {canEdit&&<button onClick={save}
                 style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",color:"#fff",border:"none",borderRadius:9,padding:"8px 20px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
                 💾 Salvar legenda
@@ -13906,7 +13850,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
           {!isAgendado&&<div style={{position:"relative"}}>
             <label style={LB}>👤 Responsáveis</label>
-            <button onClick={()=>{if(canEdit){setShowAssigneesPicker(v=>!v);setShowWatchersPicker(false);}}}
+            <button onClick={()=>{if(canEdit){setShowAssigneesPicker(v=>!v);}}}
               style={{...SI,display:"flex",alignItems:"center",gap:6,cursor:canEdit?"pointer":"default",textAlign:"left",padding:"7px 10px"}}>
               {assignees.length===0
                 ? <span style={{color:"#94a3b8",flex:1}}>Selecionar responsável...</span>
