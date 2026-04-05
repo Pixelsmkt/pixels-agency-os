@@ -9502,6 +9502,10 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
         .single();
 
       if(findErr||!profileRow){
+        // Perfil não existe — tenta fazer upsert pelo team_id diretamente
+        await _sb
+          .from("profiles")
+          .upsert({team_id:user.id, name:user.name, permissions:perms},{onConflict:"team_id"});
         flashSaved();
         return;
       }
