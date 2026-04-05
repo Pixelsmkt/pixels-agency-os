@@ -8047,6 +8047,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     agendado:  !!myPerms.colAgendado,
     publicado: !!myPerms.colPublicado,
     pausado:   !!myPerms.colPausado,
+    ajuste:    !!myPerms.colAjuste,
   };
   // isAdmin: sócios e quem tem verTodosKanban veem tudo
   const isAdmin=myPerms.verTodosKanban||activeUser.level===1;
@@ -9693,6 +9694,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   // Copy queue: cards in "demanda" without ajustar flag
   const copyQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"&&!t.ajustar);
+  // Ajuste queue: cards marcados para ajuste
+  const ajusteQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado");
   // Publication queue: cards in "avaliacao"
   const pubQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.status==="avaliacao");
 
@@ -9766,7 +9769,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     setCardIdx(0);setImgIdx(0);setEditModal(null);
   };
 
-  const queue=tab==="copys"?copyQueue:pubQueue;
+  const queue=tab==="copys"?copyQueue:tab==="ajuste"?ajusteQueue:pubQueue;
   // FIX 4: clamp seguro — se queue vazia, current fica undefined
   const clampedIdx=queue.length>0?Math.min(cardIdx,queue.length-1):0;
   const current=queue[clampedIdx]||null;
@@ -9784,9 +9787,11 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     ...(current.files||[]).filter(f=>f.type&&f.type.startsWith("image/")).map(f=>f.url),
   ].filter(Boolean):[];
 
+  const isSocio=CURRENT_USER.level===1;
   const TABS=[
-    {id:"copys",      label:"Aprovação de Copys",      count:copyQueue.length, color:C.a},
-    {id:"publicacao", label:"Aprovação de Publicação", count:pubQueue.length,  color:C.gr},
+    {id:"copys",      label:"Aprovação de Copys",      count:copyQueue.length,  color:C.a},
+    {id:"publicacao", label:"Aprovação de Publicação", count:pubQueue.length,   color:C.gr},
+    ...((perms?.verAprAjuste||isSocio)?[{id:"ajuste", label:"Ajustes Solicitados", count:ajusteQueue.length, color:C.or}]:[]),
   ];
 
   return (<div style={{display:"flex",flexDirection:"column",gap:16}}>
