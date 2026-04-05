@@ -9948,6 +9948,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
   const [search,setSearch]=useState("");
   const [filterLevel,setFilterLevel]=useState(0);
   const isPartner=CURRENT_USER.level===1;
+  const myPerms={...DEFAULT_PERMS,...(ACCESS_STORE[CURRENT_USER.id]||{})};
   const [collabProfiles,setCollabProfiles]=useState(()=>{
     // Carrega perfis do localStorage como cache inicial
     const out={};
@@ -10251,7 +10252,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
                 onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
                 👤
               </button>
-              {isPartner&&(<button onClick={()=>onViewAs&&onViewAs(u.id)}
+              {(isPartner||myPerms?.verDashOutros)&&(<button onClick={()=>onViewAs&&onViewAs(u.id)}
                 title={"Ver como "+u.name} style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.ts}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"18";e.currentTarget.style.color=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
@@ -14612,9 +14613,9 @@ export default function AgencyOS(){
       case "chat":                 return p.verChat;
       case "clientes":             return p.verClientes;
       case "analises":
-      case "analises_producao":
-      case "analises_gargalos":
-      case "relatorios":           return p.verAnalises||isSocio;
+      case "analises_producao":    return (p.verAnalises&&p.verAnaliseProd)||isSocio;
+      case "analises_gargalos":    return (p.verAnalises&&p.verAnaliseGarg)||isSocio;
+      case "relatorios":           return (p.verAnalises&&p.verRelatorio)||isSocio;
       case "ia":
       case "ia_diagnostico":
       case "ia_churn":
@@ -14637,12 +14638,12 @@ export default function AgencyOS(){
       case "capacidade_onboarding":return p.verFinanceiro||isSocio;
       case "acessos":              return p.verAcessos||isSocio;
       case "interno":
-      case "interno_calendario":
-      case "interno_pontuacao":
-      case "interno_mapeamento":
-      case "interno_conexoes":
-      case "interno_360":
-      case "interno_carreira":     return p.verInterno||isSocio;
+      case "interno_calendario":   return p.verInterno||isSocio;
+      case "interno_pontuacao":    return (p.verInterno&&p.verPontuacao)||isSocio;
+      case "interno_mapeamento":   return (p.verInterno&&p.verMapeamento)||isSocio;
+      case "interno_conexoes":     return (p.verInterno&&p.verConexoes)||isSocio;
+      case "interno_360":          return (p.verInterno&&p.verAvaliacao360)||isSocio;
+      case "interno_carreira":     return (p.verInterno&&p.verCarreira)||isSocio;
       default:                     return true;
     }
   };
@@ -14682,9 +14683,9 @@ export default function AgencyOS(){
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "analises":
-      case "analises_producao":     return (effectivePerms.verAnalises||isSocio)?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
-      case "analises_gargalos":     return (effectivePerms.verAnalises||isSocio)?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
-      case "relatorios":            return (effectivePerms.verAnalises||isSocio)?<PageRelatorio {...p} tasks={tasks}/>:<NoPerm/>;
+      case "analises_producao":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseProd)||isSocio?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
+      case "analises_gargalos":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseGarg)||isSocio?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
+      case "relatorios":            return (effectivePerms.verAnalises&&effectivePerms.verRelatorio)||isSocio?<PageRelatorio {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao":
       case "contratos_lista":       return (effectivePerms.verFinanceiro||isSocio)?<PageContratos {...p}/>:<NoPerm/>;
       case "ia":
@@ -14700,7 +14701,13 @@ export default function AgencyOS(){
       case "portal_chat":
       case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno":
+      case "interno":
       case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
+      case "interno_pontuacao":     return (effectivePerms.verInterno&&effectivePerms.verPontuacao)||isSocio?<PagePontuacao {...p} tasks={tasks}/>:<NoPerm/>;
+      case "interno_mapeamento":    return (effectivePerms.verInterno&&effectivePerms.verMapeamento)||isSocio?<PageMapeamento {...p}/>:<NoPerm/>;
+      case "interno_conexoes":      return (effectivePerms.verInterno&&effectivePerms.verConexoes)||isSocio?<PageConexoes {...p}/>:<NoPerm/>;
+      case "interno_360":           return (effectivePerms.verInterno&&effectivePerms.verAvaliacao360)||isSocio?<PageAvaliacao360 {...p}/>:<NoPerm/>;
+      case "interno_carreira":      return (effectivePerms.verInterno&&effectivePerms.verCarreira)||isSocio?<PageCarreira {...p} tasks={tasks}/>:<NoPerm/>;
       case "notificacoes":          return <PageNotificacoes notifs={notifs} setNotifs={setNotifs}/>;
       default:                      return <NoPerm/>;
     }
