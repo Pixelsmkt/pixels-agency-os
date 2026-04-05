@@ -12943,6 +12943,25 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [filesTab,setFilesTab]=useState("lista");
   const [cover,setCover]=useState(task.cover||null);
   const [showCoverPicker,setShowCoverPicker]=useState(false);
+  const [showCalendar,setShowCalendar]=useState(false);
+  const [calViewMonth,setCalViewMonth]=useState(()=>{
+    if(typeof task.deadline==='string'&&task.deadline){
+      return parseInt(task.deadline.split('-')[1])-1;
+    }
+    return new Date().getMonth();
+  });
+  const [calViewYear,setCalViewYear]=useState(()=>{
+    if(typeof task.deadline==='string'&&task.deadline){
+      return parseInt(task.deadline.split('-')[0]);
+    }
+    return 2026;
+  });
+  const [calMonth,setCalMonth]=useState(()=>{
+    if(typeof deadline==="string"&&deadline.length===10){
+      const [y,m]=deadline.split("-");return new Date(parseInt(y),parseInt(m)-1,1);
+    }
+    return new Date(2026,new Date().getMonth(),1);
+  });
   const [bioterUnit,setBioterUnit]=useState(task.bioterUnit||"chapeco");
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
@@ -12953,6 +12972,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [showUnsavedDialog,setShowUnsavedDialog]=useState(false);
   const [lightbox,setLightbox]=useState(null); // {url, name}
   const [conclusionStep,setConclusionStep]=useState(null);
+  const [isEditingText,setIsEditingText]=useState(false);
+  const backdropClickRef=useRef(0); // conta cliques no backdrop enquanto editando
   const [showAssigneesPicker,setShowAssigneesPicker]=useState(false);
   const [publishDate,setPublishDate]=useState(task.publishDate||"");
   const [publishTime,setPublishTime]=useState(task.publishTime||"09:00");
@@ -13016,9 +13037,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   },[title,desc,assignees,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,task]);
 
   const handleClose=useCallback(()=>{
+    // Se há campo de texto ativo dentro do modal, primeiro clique só tira foco
+    const active=document.activeElement;
+    if(active&&(active.tagName==="TEXTAREA"||active.tagName==="INPUT")&&active.closest("[data-cardmodal]")){
+      active.blur();
+      return;
+    }
     if(hasChanges()){setShowUnsavedDialog(true);}
     else{onClose();}
-  },[hasChanges,onClose]);
+  },[hasChanges,onClose,isEditingText]);
 
   const save=()=>{
     // Validações obrigatórias
@@ -13249,7 +13276,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>}
 
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:8}}>
+    <div data-cardmodal onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:8}}>
 
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
@@ -13267,7 +13294,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>
             <input value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit}
               style={{width:"100%",border:"none",outline:"none",fontSize:20,fontWeight:800,color:"#0f172a",background:"transparent",padding:0,lineHeight:1.3}}
-              placeholder="Título da demanda"/>
+              placeholder="Título da demanda"
+              onFocus={()=>setIsEditingText(true)}
+              onBlur={()=>setIsEditingText(false)}/>
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"flex-start",position:"relative"}}>
             {/* Cor de Capa — compact swatch button */}
@@ -13456,6 +13485,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {canEdit&&<RichToolbar taRef={descRef} onChange={setDesc}/>}
               <textarea value={desc} onChange={e=>setDesc(e.target.value)} disabled={!canEdit} rows={9}
                 ref={descRef}
+                onFocus={()=>setIsEditingText(true)}
+                onBlur={()=>setIsEditingText(false)}
                 placeholder="Descrição, briefing, detalhes da demanda..."
                 style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,resize:"vertical",outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:160,background:"#f8fafc"}}/>
               {canEdit&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
@@ -13603,6 +13634,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <div style={{flex:1}}>
                   <textarea value={comment} onChange={e=>setComment(e.target.value)}
                     onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();addComment();}}}
+                    onFocus={()=>setIsEditingText(true)}
+                    onBlur={()=>setIsEditingText(false)}
                     placeholder="Comentar... (Enter para enviar)" rows={2}
                     style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 12px",color:"#1e293b",fontSize:12,outline:"none",resize:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
                 </div>
@@ -13629,6 +13662,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 onChange={e=>setCaption(e.target.value)}
                 disabled={!canEdit}
                 ref={captionRef}
+                onFocus={()=>setIsEditingText(true)}
+                onBlur={()=>setIsEditingText(false)}
                 placeholder={"Escreva aqui a legenda final que será publicada nas redes sociais do cliente...\n\nExemplo:\n🌿 Sua saúde começa no campo!\n\nConheça nossa linha completa de produtos...\n\n#hashtag1 #hashtag2"}
                 rows={10}
                 style={{width:"100%",border:"none",padding:"14px 16px",color:"#1e293b",fontSize:13,lineHeight:1.8,resize:"vertical",outline:"none",fontFamily:"inherit",boxSizing:"border-box",minHeight:220,background:"transparent"}}/>
@@ -13864,7 +13899,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <label style={LB}>Setor</label>
             <select value={sector} onChange={e=>setSector(e.target.value)} disabled={!canEdit}
               style={{...SI,borderColor:!sector?"#fca5a5":undefined,background:!sector?"#fff7f7":undefined}}>
-              <option value="">— Selecione o setor * —</option>
+              <option value="">Selecione o setor</option>
               {SECTORS.map(s=><option key={s} value={s}>{SECTOR_LABELS[s]}</option>)}
             </select>
           </div>}
@@ -13876,7 +13911,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {assignees.length===0
                 ? <span style={{color:"#94a3b8",flex:1}}>Selecionar responsável...</span>
                 : <div style={{display:"flex",alignItems:"center",gap:4,flex:1,minWidth:0,flexWrap:"wrap"}}>
-                    {assignees.map(aid=>{const au=TEAM.find(u=>u.id===aid);return au?<span key={aid} style={{background:au.color+"18",color:au.color,borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{au.name}</span>:null;})}
+                    {assignees.map(aid=>{const au=TEAM.find(u=>u.id===aid);return au?<span key={aid} style={{background:"#e8edf2",color:"#1e293b",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{au.name}</span>:null;})}
                   </div>
               }
               <span style={{color:"#94a3b8",fontSize:11,flexShrink:0,marginLeft:"auto"}}>▾</span>
@@ -13888,7 +13923,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",border:"none",borderTop:i>0?"1px solid #f8fafc":"none",background:sel?"#eef2ff":"#fff",cursor:"pointer",textAlign:"left",transition:"background .1s"}}>
                   <div style={{width:24,height:24,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:9,flexShrink:0}}>{u.av}</div>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:sel?"#4338ca":"#1e293b",fontSize:12,fontWeight:sel?700:400}}>{u.name}</div>
+                    <div style={{color:"#1e293b",fontSize:12,fontWeight:sel?700:400}}>{u.name}</div>
                     <div style={{color:"#94a3b8",fontSize:10}}>{u.role}</div>
                   </div>
                   <div style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${sel?"#6366f1":"#cbd5e1"}`,background:sel?"#6366f1":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -13906,7 +13941,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <label style={LB}>Cliente</label>
             <select value={client} onChange={e=>setClient(e.target.value)} disabled={!canEdit}
               style={{...SI,borderColor:!client?"#fca5a5":undefined,background:!client?"#fff7f7":undefined}}>
-              <option value="">— Selecione o cliente * —</option>
+              <option value="">Selecione o cliente</option>
               {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
             {client==="bioter"&&<><label style={{...LB,marginTop:8}}>Unidade Bioter</label>
@@ -13922,7 +13957,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <label style={LB}>Prioridade</label>
               <select value={priority} onChange={e=>setPriority(e.target.value)} disabled={!canEdit}
                 style={{...SI,borderColor:!priority?"#fca5a5":priority==="alta"?"#fecaca":priority==="media"?"#fef08a":"#bbf7d0",background:!priority?"#fff7f7":priority==="alta"?"#fff1f2":priority==="media"?"#fefce8":"#f0fdf4",color:!priority?"#94a3b8":priority==="alta"?"#be123c":priority==="media"?"#854d0e":"#15803d",fontWeight:700}}>
-                <option value="">— Prioridade * —</option>
+                <option value="">Selecione a prioridade</option>
                 <option value="baixa">🟢 Baixa</option>
                 <option value="media">🟡 Média</option>
                 <option value="alta">🔴 Alta</option>
@@ -13930,26 +13965,73 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>
             <div>
               <label style={LB}>Prazo</label>
-              {canEdit
-                ? <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                    <select
-                      value={deadline?deadline.split("-")[2]:""}
-                      onChange={e=>{const d=e.target.value;const m=deadline?deadline.split("-")[1]:"01";setDeadline(d?"2026-"+m+"-"+d:"");}}
-                      style={{...SI,flex:1}}>
-                      <option value="">Dia</option>
-                      {Array.from({length:31},(_,i)=>String(i+1).padStart(2,"0")).map(d=><option key={d} value={d}>{d}</option>)}
-                    </select>
-                    <select
-                      value={deadline?deadline.split("-")[1]:""}
-                      onChange={e=>{const m=e.target.value;const d=deadline?deadline.split("-")[2]:"01";setDeadline(m?"2026-"+m+"-"+d:"");}}
-                      style={{...SI,flex:1}}>
-                      <option value="">Mês</option>
-                      {["01","02","03","04","05","06","07","08","09","10","11","12"].map((m,i)=><option key={m} value={m}>{["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][i]}</option>)}
-                    </select>
-                    <span style={{color:"#94a3b8",fontSize:12,fontWeight:700,flexShrink:0}}>2026</span>
-                  </div>
-                : <div style={SI}>{deadline?deadline.split("-")[2]+"/"+deadline.split("-")[1]+"/2026":"—"}</div>
-              }
+              {(()=>{
+                const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+                const DIAS_SEMANA=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+                const firstDay=new Date(calViewYear,calViewMonth,1).getDay();
+                const daysInMonth=new Date(calViewYear,calViewMonth+1,0).getDate();
+                const selDay=deadline?parseInt(deadline.split("-")[2]):null;
+                const selMonth=deadline?parseInt(deadline.split("-")[1])-1:null;
+                const selYear=deadline?parseInt(deadline.split("-")[0]):null;
+                const pickDay=(d)=>{
+                  const mm=String(calViewMonth+1).padStart(2,"0");
+                  const dd=String(d).padStart(2,"0");
+                  setDeadline(`${calViewYear}-${mm}-${dd}`);
+                  setShowCalendar(false);
+                };
+                const displayDeadline=()=>{
+                  if(!deadline)return "Selecionar prazo";
+                  const dt=new Date(deadline+"T12:00:00");
+                  return dt.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});
+                };
+                return <div style={{position:"relative"}}>
+                  {canEdit
+                    ? <button onClick={()=>setShowCalendar(v=>!v)}
+                        style={{...SI,display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",background:!deadline?"#fff7f7":undefined,borderColor:!deadline?"#fca5a5":undefined}}>
+                        <span style={{fontSize:14}}>📅</span>
+                        <span style={{flex:1,color:deadline?"#1e293b":"#94a3b8",fontSize:12}}>{displayDeadline()}</span>
+                        {deadline&&<button onMouseDown={e=>{e.stopPropagation();setDeadline("");}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,padding:"0 2px"}} title="Limpar">×</button>}
+                      </button>
+                    : <div style={SI}>{deadline?new Date(deadline+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}):"—"}</div>
+                  }
+                  {showCalendar&&canEdit&&<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:200,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",padding:14,minWidth:260}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <button onClick={()=>{if(calViewMonth===0){setCalViewMonth(11);setCalViewYear(y=>y-1);}else setCalViewMonth(m=>m-1);}}
+                        style={{background:"none",border:"none",cursor:"pointer",color:"#64748b",fontSize:16,padding:"2px 8px",borderRadius:6}}>‹</button>
+                      <span style={{color:"#1e293b",fontWeight:700,fontSize:13}}>{MESES[calViewMonth]} {calViewYear}</span>
+                      <button onClick={()=>{if(calViewMonth===11){setCalViewMonth(0);setCalViewYear(y=>y+1);}else setCalViewMonth(m=>m+1);}}
+                        style={{background:"none",border:"none",cursor:"pointer",color:"#64748b",fontSize:16,padding:"2px 8px",borderRadius:6}}>›</button>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:4}}>
+                      {DIAS_SEMANA.map(d=><div key={d} style={{textAlign:"center",color:"#94a3b8",fontSize:9,fontWeight:700,padding:"2px 0"}}>{d}</div>)}
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+                      {Array.from({length:firstDay},(_,i)=><div key={"e"+i}/>)}
+                      {Array.from({length:daysInMonth},(_,i)=>{
+                        const d=i+1;
+                        const isSel=selDay===d&&selMonth===calViewMonth&&selYear===calViewYear;
+                        const dt=new Date(calViewYear,calViewMonth,d);
+                        const isWeekend=dt.getDay()===0||dt.getDay()===6;
+                        const isPast=dt<new Date(new Date().setHours(0,0,0,0));
+                        return <button key={d} onClick={()=>pickDay(d)}
+                          style={{textAlign:"center",padding:"5px 0",borderRadius:7,border:"none",cursor:isPast?"default":"pointer",fontSize:11,fontWeight:isSel?800:400,
+                            background:isSel?"#6366f1":isPast?"transparent":"#fff",
+                            color:isSel?"#fff":isPast?"#cbd5e1":isWeekend?"#f97316":"#1e293b",
+                            opacity:isPast?0.4:1,
+                            boxShadow:isSel?"0 2px 8px rgba(99,102,241,0.4)":undefined}}>
+                          {d}
+                        </button>;
+                      })}
+                    </div>
+                    <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <button onClick={()=>{const t=new Date();const mm=String(t.getMonth()+1).padStart(2,"0");const dd=String(t.getDate()).padStart(2,"0");setDeadline(`${t.getFullYear()}-${mm}-${dd}`);setShowCalendar(false);}}
+                        style={{background:"none",border:"none",color:"#6366f1",cursor:"pointer",fontSize:11,fontWeight:700}}>Hoje</button>
+                      <button onClick={()=>setShowCalendar(false)}
+                        style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:11}}>Fechar</button>
+                    </div>
+                  </div>}
+                </div>;
+              })()}
             </div>
           </div>}
           {(task.createdAt||task.id)&&<div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,display:"flex",flexDirection:"column",gap:4}}>
