@@ -280,6 +280,9 @@ const DEFAULT_PERMS={
   verAnaliseProd:false, verAnaliseGarg:false, verRelatorio:false,
   // Acessos
   editarAcessos:false,
+  // Clientes por ID
+  verCliente_construschorr:false, verCliente_bioter:false, verCliente_arabuta:false, verCliente_climaves:false, verCliente_vetservice:false, verCliente_pixels:false,
+  verCliente_construschorr_metricas:false, verCliente_construschorr_mindmap:false, verCliente_construschorr_concorrencia:false, verCliente_construschorr_links:false, verCliente_bioter_metricas:false, verCliente_bioter_mindmap:false, verCliente_bioter_concorrencia:false, verCliente_bioter_links:false, verCliente_arabuta_metricas:false, verCliente_arabuta_mindmap:false, verCliente_arabuta_concorrencia:false, verCliente_arabuta_links:false, verCliente_climaves_metricas:false, verCliente_climaves_mindmap:false, verCliente_climaves_concorrencia:false, verCliente_climaves_links:false, verCliente_vetservice_metricas:false, verCliente_vetservice_mindmap:false, verCliente_vetservice_concorrencia:false, verCliente_vetservice_links:false, verCliente_pixels_metricas:false, verCliente_pixels_mindmap:false, verCliente_pixels_concorrencia:false, verCliente_pixels_links:false,
 };
 
 const PARTNER_PERMS=Object.keys(DEFAULT_PERMS).reduce((a,k)=>({...a,[k]:true}),{});
@@ -937,7 +940,7 @@ function MindMap({clientId,centerColor}){
 }
 
 /* ─── CLIENTES BOARD ─────────────────────── */
-function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDrag,canCreate}){
+function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDrag,canCreate,perms}){
   const [activeClient,setActiveClient]=useState(null);
   const [activeBioterUnit,setActiveBioterUnit]=useState(null);
   const [boardView,setBoardView]=useState("cartao"); // cartao | lista | calendar
@@ -1264,7 +1267,12 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
       <div style={{color:C.ts,fontSize:12,marginTop:3}}>Clique em um cliente para abrir o quadro completo de demandas</div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
-      {CLIENTS.map(cl=>{
+      {CLIENTS.filter(cl=>{
+        const isSocio=CURRENT_USER.level===1;
+        if(isSocio)return true;
+        if(!perms)return true;
+        return perms[`verCliente_${cl.id}`]!==false;
+      }).map(cl=>{
         const clTasks=tasks.filter(t=>!t.deletedAt&&t.client===cl.id);
         const open=clTasks.filter(t=>t.status!=="aprovado"&&t.status!=="pausado");
         const done=clTasks.filter(t=>t.status==="aprovado");
@@ -3769,6 +3777,13 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   var isSocio=CURRENT_USER.level===1;
   // Busca perms do usuário atual — suporta tanto prop quanto ACCESS_STORE
   var myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
+  var isSocio=CURRENT_USER.level===1;
+  // Permissão específica para este cliente
+  var canSeeThisClient=isSocio||myPerms["verCliente_"+cl.id]!==false;
+  var canSeeMetricas=isSocio||(myPerms.verMetricas&&myPerms["verCliente_"+cl.id+"_metricas"]!==false);
+  var canSeeMindmap=isSocio||(myPerms.verMindmap&&myPerms["verCliente_"+cl.id+"_mindmap"]!==false);
+  var canSeeConcorrencia=isSocio||(myPerms.verConcorrencia&&myPerms["verCliente_"+cl.id+"_concorrencia"]!==false);
+  var canSeeLinks=isSocio||(myPerms.verLinksCliente&&myPerms["verCliente_"+cl.id+"_links"]!==false);
 
   var score=calcScore(cl,TASKS);
   var scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
@@ -3786,14 +3801,14 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     return Math.floor((new Date()-new Date(p[2]+"-"+p[1]+"-"+p[0]))/(1000*60*60*24));
   })();
 
-  // Abas controladas por permissão
+  // Abas controladas por permissão por cliente
   var TABS=[
     {id:"dashboard",   label:"Dashboard"},
     {id:"redes",       label:"Redes e Ads"},
     {id:"ferramentas", label:"Ferramentas"},
     {id:"info",        label:"Informações"},
-    ...((myPerms.verConcorrencia||isSocio)?[{id:"concorrencia",label:"Concorrência"}]:[]),
-    ...((myPerms.verLinksCliente||isSocio)?[{id:"links",       label:"Links & Acessos"}]:[]),
+    ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
+    ...(canSeeLinks?[{id:"links",label:"Links & Acessos"}]:[]),
   ];
 
   // Se a aba ativa foi removida por falta de permissão, volta para dashboard
@@ -3879,8 +3894,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="redes"&&<CRedes cl={cl}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
-    {tab==="concorrencia"&&(myPerms.verConcorrencia||isSocio)&&<ClienteConcorrencia cl={cl} tab={tab} setTab={setTab}/>}
-    {tab==="links"&&(myPerms.verLinksCliente||isSocio)&&<div>
+    {tab==="concorrencia"&&canSeeConcorrencia&&<ClienteConcorrencia cl={cl} tab={tab} setTab={setTab}/>}
+    {tab==="links"&&canSeeLinks&&<div>
       <div style={{background:C.a+"12",border:"1px solid "+C.a+"33",borderRadius:10,padding:"10px 14px",marginBottom:16,color:C.a,fontSize:12,fontWeight:600}}>
         🔗 Acesse a aba "Links" dentro de Redes e Ads para ver os links e acessos do cliente.
       </div>
@@ -9479,12 +9494,39 @@ const PERM_GROUPS={
   ],
   clientes:[
     {key:"verClientes",       label:"Acessar Clientes",           desc:"Acesso à lista de clientes"},
-    {section:"Informações do Cliente"},
+    {section:"Informações Gerais"},
     {key:"verDadosCliente",   label:"Dados do Cliente",           desc:"Ver informações e detalhes do cliente"},
-    {key:"verMetricas",       label:"Métricas",                   desc:"Ver métricas de performance"},
-    {key:"verMindmap",        label:"Mapa Mental",                desc:"Acesso ao mapa estratégico do cliente"},
-    {key:"verConcorrencia",   label:"Concorrência",               desc:"Ver análise de concorrentes"},
-    {key:"verLinksCliente",   label:"Links & Acessos",            desc:"Ver links e acessos do cliente"},
+    {section:"Por Cliente"},
+    {key:"verCliente_construschorr", label:"Construschorr", desc:"Acesso ao cliente Construschorr"},
+    {key:"verCliente_construschorr_metricas", label:"Construschorr — Métricas", desc:"Ver métricas de performance do Construschorr"},
+    {key:"verCliente_construschorr_mindmap", label:"Construschorr — Mapa Mental", desc:"Ver mapa mental do Construschorr"},
+    {key:"verCliente_construschorr_concorrencia", label:"Construschorr — Concorrência", desc:"Ver concorrência do Construschorr"},
+    {key:"verCliente_construschorr_links", label:"Construschorr — Links & Acessos", desc:"Ver links do Construschorr"},
+    {key:"verCliente_bioter", label:"Bioter", desc:"Acesso ao cliente Bioter"},
+    {key:"verCliente_bioter_metricas", label:"Bioter — Métricas", desc:"Ver métricas de performance do Bioter"},
+    {key:"verCliente_bioter_mindmap", label:"Bioter — Mapa Mental", desc:"Ver mapa mental do Bioter"},
+    {key:"verCliente_bioter_concorrencia", label:"Bioter — Concorrência", desc:"Ver concorrência do Bioter"},
+    {key:"verCliente_bioter_links", label:"Bioter — Links & Acessos", desc:"Ver links do Bioter"},
+    {key:"verCliente_arabuta", label:"Arabuta", desc:"Acesso ao cliente Arabuta"},
+    {key:"verCliente_arabuta_metricas", label:"Arabuta — Métricas", desc:"Ver métricas de performance do Arabuta"},
+    {key:"verCliente_arabuta_mindmap", label:"Arabuta — Mapa Mental", desc:"Ver mapa mental do Arabuta"},
+    {key:"verCliente_arabuta_concorrencia", label:"Arabuta — Concorrência", desc:"Ver concorrência do Arabuta"},
+    {key:"verCliente_arabuta_links", label:"Arabuta — Links & Acessos", desc:"Ver links do Arabuta"},
+    {key:"verCliente_climaves", label:"Climaves", desc:"Acesso ao cliente Climaves"},
+    {key:"verCliente_climaves_metricas", label:"Climaves — Métricas", desc:"Ver métricas de performance do Climaves"},
+    {key:"verCliente_climaves_mindmap", label:"Climaves — Mapa Mental", desc:"Ver mapa mental do Climaves"},
+    {key:"verCliente_climaves_concorrencia", label:"Climaves — Concorrência", desc:"Ver concorrência do Climaves"},
+    {key:"verCliente_climaves_links", label:"Climaves — Links & Acessos", desc:"Ver links do Climaves"},
+    {key:"verCliente_vetservice", label:"Vet Service", desc:"Acesso ao cliente Vet Service"},
+    {key:"verCliente_vetservice_metricas", label:"Vet Service — Métricas", desc:"Ver métricas de performance do Vet Service"},
+    {key:"verCliente_vetservice_mindmap", label:"Vet Service — Mapa Mental", desc:"Ver mapa mental do Vet Service"},
+    {key:"verCliente_vetservice_concorrencia", label:"Vet Service — Concorrência", desc:"Ver concorrência do Vet Service"},
+    {key:"verCliente_vetservice_links", label:"Vet Service — Links & Acessos", desc:"Ver links do Vet Service"},
+    {key:"verCliente_pixels", label:"Pixels (interno)", desc:"Acesso ao cliente Pixels (interno)"},
+    {key:"verCliente_pixels_metricas", label:"Pixels (interno) — Métricas", desc:"Ver métricas de performance do Pixels (interno)"},
+    {key:"verCliente_pixels_mindmap", label:"Pixels (interno) — Mapa Mental", desc:"Ver mapa mental do Pixels (interno)"},
+    {key:"verCliente_pixels_concorrencia", label:"Pixels (interno) — Concorrência", desc:"Ver concorrência do Pixels (interno)"},
+    {key:"verCliente_pixels_links", label:"Pixels (interno) — Links & Acessos", desc:"Ver links do Pixels (interno)"},
   ],
   analises:[
     {key:"verAnalises",       label:"Acessar Análises",           desc:"Acesso ao módulo de análises"},
