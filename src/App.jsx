@@ -759,10 +759,10 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
         <div style={{display:"flex",alignItems:"flex-start",gap:24,paddingTop:24,marginTop:0}}>
 
           {/* Foto grande */}
-          <div style={{width:isMob?72:110,height:isMob?72:110,borderRadius:"50%",border:"3px solid "+C.b1,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
+          <div style={{width:isMob?100:150,height:isMob?100:150,borderRadius:"50%",border:"3px solid "+C.b1,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
             {photo
               ?<img src={photo} alt={CURRENT_USER.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?28:44}}>{CURRENT_USER.av}</span>
+              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?38:56}}>{CURRENT_USER.av}</span>
             }
           </div>
 
