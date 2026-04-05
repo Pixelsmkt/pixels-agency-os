@@ -788,7 +788,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
                 <div style={{color:C.td,fontSize:10,marginTop:2}}>solicitadas</div>
               </div>
             </div>
-            <div style={{display:"flex",gap:6,marginTop:10,justifyContent:"flex-end",flexWrap:"wrap"}}>
+            <div style={{display:"flex",gap:6,marginTop:10,justifyContent:"center",flexWrap:"wrap"}}>
               {emAberto>0&&<span style={{background:C.a+"18",color:C.a,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700}}>{emAberto} em aberto</span>}
               {lateMes.length>0&&<span style={{background:"#ef444418",color:"#ef4444",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700}}>{lateMes.length} atrasada{lateMes.length>1?"s":""}</span>}
             </div>
