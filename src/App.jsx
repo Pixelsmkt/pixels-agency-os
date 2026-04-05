@@ -719,7 +719,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     <div style={{boxShadow:"0 4px 24px rgba(0,0,0,0.15)",position:"relative",marginBottom:8,borderRadius:20}}>
 
       {/* ── PARTE COLORIDA ── */}
-      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?160:220,width:"100%",position:"relative",borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",justifyContent:"flex-end",padding:"0 0 32px 0"}}>
+      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?100:140,width:"100%",position:"relative",borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 0 16px 0"}}>
 
         {/* Coluna esquerda: editar + cor da capa */}
         <div style={{position:"absolute",top:14,left:14,display:"flex",flexDirection:"column",gap:6}}>
@@ -743,7 +743,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
 
         {/* Sino — direita */}
         <button onClick={()=>onNotif&&onNotif()}
-          style={{position:"absolute",top:14,right:14,background:"#f97316",border:"none",borderRadius:14,padding:"8px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,boxShadow:"0 4px 16px rgba(249,115,22,0.5)"}}>
+          style={{position:"absolute",top:14,right:14,background:"#f97316",border:"none",borderRadius:14,padding:"8px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,boxShadow:"none"}}>
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 01-3.46 0"/>
@@ -751,27 +751,25 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           {unread>0&&<span style={{color:"#fff",fontSize:20,fontWeight:900,lineHeight:1}}>{unread}</span>}
         </button>
 
-        {/* Bom dia — centralizado na capa colorida */}
-        <div style={{textAlign:"center",paddingBottom:8}}>
-          <div style={{color:"rgba(255,255,255,0.95)",fontWeight:800,fontSize:isMob?28:36,letterSpacing:-.5,textShadow:"0 2px 8px rgba(0,0,0,0.2)"}}>{greeting}</div>
-        </div>
+
       </div>
 
       {/* ── PARTE BRANCA ── */}
       <div style={{background:C.card,padding:isMob?"0 20px 24px":"0 32px 28px",position:"relative",borderRadius:"0 0 20px 20px"}}>
-        <div style={{display:"flex",alignItems:"flex-end",gap:24,position:"relative",top:-90}}>
+        <div style={{display:"flex",alignItems:"flex-end",gap:24,position:"relative",top:-70}}>
 
           {/* Foto grande */}
-          <div style={{width:isMob?110:180,height:isMob?110:180,borderRadius:"50%",border:"5px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
+          <div style={{width:isMob?90:140,height:isMob?90:140,borderRadius:"50%",border:"4px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
             {photo
               ?<img src={photo} alt={CURRENT_USER.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?44:68}}>{CURRENT_USER.av}</span>
+              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?34:54}}>{CURRENT_USER.av}</span>
             }
           </div>
 
           {/* Nome + cargo + data */}
-          <div style={{flex:1,minWidth:0,paddingBottom:8}}>
-            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?32:48,letterSpacing:-1.5,lineHeight:1,marginBottom:6}}>{CURRENT_USER.name}</div>
+          <div style={{flex:1,minWidth:0,paddingBottom:8,paddingTop:16}}>
+            <div style={{color:C.td,fontSize:isMob?12:13,fontWeight:600,marginBottom:4}}>{greeting}</div>
+            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?36:62,letterSpacing:-2,lineHeight:1,marginBottom:8}}>{CURRENT_USER.name}</div>
             <div style={{color:C.ts,fontSize:14,fontWeight:600,marginBottom:4}}>{CURRENT_USER.role}</div>
             <div style={{color:C.td,fontSize:12}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
           </div>
