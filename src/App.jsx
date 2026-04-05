@@ -719,7 +719,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     <div style={{boxShadow:"0 4px 24px rgba(0,0,0,0.15)",position:"relative",marginBottom:8,borderRadius:20}}>
 
       {/* ── PARTE COLORIDA ── */}
-      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?100:140,width:"100%",position:"relative",borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 0 16px 0"}}>
+      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?85:120,width:"100%",position:"relative",borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 0 16px 0"}}>
 
         {/* Coluna esquerda: editar + cor da capa */}
         <div style={{position:"absolute",top:14,left:14,display:"flex",flexDirection:"column",gap:6}}>
@@ -755,19 +755,19 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
       </div>
 
       {/* ── PARTE BRANCA ── */}
-      <div style={{background:C.card,padding:isMob?"0 20px 24px":"0 32px 28px",position:"relative",borderRadius:"0 0 20px 20px"}}>
-        <div style={{display:"flex",alignItems:"flex-end",gap:24,position:"relative",top:-70}}>
+      <div style={{background:C.card,padding:isMob?"14px 16px 16px":"18px 24px 20px",position:"relative",borderRadius:"0 0 20px 20px"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:24,paddingTop:24,marginTop:0}}>
 
           {/* Foto grande */}
-          <div style={{width:isMob?90:140,height:isMob?90:140,borderRadius:"50%",border:"4px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
+          <div style={{width:isMob?72:110,height:isMob?72:110,borderRadius:"50%",border:"3px solid "+C.b1,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
             {photo
               ?<img src={photo} alt={CURRENT_USER.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?34:54}}>{CURRENT_USER.av}</span>
+              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?28:44}}>{CURRENT_USER.av}</span>
             }
           </div>
 
           {/* Nome + cargo + data */}
-          <div style={{flex:1,minWidth:0,paddingBottom:8,paddingTop:16}}>
+          <div style={{flex:1,minWidth:0,paddingBottom:0}}>
             <div style={{color:C.td,fontSize:isMob?12:13,fontWeight:600,marginBottom:4}}>{greeting}</div>
             <div style={{color:C.tx,fontWeight:900,fontSize:isMob?36:62,letterSpacing:-2,lineHeight:1,marginBottom:8}}>{CURRENT_USER.name}</div>
             <div style={{color:C.ts,fontSize:14,fontWeight:600,marginBottom:4}}>{CURRENT_USER.role}</div>
@@ -775,7 +775,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           </div>
 
           {/* Demandas do mês + badges */}
-          {!isMob&&<div style={{flexShrink:0,textAlign:"right",paddingBottom:8}}>
+          {!isMob&&<div style={{flexShrink:0,textAlign:"right",background:C.s1,borderRadius:14,padding:"14px 20px",border:`1px solid ${C.b1}`,alignSelf:"flex-start",marginTop:0}}>
             <div style={{color:C.td,fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:6}}>Demandas do mês</div>
             <div style={{display:"flex",alignItems:"flex-end",gap:6,justifyContent:"flex-end"}}>
               <div style={{textAlign:"center"}}>
