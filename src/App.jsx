@@ -365,40 +365,23 @@ const NOTIF_STORE={
 
 
 /* ─── Ícones SVG outline para o menu ─────── */
-const NavIcon=({id,size=18,color="currentColor"})=>{
-  const s={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round"};
-  const icons={
-    // Casa — Dashboard
-    meudash:<svg {...s}><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>,
-    // Kanban — Demandas
-    demandas:<svg {...s}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>,
-    // Check num círculo — Aprovações
-    aprovacoes:<svg {...s}><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-5"/></svg>,
-    // Balão de diálogo — Chat
-    chat:<svg {...s}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>,
-    // Edifício — Clientes
-    clientes:<svg {...s}><rect x="2" y="7" width="20" height="15" rx="1"/><path d="M16 22V7M8 22V7"/><path d="M2 12h20"/><path d="M7 3h10l2 4H5l2-4z"/></svg>,
-    // Gráfico de barras — Análises
-    analises:<svg {...s}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>,
-    // Faísca — Pixels IA
-    ia:<svg {...s}><path d="M13 2L4.09 12.26a1 1 0 00.92 1.74H11l-1 8 8.91-10.26a1 1 0 00-.92-1.74H13l1-8z"/></svg>,
-    // Briefcase — Gestão
-    gestao:<svg {...s}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>,
-    // Cadeado — Acessos
-    acessos:<svg {...s}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/><circle cx="12" cy="16" r="1" fill={color}/></svg>,
-    // Bloco de notas — Interno
-    interno:<svg {...s}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>,
-    // Monitor — Portal
-    portal:<svg {...s}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>,
-    // Estrela / notif — Notificações
-    notificacoes:<svg {...s}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>,
-    // Gráfico — Financeiro
-    financeiro:<svg {...s}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 110 7H6"/></svg>,
-  };
-  // fallback: quadrado simples
-  const el=icons[id]||(<svg {...s}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>);
-  return el;
-};
+function NavIcon({id,size=18,color}){
+  const cl=color||"currentColor";
+  const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:cl,strokeWidth:"1.8",strokeLinecap:"round",strokeLinejoin:"round"};
+  if(id==="meudash")    return <svg {...p}><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>;
+  if(id==="demandas")   return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
+  if(id==="aprovacoes") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-5"/></svg>;
+  if(id==="chat")       return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+  if(id==="clientes")   return <svg {...p}><rect x="2" y="7" width="20" height="15" rx="1"/><path d="M16 22V7M8 22V7"/><path d="M2 12h20"/><path d="M7 3h10l2 4H5l2-4z"/></svg>;
+  if(id==="analises")   return <svg {...p}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
+  if(id==="ia")         return <svg {...p}><path d="M13 2L4.09 12.26a1 1 0 00.92 1.74H11l-1 8 8.91-10.26a1 1 0 00-.92-1.74H13l1-8z"/></svg>;
+  if(id==="gestao")     return <svg {...p}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>;
+  if(id==="acessos")    return <svg {...p}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/><circle cx="12" cy="16" r="1" fill={cl}/></svg>;
+  if(id==="interno")    return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>;
+  if(id==="portal")     return <svg {...p}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>;
+  if(id==="notificacoes")return <svg {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
+  return <svg {...p}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
+}
 
 /* ─── NAV ────────────────────────────────── */
 const NAV=[
