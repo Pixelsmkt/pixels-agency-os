@@ -10507,7 +10507,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
   const [filterLevel,setFilterLevel]=useState(0);
   const isPartner=CURRENT_USER.level===1;
   const [collabProfiles,setCollabProfiles]=useState(()=>{
-    // Carrega perfis salvos do localStorage (incluindo edições feitas via sidebar)
+    // Carrega perfis do localStorage como cache inicial
     const out={};
     TEAM.forEach(u=>{
       try{
@@ -10517,6 +10517,28 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
     });
     return out;
   });
+
+  // Carregar perfis do Supabase ao montar (fonte de verdade)
+  useEffect(()=>{
+    const loadProfiles=async()=>{
+      try{
+        const sb=window._sb;
+        const{data:rows}=await sb.from("profiles").select("team_id,profile_data").not("profile_data","is",null);
+        if(!rows)return;
+        const updates={};
+        rows.forEach(row=>{
+          if(row.team_id&&row.profile_data){
+            updates[row.team_id]=row.profile_data;
+            try{localStorage.setItem("pixels-selfprofile-"+row.team_id,JSON.stringify(row.profile_data));}catch(e){}
+          }
+        });
+        if(Object.keys(updates).length>0){
+          setCollabProfiles(p=>({...p,...updates}));
+        }
+      }catch(e){console.warn("Erro ao carregar perfis do Supabase:",e);}
+    };
+    loadProfiles();
+  },[]);
 
   const [mainTab,setMainTab]=useState("equipe");
 
@@ -10591,9 +10613,17 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
     {profileUser&&(<CollabProfilePage
       user={profileUser}
       profile={collabProfiles[editProfile]}
-      onSave={(uid,data)=>{
+      onSave={async(uid,data)=>{
         setCollabProfiles(p=>({...p,[uid]:data}));
         try{localStorage.setItem("pixels-selfprofile-"+uid,JSON.stringify(data));}catch(e){}
+        // Salvar no Supabase para persistência permanente
+        try{
+          const sb=window._sb;
+          const{data:profileRow}=await sb.from("profiles").select("id").eq("team_id",uid).single();
+          if(profileRow){
+            await sb.from("profiles").update({profile_data:data}).eq("id",profileRow.id);
+          }
+        }catch(e){console.warn("Erro ao salvar perfil no Supabase:",e);}
       }}
       onClose={()=>setEditProfile(null)}
     />)}
@@ -14765,6 +14795,21 @@ export default function AgencyOS(){
     window._openMyProfile=()=>setShowSelfProfile(true);
     return()=>{delete window._openMyProfile;};
   },[]);
+
+  // Carregar selfProfile do Supabase ao iniciar
+  useEffect(()=>{
+    const loadSelfProfile=async()=>{
+      try{
+        const sb=window._sb;
+        const{data:row}=await sb.from("profiles").select("profile_data").eq("team_id",CURRENT_USER.id).single();
+        if(row?.profile_data){
+          setSelfProfileData(row.profile_data);
+          try{localStorage.setItem("pixels-selfprofile-"+CURRENT_USER.id,JSON.stringify(row.profile_data));}catch(e){}
+        }
+      }catch(e){}
+    };
+    if(authState==="app")loadSelfProfile();
+  },[authState]);
   useEffect(()=>{
     const u=resolveUser(currentProfile);
     if(u&&u.id!==loggedUser){window._pixelsUser=u.id;setLoggedUser(u.id);}
@@ -15202,9 +15247,17 @@ export default function AgencyOS(){
     {showSelfProfile&&<CollabProfilePage
       user={CURRENT_USER}
       profile={selfProfileData}
-      onSave={(uid,data)=>{
+      onSave={async(uid,data)=>{
         setSelfProfileData(data);
         try{localStorage.setItem("pixels-selfprofile-"+uid,JSON.stringify(data));}catch(e){}
+        // Salvar no Supabase para persistência permanente
+        try{
+          const sb=window._sb;
+          const{data:profileRow}=await sb.from("profiles").select("id").eq("team_id",uid).single();
+          if(profileRow){
+            await sb.from("profiles").update({profile_data:data}).eq("id",profileRow.id);
+          }
+        }catch(e){console.warn("Erro ao salvar perfil no Supabase:",e);}
       }}
       onClose={()=>setShowSelfProfile(false)}
     />}
