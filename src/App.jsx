@@ -667,7 +667,7 @@ const DashGestor=DashColaborador;
 const DashDesigner=DashColaborador;
 const DashEditor=DashColaborador;
 
-function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif}){
+function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif,selfProfile}){
   const allTasks=propTasks||[];
   const active=allTasks.filter(t=>!t.deletedAt);
   const urgent=active.filter(t=>taskUrgencyLevel(t)===0);
@@ -711,6 +711,8 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   const [showColorPicker,setShowColorPicker]=useState(false);
   const saveCoverColor=(c)=>{setCoverColor(c);setShowColorPicker(false);try{localStorage.setItem("pixels-covercolor-"+CURRENT_USER.id,c);}catch(e){}};
   const photo=getProfilePhoto(CURRENT_USER.id);
+  const displayName=selfProfile?.nome||CURRENT_USER.name;
+  const displayRole=selfProfile?.funcao||CURRENT_USER.role;
 
   const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(CURRENT_USER.id));
 
@@ -761,7 +763,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           {/* Foto grande */}
           <div style={{width:isMob?100:150,height:isMob?100:150,borderRadius:"50%",border:"3px solid "+C.b1,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
             {photo
-              ?<img src={photo} alt={CURRENT_USER.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
               :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?38:56}}>{CURRENT_USER.av}</span>
             }
           </div>
@@ -769,8 +771,8 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           {/* Nome + cargo + data */}
           <div style={{flex:1,minWidth:0,paddingBottom:0}}>
             <div style={{color:C.td,fontSize:isMob?12:13,fontWeight:600,marginBottom:4}}>{greeting}</div>
-            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?36:62,letterSpacing:-2,lineHeight:1,marginBottom:8}}>{CURRENT_USER.name}</div>
-            <div style={{color:C.ts,fontSize:14,fontWeight:600,marginBottom:4}}>{CURRENT_USER.role}</div>
+            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?36:62,letterSpacing:-2,lineHeight:1,marginBottom:8}}>{displayName}</div>
+            <div style={{color:C.ts,fontSize:14,fontWeight:600,marginBottom:4}}>{displayRole}</div>
             <div style={{color:C.td,fontSize:12}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
           </div>
 
@@ -15347,7 +15349,7 @@ export default function AgencyOS(){
     switch(page){
       case "clientes":              return effectivePerms.verClientes?<PageClientes isMob={isMob} perms={effectivePerms} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "meudash":
-      case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)}/>:<NoPerm/>;
+      case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)} selfProfile={selfProfileData}/>:<NoPerm/>;
       case "demandas":
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
