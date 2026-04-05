@@ -580,6 +580,13 @@ const CLIENT_MINDMAP = {
 
 // ======= 01_dashboard.jsx =======
 
+// Barra de progresso simples
+const Bar=({v,color,h=6})=>(
+  <div style={{width:"100%",height:h,background:C.b1,borderRadius:99,overflow:"hidden"}}>
+    <div style={{width:`${Math.min(100,Math.max(0,v))}%`,height:"100%",background:color||C.a,borderRadius:99,transition:"width .4s ease"}}/>
+  </div>
+);
+
 function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks}){
   const allTasks=propTasks||[];
   const mrr=CLIENTS.reduce((a,c)=>a+c.contract,0);
