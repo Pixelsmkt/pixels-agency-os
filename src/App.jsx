@@ -10216,6 +10216,68 @@ function PageFinanceiro({isMob}){
 }
 
 // ======= 09_acessos.jsx =======
+// Grupos de permissões para o modal de gerenciamento
+const PERM_GROUPS=[
+  {group:"Dashboard & Demandas",items:[
+    {key:"verDashboard",     label:"Ver Dashboard",          desc:"Acesso à página inicial do dashboard"},
+    {key:"verDemandas",      label:"Ver Demandas",            desc:"Acesso ao kanban de demandas"},
+    {key:"criarDemanda",     label:"Criar Demandas",          desc:"Pode criar novos cartões"},
+    {key:"editarDemanda",    label:"Editar Demandas",         desc:"Pode editar cartões existentes"},
+    {key:"excluirDemanda",   label:"Excluir Demandas",        desc:"Pode mover cartões para lixeira"},
+    {key:"arrastarCards",    label:"Arrastar Cards",          desc:"Pode mover cards entre colunas"},
+    {key:"verTodosKanban",   label:"Ver Todos no Kanban",     desc:"Vê cards de todos os usuários"},
+    {key:"novaColuna",       label:"Nova Coluna",             desc:"Pode criar colunas customizadas"},
+    {key:"verLixeira",       label:"Ver Lixeira",             desc:"Acesso à lixeira de cartões"},
+  ]},
+  {group:"Filtros",items:[
+    {key:"filtroSetor",      label:"Filtro por Setor",        desc:"Pode filtrar demandas por setor"},
+    {key:"filtroCliente",    label:"Filtro por Cliente",      desc:"Pode filtrar por cliente"},
+    {key:"filtroPerfil",     label:"Filtro por Perfil",       desc:"Pode filtrar por colaborador"},
+  ]},
+  {group:"Colunas do Kanban",items:[
+    {key:"colCopys",         label:"Coluna Copys",            desc:"Acesso à coluna de Copys"},
+    {key:"colAvaliacao",     label:"Coluna Avaliação",        desc:"Acesso à coluna de Avaliação"},
+    {key:"colAprovado",      label:"Coluna Aprovado",         desc:"Acesso à coluna Aprovado"},
+    {key:"colAgendado",      label:"Coluna Agendado",         desc:"Acesso à coluna Agendado"},
+    {key:"colPublicado",     label:"Coluna Publicado",        desc:"Acesso à coluna Publicado"},
+    {key:"colPausado",       label:"Coluna Pausado",          desc:"Acesso à coluna Pausado"},
+    {key:"colAjuste",        label:"Coluna Ajuste",           desc:"Acesso à coluna de Ajuste"},
+  ]},
+  {group:"Aprovações",items:[
+    {key:"verAprovacoes",    label:"Ver Aprovações",          desc:"Acesso ao módulo de aprovações"},
+    {key:"verAprCopys",      label:"Aprovar Copys",           desc:"Pode visualizar copys para aprovação"},
+    {key:"verAprPublicacao", label:"Aprovar Publicações",     desc:"Pode aprovar publicações agendadas"},
+    {key:"aprovar",          label:"Botão Aprovar",           desc:"Pode clicar em Aprovar / Solicitar Ajuste"},
+  ]},
+  {group:"Clientes",items:[
+    {key:"verClientes",      label:"Ver Clientes",            desc:"Acesso à aba de clientes"},
+    {key:"verDadosCliente",  label:"Ver Dados do Cliente",    desc:"Vê informações completas do cliente"},
+    {key:"verMetricas",      label:"Ver Métricas",            desc:"Acesso às métricas de performance"},
+    {key:"verConcorrencia",  label:"Ver Concorrência",        desc:"Acesso à análise de concorrentes"},
+    {key:"verMindmap",       label:"Ver Mindmap",             desc:"Acesso ao mapa estratégico"},
+    {key:"verLinksCliente",  label:"Ver Links do Cliente",    desc:"Acesso aos links e acessos do cliente"},
+  ]},
+  {group:"Chat",items:[
+    {key:"verChat",          label:"Ver Chat",                desc:"Acesso ao módulo de chat"},
+    {key:"enviarMensagem",   label:"Enviar Mensagens",        desc:"Pode enviar mensagens no chat"},
+    {key:"verCanalGeral",    label:"Canal Geral",             desc:"Acesso ao canal geral"},
+    {key:"verCanalDesign",   label:"Canal Design",            desc:"Acesso ao canal de design"},
+    {key:"verCanalVideo",    label:"Canal Vídeo",             desc:"Acesso ao canal de vídeo"},
+    {key:"verCanalTrafego",  label:"Canal Tráfego",           desc:"Acesso ao canal de tráfego"},
+    {key:"verCanalSocial",   label:"Canal Social Media",      desc:"Acesso ao canal de social media"},
+  ]},
+  {group:"Admin & Ferramentas",items:[
+    {key:"verAcessos",       label:"Ver Acessos",             desc:"Acesso ao módulo de acessos"},
+    {key:"verFinanceiro",    label:"Ver Financeiro",          desc:"Acesso ao módulo financeiro"},
+    {key:"verAnalises",      label:"Ver Análises",            desc:"Acesso ao módulo de análises"},
+    {key:"verPortal",        label:"Ver Portal Cliente",      desc:"Acesso ao portal do cliente"},
+    {key:"verInterno",       label:"Ver Interno",             desc:"Acesso ao módulo interno"},
+    {key:"pixelsIA",         label:"Pixels IA",               desc:"Acesso à Pixels IA"},
+    {key:"escanear",         label:"Escanear Storage",        desc:"Pode escanear o Storage"},
+    {key:"verBriefingCard",  label:"Ver Briefing",            desc:"Vê o briefing dentro dos cards"},
+  ]},
+];
+
 function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks}){
   // Prioridade: livePerms (localStorage) → ACCESS_STORE (padrão hardcoded) → DEFAULT_PERMS
   const [perms,setPerms]=useState(()=>({
