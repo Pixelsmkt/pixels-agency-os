@@ -14832,6 +14832,13 @@ export default function AgencyOS(){
   const [selfProfileData,setSelfProfileData] = useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-selfprofile-"+CURRENT_USER.id)||"null");}catch{return null;}
   });
+  // Recarregar selfProfileData quando o usuário logado muda (ex: troca de conta)
+  useEffect(()=>{
+    try{
+      const saved=localStorage.getItem("pixels-selfprofile-"+CURRENT_USER.id);
+      setSelfProfileData(saved?JSON.parse(saved):null);
+    }catch{setSelfProfileData(null);}
+  },[CURRENT_USER.id]);
   const [activeCl,setActiveCl]     = useState(null);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
   const [viewingAs,setViewingAs]   = useState(null);
