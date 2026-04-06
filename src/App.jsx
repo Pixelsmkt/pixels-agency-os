@@ -7870,10 +7870,12 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
 // ======= 05_chat.jsx =======
 
 /* ─────────────────────────────────────────────────────────
-   CHAT — Supabase realtime + persistência completa
+   CHAT — Supabase realtime + persistência protegida
 
-   SQL para rodar no Supabase antes de usar:
-   ─────────────────────────────────────────
+   SQL COMPLETO para rodar no Supabase (SQL Editor):
+   ─────────────────────────────────────────────────
+
+   -- 1. Cria a tabela com soft delete
    CREATE TABLE IF NOT EXISTS messages (
      id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
      channel_id  text        NOT NULL,
@@ -7884,12 +7886,40 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
      type        text        DEFAULT 'text',
      content     jsonb       DEFAULT '{}',
      reactions   jsonb       DEFAULT '[]',
+     deleted_at  timestamptz DEFAULT NULL,
      created_at  timestamptz DEFAULT now()
    );
+
+   -- 2. Ativa RLS
    ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-   CREATE POLICY "allow_all" ON messages FOR ALL USING (true) WITH CHECK (true);
+
+   -- 3. Remove qualquer policy antiga
+   DROP POLICY IF EXISTS "allow_all" ON messages;
+
+   -- 4. Policies específicas por operação
+   -- Leitura: todos podem ler (inclusive deletadas — a UI decide o que mostra)
+   CREATE POLICY "messages_select" ON messages
+     FOR SELECT USING (true);
+
+   -- Inserção: qualquer autenticado pode inserir
+   CREATE POLICY "messages_insert" ON messages
+     FOR INSERT WITH CHECK (true);
+
+   -- Update: só reactions e deleted_at são atualizáveis (sem alterar conteúdo)
+   CREATE POLICY "messages_update" ON messages
+     FOR UPDATE USING (true)
+     WITH CHECK (true);
+
+   -- Delete físico: BLOQUEADO para todos — nunca apaga do banco
+   -- (sem CREATE POLICY para DELETE = bloqueado por padrão com RLS ativo)
+
+   -- 5. Ativa realtime
    ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-   ─────────────────────────────────────────
+
+   ─────────────────────────────────────────────────
+   Se a tabela já existe e só precisa adicionar deleted_at:
+   ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
+   ─────────────────────────────────────────────────
 ───────────────────────────────────────────────────────── */
 
 /* Helpers de link preview */
@@ -7980,6 +8010,7 @@ const rowToMsg=(row)=>({
   color:     row.user_color,
   type:      row.type,
   reactions: Array.isArray(row.reactions)?row.reactions:[],
+  deletedAt: row.deleted_at||null,
   time:      new Date(row.created_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
   ...(row.content||{}),
 });
@@ -8146,7 +8177,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
         const updated=rowToMsg(payload.new);
         setMsgs(prev=>{
           const chId=payload.new.channel_id;
-          return{...prev,[chId]:(prev[chId]||[]).map(m=>m.id===updated.id?{...m,reactions:updated.reactions}:m)};
+          return{...prev,[chId]:(prev[chId]||[]).map(m=>m.id===updated.id?{...m,reactions:updated.reactions,deletedAt:updated.deletedAt}:m)};
         });
       })
       .subscribe();
@@ -8308,6 +8339,31 @@ function PageChat({isMob, perms, tasks, setTasks}){
       return{...m,reactions:newReactions};
     })}));
     setReactionTarget(null);
+  };
+
+  /* ── Soft delete de mensagem ── */
+  const deleteMsg=async(msgId)=>{
+    // Só o dono da msg ou sócio pode apagar
+    const msg=channelMsgs.find(m=>m.id===msgId);
+    if(!msg)return;
+    if(msg.uid!==CURRENT_USER.id&&!isSocio)return;
+    if(String(msgId).startsWith("local-"))return; // msg ainda não persistida
+
+    // Marca como deletada localmente (imediato)
+    setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).map(m=>
+      m.id===msgId?{...m,deletedAt:new Date().toISOString()}:m
+    )}));
+
+    // Persiste soft delete no Supabase
+    try{
+      await sb.from("messages").update({deleted_at:new Date().toISOString()}).eq("id",msgId);
+    }catch(e){
+      console.warn("Erro ao apagar mensagem:",e);
+      // Reverte se falhar
+      setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).map(m=>
+        m.id===msgId?{...m,deletedAt:null}:m
+      )}));
+    }
   };
 
   /* ── Input handlers ── */
@@ -8490,7 +8546,16 @@ function PageChat({isMob, perms, tasks, setTasks}){
                     {!grouped&&<div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:3}}>
                       <span style={{color:m.color||C.ts,fontWeight:700,fontSize:12}}>{m.u}</span>
                       <span style={{color:C.td,fontSize:10}}>{m.time}</span>
+                      {m.deletedAt&&<span style={{color:C.td,fontSize:9,fontStyle:"italic"}}>· apagada</span>}
                     </div>}
+
+                    {/* Mensagem apagada */}
+                    {m.deletedAt?(
+                      <div style={{background:C.s1,borderRadius:"12px 12px 12px 4px",padding:"8px 12px",display:"inline-flex",alignItems:"center",gap:6,opacity:.6}}>
+                        <span style={{fontSize:12}}>🚫</span>
+                        <span style={{color:C.td,fontSize:12,fontStyle:"italic"}}>Esta mensagem foi apagada.</span>
+                      </div>
+                    ):<>
 
                     {m.type==="text"&&(
                       <div>
@@ -8536,9 +8601,11 @@ function PageChat({isMob, perms, tasks, setTasks}){
                         </button>
                       ))}
                     </div>}
+                    </>}
                   </div>
 
-                  {m.uid!=="sistema"&&<div className="msg-actions" onClick={e=>e.stopPropagation()}
+                  {/* Hover actions — reações + lixeira */}
+                  {m.uid!=="sistema"&&!m.deletedAt&&<div className="msg-actions" onClick={e=>e.stopPropagation()}
                     style={{position:"absolute",right:0,top:0,background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:"3px 6px",display:"flex",gap:2,opacity:0,transition:"opacity .15s",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
                     {EMOJIS.slice(0,5).map(e=>(
                       <button key={e} onClick={()=>addReaction(m.id,e)}
@@ -8548,6 +8615,15 @@ function PageChat({isMob, perms, tasks, setTasks}){
                         {e}
                       </button>
                     ))}
+                    {/* Botão apagar — só dono da msg ou sócio */}
+                    {(m.uid===CURRENT_USER.id||isSocio)&&(
+                      <button onClick={()=>deleteMsg(m.id)} title="Apagar mensagem"
+                        style={{background:"none",border:"none",cursor:"pointer",fontSize:13,padding:"2px 5px",borderRadius:5,lineHeight:1,color:C.td,marginLeft:2,borderLeft:`1px solid ${C.b1}`}}
+                        onMouseEnter={ev=>{ev.currentTarget.style.background="#fee2e2";ev.currentTarget.style.color=C.rd;}}
+                        onMouseLeave={ev=>{ev.currentTarget.style.background="none";ev.currentTarget.style.color=C.td;}}>
+                        🗑
+                      </button>
+                    )}
                   </div>}
                 </div>
               );
