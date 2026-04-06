@@ -8106,8 +8106,17 @@ function PageChat({isMob, perms, tasks, setTasks}){
     return `${DAILY_DOMAIN}/${room}`;
   };
 
-  /* ── Call state ── */
-  const [activeCall,setActiveCall]=useState(null); // channelId da call aberta
+  /* ── Call state — usa global para persistir entre páginas ── */
+  const [,callTick]=useState(0);
+  const forceCallUpdate=()=>{callTick(v=>v+1);window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();};
+
+  const startCall=(channelId,channelName)=>{
+    const url=getDailyUrl(channelId);
+    if(!url)return;
+    window._pixelsCallState={url,channelId,channelName,createdBy:CURRENT_USER.id,minimized:false};
+    forceCallUpdate();
+  };
+  const activeCall=window._pixelsCallState?.channelId||null;
   const [showPixelsRoom,setShowPixelsRoom]=useState(false);
   const [ch,setCh]=useState(()=>ALL_VISIBLE[0]?.id||"geral");
   const activeCh=ALL_VISIBLE.find(c=>c.id===ch)?ch:(ALL_VISIBLE[0]?.id||"geral");
@@ -8508,67 +8517,38 @@ function PageChat({isMob, perms, tasks, setTasks}){
           <div style={{flex:1,overflowY:"auto",padding:"8px 8px"}}>
             {visibleInternal.length>0&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"8px 6px 5px"}}>Equipe</div>
-              {visibleInternal.map(c=>{
-                const callUrl=getDailyUrl(c.id);
-                const isThisCallActive=activeCall===c.id;
-                return(
-                  <div key={c.id} style={{marginBottom:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:2}}>
-                      <button onClick={()=>switchChannel(c.id)}
-                        style={{display:"flex",alignItems:"center",gap:8,flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:activeCh===c.id?C.ag:"transparent",cursor:"pointer",textAlign:"left"}}>
-                        <span style={{fontSize:13,flexShrink:0}}>{c.icon}</span>
-                        <span style={{color:activeCh===c.id?C.a:C.ts,fontWeight:activeCh===c.id?700:400,fontSize:12,flex:1}}>#{c.name}</span>
-                      </button>
-                      {callUrl&&canCall&&<button
-                        onClick={()=>setActiveCall(isThisCallActive?null:c.id)}
-                        title="Pixels Call"
-                        style={{background:isThisCallActive?"#22c55e18":"none",border:`1px solid ${isThisCallActive?"#22c55e44":C.b1}`,borderRadius:6,padding:"3px 6px",cursor:"pointer",fontSize:10,color:isThisCallActive?"#22c55e":C.td,fontWeight:700,flexShrink:0,transition:"all .15s",whiteSpace:"nowrap"}}
-                        onMouseEnter={e=>{if(!isThisCallActive){e.currentTarget.style.background="#22c55e18";e.currentTarget.style.color="#22c55e";e.currentTarget.style.borderColor="#22c55e44";}}}
-                        onMouseLeave={e=>{if(!isThisCallActive){e.currentTarget.style.background="none";e.currentTarget.style.color=C.td;e.currentTarget.style.borderColor=C.b1;}}}>
-                        {isThisCallActive?"🔴":"📞"}
-                      </button>}
-                    </div>
-                  </div>
-                );
-              })}
+              {visibleInternal.map(c=>(
+                <button key={c.id} onClick={()=>switchChannel(c.id)}
+                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:"none",background:activeCh===c.id?C.ag:"transparent",cursor:"pointer",textAlign:"left",marginBottom:1}}>
+                  <span style={{fontSize:13,flexShrink:0}}>{c.icon}</span>
+                  <span style={{color:activeCh===c.id?C.a:C.ts,fontWeight:activeCh===c.id?700:400,fontSize:12,flex:1}}>#{c.name}</span>
+                </button>
+              ))}
             </>}
 
             {/* ── PIXELS ROOM ── */}
             {(isSocio||canCall)&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px"}}>🎙 Pixels Room</div>
-              <button onClick={()=>setShowPixelsRoom(v=>!v)}
-                style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:`1px solid ${showPixelsRoom?"#a855f744":C.b1}`,background:showPixelsRoom?"#a855f714":"transparent",cursor:"pointer",textAlign:"left",marginBottom:4,transition:"all .15s"}}>
+              <button onClick={()=>{
+                window._pixelsCallState={url:`${DAILY_DOMAIN}/pixels-room`,channelId:"pixels-room",channelName:"Pixels Room",createdBy:CURRENT_USER.id,minimized:false};
+                forceCallUpdate();
+              }}
+                style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:`1px solid ${activeCall==="pixels-room"?"#a855f744":C.b1}`,background:activeCall==="pixels-room"?"#a855f714":"transparent",cursor:"pointer",textAlign:"left",marginBottom:4,transition:"all .15s"}}>
                 <span style={{fontSize:13}}>🎙</span>
-                <span style={{color:showPixelsRoom?"#a855f7":C.ts,fontWeight:showPixelsRoom?700:400,fontSize:12,flex:1}}>Pixels Room</span>
-                <span style={{fontSize:9,color:showPixelsRoom?"#22c55e":C.td,fontWeight:700}}>{showPixelsRoom?"● AO VIVO":"Entrar"}</span>
+                <span style={{color:activeCall==="pixels-room"?"#a855f7":C.ts,fontWeight:activeCall==="pixels-room"?700:400,fontSize:12,flex:1}}>Pixels Room</span>
+                <span style={{fontSize:9,color:activeCall==="pixels-room"?"#22c55e":C.td,fontWeight:700}}>{activeCall==="pixels-room"?"● AO VIVO":"Entrar"}</span>
               </button>
             </>}
 
             {visibleClient.length>0&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px"}}>🏢 Clientes</div>
-              {visibleClient.map(c=>{
-                const callUrl=getDailyUrl(c.id);
-                const isThisCallActive=activeCall===c.id;
-                return(
-                  <div key={c.id} style={{marginBottom:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:2}}>
-                      <button onClick={()=>switchChannel(c.id)}
-                        style={{display:"flex",alignItems:"center",gap:8,flex:1,padding:"7px 10px",borderRadius:8,border:"none",background:activeCh===c.id?c.clientColor+"18":"transparent",cursor:"pointer",textAlign:"left"}}>
-                        <div style={{width:8,height:8,borderRadius:"50%",background:c.clientColor,flexShrink:0}}/>
-                        <span style={{color:activeCh===c.id?c.clientColor:C.ts,fontWeight:activeCh===c.id?700:400,fontSize:12,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.clientName}</span>
-                      </button>
-                      {callUrl&&canCall&&<button
-                        onClick={()=>setActiveCall(isThisCallActive?null:c.id)}
-                        title="Pixels Call"
-                        style={{background:isThisCallActive?"#22c55e18":"none",border:`1px solid ${isThisCallActive?"#22c55e44":C.b1}`,borderRadius:6,padding:"3px 6px",cursor:"pointer",fontSize:10,color:isThisCallActive?"#22c55e":C.td,fontWeight:700,flexShrink:0,transition:"all .15s",whiteSpace:"nowrap"}}
-                        onMouseEnter={e=>{if(!isThisCallActive){e.currentTarget.style.background="#22c55e18";e.currentTarget.style.color="#22c55e";e.currentTarget.style.borderColor="#22c55e44";}}}
-                        onMouseLeave={e=>{if(!isThisCallActive){e.currentTarget.style.background="none";e.currentTarget.style.color=C.td;e.currentTarget.style.borderColor=C.b1;}}}>
-                        {isThisCallActive?"🔴":"📞"}
-                      </button>}
-                    </div>
-                  </div>
-                );
-              })}
+              {visibleClient.map(c=>(
+                <button key={c.id} onClick={()=>switchChannel(c.id)}
+                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:"none",background:activeCh===c.id?c.clientColor+"18":"transparent",cursor:"pointer",textAlign:"left",marginBottom:1}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:c.clientColor,flexShrink:0}}/>
+                  <span style={{color:activeCh===c.id?c.clientColor:C.ts,fontWeight:activeCh===c.id?700:400,fontSize:12,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.clientName}</span>
+                </button>
+              ))}
             </>}
 
             {visibleInternal.length>0&&<>
@@ -8589,50 +8569,6 @@ function PageChat({isMob, perms, tasks, setTasks}){
         {/* ── MAIN CHAT ── */}
         <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0}}>
 
-          {/* ── PIXELS CALL — iframe inline ── */}
-          {activeCall&&getDailyUrl(activeCall)&&(
-            <div style={{borderBottom:`1px solid ${C.b1}`,background:"#0f0f0f",flexShrink:0,position:"relative"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 14px",background:"#1a1a1a"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{width:8,height:8,borderRadius:"50%",background:"#22c55e"}}/>
-                  <span style={{color:"#fff",fontSize:12,fontWeight:700}}>📞 Pixels Call — #{ALL_VISIBLE.find(c=>c.id===activeCall)?.name||activeCall}</span>
-                </div>
-                <button onClick={()=>setActiveCall(null)}
-                  style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:7,padding:"4px 12px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                  Sair da Call
-                </button>
-              </div>
-              <iframe
-                src={getDailyUrl(activeCall)+"?userName="+encodeURIComponent(CURRENT_USER.name)}
-                allow="camera; microphone; fullscreen; display-capture; autoplay"
-                style={{width:"100%",height:380,border:"none",display:"block"}}
-              />
-            </div>
-          )}
-
-          {/* ── PIXELS ROOM — modal flutuante ── */}
-          {showPixelsRoom&&(
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-              <div style={{background:"#0f0f0f",borderRadius:20,overflow:"hidden",width:"100%",maxWidth:900,border:"2px solid #a855f744",boxShadow:"0 0 60px #a855f730",display:"flex",flexDirection:"column"}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 18px",background:"#1a1a1a",borderBottom:"1px solid #333"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",background:"#22c55e"}}/>
-                    <span style={{color:"#fff",fontSize:13,fontWeight:800}}>🎙 Pixels Room — Sala de prosa rápida</span>
-                  </div>
-                  <button onClick={()=>setShowPixelsRoom(false)}
-                    style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:8,padding:"5px 14px",color:"#ef4444",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-                    Sair
-                  </button>
-                </div>
-                <iframe
-                  src={`${DAILY_DOMAIN}/pixels-room?userName=${encodeURIComponent(CURRENT_USER.name)}`}
-                  allow="camera; microphone; fullscreen; display-capture; autoplay"
-                  style={{width:"100%",height:520,border:"none",display:"block"}}
-                />
-              </div>
-            </div>
-          )}
-
           {/* Header */}
           <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:10,flexShrink:0,background:C.card}}>
             {isMob&&<button onClick={()=>setShowChannels(v=>!v)} style={{background:"none",border:"none",color:C.ts,cursor:"pointer",fontSize:18,padding:0}}>☰</button>}
@@ -8652,10 +8588,10 @@ function PageChat({isMob, perms, tasks, setTasks}){
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               {sending&&<div style={{color:C.td,fontSize:10}}>Enviando...</div>}
               {getDailyUrl(activeCh)&&canCall&&(
-                <button onClick={()=>setActiveCall(activeCall===activeCh?null:activeCh)}
-                  style={{background:activeCall===activeCh?"#22c55e18":C.s1,border:`1px solid ${activeCall===activeCh?"#22c55e44":C.b1}`,borderRadius:8,padding:"5px 12px",color:activeCall===activeCh?"#22c55e":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,transition:"all .15s"}}>
+                <button onClick={()=>startCall(activeCh,activeChData?.name||activeCh)}
+                  style={{background:activeCall===activeCh?"#22c55e18":"linear-gradient(135deg,#7c3aed,#6d28d9)",border:`1px solid ${activeCall===activeCh?"#22c55e44":"#7c3aed88"}`,borderRadius:8,padding:"6px 14px",color:activeCall===activeCh?"#22c55e":"#fff",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:activeCall===activeCh?"none":"0 2px 8px #7c3aed33"}}>
                   <span>{activeCall===activeCh?"🔴":"📞"}</span>
-                  <span>Pixels Call</span>
+                  <span>{activeCall===activeCh?"Em call":"Pixels Call"}</span>
                 </button>
               )}
               <div style={{color:C.td,fontSize:11}}>{channelMsgs.length} msgs</div>
@@ -14943,6 +14879,24 @@ export default function AgencyOS(){
   const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};return{...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})};};
   const myPerms=getPerms(CURRENT_USER.id);
 
+  // ── Call state global (persiste entre páginas) ───────────
+  const [,callForceUpdate]=useState(0);
+  window._pixelsCallForceUpdate=()=>callForceUpdate(v=>v+1);
+
+  // Escuta encerramento de call pelo criador via Supabase broadcast
+  useEffect(()=>{
+    const ch=window._sb.channel("pixels-call-events")
+      .on("broadcast",{event:"call_ended"},(payload)=>{
+        const myCall=window._pixelsCallState;
+        if(myCall&&myCall.channelId===payload.payload?.channelId&&myCall.createdBy!==CURRENT_USER.id){
+          window._pixelsCallState=null;
+          callForceUpdate(v=>v+1);
+        }
+      })
+      .subscribe();
+    return()=>{window._sb.removeChannel(ch);};
+  },[]);
+
   // ── Fetch tasks do Supabase ───────────────────────────────
   const fetchTasks = async (token) => {
     const tok = token||tokenRef.current||getToken();
@@ -15345,6 +15299,46 @@ export default function AgencyOS(){
   const markRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));
 
   return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",position:"relative"}}>
+
+    {/* ── PIXELS CALL — painel flutuante global (persiste entre páginas) ── */}
+    {(()=>{
+      const callState=window._pixelsCallState;
+      if(!callState||!callState.url)return null;
+      const isMin=callState.minimized;
+      return(
+        <div style={{position:"fixed",bottom:20,right:20,zIndex:500,borderRadius:16,overflow:"hidden",border:"2px solid #7c3aed44",boxShadow:"0 8px 40px rgba(124,58,237,0.3)",background:"#0f0f0f",width:isMin?260:440,transition:"width .3s"}}>
+          {/* Call header */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:"#1a1a1a",borderBottom:"1px solid #333"}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              <div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/>
+              <span style={{color:"#fff",fontSize:11,fontWeight:700}}>📞 {callState.channelName}</span>
+            </div>
+            <div style={{display:"flex",gap:5}}>
+              <button onClick={()=>{window._pixelsCallState={...callState,minimized:!isMin};window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();}}
+                style={{background:"#ffffff18",border:"none",borderRadius:5,padding:"3px 8px",color:"#fff",fontSize:10,cursor:"pointer",fontWeight:700}}>
+                {isMin?"↑ Expandir":"↓ Minimizar"}
+              </button>
+              <button onClick={()=>{
+                // Se é o criador, avisa todo mundo via Supabase broadcast
+                if(callState.createdBy===CURRENT_USER.id){
+                  try{window._sb.channel("pixels-call-events").send({type:"broadcast",event:"call_ended",payload:{channelId:callState.channelId}});}catch(e){}
+                }
+                window._pixelsCallState=null;
+                window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();
+              }}
+                style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:5,padding:"3px 8px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:700}}>
+                {callState.createdBy===CURRENT_USER.id?"Encerrar":"Sair"}
+              </button>
+            </div>
+          </div>
+          {!isMin&&<iframe
+            src={callState.url+"?userName="+encodeURIComponent(CURRENT_USER.name)}
+            allow="camera; microphone; fullscreen; display-capture; autoplay"
+            style={{width:"100%",height:300,border:"none",display:"block"}}
+          />}
+        </div>
+      );
+    })()}
     {showSelfProfile&&<CollabProfilePage
       user={CURRENT_USER}
       profile={selfProfileData}
