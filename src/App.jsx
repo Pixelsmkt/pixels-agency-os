@@ -7931,6 +7931,37 @@ const getDomain=(url)=>{try{return new URL(url).hostname.replace(/^www\./,"");}c
 const isUrl=(txt)=>/https?:\/\/[^\s]+/.test(txt);
 const extractUrl=(txt)=>{const m=txt.match(/https?:\/\/[^\s]+/);return m?m[0]:null;};
 
+/* ── Som de "chamar atenção" via Web Audio API ── */
+const playShakeSound=()=>{
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    // Sequência de 3 beeps rápidos descendentes
+    [[0,880],[0.12,660],[0.24,440]].forEach(([when,freq])=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.type="sine";
+      osc.frequency.setValueAtTime(freq,ctx.currentTime+when);
+      gain.gain.setValueAtTime(0.4,ctx.currentTime+when);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+when+0.1);
+      osc.start(ctx.currentTime+when);
+      osc.stop(ctx.currentTime+when+0.12);
+    });
+    setTimeout(()=>{try{ctx.close();}catch(e){}},600);
+  }catch(e){}
+};
+
+/* ── Shake na tela ── */
+const triggerShake=()=>{
+  const el=document.getElementById("pixels-chat-area");
+  if(!el)return;
+  el.style.animation="none";
+  requestAnimationFrame(()=>{
+    el.style.animation="pixels-shake 0.5s ease";
+    setTimeout(()=>{el.style.animation="none";},550);
+  });
+};
+
 /* Status labels e cores para card preview */
 const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
 const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
@@ -8165,6 +8196,11 @@ function PageChat({isMob, perms, tasks, setTasks}){
       .channel("chat-realtime-"+Date.now())
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},(payload)=>{
         const newMsg=rowToMsg(payload.new);
+        // Se é shake e não foi eu que enviei → toca e treme
+        if(payload.new.type==="shake"&&payload.new.user_id!==CURRENT_USER.id){
+          playShakeSound();
+          triggerShake();
+        }
         setMsgs(prev=>{
           const chId=payload.new.channel_id;
           const existing=prev[chId]||[];
@@ -8341,6 +8377,15 @@ function PageChat({isMob, perms, tasks, setTasks}){
     setReactionTarget(null);
   };
 
+  /* ── Chamar atenção (shake) ── */
+  const sendShake=async()=>{
+    if(!canSend||sending)return;
+    // Toca e treme localmente para quem enviou também
+    playShakeSound();
+    triggerShake();
+    await pushMsg({type:"shake",txt:""});
+  };
+
   /* ── Soft delete de mensagem ── */
   const deleteMsg=async(msgId)=>{
     // Só o dono da msg ou sócio pode apagar
@@ -8506,10 +8551,9 @@ function PageChat({isMob, perms, tasks, setTasks}){
           </div>
 
           {/* Messages */}
-          <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:0,position:"relative"}}
+          <div id="pixels-chat-area" style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:0,position:"relative"}}
             onClick={()=>{setShowEmoji(false);setReactionTarget(null);setShowMentions(false);setShowCardPicker(false);}}>
-
-            {/* Loading */}
+            <style>{`@keyframes pixels-shake{0%,100%{transform:translateX(0)}10%,50%,90%{transform:translateX(-8px)}30%,70%{transform:translateX(8px)}}`}</style>
             {loading&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,gap:10}}>
               <div style={{width:20,height:20,border:`2px solid ${C.b1}`,borderTop:`2px solid ${C.a}`,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
               <span style={{color:C.td,fontSize:12}}>Carregando mensagens...</span>
@@ -8526,6 +8570,17 @@ function PageChat({isMob, perms, tasks, setTasks}){
                 <div key={m.id} style={{margin:"4px 0",padding:"8px 14px",background:m.type==="success"?C.gr+"12":"#fff5f5",borderRadius:10,borderLeft:`3px solid ${m.type==="success"?C.gr:m.color||C.rd}`,display:"flex",alignItems:"center",gap:8}}>
                   <div style={{flex:1,color:m.type==="success"?C.gr:m.color||C.rd,fontSize:12,fontWeight:600}}>{m.txt}</div>
                   <span style={{color:C.td,fontSize:9,flexShrink:0}}>{m.time}</span>
+                </div>
+              );
+
+              // Shake message
+              if(m.type==="shake")return(
+                <div key={m.id} style={{margin:"6px 0",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <div style={{background:"linear-gradient(135deg,#f97316,#f97316cc)",borderRadius:20,padding:"6px 16px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 12px #f9731640"}}>
+                    <span style={{fontSize:16}}>📣</span>
+                    <span style={{color:"#fff",fontSize:12,fontWeight:700}}>{m.u} chamou a atenção de todos!</span>
+                    <span style={{color:"rgba(255,255,255,0.7)",fontSize:10}}>{m.time}</span>
+                  </div>
                 </div>
               );
 
@@ -8744,6 +8799,12 @@ function PageChat({isMob, perms, tasks, setTasks}){
                   <button onClick={e=>{e.stopPropagation();setShowEmoji(v=>!v);}} title="Emoji"
                     style={{background:"none",border:"none",color:showEmoji?C.a:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🙂
+                  </button>
+                  <button onClick={sendShake} title="Chamar atenção de todos"
+                    style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0,transition:"all .15s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.color="#f97316";e.currentTarget.style.transform="scale(1.2)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.color=C.td;e.currentTarget.style.transform="scale(1)";}}>
+                    📣
                   </button>
                 </>}
 
