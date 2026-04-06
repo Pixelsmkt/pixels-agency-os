@@ -7870,14 +7870,26 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
 // ======= 05_chat.jsx =======
 
 /* ─────────────────────────────────────────────────────────
-   CHAT — Features:
-   • /demandas  → picker de cartões com busca → card linkado
-   • Card preview rico dentro da mensagem
-   • Seção "Clientes" → canal por cliente (só vê o próprio)
-   • Preview de YouTube / links gerais
-   • Permissões granulares por canal
-   • @menção de membros
-   • Reações, áudio, foto
+   CHAT — Supabase realtime + persistência completa
+
+   SQL para rodar no Supabase antes de usar:
+   ─────────────────────────────────────────
+   CREATE TABLE IF NOT EXISTS messages (
+     id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
+     channel_id  text        NOT NULL,
+     user_id     text        NOT NULL,
+     user_name   text,
+     user_av     text,
+     user_color  text,
+     type        text        DEFAULT 'text',
+     content     jsonb       DEFAULT '{}',
+     reactions   jsonb       DEFAULT '[]',
+     created_at  timestamptz DEFAULT now()
+   );
+   ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+   CREATE POLICY "allow_all" ON messages FOR ALL USING (true) WITH CHECK (true);
+   ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+   ─────────────────────────────────────────
 ───────────────────────────────────────────────────────── */
 
 /* Helpers de link preview */
@@ -7893,7 +7905,7 @@ const extractUrl=(txt)=>{const m=txt.match(/https?:\/\/[^\s]+/);return m?m[0]:nu
 const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
 const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
 
-/* Link Preview Component */
+/* ── Link Preview ── */
 function LinkPreview({url}){
   const ytId=getYtId(url);
   if(ytId){
@@ -7915,7 +7927,6 @@ function LinkPreview({url}){
       </a>
     );
   }
-  // Generic URL preview
   return(
     <a href={url} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:8,borderRadius:9,border:"1px solid #e2e8f0",padding:"8px 12px",maxWidth:280,textDecoration:"none",background:"#f8fafc",marginTop:6}}>
       <div style={{width:32,height:32,borderRadius:8,background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>🔗</div>
@@ -7927,7 +7938,7 @@ function LinkPreview({url}){
   );
 }
 
-/* Card Preview Component (card linkado na mensagem) */
+/* ── Card Preview ── */
 function CardPreview({card,onClick}){
   if(!card)return<div style={{background:"#fef2f2",borderRadius:9,padding:"8px 12px",fontSize:11,color:"#dc2626",border:"1px solid #fecaca",marginTop:6}}>❌ Cartão não encontrado</div>;
   const cl=CLIENTS.find(c=>c.id===card.client);
@@ -7960,7 +7971,36 @@ function CardPreview({card,onClick}){
   );
 }
 
+/* ── Converte row do Supabase → msg local ── */
+const rowToMsg=(row)=>({
+  id:        row.id,
+  u:         row.user_name,
+  uid:       row.user_id,
+  av:        row.user_av,
+  color:     row.user_color,
+  type:      row.type,
+  reactions: Array.isArray(row.reactions)?row.reactions:[],
+  time:      new Date(row.created_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
+  ...(row.content||{}),
+});
+
+/* ── Sementes para canais sem histórico ── */
+const SEED_MSGS={
+  geral:[
+    {uid:"vinicius",u:"Vinicius",av:"V",color:C.a,type:"text",txt:"Bom dia time! ROAS do Bioter subindo essa semana 🚀",reactions:[{e:"🚀",users:["gustavo","ellen"]}]},
+    {uid:"ellen",u:"Hellen",av:"E",color:C.pk,type:"text",txt:"Criativos do Climaves prontos para aprovação! Já enviou para o menu ✅",reactions:[]},
+    {uid:"gustavo",u:"Gustavo",av:"G",color:C.aL,type:"text",txt:"Vinicius, precisamos revisar a estratégia de leads do VetService. Agende 30min hoje?",reactions:[{e:"👍",users:["vinicius"]}]},
+    {uid:"andre",u:"André",av:"A",color:"#e040fb",type:"text",txt:"Stories Arabuta finalizados! Foram pro quadro de aprovação",reactions:[{e:"✅",users:["ellen","vinicius"]}]},
+  ],
+  alertas:[
+    {uid:"sistema",u:"Sistema",av:"⚡",color:C.rd,type:"alert",txt:"🚨 Climaves: Budget Google estourou (101%)"},
+    {uid:"sistema",u:"Sistema",av:"⚡",color:C.rd,type:"alert",txt:"🔥 Tour Bioter Toledo — 2 dias sem atualização"},
+    {uid:"sistema",u:"Sistema",av:"⚡",color:C.gr,type:"success",txt:"✅ Bioter ROAS subiu para 4.8x — acima da meta!"},
+  ],
+};
+
 function PageChat({isMob, perms, tasks, setTasks}){
+  const sb=window._sb;
   const isSocio=CURRENT_USER.level===1;
   const p=perms||{};
 
@@ -7973,9 +8013,6 @@ function PageChat({isMob, perms, tasks, setTasks}){
     {id:"social",   name:"social",   icon:"📱", desc:"Social Media",            perm:"verCanalSocial",  group:"interno"},
     {id:"alertas",  name:"alertas",  icon:"⚡", desc:"Alertas automáticos",     perm:"verCanalAlertas", group:"interno"},
   ];
-
-  // Client channels — each client gets own channel
-  // Permission: "verCanalCliente_[clientId]" or isSocio
   const CLIENT_CHANNELS=CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>({
     id:"cliente_"+cl.id,
     name:cl.abbr.toLowerCase(),
@@ -7988,81 +8025,29 @@ function PageChat({isMob, perms, tasks, setTasks}){
     clientName:cl.name,
   }));
 
-  // Filter visible channels by permission
-  const visibleInternal=INTERNAL_CHANNELS.filter(c=>
-    isSocio||p[c.perm]
-  );
-  const visibleClient=CLIENT_CHANNELS.filter(c=>
-    isSocio||p[c.perm]||p["verCanalTodosClientes"]
-  );
+  const visibleInternal=INTERNAL_CHANNELS.filter(c=>isSocio||p[c.perm]);
+  const visibleClient=CLIENT_CHANNELS.filter(c=>isSocio||p[c.perm]||p["verCanalTodosClientes"]);
   const ALL_VISIBLE=[...visibleInternal,...visibleClient];
-
-  /* ── INIT messages ── */
-  const INIT_MSGS={
-    geral:[
-      {id:1,u:"Vinicius",uid:"vinicius",av:"V",color:C.a,txt:"Bom dia time! ROAS do Bioter subindo essa semana 🚀",time:"08:00",reactions:[{e:"🚀",users:["gustavo","ellen"]},{e:"🔥",users:["guilherme"]}],type:"text"},
-      {id:2,u:"Hellen",uid:"ellen",av:"E",color:C.pk,txt:"Criativos do Climaves prontos para aprovação! Já enviou para o menu ✅",time:"08:45",reactions:[],type:"text"},
-      {id:3,u:"Gustavo",uid:"gustavo",av:"G",color:C.aL,txt:"Vinicius, precisamos revisar a estratégia de leads do VetService. Agende 30min hoje?",time:"09:10",reactions:[{e:"👍",users:["vinicius"]}],type:"text"},
-      {id:4,u:"André",uid:"andre",av:"A",color:"#e040fb",txt:"Stories Arabuta finalizados! Foram pro quadro de aprovação",time:"09:22",reactions:[{e:"✅",users:["ellen","vinicius"]}],type:"text"},
-      {id:5,u:"Vinicius",uid:"vinicius",av:"V",color:C.a,txt:"@Gustavo - confirmado! 14h. @André - vi lá, ficou top! 🎨",time:"09:30",reactions:[],type:"text"},
-    ],
-    design:[
-      {id:1,u:"André",uid:"andre",av:"A",color:"#e040fb",txt:"Alguém tem o briefing atualizado da Arabuta?",time:"07:55",reactions:[],type:"text"},
-      {id:2,u:"Hellen",uid:"ellen",av:"E",color:C.pk,txt:"Sim! Deixei no drive. Pasta Clientes > Arabuta > Briefings 2026",time:"08:02",reactions:[{e:"🙏",users:["andre"]}],type:"text"},
-    ],
-    video:[
-      {id:1,u:"Guilherme",uid:"guilherme",av:"G",color:C.bl,txt:"Pessoal — Reels do Bioter sai hoje às 18h. Finalizando os cortes",time:"10:00",reactions:[{e:"💪",users:["joao"]}],type:"text"},
-      {id:2,u:"João",uid:"joao",av:"J",color:C.yw,txt:"Show! Eu fico no Construschorr então. Entrego amanhã cedo",time:"10:15",reactions:[],type:"text"},
-    ],
-    trafego:[
-      {id:1,u:"Vinicius",uid:"vinicius",av:"V",color:C.a,txt:"Arabuta ROAS 5.6x essa semana 🔥 Melhor resultado do ano",time:"08:30",reactions:[{e:"🔥",users:["gustavo","ellen"]}],type:"text"},
-      {id:2,u:"Gustavo",uid:"gustavo",av:"G",color:C.aL,txt:"Climaves precisa de atenção. Budget quase estourando no Google",time:"09:00",reactions:[{e:"⚠",users:["vinicius"]}],type:"text"},
-    ],
-    social:[
-      {id:1,u:"Hellen",uid:"ellen",av:"E",color:C.pk,txt:"Calendário de abril fechado para todos os clientes! ✅",time:"09:00",reactions:[{e:"🎉",users:["vinicius","gustavo","andre"]}],type:"text"},
-    ],
-    alertas:[
-      {id:1,u:"Sistema",uid:"sistema",av:"⚡",color:C.rd,txt:"🚨 Climaves: Budget Google estourou (101%)",time:"08:00",reactions:[],type:"alert"},
-      {id:2,u:"Sistema",uid:"sistema",av:"⚡",color:C.rd,txt:"🔥 Tour Bioter Toledo — 2 dias sem atualização (SLA em risco)",time:"08:10",reactions:[],type:"alert"},
-      {id:3,u:"Sistema",uid:"sistema",av:"⚡",color:C.or,txt:"⚠ Construschorr: 5 demandas urgentes no kanban",time:"08:15",reactions:[],type:"alert"},
-      {id:4,u:"Sistema",uid:"sistema",av:"⚡",color:C.yw,txt:"📋 3 copys aguardando aprovação há mais de 24h",time:"08:30",reactions:[],type:"alert"},
-      {id:5,u:"Sistema",uid:"sistema",av:"⚡",color:C.gr,txt:"✅ Bioter ROAS subiu para 4.8x — acima da meta!",time:"09:00",reactions:[],type:"success"},
-    ],
-    // Client channels start empty
-    ...Object.fromEntries(CLIENT_CHANNELS.map(c=>[c.id,[
-      {id:1,u:"Pixels Agência",uid:"sistema",av:"⭐",color:C.a,txt:`Bem-vindo ao canal exclusivo de ${c.clientName}! Aqui você pode tirar dúvidas e acompanhar o andamento dos projetos.`,time:"09:00",reactions:[],type:"text"},
-    ]]))
-  };
 
   const EMOJIS=["👍","🔥","🚀","✅","❤","😂","🎨","💪","⚡","🎯","👏","🙏","😎","🤝","💡","🏆"];
   const canSend=isSocio||!!p.enviarMensagem;
 
+  /* ── State ── */
   const [ch,setCh]=useState(()=>ALL_VISIBLE[0]?.id||"geral");
   const activeCh=ALL_VISIBLE.find(c=>c.id===ch)?ch:(ALL_VISIBLE[0]?.id||"geral");
 
-  const [msgs,setMsgs]=useState(()=>{
-    const initial={...INIT_MSGS};
-    // Load client channel messages from localStorage (synced with portal)
-    CLIENT_CHANNELS.forEach(c=>{
-      try{
-        const s=localStorage.getItem("pixels-chat-portal-"+c.clientId);
-        if(s){const parsed=JSON.parse(s);if(parsed.length>0)initial[c.id]=parsed;}
-      }catch(e){}
-    });
-    return initial;
-  });
+  const [msgs,setMsgs]=useState({});           // { channelId: msg[] }
+  const [loading,setLoading]=useState(true);
+  const [sending,setSending]=useState(false);
+
   const [input,setInput]=useState("");
   const [showEmoji,setShowEmoji]=useState(false);
   const [reactionTarget,setReactionTarget]=useState(null);
   const [showChannels,setShowChannels]=useState(!isMob);
   const [mentionQuery,setMentionQuery]=useState("");
   const [showMentions,setShowMentions]=useState(false);
-
-  // /demandas picker
   const [showCardPicker,setShowCardPicker]=useState(false);
   const [cardSearch,setCardSearch]=useState("");
-
-  // Card modal when clicking a linked card
   const [openCard,setOpenCard]=useState(null);
 
   // Audio
@@ -8081,66 +8066,215 @@ function PageChat({isMob, perms, tasks, setTasks}){
   const inputRef=useRef(null);
   const textareaRef=useRef(null);
   const cardSearchRef=useRef(null);
+  const realtimeRef=useRef(null);
 
-  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,ch]);
+  /* ── Scroll para o fim ── */
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,activeCh]);
 
+  /* ── Fecha dropdowns ao clicar fora ── */
   useEffect(()=>{
     const close=()=>{setShowEmoji(false);setReactionTarget(null);setShowMentions(false);setShowCardPicker(false);};
     document.addEventListener("click",close);
     return()=>document.removeEventListener("click",close);
   },[]);
 
-  // Focus card search when picker opens
   useEffect(()=>{
     if(showCardPicker)setTimeout(()=>cardSearchRef.current?.focus(),50);
   },[showCardPicker]);
 
+  /* ── Carrega mensagens do canal ── */
+  const loadChannel=async(channelId)=>{
+    setLoading(true);
+    try{
+      const{data,error}=await sb
+        .from("messages")
+        .select("*")
+        .eq("channel_id",channelId)
+        .order("created_at",{ascending:true})
+        .limit(200);
+
+      if(error)throw error;
+
+      if(data&&data.length>0){
+        setMsgs(prev=>({...prev,[channelId]:data.map(rowToMsg)}));
+      } else {
+        // Canal vazio — insere sementes se existirem
+        const seeds=SEED_MSGS[channelId];
+        if(seeds&&seeds.length>0){
+          const rows=seeds.map(s=>({
+            channel_id:channelId,
+            user_id:s.uid,
+            user_name:s.u,
+            user_av:s.av,
+            user_color:s.color,
+            type:s.type||"text",
+            content:{txt:s.txt||""},
+            reactions:s.reactions||[],
+          }));
+          const{data:inserted}=await sb.from("messages").insert(rows).select();
+          if(inserted)setMsgs(prev=>({...prev,[channelId]:inserted.map(rowToMsg)}));
+          else setMsgs(prev=>({...prev,[channelId]:[]}));
+        } else {
+          setMsgs(prev=>({...prev,[channelId]:[]}));
+        }
+      }
+    }catch(e){
+      console.warn("Erro ao carregar mensagens:",e);
+      setMsgs(prev=>({...prev,[channelId]:[]}));
+    }
+    setLoading(false);
+  };
+
+  /* ── Realtime subscription ── */
+  const setupRealtime=()=>{
+    if(realtimeRef.current){
+      sb.removeChannel(realtimeRef.current);
+    }
+    const channel=sb
+      .channel("chat-realtime-"+Date.now())
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},(payload)=>{
+        const newMsg=rowToMsg(payload.new);
+        setMsgs(prev=>{
+          const chId=payload.new.channel_id;
+          const existing=prev[chId]||[];
+          // Evita duplicata (mensagem própria já foi adicionada otimisticamente)
+          if(existing.some(m=>m.id===newMsg.id))return prev;
+          return{...prev,[chId]:[...existing,newMsg]};
+        });
+      })
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"messages"},(payload)=>{
+        const updated=rowToMsg(payload.new);
+        setMsgs(prev=>{
+          const chId=payload.new.channel_id;
+          return{...prev,[chId]:(prev[chId]||[]).map(m=>m.id===updated.id?{...m,reactions:updated.reactions}:m)};
+        });
+      })
+      .subscribe();
+    realtimeRef.current=channel;
+  };
+
+  /* ── Monta: carrega canal inicial + realtime ── */
+  useEffect(()=>{
+    loadChannel(activeCh);
+    setupRealtime();
+    return()=>{
+      if(realtimeRef.current)sb.removeChannel(realtimeRef.current);
+    };
+  },[]);
+
+  /* ── Troca de canal ── */
+  useEffect(()=>{
+    if(msgs[activeCh]===undefined)loadChannel(activeCh);
+    else setLoading(false);
+  },[activeCh]);
+
+  /* ── Upload de arquivo para Supabase Storage ── */
+  const uploadFile=async(file,folder)=>{
+    const ext=file.name?file.name.split(".").pop():"bin";
+    const path=`chat/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const{error}=await sb.storage.from("pixels-files").upload(path,file,{upsert:false});
+    if(error)throw error;
+    const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  const uploadAudio=async(blob)=>{
+    const path=`chat/audio/${Date.now()}-${Math.random().toString(36).slice(2)}.webm`;
+    const{error}=await sb.storage.from("pixels-files").upload(path,blob,{upsert:false,contentType:"audio/webm"});
+    if(error)throw error;
+    const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+    return data.publicUrl;
+  };
+
+  /* ── Envia mensagem ── */
   const nowTime=()=>new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 
-  const pushMsg=(extra)=>{
-    const m={id:Date.now(),u:CURRENT_USER.name,uid:CURRENT_USER.id,av:CURRENT_USER.av,color:CURRENT_USER.color,time:nowTime(),reactions:[],...extra};
-    setMsgs(p=>{
-      const updated={...p,[activeCh]:[...(p[activeCh]||[]),m]};
-      // Sync client channels to localStorage so portal chat stays in sync
-      if(activeCh.startsWith("cliente_")){
-        const clientId=activeCh.replace("cliente_","");
-        try{localStorage.setItem("pixels-chat-portal-"+clientId,JSON.stringify(updated[activeCh]));}catch(e){}
+  const pushMsg=async(extra)=>{
+    if(!canSend||sending)return;
+    setSending(true);
+
+    const localId="local-"+Date.now();
+    const localMsg={
+      id:localId,
+      u:CURRENT_USER.name,uid:CURRENT_USER.id,
+      av:CURRENT_USER.av,color:CURRENT_USER.color,
+      time:nowTime(),reactions:[],
+      ...extra,
+    };
+    // Otimista: mostra imediatamente
+    setMsgs(prev=>({...prev,[activeCh]:[...(prev[activeCh]||[]),localMsg]}));
+
+    try{
+      const{data:inserted,error}=await sb.from("messages").insert({
+        channel_id:activeCh,
+        user_id:CURRENT_USER.id,
+        user_name:CURRENT_USER.name,
+        user_av:CURRENT_USER.av,
+        user_color:CURRENT_USER.color,
+        type:extra.type||"text",
+        content:extra,
+        reactions:[],
+      }).select().single();
+
+      if(error)throw error;
+
+      // Substitui msg otimista pelo ID real do Supabase
+      if(inserted){
+        const realMsg=rowToMsg(inserted);
+        setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).map(m=>m.id===localId?{...realMsg,...extra}:m)}));
       }
-      return updated;
-    });
+    }catch(e){
+      console.warn("Erro ao enviar mensagem:",e);
+      // Remove msg otimista em caso de erro
+      setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).filter(m=>m.id!==localId)}));
+    }
+    setSending(false);
   };
 
-  const autoResize=()=>{
-    const ta=textareaRef.current;
-    if(!ta)return;
-    ta.style.height="auto";
-    ta.style.height=Math.min(ta.scrollHeight,120)+"px";
-  };
+  const send=async()=>{
+    if(!canSend||sending)return;
 
-  const send=()=>{
-    if(!canSend)return;
     if(photoPreview){
-      pushMsg({type:"image",imageUrl:photoPreview.url,txt:input.trim()||""});
+      setSending(true);
+      try{
+        const url=await uploadFile(photoPreview.file,"photos");
+        await pushMsg({type:"image",imageUrl:url,txt:input.trim()||""});
+      }catch(e){
+        console.warn("Erro upload foto:",e);
+        // Fallback: envia como blob local (não persiste entre sessões)
+        await pushMsg({type:"image",imageUrl:photoPreview.url,txt:input.trim()||""});
+      }
       setPhotoPreview(null);setInput("");
       if(textareaRef.current)textareaRef.current.style.height="auto";
+      setSending(false);
       return;
     }
+
     if(audioBlob){
-      pushMsg({type:"audio",audioUrl:audioPreviewUrl,txt:""});
+      setSending(true);
+      try{
+        const url=await uploadAudio(audioBlob);
+        await pushMsg({type:"audio",audioUrl:url,txt:""});
+      }catch(e){
+        console.warn("Erro upload áudio:",e);
+        await pushMsg({type:"audio",audioUrl:audioPreviewUrl,txt:""});
+      }
       setAudioBlob(null);setAudioPreviewUrl(null);
+      setSending(false);
       return;
     }
+
     const txt=input.trim();
     if(!txt)return;
-    pushMsg({type:"text",txt});
+    await pushMsg({type:"text",txt});
     setInput("");setShowEmoji(false);setShowMentions(false);setShowCardPicker(false);
     if(textareaRef.current)textareaRef.current.style.height="auto";
   };
 
-  // Insert linked card into chat
-  const insertCard=(task)=>{
+  /* ── Linkar cartão ── */
+  const insertCard=async(task)=>{
     const txt=input.trim();
-    pushMsg({
+    await pushMsg({
       type:"card",
       taskId:task.id,
       taskTitle:task.title,
@@ -8152,40 +8286,55 @@ function PageChat({isMob, perms, tasks, setTasks}){
     if(textareaRef.current)textareaRef.current.style.height="auto";
   };
 
-  const addReaction=(msgId,emoji)=>{
-    setMsgs(p=>({...p,[activeCh]:(p[activeCh]||[]).map(m=>{
+  /* ── Reações ── */
+  const addReaction=async(msgId,emoji)=>{
+    // Atualiza local otimisticamente
+    setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).map(m=>{
       if(m.id!==msgId||m.uid==="sistema")return m;
       const existing=m.reactions.find(r=>r.e===emoji);
+      let newReactions;
       if(existing){
         if(existing.users.includes(CURRENT_USER.id))
-          return{...m,reactions:m.reactions.map(r=>r.e===emoji?{...r,users:r.users.filter(u=>u!==CURRENT_USER.id)}:r).filter(r=>r.users.length>0)};
-        return{...m,reactions:m.reactions.map(r=>r.e===emoji?{...r,users:[...r.users,CURRENT_USER.id]}:r)};
+          newReactions=m.reactions.map(r=>r.e===emoji?{...r,users:r.users.filter(u=>u!==CURRENT_USER.id)}:r).filter(r=>r.users.length>0);
+        else
+          newReactions=m.reactions.map(r=>r.e===emoji?{...r,users:[...r.users,CURRENT_USER.id]}:r);
+      } else {
+        newReactions=[...m.reactions,{e:emoji,users:[CURRENT_USER.id]}];
       }
-      return{...m,reactions:[...m.reactions,{e:emoji,users:[CURRENT_USER.id]}]};
+      // Persiste no Supabase (ignora IDs locais otimistas)
+      if(!String(msgId).startsWith("local-")){
+        sb.from("messages").update({reactions:newReactions}).eq("id",msgId).then(()=>{});
+      }
+      return{...m,reactions:newReactions};
     })}));
     setReactionTarget(null);
   };
+
+  /* ── Input handlers ── */
+  const autoResize=()=>{
+    const ta=textareaRef.current;
+    if(!ta)return;
+    ta.style.height="auto";
+    ta.style.height=Math.min(ta.scrollHeight,120)+"px";
+  };
+
+  const filteredTeam=TEAM.filter(u=>u.name.toLowerCase().includes(mentionQuery.toLowerCase()));
+  const allTasks=tasks||[];
+  const filteredCards=allTasks.filter(t=>
+    !t.deletedAt&&
+    (cardSearch===""||t.title.toLowerCase().includes(cardSearch.toLowerCase())||(CLIENTS.find(c=>c.id===t.client)?.name||"").toLowerCase().includes(cardSearch.toLowerCase()))
+  ).slice(0,12);
+
+  const switchChannel=(id)=>{setCh(id);if(isMob)setShowChannels(false);};
 
   const handleInput=(e)=>{
     const val=e.target.value;
     setInput(val);
     autoResize();
-
-    // @mention
     const lastAt=val.lastIndexOf("@");
     if(lastAt>=0&&!val.slice(lastAt+1).includes(" ")){
       setShowMentions(true);setMentionQuery(val.slice(lastAt+1));
     } else setShowMentions(false);
-
-    // /demandas command
-    const slashMatch=val.match(/\/(\w*)$/);
-    if(slashMatch&&"demandas".startsWith(slashMatch[1])){
-      setShowCardPicker(true);setCardSearch("");
-    } else if(!val.includes("/demandas")){
-      // keep picker open if was opened by /demandas
-    }
-
-    // If user typed full /demandas, open picker and clear command
     if(val.endsWith("/demandas")||val.endsWith("/demandas ")){
       setInput(val.replace(/\/demandas\s?$/,""));
       setShowCardPicker(true);setCardSearch("");
@@ -8218,24 +8367,14 @@ function PageChat({isMob, perms, tasks, setTasks}){
   const stopRec=()=>{mediaRecRef.current?.stop();clearInterval(recTimerRef.current);setRecording(false);};
   const cancelAudio=()=>{setAudioBlob(null);setAudioPreviewUrl(null);};
 
-  const filteredTeam=TEAM.filter(u=>u.name.toLowerCase().includes(mentionQuery.toLowerCase()));
-
-  // Filter cards for /demandas picker
-  const allTasks=tasks||[];
-  const filteredCards=allTasks.filter(t=>
-    !t.deletedAt&&
-    (cardSearch===""||t.title.toLowerCase().includes(cardSearch.toLowerCase())||(CLIENTS.find(c=>c.id===t.client)?.name||"").toLowerCase().includes(cardSearch.toLowerCase()))
-  ).slice(0,12);
-
-  const switchChannel=(id)=>{setCh(id);if(isMob)setShowChannels(false);};
-
   const activeChData=ALL_VISIBLE.find(c=>c.id===activeCh);
   const isClientCh=activeChData?.group==="clientes";
   const clientChData=isClientCh?CLIENTS.find(c=>c.id===activeChData.clientId):null;
+  const channelMsgs=msgs[activeCh]||[];
 
+  /* ─── RENDER ─── */
   return(
     <>
-      {/* Card modal quando clica em card linkado */}
       {openCard&&tasks&&setTasks&&(
         <CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={CURRENT_USER}/>
       )}
@@ -8248,23 +8387,17 @@ function PageChat({isMob, perms, tasks, setTasks}){
             <div style={{color:C.tx,fontWeight:800,fontSize:14}}>💬 Canais</div>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"8px 8px"}}>
-
-            {/* Internal channels */}
             {visibleInternal.length>0&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"8px 6px 5px"}}>Equipe</div>
-              {visibleInternal.map(c=>{
-                const unread=(msgs[c.id]||[]).length>0;
-                return(
-                  <button key={c.id} onClick={()=>switchChannel(c.id)}
-                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:"none",background:activeCh===c.id?C.ag:"transparent",cursor:"pointer",textAlign:"left",marginBottom:1}}>
-                    <span style={{fontSize:13,flexShrink:0}}>{c.icon}</span>
-                    <span style={{color:activeCh===c.id?C.a:C.ts,fontWeight:activeCh===c.id?700:400,fontSize:12,flex:1}}>#{c.name}</span>
-                  </button>
-                );
-              })}
+              {visibleInternal.map(c=>(
+                <button key={c.id} onClick={()=>switchChannel(c.id)}
+                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:"none",background:activeCh===c.id?C.ag:"transparent",cursor:"pointer",textAlign:"left",marginBottom:1}}>
+                  <span style={{fontSize:13,flexShrink:0}}>{c.icon}</span>
+                  <span style={{color:activeCh===c.id?C.a:C.ts,fontWeight:activeCh===c.id?700:400,fontSize:12,flex:1}}>#{c.name}</span>
+                </button>
+              ))}
             </>}
 
-            {/* Client channels */}
             {visibleClient.length>0&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px"}}>🏢 Clientes</div>
               {visibleClient.map(c=>(
@@ -8276,7 +8409,6 @@ function PageChat({isMob, perms, tasks, setTasks}){
               ))}
             </>}
 
-            {/* Team members */}
             {visibleInternal.length>0&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px"}}>Membros</div>
               {TEAM.map(m=>(
@@ -8311,26 +8443,37 @@ function PageChat({isMob, perms, tasks, setTasks}){
               </div>
               <div style={{color:C.td,fontSize:10}}>{activeChData?.desc}</div>
             </div>
-            <div style={{color:C.td,fontSize:11}}>{(msgs[activeCh]||[]).length} msgs</div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              {sending&&<div style={{color:C.td,fontSize:10}}>Enviando...</div>}
+              <div style={{color:C.td,fontSize:11}}>{channelMsgs.length} msgs</div>
+            </div>
           </div>
 
           {/* Messages */}
-          <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:0}}
+          <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:0,position:"relative"}}
             onClick={()=>{setShowEmoji(false);setReactionTarget(null);setShowMentions(false);setShowCardPicker(false);}}>
-            {(msgs[activeCh]||[]).map((m,i)=>{
+
+            {/* Loading */}
+            {loading&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,gap:10}}>
+              <div style={{width:20,height:20,border:`2px solid ${C.b1}`,borderTop:`2px solid ${C.a}`,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
+              <span style={{color:C.td,fontSize:12}}>Carregando mensagens...</span>
+              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+            </div>}
+
+            {!loading&&channelMsgs.map((m,i)=>{
               const isMe=m.uid===CURRENT_USER.id;
               const isAlert=m.type==="alert"||m.type==="success";
-              const prevMsg=(msgs[activeCh]||[])[i-1];
+              const prevMsg=channelMsgs[i-1];
               const grouped=prevMsg&&prevMsg.uid===m.uid&&!isAlert&&m.type==="text"&&prevMsg.type==="text";
 
               if(isAlert)return(
-                <div key={m.id} style={{margin:"4px 0",padding:"8px 14px",background:m.type==="success"?C.gr+"12":"#fff5f5",borderRadius:10,borderLeft:`3px solid ${m.type==="success"?C.gr:m.color}`,display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{flex:1,color:m.type==="success"?C.gr:m.color,fontSize:12,fontWeight:600}}>{m.txt}</div>
+                <div key={m.id} style={{margin:"4px 0",padding:"8px 14px",background:m.type==="success"?C.gr+"12":"#fff5f5",borderRadius:10,borderLeft:`3px solid ${m.type==="success"?C.gr:m.color||C.rd}`,display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{flex:1,color:m.type==="success"?C.gr:m.color||C.rd,fontSize:12,fontWeight:600}}>{m.txt}</div>
                   <span style={{color:C.td,fontSize:9,flexShrink:0}}>{m.time}</span>
                 </div>
               );
 
-              const urlInMsg=m.type==="text"?extractUrl(m.txt):null;
+              const urlInMsg=m.type==="text"?extractUrl(m.txt||""):null;
               const linkedCard=m.type==="card"?(allTasks.find(t=>t.id===m.taskId)||null):null;
 
               return(
@@ -8339,38 +8482,33 @@ function PageChat({isMob, perms, tasks, setTasks}){
                   onMouseEnter={e=>e.currentTarget.querySelector(".msg-actions")?.style&&(e.currentTarget.querySelector(".msg-actions").style.opacity="1")}
                   onMouseLeave={e=>e.currentTarget.querySelector(".msg-actions")?.style&&(e.currentTarget.querySelector(".msg-actions").style.opacity="0")}>
 
-                  {/* Avatar */}
                   <div style={{width:34,flexShrink:0,paddingTop:2}}>
-                    {!grouped&&<div style={{width:34,height:34,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11}}>{m.av}</div>}
+                    {!grouped&&<div style={{width:34,height:34,borderRadius:"50%",background:m.color||C.ts,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11}}>{m.av}</div>}
                   </div>
 
-                  {/* Content */}
                   <div style={{flex:1,minWidth:0}}>
                     {!grouped&&<div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:3}}>
-                      <span style={{color:m.color,fontWeight:700,fontSize:12}}>{m.u}</span>
+                      <span style={{color:m.color||C.ts,fontWeight:700,fontSize:12}}>{m.u}</span>
                       <span style={{color:C.td,fontSize:10}}>{m.time}</span>
                     </div>}
 
-                    {/* Text message */}
                     {m.type==="text"&&(
                       <div>
                         <div style={{background:isMe?C.a+"18":C.s1,borderRadius:"12px 12px 12px 4px",padding:"8px 12px",display:"inline-block",maxWidth:"85%",color:C.tx,fontSize:12,lineHeight:1.6,wordBreak:"break-word"}}>
-                          {m.txt.split(/(@\w+)/g).map((part,i)=>
+                          {(m.txt||"").split(/(@\w+)/g).map((part,i)=>
                             part.startsWith("@")
                               ?<span key={i} style={{color:C.a,fontWeight:700}}>{part}</span>
                               :<span key={i}>{part}</span>
                           )}
                         </div>
-                        {/* Link preview */}
                         {urlInMsg&&<LinkPreview url={urlInMsg}/>}
                       </div>
                     )}
 
-                    {/* Card message */}
                     {m.type==="card"&&(
                       <div>
                         {m.txt&&<div style={{background:isMe?C.a+"18":C.s1,borderRadius:"12px 12px 12px 4px",padding:"8px 12px",display:"inline-block",maxWidth:"85%",color:C.tx,fontSize:12,lineHeight:1.6,wordBreak:"break-word",marginBottom:2}}>
-                          {m.txt.split(/(@\w+)/g).map((part,i)=>
+                          {(m.txt||"").split(/(@\w+)/g).map((part,i)=>
                             part.startsWith("@")
                               ?<span key={i} style={{color:C.a,fontWeight:700}}>{part}</span>
                               :<span key={i}>{part}</span>
@@ -8380,19 +8518,16 @@ function PageChat({isMob, perms, tasks, setTasks}){
                       </div>
                     )}
 
-                    {/* Image */}
                     {m.type==="image"&&<div style={{display:"inline-block",maxWidth:"70%"}}>
                       <img src={m.imageUrl} alt="foto" style={{maxWidth:"100%",maxHeight:280,borderRadius:12,display:"block",cursor:"pointer",objectFit:"cover"}} onClick={()=>window.open(m.imageUrl,"_blank")}/>
                       {m.txt&&<div style={{color:C.ts,fontSize:11,marginTop:4}}>{m.txt}</div>}
                     </div>}
 
-                    {/* Audio */}
                     {m.type==="audio"&&<div style={{background:isMe?C.a+"18":C.s1,borderRadius:12,padding:"8px 12px",display:"inline-flex",alignItems:"center",gap:8,maxWidth:260}}>
                       <span style={{fontSize:16}}>🎙</span>
                       <audio src={m.audioUrl} controls style={{height:28,flex:1,minWidth:0}}/>
                     </div>}
 
-                    {/* Reactions */}
                     {(m.reactions||[]).length>0&&<div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}}>
                       {m.reactions.map(r=>(
                         <button key={r.e} onClick={e=>{e.stopPropagation();addReaction(m.id,r.e);}}
@@ -8403,7 +8538,6 @@ function PageChat({isMob, perms, tasks, setTasks}){
                     </div>}
                   </div>
 
-                  {/* Hover actions */}
                   {m.uid!=="sistema"&&<div className="msg-actions" onClick={e=>e.stopPropagation()}
                     style={{position:"absolute",right:0,top:0,background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:"3px 6px",display:"flex",gap:2,opacity:0,transition:"opacity .15s",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
                     {EMOJIS.slice(0,5).map(e=>(
@@ -8418,13 +8552,19 @@ function PageChat({isMob, perms, tasks, setTasks}){
                 </div>
               );
             })}
+
+            {!loading&&channelMsgs.length===0&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flex:1,gap:8,color:C.td}}>
+              <div style={{fontSize:32}}>💬</div>
+              <div style={{fontSize:13,fontWeight:600}}>Nenhuma mensagem ainda</div>
+              <div style={{fontSize:11}}>Seja o primeiro a escrever em #{activeChData?.name}</div>
+            </div>}
+
             <div ref={endRef}/>
           </div>
 
           {/* ── INPUT AREA ── */}
           <div style={{borderTop:`1px solid ${C.b1}`,background:C.card,flexShrink:0}}>
 
-            {/* Photo preview */}
             {photoPreview&&<div style={{padding:"8px 14px",display:"flex",alignItems:"center",gap:10,background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
               <img src={photoPreview.url} alt="preview" style={{height:56,width:56,objectFit:"cover",borderRadius:8,flexShrink:0}}/>
               <div style={{flex:1,minWidth:0}}>
@@ -8434,14 +8574,12 @@ function PageChat({isMob, perms, tasks, setTasks}){
               <button onClick={cancelPhoto} style={{background:"none",border:"none",color:C.rd,cursor:"pointer",fontSize:18,padding:4}}>✕</button>
             </div>}
 
-            {/* Audio preview */}
             {audioPreviewUrl&&!recording&&<div style={{padding:"8px 14px",display:"flex",alignItems:"center",gap:10,background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
               <span style={{fontSize:20}}>🎙</span>
               <audio src={audioPreviewUrl} controls style={{height:28,flex:1}}/>
               <button onClick={cancelAudio} style={{background:"none",border:"none",color:C.rd,cursor:"pointer",fontSize:18,padding:4}}>✕</button>
             </div>}
 
-            {/* Recording */}
             {recording&&<div style={{padding:"8px 14px",display:"flex",alignItems:"center",gap:10,background:"#fff5f5",borderBottom:`1px solid ${C.b1}`}}>
               <div style={{width:10,height:10,borderRadius:"50%",background:C.rd}}/>
               <span style={{color:C.rd,fontSize:12,fontWeight:700}}>Gravando... {Math.floor(recSecs/60).toString().padStart(2,"0")}:{(recSecs%60).toString().padStart(2,"0")}</span>
@@ -8450,7 +8588,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
 
             <div style={{padding:"10px 14px",position:"relative"}} onClick={e=>e.stopPropagation()}>
 
-              {/* /demandas card picker */}
+              {/* /demandas picker */}
               {showCardPicker&&<div style={{position:"absolute",bottom:"calc(100% + 4px)",left:14,right:14,background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,zIndex:60,boxShadow:"0 8px 32px rgba(0,0,0,0.18)",overflow:"hidden"}}>
                 <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
                   <span style={{color:C.a,fontWeight:800,fontSize:12}}>◈ Selecionar cartão</span>
@@ -8515,45 +8653,36 @@ function PageChat({isMob, perms, tasks, setTasks}){
                 <input ref={photoInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={handlePhoto}/>
 
                 {canSend&&<>
-                  {/* /demandas button */}
                   <button onClick={e=>{e.stopPropagation();setShowCardPicker(v=>!v);setCardSearch("");}} title="Linkar cartão (/demandas)"
                     style={{background:showCardPicker?C.a+"18":"none",border:"none",color:showCardPicker?C.a:C.td,cursor:"pointer",fontSize:16,padding:"6px 5px",lineHeight:1,flexShrink:0,borderRadius:7,transition:"all .15s"}}>
                     ◈
                   </button>
-
-                  {/* Foto */}
                   <button onClick={()=>photoInputRef.current?.click()} title="Enviar foto"
                     style={{background:"none",border:"none",color:photoPreview?C.a:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🖼
                   </button>
-
-                  {/* Audio */}
                   {!recording&&!audioPreviewUrl&&<button onClick={startRec} title="Gravar áudio"
                     style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🎙
                   </button>}
-
-                  {/* Emoji */}
                   <button onClick={e=>{e.stopPropagation();setShowEmoji(v=>!v);}} title="Emoji"
                     style={{background:"none",border:"none",color:showEmoji?C.a:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🙂
                   </button>
                 </>}
 
-                {/* Textarea */}
                 <textarea ref={el=>{inputRef.current=el;textareaRef.current=el;}}
                   value={input} onChange={handleInput}
                   onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
                   placeholder={canSend?`Mensagem em #${activeChData?.name||""}... (@ mencionar · /demandas linkar cartão · Enter enviar)`:"Você não tem permissão para enviar mensagens neste canal."}
-                  disabled={!canSend}
+                  disabled={!canSend||sending}
                   rows={1}
                   style={{flex:1,background:canSend?C.s1:C.b1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"9px 14px",color:C.tx,fontSize:12,outline:"none",resize:"none",fontFamily:"inherit",boxSizing:"border-box",lineHeight:1.5,maxHeight:120,overflowY:"auto",opacity:canSend?1:.6}}/>
 
-                {/* Send */}
                 {canSend&&<button onClick={send}
-                  disabled={!input.trim()&&!photoPreview&&!audioPreviewUrl}
-                  style={{background:(input.trim()||photoPreview||audioPreviewUrl)?C.a:C.b1,border:"none",borderRadius:10,padding:"9px 14px",color:(input.trim()||photoPreview||audioPreviewUrl)?"#fff":C.td,fontWeight:700,cursor:(input.trim()||photoPreview||audioPreviewUrl)?"pointer":"default",fontSize:14,flexShrink:0,transition:"all .15s"}}>
-                  ↑
+                  disabled={(!input.trim()&&!photoPreview&&!audioPreviewUrl)||sending}
+                  style={{background:(input.trim()||photoPreview||audioPreviewUrl)&&!sending?C.a:C.b1,border:"none",borderRadius:10,padding:"9px 14px",color:(input.trim()||photoPreview||audioPreviewUrl)&&!sending?"#fff":C.td,fontWeight:700,cursor:(input.trim()||photoPreview||audioPreviewUrl)&&!sending?"pointer":"default",fontSize:14,flexShrink:0,transition:"all .15s"}}>
+                  {sending?"⏳":"↑"}
                 </button>}
               </div>
 
