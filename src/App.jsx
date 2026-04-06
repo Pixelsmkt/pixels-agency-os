@@ -9563,8 +9563,8 @@ const PERM_GROUPS={
   ],
 };
 
+
 function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks}){
-  // Prioridade: livePerms (localStorage) → ACCESS_STORE (padrão hardcoded) → DEFAULT_PERMS
   const [perms,setPerms]=useState(()=>({
     ...DEFAULT_PERMS,
     ...(ACCESS_STORE[user.id]||{}),
@@ -9572,6 +9572,7 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   }));
   const [saved,setSaved]=useState(false);
   const [activeTab,setActiveTab]=useState("dashboard");
+  const [openSections,setOpenSections]=useState(new Set());
   const savedTimer=useRef(null);
   const isPartnerUser=user.level===1;
 
@@ -9582,121 +9583,318 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   };
 
   const toggle=(key)=>{
-    if(isPartnerUser)return; // sócios sempre têm tudo
+    if(isPartnerUser)return;
     setPerms(p=>({...p,[key]:!p[key]}));
     setSaved(false);
   };
 
+  const toggleSection=(id)=>{
+    setOpenSections(prev=>{
+      const next=new Set(prev);
+      next.has(id)?next.delete(id):next.add(id);
+      return next;
+    });
+  };
+
   const save=async()=>{
-    // 1. Atualiza memória e localStorage imediatamente
     ACCESS_STORE[user.id]={...perms};
-    if(setLivePerms) setLivePerms(p=>({...p,[user.id]:{...perms}}));
+    if(setLivePerms)setLivePerms(p=>({...p,[user.id]:{...perms}}));
     try{localStorage.setItem(`pixels-perms-${user.id}`,JSON.stringify(perms));}catch(e){}
-
-    // 2. Salva no Supabase — busca o perfil pelo team_id para obter o UUID real
     try{
-      // Primeiro busca o UUID real do perfil pelo team_id
-      const {data:profileRow,error:findErr}=await _sb
-        .from("profiles")
-        .select("id")
-        .eq("team_id",user.id)
-        .single();
-
+      const{data:profileRow,error:findErr}=await _sb.from("profiles").select("id").eq("team_id",user.id).single();
       if(findErr||!profileRow){
-        // Perfil não existe — tenta fazer upsert pelo team_id diretamente
-        await _sb
-          .from("profiles")
-          .upsert({team_id:user.id, name:user.name, permissions:perms},{onConflict:"team_id"});
-        flashSaved();
-        return;
+        await _sb.from("profiles").upsert({team_id:user.id,name:user.name,permissions:perms},{onConflict:"team_id"});
+        flashSaved();return;
       }
-
-      // Atualiza pelo UUID real (sempre funciona independente de RLS por team_id)
-      await _sb
-        .from("profiles")
-        .update({permissions:perms})
-        .eq("id",profileRow.id);
-
+      await _sb.from("profiles").update({permissions:perms}).eq("id",profileRow.id);
     }catch(e){}
-
     flashSaved();
   };
 
-  const tasks=(propTasks||[]).filter(t=>t.assignee===user.id);
-  const done=tasks.filter(t=>t.status==="aprovado");
-  const open=tasks.filter(t=>t.status!=="aprovado"&&t.status!=="pausado");
-  const late=open.filter(t=>daysLeft(t.deadline)<0);
+  // ── Ícone SVG igual ao NavIcon do menu ──────────────────
+  const TabIcon=({id,color,size=15})=>{
+    const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",flexShrink:0};
+    if(id==="dashboard")  return <svg {...p}><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>;
+    if(id==="demandas")   return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
+    if(id==="aprovacoes") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-5"/></svg>;
+    if(id==="chat")       return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+    if(id==="clientes")   return <svg {...p}><rect x="2" y="7" width="20" height="15" rx="1"/><path d="M16 22V7M8 22V7"/><path d="M2 12h20"/><path d="M7 3h10l2 4H5l2-4z"/></svg>;
+    if(id==="analises")   return <svg {...p}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
+    if(id==="ia")         return <svg {...p}><path d="M13 2L4.09 12.26a1 1 0 00.92 1.74H11l-1 8 8.91-10.26a1 1 0 00-.92-1.74H13l1-8z"/></svg>;
+    if(id==="portal")     return <svg {...p}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>;
+    if(id==="gestao")     return <svg {...p}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>;
+    if(id==="acessos")    return <svg {...p}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/><circle cx="12" cy="16" r="1" fill={color}/></svg>;
+    if(id==="interno")    return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>;
+    return <svg {...p}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
+  };
 
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`2px solid ${user.color}`,borderRadius:22,width:"100%",maxWidth:680,maxHeight:"92vh",overflowY:"auto",display:"flex",flexDirection:"column",boxShadow:`0 0 60px ${user.color}30`}}>
+  // ── Toggle switch ────────────────────────────────────────
+  const Toggle=({on,onClick})=>(
+    <div onClick={e=>{e.stopPropagation();if(!isPartnerUser)onClick();}}
+      style={{width:40,height:22,borderRadius:99,background:on?user.color:C.b2,cursor:isPartnerUser?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
+      <div style={{position:"absolute",top:3,left:on?20:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,0.25)"}}/>
+    </div>
+  );
 
-      {/* Header */}
-      <div style={{background:`linear-gradient(135deg,${user.color},${user.color}88)`,padding:"20px 24px",borderRadius:"20px 20px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <div style={{width:52,height:52,borderRadius:16,background:"rgba(255,255,255,0.2)",border:"2px solid rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff"}}>{user.av}</div>
-          <div>
-            <div style={{color:"#fff",fontWeight:900,fontSize:18}}>{user.name}</div>
-            <div style={{color:"rgba(255,255,255,0.8)",fontSize:12,marginTop:2}}>{user.role} · Nível {user.level}</div>
+  // ── Linha de permissão ────────────────────────────────────
+  const PermRow=({item})=>{
+    const on=isPartnerUser?true:(perms[item.key]||false);
+    return(
+      <div onClick={()=>toggle(item.key)}
+        style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 4px",borderBottom:`1px solid ${C.b1}22`,cursor:isPartnerUser?"default":"pointer",transition:"background .1s"}}>
+        <div style={{flex:1,minWidth:0,paddingRight:16}}>
+          <div style={{color:on?C.tx:C.ts,fontSize:13,fontWeight:on?600:400,lineHeight:1.3}}>{item.label}</div>
+          <div style={{color:C.td,fontSize:11,marginTop:3,lineHeight:1.4}}>{item.desc}</div>
+        </div>
+        <Toggle on={on} onClick={()=>toggle(item.key)}/>
+      </div>
+    );
+  };
+
+  // ── Accordion genérico ────────────────────────────────────
+  const Accordion=({id,label,items})=>{
+    const isOpen=openSections.has(id);
+    const activeCount=items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key])).length;
+    const total=items.filter(i=>i.key).length;
+    return(
+      <div style={{border:`1px solid ${C.b1}`,borderRadius:12,overflow:"hidden",marginBottom:8}}>
+        <button onClick={()=>toggleSection(id)}
+          style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:isOpen?user.color+"0c":C.s1,border:"none",cursor:"pointer",transition:"background .15s"}}>
+          <span style={{color:C.tx,fontWeight:600,fontSize:13}}>{label}</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {total>0&&<span style={{background:user.color+"22",color:user.color,borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700}}>{activeCount}/{total}</span>}
+            <span style={{color:C.ts,fontSize:11,display:"inline-block",transform:isOpen?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</span>
+          </div>
+        </button>
+        {isOpen&&(
+          <div style={{padding:"4px 16px 8px",background:C.card}}>
+            {items.map((item,i)=><PermRow key={item.key||i} item={item}/>)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Helper: parse PERM_GROUPS em seções ─────────────────
+  const parseSections=(groupKey,prefix)=>{
+    const sections=[];
+    let cur=null;
+    (PERM_GROUPS[groupKey]||[]).forEach(item=>{
+      if(item.section){
+        cur={id:prefix+"_"+item.section.toLowerCase().replace(/[\s&]+/g,"_"),label:item.section,items:[]};
+        sections.push(cur);
+      } else {
+        if(!cur){cur={id:prefix+"_geral",label:"Acesso Geral",items:[]};sections.push(cur);}
+        cur.items.push(item);
+      }
+    });
+    return sections;
+  };
+
+  // ── Contador por aba ────────────────────────────────────
+  const tabCount=(tabId)=>{
+    const items=(PERM_GROUPS[tabId]||[]).filter(i=>i.key);
+    return{active:items.filter(i=>isPartnerUser?true:perms[i.key]).length,total:items.length};
+  };
+
+  // ── Renderiza conteúdo da aba ativa ─────────────────────
+  const renderTabContent=()=>{
+    // Abas de lista direta (sem agrupamento)
+    const directTabs=["dashboard","aprovacoes","ia","portal","gestao","acessos"];
+    if(directTabs.includes(activeTab)){
+      return(PERM_GROUPS[activeTab]||[]).map((item,i)=>
+        item.key?<PermRow key={item.key} item={item}/>:null
+      );
+    }
+
+    // Demandas — 4 seções accordion
+    if(activeTab==="demandas"){
+      const sections=parseSections("demandas","dem");
+      return sections.map(s=><Accordion key={s.id} id={s.id} label={s.label} items={s.items}/>);
+    }
+
+    // Chat — 2 primeiros itens diretos + seções accordion
+    if(activeTab==="chat"){
+      const sections=parseSections("chat","chat");
+      const firstSection=sections[0];
+      const rest=sections.slice(1);
+      return <>
+        {firstSection&&firstSection.items.map(item=><PermRow key={item.key} item={item}/>)}
+        {rest.length>0&&<div style={{marginTop:8}}>{rest.map(s=><Accordion key={s.id} id={s.id} label={s.label} items={s.items}/>)}</div>}
+      </>;
+    }
+
+    // Análises — acesso direto + subpáginas accordion
+    if(activeTab==="analises"){
+      const sections=parseSections("analises","ana");
+      const firstSection=sections[0];
+      const rest=sections.slice(1);
+      return <>
+        {firstSection&&firstSection.items.map(item=><PermRow key={item.key} item={item}/>)}
+        {rest.length>0&&<div style={{marginTop:8}}>{rest.map(s=><Accordion key={s.id} id={s.id} label={s.label} items={s.items}/>)}</div>}
+      </>;
+    }
+
+    // Interno — acesso direto + subpáginas accordion
+    if(activeTab==="interno"){
+      const sections=parseSections("interno","int");
+      const firstSection=sections[0];
+      const rest=sections.slice(1);
+      return <>
+        {firstSection&&firstSection.items.map(item=><PermRow key={item.key} item={item}/>)}
+        {rest.length>0&&<div style={{marginTop:8}}>{rest.map(s=><Accordion key={s.id} id={s.id} label={s.label} items={s.items}/>)}</div>}
+      </>;
+    }
+
+    // Clientes — acesso global + accordion por cliente
+    if(activeTab==="clientes"){
+      const SUB_PERMS=["metricas","mindmap","concorrencia","links"];
+      const SUB_LABELS={metricas:"Métricas",mindmap:"Mapa Mental",concorrencia:"Concorrência",links:"Links & Acessos"};
+      const globalItems=(PERM_GROUPS.clientes||[]).filter(i=>i.key&&(i.key==="verClientes"||i.key==="verDadosCliente"));
+      const clientList=CLIENTS.map(c=>c.id);
+
+      return <>
+        {/* Permissões globais diretas */}
+        {globalItems.map(item=><PermRow key={item.key} item={item}/>)}
+
+        {/* Separador */}
+        <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,margin:"16px 0 8px",paddingBottom:6,borderBottom:`1px solid ${C.b1}`}}>Por Cliente</div>
+
+        {/* Accordion por cliente */}
+        {clientList.map(cid=>{
+          const cl=CLIENTS.find(c=>c.id===cid);
+          if(!cl)return null;
+          const mainKey="verCliente_"+cid;
+          const mainOn=isPartnerUser?true:(perms[mainKey]||false);
+          const isOpen=openSections.has("cl_"+cid);
+          const subItems=SUB_PERMS.map(sp=>({
+            key:"verCliente_"+cid+"_"+sp,
+            label:SUB_LABELS[sp],
+            desc:"Acesso a "+SUB_LABELS[sp].toLowerCase()+" do cliente",
+          }));
+          const activeSubCount=subItems.filter(i=>isPartnerUser?true:perms[i.key]).length;
+
+          return(
+            <div key={cid} style={{border:`1px solid ${mainOn?user.color+"44":C.b1}`,borderRadius:12,overflow:"hidden",marginBottom:8,transition:"border-color .2s"}}>
+
+              {/* Header do cliente */}
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",background:mainOn?user.color+"08":C.s1}}>
+                <div style={{width:30,height:30,borderRadius:8,overflow:"hidden",background:"#fff",border:`1px solid ${C.b1}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <ClientLogo clientId={cid} size="xs"/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:C.tx,fontWeight:600,fontSize:13}}>{cl.name}</div>
+                  {mainOn&&<div style={{color:C.td,fontSize:10,marginTop:1}}>{activeSubCount}/4 ferramentas liberadas</div>}
+                </div>
+                {/* Toggle acesso principal */}
+                <Toggle on={mainOn} onClick={()=>toggle(mainKey)}/>
+                {/* Expandir sub-permissões */}
+                <button onClick={()=>toggleSection("cl_"+cid)}
+                  style={{background:"none",border:`1px solid ${C.b1}`,borderRadius:7,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.ts,fontSize:11,flexShrink:0,transition:"all .15s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=user.color+"18";e.currentTarget.style.color=user.color;}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
+                  {isOpen?"▴":"▾"}
+                </button>
+              </div>
+
+              {/* Sub-permissões expandidas */}
+              {isOpen&&(
+                <div style={{borderTop:`1px solid ${C.b1}22`,padding:"10px 14px 12px",background:C.card}}>
+                  {!mainOn
+                    ?<div style={{color:C.td,fontSize:11,fontStyle:"italic",padding:"4px 0"}}>Ative o acesso ao cliente para liberar as ferramentas.</div>
+                    :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      {subItems.map(sub=>{
+                        const on=isPartnerUser?true:(perms[sub.key]||false);
+                        return(
+                          <div key={sub.key} onClick={()=>toggle(sub.key)}
+                            style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:on?user.color+"0e":C.s1,borderRadius:9,border:`1px solid ${on?user.color+"33":C.b1}`,cursor:isPartnerUser?"default":"pointer",transition:"all .15s"}}>
+                            <span style={{color:on?C.tx:C.ts,fontSize:12,fontWeight:on?600:400}}>{sub.label}</span>
+                            <Toggle on={on} onClick={()=>toggle(sub.key)}/>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  }
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </>;
+    }
+
+    return null;
+  };
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{background:C.card,border:`1px solid ${user.color}44`,borderRadius:22,width:"100%",maxWidth:720,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 8px 60px rgba(0,0,0,0.35)"}}>
+
+        {/* ── Header ── */}
+        <div style={{background:`linear-gradient(135deg,${user.color},${user.color}99)`,padding:"18px 24px",borderRadius:"20px 20px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <div style={{width:48,height:48,borderRadius:14,background:"rgba(255,255,255,0.2)",border:"2px solid rgba(255,255,255,0.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"#fff"}}>{user.av}</div>
+            <div>
+              <div style={{color:"#fff",fontWeight:900,fontSize:17}}>{user.name}</div>
+              <div style={{color:"rgba(255,255,255,0.75)",fontSize:12,marginTop:2}}>{user.role} · Nível {user.level}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(0,0,0,0.25)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>✕</button>
+        </div>
+
+        {/* ── Body: sidebar + conteúdo ── */}
+        <div style={{display:"flex",flex:1,overflow:"hidden",borderRadius:"0 0 20px 20px"}}>
+
+          {/* Sidebar vertical de abas */}
+          <div style={{width:136,flexShrink:0,background:C.s1,borderRight:`1px solid ${C.b1}`,overflowY:"auto",padding:"10px 8px",display:"flex",flexDirection:"column",gap:2}}>
+            {PERM_TABS.map(tab=>{
+              const isActive=activeTab===tab.id;
+              const{active,total}=tabCount(tab.id);
+              const color=isActive?user.color:C.ts;
+              return(
+                <button key={tab.id}
+                  onClick={()=>{setActiveTab(tab.id);setOpenSections(new Set());}}
+                  style={{display:"flex",alignItems:"center",gap:9,padding:"9px 10px",borderRadius:9,border:"none",borderLeft:isActive?`3px solid ${user.color}`:"3px solid transparent",background:isActive?user.color+"15":"transparent",cursor:"pointer",textAlign:"left",transition:"all .12s",width:"100%"}}>
+                  <TabIcon id={tab.id} size={15} color={color}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color,fontSize:11,fontWeight:isActive?700:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tab.label}</div>
+                    {total>0&&<div style={{fontSize:9,marginTop:1,color:isActive?user.color:C.td}}>{active}/{total}</div>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Área de conteúdo */}
+          <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
+
+            {/* Aviso sócio */}
+            {isPartnerUser&&(
+              <div style={{margin:"12px 16px 0",flexShrink:0,background:C.a+"14",border:`1px solid ${C.a}33`,borderRadius:10,padding:"9px 14px",color:C.a,fontSize:12,fontWeight:600}}>
+                ⚡ Sócios têm acesso total e irrestrito ao sistema.
+              </div>
+            )}
+
+            {/* Permissões com scroll */}
+            <div style={{flex:1,overflowY:"auto",padding:"14px 20px"}}>
+              {renderTabContent()}
+            </div>
+
+            {/* Botão salvar fixo no rodapé */}
+            <div style={{padding:"12px 16px",borderTop:`1px solid ${C.b1}`,background:C.card,flexShrink:0}}>
+              <button onClick={save} disabled={saved}
+                style={{width:"100%",background:saved?"#22c55e":`linear-gradient(135deg,${user.color},${user.color}cc)`,color:"#fff",border:"none",borderRadius:11,padding:"13px 0",fontWeight:800,fontSize:14,cursor:saved?"default":"pointer",transition:"background .3s",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                {saved?"✓ Permissões Salvas!":"💾 Salvar Permissões"}
+              </button>
+            </div>
           </div>
         </div>
-        <button onClick={onClose} style={{background:"rgba(0,0,0,0.3)",border:"none",borderRadius:10,padding:"7px 13px",color:"#fff",cursor:"pointer",fontWeight:700}}>✕</button>
-      </div>
-
-      {/* Quick stats */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,padding:"16px 24px 0"}}>
-        {[
-          {l:"Demandas",v:tasks.length,c:user.color},
-          {l:"Abertas",v:open.length,c:C.yw},
-          {l:"Aprovadas",v:done.length,c:C.gr},
-          {l:"Atrasadas",v:late.length,c:late.length>0?C.rd:C.td},
-        ].map(s=><div key={s.l} style={{background:`linear-gradient(135deg,${s.c}22,${s.c}0a)`,border:`1px solid ${s.c}33`,borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-          <div style={{color:s.c,fontWeight:900,fontSize:20}}>{s.v}</div>
-          <div style={{color:C.td,fontSize:10,marginTop:2}}>{s.l}</div>
-        </div>)}
-      </div>
-
-      {/* Tab Navigation */}
-      <div style={{display:"flex",gap:0,overflowX:"auto",borderBottom:`1px solid ${C.b1}`,background:C.s1,flexShrink:0}}>
-        {PERM_TABS.map(tab=>{
-          const items=PERM_GROUPS[tab.id]||[];
-          const activeItems=items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key]));
-          const totalKeys=items.filter(i=>i.key).length;
-          const isActive=activeTab===tab.id;
-          return <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
-            style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"10px 14px",background:isActive?C.card:"transparent",border:"none",borderBottom:isActive?`2px solid ${tab.color}`:"2px solid transparent",color:isActive?tab.color:C.ts,cursor:"pointer",whiteSpace:"nowrap",transition:"all .12s",flexShrink:0,marginBottom:-1}}>
-            <span style={{fontSize:14}}>{tab.icon}</span>
-            <span style={{fontSize:10,fontWeight:isActive?700:500}}>{tab.label}</span>
-            {totalKeys>0&&<span style={{fontSize:8,color:isActive?tab.color:C.td}}>{activeItems.length}/{totalKeys}</span>}
-          </button>;
-        })}
-      </div>
-
-      {/* Permissions — aba ativa */}
-      <div style={{padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flex:1}}>
-        {isPartnerUser&&<div style={{background:C.a+"18",border:`1px solid ${C.a}44`,borderRadius:12,padding:"10px 14px",color:C.a,fontSize:12,fontWeight:600}}>⚡ Sócios têm acesso total e irrestrito ao sistema.</div>}
-
-        {(PERM_GROUPS[activeTab]||[]).map((item,idx)=>{
-          if(item.section) return <div key={idx} style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginTop:idx>0?8:0,paddingBottom:6,borderBottom:`1px solid ${C.b1}`}}>{item.section}</div>;
-          const on=isPartnerUser?true:(perms[item.key]||false);
-          const tabColor=PERM_TABS.find(t=>t.id===activeTab)?.color||user.color;
-          return <div key={item.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:on?tabColor+"10":C.s1,borderRadius:10,border:`1px solid ${on?tabColor+"33":C.b1}`,transition:"all .15s",cursor:isPartnerUser?"default":"pointer"}} onClick={()=>toggle(item.key)}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:on?C.tx:C.ts,fontSize:13,fontWeight:on?700:500}}>{item.label}</div>
-              <div style={{color:C.td,fontSize:10,marginTop:1}}>{item.desc}</div>
-            </div>
-            <div style={{width:42,height:24,borderRadius:99,background:on?tabColor:C.b2,cursor:isPartnerUser?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0,marginLeft:12}}>
-              <div style={{position:"absolute",top:3,left:on?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
-            </div>
-          </div>;
-        })}
-
-        <button onClick={save} disabled={saved} style={{background:`linear-gradient(135deg,${user.color},${user.color}88)`,color:"#fff",border:"none",borderRadius:12,padding:"14px 0",fontWeight:900,fontSize:15,cursor:saved?"default":"pointer",boxShadow:`0 4px 18px ${user.color}40`,marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:saved?0.8:1}}>
-          {saved?<>✓ Permissões Salvas!</>:<>💾 Salvar Permissões</>}
-        </button>
       </div>
     </div>
-  </div>;
+  );
 }
+
 
 /* ─── Constantes estáticas de CollabProfilePage ─── */
 const COLLAB_TABS=[
