@@ -15305,36 +15305,85 @@ export default function AgencyOS(){
       const callState=window._pixelsCallState;
       if(!callState||!callState.url)return null;
       const isMin=callState.minimized;
-      return(
-        <div style={{position:"fixed",bottom:20,right:20,zIndex:500,borderRadius:16,overflow:"hidden",border:"2px solid #7c3aed44",boxShadow:"0 8px 40px rgba(124,58,237,0.3)",background:"#0f0f0f",width:isMin?260:440,transition:"width .3s"}}>
-          {/* Call header */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:"#1a1a1a",borderBottom:"1px solid #333"}}>
-            <div style={{display:"flex",alignItems:"center",gap:7}}>
+      const isMax=callState.maximized;
+      const endCall=()=>{
+        if(callState.createdBy===CURRENT_USER.id){
+          try{window._sb.channel("pixels-call-events").send({type:"broadcast",event:"call_ended",payload:{channelId:callState.channelId}});}catch(e){}
+        }
+        window._pixelsCallState=null;
+        window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();
+      };
+      const update=(patch)=>{window._pixelsCallState={...callState,...patch};window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();};
+
+      // Maximizado — modal tela cheia
+      if(isMax) return(
+        <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.95)",display:"flex",flexDirection:"column"}}>
+          {/* Header fino */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 20px",background:"rgba(255,255,255,0.04)",borderBottom:"1px solid rgba(255,255,255,0.08)",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/>
-              <span style={{color:"#fff",fontSize:11,fontWeight:700}}>📞 {callState.channelName}</span>
+              <span style={{color:"rgba(255,255,255,0.9)",fontSize:12,fontWeight:600,letterSpacing:.3}}>Pixels Call · {callState.channelName}</span>
             </div>
-            <div style={{display:"flex",gap:5}}>
-              <button onClick={()=>{window._pixelsCallState={...callState,minimized:!isMin};window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();}}
-                style={{background:"#ffffff18",border:"none",borderRadius:5,padding:"3px 8px",color:"#fff",fontSize:10,cursor:"pointer",fontWeight:700}}>
-                {isMin?"↑ Expandir":"↓ Minimizar"}
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>update({maximized:false})}
+                style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:7,padding:"5px 12px",color:"rgba(255,255,255,0.7)",fontSize:11,cursor:"pointer",fontWeight:600}}>
+                ↙ Minimizar
               </button>
-              <button onClick={()=>{
-                // Se é o criador, avisa todo mundo via Supabase broadcast
-                if(callState.createdBy===CURRENT_USER.id){
-                  try{window._sb.channel("pixels-call-events").send({type:"broadcast",event:"call_ended",payload:{channelId:callState.channelId}});}catch(e){}
-                }
-                window._pixelsCallState=null;
-                window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();
-              }}
-                style={{background:"#ef444422",border:"1px solid #ef444444",borderRadius:5,padding:"3px 8px",color:"#ef4444",fontSize:10,cursor:"pointer",fontWeight:700}}>
-                {callState.createdBy===CURRENT_USER.id?"Encerrar":"Sair"}
+              <button onClick={endCall}
+                style={{background:"#ef444420",border:"1px solid #ef444440",borderRadius:7,padding:"5px 14px",color:"#ef4444",fontSize:11,cursor:"pointer",fontWeight:700}}>
+                {callState.createdBy===CURRENT_USER.id?"Encerrar call":"Sair"}
+              </button>
+            </div>
+          </div>
+          <iframe
+            src={callState.url+"?userName="+encodeURIComponent(CURRENT_USER.name)}
+            allow="camera; microphone; fullscreen; display-capture; autoplay"
+            style={{flex:1,width:"100%",border:"none"}}
+          />
+        </div>
+      );
+
+      // Flutuante normal / minimizado
+      return(
+        <div style={{
+          position:"fixed",bottom:20,right:20,zIndex:500,
+          borderRadius:14,overflow:"hidden",
+          border:"1px solid rgba(124,58,237,0.3)",
+          boxShadow:"0 12px 48px rgba(0,0,0,0.5)",
+          background:"#111",
+          width:isMin?220:420,
+          transition:"width .25s ease",
+        }}>
+          {/* Header minimalista */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:"rgba(255,255,255,0.03)",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",flexShrink:0}}/>
+              <span style={{color:"rgba(255,255,255,0.8)",fontSize:11,fontWeight:600}}>
+                {isMin?`Pixels Call · ${callState.channelName}`:`#${callState.channelName}`}
+              </span>
+            </div>
+            <div style={{display:"flex",gap:4}}>
+              {/* Minimizar */}
+              <button onClick={()=>update({minimized:!isMin,maximized:false})} title={isMin?"Expandir":"Minimizar"}
+                style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:5,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.6)",fontSize:12,cursor:"pointer"}}>
+                {isMin?"▲":"▼"}
+              </button>
+              {/* Maximizar */}
+              {!isMin&&<button onClick={()=>update({maximized:true,minimized:false})} title="Tela cheia"
+                style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:5,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.6)",fontSize:11,cursor:"pointer"}}>
+                ⤢
+              </button>}
+              {/* Sair/Encerrar */}
+              <button onClick={endCall} title={callState.createdBy===CURRENT_USER.id?"Encerrar call":"Sair"}
+                style={{background:"#ef444418",border:"none",borderRadius:5,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",color:"#ef4444",fontSize:12,cursor:"pointer",fontWeight:700}}>
+                ✕
               </button>
             </div>
           </div>
           {!isMin&&<iframe
             src={callState.url+"?userName="+encodeURIComponent(CURRENT_USER.name)}
             allow="camera; microphone; fullscreen; display-capture; autoplay"
-            style={{width:"100%",height:300,border:"none",display:"block"}}
+            style={{width:"100%",height:320,border:"none",display:"block"}}
           />}
         </div>
       );
