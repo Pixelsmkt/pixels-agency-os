@@ -7931,23 +7931,38 @@ const getDomain=(url)=>{try{return new URL(url).hostname.replace(/^www\./,"");}c
 const isUrl=(txt)=>/https?:\/\/[^\s]+/.test(txt);
 const extractUrl=(txt)=>{const m=txt.match(/https?:\/\/[^\s]+/);return m?m[0]:null;};
 
-/* ── Som de "chamar atenção" via Web Audio API ── */
+/* ── Som clássico estilo MSN Nudge via Web Audio API ── */
 const playShakeSound=()=>{
   try{
     const ctx=new(window.AudioContext||window.webkitAudioContext)();
-    // Sequência de 3 beeps rápidos descendentes
-    [[0,880],[0.12,660],[0.24,440]].forEach(([when,freq])=>{
+    const master=ctx.createGain();
+    master.gain.setValueAtTime(0.5,ctx.currentTime);
+    master.connect(ctx.destination);
+
+    const note=(freq,start,dur,vol=0.5,type="sine")=>{
       const osc=ctx.createOscillator();
-      const gain=ctx.createGain();
-      osc.connect(gain);gain.connect(ctx.destination);
-      osc.type="sine";
-      osc.frequency.setValueAtTime(freq,ctx.currentTime+when);
-      gain.gain.setValueAtTime(0.4,ctx.currentTime+when);
-      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+when+0.1);
-      osc.start(ctx.currentTime+when);
-      osc.stop(ctx.currentTime+when+0.12);
-    });
-    setTimeout(()=>{try{ctx.close();}catch(e){}},600);
+      const g=ctx.createGain();
+      osc.connect(g);g.connect(master);
+      osc.type=type;
+      osc.frequency.setValueAtTime(freq,ctx.currentTime+start);
+      g.gain.setValueAtTime(0,ctx.currentTime+start);
+      g.gain.linearRampToValueAtTime(vol,ctx.currentTime+start+0.01);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+start+dur);
+      osc.start(ctx.currentTime+start);
+      osc.stop(ctx.currentTime+start+dur+0.05);
+    };
+
+    // Reproduz o "ding-ding" metálico do MSN Nudge
+    // Nota principal alta + harmônico + eco rápido
+    note(1318,0,     0.18, 0.6,"sine");      // E6 — ataque inicial
+    note(1318,0,     0.18, 0.3,"triangle");  // harmônico
+    note(1760,0.005, 0.12, 0.4,"sine");      // A6 — brilho
+    note(1318,0.18,  0.14, 0.35,"sine");     // E6 — segundo ding
+    note(1047,0.18,  0.14, 0.2,"triangle");  // C6 — corpo
+    note(1318,0.35,  0.10, 0.2,"sine");      // eco suave
+    note(1047,0.38,  0.18, 0.15,"sine");     // cauda
+
+    setTimeout(()=>{try{ctx.close();}catch(e){}},900);
   }catch(e){}
 };
 
