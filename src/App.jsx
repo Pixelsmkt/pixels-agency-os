@@ -5524,6 +5524,15 @@ function CDrive({cl}){
 // Entrada da seção Clientes: PageClientes + NovoClienteModal + calcScore + Sparkline
 // Depende de: 00_globals, 00_clientes_data, 00_mindmap_data, 02_clientes (MindMap)
 
+/* ── Aliases Recharts e stubs — devem vir antes de 03_cliente_ads ── */
+const RBar    = (typeof recharts!=="undefined"&&recharts?.Bar)    || (()=>null);
+const RArea   = (typeof recharts!=="undefined"&&recharts?.Area)   || (()=>null);
+const RLine   = (typeof recharts!=="undefined"&&recharts?.Line)   || (()=>null);
+const RLegend = (typeof recharts!=="undefined"&&recharts?.Legend) || (()=>null);
+const RTooltip= (typeof recharts!=="undefined"&&recharts?.Tooltip)|| (()=>null);
+const TT=()=>null;
+
+
 /* ─── NOVO CLIENTE MODAL ─────────────────────── */
 function NovoClienteModal({onClose,onSave}){
   const inp={background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 12px",color:"#1e293b",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
@@ -6115,16 +6124,6 @@ function PageClientes({isMob, tasks}){
 /* ─── CLIENT DETAIL — 4 ABAS ────────────────── */
 
 // ======= 03_cliente_detalhe.jsx =======
-
-/* ── Aliases Recharts usados em 03_cliente_ads ── */
-const RBar      = recharts?.Bar       || (()=>null);
-const RArea     = recharts?.Area      || (()=>null);
-const RLine     = recharts?.Line      || (()=>null);
-const RLegend   = recharts?.Legend    || (()=>null);
-const RTooltip  = recharts?.Tooltip   || (()=>null);
-
-/* ── Stubs para componentes sem definição ── */
-const TT=()=>null;
 
 /* ── Aliases do ClienteDashboard ── */
 function CDashboard({cl}){
