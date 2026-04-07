@@ -6116,6 +6116,18 @@ function PageClientes({isMob, tasks}){
 
 // ======= 03_cliente_detalhe.jsx =======
 
+/* ── Aliases para compatibilidade ── */
+// CDashboard e CRedes não existem como funções separadas —
+// são servidos pelo ClienteDashboard com state local de tab
+function CDashboard({cl,tasks,onMindmap}){
+  const [t,setT]=useState("meta");
+  return <ClienteDashboard cl={cl} tab={t} setTab={setT}/>;
+}
+function CRedes({cl}){
+  const [t,setT]=useState("meta");
+  return <ClienteDashboard cl={cl} tab={t} setTab={setT}/>;
+}
+
 
 /* ── Mapeamento cliente Pixels → cache IDs no Supabase ── */
 const REPORTEI_CACHE_IDS={
