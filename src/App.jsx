@@ -6116,199 +6116,53 @@ function PageClientes({isMob, tasks}){
 
 // ======= 03_cliente_detalhe.jsx =======
 
+
 /* ── Mapeamento cliente Pixels → cache IDs no Supabase ── */
 const REPORTEI_CACHE_IDS={
-  bioter:       ["bioter_chapeco","bioter_toledo","bioter_castro"],
-  climaves:     ["climaves"],
-  vetservice:   ["vetservice"],
+  bioter:["bioter_chapeco","bioter_toledo","bioter_castro"],
+  climaves:["climaves"],
+  vetservice:["vetservice"],
   construschorr:["construschorr"],
-  arabuta:      ["arabuta"],
+  arabuta:["arabuta"],
 };
+const REPORTEI_LABELS={bioter_chapeco:"Chapecó",bioter_toledo:"Toledo",bioter_castro:"Castro",climaves:"Climaves",vetservice:"VetService",construschorr:"Construschorr",arabuta:"Arabutã"};
+const REPORTEI_URLS={bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",bioter_toledo:"https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",bioter_castro:"https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",climaves:"https://app.reportei.com/dashboard/h3MihpaCfhBoVdMvEgc9fHI1T6TzODBR",vetservice:"https://app.reportei.com/dashboard/G42f7UB5R7V68m9BFDobFlW61f5ujXiX",construschorr:"https://app.reportei.com/dashboard/4q3Ubekgg97cstORgg5yPBcR8Zvr3Jv3",arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb"};
+const METRIC_LABEL={"spend":"Valor Investido","reach":"Alcance","impressions":"Impressões","link_clicks":"Cliques","actions_purchase_roas":"ROAS","cpc":"CPC Médio","ctr":"CTR","cpm":"CPM Médio","frequency":"Frequência","clicks":"Cliques (Google)","conversions":"Conversões","cost_per_conversion":"Custo/Conv."};
+const resolveLabel=(r="")=>{for(const[k,v]of Object.entries(METRIC_LABEL)){if(r.includes(k))return v;}return r.split(":").pop()||r;};
+const fmtMetric=(val,r="")=>{if(val===null||val===undefined)return"—";if(r.includes("spend")||r.includes("cpc")||r.includes("cpm")||r.includes("cost"))return"R$"+Number(val).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});if(r.includes("ctr"))return Number(val).toFixed(2)+"%";if(r.includes("roas"))return Number(val).toFixed(2)+"x";if(r.includes("frequency"))return Number(val).toFixed(2);return Number(val).toLocaleString("pt-BR");};
+const metricColor=(r="")=>{if(r.includes("spend")||r.includes("cost"))return C.rd;if(r.includes("roas")||r.includes("conversion"))return C.gr;if(r.includes("reach")||r.includes("impression"))return C.bl;if(r.includes("click")||r.includes("ctr"))return C.a;return C.ts;};
 
-const REPORTEI_LABELS={
-  bioter_chapeco:"Chapecó", bioter_toledo:"Toledo", bioter_castro:"Castro",
-  climaves:"Climaves", vetservice:"VetService", construschorr:"Construschorr", arabuta:"Arabutã",
-};
-
-const REPORTEI_URLS={
-  bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",
-  bioter_toledo: "https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",
-  bioter_castro: "https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",
-  climaves:      "https://app.reportei.com/dashboard/h3MihpaCfhBoVdMvEgc9fHI1T6TzODBR",
-  vetservice:    "https://app.reportei.com/dashboard/G42f7UB5R7V68m9BFDobFlW61f5ujXiX",
-  construschorr: "https://app.reportei.com/dashboard/4q3Ubekgg97cstORgg5yPBcR8Zvr3Jv3",
-  arabuta:       "https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
-};
-
-/* ── Mapeia reference_key → label amigável ── */
-const METRIC_LABEL={
-  "spend":                "Valor Investido",
-  "reach":                "Alcance",
-  "impressions":          "Impressões",
-  "link_clicks":          "Cliques no Link",
-  "actions_purchase_roas":"ROAS",
-  "cpc":                  "CPC Médio",
-  "ctr":                  "CTR",
-  "cpm":                  "CPM Médio",
-  "frequency":            "Frequência",
-  "clicks":               "Cliques (Google)",
-  "conversions":          "Conversões",
-  "cost_per_conversion":  "Custo/Conv.",
-};
-
-const resolveLabel=(refKey="")=>{
-  for(const [k,v] of Object.entries(METRIC_LABEL)){
-    if(refKey.includes(k))return v;
-  }
-  return refKey.split(":").pop()||refKey;
-};
-
-const fmtMetric=(val,refKey="")=>{
-  if(val===null||val===undefined)return "—";
-  const r=refKey.toLowerCase();
-  if(r.includes("spend")||r.includes("cpc")||r.includes("cpm")||r.includes("cost"))
-    return "R$"+Number(val).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(r.includes("ctr")||r.includes("roas"))
-    return Number(val).toFixed(2)+(r.includes("ctr")?"%":"x");
-  if(r.includes("frequency"))return Number(val).toFixed(2);
-  return Number(val).toLocaleString("pt-BR");
-};
-
-const metricColor=(refKey="")=>{
-  if(refKey.includes("spend")||refKey.includes("cost"))return C.rd;
-  if(refKey.includes("roas")||refKey.includes("conversion"))return C.gr;
-  if(refKey.includes("reach")||refKey.includes("impression"))return C.bl;
-  if(refKey.includes("click")||refKey.includes("ctr"))return C.a;
-  return C.ts;
-};
-
-/* ── Componente de análises nativo ── */
 function CAnalises({cl}){
   const cacheIds=REPORTEI_CACHE_IDS[cl.id]||[];
   const [activeId,setActiveId]=useState(cacheIds[0]||null);
   const [data,setData]=useState(null);
   const [loading,setLoading]=useState(true);
   const [updatedAt,setUpdatedAt]=useState(null);
-
   useEffect(()=>{
     if(!activeId)return;
     setLoading(true);
-    const sb=window._sb;
-    sb.from("reportei_cache")
-      .select("data,updated_at")
-      .eq("client_id",activeId)
-      .single()
-      .then(({data:row})=>{
-        setData(row?.data||null);
-        setUpdatedAt(row?.updated_at||null);
-        setLoading(false);
-      });
+    window._sb.from("reportei_cache").select("data,updated_at").eq("client_id",activeId).single().then(({data:row})=>{setData(row?.data||null);setUpdatedAt(row?.updated_at||null);setLoading(false);});
   },[activeId]);
-
-  if(cacheIds.length===0)return(
-    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
-      <div style={{fontSize:32,marginBottom:12}}>📊</div>
-      <div style={{color:C.tx,fontWeight:700,fontSize:15}}>Análises não configuradas</div>
-    </div>
-  );
-
-  // Extrai métricas do cache
-  const extractMetrics=(d)=>{
-    if(!d?.metrics)return[];
-    const items=[];
-    for(const [platform,info] of Object.entries(d.metrics)){
-      if(!info?.values||!info?.metrics_map)continue;
-      for(const [uuid,refKey] of Object.entries(info.metrics_map)){
-        const entry=info.values[uuid];
-        if(!entry)continue;
-        items.push({refKey,label:resolveLabel(refKey),val:entry.values,comparison:entry.comparison,platform});
-      }
-    }
-    return items;
-  };
-
+  if(cacheIds.length===0)return<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>📊</div><div style={{color:C.tx,fontWeight:700,fontSize:15}}>Análises não configuradas</div></div>;
+  const extractMetrics=(d)=>{if(!d?.metrics)return[];const items=[];for(const[,info]of Object.entries(d.metrics)){if(!info?.values||!info?.metrics_map)continue;for(const[uuid,refKey]of Object.entries(info.metrics_map)){const entry=info.values[uuid];if(!entry)continue;items.push({refKey,label:resolveLabel(refKey),val:entry.values,comparison:entry.comparison});}}return items;};
   const metrics=data?extractMetrics(data):[];
   const period=data?.period;
-
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-
-      {/* Sub-tabs Bioter */}
-      {cacheIds.length>1&&(
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {cacheIds.map(id=>(
-            <button key={id} onClick={()=>setActiveId(id)}
-              style={{background:activeId===id?cl.color:"transparent",border:`1px solid ${activeId===id?cl.color:C.b1}`,borderRadius:20,padding:"5px 16px",color:activeId===id?"#fff":C.ts,fontSize:12,fontWeight:activeId===id?700:400,cursor:"pointer",transition:"all .15s"}}>
-              {REPORTEI_LABELS[id]||id}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{background:"#6366f110",border:"1px solid #6366f130",borderRadius:8,padding:"4px 12px",display:"flex",alignItems:"center",gap:6}}>
-            <div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/>
-            <span style={{color:"#6366f1",fontSize:11,fontWeight:700}}>Reportei · Meta Ads</span>
-          </div>
-          {period&&<span style={{color:C.td,fontSize:11}}>{period.start} → {period.end}</span>}
-          {updatedAt&&<span style={{color:C.td,fontSize:10}}>Atualizado {new Date(updatedAt).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>}
-        </div>
-        {activeId&&REPORTEI_URLS[activeId]&&(
-          <a href={REPORTEI_URLS[activeId]} target="_blank" rel="noopener noreferrer"
-            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"5px 12px",color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none"}}>
-            ↗ Ver no Reportei
-          </a>
-        )}
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {cacheIds.length>1&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{cacheIds.map(id=><button key={id} onClick={()=>setActiveId(id)} style={{background:activeId===id?cl.color:"transparent",border:`1px solid ${activeId===id?cl.color:C.b1}`,borderRadius:20,padding:"5px 16px",color:activeId===id?"#fff":C.ts,fontSize:12,fontWeight:activeId===id?700:400,cursor:"pointer"}}>{REPORTEI_LABELS[id]||id}</button>)}</div>}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{background:"#6366f110",border:"1px solid #6366f130",borderRadius:8,padding:"4px 12px",display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/><span style={{color:"#6366f1",fontSize:11,fontWeight:700}}>Reportei · Meta Ads</span></div>
+        {period&&<span style={{color:C.td,fontSize:11}}>{period.start} → {period.end}</span>}
+        {updatedAt&&<span style={{color:C.td,fontSize:10}}>Atualizado {new Date(updatedAt).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>}
       </div>
-
-      {/* Loading */}
-      {loading&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
-        <div style={{color:C.td,fontSize:13}}>Carregando métricas...</div>
-      </div>}
-
-      {/* Sem dados */}
-      {!loading&&metrics.length===0&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
-        <div style={{fontSize:32,marginBottom:12}}>📊</div>
-        <div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:6}}>Nenhuma métrica disponível</div>
-        <div style={{color:C.ts,fontSize:12,marginBottom:16}}>Os dados ainda não foram sincronizados para este cliente.</div>
-        <a href={activeId?REPORTEI_URLS[activeId]:"#"} target="_blank" rel="noopener noreferrer"
-          style={{background:cl.color,color:"#fff",borderRadius:9,padding:"8px 20px",fontSize:12,fontWeight:700,textDecoration:"none",display:"inline-block"}}>
-          Ver no Reportei →
-        </a>
-      </div>}
-
-      {/* Grid de métricas */}
-      {!loading&&metrics.length>0&&(
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
-          {metrics.map((m,i)=>{
-            const diff=m.comparison?.difference;
-            const positive=diff>0;
-            return(
-              <div key={i} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px"}}>
-                <div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>{m.label}</div>
-                <div style={{color:metricColor(m.refKey),fontWeight:900,fontSize:20,lineHeight:1,marginBottom:6}}>
-                  {fmtMetric(m.val,m.refKey)}
-                </div>
-                {diff!=null&&<div style={{color:positive?C.gr:C.rd,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",gap:3}}>
-                  <span>{positive?"▲":"▼"}</span>
-                  <span>{Math.abs(diff).toFixed(1)}%</span>
-                  <span style={{color:C.td,fontWeight:400}}>vs anterior</span>
-                </div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {activeId&&REPORTEI_URLS[activeId]&&<a href={REPORTEI_URLS[activeId]} target="_blank" rel="noopener noreferrer" style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"5px 12px",color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none"}}>↗ Ver no Reportei</a>}
     </div>
-  );
-}
-
-/* ── Wrapper para ClienteDashboard com state local de tab ── */
-function ClienteDashboardWrapper({cl,tasks,onMindmap,initTab}){
-  const [tab,setTab]=useState(initTab||"meta");
-  return <ClienteDashboard cl={cl} tab={tab} setTab={setTab}/>;
+    {loading&&<div style={{padding:"40px",textAlign:"center",color:C.td}}>Carregando métricas...</div>}
+    {!loading&&metrics.length===0&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>📊</div><div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:6}}>Nenhuma métrica disponível</div><a href={activeId?REPORTEI_URLS[activeId]:"#"} target="_blank" rel="noopener noreferrer" style={{background:cl.color,color:"#fff",borderRadius:9,padding:"8px 20px",fontSize:12,fontWeight:700,textDecoration:"none",display:"inline-block",marginTop:8}}>Ver no Reportei →</a></div>}
+    {!loading&&metrics.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
+      {metrics.map((m,i)=>{const diff=m.comparison?.difference;const pos=diff>0;return(<div key={i} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px"}}><div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>{m.label}</div><div style={{color:metricColor(m.refKey),fontWeight:900,fontSize:20,lineHeight:1,marginBottom:6}}>{fmtMetric(m.val,m.refKey)}</div>{diff!=null&&<div style={{color:pos?C.gr:C.rd,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span>{pos?"▲":"▼"}</span><span>{Math.abs(diff).toFixed(1)}%</span><span style={{color:C.td,fontWeight:400}}>vs anterior</span></div>}</div>);})}
+    </div>}
+  </div>);
 }
 
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
@@ -6316,14 +6170,15 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   cl=getLiveClient(cl.id)||cl;
   var [tab,setTab]=useState("dashboard");
   var isSocio=CURRENT_USER.level===1;
+  // Busca perms do usuário atual — suporta tanto prop quanto ACCESS_STORE
   var myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
   var isSocio=CURRENT_USER.level===1;
+  // Permissão específica para este cliente
   var canSeeThisClient=isSocio||myPerms["verCliente_"+cl.id]!==false;
   var canSeeMetricas=isSocio||(myPerms.verMetricas&&myPerms["verCliente_"+cl.id+"_metricas"]!==false);
   var canSeeMindmap=isSocio||(myPerms.verMindmap&&myPerms["verCliente_"+cl.id+"_mindmap"]!==false);
   var canSeeConcorrencia=isSocio||(myPerms.verConcorrencia&&myPerms["verCliente_"+cl.id+"_concorrencia"]!==false);
   var canSeeLinks=isSocio||(myPerms.verLinksCliente&&myPerms["verCliente_"+cl.id+"_links"]!==false);
-  var canSeeAnalises=isSocio||(myPerms.verMetricas&&(REPORTEI_CACHE_IDS[cl.id]||[]).length>0);
 
   var score=calcScore(cl,TASKS);
   var scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
@@ -6347,11 +6202,12 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"redes",       label:"Redes e Ads"},
     {id:"ferramentas", label:"Ferramentas"},
     {id:"info",        label:"Informações"},
-    ...(canSeeAnalises?[{id:"analises",label:"📊 Análises"}]:[]),
     ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
     ...(canSeeLinks?[{id:"links",label:"Links & Acessos"}]:[]),
+    ...((isSocio||(myPerms.verMetricas&&(REPORTEI_CACHE_IDS[cl.id]||[]).length>0))?[{id:"analises",label:"📊 Análises"}]:[]),
   ];
 
+  // Se a aba ativa foi removida por falta de permissão, volta para dashboard
   if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("dashboard");},0);
 
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
@@ -6430,17 +6286,17 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     </div>
 
     {/* CONTENT */}
-    {tab==="dashboard"&&<ClienteDashboardWrapper cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
-    {tab==="redes"&&<ClienteDashboardWrapper cl={cl} tasks={TASKS} onMindmap={onMindmap} initTab="meta"/>}
+    {tab==="dashboard"&&<CDashboard cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
+    {tab==="redes"&&<CRedes cl={cl}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
-    {tab==="analises"&&canSeeAnalises&&<CAnalises cl={cl}/>}
+    {tab==="analises"&&(isSocio||myPerms.verMetricas)&&<CAnalises cl={cl}/>}
     {tab==="concorrencia"&&canSeeConcorrencia&&<ClienteConcorrencia cl={cl} tab={tab} setTab={setTab}/>}
     {tab==="links"&&canSeeLinks&&<div>
       <div style={{background:C.a+"12",border:"1px solid "+C.a+"33",borderRadius:10,padding:"10px 14px",marginBottom:16,color:C.a,fontSize:12,fontWeight:600}}>
         🔗 Acesse a aba "Links" dentro de Redes e Ads para ver os links e acessos do cliente.
       </div>
-      <ClienteDashboardWrapper cl={cl} tasks={TASKS} onMindmap={onMindmap} initTab="meta"/>
+      <CRedes cl={cl}/>
     </div>}
   </div>);
 }
