@@ -3768,331 +3768,6 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
   </div>;
 }
 
-// ======= 03_cliente_detalhe.jsx =======
-
-/* ── Mapeamento cliente Pixels → cache IDs no Supabase ── */
-const REPORTEI_CACHE_IDS={
-  bioter:       ["bioter_chapeco","bioter_toledo","bioter_castro"],
-  climaves:     ["climaves"],
-  vetservice:   ["vetservice"],
-  construschorr:["construschorr"],
-  arabuta:      ["arabuta"],
-};
-
-const REPORTEI_LABELS={
-  bioter_chapeco:"Chapecó", bioter_toledo:"Toledo", bioter_castro:"Castro",
-  climaves:"Climaves", vetservice:"VetService", construschorr:"Construschorr", arabuta:"Arabutã",
-};
-
-const REPORTEI_URLS={
-  bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",
-  bioter_toledo: "https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",
-  bioter_castro: "https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",
-  climaves:      "https://app.reportei.com/dashboard/h3MihpaCfhBoVdMvEgc9fHI1T6TzODBR",
-  vetservice:    "https://app.reportei.com/dashboard/G42f7UB5R7V68m9BFDobFlW61f5ujXiX",
-  construschorr: "https://app.reportei.com/dashboard/4q3Ubekgg97cstORgg5yPBcR8Zvr3Jv3",
-  arabuta:       "https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
-};
-
-/* ── Mapeia reference_key → label amigável ── */
-const METRIC_LABEL={
-  "spend":                "Valor Investido",
-  "reach":                "Alcance",
-  "impressions":          "Impressões",
-  "link_clicks":          "Cliques no Link",
-  "actions_purchase_roas":"ROAS",
-  "cpc":                  "CPC Médio",
-  "ctr":                  "CTR",
-  "cpm":                  "CPM Médio",
-  "frequency":            "Frequência",
-  "clicks":               "Cliques (Google)",
-  "conversions":          "Conversões",
-  "cost_per_conversion":  "Custo/Conv.",
-};
-
-const resolveLabel=(refKey="")=>{
-  for(const [k,v] of Object.entries(METRIC_LABEL)){
-    if(refKey.includes(k))return v;
-  }
-  return refKey.split(":").pop()||refKey;
-};
-
-const fmtMetric=(val,refKey="")=>{
-  if(val===null||val===undefined)return "—";
-  const r=refKey.toLowerCase();
-  if(r.includes("spend")||r.includes("cpc")||r.includes("cpm")||r.includes("cost"))
-    return "R$"+Number(val).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
-  if(r.includes("ctr")||r.includes("roas"))
-    return Number(val).toFixed(2)+(r.includes("ctr")?"%":"x");
-  if(r.includes("frequency"))return Number(val).toFixed(2);
-  return Number(val).toLocaleString("pt-BR");
-};
-
-const metricColor=(refKey="")=>{
-  if(refKey.includes("spend")||refKey.includes("cost"))return C.rd;
-  if(refKey.includes("roas")||refKey.includes("conversion"))return C.gr;
-  if(refKey.includes("reach")||refKey.includes("impression"))return C.bl;
-  if(refKey.includes("click")||refKey.includes("ctr"))return C.a;
-  return C.ts;
-};
-
-/* ── Componente de análises nativo ── */
-function CAnalises({cl}){
-  const cacheIds=REPORTEI_CACHE_IDS[cl.id]||[];
-  const [activeId,setActiveId]=useState(cacheIds[0]||null);
-  const [data,setData]=useState(null);
-  const [loading,setLoading]=useState(true);
-  const [updatedAt,setUpdatedAt]=useState(null);
-
-  useEffect(()=>{
-    if(!activeId)return;
-    setLoading(true);
-    const sb=window._sb;
-    sb.from("reportei_cache")
-      .select("data,updated_at")
-      .eq("client_id",activeId)
-      .single()
-      .then(({data:row})=>{
-        setData(row?.data||null);
-        setUpdatedAt(row?.updated_at||null);
-        setLoading(false);
-      });
-  },[activeId]);
-
-  if(cacheIds.length===0)return(
-    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
-      <div style={{fontSize:32,marginBottom:12}}>📊</div>
-      <div style={{color:C.tx,fontWeight:700,fontSize:15}}>Análises não configuradas</div>
-    </div>
-  );
-
-  // Extrai métricas do cache
-  const extractMetrics=(d)=>{
-    if(!d?.metrics)return[];
-    const items=[];
-    for(const [platform,info] of Object.entries(d.metrics)){
-      if(!info?.values||!info?.metrics_map)continue;
-      for(const [uuid,refKey] of Object.entries(info.metrics_map)){
-        const entry=info.values[uuid];
-        if(!entry)continue;
-        items.push({refKey,label:resolveLabel(refKey),val:entry.values,comparison:entry.comparison,platform});
-      }
-    }
-    return items;
-  };
-
-  const metrics=data?extractMetrics(data):[];
-  const period=data?.period;
-
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-
-      {/* Sub-tabs Bioter */}
-      {cacheIds.length>1&&(
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {cacheIds.map(id=>(
-            <button key={id} onClick={()=>setActiveId(id)}
-              style={{background:activeId===id?cl.color:"transparent",border:`1px solid ${activeId===id?cl.color:C.b1}`,borderRadius:20,padding:"5px 16px",color:activeId===id?"#fff":C.ts,fontSize:12,fontWeight:activeId===id?700:400,cursor:"pointer",transition:"all .15s"}}>
-              {REPORTEI_LABELS[id]||id}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{background:"#6366f110",border:"1px solid #6366f130",borderRadius:8,padding:"4px 12px",display:"flex",alignItems:"center",gap:6}}>
-            <div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/>
-            <span style={{color:"#6366f1",fontSize:11,fontWeight:700}}>Reportei · Meta Ads</span>
-          </div>
-          {period&&<span style={{color:C.td,fontSize:11}}>{period.start} → {period.end}</span>}
-          {updatedAt&&<span style={{color:C.td,fontSize:10}}>Atualizado {new Date(updatedAt).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>}
-        </div>
-        {activeId&&REPORTEI_URLS[activeId]&&(
-          <a href={REPORTEI_URLS[activeId]} target="_blank" rel="noopener noreferrer"
-            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"5px 12px",color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none"}}>
-            ↗ Ver no Reportei
-          </a>
-        )}
-      </div>
-
-      {/* Loading */}
-      {loading&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
-        <div style={{color:C.td,fontSize:13}}>Carregando métricas...</div>
-      </div>}
-
-      {/* Sem dados */}
-      {!loading&&metrics.length===0&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
-        <div style={{fontSize:32,marginBottom:12}}>📊</div>
-        <div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:6}}>Nenhuma métrica disponível</div>
-        <div style={{color:C.ts,fontSize:12,marginBottom:16}}>Os dados ainda não foram sincronizados para este cliente.</div>
-        <a href={activeId?REPORTEI_URLS[activeId]:"#"} target="_blank" rel="noopener noreferrer"
-          style={{background:cl.color,color:"#fff",borderRadius:9,padding:"8px 20px",fontSize:12,fontWeight:700,textDecoration:"none",display:"inline-block"}}>
-          Ver no Reportei →
-        </a>
-      </div>}
-
-      {/* Grid de métricas */}
-      {!loading&&metrics.length>0&&(
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
-          {metrics.map((m,i)=>{
-            const diff=m.comparison?.difference;
-            const positive=diff>0;
-            return(
-              <div key={i} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px"}}>
-                <div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>{m.label}</div>
-                <div style={{color:metricColor(m.refKey),fontWeight:900,fontSize:20,lineHeight:1,marginBottom:6}}>
-                  {fmtMetric(m.val,m.refKey)}
-                </div>
-                {diff!=null&&<div style={{color:positive?C.gr:C.rd,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",gap:3}}>
-                  <span>{positive?"▲":"▼"}</span>
-                  <span>{Math.abs(diff).toFixed(1)}%</span>
-                  <span style={{color:C.td,fontWeight:400}}>vs anterior</span>
-                </div>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
-  var TASKS=tasks||(typeof []!=="undefined"?[]:[]);
-  cl=getLiveClient(cl.id)||cl;
-  var [tab,setTab]=useState("dashboard");
-  var isSocio=CURRENT_USER.level===1;
-  var myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
-  var isSocio=CURRENT_USER.level===1;
-  var canSeeThisClient=isSocio||myPerms["verCliente_"+cl.id]!==false;
-  var canSeeMetricas=isSocio||(myPerms.verMetricas&&myPerms["verCliente_"+cl.id+"_metricas"]!==false);
-  var canSeeMindmap=isSocio||(myPerms.verMindmap&&myPerms["verCliente_"+cl.id+"_mindmap"]!==false);
-  var canSeeConcorrencia=isSocio||(myPerms.verConcorrencia&&myPerms["verCliente_"+cl.id+"_concorrencia"]!==false);
-  var canSeeLinks=isSocio||(myPerms.verLinksCliente&&myPerms["verCliente_"+cl.id+"_links"]!==false);
-  var canSeeAnalises=isSocio||(myPerms.verMetricas&&(REPORTEI_CACHE_IDS[cl.id]||[]).length>0);
-
-  var score=calcScore(cl,TASKS);
-  var scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
-  var healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
-  var clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
-  var lateTasks=clTasks.filter(function(t){
-    if(!t.deadline)return false;
-    return Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24))<0&&t.status!=="aprovado";
-  });
-  var pendingCopy=clTasks.filter(function(t){return t.status==="demanda"&&!t.ajustar;});
-  var pendingPub=clTasks.filter(function(t){return t.status==="avaliacao";});
-  var lastMeetDays=(function(){
-    if(!cl.lastMeeting)return null;
-    var p=cl.lastMeeting.split("/");
-    return Math.floor((new Date()-new Date(p[2]+"-"+p[1]+"-"+p[0]))/(1000*60*60*24));
-  })();
-
-  // Abas controladas por permissão por cliente
-  var TABS=[
-    {id:"dashboard",   label:"Dashboard"},
-    {id:"redes",       label:"Redes e Ads"},
-    {id:"ferramentas", label:"Ferramentas"},
-    {id:"info",        label:"Informações"},
-    ...(canSeeAnalises?[{id:"analises",label:"📊 Análises"}]:[]),
-    ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
-    ...(canSeeLinks?[{id:"links",label:"Links & Acessos"}]:[]),
-  ];
-
-  if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("dashboard");},0);
-
-  return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
-
-    {/* HEADER */}
-    <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:16,flexWrap:"wrap"}}>
-      <button onClick={onBack}
-        style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:4,padding:0,flexShrink:0}}
-        onMouseEnter={e=>e.currentTarget.style.color=C.ts}
-        onMouseLeave={e=>e.currentTarget.style.color=C.td}>
-        ← Clientes
-      </button>
-      <div style={{width:1,height:20,background:C.b1,flexShrink:0}}/>
-      <div style={{background:"#fff",borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center",justifyContent:"center",height:30,border:"1px solid #f1f5f9",flexShrink:0}}>
-        {CLIENT_LOGOS[cl.id]?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:68,objectFit:"contain"}}/>
-          :<span style={{color:cl.color,fontWeight:900,fontSize:11}}>{cl.abbr}</span>}
-      </div>
-      <div style={{flex:1,minWidth:100}}>
-        <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.3}}>{cl.name}</div>
-        <div style={{color:C.td,fontSize:11}}>{cl.sector}</div>
-      </div>
-      <div style={{display:"flex",gap:14,alignItems:"center",flexShrink:0}}>
-        {[
-          {label:"Score",value:score,color:scoreColor,circle:true},
-          {label:"Saúde",value:cl.health+"%",color:healthColor,circle:false},
-          {label:"NPS",value:cl.nps||0,color:cl.nps>=80?C.gr:cl.nps>=60?C.yw:C.rd,circle:false},
-          {label:"MRR",value:cl.contract>0?"R$"+(cl.contract/1000).toFixed(1)+"k":"—",color:C.tx,circle:false},
-        ].map(function(item,i){
-          return(<div key={item.label} style={{textAlign:"center"}}>
-            {item.circle?(
-              <div style={{position:"relative",width:36,height:36,margin:"0 auto"}}>
-                <svg width="36" height="36" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="14" fill="none" stroke={C.b1} strokeWidth="3"/>
-                  <circle cx="18" cy="18" r="14" fill="none" stroke={item.color} strokeWidth="3"
-                    strokeDasharray={2*Math.PI*14} strokeDashoffset={2*Math.PI*14*(1-item.value/100)}
-                    strokeLinecap="round" transform="rotate(-90 18 18)"/>
-                </svg>
-                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:item.color,fontWeight:900,fontSize:10}}>{item.value}</div>
-              </div>
-            ):<div style={{color:item.color,fontWeight:800,fontSize:15}}>{item.value}</div>}
-            <div style={{color:C.td,fontSize:9,marginTop:2}}>{item.label}</div>
-          </div>);
-        })}
-      </div>
-    </div>
-
-    {/* ALERT STRIP */}
-    {(lateTasks.length>0||pendingCopy.length>0||pendingPub.length>0||(cl.payment&&cl.payment.status==="atrasado")||(lastMeetDays!==null&&lastMeetDays>25))&&(
-      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
-        {lateTasks.length>0&&<div style={{background:C.rd+"18",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.rd,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-          <span>🔥</span>{lateTasks.length} atrasada(s)
-        </div>}
-        {(cl.payment&&cl.payment.status==="atrasado")&&<div style={{background:C.rd+"18",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.rd,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-          <span>💸</span>Pag. atrasado
-        </div>}
-        {pendingCopy.length>0&&<div style={{background:C.a+"18",border:"1px solid "+C.a+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.a,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-          <span>📝</span>{pendingCopy.length} copy(ies) p/ aprovar
-        </div>}
-        {pendingPub.length>0&&<div style={{background:C.gr+"18",border:"1px solid "+C.gr+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.gr,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-          <span>🎨</span>{pendingPub.length} pub. p/ aprovar
-        </div>}
-        {lastMeetDays!==null&&lastMeetDays>25&&<div style={{background:C.yw+"18",border:"1px solid "+C.yw+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.yw,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-          <span>📅</span>Reunião há {lastMeetDays}d
-        </div>}
-      </div>
-    )}
-
-    {/* TABS */}
-    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,marginBottom:20}}>
-      {TABS.map(function(t){
-        return(<button key={t.id} onClick={()=>setTab(t.id)}
-          style={{background:"none",border:"none",borderBottom:tab===t.id?"2px solid "+cl.color:"2px solid transparent",padding:"10px 20px",color:tab===t.id?cl.color:C.ts,fontWeight:tab===t.id?700:400,fontSize:13,cursor:"pointer",transition:"all .12s",whiteSpace:"nowrap",marginBottom:-1}}>
-          {t.label}
-        </button>);
-      })}
-    </div>
-
-    {/* CONTENT */}
-    {tab==="dashboard"&&<CDashboard cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
-    {tab==="redes"&&<CRedes cl={cl}/>}
-    {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
-    {tab==="info"&&<CInfo cl={cl}/>}
-    {tab==="analises"&&canSeeAnalises&&<CAnalises cl={cl}/>}
-    {tab==="concorrencia"&&canSeeConcorrencia&&<ClienteConcorrencia cl={cl} tab={tab} setTab={setTab}/>}
-    {tab==="links"&&canSeeLinks&&<div>
-      <div style={{background:C.a+"12",border:"1px solid "+C.a+"33",borderRadius:10,padding:"10px 14px",marginBottom:16,color:C.a,fontSize:12,fontWeight:600}}>
-        🔗 Acesse a aba "Links" dentro de Redes e Ads para ver os links e acessos do cliente.
-      </div>
-      <CRedes cl={cl}/>
-    </div>}
-  </div>);
-}
-
 // ======= 03_cliente_ferramentas.jsx =======
 // Ferramentas do cliente: CFerramentas + CInfo, CMetricas, CBriefing, CContatos, CTimeline, CMetas, CDrive
 // + helpers de dados: genTrend, buildMetaData, buildGoogleData, buildInstaData
@@ -6438,6 +6113,331 @@ function PageClientes({isMob, tasks}){
 }
 
 /* ─── CLIENT DETAIL — 4 ABAS ────────────────── */
+
+// ======= 03_cliente_detalhe.jsx =======
+
+/* ── Mapeamento cliente Pixels → cache IDs no Supabase ── */
+const REPORTEI_CACHE_IDS={
+  bioter:       ["bioter_chapeco","bioter_toledo","bioter_castro"],
+  climaves:     ["climaves"],
+  vetservice:   ["vetservice"],
+  construschorr:["construschorr"],
+  arabuta:      ["arabuta"],
+};
+
+const REPORTEI_LABELS={
+  bioter_chapeco:"Chapecó", bioter_toledo:"Toledo", bioter_castro:"Castro",
+  climaves:"Climaves", vetservice:"VetService", construschorr:"Construschorr", arabuta:"Arabutã",
+};
+
+const REPORTEI_URLS={
+  bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",
+  bioter_toledo: "https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",
+  bioter_castro: "https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",
+  climaves:      "https://app.reportei.com/dashboard/h3MihpaCfhBoVdMvEgc9fHI1T6TzODBR",
+  vetservice:    "https://app.reportei.com/dashboard/G42f7UB5R7V68m9BFDobFlW61f5ujXiX",
+  construschorr: "https://app.reportei.com/dashboard/4q3Ubekgg97cstORgg5yPBcR8Zvr3Jv3",
+  arabuta:       "https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
+};
+
+/* ── Mapeia reference_key → label amigável ── */
+const METRIC_LABEL={
+  "spend":                "Valor Investido",
+  "reach":                "Alcance",
+  "impressions":          "Impressões",
+  "link_clicks":          "Cliques no Link",
+  "actions_purchase_roas":"ROAS",
+  "cpc":                  "CPC Médio",
+  "ctr":                  "CTR",
+  "cpm":                  "CPM Médio",
+  "frequency":            "Frequência",
+  "clicks":               "Cliques (Google)",
+  "conversions":          "Conversões",
+  "cost_per_conversion":  "Custo/Conv.",
+};
+
+const resolveLabel=(refKey="")=>{
+  for(const [k,v] of Object.entries(METRIC_LABEL)){
+    if(refKey.includes(k))return v;
+  }
+  return refKey.split(":").pop()||refKey;
+};
+
+const fmtMetric=(val,refKey="")=>{
+  if(val===null||val===undefined)return "—";
+  const r=refKey.toLowerCase();
+  if(r.includes("spend")||r.includes("cpc")||r.includes("cpm")||r.includes("cost"))
+    return "R$"+Number(val).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(r.includes("ctr")||r.includes("roas"))
+    return Number(val).toFixed(2)+(r.includes("ctr")?"%":"x");
+  if(r.includes("frequency"))return Number(val).toFixed(2);
+  return Number(val).toLocaleString("pt-BR");
+};
+
+const metricColor=(refKey="")=>{
+  if(refKey.includes("spend")||refKey.includes("cost"))return C.rd;
+  if(refKey.includes("roas")||refKey.includes("conversion"))return C.gr;
+  if(refKey.includes("reach")||refKey.includes("impression"))return C.bl;
+  if(refKey.includes("click")||refKey.includes("ctr"))return C.a;
+  return C.ts;
+};
+
+/* ── Componente de análises nativo ── */
+function CAnalises({cl}){
+  const cacheIds=REPORTEI_CACHE_IDS[cl.id]||[];
+  const [activeId,setActiveId]=useState(cacheIds[0]||null);
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [updatedAt,setUpdatedAt]=useState(null);
+
+  useEffect(()=>{
+    if(!activeId)return;
+    setLoading(true);
+    const sb=window._sb;
+    sb.from("reportei_cache")
+      .select("data,updated_at")
+      .eq("client_id",activeId)
+      .single()
+      .then(({data:row})=>{
+        setData(row?.data||null);
+        setUpdatedAt(row?.updated_at||null);
+        setLoading(false);
+      });
+  },[activeId]);
+
+  if(cacheIds.length===0)return(
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
+      <div style={{fontSize:32,marginBottom:12}}>📊</div>
+      <div style={{color:C.tx,fontWeight:700,fontSize:15}}>Análises não configuradas</div>
+    </div>
+  );
+
+  // Extrai métricas do cache
+  const extractMetrics=(d)=>{
+    if(!d?.metrics)return[];
+    const items=[];
+    for(const [platform,info] of Object.entries(d.metrics)){
+      if(!info?.values||!info?.metrics_map)continue;
+      for(const [uuid,refKey] of Object.entries(info.metrics_map)){
+        const entry=info.values[uuid];
+        if(!entry)continue;
+        items.push({refKey,label:resolveLabel(refKey),val:entry.values,comparison:entry.comparison,platform});
+      }
+    }
+    return items;
+  };
+
+  const metrics=data?extractMetrics(data):[];
+  const period=data?.period;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+      {/* Sub-tabs Bioter */}
+      {cacheIds.length>1&&(
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {cacheIds.map(id=>(
+            <button key={id} onClick={()=>setActiveId(id)}
+              style={{background:activeId===id?cl.color:"transparent",border:`1px solid ${activeId===id?cl.color:C.b1}`,borderRadius:20,padding:"5px 16px",color:activeId===id?"#fff":C.ts,fontSize:12,fontWeight:activeId===id?700:400,cursor:"pointer",transition:"all .15s"}}>
+              {REPORTEI_LABELS[id]||id}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{background:"#6366f110",border:"1px solid #6366f130",borderRadius:8,padding:"4px 12px",display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/>
+            <span style={{color:"#6366f1",fontSize:11,fontWeight:700}}>Reportei · Meta Ads</span>
+          </div>
+          {period&&<span style={{color:C.td,fontSize:11}}>{period.start} → {period.end}</span>}
+          {updatedAt&&<span style={{color:C.td,fontSize:10}}>Atualizado {new Date(updatedAt).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>}
+        </div>
+        {activeId&&REPORTEI_URLS[activeId]&&(
+          <a href={REPORTEI_URLS[activeId]} target="_blank" rel="noopener noreferrer"
+            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"5px 12px",color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none"}}>
+            ↗ Ver no Reportei
+          </a>
+        )}
+      </div>
+
+      {/* Loading */}
+      {loading&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
+        <div style={{color:C.td,fontSize:13}}>Carregando métricas...</div>
+      </div>}
+
+      {/* Sem dados */}
+      {!loading&&metrics.length===0&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}>
+        <div style={{fontSize:32,marginBottom:12}}>📊</div>
+        <div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:6}}>Nenhuma métrica disponível</div>
+        <div style={{color:C.ts,fontSize:12,marginBottom:16}}>Os dados ainda não foram sincronizados para este cliente.</div>
+        <a href={activeId?REPORTEI_URLS[activeId]:"#"} target="_blank" rel="noopener noreferrer"
+          style={{background:cl.color,color:"#fff",borderRadius:9,padding:"8px 20px",fontSize:12,fontWeight:700,textDecoration:"none",display:"inline-block"}}>
+          Ver no Reportei →
+        </a>
+      </div>}
+
+      {/* Grid de métricas */}
+      {!loading&&metrics.length>0&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
+          {metrics.map((m,i)=>{
+            const diff=m.comparison?.difference;
+            const positive=diff>0;
+            return(
+              <div key={i} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px"}}>
+                <div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>{m.label}</div>
+                <div style={{color:metricColor(m.refKey),fontWeight:900,fontSize:20,lineHeight:1,marginBottom:6}}>
+                  {fmtMetric(m.val,m.refKey)}
+                </div>
+                {diff!=null&&<div style={{color:positive?C.gr:C.rd,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",gap:3}}>
+                  <span>{positive?"▲":"▼"}</span>
+                  <span>{Math.abs(diff).toFixed(1)}%</span>
+                  <span style={{color:C.td,fontWeight:400}}>vs anterior</span>
+                </div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
+  var TASKS=tasks||(typeof []!=="undefined"?[]:[]);
+  cl=getLiveClient(cl.id)||cl;
+  var [tab,setTab]=useState("dashboard");
+  var isSocio=CURRENT_USER.level===1;
+  var myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
+  var isSocio=CURRENT_USER.level===1;
+  var canSeeThisClient=isSocio||myPerms["verCliente_"+cl.id]!==false;
+  var canSeeMetricas=isSocio||(myPerms.verMetricas&&myPerms["verCliente_"+cl.id+"_metricas"]!==false);
+  var canSeeMindmap=isSocio||(myPerms.verMindmap&&myPerms["verCliente_"+cl.id+"_mindmap"]!==false);
+  var canSeeConcorrencia=isSocio||(myPerms.verConcorrencia&&myPerms["verCliente_"+cl.id+"_concorrencia"]!==false);
+  var canSeeLinks=isSocio||(myPerms.verLinksCliente&&myPerms["verCliente_"+cl.id+"_links"]!==false);
+  var canSeeAnalises=isSocio||(myPerms.verMetricas&&(REPORTEI_CACHE_IDS[cl.id]||[]).length>0);
+
+  var score=calcScore(cl,TASKS);
+  var scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
+  var healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
+  var clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
+  var lateTasks=clTasks.filter(function(t){
+    if(!t.deadline)return false;
+    return Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24))<0&&t.status!=="aprovado";
+  });
+  var pendingCopy=clTasks.filter(function(t){return t.status==="demanda"&&!t.ajustar;});
+  var pendingPub=clTasks.filter(function(t){return t.status==="avaliacao";});
+  var lastMeetDays=(function(){
+    if(!cl.lastMeeting)return null;
+    var p=cl.lastMeeting.split("/");
+    return Math.floor((new Date()-new Date(p[2]+"-"+p[1]+"-"+p[0]))/(1000*60*60*24));
+  })();
+
+  // Abas controladas por permissão por cliente
+  var TABS=[
+    {id:"dashboard",   label:"Dashboard"},
+    {id:"redes",       label:"Redes e Ads"},
+    {id:"ferramentas", label:"Ferramentas"},
+    {id:"info",        label:"Informações"},
+    ...(canSeeAnalises?[{id:"analises",label:"📊 Análises"}]:[]),
+    ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
+    ...(canSeeLinks?[{id:"links",label:"Links & Acessos"}]:[]),
+  ];
+
+  if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("dashboard");},0);
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
+
+    {/* HEADER */}
+    <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:16,flexWrap:"wrap"}}>
+      <button onClick={onBack}
+        style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:4,padding:0,flexShrink:0}}
+        onMouseEnter={e=>e.currentTarget.style.color=C.ts}
+        onMouseLeave={e=>e.currentTarget.style.color=C.td}>
+        ← Clientes
+      </button>
+      <div style={{width:1,height:20,background:C.b1,flexShrink:0}}/>
+      <div style={{background:"#fff",borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center",justifyContent:"center",height:30,border:"1px solid #f1f5f9",flexShrink:0}}>
+        {CLIENT_LOGOS[cl.id]?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:68,objectFit:"contain"}}/>
+          :<span style={{color:cl.color,fontWeight:900,fontSize:11}}>{cl.abbr}</span>}
+      </div>
+      <div style={{flex:1,minWidth:100}}>
+        <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.3}}>{cl.name}</div>
+        <div style={{color:C.td,fontSize:11}}>{cl.sector}</div>
+      </div>
+      <div style={{display:"flex",gap:14,alignItems:"center",flexShrink:0}}>
+        {[
+          {label:"Score",value:score,color:scoreColor,circle:true},
+          {label:"Saúde",value:cl.health+"%",color:healthColor,circle:false},
+          {label:"NPS",value:cl.nps||0,color:cl.nps>=80?C.gr:cl.nps>=60?C.yw:C.rd,circle:false},
+          {label:"MRR",value:cl.contract>0?"R$"+(cl.contract/1000).toFixed(1)+"k":"—",color:C.tx,circle:false},
+        ].map(function(item,i){
+          return(<div key={item.label} style={{textAlign:"center"}}>
+            {item.circle?(
+              <div style={{position:"relative",width:36,height:36,margin:"0 auto"}}>
+                <svg width="36" height="36" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="14" fill="none" stroke={C.b1} strokeWidth="3"/>
+                  <circle cx="18" cy="18" r="14" fill="none" stroke={item.color} strokeWidth="3"
+                    strokeDasharray={2*Math.PI*14} strokeDashoffset={2*Math.PI*14*(1-item.value/100)}
+                    strokeLinecap="round" transform="rotate(-90 18 18)"/>
+                </svg>
+                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:item.color,fontWeight:900,fontSize:10}}>{item.value}</div>
+              </div>
+            ):<div style={{color:item.color,fontWeight:800,fontSize:15}}>{item.value}</div>}
+            <div style={{color:C.td,fontSize:9,marginTop:2}}>{item.label}</div>
+          </div>);
+        })}
+      </div>
+    </div>
+
+    {/* ALERT STRIP */}
+    {(lateTasks.length>0||pendingCopy.length>0||pendingPub.length>0||(cl.payment&&cl.payment.status==="atrasado")||(lastMeetDays!==null&&lastMeetDays>25))&&(
+      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+        {lateTasks.length>0&&<div style={{background:C.rd+"18",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.rd,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+          <span>🔥</span>{lateTasks.length} atrasada(s)
+        </div>}
+        {(cl.payment&&cl.payment.status==="atrasado")&&<div style={{background:C.rd+"18",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.rd,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+          <span>💸</span>Pag. atrasado
+        </div>}
+        {pendingCopy.length>0&&<div style={{background:C.a+"18",border:"1px solid "+C.a+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.a,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+          <span>📝</span>{pendingCopy.length} copy(ies) p/ aprovar
+        </div>}
+        {pendingPub.length>0&&<div style={{background:C.gr+"18",border:"1px solid "+C.gr+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.gr,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+          <span>🎨</span>{pendingPub.length} pub. p/ aprovar
+        </div>}
+        {lastMeetDays!==null&&lastMeetDays>25&&<div style={{background:C.yw+"18",border:"1px solid "+C.yw+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.yw,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+          <span>📅</span>Reunião há {lastMeetDays}d
+        </div>}
+      </div>
+    )}
+
+    {/* TABS */}
+    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,marginBottom:20}}>
+      {TABS.map(function(t){
+        return(<button key={t.id} onClick={()=>setTab(t.id)}
+          style={{background:"none",border:"none",borderBottom:tab===t.id?"2px solid "+cl.color:"2px solid transparent",padding:"10px 20px",color:tab===t.id?cl.color:C.ts,fontWeight:tab===t.id?700:400,fontSize:13,cursor:"pointer",transition:"all .12s",whiteSpace:"nowrap",marginBottom:-1}}>
+          {t.label}
+        </button>);
+      })}
+    </div>
+
+    {/* CONTENT */}
+    {tab==="dashboard"&&<CDashboard cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
+    {tab==="redes"&&<CRedes cl={cl}/>}
+    {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
+    {tab==="info"&&<CInfo cl={cl}/>}
+    {tab==="analises"&&canSeeAnalises&&<CAnalises cl={cl}/>}
+    {tab==="concorrencia"&&canSeeConcorrencia&&<ClienteConcorrencia cl={cl} tab={tab} setTab={setTab}/>}
+    {tab==="links"&&canSeeLinks&&<div>
+      <div style={{background:C.a+"12",border:"1px solid "+C.a+"33",borderRadius:10,padding:"10px 14px",marginBottom:16,color:C.a,fontSize:12,fontWeight:600}}>
+        🔗 Acesse a aba "Links" dentro de Redes e Ads para ver os links e acessos do cliente.
+      </div>
+      <CRedes cl={cl}/>
+    </div>}
+  </div>);
+}
 
 // ======= 04_calendario.jsx =======
 // Página do Calendário de Publicações
