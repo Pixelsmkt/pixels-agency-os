@@ -6140,10 +6140,44 @@ const REPORTEI_CACHE_IDS={
 };
 const REPORTEI_LABELS={bioter_chapeco:"Chapecó",bioter_toledo:"Toledo",bioter_castro:"Castro",climaves:"Climaves",vetservice:"VetService",construschorr:"Construschorr",arabuta:"Arabutã"};
 const REPORTEI_URLS={bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",bioter_toledo:"https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",bioter_castro:"https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",climaves:"https://app.reportei.com/dashboard/h3MihpaCfhBoVdMvEgc9fHI1T6TzODBR",vetservice:"https://app.reportei.com/dashboard/G42f7UB5R7V68m9BFDobFlW61f5ujXiX",construschorr:"https://app.reportei.com/dashboard/4q3Ubekgg97cstORgg5yPBcR8Zvr3Jv3",arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb"};
-const METRIC_LABEL={"spend":"Valor Investido","reach":"Alcance","impressions":"Impressões","link_clicks":"Cliques","actions_purchase_roas":"ROAS","cpc":"CPC Médio","ctr":"CTR","cpm":"CPM Médio","frequency":"Frequência","clicks":"Cliques (Google)","conversions":"Conversões","cost_per_conversion":"Custo/Conv."};
-const resolveLabel=(r="")=>{for(const[k,v]of Object.entries(METRIC_LABEL)){if(r.includes(k))return v;}return r.split(":").pop()||r;};
-const fmtMetric=(val,r="")=>{if(val===null||val===undefined)return"—";if(r.includes("spend")||r.includes("cpc")||r.includes("cpm")||r.includes("cost"))return"R$"+Number(val).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});if(r.includes("ctr"))return Number(val).toFixed(2)+"%";if(r.includes("roas"))return Number(val).toFixed(2)+"x";if(r.includes("frequency"))return Number(val).toFixed(2);return Number(val).toLocaleString("pt-BR");};
-const metricColor=(r="")=>{if(r.includes("spend")||r.includes("cost"))return C.rd;if(r.includes("roas")||r.includes("conversion"))return C.gr;if(r.includes("reach")||r.includes("impression"))return C.bl;if(r.includes("click")||r.includes("ctr"))return C.a;return C.ts;};
+
+const ADS_METRICS=[
+  {slug:"spend",       label:"Investido",   fmt:"money", icon:"💰", color:"#1877f2", good:false, desc:"Total investido no período"},
+  {slug:"reach",       label:"Alcance",     fmt:"num",   icon:"👥", color:"#8b5cf6", good:true,  desc:"Pessoas únicas alcançadas"},
+  {slug:"impressions", label:"Impressões",  fmt:"num",   icon:"👁", color:"#0891b2", good:true,  desc:"Total de exibições dos anúncios"},
+  {slug:"link_clicks", label:"Cliques",     fmt:"num",   icon:"🖱", color:"#f97316", good:true,  desc:"Cliques no link dos anúncios"},
+  {slug:"ctr",         label:"CTR",         fmt:"pct",   icon:"📈", color:"#059669", good:true,  desc:"Taxa de clique"},
+  {slug:"cpc",         label:"CPC",         fmt:"money", icon:"💲", color:"#e53e3e", good:false, desc:"Custo por clique"},
+  {slug:"cpm",         label:"CPM",         fmt:"money", icon:"📢", color:"#7c3aed", good:false, desc:"Custo por mil impressões"},
+  {slug:"frequency",   label:"Frequência",  fmt:"dec",   icon:"🔁", color:"#d97706", good:null,  desc:"Média de vezes que cada pessoa viu"},
+];
+const adsNum=(v)=>{if(v===null||v===undefined)return null;const n=Number(v);if(isNaN(n)||!isFinite(n))return null;return n;};
+const adsFmt=(n,fmt)=>{
+  if(n===null||n===undefined)return"—";
+  const num=Number(n);if(isNaN(num))return"—";
+  if(fmt==="money")return"R$"+num.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(fmt==="pct")return num.toFixed(2)+"%";
+  if(fmt==="dec")return num.toFixed(2);
+  if(num>=1000000)return(num/1000000).toFixed(1)+"M";
+  if(num>=1000)return(num/1000).toFixed(1)+"k";
+  return num.toLocaleString("pt-BR");
+};
+const extractAdsMetrics=(data)=>{
+  if(!data?.metrics)return{};
+  const result={};
+  for(const[,info]of Object.entries(data.metrics)){
+    if(!info?.values||!info?.metrics_map)continue;
+    for(const[uuid,refKey]of Object.entries(info.metrics_map)){
+      const entry=info.values[uuid];
+      if(!entry)continue;
+      const slug=refKey.split(":").pop();
+      const n=adsNum(entry.values);
+      if(n===null)continue;
+      if(!result[slug]){result[slug]={val:n,comparison:entry.comparison};}
+    }
+  }
+  return result;
+};
 
 function CAnalises({cl}){
   const cacheIds=REPORTEI_CACHE_IDS[cl.id]||[];
@@ -6154,28 +6188,137 @@ function CAnalises({cl}){
   useEffect(()=>{
     if(!activeId)return;
     setLoading(true);
-    window._sb.from("reportei_cache").select("data,updated_at").eq("client_id",activeId).single().then(({data:row})=>{setData(row?.data||null);setUpdatedAt(row?.updated_at||null);setLoading(false);});
+    window._sb.from("reportei_cache").select("data,updated_at").eq("client_id",activeId).single()
+      .then(({data:row})=>{setData(row?.data||null);setUpdatedAt(row?.updated_at||null);setLoading(false);});
   },[activeId]);
-  if(cacheIds.length===0)return<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>📊</div><div style={{color:C.tx,fontWeight:700,fontSize:15}}>Análises não configuradas</div></div>;
-  const extractMetrics=(d)=>{if(!d?.metrics)return[];const items=[];for(const[,info]of Object.entries(d.metrics)){if(!info?.values||!info?.metrics_map)continue;for(const[uuid,refKey]of Object.entries(info.metrics_map)){const entry=info.values[uuid];if(!entry)continue;items.push({refKey,label:resolveLabel(refKey),val:entry.values,comparison:entry.comparison});}}return items;};
-  const metrics=data?extractMetrics(data):[];
-  const period=data?.period;
-  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {cacheIds.length>1&&<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{cacheIds.map(id=><button key={id} onClick={()=>setActiveId(id)} style={{background:activeId===id?cl.color:"transparent",border:`1px solid ${activeId===id?cl.color:C.b1}`,borderRadius:20,padding:"5px 16px",color:activeId===id?"#fff":C.ts,fontSize:12,fontWeight:activeId===id?700:400,cursor:"pointer"}}>{REPORTEI_LABELS[id]||id}</button>)}</div>}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <div style={{background:"#6366f110",border:"1px solid #6366f130",borderRadius:8,padding:"4px 12px",display:"flex",alignItems:"center",gap:6}}><div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/><span style={{color:"#6366f1",fontSize:11,fontWeight:700}}>Reportei · Meta Ads</span></div>
-        {period&&<span style={{color:C.td,fontSize:11}}>{period.start} → {period.end}</span>}
-        {updatedAt&&<span style={{color:C.td,fontSize:10}}>Atualizado {new Date(updatedAt).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>}
-      </div>
-      {activeId&&REPORTEI_URLS[activeId]&&<a href={REPORTEI_URLS[activeId]} target="_blank" rel="noopener noreferrer" style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"5px 12px",color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none"}}>↗ Ver no Reportei</a>}
+  if(cacheIds.length===0)return(
+    <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,padding:"60px",textAlign:"center"}}>
+      <div style={{fontSize:40,marginBottom:12}}>📊</div>
+      <div style={{color:C.tx,fontWeight:700,fontSize:16}}>Análises não configuradas</div>
     </div>
-    {loading&&<div style={{padding:"40px",textAlign:"center",color:C.td}}>Carregando métricas...</div>}
-    {!loading&&metrics.length===0&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"40px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:8}}>📊</div><div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:6}}>Nenhuma métrica disponível</div><a href={activeId?REPORTEI_URLS[activeId]:"#"} target="_blank" rel="noopener noreferrer" style={{background:cl.color,color:"#fff",borderRadius:9,padding:"8px 20px",fontSize:12,fontWeight:700,textDecoration:"none",display:"inline-block",marginTop:8}}>Ver no Reportei →</a></div>}
-    {!loading&&metrics.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
-      {metrics.map((m,i)=>{const diff=m.comparison?.difference;const pos=diff>0;return(<div key={i} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px"}}><div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>{m.label}</div><div style={{color:metricColor(m.refKey),fontWeight:900,fontSize:20,lineHeight:1,marginBottom:6}}>{fmtMetric(m.val,m.refKey)}</div>{diff!=null&&<div style={{color:pos?C.gr:C.rd,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",gap:3}}><span>{pos?"▲":"▼"}</span><span>{Math.abs(diff).toFixed(1)}%</span><span style={{color:C.td,fontWeight:400}}>vs anterior</span></div>}</div>);})}
-    </div>}
-  </div>);
+  );
+  const raw=data?extractAdsMetrics(data):{};
+  const period=data?.period;
+  const metrics=ADS_METRICS.map(m=>({...m,entry:raw[m.slug]||null})).filter(m=>m.entry!==null&&m.entry.val!==null);
+  const hero=["spend","reach","impressions","link_clicks"];
+  const heroMetrics=hero.map(s=>metrics.find(m=>m.slug===s)).filter(Boolean);
+  const secondary=metrics.filter(m=>!hero.includes(m.slug));
+  const chartData=metrics.filter(m=>m.fmt==="num"&&m.entry?.val>0);
+  const chartMax=Math.max(...chartData.map(d=>d.entry.val),1);
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {cacheIds.length>1&&(
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {cacheIds.map(id=>(
+            <button key={id} onClick={()=>setActiveId(id)}
+              style={{background:activeId===id?cl.color:"transparent",border:`1px solid ${activeId===id?cl.color:C.b1}`,borderRadius:20,padding:"5px 20px",color:activeId===id?"#fff":C.ts,fontSize:12,fontWeight:activeId===id?700:400,cursor:"pointer",transition:"all .15s"}}>
+              {REPORTEI_LABELS[id]||id}
+            </button>
+          ))}
+        </div>
+      )}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{background:"#1877f2",borderRadius:8,padding:"5px 12px",display:"flex",alignItems:"center",gap:6}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+            <span style={{color:"#fff",fontSize:11,fontWeight:700}}>Meta Ads</span>
+            <div style={{width:5,height:5,borderRadius:"50%",background:"#4ade80"}}/>
+          </div>
+          {period&&<span style={{color:C.ts,fontSize:12,fontWeight:600}}>{period.start} → {period.end}</span>}
+          {updatedAt&&<span style={{color:C.td,fontSize:11}}>Sync {new Date(updatedAt).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</span>}
+        </div>
+        {activeId&&REPORTEI_URLS[activeId]&&(
+          <a href={REPORTEI_URLS[activeId]} target="_blank" rel="noopener noreferrer"
+            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"6px 14px",color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
+            ↗ Abrir no Reportei
+          </a>
+        )}
+      </div>
+      {loading&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"50px",textAlign:"center",color:C.td}}>Carregando métricas...</div>}
+      {!loading&&metrics.length===0&&(
+        <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,padding:"60px",textAlign:"center"}}>
+          <div style={{fontSize:40,marginBottom:12}}>📊</div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:8}}>Sem dados disponíveis</div>
+          <a href={activeId?REPORTEI_URLS[activeId]:"#"} target="_blank" rel="noopener noreferrer"
+            style={{background:cl.color,color:"#fff",borderRadius:10,padding:"9px 22px",fontSize:12,fontWeight:700,textDecoration:"none",display:"inline-block"}}>
+            Ver no Reportei →
+          </a>
+        </div>
+      )}
+      {!loading&&metrics.length>0&&(<>
+        {heroMetrics.length>0&&(
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${Math.min(heroMetrics.length,4)},1fr)`,gap:10}}>
+            {heroMetrics.map((m,i)=>{
+              const n=m.entry?.val;
+              const diff=m.entry?.comparison?.difference;
+              const pos=diff>0;
+              const diffColor=diff==null?null:(m.good===null?"#94a3b8":pos===m.good?C.gr:C.rd);
+              return(
+                <div key={i} style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"18px 20px",position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:m.color,borderRadius:"14px 14px 0 0"}}/>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                    <span style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>{m.label}</span>
+                    <span style={{fontSize:16}}>{m.icon}</span>
+                  </div>
+                  <div style={{color:m.color,fontWeight:900,fontSize:24,letterSpacing:-1,lineHeight:1,marginBottom:8}}>{adsFmt(n,m.fmt)}</div>
+                  {diff!=null&&(
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <div style={{background:(diffColor||"#94a3b8")+"22",borderRadius:6,padding:"2px 7px"}}>
+                        <span style={{color:diffColor||"#94a3b8",fontSize:10,fontWeight:800}}>{pos?"▲":"▼"} {Math.abs(diff).toFixed(1)}%</span>
+                      </div>
+                      <span style={{color:C.td,fontSize:10}}>vs anterior</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {chartData.length>0&&(
+          <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"18px 20px"}}>
+            <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:16}}>Volume de Alcance & Engajamento</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {chartData.map((m,i)=>{
+                const pct=Math.round((m.entry.val/chartMax)*100);
+                return(
+                  <div key={i}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                      <span style={{color:C.ts,fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:5}}><span>{m.icon}</span>{m.label}</span>
+                      <span style={{color:m.color,fontSize:12,fontWeight:800}}>{adsFmt(m.entry.val,"num")}</span>
+                    </div>
+                    <div style={{height:8,background:C.s1,borderRadius:99,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${m.color}bb,${m.color})`,borderRadius:99,transition:"width .6s ease"}}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {secondary.length>0&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
+            {secondary.map((m,i)=>{
+              const n=m.entry?.val;
+              const diff=m.entry?.comparison?.difference;
+              const pos=diff>0;
+              const diffColor=diff==null?null:(m.good===null?"#94a3b8":pos===m.good?C.gr:C.rd);
+              return(
+                <div key={i} style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"14px 16px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}>
+                    <span style={{fontSize:13}}>{m.icon}</span>
+                    <span style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{m.label}</span>
+                  </div>
+                  <div style={{color:m.color,fontWeight:900,fontSize:20,lineHeight:1,marginBottom:4}}>{adsFmt(n,m.fmt)}</div>
+                  <div style={{color:C.td,fontSize:9,marginBottom:diff!=null?4:0}}>{m.desc}</div>
+                  {diff!=null&&<div style={{color:diffColor||"#94a3b8",fontSize:10,fontWeight:700}}>{pos?"▲":"▼"} {Math.abs(diff).toFixed(1)}%</div>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </>)}
+    </div>
+  );
 }
 
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
