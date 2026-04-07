@@ -5524,14 +5524,8 @@ function CDrive({cl}){
 // Entrada da seção Clientes: PageClientes + NovoClienteModal + calcScore + Sparkline
 // Depende de: 00_globals, 00_clientes_data, 00_mindmap_data, 02_clientes (MindMap)
 
-/* ── Aliases Recharts e stubs — devem vir antes de 03_cliente_ads ── */
-const RBar    = (typeof recharts!=="undefined"&&recharts?.Bar)    || (()=>null);
-const RArea   = (typeof recharts!=="undefined"&&recharts?.Area)   || (()=>null);
-const RLine   = (typeof recharts!=="undefined"&&recharts?.Line)   || (()=>null);
-const RLegend = (typeof recharts!=="undefined"&&recharts?.Legend) || (()=>null);
-const RTooltip= (typeof recharts!=="undefined"&&recharts?.Tooltip)|| (()=>null);
+/* ── Stub TT — usado em ClienteDashboard (03_cliente_ads) ── */
 const TT=()=>null;
-
 
 /* ─── NOVO CLIENTE MODAL ─────────────────────── */
 function NovoClienteModal({onClose,onSave}){
