@@ -6116,10 +6116,18 @@ function PageClientes({isMob, tasks}){
 
 // ======= 03_cliente_detalhe.jsx =======
 
-/* ── Aliases para compatibilidade ── */
-// CDashboard e CRedes não existem como funções separadas —
-// são servidos pelo ClienteDashboard com state local de tab
-function CDashboard({cl,tasks,onMindmap}){
+/* ── Aliases Recharts usados em 03_cliente_ads ── */
+const RBar      = recharts?.Bar       || (()=>null);
+const RArea     = recharts?.Area      || (()=>null);
+const RLine     = recharts?.Line      || (()=>null);
+const RLegend   = recharts?.Legend    || (()=>null);
+const RTooltip  = recharts?.Tooltip   || (()=>null);
+
+/* ── Stubs para componentes sem definição ── */
+const TT=()=>null;
+
+/* ── Aliases do ClienteDashboard ── */
+function CDashboard({cl}){
   const [t,setT]=useState("meta");
   return <ClienteDashboard cl={cl} tab={t} setTab={setT}/>;
 }
