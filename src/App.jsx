@@ -6305,6 +6305,12 @@ function CAnalises({cl}){
   );
 }
 
+/* ── Wrapper para ClienteDashboard com state local de tab ── */
+function ClienteDashboardWrapper({cl,tasks,onMindmap,initTab}){
+  const [tab,setTab]=useState(initTab||"meta");
+  return <ClienteDashboard cl={cl} tab={tab} setTab={setTab}/>;
+}
+
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   var TASKS=tasks||(typeof []!=="undefined"?[]:[]);
   cl=getLiveClient(cl.id)||cl;
@@ -6424,8 +6430,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     </div>
 
     {/* CONTENT */}
-    {tab==="dashboard"&&<CDashboard cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
-    {tab==="redes"&&<CRedes cl={cl}/>}
+    {tab==="dashboard"&&<ClienteDashboardWrapper cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
+    {tab==="redes"&&<ClienteDashboardWrapper cl={cl} tasks={TASKS} onMindmap={onMindmap} initTab="meta"/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
     {tab==="analises"&&canSeeAnalises&&<CAnalises cl={cl}/>}
@@ -6434,7 +6440,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
       <div style={{background:C.a+"12",border:"1px solid "+C.a+"33",borderRadius:10,padding:"10px 14px",marginBottom:16,color:C.a,fontSize:12,fontWeight:600}}>
         🔗 Acesse a aba "Links" dentro de Redes e Ads para ver os links e acessos do cliente.
       </div>
-      <CRedes cl={cl}/>
+      <ClienteDashboardWrapper cl={cl} tasks={TASKS} onMindmap={onMindmap} initTab="meta"/>
     </div>}
   </div>);
 }
