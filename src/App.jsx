@@ -201,6 +201,7 @@ function applyTheme(key){
   const t=THEMES[key]||THEMES.dark;
   Object.assign(C,t);
   try{localStorage.setItem("pixels-theme",key);}catch(e){}
+  if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,theme:key},{onConflict:"user_id"}).catch(()=>{});
 }
 
 // Load saved theme on startup
@@ -274,9 +275,6 @@ const DEFAULT_PERMS={
   pixelsIA:false, escanear:false, verCalendario:true, verBriefingCard:false,
   // Notificações
   verNotificacoes:true, verInterno:false,
-  // Demandas Internas
-  verDemandasInternas:false, criarDemandaInterna:false, aprovarDemandaInterna:false, verTodosInternos:false,
-  verRadarEntrega:false,
   // Interno — sub-páginas
   verMapeamento:false, verConexoes:false, verPontuacao:false, verCarreira:false, verAvaliacao360:false,
   // Análises — sub-páginas
@@ -392,47 +390,6 @@ function NavIcon({id,size=18,color}){
   if(id==="interno")    return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>;
   if(id==="portal")     return <svg {...p}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>;
   if(id==="notificacoes")return <svg {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
-  // ── Submenus Demandas ──
-  if(id==="demandas_kanban")     return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
-  if(id==="demandas_internas")   return <svg {...p}><path d="M12 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M12 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
-  if(id==="demandas_cal_pub")    return <svg {...p}><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><circle cx="8" cy="15" r="1" fill={cl}/><circle cx="12" cy="15" r="1" fill={cl}/></svg>;
-  if(id==="demandas_cal_interno")return <svg {...p}><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h8M8 17h5"/></svg>;
-  // ── Submenus Aprovações ──
-  if(id==="aprovacoes_copys")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
-  if(id==="aprovacoes_publicacao") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>;
-  if(id==="aprovacoes_internas")   return <svg {...p}><path d="M12 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M12 2v6h6"/><path d="M9 15l2 2 4-4"/><circle cx="18" cy="5" r="3" fill={cl}/></svg>;
-  // ── Submenus Análises ──
-  if(id==="analises_producao") return <svg {...p}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
-  if(id==="analises_gargalos") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>;
-  if(id==="relatorios")        return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg>;
-  // ── Submenus Pixels IA ──
-  if(id==="ia_diagnostico") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>;
-  if(id==="ia_churn")       return <svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>;
-  if(id==="ia_playbooks")   return <svg {...p}><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>;
-  if(id==="ia_biblioteca")  return <svg {...p}><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M8 7h8M8 11h6"/></svg>;
-  // ── Submenus Portal ──
-  if(id==="portal_dashboard")   return <svg {...p}><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>;
-  if(id==="portal_demandas")    return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
-  if(id==="portal_calendario")  return <svg {...p}><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>;
-  if(id==="portal_publicacoes") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>;
-  if(id==="portal_analises")    return <svg {...p}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
-  if(id==="portal_faturamento") return <svg {...p}><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>;
-  if(id==="portal_chat")        return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
-  // ── Submenus Gestão ──
-  if(id==="contratos_lista")       return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
-  if(id==="contratos_ltv")         return <svg {...p}><path d="M12 2v20M2 12h20"/><path d="M7 7l5 5 5-5M7 17l5-5 5 5"/></svg>;
-  if(id==="contratos_projecao")    return <svg {...p}><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>;
-  if(id==="capacidade_alocacao")   return <svg {...p}><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75M21 21v-2a4 4 0 00-3-3.85"/></svg>;
-  if(id==="capacidade_onboarding") return <svg {...p}><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8l2 2 4-4"/></svg>;
-  // ── Submenus Interno ──
-  if(id==="interno_calendario") return <svg {...p}><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M8 14h8M8 17h5"/></svg>;
-  if(id==="interno_radar")      return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3"/></svg>;
-  if(id==="interno_pontuacao")  return <svg {...p}><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>;
-  if(id==="interno_mapeamento") return <svg {...p}><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 00-8 8c0 5.25 8 14 8 14s8-8.75 8-14a8 8 0 00-8-8z"/></svg>;
-  if(id==="interno_conexoes")   return <svg {...p}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
-  if(id==="interno_360")        return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/><path d="M16.51 17.35l-.35 3.83a2 2 0 01-3.97.22l-.44-4.98"/></svg>;
-  if(id==="interno_carreira")   return <svg {...p}><path d="M3 17l4-8 4 4 4-6 4 10"/></svg>;
-  // ── fallback ──
   return <svg {...p}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
 }
 
@@ -440,15 +397,12 @@ function NavIcon({id,size=18,color}){
 const NAV=[
   {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
-    {id:"demandas_kanban",    icon:"◈", label:"Fluxo de Demandas"},
-    {id:"demandas_internas",  icon:"◫", label:"Demandas Internas"},
-    {id:"demandas_cal_pub",   icon:"▦", label:"Calendário de Publicações"},
-    {id:"demandas_cal_interno",icon:"▦", label:"Calendário Interno/Clientes"},
+    {id:"demandas_kanban",  icon:"◈", label:"Fluxo de Demandas"},
+    {id:"demandas_cal_pub", icon:"▦", label:"Calendário de Publicações"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de Copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Publicação"},
-    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação Demanda Interna"},
   ]},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
@@ -484,8 +438,7 @@ const NAV=[
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
-    {id:"interno_calendario", icon:"▦", label:"Visão Geral"},
-    {id:"interno_radar",      icon:"◎", label:"Radar de Entrega"},
+    {id:"interno_calendario", icon:"▦", label:"Calendário"},
     {id:"interno_pontuacao",  icon:"◈", label:"Pontuação"},
     {id:"interno_mapeamento", icon:"◉", label:"Mapeamento"},
     {id:"interno_conexoes",   icon:"◬", label:"Conexão e Contas"},
@@ -7419,6 +7372,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   // Persiste colunas sempre que mudam
   useEffect(()=>{
     try{localStorage.setItem("pixels-cols-v1",JSON.stringify(cols));}catch(e){}
+    if(window._sb)window._sb.from("columns_config").upsert({user_id:CURRENT_USER.id,colunas:cols},{onConflict:"user_id"}).catch(()=>{});
   },[cols]);
   const [showNewCol,setShowNewCol]=useState(false);
   const [deleteColConfirm,setDeleteColConfirm]=useState(null); // {colId, step:"senha"|"pin", senha:"", pin:""}
@@ -8711,56 +8665,14 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
 // ======= 05_chat.jsx =======
 
 /* ─────────────────────────────────────────────────────────
-   CHAT — Supabase realtime + persistência protegida
-
-   SQL COMPLETO para rodar no Supabase (SQL Editor):
-   ─────────────────────────────────────────────────
-
-   -- 1. Cria a tabela com soft delete
-   CREATE TABLE IF NOT EXISTS messages (
-     id          uuid        DEFAULT gen_random_uuid() PRIMARY KEY,
-     channel_id  text        NOT NULL,
-     user_id     text        NOT NULL,
-     user_name   text,
-     user_av     text,
-     user_color  text,
-     type        text        DEFAULT 'text',
-     content     jsonb       DEFAULT '{}',
-     reactions   jsonb       DEFAULT '[]',
-     deleted_at  timestamptz DEFAULT NULL,
-     created_at  timestamptz DEFAULT now()
-   );
-
-   -- 2. Ativa RLS
-   ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-
-   -- 3. Remove qualquer policy antiga
-   DROP POLICY IF EXISTS "allow_all" ON messages;
-
-   -- 4. Policies específicas por operação
-   -- Leitura: todos podem ler (inclusive deletadas — a UI decide o que mostra)
-   CREATE POLICY "messages_select" ON messages
-     FOR SELECT USING (true);
-
-   -- Inserção: qualquer autenticado pode inserir
-   CREATE POLICY "messages_insert" ON messages
-     FOR INSERT WITH CHECK (true);
-
-   -- Update: só reactions e deleted_at são atualizáveis (sem alterar conteúdo)
-   CREATE POLICY "messages_update" ON messages
-     FOR UPDATE USING (true)
-     WITH CHECK (true);
-
-   -- Delete físico: BLOQUEADO para todos — nunca apaga do banco
-   -- (sem CREATE POLICY para DELETE = bloqueado por padrão com RLS ativo)
-
-   -- 5. Ativa realtime
-   ALTER PUBLICATION supabase_realtime ADD TABLE messages;
-
-   ─────────────────────────────────────────────────
-   Se a tabela já existe e só precisa adicionar deleted_at:
-   ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at timestamptz DEFAULT NULL;
-   ─────────────────────────────────────────────────
+   CHAT — Features:
+   • /demandas  → picker de cartões com busca → card linkado
+   • Card preview rico dentro da mensagem
+   • Seção "Clientes" → canal por cliente (só vê o próprio)
+   • Preview de YouTube / links gerais
+   • Permissões granulares por canal
+   • @menção de membros
+   • Reações, áudio, foto
 ───────────────────────────────────────────────────────── */
 
 /* Helpers de link preview */
@@ -8772,32 +8684,11 @@ const getDomain=(url)=>{try{return new URL(url).hostname.replace(/^www\./,"");}c
 const isUrl=(txt)=>/https?:\/\/[^\s]+/.test(txt);
 const extractUrl=(txt)=>{const m=txt.match(/https?:\/\/[^\s]+/);return m?m[0]:null;};
 
-/* ── Sons do chat — MP3 originais embutidos ── */
-const SOUND_MSG="data:audio/mp3;base64,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AAAAAANIAAAAADMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FM//zQGSsAAABpAAAAAAAAANIAAAAAC4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkxBTUUz//NCZKsAAAGkAAAAAAAAA0gAAAAALjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkxBTUUz//NAZKwAAAGkAAAAAAAAA0gAAAAALjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqTEFNRTP/80BkrAAAAaQAAAAAAAADSAAAAAAuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqTEFNRf/zQmSrAAABpAAAAAAAAANIAAAAADMuMTAwqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1FM//zQGSsAAABpAAAAAAAAANIAAAAAC4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqpMQU1F//NCZKsAAAGkAAAAAAAAA0gAAAAAMy4xMDCqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqkxBTUUz//NAZKwAAAGkAAAAAAAAA0gAAAAALjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq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80BkrAAAAaQAAAAAAAADSAAAAAAuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRf/zQmSrAAABpAAAAAAAAANIAAAAADMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FM//zQGSsAAABpAAAAAAAAANIAAAAAC4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1F//NCZKsAAAGkAAAAAAAAA0gAAAAAMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUz//NAZKwAAAGkAAAAAAAAA0gAAAAALjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUX/80JkqwAAAaQAAAAAAAADSAAAAAAzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTP/80BkrAAAAaQAAAAAAAADSAAAAAAuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRf/zQmSrAAABpAAAAAAAAANIAAAAADMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FM//zQGSsAAABpAAAAAAAAANIAAAAAC4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1F//NCZKsAAAGkAAAAAAAAA0gAAAAAMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUz//NAZKwAAAGkAAAAAAAAA0gAAAAALjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUX/80JkqwAAAaQAAAAAAAADSAAAAAAzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTP/80BkrAAAAaQAAAAAAAADSAAAAAAuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRf/zQmSrAAABpAAAAAAAAANIAAAAADMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FM//zQGSsAAABpAAAAAAAAANIAAAAAC4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1F//NCZKsAAAGkAAAAAAAAA0gAAAAAMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUz//NAZKwAAAGkAAAAAAAAA0gAAAAALjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUX/80JkqwAAAaQAAAAAAAADSAAAAAAzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTP/80BkrAAAAaQAAAAAAAADSAAAAAAuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRf/zQmSrAAABpAAAAAAAAANIAAAAADMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FM//zQGSsAAABpAAAAAAAAANIAAAAAC4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1F//NCZKsAAAGkAAAAAAAAA0gAAAAAMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUz//NAZKwAAAGkAAAAAAAAA0gAAAAALjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUX/80JkqwAAAaQAAAAAAAADSAAAAAAzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRTP/80BkrAAAAaQAAAAAAAADSAAAAAAuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRf/zQmSrAAABpAAAAAAAAANIAAAAADMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV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";
-const SOUND_NUDGE="data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYwLjE2LjEwMAAAAAAAAAAAAAAA//NwAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAA6AAAYYgALEBAUFBgcHCEhJSUpLi4yMjY6Oj8/Q0NHTExQUFRUWF1dYWFlampubnJydnt7f3+DiIiMjJCQlJmZnZ2hoaaqqq6usre3u7u/v8TIyMzM0NDV2dnd3eLm5urq7u7z9/f7+/8AAAAATGF2YzYwLjMxAAAAAAAAAAAAAAAAJAJAAAAAAAAAGGJg0vqJAAAAAAD/80BkAAAAAaQAAAAAAAADSAAAAABMQU1FMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVTEFNRf/zQmRTAAABpAAAAAAAAANIAAAAADMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1FM//zQGSnAAABpAAAAAAAAANIAAAAAC4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVMQU1F//NCZKsAAAGkAAAAAAAAA0gAAAAAMy4xMDBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUUz//NAZKwAAAGkAAAAAAAAA0gAAAAALjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUxBTUX/80JkqwAAAaQAAAAAAAADSAAAAAAzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVFuagLtD/80BkrAAAAaQAAAAAAAADSAAAAACgbND5IjUVkz/3IUQBghhaN/zzmECY8BBEDjAOIMe3oxzCgmYhFf+cIB0DgIIjyenQw4XEBokKi5Lp/8g0SHAQTMRlHSQRkwYI3itIwRlhIF0RhP/zQmSrAAABpAAAAAAAAANIAAAAAAjSdP9SJgjOMk6icnIC70EW4X5yQFz4oQhs4JyBzew//rJqOFZw8GF9////9ycKzgsF2hW0SJpF4BDRKi1OgAAQS4cUACEMOBh3MQZegAIT9oMQe//zQGSsAAABpAAAAAAAAANIAAAAAE97EMswhHa/cEGIEPt3d3d73u7PJhZPP/2z//8zP/Z5O7u/9/vClHpoIZ/3vf/ERnYndsYQQz//97J3PnnOkCCFkCdaKDo+ghsEEM//RisVvUIE//NCZP8I6QLYECRFS5IRwagASBOhCBBYXDdXNG3P/+stGTigkyeqQ889o0aMjeQNz+f+c2MmRlI/wnNdG3v//TBM3CHtcnSYvVEDFQy125KKBvo0e1CEJ/3NG2PVyaD4EQbjxoMKoi3Y//NARMMK9SENK6GYAJeqOfABSUgB0R7YSgPL/iWc7pOM9H/d//vAH/8Bh9MtgAsDHgGKAHiyGSXuNuJbmFALefn////////////+//9P/3LKxRgClB6Pwu8shrP5FCOIGiojOf//////80JEXwRIR0gAyBwACUourMuHOAD////////x9P/r/+VcMDYAgVHsqg7uQHseyYUI3yUE6Z/tq/////////X///Z//kT9Fddx6sAUqOLS8mqXHlbco7vKImebDusdd2rf///0+mv/////80BkawR5F2AAxZwACSn2tAGCaAD///uOjcKEnr0rLuwoCVakkKByOShTpp2nw6g5sNQFPSLkX/V////LNYvMRZbdhPnGSME1HAeassY/nvFXww4sL3W9vte6a70po6eVFMhuXPb33//zQmR1BTjpSgDsnAAIQF7eWcgQAv///6gKwmmAgGAAnkwPIIuihuW9fIwv/s/////9aYnMg7bbrdwBWsW9koEgwYYIRGX1Z9ROEXAbyDbzIu5te/TnhEA4wkLEK/LXOMemqxHxg6ESYP/zQGR+Bezjayw84kuGKF7aWGmEKlOaPPaqNGnxLJBTkfEjYFEMf00T/qpjMT4T0f4Bx6vhETHz7Ky7GNT3AoiZCCI6qg47JA7gBZ0r35AjTKg0E5tH7V8Rwtr/iRx4GHjAdCCIIsbP//NCZIkM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";
-
-const playSound=(src)=>{
-  try{const a=new Audio(src);a.volume=0.7;a.play().catch(()=>{});}catch(e){}
-};
-const playMsgSound=()=>playSound(SOUND_MSG);
-const playShakeSound=()=>playSound(SOUND_NUDGE);
-
-/* ── Shake na tela ── */
-const triggerShake=()=>{
-  const el=document.getElementById("pixels-chat-area");
-  if(!el)return;
-  el.style.animation="none";
-  requestAnimationFrame(()=>{
-    el.style.animation="pixels-shake 0.5s ease";
-    setTimeout(()=>{el.style.animation="none";},550);
-  });
-};
-
 /* Status labels e cores para card preview */
 const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
 const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
 
-/* ── Link Preview ── */
+/* Link Preview Component */
 function LinkPreview({url}){
   const ytId=getYtId(url);
   if(ytId){
@@ -8819,6 +8710,7 @@ function LinkPreview({url}){
       </a>
     );
   }
+  // Generic URL preview
   return(
     <a href={url} target="_blank" rel="noopener noreferrer" style={{display:"flex",alignItems:"center",gap:8,borderRadius:9,border:"1px solid #e2e8f0",padding:"8px 12px",maxWidth:280,textDecoration:"none",background:"#f8fafc",marginTop:6}}>
       <div style={{width:32,height:32,borderRadius:8,background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:16}}>🔗</div>
@@ -8830,7 +8722,7 @@ function LinkPreview({url}){
   );
 }
 
-/* ── Card Preview ── */
+/* Card Preview Component (card linkado na mensagem) */
 function CardPreview({card,onClick}){
   if(!card)return<div style={{background:"#fef2f2",borderRadius:9,padding:"8px 12px",fontSize:11,color:"#dc2626",border:"1px solid #fecaca",marginTop:6}}>❌ Cartão não encontrado</div>;
   const cl=CLIENTS.find(c=>c.id===card.client);
@@ -8863,37 +8755,7 @@ function CardPreview({card,onClick}){
   );
 }
 
-/* ── Converte row do Supabase → msg local ── */
-const rowToMsg=(row)=>({
-  id:        row.id,
-  u:         row.user_name,
-  uid:       row.user_id,
-  av:        row.user_av,
-  color:     row.user_color,
-  type:      row.type,
-  reactions: Array.isArray(row.reactions)?row.reactions:[],
-  deletedAt: row.deleted_at||null,
-  time:      new Date(row.created_at).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
-  ...(row.content||{}),
-});
-
-/* ── Sementes para canais sem histórico ── */
-const SEED_MSGS={
-  geral:[
-    {uid:"vinicius",u:"Vinicius",av:"V",color:C.a,type:"text",txt:"Bom dia time! ROAS do Bioter subindo essa semana 🚀",reactions:[{e:"🚀",users:["gustavo","ellen"]}]},
-    {uid:"ellen",u:"Hellen",av:"E",color:C.pk,type:"text",txt:"Criativos do Climaves prontos para aprovação! Já enviou para o menu ✅",reactions:[]},
-    {uid:"gustavo",u:"Gustavo",av:"G",color:C.aL,type:"text",txt:"Vinicius, precisamos revisar a estratégia de leads do VetService. Agende 30min hoje?",reactions:[{e:"👍",users:["vinicius"]}]},
-    {uid:"andre",u:"André",av:"A",color:"#e040fb",type:"text",txt:"Stories Arabuta finalizados! Foram pro quadro de aprovação",reactions:[{e:"✅",users:["ellen","vinicius"]}]},
-  ],
-  alertas:[
-    {uid:"sistema",u:"Sistema",av:"⚡",color:C.rd,type:"alert",txt:"🚨 Climaves: Budget Google estourou (101%)"},
-    {uid:"sistema",u:"Sistema",av:"⚡",color:C.rd,type:"alert",txt:"🔥 Tour Bioter Toledo — 2 dias sem atualização"},
-    {uid:"sistema",u:"Sistema",av:"⚡",color:C.gr,type:"success",txt:"✅ Bioter ROAS subiu para 4.8x — acima da meta!"},
-  ],
-};
-
 function PageChat({isMob, perms, tasks, setTasks}){
-  const sb=window._sb;
   const isSocio=CURRENT_USER.level===1;
   const p=perms||{};
 
@@ -8906,6 +8768,9 @@ function PageChat({isMob, perms, tasks, setTasks}){
     {id:"social",   name:"social",   icon:"📱", desc:"Social Media",            perm:"verCanalSocial",  group:"interno"},
     {id:"alertas",  name:"alertas",  icon:"⚡", desc:"Alertas automáticos",     perm:"verCanalAlertas", group:"interno"},
   ];
+
+  // Client channels — each client gets own channel
+  // Permission: "verCanalCliente_[clientId]" or isSocio
   const CLIENT_CHANNELS=CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>({
     id:"cliente_"+cl.id,
     name:cl.abbr.toLowerCase(),
@@ -8918,62 +8783,81 @@ function PageChat({isMob, perms, tasks, setTasks}){
     clientName:cl.name,
   }));
 
-  const visibleInternal=INTERNAL_CHANNELS.filter(c=>isSocio||p[c.perm]);
-  const visibleClient=CLIENT_CHANNELS.filter(c=>isSocio||p[c.perm]||p["verCanalTodosClientes"]);
+  // Filter visible channels by permission
+  const visibleInternal=INTERNAL_CHANNELS.filter(c=>
+    isSocio||p[c.perm]
+  );
+  const visibleClient=CLIENT_CHANNELS.filter(c=>
+    isSocio||p[c.perm]||p["verCanalTodosClientes"]
+  );
   const ALL_VISIBLE=[...visibleInternal,...visibleClient];
+
+  /* ── INIT messages ── */
+  const INIT_MSGS={
+    geral:[
+      {id:1,u:"Vinicius",uid:"vinicius",av:"V",color:C.a,txt:"Bom dia time! ROAS do Bioter subindo essa semana 🚀",time:"08:00",reactions:[{e:"🚀",users:["gustavo","ellen"]},{e:"🔥",users:["guilherme"]}],type:"text"},
+      {id:2,u:"Hellen",uid:"ellen",av:"E",color:C.pk,txt:"Criativos do Climaves prontos para aprovação! Já enviou para o menu ✅",time:"08:45",reactions:[],type:"text"},
+      {id:3,u:"Gustavo",uid:"gustavo",av:"G",color:C.aL,txt:"Vinicius, precisamos revisar a estratégia de leads do VetService. Agende 30min hoje?",time:"09:10",reactions:[{e:"👍",users:["vinicius"]}],type:"text"},
+      {id:4,u:"André",uid:"andre",av:"A",color:"#e040fb",txt:"Stories Arabuta finalizados! Foram pro quadro de aprovação",time:"09:22",reactions:[{e:"✅",users:["ellen","vinicius"]}],type:"text"},
+      {id:5,u:"Vinicius",uid:"vinicius",av:"V",color:C.a,txt:"@Gustavo - confirmado! 14h. @André - vi lá, ficou top! 🎨",time:"09:30",reactions:[],type:"text"},
+    ],
+    design:[
+      {id:1,u:"André",uid:"andre",av:"A",color:"#e040fb",txt:"Alguém tem o briefing atualizado da Arabuta?",time:"07:55",reactions:[],type:"text"},
+      {id:2,u:"Hellen",uid:"ellen",av:"E",color:C.pk,txt:"Sim! Deixei no drive. Pasta Clientes > Arabuta > Briefings 2026",time:"08:02",reactions:[{e:"🙏",users:["andre"]}],type:"text"},
+    ],
+    video:[
+      {id:1,u:"Guilherme",uid:"guilherme",av:"G",color:C.bl,txt:"Pessoal — Reels do Bioter sai hoje às 18h. Finalizando os cortes",time:"10:00",reactions:[{e:"💪",users:["joao"]}],type:"text"},
+      {id:2,u:"João",uid:"joao",av:"J",color:C.yw,txt:"Show! Eu fico no Construschorr então. Entrego amanhã cedo",time:"10:15",reactions:[],type:"text"},
+    ],
+    trafego:[
+      {id:1,u:"Vinicius",uid:"vinicius",av:"V",color:C.a,txt:"Arabuta ROAS 5.6x essa semana 🔥 Melhor resultado do ano",time:"08:30",reactions:[{e:"🔥",users:["gustavo","ellen"]}],type:"text"},
+      {id:2,u:"Gustavo",uid:"gustavo",av:"G",color:C.aL,txt:"Climaves precisa de atenção. Budget quase estourando no Google",time:"09:00",reactions:[{e:"⚠",users:["vinicius"]}],type:"text"},
+    ],
+    social:[
+      {id:1,u:"Hellen",uid:"ellen",av:"E",color:C.pk,txt:"Calendário de abril fechado para todos os clientes! ✅",time:"09:00",reactions:[{e:"🎉",users:["vinicius","gustavo","andre"]}],type:"text"},
+    ],
+    alertas:[
+      {id:1,u:"Sistema",uid:"sistema",av:"⚡",color:C.rd,txt:"🚨 Climaves: Budget Google estourou (101%)",time:"08:00",reactions:[],type:"alert"},
+      {id:2,u:"Sistema",uid:"sistema",av:"⚡",color:C.rd,txt:"🔥 Tour Bioter Toledo — 2 dias sem atualização (SLA em risco)",time:"08:10",reactions:[],type:"alert"},
+      {id:3,u:"Sistema",uid:"sistema",av:"⚡",color:C.or,txt:"⚠ Construschorr: 5 demandas urgentes no kanban",time:"08:15",reactions:[],type:"alert"},
+      {id:4,u:"Sistema",uid:"sistema",av:"⚡",color:C.yw,txt:"📋 3 copys aguardando aprovação há mais de 24h",time:"08:30",reactions:[],type:"alert"},
+      {id:5,u:"Sistema",uid:"sistema",av:"⚡",color:C.gr,txt:"✅ Bioter ROAS subiu para 4.8x — acima da meta!",time:"09:00",reactions:[],type:"success"},
+    ],
+    // Client channels start empty
+    ...Object.fromEntries(CLIENT_CHANNELS.map(c=>[c.id,[
+      {id:1,u:"Pixels Agência",uid:"sistema",av:"⭐",color:C.a,txt:`Bem-vindo ao canal exclusivo de ${c.clientName}! Aqui você pode tirar dúvidas e acompanhar o andamento dos projetos.`,time:"09:00",reactions:[],type:"text"},
+    ]]))
+  };
 
   const EMOJIS=["👍","🔥","🚀","✅","❤","😂","🎨","💪","⚡","🎯","👏","🙏","😎","🤝","💡","🏆"];
   const canSend=isSocio||!!p.enviarMensagem;
-  const canCall=isSocio||!!p.enviarMensagem; // mesma permissão de acesso ao canal
 
-  /* ── Daily.co room mapping ── */
-  const DAILY_DOMAIN="https://pixelsmarketing.daily.co";
-  const DAILY_ROOMS={
-    geral:          "pixels-geral",
-    design:         "pixels-design",
-    video:          "pixels-video",
-    trafego:        "pixels-trafego",
-    social:         "pixels-social",
-    alertas:        "pixels-alertas",
-    cliente_bioter:         "pixels-bioter",
-    cliente_arabuta:        "pixels-arabuta",
-    cliente_climaves:       "pixels-climaves",
-    cliente_construschorr:  "pixels-construschorr",
-    cliente_vetservice:     "pixels-vetservice",
-  };
-  const getDailyUrl=(channelId)=>{
-    const room=DAILY_ROOMS[channelId];
-    if(!room)return null;
-    return `${DAILY_DOMAIN}/${room}`;
-  };
-
-  /* ── Call state — usa global para persistir entre páginas ── */
-  const [,callTick]=useState(0);
-  const forceCallUpdate=()=>{callTick(v=>v+1);window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();};
-
-  const startCall=(channelId,channelName)=>{
-    const url=getDailyUrl(channelId);
-    if(!url)return;
-    window._pixelsCallState={url,channelId,channelName,createdBy:CURRENT_USER.id,minimized:false};
-    forceCallUpdate();
-  };
-  const activeCall=window._pixelsCallState?.channelId||null;
-  const [showPixelsRoom,setShowPixelsRoom]=useState(false);
   const [ch,setCh]=useState(()=>ALL_VISIBLE[0]?.id||"geral");
   const activeCh=ALL_VISIBLE.find(c=>c.id===ch)?ch:(ALL_VISIBLE[0]?.id||"geral");
 
-  const [msgs,setMsgs]=useState({});           // { channelId: msg[] }
-  const [loading,setLoading]=useState(true);
-  const [sending,setSending]=useState(false);
-
+  const [msgs,setMsgs]=useState(()=>{
+    const initial={...INIT_MSGS};
+    // Load client channel messages from localStorage (synced with portal)
+    CLIENT_CHANNELS.forEach(c=>{
+      try{
+        const s=localStorage.getItem("pixels-chat-portal-"+c.clientId);
+        if(s){const parsed=JSON.parse(s);if(parsed.length>0)initial[c.id]=parsed;}
+      }catch(e){}
+    });
+    return initial;
+  });
   const [input,setInput]=useState("");
   const [showEmoji,setShowEmoji]=useState(false);
   const [reactionTarget,setReactionTarget]=useState(null);
   const [showChannels,setShowChannels]=useState(!isMob);
   const [mentionQuery,setMentionQuery]=useState("");
   const [showMentions,setShowMentions]=useState(false);
+
+  // /demandas picker
   const [showCardPicker,setShowCardPicker]=useState(false);
   const [cardSearch,setCardSearch]=useState("");
+
+  // Card modal when clicking a linked card
   const [openCard,setOpenCard]=useState(null);
 
   // Audio
@@ -8992,224 +8876,67 @@ function PageChat({isMob, perms, tasks, setTasks}){
   const inputRef=useRef(null);
   const textareaRef=useRef(null);
   const cardSearchRef=useRef(null);
-  const realtimeRef=useRef(null);
 
-  /* ── Scroll para o fim ── */
-  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,activeCh]);
+  useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs,ch]);
 
-  /* ── Fecha dropdowns ao clicar fora ── */
   useEffect(()=>{
     const close=()=>{setShowEmoji(false);setReactionTarget(null);setShowMentions(false);setShowCardPicker(false);};
     document.addEventListener("click",close);
     return()=>document.removeEventListener("click",close);
   },[]);
 
+  // Focus card search when picker opens
   useEffect(()=>{
     if(showCardPicker)setTimeout(()=>cardSearchRef.current?.focus(),50);
   },[showCardPicker]);
 
-  /* ── Carrega mensagens do canal ── */
-  const loadChannel=async(channelId)=>{
-    setLoading(true);
-    try{
-      const{data,error}=await sb
-        .from("messages")
-        .select("*")
-        .eq("channel_id",channelId)
-        .order("created_at",{ascending:true})
-        .limit(200);
-
-      if(error)throw error;
-
-      if(data&&data.length>0){
-        setMsgs(prev=>({...prev,[channelId]:data.map(rowToMsg)}));
-      } else {
-        // Canal vazio — insere sementes se existirem
-        const seeds=SEED_MSGS[channelId];
-        if(seeds&&seeds.length>0){
-          const rows=seeds.map(s=>({
-            channel_id:channelId,
-            user_id:s.uid,
-            user_name:s.u,
-            user_av:s.av,
-            user_color:s.color,
-            type:s.type||"text",
-            content:{txt:s.txt||""},
-            reactions:s.reactions||[],
-          }));
-          const{data:inserted}=await sb.from("messages").insert(rows).select();
-          if(inserted)setMsgs(prev=>({...prev,[channelId]:inserted.map(rowToMsg)}));
-          else setMsgs(prev=>({...prev,[channelId]:[]}));
-        } else {
-          setMsgs(prev=>({...prev,[channelId]:[]}));
-        }
-      }
-    }catch(e){
-      console.warn("Erro ao carregar mensagens:",e);
-      setMsgs(prev=>({...prev,[channelId]:[]}));
-    }
-    setLoading(false);
-  };
-
-  /* ── Realtime subscription ── */
-  const setupRealtime=()=>{
-    if(realtimeRef.current){
-      sb.removeChannel(realtimeRef.current);
-    }
-    const channel=sb
-      .channel("chat-realtime-"+Date.now())
-      .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},(payload)=>{
-        const newMsg=rowToMsg(payload.new);
-        // Som de mensagem recebida (de outro usuário, não shake)
-        if(payload.new.user_id!==CURRENT_USER.id&&payload.new.type!=="shake"){
-          playMsgSound();
-        }
-        // Se é shake e não foi eu que enviei → toca nudge e treme
-        if(payload.new.type==="shake"&&payload.new.user_id!==CURRENT_USER.id){
-          playShakeSound();
-          triggerShake();
-        }
-        setMsgs(prev=>{
-          const chId=payload.new.channel_id;
-          const existing=prev[chId]||[];
-          // Evita duplicata (mensagem própria já foi adicionada otimisticamente)
-          if(existing.some(m=>m.id===newMsg.id))return prev;
-          return{...prev,[chId]:[...existing,newMsg]};
-        });
-      })
-      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"messages"},(payload)=>{
-        const updated=rowToMsg(payload.new);
-        setMsgs(prev=>{
-          const chId=payload.new.channel_id;
-          return{...prev,[chId]:(prev[chId]||[]).map(m=>m.id===updated.id?{...m,reactions:updated.reactions,deletedAt:updated.deletedAt}:m)};
-        });
-      })
-      .subscribe();
-    realtimeRef.current=channel;
-  };
-
-  /* ── Monta: carrega canal inicial + realtime ── */
-  useEffect(()=>{
-    loadChannel(activeCh);
-    setupRealtime();
-    return()=>{
-      if(realtimeRef.current)sb.removeChannel(realtimeRef.current);
-    };
-  },[]);
-
-  /* ── Troca de canal ── */
-  useEffect(()=>{
-    if(msgs[activeCh]===undefined)loadChannel(activeCh);
-    else setLoading(false);
-  },[activeCh]);
-
-  /* ── Upload de arquivo para Supabase Storage ── */
-  const uploadFile=async(file,folder)=>{
-    const ext=file.name?file.name.split(".").pop():"bin";
-    const path=`chat/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const{error}=await sb.storage.from("pixels-files").upload(path,file,{upsert:false});
-    if(error)throw error;
-    const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
-    return data.publicUrl;
-  };
-
-  const uploadAudio=async(blob)=>{
-    const path=`chat/audio/${Date.now()}-${Math.random().toString(36).slice(2)}.webm`;
-    const{error}=await sb.storage.from("pixels-files").upload(path,blob,{upsert:false,contentType:"audio/webm"});
-    if(error)throw error;
-    const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
-    return data.publicUrl;
-  };
-
-  /* ── Envia mensagem ── */
   const nowTime=()=>new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 
-  const pushMsg=async(extra)=>{
-    if(!canSend||sending)return;
-    setSending(true);
-
-    const localId="local-"+Date.now();
-    const localMsg={
-      id:localId,
-      u:CURRENT_USER.name,uid:CURRENT_USER.id,
-      av:CURRENT_USER.av,color:CURRENT_USER.color,
-      time:nowTime(),reactions:[],
-      ...extra,
-    };
-    // Otimista: mostra imediatamente
-    setMsgs(prev=>({...prev,[activeCh]:[...(prev[activeCh]||[]),localMsg]}));
-
-    try{
-      const{data:inserted,error}=await sb.from("messages").insert({
-        channel_id:activeCh,
-        user_id:CURRENT_USER.id,
-        user_name:CURRENT_USER.name,
-        user_av:CURRENT_USER.av,
-        user_color:CURRENT_USER.color,
-        type:extra.type||"text",
-        content:extra,
-        reactions:[],
-      }).select().single();
-
-      if(error)throw error;
-
-      // Substitui msg otimista pelo ID real do Supabase
-      if(inserted){
-        const realMsg=rowToMsg(inserted);
-        setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).map(m=>m.id===localId?{...realMsg,...extra}:m)}));
+  const pushMsg=(extra)=>{
+    const m={id:Date.now(),u:CURRENT_USER.name,uid:CURRENT_USER.id,av:CURRENT_USER.av,color:CURRENT_USER.color,time:nowTime(),reactions:[],...extra};
+    setMsgs(p=>{
+      const updated={...p,[activeCh]:[...(p[activeCh]||[]),m]};
+      // Sync client channels to localStorage so portal chat stays in sync
+      if(activeCh.startsWith("cliente_")){
+        const clientId=activeCh.replace("cliente_","");
+        try{localStorage.setItem("pixels-chat-portal-"+clientId,JSON.stringify(updated[activeCh]));}catch(e){}
+        if(window._sb)window._sb.from("portal_chat").upsert({client_id:clientId,mensagens:updated[activeCh]},{onConflict:"client_id"}).catch(()=>{});
       }
-    }catch(e){
-      console.warn("Erro ao enviar mensagem:",e);
-      // Remove msg otimista em caso de erro
-      setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).filter(m=>m.id!==localId)}));
-    }
-    setSending(false);
+      return updated;
+    });
   };
 
-  const send=async()=>{
-    if(!canSend||sending)return;
+  const autoResize=()=>{
+    const ta=textareaRef.current;
+    if(!ta)return;
+    ta.style.height="auto";
+    ta.style.height=Math.min(ta.scrollHeight,120)+"px";
+  };
 
+  const send=()=>{
+    if(!canSend)return;
     if(photoPreview){
-      setSending(true);
-      try{
-        const url=await uploadFile(photoPreview.file,"photos");
-        await pushMsg({type:"image",imageUrl:url,txt:input.trim()||""});
-      }catch(e){
-        console.warn("Erro upload foto:",e);
-        // Fallback: envia como blob local (não persiste entre sessões)
-        await pushMsg({type:"image",imageUrl:photoPreview.url,txt:input.trim()||""});
-      }
+      pushMsg({type:"image",imageUrl:photoPreview.url,txt:input.trim()||""});
       setPhotoPreview(null);setInput("");
       if(textareaRef.current)textareaRef.current.style.height="auto";
-      setSending(false);
       return;
     }
-
     if(audioBlob){
-      setSending(true);
-      try{
-        const url=await uploadAudio(audioBlob);
-        await pushMsg({type:"audio",audioUrl:url,txt:""});
-      }catch(e){
-        console.warn("Erro upload áudio:",e);
-        await pushMsg({type:"audio",audioUrl:audioPreviewUrl,txt:""});
-      }
+      pushMsg({type:"audio",audioUrl:audioPreviewUrl,txt:""});
       setAudioBlob(null);setAudioPreviewUrl(null);
-      setSending(false);
       return;
     }
-
     const txt=input.trim();
     if(!txt)return;
-    await pushMsg({type:"text",txt});
+    pushMsg({type:"text",txt});
     setInput("");setShowEmoji(false);setShowMentions(false);setShowCardPicker(false);
     if(textareaRef.current)textareaRef.current.style.height="auto";
   };
 
-  /* ── Linkar cartão ── */
-  const insertCard=async(task)=>{
+  // Insert linked card into chat
+  const insertCard=(task)=>{
     const txt=input.trim();
-    await pushMsg({
+    pushMsg({
       type:"card",
       taskId:task.id,
       taskTitle:task.title,
@@ -9221,89 +8948,40 @@ function PageChat({isMob, perms, tasks, setTasks}){
     if(textareaRef.current)textareaRef.current.style.height="auto";
   };
 
-  /* ── Reações ── */
-  const addReaction=async(msgId,emoji)=>{
-    // Atualiza local otimisticamente
-    setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).map(m=>{
+  const addReaction=(msgId,emoji)=>{
+    setMsgs(p=>({...p,[activeCh]:(p[activeCh]||[]).map(m=>{
       if(m.id!==msgId||m.uid==="sistema")return m;
       const existing=m.reactions.find(r=>r.e===emoji);
-      let newReactions;
       if(existing){
         if(existing.users.includes(CURRENT_USER.id))
-          newReactions=m.reactions.map(r=>r.e===emoji?{...r,users:r.users.filter(u=>u!==CURRENT_USER.id)}:r).filter(r=>r.users.length>0);
-        else
-          newReactions=m.reactions.map(r=>r.e===emoji?{...r,users:[...r.users,CURRENT_USER.id]}:r);
-      } else {
-        newReactions=[...m.reactions,{e:emoji,users:[CURRENT_USER.id]}];
+          return{...m,reactions:m.reactions.map(r=>r.e===emoji?{...r,users:r.users.filter(u=>u!==CURRENT_USER.id)}:r).filter(r=>r.users.length>0)};
+        return{...m,reactions:m.reactions.map(r=>r.e===emoji?{...r,users:[...r.users,CURRENT_USER.id]}:r)};
       }
-      // Persiste no Supabase (ignora IDs locais otimistas)
-      if(!String(msgId).startsWith("local-")){
-        sb.from("messages").update({reactions:newReactions}).eq("id",msgId).then(()=>{});
-      }
-      return{...m,reactions:newReactions};
+      return{...m,reactions:[...m.reactions,{e:emoji,users:[CURRENT_USER.id]}]};
     })}));
     setReactionTarget(null);
   };
-
-  /* ── Chamar atenção (shake) ── */
-  const sendShake=async()=>{
-    if(!canSend||sending)return;
-    // Toca e treme localmente para quem enviou também
-    playShakeSound();
-    triggerShake();
-    await pushMsg({type:"shake",txt:""});
-  };
-
-  /* ── Soft delete de mensagem ── */
-  const deleteMsg=async(msgId)=>{
-    // Só o dono da msg ou sócio pode apagar
-    const msg=channelMsgs.find(m=>m.id===msgId);
-    if(!msg)return;
-    if(msg.uid!==CURRENT_USER.id&&!isSocio)return;
-    if(String(msgId).startsWith("local-"))return; // msg ainda não persistida
-
-    // Marca como deletada localmente (imediato)
-    setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).map(m=>
-      m.id===msgId?{...m,deletedAt:new Date().toISOString()}:m
-    )}));
-
-    // Persiste soft delete no Supabase
-    try{
-      await sb.from("messages").update({deleted_at:new Date().toISOString()}).eq("id",msgId);
-    }catch(e){
-      console.warn("Erro ao apagar mensagem:",e);
-      // Reverte se falhar
-      setMsgs(prev=>({...prev,[activeCh]:(prev[activeCh]||[]).map(m=>
-        m.id===msgId?{...m,deletedAt:null}:m
-      )}));
-    }
-  };
-
-  /* ── Input handlers ── */
-  const autoResize=()=>{
-    const ta=textareaRef.current;
-    if(!ta)return;
-    ta.style.height="auto";
-    ta.style.height=Math.min(ta.scrollHeight,120)+"px";
-  };
-
-  const filteredTeam=TEAM.filter(u=>u.name.toLowerCase().includes(mentionQuery.toLowerCase()));
-  const allTasks=tasks||[];
-  const filteredCards=allTasks.filter(t=>
-    !t.deletedAt&&
-    (cardSearch===""||t.title.toLowerCase().includes(cardSearch.toLowerCase())||(CLIENTS.find(c=>c.id===t.client)?.name||"").toLowerCase().includes(cardSearch.toLowerCase()))
-  ).slice(0,12);
-
-  const switchChannel=(id)=>{setCh(id);if(isMob)setShowChannels(false);};
 
   const handleInput=(e)=>{
     const val=e.target.value;
     setInput(val);
     autoResize();
+
+    // @mention
     const lastAt=val.lastIndexOf("@");
     if(lastAt>=0&&!val.slice(lastAt+1).includes(" ")){
       setShowMentions(true);setMentionQuery(val.slice(lastAt+1));
     } else setShowMentions(false);
+
+    // /demandas command
+    const slashMatch=val.match(/\/(\w*)$/);
+    if(slashMatch&&"demandas".startsWith(slashMatch[1])){
+      setShowCardPicker(true);setCardSearch("");
+    } else if(!val.includes("/demandas")){
+      // keep picker open if was opened by /demandas
+    }
+
+    // If user typed full /demandas, open picker and clear command
     if(val.endsWith("/demandas")||val.endsWith("/demandas ")){
       setInput(val.replace(/\/demandas\s?$/,""));
       setShowCardPicker(true);setCardSearch("");
@@ -9336,14 +9014,24 @@ function PageChat({isMob, perms, tasks, setTasks}){
   const stopRec=()=>{mediaRecRef.current?.stop();clearInterval(recTimerRef.current);setRecording(false);};
   const cancelAudio=()=>{setAudioBlob(null);setAudioPreviewUrl(null);};
 
+  const filteredTeam=TEAM.filter(u=>u.name.toLowerCase().includes(mentionQuery.toLowerCase()));
+
+  // Filter cards for /demandas picker
+  const allTasks=tasks||[];
+  const filteredCards=allTasks.filter(t=>
+    !t.deletedAt&&
+    (cardSearch===""||t.title.toLowerCase().includes(cardSearch.toLowerCase())||(CLIENTS.find(c=>c.id===t.client)?.name||"").toLowerCase().includes(cardSearch.toLowerCase()))
+  ).slice(0,12);
+
+  const switchChannel=(id)=>{setCh(id);if(isMob)setShowChannels(false);};
+
   const activeChData=ALL_VISIBLE.find(c=>c.id===activeCh);
   const isClientCh=activeChData?.group==="clientes";
   const clientChData=isClientCh?CLIENTS.find(c=>c.id===activeChData.clientId):null;
-  const channelMsgs=msgs[activeCh]||[];
 
-  /* ─── RENDER ─── */
   return(
     <>
+      {/* Card modal quando clica em card linkado */}
       {openCard&&tasks&&setTasks&&(
         <CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={CURRENT_USER}/>
       )}
@@ -9356,31 +9044,23 @@ function PageChat({isMob, perms, tasks, setTasks}){
             <div style={{color:C.tx,fontWeight:800,fontSize:14}}>💬 Canais</div>
           </div>
           <div style={{flex:1,overflowY:"auto",padding:"8px 8px"}}>
+
+            {/* Internal channels */}
             {visibleInternal.length>0&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"8px 6px 5px"}}>Equipe</div>
-              {visibleInternal.map(c=>(
-                <button key={c.id} onClick={()=>switchChannel(c.id)}
-                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:"none",background:activeCh===c.id?C.ag:"transparent",cursor:"pointer",textAlign:"left",marginBottom:1}}>
-                  <span style={{fontSize:13,flexShrink:0}}>{c.icon}</span>
-                  <span style={{color:activeCh===c.id?C.a:C.ts,fontWeight:activeCh===c.id?700:400,fontSize:12,flex:1}}>#{c.name}</span>
-                </button>
-              ))}
+              {visibleInternal.map(c=>{
+                const unread=(msgs[c.id]||[]).length>0;
+                return(
+                  <button key={c.id} onClick={()=>switchChannel(c.id)}
+                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:"none",background:activeCh===c.id?C.ag:"transparent",cursor:"pointer",textAlign:"left",marginBottom:1}}>
+                    <span style={{fontSize:13,flexShrink:0}}>{c.icon}</span>
+                    <span style={{color:activeCh===c.id?C.a:C.ts,fontWeight:activeCh===c.id?700:400,fontSize:12,flex:1}}>#{c.name}</span>
+                  </button>
+                );
+              })}
             </>}
 
-            {/* ── PIXELS ROOM ── */}
-            {(isSocio||canCall)&&<>
-              <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px"}}>🎙 Pixels Room</div>
-              <button onClick={()=>{
-                window._pixelsCallState={url:`${DAILY_DOMAIN}/pixels-room`,channelId:"pixels-room",channelName:"Pixels Room",createdBy:CURRENT_USER.id,minimized:false};
-                forceCallUpdate();
-              }}
-                style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 10px",borderRadius:8,border:`1px solid ${activeCall==="pixels-room"?"#a855f744":C.b1}`,background:activeCall==="pixels-room"?"#a855f714":"transparent",cursor:"pointer",textAlign:"left",marginBottom:4,transition:"all .15s"}}>
-                <span style={{fontSize:13}}>🎙</span>
-                <span style={{color:activeCall==="pixels-room"?"#a855f7":C.ts,fontWeight:activeCall==="pixels-room"?700:400,fontSize:12,flex:1}}>Pixels Room</span>
-                <span style={{fontSize:9,color:activeCall==="pixels-room"?"#22c55e":C.td,fontWeight:700}}>{activeCall==="pixels-room"?"● AO VIVO":"Entrar"}</span>
-              </button>
-            </>}
-
+            {/* Client channels */}
             {visibleClient.length>0&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px"}}>🏢 Clientes</div>
               {visibleClient.map(c=>(
@@ -9392,6 +9072,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
               ))}
             </>}
 
+            {/* Team members */}
             {visibleInternal.length>0&&<>
               <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px"}}>Membros</div>
               {TEAM.map(m=>(
@@ -9426,54 +9107,26 @@ function PageChat({isMob, perms, tasks, setTasks}){
               </div>
               <div style={{color:C.td,fontSize:10}}>{activeChData?.desc}</div>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              {sending&&<div style={{color:C.td,fontSize:10}}>Enviando...</div>}
-              {getDailyUrl(activeCh)&&canCall&&(
-                <button onClick={()=>startCall(activeCh,activeChData?.name||activeCh)}
-                  style={{background:activeCall===activeCh?"#22c55e18":"linear-gradient(135deg,#7c3aed,#6d28d9)",border:`1px solid ${activeCall===activeCh?"#22c55e44":"#7c3aed88"}`,borderRadius:8,padding:"6px 14px",color:activeCall===activeCh?"#22c55e":"#fff",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5,transition:"all .15s",boxShadow:activeCall===activeCh?"none":"0 2px 8px #7c3aed33"}}>
-                  <span>{activeCall===activeCh?"🔴":"📞"}</span>
-                  <span>{activeCall===activeCh?"Em call":"Pixels Call"}</span>
-                </button>
-              )}
-              <div style={{color:C.td,fontSize:11}}>{channelMsgs.length} msgs</div>
-            </div>
+            <div style={{color:C.td,fontSize:11}}>{(msgs[activeCh]||[]).length} msgs</div>
           </div>
 
           {/* Messages */}
-          <div id="pixels-chat-area" style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:0,position:"relative"}}
+          <div style={{flex:1,overflowY:"auto",padding:"12px 14px",display:"flex",flexDirection:"column",gap:0}}
             onClick={()=>{setShowEmoji(false);setReactionTarget(null);setShowMentions(false);setShowCardPicker(false);}}>
-            <style>{`@keyframes pixels-shake{0%,100%{transform:translateX(0)}10%,50%,90%{transform:translateX(-8px)}30%,70%{transform:translateX(8px)}}`}</style>
-            {loading&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,gap:10}}>
-              <div style={{width:20,height:20,border:`2px solid ${C.b1}`,borderTop:`2px solid ${C.a}`,borderRadius:"50%",animation:"spin 0.8s linear infinite"}}/>
-              <span style={{color:C.td,fontSize:12}}>Carregando mensagens...</span>
-              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-            </div>}
-
-            {!loading&&channelMsgs.map((m,i)=>{
+            {(msgs[activeCh]||[]).map((m,i)=>{
               const isMe=m.uid===CURRENT_USER.id;
               const isAlert=m.type==="alert"||m.type==="success";
-              const prevMsg=channelMsgs[i-1];
+              const prevMsg=(msgs[activeCh]||[])[i-1];
               const grouped=prevMsg&&prevMsg.uid===m.uid&&!isAlert&&m.type==="text"&&prevMsg.type==="text";
 
               if(isAlert)return(
-                <div key={m.id} style={{margin:"4px 0",padding:"8px 14px",background:m.type==="success"?C.gr+"12":"#fff5f5",borderRadius:10,borderLeft:`3px solid ${m.type==="success"?C.gr:m.color||C.rd}`,display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{flex:1,color:m.type==="success"?C.gr:m.color||C.rd,fontSize:12,fontWeight:600}}>{m.txt}</div>
+                <div key={m.id} style={{margin:"4px 0",padding:"8px 14px",background:m.type==="success"?C.gr+"12":"#fff5f5",borderRadius:10,borderLeft:`3px solid ${m.type==="success"?C.gr:m.color}`,display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{flex:1,color:m.type==="success"?C.gr:m.color,fontSize:12,fontWeight:600}}>{m.txt}</div>
                   <span style={{color:C.td,fontSize:9,flexShrink:0}}>{m.time}</span>
                 </div>
               );
 
-              // Shake message
-              if(m.type==="shake")return(
-                <div key={m.id} style={{margin:"6px 0",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <div style={{background:"linear-gradient(135deg,#f97316,#f97316cc)",borderRadius:20,padding:"6px 16px",display:"flex",alignItems:"center",gap:8,boxShadow:"0 2px 12px #f9731640"}}>
-                    <span style={{fontSize:16}}>📣</span>
-                    <span style={{color:"#fff",fontSize:12,fontWeight:700}}>{m.u} chamou a atenção de todos!</span>
-                    <span style={{color:"rgba(255,255,255,0.7)",fontSize:10}}>{m.time}</span>
-                  </div>
-                </div>
-              );
-
-              const urlInMsg=m.type==="text"?extractUrl(m.txt||""):null;
+              const urlInMsg=m.type==="text"?extractUrl(m.txt):null;
               const linkedCard=m.type==="card"?(allTasks.find(t=>t.id===m.taskId)||null):null;
 
               return(
@@ -9482,42 +9135,38 @@ function PageChat({isMob, perms, tasks, setTasks}){
                   onMouseEnter={e=>e.currentTarget.querySelector(".msg-actions")?.style&&(e.currentTarget.querySelector(".msg-actions").style.opacity="1")}
                   onMouseLeave={e=>e.currentTarget.querySelector(".msg-actions")?.style&&(e.currentTarget.querySelector(".msg-actions").style.opacity="0")}>
 
+                  {/* Avatar */}
                   <div style={{width:34,flexShrink:0,paddingTop:2}}>
-                    {!grouped&&<div style={{width:34,height:34,borderRadius:"50%",background:m.color||C.ts,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11}}>{m.av}</div>}
+                    {!grouped&&<div style={{width:34,height:34,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11}}>{m.av}</div>}
                   </div>
 
+                  {/* Content */}
                   <div style={{flex:1,minWidth:0}}>
                     {!grouped&&<div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:3}}>
-                      <span style={{color:m.color||C.ts,fontWeight:700,fontSize:12}}>{m.u}</span>
+                      <span style={{color:m.color,fontWeight:700,fontSize:12}}>{m.u}</span>
                       <span style={{color:C.td,fontSize:10}}>{m.time}</span>
-                      {m.deletedAt&&<span style={{color:C.td,fontSize:9,fontStyle:"italic"}}>· apagada</span>}
                     </div>}
 
-                    {/* Mensagem apagada */}
-                    {m.deletedAt?(
-                      <div style={{background:C.s1,borderRadius:"12px 12px 12px 4px",padding:"8px 12px",display:"inline-flex",alignItems:"center",gap:6,opacity:.6}}>
-                        <span style={{fontSize:12}}>🚫</span>
-                        <span style={{color:C.td,fontSize:12,fontStyle:"italic"}}>Esta mensagem foi apagada.</span>
-                      </div>
-                    ):<>
-
+                    {/* Text message */}
                     {m.type==="text"&&(
                       <div>
                         <div style={{background:isMe?C.a+"18":C.s1,borderRadius:"12px 12px 12px 4px",padding:"8px 12px",display:"inline-block",maxWidth:"85%",color:C.tx,fontSize:12,lineHeight:1.6,wordBreak:"break-word"}}>
-                          {(m.txt||"").split(/(@\w+)/g).map((part,i)=>
+                          {m.txt.split(/(@\w+)/g).map((part,i)=>
                             part.startsWith("@")
                               ?<span key={i} style={{color:C.a,fontWeight:700}}>{part}</span>
                               :<span key={i}>{part}</span>
                           )}
                         </div>
+                        {/* Link preview */}
                         {urlInMsg&&<LinkPreview url={urlInMsg}/>}
                       </div>
                     )}
 
+                    {/* Card message */}
                     {m.type==="card"&&(
                       <div>
                         {m.txt&&<div style={{background:isMe?C.a+"18":C.s1,borderRadius:"12px 12px 12px 4px",padding:"8px 12px",display:"inline-block",maxWidth:"85%",color:C.tx,fontSize:12,lineHeight:1.6,wordBreak:"break-word",marginBottom:2}}>
-                          {(m.txt||"").split(/(@\w+)/g).map((part,i)=>
+                          {m.txt.split(/(@\w+)/g).map((part,i)=>
                             part.startsWith("@")
                               ?<span key={i} style={{color:C.a,fontWeight:700}}>{part}</span>
                               :<span key={i}>{part}</span>
@@ -9527,16 +9176,19 @@ function PageChat({isMob, perms, tasks, setTasks}){
                       </div>
                     )}
 
+                    {/* Image */}
                     {m.type==="image"&&<div style={{display:"inline-block",maxWidth:"70%"}}>
                       <img src={m.imageUrl} alt="foto" style={{maxWidth:"100%",maxHeight:280,borderRadius:12,display:"block",cursor:"pointer",objectFit:"cover"}} onClick={()=>window.open(m.imageUrl,"_blank")}/>
                       {m.txt&&<div style={{color:C.ts,fontSize:11,marginTop:4}}>{m.txt}</div>}
                     </div>}
 
+                    {/* Audio */}
                     {m.type==="audio"&&<div style={{background:isMe?C.a+"18":C.s1,borderRadius:12,padding:"8px 12px",display:"inline-flex",alignItems:"center",gap:8,maxWidth:260}}>
                       <span style={{fontSize:16}}>🎙</span>
                       <audio src={m.audioUrl} controls style={{height:28,flex:1,minWidth:0}}/>
                     </div>}
 
+                    {/* Reactions */}
                     {(m.reactions||[]).length>0&&<div style={{display:"flex",gap:4,marginTop:4,flexWrap:"wrap"}}>
                       {m.reactions.map(r=>(
                         <button key={r.e} onClick={e=>{e.stopPropagation();addReaction(m.id,r.e);}}
@@ -9545,11 +9197,10 @@ function PageChat({isMob, perms, tasks, setTasks}){
                         </button>
                       ))}
                     </div>}
-                    </>}
                   </div>
 
-                  {/* Hover actions — reações + lixeira */}
-                  {m.uid!=="sistema"&&!m.deletedAt&&<div className="msg-actions" onClick={e=>e.stopPropagation()}
+                  {/* Hover actions */}
+                  {m.uid!=="sistema"&&<div className="msg-actions" onClick={e=>e.stopPropagation()}
                     style={{position:"absolute",right:0,top:0,background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:"3px 6px",display:"flex",gap:2,opacity:0,transition:"opacity .15s",zIndex:10,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
                     {EMOJIS.slice(0,5).map(e=>(
                       <button key={e} onClick={()=>addReaction(m.id,e)}
@@ -9559,32 +9210,17 @@ function PageChat({isMob, perms, tasks, setTasks}){
                         {e}
                       </button>
                     ))}
-                    {/* Botão apagar — só dono da msg ou sócio */}
-                    {(m.uid===CURRENT_USER.id||isSocio)&&(
-                      <button onClick={()=>deleteMsg(m.id)} title="Apagar mensagem"
-                        style={{background:"none",border:"none",cursor:"pointer",fontSize:13,padding:"2px 5px",borderRadius:5,lineHeight:1,color:C.td,marginLeft:2,borderLeft:`1px solid ${C.b1}`}}
-                        onMouseEnter={ev=>{ev.currentTarget.style.background="#fee2e2";ev.currentTarget.style.color=C.rd;}}
-                        onMouseLeave={ev=>{ev.currentTarget.style.background="none";ev.currentTarget.style.color=C.td;}}>
-                        🗑
-                      </button>
-                    )}
                   </div>}
                 </div>
               );
             })}
-
-            {!loading&&channelMsgs.length===0&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flex:1,gap:8,color:C.td}}>
-              <div style={{fontSize:32}}>💬</div>
-              <div style={{fontSize:13,fontWeight:600}}>Nenhuma mensagem ainda</div>
-              <div style={{fontSize:11}}>Seja o primeiro a escrever em #{activeChData?.name}</div>
-            </div>}
-
             <div ref={endRef}/>
           </div>
 
           {/* ── INPUT AREA ── */}
           <div style={{borderTop:`1px solid ${C.b1}`,background:C.card,flexShrink:0}}>
 
+            {/* Photo preview */}
             {photoPreview&&<div style={{padding:"8px 14px",display:"flex",alignItems:"center",gap:10,background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
               <img src={photoPreview.url} alt="preview" style={{height:56,width:56,objectFit:"cover",borderRadius:8,flexShrink:0}}/>
               <div style={{flex:1,minWidth:0}}>
@@ -9594,12 +9230,14 @@ function PageChat({isMob, perms, tasks, setTasks}){
               <button onClick={cancelPhoto} style={{background:"none",border:"none",color:C.rd,cursor:"pointer",fontSize:18,padding:4}}>✕</button>
             </div>}
 
+            {/* Audio preview */}
             {audioPreviewUrl&&!recording&&<div style={{padding:"8px 14px",display:"flex",alignItems:"center",gap:10,background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
               <span style={{fontSize:20}}>🎙</span>
               <audio src={audioPreviewUrl} controls style={{height:28,flex:1}}/>
               <button onClick={cancelAudio} style={{background:"none",border:"none",color:C.rd,cursor:"pointer",fontSize:18,padding:4}}>✕</button>
             </div>}
 
+            {/* Recording */}
             {recording&&<div style={{padding:"8px 14px",display:"flex",alignItems:"center",gap:10,background:"#fff5f5",borderBottom:`1px solid ${C.b1}`}}>
               <div style={{width:10,height:10,borderRadius:"50%",background:C.rd}}/>
               <span style={{color:C.rd,fontSize:12,fontWeight:700}}>Gravando... {Math.floor(recSecs/60).toString().padStart(2,"0")}:{(recSecs%60).toString().padStart(2,"0")}</span>
@@ -9608,7 +9246,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
 
             <div style={{padding:"10px 14px",position:"relative"}} onClick={e=>e.stopPropagation()}>
 
-              {/* /demandas picker */}
+              {/* /demandas card picker */}
               {showCardPicker&&<div style={{position:"absolute",bottom:"calc(100% + 4px)",left:14,right:14,background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,zIndex:60,boxShadow:"0 8px 32px rgba(0,0,0,0.18)",overflow:"hidden"}}>
                 <div style={{padding:"10px 12px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
                   <span style={{color:C.a,fontWeight:800,fontSize:12}}>◈ Selecionar cartão</span>
@@ -9673,42 +9311,45 @@ function PageChat({isMob, perms, tasks, setTasks}){
                 <input ref={photoInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={handlePhoto}/>
 
                 {canSend&&<>
+                  {/* /demandas button */}
                   <button onClick={e=>{e.stopPropagation();setShowCardPicker(v=>!v);setCardSearch("");}} title="Linkar cartão (/demandas)"
                     style={{background:showCardPicker?C.a+"18":"none",border:"none",color:showCardPicker?C.a:C.td,cursor:"pointer",fontSize:16,padding:"6px 5px",lineHeight:1,flexShrink:0,borderRadius:7,transition:"all .15s"}}>
                     ◈
                   </button>
+
+                  {/* Foto */}
                   <button onClick={()=>photoInputRef.current?.click()} title="Enviar foto"
                     style={{background:"none",border:"none",color:photoPreview?C.a:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🖼
                   </button>
+
+                  {/* Audio */}
                   {!recording&&!audioPreviewUrl&&<button onClick={startRec} title="Gravar áudio"
                     style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🎙
                   </button>}
+
+                  {/* Emoji */}
                   <button onClick={e=>{e.stopPropagation();setShowEmoji(v=>!v);}} title="Emoji"
                     style={{background:"none",border:"none",color:showEmoji?C.a:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🙂
                   </button>
-                  <button onClick={sendShake} title="Chamar atenção de todos"
-                    style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0,transition:"all .15s"}}
-                    onMouseEnter={e=>{e.currentTarget.style.color="#f97316";e.currentTarget.style.transform="scale(1.2)";}}
-                    onMouseLeave={e=>{e.currentTarget.style.color=C.td;e.currentTarget.style.transform="scale(1)";}}>
-                    📣
-                  </button>
                 </>}
 
+                {/* Textarea */}
                 <textarea ref={el=>{inputRef.current=el;textareaRef.current=el;}}
                   value={input} onChange={handleInput}
                   onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
                   placeholder={canSend?`Mensagem em #${activeChData?.name||""}... (@ mencionar · /demandas linkar cartão · Enter enviar)`:"Você não tem permissão para enviar mensagens neste canal."}
-                  disabled={!canSend||sending}
+                  disabled={!canSend}
                   rows={1}
                   style={{flex:1,background:canSend?C.s1:C.b1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"9px 14px",color:C.tx,fontSize:12,outline:"none",resize:"none",fontFamily:"inherit",boxSizing:"border-box",lineHeight:1.5,maxHeight:120,overflowY:"auto",opacity:canSend?1:.6}}/>
 
+                {/* Send */}
                 {canSend&&<button onClick={send}
-                  disabled={(!input.trim()&&!photoPreview&&!audioPreviewUrl)||sending}
-                  style={{background:(input.trim()||photoPreview||audioPreviewUrl)&&!sending?C.a:C.b1,border:"none",borderRadius:10,padding:"9px 14px",color:(input.trim()||photoPreview||audioPreviewUrl)&&!sending?"#fff":C.td,fontWeight:700,cursor:(input.trim()||photoPreview||audioPreviewUrl)&&!sending?"pointer":"default",fontSize:14,flexShrink:0,transition:"all .15s"}}>
-                  {sending?"⏳":"↑"}
+                  disabled={!input.trim()&&!photoPreview&&!audioPreviewUrl}
+                  style={{background:(input.trim()||photoPreview||audioPreviewUrl)?C.a:C.b1,border:"none",borderRadius:10,padding:"9px 14px",color:(input.trim()||photoPreview||audioPreviewUrl)?"#fff":C.td,fontWeight:700,cursor:(input.trim()||photoPreview||audioPreviewUrl)?"pointer":"default",fontSize:14,flexShrink:0,transition:"all .15s"}}>
+                  ↑
                 </button>}
               </div>
 
@@ -14781,6 +14422,7 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
   const saveWidgets=(w)=>{
     setWidgets(w);
     try{localStorage.setItem("pixels-dash-widgets-"+user.id,JSON.stringify(w));}catch(e){}
+    if(window._sb)window._sb.from("user_settings").upsert({user_id:user.id,dash_widgets:w},{onConflict:"user_id"}).catch(()=>{});
   };
 
   // Notificações do usuário (últimas 5)
@@ -15685,8 +15327,6 @@ const rowToTask = (r) => ({
   client:       r.client       || "",
   priority:     r.priority     || "media",
   deadline:     r.deadline     || "",
-  deadlineTime: r.deadline_time || "",
-  origem:       r.origem        || "interno",
   startDate:    r.start_date   || "",
   completedAt:  r.completed_at || "",
   cover:        r.cover        || null,
@@ -15888,6 +15528,7 @@ export default function AgencyOS(){
   const toggleCollapse=()=>setSideCollapsed(v=>{
     const next=!v;
     try{localStorage.setItem("pixels-sidebar-collapsed",next?"1":"0");}catch(e){}
+    if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,sidebar_collapsed:next},{onConflict:"user_id"}).catch(()=>{});
     return next;
   });
   const [showSelfProfile,setShowSelfProfile] = useState(false);
@@ -15903,8 +15544,6 @@ export default function AgencyOS(){
   },[CURRENT_USER.id]);
   const [activeCl,setActiveCl]     = useState(null);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
-  // Expõe setNotifs para o portal poder disparar notificações
-  useEffect(()=>{ window._setNotifs=setNotifs; return()=>{delete window._setNotifs;}; },[setNotifs]);
   const [viewingAs,setViewingAs]   = useState(null);
 
   useEffect(()=>{
@@ -16227,12 +15866,9 @@ export default function AgencyOS(){
       case "demandas":
       case "demandas_kanban":      return p.verDemandas;
       case "demandas_cal_pub":     return p.verCalPub||isSocio;
-      case "demandas_internas":    return p.verDemandasInternas||isSocio;
-      case "demandas_cal_interno": return p.verInterno||isSocio;
-      case "aprovacoes":        return p.verAprovacoes||p.aprovarDemandaInterna||isSocio;
+      case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
-      case "aprovacoes_internas":  return p.aprovarDemandaInterna||isSocio;
       case "chat":                 return p.verChat;
       case "clientes":             return p.verClientes;
       case "analises":
@@ -16266,7 +15902,6 @@ export default function AgencyOS(){
       case "interno_mapeamento":   return (p.verInterno&&p.verMapeamento)||isSocio;
       case "interno_conexoes":     return (p.verInterno&&p.verConexoes)||isSocio;
       case "interno_360":          return (p.verInterno&&p.verAvaliacao360)||isSocio;
-      case "interno_radar":        return (p.verInterno&&p.verRadarEntrega)||isSocio;
       case "interno_carreira":     return (p.verInterno&&p.verCarreira)||isSocio;
       default:                     return true;
     }
@@ -16274,7 +15909,7 @@ export default function AgencyOS(){
   // Pendências de aprovação — para destaque laranja no menu
   const pendingAprovacoes=tasks.filter(t=>
     !t.deletedAt&&(
-      t.status==="avaliacao"||(t.status==="demanda"&&!t.ajustar)||t.status==="interno_avaliacao"
+      t.status==="avaliacao"||(t.status==="demanda"&&!t.ajustar)
     )
   ).length;
 
@@ -16301,14 +15936,11 @@ export default function AgencyOS(){
       case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)} selfProfile={selfProfileData}/>:<NoPerm/>;
       case "demandas":
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
-      case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
-      case "demandas_cal_interno":  return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
-      case "aprovacoes_internas":   return (effectivePerms.aprovarDemandaInterna||isSocio)?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="internas"/>:<NoPerm/>;
       case "analises":
       case "analises_producao":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseProd)||isSocio?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
       case "analises_gargalos":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseGarg)||isSocio?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
@@ -16328,12 +15960,12 @@ export default function AgencyOS(){
       case "portal_chat":
       case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno":
-      case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>; // legado
+      case "interno":
+      case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_pontuacao":     return (effectivePerms.verInterno&&effectivePerms.verPontuacao)||isSocio?<PagePontuacao {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_mapeamento":    return (effectivePerms.verInterno&&effectivePerms.verMapeamento)||isSocio?<PageMapeamento {...p}/>:<NoPerm/>;
       case "interno_conexoes":      return (effectivePerms.verInterno&&effectivePerms.verConexoes)||isSocio?<PageConexoes {...p}/>:<NoPerm/>;
       case "interno_360":           return (effectivePerms.verInterno&&effectivePerms.verAvaliacao360)||isSocio?<PageAvaliacao360 {...p}/>:<NoPerm/>;
-      case "interno_radar":         return (effectivePerms.verInterno&&effectivePerms.verRadarEntrega)||isSocio?<PageRadarEntrega {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_carreira":      return (effectivePerms.verInterno&&effectivePerms.verCarreira)||isSocio?<PageCarreira {...p} tasks={tasks}/>:<NoPerm/>;
       case "notificacoes":          return <PageNotificacoes notifs={notifs} setNotifs={setNotifs}/>;
       default:                      return <NoPerm/>;
@@ -16461,8 +16093,9 @@ export default function AgencyOS(){
           const btnColor=isAprOrange?"#fff":isActive?C.a:C.ts;
           return(<div key={n.id}>
             <button onClick={()=>{
-              if(sideCollapsed&&!isMob){setSideCollapsed(false);try{localStorage.setItem("pixels-sidebar-collapsed","0");}catch(e){}}
-              if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded){const firstVisible=n.children.find(c=>canSee(c,effectivePerms));if(firstVisible)nav(firstVisible.id);}}
+              if(sideCollapsed&&!isMob){setSideCollapsed(false);try{localStorage.setItem("pixels-sidebar-collapsed","0");}catch(e){}
+              if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,sidebar_collapsed:false},{onConflict:"user_id"}).catch(()=>{});}
+              if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded)nav(n.children[0].id);}
               else nav(n.id);
             }}
             title={sideCollapsed&&!isMob?n.label:undefined}
@@ -16478,7 +16111,7 @@ export default function AgencyOS(){
               </span>}
             </button>
             {(!sideCollapsed||isMob)&&hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
-              {n.children.filter(child=>canSee(child,effectivePerms)).map(child=>(
+              {n.children.map(child=>(
                 <button key={child.id} onClick={()=>nav(child.id)}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:400,fontSize:11,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
                   <NavIcon id={child.id} size={14} color={page===child.id?C.a:C.ts}/><span style={{marginLeft:2}}>{child.label}</span>
