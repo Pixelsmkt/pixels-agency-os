@@ -8013,15 +8013,17 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
   const [title,     setTitle]     = useState(card.title     || "");
   const [desc,      setDesc]      = useState(card.desc      || "");
   const [priority,  setPriority]  = useState(card.priority  || "media");
-  const [deadline,  setDeadline]  = useState(card.deadline  || "");
-  const [assignees, setAssignees] = useState(card.assignees || []);
+  const [deadline,     setDeadline]     = useState(card.deadline     || "");
+  const [deadlineTime, setDeadlineTime] = useState(card.deadlineTime || "");
+  const [clientId,     setClientId]     = useState(card.client && card.client!=="interno" ? card.client : "");
+  const [assignees,    setAssignees]    = useState(card.assignees || []);
   const [checklist, setChecklist] = useState(card.checklist || []);
   const [newCheck,  setNewCheck]  = useState("");
 
   const eligible = TEAM.filter(u => u.level === 1 || ACCESS_STORE?.[u.id]?.verDemandasInternas);
   const toggleA  = (uid) => setAssignees(p => p.includes(uid) ? p.filter(x=>x!==uid) : [...p, uid]);
   const addCheck = () => { if (!newCheck.trim()) return; setChecklist(p=>[...p,{id:Date.now()+"-"+Math.random().toString(36).slice(2,5),text:newCheck.trim(),done:false}]); setNewCheck(""); };
-  const save = () => onSave({ ...card, title, desc, priority, deadline, assignees, checklist });
+  const save = () => onSave({ ...card, title, desc, priority, deadline, deadlineTime, client: clientId||"interno", assignees, checklist });
   const col  = INTERNO_COLS.find(c => c.id === card.status) || INTERNO_COLS[0];
   const pc   = PRIO_CFG[priority] || PRIO_CFG.media;
   const done = checklist.filter(c=>c.done).length;
@@ -8050,23 +8052,43 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
               style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:13,resize:"vertical",width:"100%",fontFamily:"inherit",minHeight:70,outline:"none",boxSizing:"border-box"}}/>
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <div>
-              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prioridade</div>
-              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                {Object.entries(PRIO_CFG).map(([k,conf])=>(
-                  <button key={k} onClick={()=>setPriority(k)}
-                    style={{background:priority===k?conf.bg:"transparent",border:`1px solid ${priority===k?conf.color:C.b1}`,borderRadius:8,padding:"4px 8px",color:priority===k?conf.color:C.td,fontSize:10,fontWeight:priority===k?700:400,cursor:"pointer"}}>
-                    {conf.label}
-                  </button>
-                ))}
-              </div>
+          {/* Prioridade */}
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prioridade</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              {Object.entries(PRIO_CFG).map(([k,conf])=>(
+                <button key={k} onClick={()=>setPriority(k)}
+                  style={{background:priority===k?conf.bg:"transparent",border:`1px solid ${priority===k?conf.color:C.b1}`,borderRadius:8,padding:"4px 8px",color:priority===k?conf.color:C.td,fontSize:10,fontWeight:priority===k?700:400,cursor:"pointer"}}>
+                  {conf.label}
+                </button>
+              ))}
             </div>
+          </div>
+
+          {/* Prazo + Horário */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div>
               <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prazo</div>
               <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
                 style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
             </div>
+            <div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Horário</div>
+              <input type="time" value={deadlineTime} onChange={e=>setDeadlineTime(e.target.value)}
+                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+
+          {/* Cliente */}
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Cliente</div>
+            <select value={clientId} onChange={e=>setClientId(e.target.value)}
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:clientId?C.tx:C.td,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",cursor:"pointer"}}>
+              <option value="">— Sem cliente (interno) —</option>
+              {CLIENTS.map(c=>(
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -8220,6 +8242,7 @@ function CardKanbanInterno({ task, onOpen, onDragStart }) {
         <div style={{background:pc.bg,borderRadius:6,padding:"2px 8px"}}><span style={{color:pc.color,fontSize:10,fontWeight:700}}>{pc.label}</span></div>
         {dl!==null&&<span style={{color:dlC,fontSize:10,fontWeight:700}}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
       </div>
+      {task.client&&task.client!=="interno"&&(()=>{const cl=CLIENTS.find(c=>c.id===task.client);return cl?<div style={{background:cl.color+"18",border:`1px solid ${cl.color}33`,borderRadius:6,padding:"2px 8px",display:"inline-flex",alignItems:"center",marginBottom:5}}><span style={{color:cl.color,fontSize:9,fontWeight:700}}>{cl.abbr}</span></div>:null;})()}
       <div style={{color:C.tx,fontSize:13,fontWeight:600,lineHeight:1.4,marginBottom:8}}>{task.title}</div>
       {ck.length>0&&(
         <div style={{marginBottom:8}}>
@@ -8238,7 +8261,7 @@ function CardKanbanInterno({ task, onOpen, onDragStart }) {
             </div>
           ))}
         </div>
-        {task.deadline&&<span style={{color:C.td,fontSize:10}}>{new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span>}
+        {task.deadline&&<span style={{color:C.td,fontSize:10}}>{new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}{task.deadlineTime?" "+task.deadlineTime:""}</span>}
       </div>
     </div>
   );
@@ -8317,9 +8340,9 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
       window._sb.from("tasks").upsert({
         id:card.id,title:card.title,status:card.status,
         assignee:card.assignees?.[0]||"",assignees:card.assignees||[],
-        priority:card.priority,deadline:card.deadline||null,
+        priority:card.priority,deadline:card.deadline||null,deadline_time:card.deadlineTime||null,
         description:card.desc||"",checklist:card.checklist||[],
-        timeline:card.timeline||[],client:"interno",sector:"",
+        timeline:card.timeline||[],client:card.client||"interno",sector:"",
         created_by:card.createdBy||CURRENT_USER.id,
         col_entered_at:card.colEnteredAt||null,
         tags:[],comments:[],files:[],watchers:[],cover:null,
@@ -15129,6 +15152,7 @@ const rowToTask = (r) => ({
   client:       r.client       || "",
   priority:     r.priority     || "media",
   deadline:     r.deadline     || "",
+  deadlineTime: r.deadline_time || "",
   startDate:    r.start_date   || "",
   completedAt:  r.completed_at || "",
   cover:        r.cover        || null,
