@@ -10428,18 +10428,18 @@ function PageFinanceiro({isMob}){
 // ======= 09_acessos.jsx =======
 // Grupos de permissões organizados por módulo (abas)
 const PERM_TABS=[
-  {id:"dashboard",    icon:"🎯", label:"Dashboard",        color:"#7c3aed"},
-  {id:"demandas",     icon:"◈",  label:"Demandas",          color:"#2563eb"},
-  {id:"aprovacoes",   icon:"◇",  label:"Aprovações",        color:"#16a34a"},
-  {id:"chat",         icon:"◐",  label:"Chat",              color:"#0891b2"},
-  {id:"clientes",     icon:"◉",  label:"Clientes",          color:"#d97706"},
-  {id:"analises",     icon:"◫",  label:"Análises",          color:"#7c3aed"},
-  {id:"ia",           icon:"⚡",  label:"Pixels IA",         color:"#f97316"},
-  {id:"portal",       icon:"🌐", label:"Portal Cliente",    color:"#0d9488"},
-  {id:"gestao",       icon:"◈",  label:"Gestão",            color:"#dc2626"},
-  {id:"acessos",      icon:"🔒", label:"Acessos",           color:"#475569"},
-  {id:"interno",      icon:"◐",  label:"Interno",           color:"#7c3aed"},
-  {id:"dem_internas",  icon:"◧",  label:"Demandas Internas", color:"#6366f1"},
+  {id:"dashboard",    navIcon:"meudash",    label:"Dashboard",          color:"#7c3aed"},
+  {id:"demandas",     navIcon:"demandas",   label:"Demandas",           color:"#2563eb"},
+  {id:"dem_internas", navIcon:"demandas",   label:"Demandas Internas",  color:"#6366f1"},
+  {id:"aprovacoes",   navIcon:"aprovacoes", label:"Aprovações",         color:"#16a34a"},
+  {id:"chat",         navIcon:"chat",       label:"Chat",               color:"#0891b2"},
+  {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706"},
+  {id:"analises",     navIcon:"analises",   label:"Análises",           color:"#7c3aed"},
+  {id:"ia",           navIcon:"ia",         label:"Pixels IA",          color:"#f97316"},
+  {id:"portal",       navIcon:"portal",     label:"Portal Cliente",     color:"#0d9488"},
+  {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
+  {id:"acessos",      navIcon:"acessos",    label:"Acessos",            color:"#475569"},
+  {id:"interno",      navIcon:"interno",    label:"Interno",            color:"#7c3aed"},
 ];
 
 const PERM_GROUPS={
@@ -10472,13 +10472,18 @@ const PERM_GROUPS={
     {key:"colPausado",        label:"Pausado",                    desc:"Coluna de demandas pausadas"},
     {section:"Calendário de Publicações"},
     {key:"verCalPub",         label:"Calendário de Publicações",  desc:"Acesso ao calendário de publicações"},
+    {section:"Calendário Interno/Clientes"},
+    {key:"verInterno",        label:"Calendário Interno/Clientes", desc:"Acesso ao Calendário Interno/Clientes (também dá acesso ao menu Interno)"},
   ],
   aprovacoes:[
-    {key:"verAprovacoes",     label:"Acessar Aprovações",         desc:"Acesso ao módulo de aprovações"},
-    {key:"verAprCopys",       label:"Aba Copys",                  desc:"Ver copys aguardando aprovação"},
-    {key:"verAprPublicacao",  label:"Aba Publicação",             desc:"Ver publicações agendadas para aprovar"},
-    {key:"verAprAjuste",      label:"Aba Ajustes Solicitados",    desc:"Ver cards marcados para ajuste"},
-    {key:"aprovar",           label:"Botão Aprovar",              desc:"Pode aprovar ou solicitar ajuste"},
+    {key:"verAprovacoes",        label:"Acessar Aprovações",          desc:"Acesso ao módulo de aprovações"},
+    {section:"Copys e Publicações"},
+    {key:"verAprCopys",          label:"Aba Copys",                   desc:"Ver copys aguardando aprovação"},
+    {key:"verAprPublicacao",     label:"Aba Publicação",              desc:"Ver publicações agendadas para aprovar"},
+    {key:"verAprAjuste",         label:"Aba Ajustes Solicitados",     desc:"Ver cards marcados para ajuste"},
+    {key:"aprovar",              label:"Botão Aprovar (Copys/Pub)",   desc:"Pode aprovar ou solicitar ajuste em copys e publicações"},
+    {section:"Demandas Internas"},
+    {key:"aprovarDemandaInterna",label:"Aprovação Demanda Interna",   desc:"Vê e aprova demandas internas no menu Aprovações"},
   ],
   chat:[
     {key:"verChat",                         label:"Acessar Chat",             desc:"Acesso ao módulo de chat"},
@@ -10558,6 +10563,13 @@ const PERM_GROUPS={
     {key:"verAcessos",        label:"Ver Acessos",                desc:"Acesso ao módulo de gerenciamento"},
     {key:"editarAcessos",     label:"Editar Permissões",          desc:"Pode alterar permissões de outros"},
   ],
+  dem_internas:[
+    {section:"Acesso"},
+    {key:"verDemandasInternas",   label:"Ver Demandas Internas",       desc:"Acesso ao submenu de demandas internas"},
+    {key:"criarDemandaInterna",   label:"Criar Demanda Interna",        desc:"Pode abrir novos cards internos"},
+    {key:"aprovarDemandaInterna", label:"Aprovar Demanda Interna",      desc:"Vê e aprova no menu Aprovações > Demanda Interna"},
+    {key:"verTodosInternos",      label:"Ver Todos os Cards Internos",  desc:"Vê cards de todos — sem isso, vê só os seus"},
+  ],
   interno:[
     {key:"verInterno",        label:"Acessar Interno",            desc:"Acesso ao módulo interno"},
     {section:"Sub-páginas"},
@@ -10567,13 +10579,6 @@ const PERM_GROUPS={
     {key:"verCarreira",       label:"Histórico de Carreira",      desc:"Ver histórico de carreira"},
     {key:"verAvaliacao360",   label:"Avaliação 360",              desc:"Ver avaliações da equipe"},
   ],
-  dem_internas:[
-    {section:"Acesso"},
-    {key:"verDemandasInternas",   label:"Ver Demandas Internas",       desc:"Acesso ao submenu de demandas internas"},
-    {key:"criarDemandaInterna",   label:"Criar Demanda Interna",        desc:"Pode abrir novos cards internos"},
-    {key:"aprovarDemandaInterna", label:"Aprovar Demanda Interna",      desc:"Vê e aprova no menu Aprovações > Demanda Interna"},
-    {key:"verTodosInternos",      label:"Ver Todos os Cards Internos",  desc:"Vê cards de todos — sem isso, vê só os seus"},
-  ]
 };
 
 function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks}){
@@ -10677,7 +10682,7 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
           const isActive=activeTab===tab.id;
           return <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
             style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"10px 14px",background:isActive?C.card:"transparent",border:"none",borderBottom:isActive?`2px solid ${tab.color}`:"2px solid transparent",color:isActive?tab.color:C.ts,cursor:"pointer",whiteSpace:"nowrap",transition:"all .12s",flexShrink:0,marginBottom:-1}}>
-            <span style={{fontSize:14}}>{tab.icon}</span>
+            <NavIcon id={tab.navIcon||tab.id} size={16} color={isActive?tab.color:C.ts}/>
             <span style={{fontSize:10,fontWeight:isActive?700:500}}>{tab.label}</span>
             {totalKeys>0&&<span style={{fontSize:8,color:isActive?tab.color:C.td}}>{activeItems.length}/{totalKeys}</span>}
           </button>;
