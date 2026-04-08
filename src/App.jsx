@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 27/27 | Nao editar diretamente
+// Modulos: 28/28 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
@@ -276,6 +276,7 @@ const DEFAULT_PERMS={
   verNotificacoes:true, verInterno:false,
   // Demandas Internas
   verDemandasInternas:false, criarDemandaInterna:false, aprovarDemandaInterna:false, verTodosInternos:false,
+  verRadarEntrega:false,
   // Interno — sub-páginas
   verMapeamento:false, verConexoes:false, verPontuacao:false, verCarreira:false, verAvaliacao360:false,
   // Análises — sub-páginas
@@ -443,6 +444,7 @@ const NAV=[
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
     {id:"interno_calendario", icon:"▦", label:"Visão Geral"},
+    {id:"interno_radar",      icon:"◎", label:"Radar de Entrega"},
     {id:"interno_pontuacao",  icon:"◈", label:"Pontuação"},
     {id:"interno_mapeamento", icon:"◉", label:"Mapeamento"},
     {id:"interno_conexoes",   icon:"◬", label:"Conexão e Contas"},
@@ -8016,6 +8018,8 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
   const [deadline,     setDeadline]     = useState(card.deadline     || "");
   const [deadlineTime, setDeadlineTime] = useState(card.deadlineTime || "");
   const [clientId,     setClientId]     = useState(card.client && card.client!=="interno" ? card.client : "");
+  const [bioterUnit,   setBioterUnit]   = useState(card.bioterUnit || "");
+  const [origem,       setOrigem]       = useState(card.origem || "interno");
   const [assignees,    setAssignees]    = useState(card.assignees || []);
   const [checklist, setChecklist] = useState(card.checklist || []);
   const [newCheck,  setNewCheck]  = useState("");
@@ -8023,7 +8027,7 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
   const eligible = TEAM.filter(u => u.level === 1 || ACCESS_STORE?.[u.id]?.verDemandasInternas);
   const toggleA  = (uid) => setAssignees(p => p.includes(uid) ? p.filter(x=>x!==uid) : [...p, uid]);
   const addCheck = () => { if (!newCheck.trim()) return; setChecklist(p=>[...p,{id:Date.now()+"-"+Math.random().toString(36).slice(2,5),text:newCheck.trim(),done:false}]); setNewCheck(""); };
-  const save = () => onSave({ ...card, title, desc, priority, deadline, deadlineTime, client: clientId||"interno", assignees, checklist });
+  const save = () => onSave({ ...card, title, desc, priority, deadline, deadlineTime, client: clientId||"interno", bioterUnit: clientId==="bioter" ? bioterUnit : "", origem, assignees, checklist });
   const col  = INTERNO_COLS.find(c => c.id === card.status) || INTERNO_COLS[0];
   const pc   = PRIO_CFG[priority] || PRIO_CFG.media;
   const done = checklist.filter(c=>c.done).length;
@@ -8082,13 +8086,46 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
           {/* Cliente */}
           <div>
             <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Cliente</div>
-            <select value={clientId} onChange={e=>setClientId(e.target.value)}
+            <select value={clientId} onChange={e=>{setClientId(e.target.value);setBioterUnit("");}}
               style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:clientId?C.tx:C.td,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",cursor:"pointer"}}>
               <option value="">— Sem cliente (interno) —</option>
               {CLIENTS.map(c=>(
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Unidade Bioter — aparece só quando Bioter selecionado */}
+          {clientId==="bioter"&&(
+            <div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Unidade Bioter</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {BIOTER_UNITS.map(u=>(
+                  <button key={u.id} onClick={()=>setBioterUnit(u.id)}
+                    style={{background:bioterUnit===u.id?u.color+"22":"transparent",border:`1px solid ${bioterUnit===u.id?u.color:C.b1}`,borderRadius:8,padding:"5px 12px",color:bioterUnit===u.id?u.color:C.td,fontSize:11,fontWeight:bioterUnit===u.id?700:400,cursor:"pointer"}}>
+                    {u.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Origem da demanda */}
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Origem</div>
+            <div style={{display:"flex",gap:6}}>
+              {[
+                {id:"interno",            label:"🔵 Interna",           desc:"Equipe Pixels"},
+                {id:"solicitacao_cliente",label:"🟡 Solicitação",       desc:"Cliente pediu"},
+                {id:"portal",             label:"🟢 Portal",            desc:"Via portal"},
+              ].map(o=>(
+                <button key={o.id} onClick={()=>setOrigem(o.id)}
+                  style={{flex:1,background:origem===o.id?C.a+"18":"transparent",border:`1px solid ${origem===o.id?C.a:C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",textAlign:"center"}}>
+                  <div style={{fontSize:12,fontWeight:origem===o.id?700:500,color:origem===o.id?C.a:C.ts}}>{o.label}</div>
+                  <div style={{fontSize:10,color:C.td,marginTop:2}}>{o.desc}</div>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div>
@@ -8279,6 +8316,46 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
   const [dragId,   setDragId]   = useState(null);
   const [dragOver, setDragOver] = useState(null);
 
+  // Verifica cards parados e notifica Vinicius+Gustavo a cada hora
+  useEffect(()=>{
+    const check=()=>{
+      if(!setNotifs||!isSocio) return;
+      const now=new Date();
+      const paradas=allInternas.filter(t=>{
+        if(t.status==="interno_executado"||t.status==="interno_aprovado"||!t.colEnteredAt)return false;
+        const dias=Math.floor((now-new Date(t.colEnteredAt))/86400000);
+        return dias>=2;
+      });
+      const aguardando=allInternas.filter(t=>{
+        if(t.status!=="interno_avaliacao"||!t.colEnteredAt)return false;
+        return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=2;
+      });
+      if(paradas.length>0){
+        setNotifs(p=>{
+          const jaNotif=p.some(n=>n.type==="radar_paradas"&&n.at===now.toLocaleDateString("pt-BR"));
+          if(jaNotif)return p;
+          return [{id:"rp_"+Date.now(),read:false,type:"radar_paradas",icon:"⏳",
+            title:`${paradas.length} demanda${paradas.length>1?"s":""} interna${paradas.length>1?"s":""} parada${paradas.length>1?"s":""}`,
+            body:`Cards sem movimentação há 2+ dias: ${paradas.slice(0,3).map(t=>t.title).join(", ")}${paradas.length>3?"...":""}`,
+            user:"Sistema",at:"Agora",category:"radar",targetUsers:["vinicius","gustavo"]},...p];
+        });
+      }
+      if(aguardando.length>0){
+        setNotifs(p=>{
+          const jaNotif=p.some(n=>n.type==="radar_aprovacao"&&n.at===now.toLocaleDateString("pt-BR"));
+          if(jaNotif)return p;
+          return [{id:"ra_"+Date.now(),read:false,type:"radar_aprovacao",icon:"◫",
+            title:`${aguardando.length} demanda${aguardando.length>1?"s":""} aguardando aprovação`,
+            body:`Aguardando há 2+ dias: ${aguardando.slice(0,3).map(t=>t.title).join(", ")}${aguardando.length>3?"...":""}`,
+            user:"Sistema",at:"Agora",category:"radar",targetUsers:["vinicius","gustavo"]},...p];
+        });
+      }
+    };
+    check();
+    const iv=setInterval(check,60*60*1000); // a cada hora
+    return()=>clearInterval(iv);
+  },[allInternas.length]);
+
   const allInternas = (tasks||[]).filter(t=>!t.deletedAt&&INTERNO_COLS.find(c=>c.id===t.status));
   const visible = canSeeAll ? allInternas
     : allInternas.filter(t=>(t.assignees||[]).includes(CURRENT_USER.id)||t.createdBy===CURRENT_USER.id);
@@ -8342,13 +8419,26 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
         assignee:card.assignees?.[0]||"",assignees:card.assignees||[],
         priority:card.priority,deadline:card.deadline||null,deadline_time:card.deadlineTime||null,
         description:card.desc||"",checklist:card.checklist||[],
-        timeline:card.timeline||[],client:card.client||"interno",sector:"",
+        timeline:card.timeline||[],client:card.client||"interno",origem:card.origem||"interno",sector:"",
         created_by:card.createdBy||CURRENT_USER.id,
         col_entered_at:card.colEnteredAt||null,
         tags:[],comments:[],files:[],watchers:[],cover:null,
         ajustar:false,is_alteracao:false,score:null,
-        publish_date:null,publish_time:"09:00",bioter_unit:"",
+        publish_date:null,publish_time:"09:00",bioter_unit:card.bioterUnit||"",
       },{onConflict:"id"}).then(()=>{}).catch(err=>console.error("saveCard supabase:",err));
+    }
+    // Notifica Vinicius e Gustavo quando demanda vem de cliente
+    if(isNew&&(card.origem==="solicitacao_cliente"||card.origem==="portal")&&setNotifs){
+      const clientName=card.client&&card.client!=="interno"?CLIENTS.find(c=>c.id===card.client)?.name||card.client:"sem cliente";
+      const origemLabel=card.origem==="portal"?"🟢 Portal":"🟡 Solicitação";
+      setNotifs(p=>[{
+        id:"radar_"+Date.now(),read:false,
+        type:"radar_demanda",icon:"⚡",
+        title:`Nova demanda extra — ${clientName}`,
+        body:`${origemLabel} · "${card.title}" foi registrada por ${CURRENT_USER.name}`,
+        user:CURRENT_USER.name,at:"Agora",category:"radar",
+        targetUsers:["vinicius","gustavo"],
+      },...p]);
     }
     setOpenCard(null);
   };
@@ -12992,6 +13082,233 @@ function PagePontuacao({tasks}){
   </div>);
 }
 
+// ======= 10_radar_entrega.jsx =======
+
+const RADAR_ORIGENS = {
+  interno:             { label:"Interna",      icon:"🔵", color:"#6366f1" },
+  solicitacao_cliente: { label:"Solicitação",  icon:"🟡", color:"#f59e0b" },
+  portal:              { label:"Portal",       icon:"🟢", color:"#22c55e" },
+};
+
+const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+function getMonthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`; }
+function parseMonthKey(key){ const [y,m]=key.split("-"); return new Date(Number(y),Number(m)-1,1); }
+
+function PageRadarEntrega({ tasks, isMob }) {
+  const now = new Date();
+  const [clienteId, setClienteId] = useState("");
+  const [mesKey,    setMesKey]    = useState(getMonthKey(now));
+
+  // Gera últimos 12 meses para o select
+  const mesesDisponiveis = Array.from({length:12},(_,i)=>{
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    return {key:getMonthKey(d), label:`${MESES[d.getMonth()]} ${d.getFullYear()}`};
+  });
+
+  const mesInicio = parseMonthKey(mesKey);
+  const mesFim    = new Date(mesInicio.getFullYear(), mesInicio.getMonth()+1, 0, 23, 59, 59);
+
+  // Publicações do Fluxo de Demandas — status=publicado com cliente selecionado
+  const publicacoes = (tasks||[]).filter(t=>{
+    if(t.deletedAt||t.status!=="publicado") return false;
+    if(clienteId && t.client!==clienteId) return false;
+    const d = t.completedAt ? new Date(t.completedAt) : (t.publishDate ? new Date(t.publishDate+"T00:00:00") : null);
+    if(!d) return false;
+    return d>=mesInicio && d<=mesFim;
+  });
+
+  // Extras das Demandas Internas — executadas com cliente vinculado
+  const extras = (tasks||[]).filter(t=>{
+    if(t.deletedAt||t.status!=="interno_executado") return false;
+    if(!t.client||t.client==="interno") return false;
+    if(clienteId && t.client!==clienteId) return false;
+    const d = t.completedAt ? new Date(t.completedAt) : (t.colEnteredAt ? new Date(t.colEnteredAt) : null);
+    if(!d) return false;
+    return d>=mesInicio && d<=mesFim;
+  });
+
+  // Tempo de execução em dias (criação → conclusão)
+  const calcTempo = (t) => {
+    const inicio = t.createdAt ? new Date(t.createdAt) : null;
+    const fim    = t.completedAt ? new Date(t.completedAt) : null;
+    if(!inicio||!fim) return null;
+    const dias = Math.round((fim-inicio)/86400000);
+    return dias;
+  };
+
+  const temposPubl = publicacoes.map(calcTempo).filter(d=>d!==null&&d>=0);
+  const temposExtra = extras.map(calcTempo).filter(d=>d!==null&&d>=0);
+  const mediaPubl  = temposPubl.length ? (temposPubl.reduce((a,b)=>a+b,0)/temposPubl.length).toFixed(1) : null;
+  const mediaExtra = temposExtra.length ? (temposExtra.reduce((a,b)=>a+b,0)/temposExtra.length).toFixed(1) : null;
+
+  // Comparativo com mês anterior
+  const mesAntKey = getMonthKey(new Date(mesInicio.getFullYear(), mesInicio.getMonth()-1, 1));
+  const mesAntInicio = parseMonthKey(mesAntKey);
+  const mesAntFim    = new Date(mesAntInicio.getFullYear(), mesAntInicio.getMonth()+1, 0, 23, 59, 59);
+
+  const publAnt = (tasks||[]).filter(t=>{
+    if(t.deletedAt||t.status!=="publicado") return false;
+    if(clienteId && t.client!==clienteId) return false;
+    const d = t.completedAt ? new Date(t.completedAt) : (t.publishDate ? new Date(t.publishDate+"T00:00:00") : null);
+    if(!d) return false;
+    return d>=mesAntInicio && d<=mesAntFim;
+  }).length;
+
+  const extrasAnt = (tasks||[]).filter(t=>{
+    if(t.deletedAt||t.status!=="interno_executado") return false;
+    if(!t.client||t.client==="interno") return false;
+    if(clienteId && t.client!==clienteId) return false;
+    const d = t.completedAt ? new Date(t.completedAt) : (t.colEnteredAt ? new Date(t.colEnteredAt) : null);
+    if(!d) return false;
+    return d>=mesAntInicio && d<=mesAntFim;
+  }).length;
+
+  const diffPubl  = publAnt > 0 ? Math.round(((publicacoes.length - publAnt)/publAnt)*100) : null;
+  const diffExtra = extrasAnt > 0 ? Math.round(((extras.length - extrasAnt)/extrasAnt)*100) : null;
+
+  const DiffBadge = ({diff})=>{
+    if(diff===null) return null;
+    const up = diff>=0;
+    return <span style={{background:up?C.gr+"20":C.rd+"20",color:up?C.gr:C.rd,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,marginLeft:6}}>{up?"▲":"▼"} {Math.abs(diff)}% vs mês ant.</span>;
+  };
+
+  const ItemRow = ({t, tipo})=>{
+    const cl    = CLIENTS.find(c=>c.id===t.client);
+    const tempo = calcTempo(t);
+    const data  = t.completedAt ? new Date(t.completedAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
+                : t.publishDate ? new Date(t.publishDate+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
+                : t.colEnteredAt ? new Date(t.colEnteredAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
+                : "—";
+    const orig  = t.origem ? RADAR_ORIGENS[t.origem] : null;
+    return(
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,background:C.s1,border:`1px solid ${C.b1}`}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:C.tx,fontSize:12,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</div>
+          {t.caption&&<div style={{color:C.td,fontSize:10,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.caption.slice(0,80)}{t.caption.length>80?"...":""}</div>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+          {orig&&<span style={{background:orig.color+"20",color:orig.color,borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:700}}>{orig.icon} {orig.label}</span>}
+          {!clienteId&&cl&&<span style={{background:cl.color+"18",color:cl.color,borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:700}}>{cl.abbr}</span>}
+          {tempo!==null&&<span style={{color:C.td,fontSize:10}}>{tempo}d</span>}
+          <span style={{color:C.td,fontSize:10,minWidth:32,textAlign:"right"}}>{data}</span>
+        </div>
+      </div>
+    );
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{color:C.tx,fontWeight:800,fontSize:18}}>📡 Radar de Entrega</div>
+          <div style={{color:C.td,fontSize:12,marginTop:2}}>Tudo que foi produzido e entregue, por cliente e período</div>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <select value={clienteId} onChange={e=>setClienteId(e.target.value)}
+            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px",color:clienteId?C.tx:C.td,fontSize:12,outline:"none",cursor:"pointer"}}>
+            <option value="">Todos os clientes</option>
+            {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <select value={mesKey} onChange={e=>setMesKey(e.target.value)}
+            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px",color:C.tx,fontSize:12,outline:"none",cursor:"pointer"}}>
+            {mesesDisponiveis.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Métricas */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
+        {[
+          {label:"Publicações",   val:publicacoes.length, diff:diffPubl,  color:"#6366f1", sub: mediaPubl ? mediaPubl+"d médio":null},
+          {label:"Extras",        val:extras.length,      diff:diffExtra, color:"#f59e0b", sub: mediaExtra ? mediaExtra+"d médio":null},
+          {label:"Total entregas",val:publicacoes.length+extras.length, diff:null, color:C.gr, sub:null},
+        ].map((m,i)=>(
+          <div key={i} style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:m.color,borderRadius:"14px 14px 0 0"}}/>
+            <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>{m.label}</div>
+            <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+              <span style={{color:m.color,fontWeight:900,fontSize:28,letterSpacing:-1}}>{m.val}</span>
+              <DiffBadge diff={m.diff}/>
+            </div>
+            {m.sub&&<div style={{color:C.td,fontSize:10,marginTop:4}}>{m.sub}</div>}
+          </div>
+        ))}
+      </div>
+
+      {/* Publicações */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{color:C.tx,fontWeight:700,fontSize:13}}>📋 Publicações do Fluxo</span>
+            <span style={{background:"#6366f120",color:"#6366f1",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700}}>{publicacoes.length}</span>
+          </div>
+        </div>
+        <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,maxHeight:320,overflowY:"auto"}}>
+          {publicacoes.length===0
+            ? <div style={{color:C.td,fontSize:12,textAlign:"center",padding:"24px 0"}}>Nenhuma publicação no período</div>
+            : publicacoes.map(t=><ItemRow key={t.id} t={t} tipo="publicacao"/>)
+          }
+        </div>
+      </div>
+
+      {/* Extras */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{color:C.tx,fontWeight:700,fontSize:13}}>⚡ Extras / Solicitações</span>
+            <span style={{background:"#f59e0b20",color:"#f59e0b",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700}}>{extras.length}</span>
+          </div>
+        </div>
+        <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,maxHeight:320,overflowY:"auto"}}>
+          {extras.length===0
+            ? <div style={{color:C.td,fontSize:12,textAlign:"center",padding:"24px 0"}}>Nenhuma demanda extra no período</div>
+            : extras.map(t=><ItemRow key={t.id} t={t} tipo="extra"/>)
+          }
+        </div>
+      </div>
+
+      {/* Comparativo visual */}
+      {(diffPubl!==null||diffExtra!==null)&&(
+        <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"16px 18px"}}>
+          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>📈 Comparativo — {mesesDisponiveis.find(m=>m.key===mesKey)?.label||mesKey} vs mês anterior</div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {[
+              {label:"Publicações", atual:publicacoes.length, ant:publAnt,  color:"#6366f1"},
+              {label:"Extras",      atual:extras.length,      ant:extrasAnt, color:"#f59e0b"},
+            ].map((row,i)=>{
+              const max=Math.max(row.atual,row.ant,1);
+              const diff=row.ant>0?Math.round(((row.atual-row.ant)/row.ant)*100):null;
+              const up=diff!==null&&diff>=0;
+              return(
+                <div key={i}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                    <span style={{color:C.ts,fontSize:11,fontWeight:600}}>{row.label}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{color:C.td,fontSize:10}}>Ant: {row.ant}</span>
+                      <span style={{color:C.tx,fontSize:12,fontWeight:700}}>Atual: {row.atual}</span>
+                      {diff!==null&&<span style={{color:up?C.gr:C.rd,fontSize:11,fontWeight:700}}>{up?"▲":"▼"}{Math.abs(diff)}%</span>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                    <div style={{flex:1,height:6,background:C.b1,borderRadius:99,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${Math.round(row.ant/max*100)}%`,background:C.b2,borderRadius:99}}/>
+                    </div>
+                    <div style={{flex:1,height:6,background:C.b1,borderRadius:99,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${Math.round(row.atual/max*100)}%`,background:row.color,borderRadius:99}}/>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ======= 11_cardmodal.jsx =======
 
 function RichToolbar({elRef}){
@@ -15153,6 +15470,7 @@ const rowToTask = (r) => ({
   priority:     r.priority     || "media",
   deadline:     r.deadline     || "",
   deadlineTime: r.deadline_time || "",
+  origem:       r.origem        || "interno",
   startDate:    r.start_date   || "",
   completedAt:  r.completed_at || "",
   cover:        r.cover        || null,
@@ -15730,6 +16048,7 @@ export default function AgencyOS(){
       case "interno_mapeamento":   return (p.verInterno&&p.verMapeamento)||isSocio;
       case "interno_conexoes":     return (p.verInterno&&p.verConexoes)||isSocio;
       case "interno_360":          return (p.verInterno&&p.verAvaliacao360)||isSocio;
+      case "interno_radar":        return (p.verInterno&&p.verRadarEntrega)||isSocio;
       case "interno_carreira":     return (p.verInterno&&p.verCarreira)||isSocio;
       default:                     return true;
     }
@@ -15796,6 +16115,7 @@ export default function AgencyOS(){
       case "interno_mapeamento":    return (effectivePerms.verInterno&&effectivePerms.verMapeamento)||isSocio?<PageMapeamento {...p}/>:<NoPerm/>;
       case "interno_conexoes":      return (effectivePerms.verInterno&&effectivePerms.verConexoes)||isSocio?<PageConexoes {...p}/>:<NoPerm/>;
       case "interno_360":           return (effectivePerms.verInterno&&effectivePerms.verAvaliacao360)||isSocio?<PageAvaliacao360 {...p}/>:<NoPerm/>;
+      case "interno_radar":         return (effectivePerms.verInterno&&effectivePerms.verRadarEntrega)||isSocio?<PageRadarEntrega {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_carreira":      return (effectivePerms.verInterno&&effectivePerms.verCarreira)||isSocio?<PageCarreira {...p} tasks={tasks}/>:<NoPerm/>;
       case "notificacoes":          return <PageNotificacoes notifs={notifs} setNotifs={setNotifs}/>;
       default:                      return <NoPerm/>;
