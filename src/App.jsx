@@ -13091,12 +13091,8 @@ const RADAR_ORIGENS = {
   portal:              { label:"Portal",       icon:"🟢", color:"#22c55e" },
 };
 
-const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-
 function getMonthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`; }
-function parseMonthKey(key){ const [y,m]=key.split("-"); return new Date(Number(y),Number(m)-1,1); }
 
-// Colunas do fluxo de demandas principal (em ordem)
 const FLUXO_COLS = [
   {id:"demanda",   label:"Demanda",                color:"#a140ff"},
   {id:"recebida",  label:"Recebida",               color:"#ff6eb4"},
@@ -13107,7 +13103,6 @@ const FLUXO_COLS = [
   {id:"publicado", label:"Publicado",              color:"#a78bfa"},
 ];
 
-// Colunas das demandas internas (em ordem)
 const INTERNAS_COLS_RADAR = [
   {id:"interno_demanda",   label:"Demandas",               color:"#6366f1"},
   {id:"interno_execucao",  label:"Em Execução",            color:"#f97316"},
@@ -13116,137 +13111,135 @@ const INTERNAS_COLS_RADAR = [
   {id:"interno_executado", label:"Executado",              color:"#8b5cf6"},
 ];
 
+const PERIODO_OPTS = [
+  {id:"7d",    label:"7d",    full:"Última semana"},
+  {id:"14d",   label:"14d",   full:"14 dias"},
+  {id:"21d",   label:"21d",   full:"21 dias"},
+  {id:"30d",   label:"30d",   full:"30 dias"},
+  {id:"60d",   label:"60d",   full:"60 dias"},
+  {id:"90d",   label:"90d",   full:"90 dias"},
+  {id:"mes",   label:"Mês",   full:"Mês atual"},
+  {id:"custom",label:"Datas", full:"Personalizado"},
+];
+
 function PageRadarEntrega({ tasks, isMob }) {
   const now = new Date();
   const [clienteId,  setClienteId]  = useState("");
-  const [bioterUnit, setBioterUnit] = useState(""); // só ativo quando clienteId==="bioter"
-  const [mesKey,     setMesKey]     = useState(getMonthKey(now));
+  const [bioterUnit, setBioterUnit] = useState("");
+  const [periodoId,  setPeriodoId]  = useState("30d");
+  const [customIni,  setCustomIni]  = useState("");
+  const [customFim,  setCustomFim]  = useState("");
+  const [copiado,    setCopiado]    = useState(false);
 
-  const mesesDisponiveis = Array.from({length:12},(_,i)=>{
-    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-    return {key:getMonthKey(d), label:`${MESES[d.getMonth()]} ${d.getFullYear()}`};
-  });
-
-  const mesInicio = parseMonthKey(mesKey);
-  const mesFim    = new Date(mesInicio.getFullYear(), mesInicio.getMonth()+1, 0, 23, 59, 59);
-
-  // Helper: data relevante do card para filtro de período
-  // Para publicações/executados: colEnteredAt = quando entrou na coluna final (mais preciso)
-  // Para demandas em andamento: createdAt = quando o card foi criado
-  const dataEntrada = (t) => {
-    const finalStatuses = ["publicado","interno_executado"];
-    if(finalStatuses.includes(t.status)){
-      // card concluído — usa quando entrou na coluna final, ou completedAt
-      if(t.completedAt)  return new Date(t.completedAt);
-      if(t.colEnteredAt) return new Date(t.colEnteredAt);
-      if(t.publishDate)  return new Date(t.publishDate+"T00:00:00");
+  // ── Período ──
+  const { periodoInicio, periodoFim } = (() => {
+    const hoje = new Date(); hoje.setHours(23,59,59,999);
+    if(periodoId==="mes"){
+      return { periodoInicio:new Date(hoje.getFullYear(),hoje.getMonth(),1), periodoFim:hoje };
     }
-    // card em andamento — usa quando foi criado
+    if(periodoId==="custom"){
+      const ini = customIni ? new Date(customIni+"T00:00:00") : new Date(hoje.getFullYear(),hoje.getMonth(),1);
+      const fim = customFim ? new Date(customFim+"T23:59:59") : hoje;
+      return { periodoInicio:ini, periodoFim:fim };
+    }
+    const dias = parseInt(periodoId);
+    const ini = new Date(hoje); ini.setDate(ini.getDate()-dias); ini.setHours(0,0,0,0);
+    return { periodoInicio:ini, periodoFim:hoje };
+  })();
+
+  const durDias = Math.round((periodoFim-periodoInicio)/86400000);
+  const duracao  = periodoFim-periodoInicio;
+  const antFim   = new Date(periodoInicio.getTime()-1);
+  const antIni   = new Date(antFim.getTime()-duracao); antIni.setHours(0,0,0,0);
+
+  // ── Helpers ──
+  // Melhoria 1: fallback createdAt → colEnteredAt → publishDate
+  const dataEntrada = (t) => {
     if(t.createdAt)    return new Date(t.createdAt);
     if(t.colEnteredAt) return new Date(t.colEnteredAt);
+    if(t.publishDate)  return new Date(t.publishDate+"T00:00:00");
     return null;
   };
 
-  // ── BLOCO 1: Tudo que entrou no período (Fluxo + Internas com cliente) ──
-  const fluxoNoPeriodo = (tasks||[]).filter(t=>{
-    if(t.deletedAt) return false;
-    if(!FLUXO_COLS.find(c=>c.id===t.status)) return false;
+  const passaCliente = (t) => {
     if(clienteId && t.client!==clienteId) return false;
     if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
-    const d = dataEntrada(t);
-    if(!d) return false;
-    return d>=mesInicio && d<=mesFim;
-  });
-
-  const internasNoPeriodo = (tasks||[]).filter(t=>{
-    if(t.deletedAt) return false;
-    if(!INTERNAS_COLS_RADAR.find(c=>c.id===t.status)) return false;
-    if(!t.client||t.client==="interno") return false;
-    if(clienteId && t.client!==clienteId) return false;
-    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
-    const d = dataEntrada(t);
-    if(!d) return false;
-    return d>=mesInicio && d<=mesFim;
-  });
-
-  // ── BLOCO 2: Publicações e Extras concluídas ──
-  const publicacoes = fluxoNoPeriodo.filter(t=>t.status==="publicado");
-
-  const extras = internasNoPeriodo.filter(t=>t.status==="interno_executado");
-
-  // Total = tudo que entrou (fluxo com cliente + internas com cliente)
-  const totalEntradas = fluxoNoPeriodo.length + internasNoPeriodo.length;
-
-  // Tempo de execução
-  const calcTempo = (t) => {
-    const inicio = t.createdAt ? new Date(t.createdAt) : null;
-    const fim    = t.completedAt ? new Date(t.completedAt) : null;
-    if(!inicio||!fim) return null;
-    const dias = Math.round((fim-inicio)/86400000);
-    return dias>=0 ? dias : null;
+    return true;
   };
 
+  const noPeriodo = (t) => { const d=dataEntrada(t); return d&&d>=periodoInicio&&d<=periodoFim; };
+  const noAnt     = (t) => { const d=dataEntrada(t); return d&&d>=antIni&&d<=antFim; };
+
+  // ── Dados ──
+  const publicacoes = (tasks||[]).filter(t=>!t.deletedAt&&FLUXO_COLS.find(c=>c.id===t.status)&&passaCliente(t)&&noPeriodo(t));
+  const extras      = (tasks||[]).filter(t=>!t.deletedAt&&INTERNAS_COLS_RADAR.find(c=>c.id===t.status)&&t.client&&t.client!=="interno"&&passaCliente(t)&&noPeriodo(t));
+  const total       = publicacoes.length + extras.length;
+
+  const publAnt    = (tasks||[]).filter(t=>!t.deletedAt&&FLUXO_COLS.find(c=>c.id===t.status)&&passaCliente(t)&&noAnt(t)).length;
+  const extrasAnt  = (tasks||[]).filter(t=>!t.deletedAt&&INTERNAS_COLS_RADAR.find(c=>c.id===t.status)&&t.client&&t.client!=="interno"&&passaCliente(t)&&noAnt(t)).length;
+  const totalAnt   = publAnt+extrasAnt;
+
+  const _diffPubl  = publAnt>0   ? Math.round(((publicacoes.length-publAnt)/publAnt)*100)   : null;
+  const _diffExtra = extrasAnt>0 ? Math.round(((extras.length-extrasAnt)/extrasAnt)*100)     : null;
+  const _diffTotal = totalAnt>0  ? Math.round(((total-totalAnt)/totalAnt)*100)               : null;
+
+  const calcTempo = (t) => {
+    const ini=t.createdAt?new Date(t.createdAt):null;
+    const fim=t.completedAt?new Date(t.completedAt):null;
+    if(!ini||!fim)return null;
+    const d=Math.round((fim-ini)/86400000);
+    return d>=0?d:null;
+  };
   const temposPubl  = publicacoes.map(calcTempo).filter(d=>d!==null);
   const temposExtra = extras.map(calcTempo).filter(d=>d!==null);
   const mediaPubl   = temposPubl.length  ? (temposPubl.reduce((a,b)=>a+b,0)/temposPubl.length).toFixed(1)  : null;
   const mediaExtra  = temposExtra.length ? (temposExtra.reduce((a,b)=>a+b,0)/temposExtra.length).toFixed(1) : null;
 
-  // Comparativo mês anterior
-  const mesAntInicio = new Date(mesInicio.getFullYear(), mesInicio.getMonth()-1, 1);
-  const mesAntFim    = new Date(mesInicio.getFullYear(), mesInicio.getMonth(), 0, 23, 59, 59);
+  const todasFluxo    = (tasks||[]).filter(t=>!t.deletedAt&&FLUXO_COLS.find(c=>c.id===t.status)&&passaCliente(t));
+  const todasInternas = (tasks||[]).filter(t=>!t.deletedAt&&INTERNAS_COLS_RADAR.find(c=>c.id===t.status)&&t.client&&t.client!=="interno"&&passaCliente(t));
 
-  const totalAnt = (tasks||[]).filter(t=>{
-    if(t.deletedAt) return false;
-    const isFluxo    = FLUXO_COLS.find(c=>c.id===t.status);
-    const isInternas = INTERNAS_COLS_RADAR.find(c=>c.id===t.status) && t.client && t.client!=="interno";
-    if(!isFluxo && !isInternas) return false;
-    if(clienteId && t.client!==clienteId) return false;
-    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
-    const d = dataEntrada(t);
-    if(!d) return false;
-    return d>=mesAntInicio && d<=mesAntFim;
-  }).length;
+  // Melhoria 3: subtítulo com dias
+  const fmtData2 = (d) => d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});
+  const subtitulo = `${fmtData2(periodoInicio)} → ${fmtData2(periodoFim)}  ·  ${durDias} dia${durDias!==1?"s":""}`;
 
-  const diffTotal = totalAnt>0 ? Math.round(((totalEntradas-totalAnt)/totalAnt)*100) : null;
-
-  // Valores do mês anterior para comparativo
-  const diffPubl  = null; // computed below after publAntVal
-  const diffExtra = null; // computed below after extrasAntVal
-  const publAntVal = (tasks||[]).filter(t=>{
-    if(t.deletedAt||t.status!=="publicado")return false;
-    if(clienteId&&t.client!==clienteId)return false;
-    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit)return false;
-    const d=dataEntrada(t);if(!d)return false;
-    return d>=mesAntInicio&&d<=mesAntFim;
-  }).length;
-  const extrasAntVal = (tasks||[]).filter(t=>{
-    if(t.deletedAt||t.status!=="interno_executado")return false;
-    if(!t.client||t.client==="interno")return false;
-    if(clienteId&&t.client!==clienteId)return false;
-    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit)return false;
-    const d=dataEntrada(t);if(!d)return false;
-    return d>=mesAntInicio&&d<=mesAntFim;
-  }).length;
-  const _diffPubl  = publAntVal>0  ? Math.round(((publicacoes.length-publAntVal)/publAntVal)*100)  : null;
-  const _diffExtra = extrasAntVal>0 ? Math.round(((extras.length-extrasAntVal)/extrasAntVal)*100) : null;
+  // Melhoria 5: exportar resumo
+  const exportarResumo = () => {
+    const cl   = clienteId ? CLIENTS.find(c=>c.id===clienteId)?.name||clienteId : "Todos os clientes";
+    const unit = bioterUnit ? " — "+BIOTER_UNITS.find(u=>u.id===bioterUnit)?.label : "";
+    const per  = PERIODO_OPTS.find(p=>p.id===periodoId)?.full||periodoId;
+    const txt = [
+      `📊 Radar de Entrega — ${cl}${unit}`,
+      `📅 ${per} (${fmtData2(periodoInicio)} → ${fmtData2(periodoFim)})`,
+      ``,
+      `📋 Publicações / Conteúdos: ${publicacoes.length}${mediaPubl?" (média "+mediaPubl+"d)":""}`,
+      `⚡ Extras / Solicitações: ${extras.length}${mediaExtra?" (média "+mediaExtra+"d)":""}`,
+      `📦 Total: ${total} entrega${total!==1?"s":""}`,
+      ``,
+      `— Gerado pelo Pixels Agency OS`,
+    ].join("\n");
+    try{ navigator.clipboard.writeText(txt); }catch(e){}
+    setCopiado(true);
+    setTimeout(()=>setCopiado(false),3000);
+  };
 
   const DiffBadge = ({diff})=>{
-    if(diff===null) return null;
+    if(diff===null)return null;
     const up=diff>=0;
     return <span style={{background:up?C.gr+"20":C.rd+"20",color:up?C.gr:C.rd,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700,marginLeft:6}}>{up?"▲":"▼"} {Math.abs(diff)}%</span>;
   };
 
-  const fmtData = (t) =>
-    t.completedAt ? new Date(t.completedAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
-    : t.publishDate ? new Date(t.publishDate+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
+  const fmtDataCard = (t) =>
+    t.completedAt    ? new Date(t.completedAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
+    : t.publishDate  ? new Date(t.publishDate+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
     : t.colEnteredAt ? new Date(t.colEnteredAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
-    : t.createdAt ? new Date(t.createdAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
+    : t.createdAt    ? new Date(t.createdAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
     : "—";
 
-  const ItemRow = ({t})=>{
+  // Melhoria 4: ItemRow com badge de origem e cliente
+  const ItemRow = ({t, showOrigem})=>{
     const cl   = CLIENTS.find(c=>c.id===t.client);
     const tempo= calcTempo(t);
-    const orig = t.origem ? RADAR_ORIGENS[t.origem] : null;
+    const orig = t.origem&&t.origem!=="interno" ? RADAR_ORIGENS[t.origem] : null;
     const col  = [...FLUXO_COLS,...INTERNAS_COLS_RADAR].find(c=>c.id===t.status);
     return(
       <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,background:C.s1,border:`1px solid ${C.b1}`}}>
@@ -13256,10 +13249,10 @@ function PageRadarEntrega({ tasks, isMob }) {
         </div>
         <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
           {col&&<span style={{background:col.color+"20",color:col.color,borderRadius:6,padding:"1px 6px",fontSize:9,fontWeight:700}}>{col.label}</span>}
-          {orig&&t.origem!=="interno"&&<span style={{background:orig.color+"20",color:orig.color,borderRadius:6,padding:"1px 6px",fontSize:9,fontWeight:700}}>{orig.icon}</span>}
+          {orig&&<span style={{background:orig.color+"20",color:orig.color,borderRadius:6,padding:"1px 6px",fontSize:9,fontWeight:700}}>{orig.icon} {orig.label}</span>}
           {!clienteId&&cl&&<span style={{background:cl.color+"18",color:cl.color,borderRadius:6,padding:"1px 6px",fontSize:9,fontWeight:700}}>{cl.abbr}</span>}
           {tempo!==null&&<span style={{color:C.td,fontSize:10}}>{tempo}d</span>}
-          <span style={{color:C.td,fontSize:10,minWidth:30,textAlign:"right"}}>{fmtData(t)}</span>
+          <span style={{color:C.td,fontSize:10,minWidth:30,textAlign:"right"}}>{fmtDataCard(t)}</span>
         </div>
       </div>
     );
@@ -13284,54 +13277,64 @@ function PageRadarEntrega({ tasks, isMob }) {
     </div>
   );
 
-  // Tasks do cliente (sem filtro de período) para o bloco Em Andamento
-  const todasFluxoCliente = (tasks||[]).filter(t=>{
-    if(t.deletedAt) return false;
-    if(!FLUXO_COLS.find(c=>c.id===t.status)) return false;
-    if(clienteId && t.client!==clienteId) return false;
-    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
-    return true;
-  });
-  const todasInternasCliente = (tasks||[]).filter(t=>{
-    if(t.deletedAt) return false;
-    if(!INTERNAS_COLS_RADAR.find(c=>c.id===t.status)) return false;
-    if(!t.client||t.client==="interno") return false;
-    if(clienteId && t.client!==clienteId) return false;
-    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
-    return true;
-  });
-
   return(
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
+
       {/* Header */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div>
           <div style={{color:C.tx,fontWeight:800,fontSize:18}}>📡 Radar de Entrega</div>
-          <div style={{color:C.td,fontSize:12,marginTop:2}}>Tudo que foi produzido e entregue, por cliente e período</div>
+          <div style={{color:C.td,fontSize:11,marginTop:3}}>{subtitulo}</div>
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <select value={clienteId} onChange={e=>{setClienteId(e.target.value);setBioterUnit("");}}
-            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px",color:clienteId?C.tx:C.td,fontSize:12,outline:"none",cursor:"pointer"}}>
-            <option value="">Todos os clientes</option>
-            {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-          {clienteId==="bioter"&&(
-            <select value={bioterUnit} onChange={e=>setBioterUnit(e.target.value)}
-              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px",color:bioterUnit?C.tx:C.td,fontSize:12,outline:"none",cursor:"pointer"}}>
-              <option value="">Todas as unidades</option>
-              {BIOTER_UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
-            </select>
-          )}
-          <select value={mesKey} onChange={e=>setMesKey(e.target.value)}
-            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px",color:C.tx,fontSize:12,outline:"none",cursor:"pointer"}}>
-            {mesesDisponiveis.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
-          </select>
-        </div>
+        {/* Melhoria 5: botão exportar */}
+        <button onClick={exportarResumo}
+          style={{background:copiado?C.gr:C.s1,border:`1px solid ${copiado?C.gr:C.b1}`,borderRadius:10,padding:"8px 16px",color:copiado?"#fff":C.ts,fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .2s",flexShrink:0}}>
+          {copiado?"✅ Copiado!":"📋 Copiar resumo"}
+        </button>
       </div>
 
-      {/* Métricas do período */}
+      {/* Filtros */}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        {/* Cliente */}
+        <select value={clienteId} onChange={e=>{setClienteId(e.target.value);setBioterUnit("");}}
+          style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"7px 12px",color:clienteId?C.tx:C.td,fontSize:12,outline:"none",cursor:"pointer"}}>
+          <option value="">Todos os clientes</option>
+          {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+
+        {/* Bioter unidades */}
+        {clienteId==="bioter"&&(
+          <select value={bioterUnit} onChange={e=>setBioterUnit(e.target.value)}
+            style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"7px 12px",color:bioterUnit?C.tx:C.td,fontSize:12,outline:"none",cursor:"pointer"}}>
+            <option value="">Todas as unidades</option>
+            {BIOTER_UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
+          </select>
+        )}
+
+        {/* Melhoria 2: botões de período */}
+        <div style={{display:"flex",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,overflow:"hidden",flexShrink:0}}>
+          {PERIODO_OPTS.map(opt=>(
+            <button key={opt.id} onClick={()=>setPeriodoId(opt.id)} title={opt.full}
+              style={{background:periodoId===opt.id?C.a:"transparent",border:"none",padding:"7px 12px",color:periodoId===opt.id?"#fff":C.ts,fontSize:11,fontWeight:periodoId===opt.id?700:400,cursor:"pointer",whiteSpace:"nowrap",transition:"all .12s"}}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Datas personalizadas */}
+        {periodoId==="custom"&&(
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <input type="date" value={customIni} onChange={e=>setCustomIni(e.target.value)}
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"7px 10px",color:C.tx,fontSize:12,outline:"none"}}/>
+            <span style={{color:C.td,fontSize:12}}>→</span>
+            <input type="date" value={customFim} onChange={e=>setCustomFim(e.target.value)}
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"7px 10px",color:C.tx,fontSize:12,outline:"none"}}/>
+          </div>
+        )}
+      </div>
+
+      {/* 3 cards do topo */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.5fr",gap:10}}>
-        {/* Publicações */}
         <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"#6366f1"}}/>
           <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Publicações / Conteúdos</div>
@@ -13342,7 +13345,6 @@ function PageRadarEntrega({ tasks, isMob }) {
           {mediaPubl&&<div style={{color:C.td,fontSize:10,marginTop:3}}>{mediaPubl}d médio</div>}
         </div>
 
-        {/* Extras */}
         <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"#f59e0b"}}/>
           <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Extras</div>
@@ -13353,28 +13355,27 @@ function PageRadarEntrega({ tasks, isMob }) {
           {mediaExtra&&<div style={{color:C.td,fontSize:10,marginTop:3}}>{mediaExtra}d médio</div>}
         </div>
 
-        {/* Total — maior e destacado */}
         <div style={{background:`linear-gradient(135deg,${C.a}18,${C.a}08)`,borderRadius:14,border:`2px solid ${C.a}44`,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:C.a}}/>
           <div style={{color:C.a,fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Total no Período</div>
           <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-            <span style={{color:C.a,fontWeight:900,fontSize:38,letterSpacing:-2,lineHeight:1}}>{publicacoes.length+extras.length}</span>
-            <DiffBadge diff={diffTotal}/>
+            <span style={{color:C.a,fontWeight:900,fontSize:38,letterSpacing:-2,lineHeight:1}}>{total}</span>
+            <DiffBadge diff={_diffTotal}/>
           </div>
           <div style={{color:C.ts,fontSize:10,marginTop:6}}>{publicacoes.length} publ. + {extras.length} extras</div>
         </div>
       </div>
 
-      {/* Contadores por coluna — Fluxo de Demandas */}
-      <ColCounter cols={FLUXO_COLS} tasksArr={todasFluxoCliente} title="📋 Fluxo de Demandas — situação atual"/>
+      {/* Situação atual — Fluxo */}
+      <ColCounter cols={FLUXO_COLS} tasksArr={todasFluxo} title="📋 Fluxo de Demandas — situação atual"/>
 
-      {/* Contadores por coluna — Demandas Internas */}
-      <ColCounter cols={INTERNAS_COLS_RADAR} tasksArr={todasInternasCliente} title="⚡ Demandas Internas — situação atual"/>
+      {/* Situação atual — Internas */}
+      <ColCounter cols={INTERNAS_COLS_RADAR} tasksArr={todasInternas} title="⚡ Demandas Internas — situação atual"/>
 
-      {/* Lista do período — Publicações */}
+      {/* Lista publicações */}
       <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
-          <span style={{color:C.tx,fontWeight:700,fontSize:13}}>📋 Publicações do período</span>
+          <span style={{color:C.tx,fontWeight:700,fontSize:13}}>📋 Publicações / Conteúdos do período</span>
           <span style={{background:"#6366f120",color:"#6366f1",borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700}}>{publicacoes.length}</span>
         </div>
         <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto"}}>
@@ -13385,7 +13386,7 @@ function PageRadarEntrega({ tasks, isMob }) {
         </div>
       </div>
 
-      {/* Lista do período — Extras */}
+      {/* Lista extras */}
       <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
           <span style={{color:C.tx,fontWeight:700,fontSize:13}}>⚡ Extras / Solicitações do período</span>
@@ -13400,16 +13401,15 @@ function PageRadarEntrega({ tasks, isMob }) {
       </div>
 
       {/* Comparativo */}
-      {(diffTotal!==null||_diffPubl!==null||_diffExtra!==null)&&(
+      {(_diffTotal!==null||_diffPubl!==null||_diffExtra!==null)&&(
         <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"16px 18px"}}>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:12}}>
-            📈 Comparativo — {mesesDisponiveis.find(m=>m.key===mesKey)?.label||mesKey} vs mês anterior
-          </div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:4}}>📈 Comparativo vs período anterior</div>
+          <div style={{color:C.td,fontSize:10,marginBottom:12}}>{fmtData2(antIni)} → {fmtData2(antFim)}</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {[
-              {label:"Total no período", atual:totalEntradas,      ant:totalAnt,             color:C.a},
-              {label:"Publicações",      atual:publicacoes.length, ant:publAntVal,   color:"#6366f1"},
-              {label:"Extras",           atual:extras.length,      ant:extrasAntVal, color:"#f59e0b"},
+              {label:"Total",       atual:total,              ant:totalAnt,  color:C.a},
+              {label:"Publicações", atual:publicacoes.length, ant:publAnt,   color:"#6366f1"},
+              {label:"Extras",      atual:extras.length,      ant:extrasAnt, color:"#f59e0b"},
             ].map((row,i)=>{
               const max=Math.max(row.atual,row.ant,1);
               const diff=row.ant>0?Math.round(((row.atual-row.ant)/row.ant)*100):null;
