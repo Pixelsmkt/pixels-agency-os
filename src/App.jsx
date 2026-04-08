@@ -8316,6 +8316,11 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
   const [dragId,   setDragId]   = useState(null);
   const [dragOver, setDragOver] = useState(null);
 
+
+  const allInternas = (tasks||[]).filter(t=>!t.deletedAt&&INTERNO_COLS.find(c=>c.id===t.status));
+  const visible = canSeeAll ? allInternas
+    : allInternas.filter(t=>(t.assignees||[]).includes(CURRENT_USER.id)||t.createdBy===CURRENT_USER.id);
+
   // Verifica cards parados e notifica Vinicius+Gustavo a cada hora
   useEffect(()=>{
     const check=()=>{
@@ -8355,10 +8360,6 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
     const iv=setInterval(check,60*60*1000); // a cada hora
     return()=>clearInterval(iv);
   },[allInternas.length]);
-
-  const allInternas = (tasks||[]).filter(t=>!t.deletedAt&&INTERNO_COLS.find(c=>c.id===t.status));
-  const visible = canSeeAll ? allInternas
-    : allInternas.filter(t=>(t.assignees||[]).includes(CURRENT_USER.id)||t.createdBy===CURRENT_USER.id);
 
   const handleDragStart = (e,id) => { setDragId(id); e.dataTransfer.effectAllowed="move"; };
   const handleDragOver  = (e,colId) => { e.preventDefault(); setDragOver(colId); };
