@@ -3873,6 +3873,7 @@ function CFerramentas({cl,onMindmap}){
     setLinks(next);
     try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}
     setLinkForm({label:"",url:""});setShowLinkForm(false);
+    if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
   };
 
   var inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
@@ -4548,7 +4549,7 @@ function CFerramentas({cl,onMindmap}){
               <div style={{color:C.td,fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.url}</div>
             </div>
             <a href={l.url} target="_blank" rel="noopener" style={{background:C.a,color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:11,fontWeight:700,textDecoration:"none",flexShrink:0}}>Abrir</a>
-            <button onClick={()=>{var next=links.filter(function(x){return x.id!==l.id;});setLinks(next);try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}}}
+            <button onClick={()=>{var next=links.filter(function(x){return x.id!==l.id;});setLinks(next);try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});}}
               style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"4px"}}>×</button>
           </div>);
         })}
@@ -4663,12 +4664,28 @@ function CBriefing({cl}){
 
   var STORAGE_KEY="pixels-briefing-"+cl.id;
 
-  // ── Carrega estado salvo ──
+  // ── Carrega estado salvo (Supabase + localStorage fallback) ──
   var loadSaved=function(){
     try{var s=localStorage.getItem(STORAGE_KEY);if(s)return JSON.parse(s);}catch(e){}
     return {};
   };
   var saved0=loadSaved();
+
+  // ── Carrega do Supabase ao montar ──
+  useEffect(()=>{
+    if(!window._sb)return;
+    window._sb.from("clients").select("briefing").eq("client_id",cl.id).single()
+      .then(({data})=>{
+        if(data?.briefing){
+          try{
+            const bf=JSON.parse(data.briefing);
+            if(bf.rawText!==undefined)setRawText(bf.rawText);
+            if(bf.answers)setAnswers(bf.answers);
+            if(bf.fields&&bf.fields.length)setFields(bf.fields);
+          }catch(e){}
+        }
+      }).catch(()=>{});
+  },[cl.id]);
 
   var [tab,setTab]=useState("documento"); // "documento" | "campos"
   var [rawText,setRawText]=useState(saved0.rawText||"");
@@ -4687,10 +4704,16 @@ function CBriefing({cl}){
   var [newPlaceholder,setNewPlaceholder]=useState("");
   var fileRef=useRef(null);
 
-  // ── Salvar tudo junto no mesmo storage ──────────
+  // ── Salvar tudo junto — localStorage + Supabase ──
   var persist=function(rt,ans,flds){
     var toSave={rawText:rt!==undefined?rt:rawText, answers:ans||answers, fields:flds||fields};
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(toSave));setSavedOk(true);setTimeout(()=>setSavedOk(false),2500);}catch(e){}
+    if(window._sb){
+      window._sb.from("clients").update({
+        briefing:JSON.stringify(toSave),
+        updated_by:CURRENT_USER.name,
+      }).eq("client_id",cl.id).then(()=>{}).catch(err=>console.error("briefing save:",err));
+    }
   };
 
   var saveRaw=function(){persist(rawText,answers,fields);};
@@ -4926,6 +4949,7 @@ function CContatos({cl}){
   var save=function(list){
     setContacts(list);
     try{localStorage.setItem("pixels-contacts-"+cl.id,JSON.stringify(list));}catch(e){}
+    if(window._sb)window._sb.from("clients").update({contatos:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
   };
 
   var addOrUpdate=function(){
@@ -5091,6 +5115,7 @@ function CTimeline({cl}){
     var list=[entry,...notes];
     setNotes(list);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(list));}catch(e){}
+    if(window._sb)window._sb.from("clients").update({notas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
     setForm({date:new Date().toLocaleDateString("pt-BR"),type:"reuniao",contactIds:[],text:"",tasks:[]});
     setNewTask({title:"",deadline:"",priority:"media"});
     setShowForm(false);
@@ -5106,6 +5131,7 @@ function CTimeline({cl}){
     });
     setNotes(updated);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(updated));}catch(e){}
+    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
     try{window.dispatchEvent(new CustomEvent("pixels-notes-updated"));}catch(e){}
   };
 
@@ -5113,6 +5139,7 @@ function CTimeline({cl}){
     var updated=notes.filter(function(n){return n.id!==noteId;});
     setNotes(updated);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(updated));}catch(e){}
+    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
   };
 
   // Filters
@@ -5428,6 +5455,7 @@ function CMetas({cl}){
   var save=function(list){
     setGoals(list);
     try{localStorage.setItem("pixels-goals-"+cl.id,JSON.stringify(list));}catch(e){}
+    if(window._sb)window._sb.from("clients").update({metas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
   };
 
   var add=function(){
