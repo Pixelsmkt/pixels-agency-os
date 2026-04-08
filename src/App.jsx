@@ -12089,7 +12089,9 @@ function PageConexoes({isMob}){
   const [adding,setAdding]=useState(false);
   const [form,setForm]=useState({n:"",l:"",pw:"",cat:"",c:"#a140ff"});
 
-  const saveCreds=(list)=>{setCreds(list);try{localStorage.setItem("pixels-creds",JSON.stringify(list));}catch(e){}};
+  const saveCreds=(list)=>{setCreds(list);try{localStorage.setItem("pixels-creds",JSON.stringify(list));}catch(e){}
+    if(window._sb)window._sb.from("content_library").upsert({tipo:"creds",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+  };
   const addCred=()=>{if(!form.n.trim())return;saveCreds([...creds,{...form,id:Date.now()}]);setForm({n:"",l:"",pw:"",cat:"",c:"#a140ff"});setAdding(false);};
   const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
 
@@ -16558,6 +16560,11 @@ function PageSprint({isMob, tasks}){
   const [checkins, setCheckins] = useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-checkins")||"{}");}catch(e){return{};}
   });
+  useEffect(()=>{
+    if(!window._sb)return;
+    window._sb.from("team_data").select("dados").eq("tipo","checkins").single()
+      .then(({data})=>{if(data?.dados&&Object.keys(data.dados).length){setCheckins(data.dados);try{localStorage.setItem("pixels-checkins",JSON.stringify(data.dados));}catch(e){}}}).catch(()=>{});
+  },[]);
   const [showCheckin, setShowCheckin] = useState(false);
   const [checkinText, setCheckinText] = useState("");
 
@@ -16605,6 +16612,7 @@ function PageSprint({isMob, tasks}){
     }};
     setCheckins(newCheckins);
     localStorage.setItem("pixels-checkins", JSON.stringify(newCheckins));
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"checkins",dados:newCheckins,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
     setCheckinText(""); setShowCheckin(false);
   };
 
@@ -17788,6 +17796,11 @@ function PageAvaliacao360(){
   const [reviews, setReviews] = useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-360-reviews")||"[]");}catch(e){return[];}
   });
+  useEffect(()=>{
+    if(!window._sb)return;
+    window._sb.from("team_data").select("dados").eq("tipo","360-reviews").single()
+      .then(({data})=>{if(data?.dados&&Array.isArray(data.dados)&&data.dados.length){setReviews(data.dados);try{localStorage.setItem("pixels-360-reviews",JSON.stringify(data.dados));}catch(e){}}}).catch(()=>{});
+  },[]);
   const [form, setForm] = useState({target:"",qualidade:5,comunicacao:5,trabalhoEquipe:5,proatividade:5,obs:""});
   const [submitted, setSubmitted] = useState(false);
 
@@ -17797,6 +17810,7 @@ function PageAvaliacao360(){
     const updated = [...reviews, newReview];
     setReviews(updated);
     localStorage.setItem("pixels-360-reviews", JSON.stringify(updated));
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"360-reviews",dados:updated,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
     setSubmitted(true);
     setForm({target:"",qualidade:5,comunicacao:5,trabalhoEquipe:5,proatividade:5,obs:""});
   };
@@ -17885,6 +17899,11 @@ function PageCarreira(){
   const [careers, setCareers] = useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-careers")||"{}");}catch(e){return{};}
   });
+  useEffect(()=>{
+    if(!window._sb)return;
+    window._sb.from("team_data").select("dados").eq("tipo","careers").single()
+      .then(({data})=>{if(data?.dados&&Object.keys(data.dados).length){setCareers(data.dados);try{localStorage.setItem("pixels-careers",JSON.stringify(data.dados));}catch(e){}}}).catch(()=>{});
+  },[]);
   const [selUser, setSelUser] = useState(CURRENT_USER.id);
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({tipo:"conquista",titulo:"",desc:"",data:new Date().toISOString().slice(0,10),valor:""});
@@ -17895,6 +17914,7 @@ function PageCarreira(){
     const updated = {...careers, [selUser]:[...(careers[selUser]||[]), ev]};
     setCareers(updated);
     localStorage.setItem("pixels-careers", JSON.stringify(updated));
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"careers",dados:updated,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
     setForm({tipo:"conquista",titulo:"",desc:"",data:new Date().toISOString().slice(0,10),valor:""});
     setShowAdd(false);
   };
@@ -18857,7 +18877,28 @@ function PageContratos({tasks}){
   const [showAdd, setShowAdd] = useState(false);
   const [form, setForm] = useState({clientId:"",tipo:"mensal",valor:"",inicio:"",fim:"",servicos:"",status:"ativo",obs:""});
 
-  const save = list=>{setContratos(list);try{localStorage.setItem("pixels-contratos",JSON.stringify(list));}catch(e){}};
+  // ── Carrega do Supabase ao montar ──
+  useEffect(()=>{
+    if(!window._sb)return;
+    window._sb.from("contracts").select("dados").eq("client_id","_global").single()
+      .then(({data})=>{
+        if(data?.dados&&Array.isArray(data.dados)&&data.dados.length){
+          setContratos(data.dados);
+          try{localStorage.setItem("pixels-contratos",JSON.stringify(data.dados));}catch(e){}
+        }
+      }).catch(()=>{});
+  },[]);
+
+  // ── Salva no localStorage + Supabase ──
+  const save = list=>{
+    setContratos(list);
+    try{localStorage.setItem("pixels-contratos",JSON.stringify(list));}catch(e){}
+    if(window._sb){
+      window._sb.from("contracts")
+        .upsert({client_id:"_global",dados:list,updated_by:CURRENT_USER.name},{onConflict:"client_id"})
+        .catch(err=>console.error("contracts save:",err));
+    }
+  };
   const addContrato = ()=>{
     if(!form.clientId||!form.valor)return;
     save([...contratos,{...form,id:Date.now(),valor:parseFloat(form.valor)||0,criadoEm:new Date().toISOString()}]);
@@ -19089,7 +19130,9 @@ function PageCapacidade({tasks}){
   });
   const [tab, setTab] = useState("alocacao"); // alocacao | onboarding
 
-  const saveCapacidades = data=>{setCapacidades(data);try{localStorage.setItem("pixels-capacidades",JSON.stringify(data));}catch(e){}};
+  const saveCapacidades = data=>{setCapacidades(data);try{localStorage.setItem("pixels-capacidades",JSON.stringify(data));}catch(e){}
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"capacidades",dados:data,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+  };
   const setCapHoras = (uid, horas)=>saveCapacidades({...capacidades,[uid]:horas});
 
   const now = new Date();
@@ -19118,7 +19161,9 @@ function PageCapacidade({tasks}){
     try{const s=localStorage.getItem("pixels-onb-steps");if(s)return JSON.parse(s);}catch(e){}
     return DEFAULT_ONBOARDING_STEPS;
   });
-  const saveOnbSteps = steps=>{setOnbSteps(steps);try{localStorage.setItem("pixels-onb-steps",JSON.stringify(steps));}catch(e){}};
+  const saveOnbSteps = steps=>{setOnbSteps(steps);try{localStorage.setItem("pixels-onb-steps",JSON.stringify(steps));}catch(e){}
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"onboarding",dados:steps,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+  };
 
   const [onboarding, setOnboarding] = useState(()=>{try{return JSON.parse(localStorage.getItem("pixels-onboarding")||"{}");}catch(e){return{};}});
   const [selOnbCl, setSelOnbCl] = useState(CLIENTS[0]?.id||"");
@@ -19546,8 +19591,12 @@ function PageIAPixels({isMob, tasks}){
     }, 1800);
   };
 
-  const savePlaybooks = list=>{setPlaybooks(list);try{localStorage.setItem("pixels-playbooks",JSON.stringify(list));}catch(e){}};
-  const saveBiblioteca = list=>{setBiblioteca(list);try{localStorage.setItem("pixels-biblioteca",JSON.stringify(list));}catch(e){}};
+  const savePlaybooks = list=>{setPlaybooks(list);try{localStorage.setItem("pixels-playbooks",JSON.stringify(list));}catch(e){}
+    if(window._sb)window._sb.from("content_library").upsert({tipo:"playbooks",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+  };
+  const saveBiblioteca = list=>{setBiblioteca(list);try{localStorage.setItem("pixels-biblioteca",JSON.stringify(list));}catch(e){}
+    if(window._sb)window._sb.from("content_library").upsert({tipo:"biblioteca",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+  };
 
   const addPlaybook = ()=>{
     if(!pbForm.titulo.trim())return;
