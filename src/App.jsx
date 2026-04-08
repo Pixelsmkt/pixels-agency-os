@@ -15779,6 +15779,8 @@ export default function AgencyOS(){
   },[CURRENT_USER.id]);
   const [activeCl,setActiveCl]     = useState(null);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
+  // Expõe setNotifs para o portal poder disparar notificações
+  useEffect(()=>{ window._setNotifs=setNotifs; return()=>{delete window._setNotifs;}; },[setNotifs]);
   const [viewingAs,setViewingAs]   = useState(null);
 
   useEffect(()=>{
@@ -17890,11 +17892,16 @@ const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   icon:"🎯", label:"Dashboard"},
   {id:"demandas",    icon:"◈",  label:"Demandas"},
+  {id:"solicitar",   icon:"⚡", label:"Solicitar"},
   {id:"calendario",  icon:"📅", label:"Calendário"},
   {id:"publicacoes", icon:"✅", label:"Publicações"},
   {id:"analises",    icon:"📊", label:"Análises"},
   {id:"faturamento", icon:"💰", label:"Faturamento"},
   {id:"chat",        icon:"💬", label:"Chat"},
+];
+const INTERNAS_COLS_RADAR_P=[
+  {id:"interno_demanda"},{id:"interno_execucao"},{id:"interno_avaliacao"},
+  {id:"interno_aprovado"},{id:"interno_executado"},
 ];
 const PORTAL_STATUS_LABELS={demanda:"Copys em aprovação",recebida:"Em fila",execucao:"Em produção",avaliacao:"Em avaliação",aprovado:"Aprovado",agendado:"Agendado para publicação"};
 // STATUS_COLORS usa variáveis de tema (C.*) — lidas em tempo de uso
@@ -18204,6 +18211,140 @@ function PortalCard({task, cl}){
 }
 
 /* ── Main Portal Page ── */
+function PortalSolicitar({tasks, selCl, cl}) {
+  const [titulo,    setTitulo]    = useState("");
+  const [descricao, setDescricao] = useState("");
+  const [prioridade,setPrioridade]= useState("media");
+  const [enviado,   setEnviado]   = useState(false);
+  const [enviando,  setEnviando]  = useState(false);
+  const [minhasReqs,setMinhasReqs]= useState(
+    ()=>(tasks||[]).filter(t=>!t.deletedAt&&t.client===selCl&&INTERNAS_COLS_RADAR_P.find(c=>c.id===t.status)&&t.origem==="portal")
+  );
+
+  const PRIO=[
+    {id:"baixa",label:"Baixa",color:"#64748b"},
+    {id:"media",label:"Média",color:"#f97316"},
+    {id:"alta", label:"Alta", color:"#ef4444"},
+    {id:"urgente",label:"Urgente",color:"#dc2626"},
+  ];
+  const STATUS_INT={
+    interno_demanda:"Recebida",interno_execucao:"Em Execução",
+    interno_avaliacao:"Em Avaliação",interno_aprovado:"Aprovada",interno_executado:"Concluída",
+  };
+
+  const enviar = async () => {
+    if(!titulo.trim()){alert("Informe o título da solicitação.");return;}
+    setEnviando(true);
+    const id="portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+    const now=new Date().toISOString();
+    const novoCard={
+      id,title:titulo.trim(),desc:descricao.trim(),
+      status:"interno_demanda",priority:prioridade,
+      client:selCl,origem:"portal",
+      assignees:[],checklist:[],timeline:[],
+      createdAt:now,colEnteredAt:now,
+      createdBy:"portal_"+selCl,
+      assignee:"",sector:"",tags:[],comments:[],files:[],
+      watchers:[],deletedAt:null,cover:null,ajustar:false,
+      isAlteracao:false,score:null,publishDate:"",publishTime:"09:00",
+      bioterUnit:"",deadlineTime:"",deadline:"",
+    };
+    if(window._sb){
+      await window._sb.from("tasks").insert({
+        id,title:novoCard.title,status:"interno_demanda",
+        description:novoCard.desc,priority:prioridade,
+        client:selCl,origem:"portal",
+        assignee:"",assignees:[],checklist:[],timeline:[],
+        created_by:"portal_"+selCl,created_at:now,
+        col_entered_at:now,tags:[],comments:[],files:[],
+        watchers:[],cover:null,ajustar:false,is_alteracao:false,
+        score:null,publish_date:null,publish_time:"09:00",
+        bioter_unit:"",deadline_time:"",deleted_at:null,
+      }).catch(err=>console.error("portal insert:",err));
+    }
+    const clientName=cl?.name||selCl;
+    const prioLabel={baixa:"Baixa",media:"Média",alta:"Alta",urgente:"Urgente"}[prioridade]||prioridade;
+    if(window._setNotifs){
+      window._setNotifs(p=>[{
+        id:"portal_"+Date.now(),read:false,type:"radar_demanda",icon:"🟢",
+        title:`🟢 Nova solicitação — ${clientName}`,
+        body:`Portal · "${titulo.trim()}" · Prioridade: ${prioLabel}`,
+        user:"Portal "+clientName,at:"Agora",category:"radar",
+        targetUsers:["vinicius","gustavo"],
+      },...p]);
+    }
+    setMinhasReqs(p=>[novoCard,...p]);
+    setTitulo("");setDescricao("");setPrioridade("media");
+    setEnviado(true);setEnviando(false);
+    setTimeout(()=>setEnviado(false),4000);
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"20px 24px"}}>
+        <div style={{color:C.tx,fontWeight:800,fontSize:15,marginBottom:4}}>⚡ Nova Solicitação</div>
+        <div style={{color:C.td,fontSize:12,marginBottom:18}}>Descreva o que precisa. Nossa equipe entrará em contato em breve.</div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Título *</div>
+            <input value={titulo} onChange={e=>setTitulo(e.target.value)}
+              placeholder="Ex: Arte para evento dia 20/04..."
+              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 14px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+          </div>
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Descrição</div>
+            <textarea value={descricao} onChange={e=>setDescricao(e.target.value)}
+              placeholder="Detalhe o que precisa, referências, prazos, etc..."
+              rows={3} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 14px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prioridade</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {PRIO.map(p=>(
+                <button key={p.id} onClick={()=>setPrioridade(p.id)}
+                  style={{background:prioridade===p.id?p.color+"22":"transparent",border:"1px solid "+(prioridade===p.id?p.color:C.b1),borderRadius:8,padding:"5px 14px",color:prioridade===p.id?p.color:C.td,fontSize:12,fontWeight:prioridade===p.id?700:400,cursor:"pointer"}}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button onClick={enviar} disabled={enviando||!titulo.trim()}
+            style={{background:enviado?C.gr:cl.color,border:"none",borderRadius:10,padding:"11px 24px",color:"#fff",fontSize:13,fontWeight:700,cursor:titulo.trim()?"pointer":"not-allowed",opacity:titulo.trim()?1:0.6,transition:"all .2s",marginTop:4}}>
+            {enviado?"✅ Solicitação enviada!":enviando?"Enviando...":"Enviar Solicitação"}
+          </button>
+        </div>
+      </div>
+      {minhasReqs.length>0&&(
+        <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
+          <div style={{padding:"14px 20px",borderBottom:"1px solid "+C.b1}}>
+            <span style={{color:C.tx,fontWeight:700,fontSize:13}}>Minhas Solicitações</span>
+            <span style={{background:cl.color+"20",color:cl.color,borderRadius:99,padding:"1px 8px",fontSize:11,fontWeight:700,marginLeft:8}}>{minhasReqs.length}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:0}}>
+            {minhasReqs.map((t,i)=>{
+              const statusLabel=STATUS_INT[t.status]||t.status;
+              const concluida=t.status==="interno_executado";
+              const prio=PRIO.find(p=>p.id===t.priority)||PRIO[1];
+              return(
+                <div key={t.id} style={{padding:"12px 20px",borderBottom:i<minhasReqs.length-1?"1px solid "+C.b1:"none",display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:C.tx,fontSize:12,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.title}</div>
+                    {t.desc&&<div style={{color:C.td,fontSize:10,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{t.desc.slice(0,60)}{t.desc.length>60?"...":""}</div>}
+                  </div>
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+                    <span style={{background:prio.color+"18",color:prio.color,borderRadius:6,padding:"1px 7px",fontSize:9,fontWeight:700}}>{prio.label}</span>
+                    <span style={{background:concluida?C.gr+"20":"#f59e0b20",color:concluida?C.gr:"#f59e0b",borderRadius:6,padding:"1px 7px",fontSize:9,fontWeight:700}}>{statusLabel}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PagePortalCliente({isMob, tasks, initTab}){
   const TASKS=tasks||[];
   const [selCl,setSelCl]=useState(CLIENTS.find(c=>c.status!=="interno")?.id||"");
@@ -18324,7 +18465,8 @@ function PagePortalCliente({isMob, tasks, initTab}){
     })()}
 
     {/* ── CALENDÁRIO ── */}
-    {tab==="calendario"&&<PortalCalendario cl={cl} tasks={TASKS} isMob={isMob}/>}
+    {tab==="solicitar"&&<PortalSolicitar tasks={tasks} selCl={selCl} cl={cl}/>}
+        {tab==="calendario"&&<PortalCalendario cl={cl} tasks={TASKS} isMob={isMob}/>}
 
     {/* ── PUBLICAÇÕES ── (material final para o cliente) */}
     {tab==="publicacoes"&&(()=>{
