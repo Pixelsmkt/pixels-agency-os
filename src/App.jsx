@@ -13118,8 +13118,9 @@ const INTERNAS_COLS_RADAR = [
 
 function PageRadarEntrega({ tasks, isMob }) {
   const now = new Date();
-  const [clienteId, setClienteId] = useState("");
-  const [mesKey,    setMesKey]    = useState(getMonthKey(now));
+  const [clienteId,  setClienteId]  = useState("");
+  const [bioterUnit, setBioterUnit] = useState(""); // só ativo quando clienteId==="bioter"
+  const [mesKey,     setMesKey]     = useState(getMonthKey(now));
 
   const mesesDisponiveis = Array.from({length:12},(_,i)=>{
     const d=new Date(now.getFullYear(),now.getMonth()-i,1);
@@ -13139,8 +13140,9 @@ function PageRadarEntrega({ tasks, isMob }) {
   // ── BLOCO 1: Tudo que entrou no período (Fluxo + Internas com cliente) ──
   const fluxoNoPeriodo = (tasks||[]).filter(t=>{
     if(t.deletedAt) return false;
-    if(!FLUXO_COLS.find(c=>c.id===t.status)) return false; // só cards do fluxo principal
+    if(!FLUXO_COLS.find(c=>c.id===t.status)) return false;
     if(clienteId && t.client!==clienteId) return false;
+    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
     const d = dataEntrada(t);
     if(!d) return false;
     return d>=mesInicio && d<=mesFim;
@@ -13151,6 +13153,7 @@ function PageRadarEntrega({ tasks, isMob }) {
     if(!INTERNAS_COLS_RADAR.find(c=>c.id===t.status)) return false;
     if(!t.client||t.client==="interno") return false;
     if(clienteId && t.client!==clienteId) return false;
+    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
     const d = dataEntrada(t);
     if(!d) return false;
     return d>=mesInicio && d<=mesFim;
@@ -13188,6 +13191,7 @@ function PageRadarEntrega({ tasks, isMob }) {
     const isInternas = INTERNAS_COLS_RADAR.find(c=>c.id===t.status) && t.client && t.client!=="interno";
     if(!isFluxo && !isInternas) return false;
     if(clienteId && t.client!==clienteId) return false;
+    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
     const d = dataEntrada(t);
     if(!d) return false;
     return d>=mesAntInicio && d<=mesAntFim;
@@ -13201,6 +13205,7 @@ function PageRadarEntrega({ tasks, isMob }) {
   const publAntVal = (tasks||[]).filter(t=>{
     if(t.deletedAt||t.status!=="publicado")return false;
     if(clienteId&&t.client!==clienteId)return false;
+    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit)return false;
     const d=dataEntrada(t);if(!d)return false;
     return d>=mesAntInicio&&d<=mesAntFim;
   }).length;
@@ -13208,6 +13213,7 @@ function PageRadarEntrega({ tasks, isMob }) {
     if(t.deletedAt||t.status!=="interno_executado")return false;
     if(!t.client||t.client==="interno")return false;
     if(clienteId&&t.client!==clienteId)return false;
+    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit)return false;
     const d=dataEntrada(t);if(!d)return false;
     return d>=mesAntInicio&&d<=mesAntFim;
   }).length;
@@ -13273,6 +13279,7 @@ function PageRadarEntrega({ tasks, isMob }) {
     if(t.deletedAt) return false;
     if(!FLUXO_COLS.find(c=>c.id===t.status)) return false;
     if(clienteId && t.client!==clienteId) return false;
+    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
     return true;
   });
   const todasInternasCliente = (tasks||[]).filter(t=>{
@@ -13280,6 +13287,7 @@ function PageRadarEntrega({ tasks, isMob }) {
     if(!INTERNAS_COLS_RADAR.find(c=>c.id===t.status)) return false;
     if(!t.client||t.client==="interno") return false;
     if(clienteId && t.client!==clienteId) return false;
+    if(clienteId==="bioter"&&bioterUnit&&t.bioterUnit!==bioterUnit) return false;
     return true;
   });
 
@@ -13292,11 +13300,18 @@ function PageRadarEntrega({ tasks, isMob }) {
           <div style={{color:C.td,fontSize:12,marginTop:2}}>Tudo que foi produzido e entregue, por cliente e período</div>
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <select value={clienteId} onChange={e=>setClienteId(e.target.value)}
+          <select value={clienteId} onChange={e=>{setClienteId(e.target.value);setBioterUnit("");}}
             style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px",color:clienteId?C.tx:C.td,fontSize:12,outline:"none",cursor:"pointer"}}>
             <option value="">Todos os clientes</option>
             {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+          {clienteId==="bioter"&&(
+            <select value={bioterUnit} onChange={e=>setBioterUnit(e.target.value)}
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px",color:bioterUnit?C.tx:C.td,fontSize:12,outline:"none",cursor:"pointer"}}>
+              <option value="">Todas as unidades</option>
+              {BIOTER_UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
+            </select>
+          )}
           <select value={mesKey} onChange={e=>setMesKey(e.target.value)}
             style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px",color:C.tx,fontSize:12,outline:"none",cursor:"pointer"}}>
             {mesesDisponiveis.map(m=><option key={m.key} value={m.key}>{m.label}</option>)}
