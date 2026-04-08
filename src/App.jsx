@@ -8385,24 +8385,30 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
                 onDragOver={e=>handleDragOver(e,col.id)}
                 onDrop={e=>handleDrop(e,col.id)}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
-                style={{minWidth:240,width:240,flexShrink:0,background:isTarget?col.color+"12":C.s1,border:`1px solid ${isTarget?col.color:C.b1}`,borderRadius:14,transition:"all .15s"}}>
-                <div style={{padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`1px solid ${C.b1}`}}>
+                style={{
+                  minWidth:240,width:240,flexShrink:0,
+                  background:isTarget?"#f0f4ff":C.s1,
+                  border:`1px solid ${isTarget?col.color+"66":C.b1}`,
+                  borderTop:`3px solid ${col.color}`,
+                  borderRadius:12,padding:"8px 8px 8px",
+                  display:"flex",flexDirection:"column",gap:0,
+                  transition:"all .15s",
+                }}>
+                {/* Header colorido — mesmo padrão do Fluxo de Demandas */}
+                <div style={{padding:"8px 10px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"8px 8px 0 0",margin:"-8px -8px 10px -8px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:7}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",background:col.color}}/>
-                    <span style={{color:C.tx,fontSize:12,fontWeight:700}}>{col.label}</span>
-                  </div>
-                  <div style={{background:col.color+"20",borderRadius:99,padding:"1px 8px"}}>
-                    <span style={{color:col.color,fontSize:11,fontWeight:800}}>{colTasks.length}</span>
+                    <span style={{color:"#fff",fontWeight:700,fontSize:12,textShadow:"0 1px 2px rgba(0,0,0,0.2)"}}>{col.label}</span>
+                    <span style={{background:"rgba(0,0,0,0.18)",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
                   </div>
                 </div>
-                <div style={{padding:"10px",display:"flex",flexDirection:"column",gap:8,minHeight:80}}>
+                <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,padding:"0 2px"}}>
                   {colTasks.map(t=>(
                     <CardKanbanInterno key={t.id} task={t} onOpen={setOpenCard} onDragStart={handleDragStart}/>
                   ))}
                   {colTasks.length===0&&<div style={{color:C.td,fontSize:11,textAlign:"center",padding:"20px 0",opacity:.5}}>Nenhuma demanda</div>}
                 </div>
                 {col.id==="interno_demanda"&&canCreate&&(
-                  <div style={{padding:"0 10px 10px"}}>
+                  <div style={{paddingTop:6}}>
                     <button onClick={createCard}
                       style={{width:"100%",background:"transparent",border:`1px dashed ${C.b1}`,borderRadius:10,padding:"8px",color:C.td,fontSize:12,cursor:"pointer"}}
                       onMouseEnter={e=>e.currentTarget.style.borderColor=C.a}
