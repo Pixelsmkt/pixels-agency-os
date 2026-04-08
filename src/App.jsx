@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 26/26 | Nao editar diretamente
+// Modulos: 27/27 | Nao editar diretamente
 
 // App.jsx — Gerado por juntar.py
 import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
@@ -274,6 +274,8 @@ const DEFAULT_PERMS={
   pixelsIA:false, escanear:false, verCalendario:true, verBriefingCard:false,
   // Notificações
   verNotificacoes:true, verInterno:false,
+  // Demandas Internas
+  verDemandasInternas:false, criarDemandaInterna:false, aprovarDemandaInterna:false, verTodosInternos:false,
   // Interno — sub-páginas
   verMapeamento:false, verConexoes:false, verPontuacao:false, verCarreira:false, verAvaliacao360:false,
   // Análises — sub-páginas
@@ -396,12 +398,15 @@ function NavIcon({id,size=18,color}){
 const NAV=[
   {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
-    {id:"demandas_kanban",  icon:"◈", label:"Fluxo de Demandas"},
-    {id:"demandas_cal_pub", icon:"▦", label:"Calendário de Publicações"},
+    {id:"demandas_kanban",    icon:"◈", label:"Fluxo de Demandas"},
+    {id:"demandas_internas",  icon:"◫", label:"Demandas Internas"},
+    {id:"demandas_cal_pub",   icon:"▦", label:"Calendário de Publicações"},
+    {id:"demandas_cal_interno",icon:"▦", label:"Calendário Interno/Clientes"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de Copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Publicação"},
+    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação Demanda Interna"},
   ]},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
@@ -437,7 +442,7 @@ const NAV=[
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
-    {id:"interno_calendario", icon:"▦", label:"Calendário"},
+    {id:"interno_calendario", icon:"▦", label:"Visão Geral"},
     {id:"interno_pontuacao",  icon:"◈", label:"Pontuação"},
     {id:"interno_mapeamento", icon:"◉", label:"Mapeamento"},
     {id:"interno_conexoes",   icon:"◬", label:"Conexão e Contas"},
@@ -7980,6 +7985,446 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
    Filtro: todos os clientes + unidades Bioter
 ──────────────────────────────────────────────── */
 
+// ======= 04_demandas_internas.jsx =======
+
+const INTERNO_COLS = [
+  { id:"interno_demanda",   label:"Demandas",                color:"#6366f1" },
+  { id:"interno_execucao",  label:"Em Execução",             color:"#f97316" },
+  { id:"interno_avaliacao", label:"Concluído p/ Avaliação",  color:"#eab308" },
+  { id:"interno_aprovado",  label:"Aprovado",                color:"#22c55e" },
+  { id:"interno_executado", label:"Executado",               color:"#8b5cf6" },
+];
+
+const PRIO_CFG = {
+  baixa:   { label:"Baixa",   color:"#64748b", bg:"#64748b15" },
+  media:   { label:"Média",   color:"#f97316", bg:"#f9731615" },
+  alta:    { label:"Alta",    color:"#ef4444", bg:"#ef444415" },
+  urgente: { label:"Urgente", color:"#dc2626", bg:"#dc262620" },
+};
+
+const nowFmtInt = () => { const n=new Date(); return n.toLocaleDateString("pt-BR")+" "+n.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); };
+const dlInt = (d) => {
+  if (!d) return null;
+  return Math.ceil((new Date(d+"T00:00:00") - new Date()) / 86400000);
+};
+
+/* ── Card Modal ─────────────────────────────────── */
+function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
+  const [title,     setTitle]     = useState(card.title     || "");
+  const [desc,      setDesc]      = useState(card.desc      || "");
+  const [priority,  setPriority]  = useState(card.priority  || "media");
+  const [deadline,  setDeadline]  = useState(card.deadline  || "");
+  const [assignees, setAssignees] = useState(card.assignees || []);
+  const [checklist, setChecklist] = useState(card.checklist || []);
+  const [newCheck,  setNewCheck]  = useState("");
+
+  const eligible = TEAM.filter(u => u.level === 1 || ACCESS_STORE?.[u.id]?.verDemandasInternas);
+  const toggleA  = (uid) => setAssignees(p => p.includes(uid) ? p.filter(x=>x!==uid) : [...p, uid]);
+  const addCheck = () => { if (!newCheck.trim()) return; setChecklist(p=>[...p,{id:Date.now()+"-"+Math.random().toString(36).slice(2,5),text:newCheck.trim(),done:false}]); setNewCheck(""); };
+  const save = () => onSave({ ...card, title, desc, priority, deadline, assignees, checklist });
+  const col  = INTERNO_COLS.find(c => c.id === card.status) || INTERNO_COLS[0];
+  const pc   = PRIO_CFG[priority] || PRIO_CFG.media;
+  const done = checklist.filter(c=>c.done).length;
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:C.card,borderRadius:18,width:"100%",maxWidth:560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.3)"}}>
+        <div style={{padding:"20px 24px 0",display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
+          <div style={{display:"flex",gap:6}}>
+            <div style={{background:col.color+"20",borderRadius:8,padding:"3px 10px"}}><span style={{color:col.color,fontSize:11,fontWeight:700}}>{col.label}</span></div>
+            <div style={{background:pc.bg,borderRadius:8,padding:"3px 10px"}}><span style={{color:pc.color,fontSize:11,fontWeight:700}}>{pc.label}</span></div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            {isSocio&&card.id&&<button onClick={()=>onDelete(card.id)} style={{background:"#ef444415",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>Excluir</button>}
+            <button onClick={onClose} style={{background:C.s1,border:"none",borderRadius:8,padding:"6px 12px",color:C.td,fontSize:13,cursor:"pointer"}}>✕</button>
+          </div>
+        </div>
+        <div style={{padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:14}}>
+          <textarea value={title} onChange={e=>setTitle(e.target.value)} placeholder="Título da demanda interna..."
+            style={{background:"transparent",border:"none",outline:"none",color:C.tx,fontSize:17,fontWeight:700,resize:"none",width:"100%",fontFamily:"inherit",lineHeight:1.4}} rows={2}/>
+
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Descrição</div>
+            <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descreva a demanda..."
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:13,resize:"vertical",width:"100%",fontFamily:"inherit",minHeight:70,outline:"none",boxSizing:"border-box"}}/>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prioridade</div>
+              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                {Object.entries(PRIO_CFG).map(([k,conf])=>(
+                  <button key={k} onClick={()=>setPriority(k)}
+                    style={{background:priority===k?conf.bg:"transparent",border:`1px solid ${priority===k?conf.color:C.b1}`,borderRadius:8,padding:"4px 8px",color:priority===k?conf.color:C.td,fontSize:10,fontWeight:priority===k?700:400,cursor:"pointer"}}>
+                    {conf.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prazo</div>
+              <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
+                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Responsáveis</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {eligible.map(u=>{
+                const sel=assignees.includes(u.id);
+                return(
+                  <button key={u.id} onClick={()=>toggleA(u.id)}
+                    style={{background:sel?u.color+"20":"transparent",border:`1px solid ${sel?u.color:C.b1}`,borderRadius:20,padding:"5px 12px",display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
+                    <div style={{width:18,height:18,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,color:"#fff"}}>{u.av}</div>
+                    <span style={{color:sel?u.color:C.ts,fontSize:11,fontWeight:sel?700:400}}>{u.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>
+              Checklist {checklist.length>0&&`(${done}/${checklist.length})`}
+            </div>
+            {checklist.length>0&&(
+              <div style={{marginBottom:8}}>
+                <div style={{height:4,background:C.b1,borderRadius:99,overflow:"hidden",marginBottom:6}}>
+                  <div style={{height:"100%",width:`${checklist.length?Math.round(done/checklist.length*100):0}%`,background:C.gr,borderRadius:99}}/>
+                </div>
+                {checklist.map(item=>(
+                  <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <button onClick={()=>setChecklist(p=>p.map(c=>c.id===item.id?{...c,done:!c.done}:c))}
+                      style={{width:17,height:17,borderRadius:4,border:`2px solid ${item.done?C.gr:C.b1}`,background:item.done?C.gr:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#fff",fontSize:9,fontWeight:900}}>
+                      {item.done?"✓":""}
+                    </button>
+                    <span style={{color:item.done?C.td:C.ts,fontSize:12,textDecoration:item.done?"line-through":"none",flex:1}}>{item.text}</span>
+                    <button onClick={()=>setChecklist(p=>p.filter(c=>c.id!==item.id))}
+                      style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:10}}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:"flex",gap:8}}>
+              <input value={newCheck} onChange={e=>setNewCheck(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCheck()}
+                placeholder="Adicionar item..." style={{flex:1,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"7px 10px",color:C.ts,fontSize:12,outline:"none"}}/>
+              <button onClick={addCheck} style={{background:C.a,border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+</button>
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:8,borderTop:`1px solid ${C.b1}`}}>
+            <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 20px",color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={save}    style={{background:C.a,border:"none",borderRadius:10,padding:"9px 24px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Scanner ────────────────────────────────────── */
+function ScannerInterno({ tasks }) {
+  const now = new Date();
+  const atrasadas  = tasks.filter(t=>t.status!=="interno_executado"&&dlInt(t.deadline)!==null&&dlInt(t.deadline)<0);
+  const aguardando = tasks.filter(t=>{
+    if(t.status!=="interno_avaliacao"||!t.colEnteredAt)return false;
+    return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=2;
+  });
+  const paradas = tasks.filter(t=>{
+    // Aprovado aguardando execução manual é estado esperado — não conta como parado
+    if(["interno_executado","interno_aprovado"].includes(t.status)||!t.colEnteredAt)return false;
+    return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=3;
+  });
+  const executados = tasks.filter(t=>t.status==="interno_executado").length;
+  const taxa = tasks.length>0?Math.round(executados/tasks.length*100):0;
+
+  const Row = ({task})=>{
+    const pc=PRIO_CFG[task.priority]||PRIO_CFG.media;
+    const col=INTERNO_COLS.find(c=>c.id===task.status);
+    const dl=dlInt(task.deadline);
+    const aus=TEAM.filter(u=>(task.assignees||[]).includes(u.id));
+    return(
+      <div style={{background:C.s1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:100}}>
+          <div style={{color:C.tx,fontSize:12,fontWeight:700,marginBottom:4}}>{task.title}</div>
+          <div style={{display:"flex",gap:5}}>
+            {col&&<span style={{background:col.color+"20",color:col.color,borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:700}}>{col.label}</span>}
+            <span style={{background:pc.bg,color:pc.color,borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:700}}>{pc.label}</span>
+          </div>
+        </div>
+        {aus.length>0&&<div style={{display:"flex",gap:2}}>{aus.map(u=><div key={u.id} title={u.name} style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff"}}>{u.av}</div>)}</div>}
+        {dl!==null&&<span style={{color:dl<0?C.rd:dl<=2?C.yw:C.td,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
+      </div>
+    );
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+        {INTERNO_COLS.map(col=>(
+          <div key={col.id} style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"12px 14px"}}>
+            <div style={{color:col.color,fontWeight:900,fontSize:22,lineHeight:1,marginBottom:4}}>{tasks.filter(t=>t.status===col.id).length}</div>
+            <div style={{color:C.td,fontSize:10,fontWeight:700}}>{col.label}</div>
+          </div>
+        ))}
+        <div style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"12px 14px"}}>
+          <div style={{color:C.gr,fontWeight:900,fontSize:22,lineHeight:1,marginBottom:4}}>{taxa}%</div>
+          <div style={{color:C.td,fontSize:10,fontWeight:700}}>Taxa conclusão</div>
+        </div>
+      </div>
+
+      {atrasadas.length>0&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:C.rd}}/><span style={{color:C.rd,fontSize:12,fontWeight:800}}>Atrasadas ({atrasadas.length})</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{atrasadas.map(t=><Row key={t.id} task={t}/>)}</div>
+        </div>
+      )}
+      {aguardando.length>0&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#f97316"}}/><span style={{color:"#f97316",fontSize:12,fontWeight:800}}>Aguardando aprovação +2 dias ({aguardando.length})</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{aguardando.map(t=><Row key={t.id} task={t}/>)}</div>
+        </div>
+      )}
+      {paradas.length>0&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:C.yw}}/><span style={{color:C.yw,fontSize:12,fontWeight:800}}>Paradas +3 dias ({paradas.length})</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{paradas.map(t=><Row key={t.id} task={t}/>)}</div>
+        </div>
+      )}
+      {atrasadas.length===0&&aguardando.length===0&&paradas.length===0&&(
+        <div style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"30px",textAlign:"center"}}>
+          <div style={{fontSize:28,marginBottom:8}}>✅</div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Tudo em dia!</div>
+          <div style={{color:C.td,fontSize:12,marginTop:4}}>Nenhuma demanda interna precisa de atenção.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Card Kanban ────────────────────────────────── */
+function CardKanbanInterno({ task, onOpen, onDragStart }) {
+  const pc  = PRIO_CFG[task.priority] || PRIO_CFG.media;
+  const dl  = dlInt(task.deadline);
+  const dlC = dl===null?null:dl<0?C.rd:dl<=2?C.yw:C.td;
+  const aus = TEAM.filter(u=>(task.assignees||[]).includes(u.id));
+  const ck  = task.checklist||[];
+  return(
+    <div draggable onDragStart={e=>onDragStart(e,task.id)} onClick={()=>onOpen(task)}
+      style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",userSelect:"none"}}
+      onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.12)"}
+      onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <div style={{background:pc.bg,borderRadius:6,padding:"2px 8px"}}><span style={{color:pc.color,fontSize:10,fontWeight:700}}>{pc.label}</span></div>
+        {dl!==null&&<span style={{color:dlC,fontSize:10,fontWeight:700}}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
+      </div>
+      <div style={{color:C.tx,fontSize:13,fontWeight:600,lineHeight:1.4,marginBottom:8}}>{task.title}</div>
+      {ck.length>0&&(
+        <div style={{marginBottom:8}}>
+          <div style={{height:3,background:C.b1,borderRadius:99,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${Math.round(ck.filter(c=>c.done).length/ck.length*100)}%`,background:C.gr,borderRadius:99}}/>
+          </div>
+          <div style={{color:C.td,fontSize:10,marginTop:2}}>{ck.filter(c=>c.done).length}/{ck.length} itens</div>
+        </div>
+      )}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex"}}>
+          {aus.slice(0,3).map(u=>(
+            <div key={u.id} title={u.name}
+              style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:-4}}>
+              {u.av}
+            </div>
+          ))}
+        </div>
+        {task.deadline&&<span style={{color:C.td,fontSize:10}}>{new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ── PageDemandasInternas ───────────────────────── */
+function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
+  const isSocio  = CURRENT_USER.level === 1;
+  const myPerms  = { ...DEFAULT_PERMS, ...(ACCESS_STORE?.[CURRENT_USER.id] || {}) };
+  const canCreate = isSocio || myPerms.criarDemandaInterna;
+  const canSeeAll = isSocio || myPerms.verTodosInternos;
+
+  const [view,     setView]     = useState("kanban");
+  const [openCard, setOpenCard] = useState(null);
+  const [dragId,   setDragId]   = useState(null);
+  const [dragOver, setDragOver] = useState(null);
+
+  const allInternas = (tasks||[]).filter(t=>!t.deletedAt&&INTERNO_COLS.find(c=>c.id===t.status));
+  const visible = canSeeAll ? allInternas
+    : allInternas.filter(t=>(t.assignees||[]).includes(CURRENT_USER.id)||t.createdBy===CURRENT_USER.id);
+
+  const handleDragStart = (e,id) => { setDragId(id); e.dataTransfer.effectAllowed="move"; };
+  const handleDragOver  = (e,colId) => { e.preventDefault(); setDragOver(colId); };
+  const handleDrop      = (e,colId) => {
+    e.preventDefault(); setDragOver(null);
+    if(!dragId) return;
+    const task=(tasks||[]).find(t=>t.id===dragId);
+    if(!task) return;
+    if(task.status===colId){setDragId(null);return;} // mesma coluna — ignora
+    if(colId==="interno_aprovado"&&!isSocio&&!myPerms.aprovarDemandaInterna){
+      alert("Apenas aprovadores podem mover para Aprovado."); return;
+    }
+    const now=new Date().toISOString();
+    const fromCol=INTERNO_COLS.find(c=>c.id===task.status);
+    const toCol=INTERNO_COLS.find(c=>c.id===colId);
+    const tl=[...(task.timeline||[]),{type:"status",from:task.status,to:colId,fromLabel:fromCol?.label||task.status,toLabel:toCol?.label||colId,at:now,atFmt:nowFmtInt(),user:CURRENT_USER.name}];
+    const updated={...task,status:colId,colEnteredAt:now,timeline:tl};
+    if(colId==="interno_avaliacao"&&setNotifs){
+      setNotifs(p=>[{id:"ni_"+Date.now(),read:false,type:"interno_avaliacao",icon:"◫",title:"Demanda interna aguarda aprovação",body:`"${task.title}" foi enviada para avaliação.`,user:CURRENT_USER.name,at:"Agora",category:"interno"},...p]);
+    }
+    if(setTasks) setTasks(p=>p.map(t=>t.id===dragId?updated:t));
+    if(window._sb){
+      window._sb.from("tasks").update({
+        status:colId,
+        col_entered_at:now,
+        timeline:tl,
+      }).eq("id",dragId).then(()=>{}).catch(err=>console.error("handleDrop supabase:",err));
+    }
+    setDragId(null);
+  };
+
+  const createCard = () => {
+    // Cria objeto do card mas NÃO adiciona ao state ainda — só na saveCard
+    // Isso evita cards "fantasma" no state se o usuário fechar o modal sem salvar
+    const t={
+      id:"int-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),title:"Nova Demanda Interna",status:"interno_demanda",
+      priority:"media",deadline:"",assignees:[CURRENT_USER.id],checklist:[],desc:"",
+      createdBy:CURRENT_USER.id,createdAt:new Date().toISOString(),
+      colEnteredAt:new Date().toISOString(),timeline:[],
+      assignee:CURRENT_USER.id,sector:"",client:"interno",tags:[],comments:[],files:[],
+      watchers:[],deletedAt:null,cover:null,ajustar:false,isAlteracao:false,
+      score:null,publishDate:"",publishTime:"09:00",bioterUnit:"",
+      _isNew:true,
+    };
+    setOpenCard(t);
+  };
+
+  const saveCard = (updated) => {
+    const isNew=!!updated._isNew;
+    const card={...updated}; delete card._isNew;
+    if(setTasks){
+      if(isNew) setTasks(p=>[...p,card]);
+      else setTasks(p=>p.map(t=>t.id===card.id?card:t));
+    }
+    if(window._sb){
+      window._sb.from("tasks").upsert({
+        id:card.id,title:card.title,status:card.status,
+        assignee:card.assignees?.[0]||"",assignees:card.assignees||[],
+        priority:card.priority,deadline:card.deadline||null,
+        description:card.desc||"",checklist:card.checklist||[],
+        timeline:card.timeline||[],client:"interno",sector:"",
+        created_by:card.createdBy||CURRENT_USER.id,
+        col_entered_at:card.colEnteredAt||null,
+        tags:[],comments:[],files:[],watchers:[],cover:null,
+        ajustar:false,is_alteracao:false,score:null,
+        publish_date:null,publish_time:"09:00",bioter_unit:"",
+      },{onConflict:"id"}).then(()=>{}).catch(err=>console.error("saveCard supabase:",err));
+    }
+    setOpenCard(null);
+  };
+
+  const deleteCard = (id) => {
+    if(!confirm("Excluir esta demanda interna?")) return;
+    const now=new Date().toISOString();
+    if(setTasks) setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:now}:t));
+    if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(()=>{}).catch(err=>console.error("deleteCard supabase:",err));
+    setOpenCard(null);
+  };
+
+  const alerts = visible.filter(t=>{
+    if(t.status==="interno_executado") return false;
+    const dl=dlInt(t.deadline);
+    if(dl!==null&&dl<0) return true;
+    if(t.colEnteredAt&&Math.floor((new Date()-new Date(t.colEnteredAt))/86400000)>=3) return true;
+    return false;
+  }).length;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{color:C.tx,fontWeight:800,fontSize:17}}>Demandas Internas</div>
+          <div style={{color:C.td,fontSize:12}}>{visible.length} demanda{visible.length!==1?"s":""} ativa{visible.length!==1?"s":""}</div>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <div style={{display:"flex",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,overflow:"hidden"}}>
+            {[["kanban","◈ Kanban"],["scanner","📡 Scanner"]].map(([v,l])=>(
+              <button key={v} onClick={()=>setView(v)}
+                style={{background:view===v?C.a:"transparent",border:"none",padding:"7px 14px",color:view===v?"#fff":C.ts,fontSize:12,fontWeight:view===v?700:400,cursor:"pointer",position:"relative"}}>
+                {l}{v==="scanner"&&alerts>0&&<span style={{position:"absolute",top:3,right:3,background:"#ef4444",borderRadius:99,width:6,height:6,display:"block"}}/>}
+              </button>
+            ))}
+          </div>
+          {canCreate&&(
+            <button onClick={createCard}
+              style={{background:C.a,border:"none",borderRadius:10,padding:"8px 18px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              + Nova Demanda
+            </button>
+          )}
+        </div>
+      </div>
+
+      {view==="scanner"&&<ScannerInterno tasks={visible}/>}
+
+      {view==="kanban"&&(
+        <div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
+          {INTERNO_COLS.map(col=>{
+            const colTasks=visible.filter(t=>t.status===col.id)
+              .sort((a,b)=>({urgente:0,alta:1,media:2,baixa:3}[a.priority]??2)-({urgente:0,alta:1,media:2,baixa:3}[b.priority]??2));
+            const isTarget=dragOver===col.id;
+            return(
+              <div key={col.id}
+                onDragOver={e=>handleDragOver(e,col.id)}
+                onDrop={e=>handleDrop(e,col.id)}
+                onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
+                style={{minWidth:240,width:240,flexShrink:0,background:isTarget?col.color+"12":C.s1,border:`1px solid ${isTarget?col.color:C.b1}`,borderRadius:14,transition:"all .15s"}}>
+                <div style={{padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`1px solid ${C.b1}`}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:col.color}}/>
+                    <span style={{color:C.tx,fontSize:12,fontWeight:700}}>{col.label}</span>
+                  </div>
+                  <div style={{background:col.color+"20",borderRadius:99,padding:"1px 8px"}}>
+                    <span style={{color:col.color,fontSize:11,fontWeight:800}}>{colTasks.length}</span>
+                  </div>
+                </div>
+                <div style={{padding:"10px",display:"flex",flexDirection:"column",gap:8,minHeight:80}}>
+                  {colTasks.map(t=>(
+                    <CardKanbanInterno key={t.id} task={t} onOpen={setOpenCard} onDragStart={handleDragStart}/>
+                  ))}
+                  {colTasks.length===0&&<div style={{color:C.td,fontSize:11,textAlign:"center",padding:"20px 0",opacity:.5}}>Nenhuma demanda</div>}
+                </div>
+                {col.id==="interno_demanda"&&canCreate&&(
+                  <div style={{padding:"0 10px 10px"}}>
+                    <button onClick={createCard}
+                      style={{width:"100%",background:"transparent",border:`1px dashed ${C.b1}`,borderRadius:10,padding:"8px",color:C.td,fontSize:12,cursor:"pointer"}}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor=C.a}
+                      onMouseLeave={e=>e.currentTarget.style.borderColor=C.b1}>
+                      + Adicionar
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {openCard&&(
+        <CardModalInterno card={openCard} onClose={()=>setOpenCard(null)}
+          onSave={saveCard} onDelete={deleteCard} isSocio={isSocio}/>
+      )}
+    </div>
+  );
+}
+
 // ======= 04_lista_view.jsx =======
 // Componente ListaView — compartilhado por 02_clientes e 04_demandas
 // Depende de: 00_globals (C, KANBAN_COLS, CLIENTS, TEAM)
@@ -9406,7 +9851,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   },[initTab]);
 
   // FIX 2: isApprover usa perms.aprovar com fallback seguro
-  const isApprover=perms!=null?!!perms.aprovar:CURRENT_USER.level===1;
+  const isApprover=perms!=null?(!!perms.aprovar||(tab==="internas"&&!!perms.aprovarDemandaInterna)):CURRENT_USER.level===1;
 
   // FIX 3: usuário efetivo para o CardModal
   const effectiveUser=viewingAs?TEAM.find(u=>u.id===viewingAs)||CURRENT_USER:CURRENT_USER;
@@ -9416,9 +9861,11 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // Copy queue: cards in "demanda" without ajustar flag
   const copyQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"&&!t.ajustar);
   // Ajuste queue: cards marcados para ajuste
-  const ajusteQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado");
+  const ajusteQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_"));
   // Publication queue: cards in "avaliacao"
   const pubQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.status==="avaliacao");
+  // Demandas Internas queue
+  const internasQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.status==="interno_avaliacao");
 
   const pushNotif=(notif)=>{
     if(setGlobalNotifs)setGlobalNotifs(p=>[{id:"n"+Date.now(),read:false,...notif},...p]);
@@ -9444,7 +9891,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   const approvePub=(task)=>{
     if(!isApprover)return;
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"aprovado",completedAt:new Date().toISOString().split("T")[0],timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Avaliação",toLabel:"Aprovado",from:"avaliacao",to:"aprovado",at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}]}:t));
+    const isInterna=task.status==="interno_avaliacao";
+    const toStatus=isInterna?"interno_aprovado":"aprovado";
+    const fromLabel=isInterna?"Concluído p/ Avaliação (Interna)":"Avaliação";
+    const toLabel=isInterna?"Aprovado (Interna)":"Aprovado";
+    const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}];
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl}:t));
+    if(window._sb)window._sb.from("tasks").update({status:toStatus,completed_at:new Date().toISOString().split("T")[0],timeline:newTl}).eq("id",task.id).then(()=>{});
     // Notify everyone + specific notification to social media assignees
     const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
     const socialTeam=TEAM.filter(u=>u.role&&u.role.toLowerCase().includes("social"));
@@ -9453,44 +9906,57 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       .filter(Boolean)
       .map(u=>u.name)
       .join(", ");
-    pushNotif({
-      type:"aprovacao",
-      icon:"🏆",
-      title:"✅ Material aprovado — Agende a publicação!",
-      body:'"'+task.title+'" foi aprovado. '+
-        (targetNames?targetNames+", organize":"Organize")+
-        ' o agendamento no Calendário de Publicações.',
-      user:CURRENT_USER.name,
-      at:"Agora",
-      taskId:task.id,
-      category:"agendamento"
-    });
-    setLastApproved(task);
+    if(isInterna){
+      pushNotif({type:"aprovacao",icon:"✅",title:"Demanda Interna Aprovada",body:'"'+task.title+'" foi aprovada e pode ser executada.',user:CURRENT_USER.name,at:"Agora",taskId:task.id,category:"interno"});
+    } else {
+      pushNotif({
+        type:"aprovacao",icon:"🏆",
+        title:"✅ Material aprovado — Agende a publicação!",
+        body:'"'+task.title+'" foi aprovado. '+(targetNames?targetNames+", organize":"Organize")+' o agendamento no Calendário de Publicações.',
+        user:CURRENT_USER.name,at:"Agora",taskId:task.id,category:"agendamento"
+      });
+      setLastApproved(task);
+    }
     setCardIdx(0);setImgIdx(0);
   };
 
   const requestAdjust=(task,feedback,drawingFiles,audioFiles,comments)=>{
     if(!isApprover)return;
+    const isInterna=task.status==="interno_avaliacao";
+    const toStatus=isInterna?"interno_execucao":"execucao";
+    const fromLabel=isInterna?"Concluído p/ Avaliação (Interna)":"Concluído p/ Avaliação";
+    const toLabel=isInterna?"Em Execução (Ajuste Interno)":"Em Execução (Ajuste)";
     const newFiles=[...(task.files||[]),...(drawingFiles||[]),...(audioFiles||[])];
     const newComments=[...(task.comments||[]),...(comments||[])];
-    // FIX: status volta para "execucao" (coluna visível) com isAlteracao=true para ficar laranja com "AJUSTAR"
-    const tl=[...(task.timeline||[]),{type:"status",fromLabel:"Concluído p/ Avaliação",toLabel:"Em Execução (Ajuste)",from:"avaliacao",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}];
+    const tl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}];
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{
       ...t,
-      status:"execucao",     // volta para Em Execução — coluna visível no kanban
-      isAlteracao:true,       // flag laranja + badge "AJUSTAR"
-      ajustar:true,           // compatibilidade com outras verificações
-      priority:"alta",        // sobe a prioridade
+      status:toStatus,
+      isAlteracao:!isInterna,
+      ajustar:!isInterna,
+      priority:"alta",
       colEnteredAt:new Date().toISOString(),
       files:newFiles,
       comments:newComments,
       timeline:tl,
     }:t));
-    pushNotif({type:"urgente",icon:"⚠",title:"⚠ Ajuste necessário — retornou para Execução",body:'"'+task.title+'" voltou para Em Execução com solicitação de ajuste. Verifique os comentários.',user:CURRENT_USER.name,at:"Agora"});
+    if(window._sb){
+      window._sb.from("tasks").update({
+        status:toStatus,
+        col_entered_at:new Date().toISOString(),
+        timeline:tl,
+        priority:"alta",
+        ajustar:!isInterna,
+        is_alteracao:!isInterna,
+        files:newFiles,
+        comments:newComments,
+      }).eq("id",task.id).then(()=>{});
+    }
+    pushNotif({type:"urgente",icon:"⚠",title:"⚠ Ajuste necessário",body:'"'+task.title+'" voltou para Em Execução com solicitação de ajuste.',user:CURRENT_USER.name,at:"Agora"});
     setCardIdx(0);setImgIdx(0);setEditModal(null);
   };
 
-  const queue=tab==="copys"?copyQueue:tab==="ajuste"?ajusteQueue:pubQueue;
+  const queue=tab==="copys"?copyQueue:tab==="ajuste"?ajusteQueue:tab==="internas"?internasQueue:pubQueue;
   // FIX 4: clamp seguro — se queue vazia, current fica undefined
   const clampedIdx=queue.length>0?Math.min(cardIdx,queue.length-1):0;
   const current=queue[clampedIdx]||null;
@@ -9510,8 +9976,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   const isSocio=CURRENT_USER.level===1;
   const TABS=[
-    {id:"copys",      label:"Aprovação de Copys",      count:copyQueue.length,  color:C.a},
-    {id:"publicacao", label:"Aprovação de Publicação", count:pubQueue.length,   color:C.gr},
+    {id:"copys",      label:"Aprovação de Copys",      count:copyQueue.length,    color:C.a},
+    {id:"publicacao", label:"Aprovação de Publicação", count:pubQueue.length,     color:C.gr},
+    ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda Interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
     ...((perms?.verAprAjuste||isSocio)?[{id:"ajuste", label:"Ajustes Solicitados", count:ajusteQueue.length, color:C.or}]:[]),
   ];
 
@@ -9547,14 +10014,14 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     })()}
 
     <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>
-      {tab==="copys"?"Aprovação de Copys":"Aprovação de Publicação"}
+      {tab==="copys"?"Aprovação de Copys":tab==="internas"?"Aprovação de Demandas Internas":tab==="ajuste"?"Ajustes Solicitados":"Aprovação de Publicação"}
     </div>
 
     {/* Empty state */}
     {queue.length===0&&(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:60,gap:16,textAlign:"center",background:C.card,borderRadius:16}}>
-      <div style={{fontSize:48}}>{tab==="copys"?"✅":"🎉"}</div>
-      <div style={{color:C.tx,fontWeight:800,fontSize:18}}>{tab==="copys"?"Nenhuma copy aguarda aprovação":"Nenhuma publicação aguarda aprovação"}</div>
-      <div style={{color:C.ts,fontSize:13}}>{tab==="copys"?"Tudo aprovado por aqui!":"Os materiais aprovados aparecerao aqui."}</div>
+      <div style={{fontSize:48}}>{tab==="copys"?"✅":tab==="internas"?"◧":"🎉"}</div>
+      <div style={{color:C.tx,fontWeight:800,fontSize:18}}>{tab==="copys"?"Nenhuma copy aguarda aprovação":tab==="internas"?"Nenhuma demanda interna aguarda aprovação":"Nenhuma publicação aguarda aprovação"}</div>
+      <div style={{color:C.ts,fontSize:13}}>{tab==="copys"?"Tudo aprovado por aqui!":tab==="internas"?"Tudo aprovado!":"Os materiais aprovados aparecerao aqui."}</div>
     </div>)}
 
     {/* Card view */}
@@ -9570,8 +10037,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       {/* Main content: image + sidebar */}
       <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
 
-        {/* Image panel */}
-        <div style={{flex:1,minWidth:260,display:"flex",flexDirection:"column",gap:8}}>
+        {/* Image panel — oculto para demandas internas */}
+        {tab!=="internas"&&<div style={{flex:1,minWidth:260,display:"flex",flexDirection:"column",gap:8}}>
           <div style={{background:C.s1,borderRadius:14,overflow:"hidden",minHeight:240,display:"flex",alignItems:"center",justifyContent:"center"}}>
             {allImgs.length>0
               ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="material" style={{width:"100%",maxHeight:"65vh",objectFit:"contain",display:"block"}}/>)
@@ -9587,7 +10054,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 style={{width:52,height:52,objectFit:"cover",borderRadius:8,cursor:"pointer",border:i===imgIdx?"2px solid "+C.a:"2px solid transparent",opacity:i===imgIdx?1:.5,transition:"all .15s"}}/>
             ))}
           </div>)}
-        </div>
+        </div>}
 
         {/* Right sidebar */}
         <div style={{width:"min(220px,100%)",flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
@@ -9609,10 +10076,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
           {/* Action buttons */}
           {isApprover?(<div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <button onClick={()=>setOpenCard(current)}
+            {tab!=="internas"&&<button onClick={()=>setOpenCard(current)}
               style={{width:"100%",background:C.b1,color:C.ts,border:"none",borderRadius:12,padding:"11px 0",fontWeight:700,fontSize:13,cursor:"pointer"}}>
               Visualizar / Editar
-            </button>
+            </button>}
 
             {tab==="copys"&&(<>
               <button onClick={()=>approveCopy(current)}
@@ -9634,6 +10101,17 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               <button onClick={()=>setEditModal(current)}
                 style={{width:"100%",background:C.or,color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px "+C.or+"40"}}>
                 Solicitar Ajuste
+              </button>
+            </>)}
+
+            {tab==="internas"&&(<>
+              <button onClick={()=>approvePub(current)}
+                style={{width:"100%",background:"#8b5cf6",color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px #8b5cf640"}}>
+                ✅ Aprovar Demanda
+              </button>
+              <button onClick={()=>requestAdjust(current,[],[],[],[])}
+                style={{width:"100%",background:C.or,color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px "+C.or+"40"}}>
+                ↩ Devolver para Execução
               </button>
             </>)}
           </div>):(<div style={{background:C.s1,borderRadius:10,padding:"12px",color:C.ts,fontSize:11,textAlign:"center"}}>
@@ -9955,6 +10433,7 @@ const PERM_TABS=[
   {id:"gestao",       icon:"◈",  label:"Gestão",            color:"#dc2626"},
   {id:"acessos",      icon:"🔒", label:"Acessos",           color:"#475569"},
   {id:"interno",      icon:"◐",  label:"Interno",           color:"#7c3aed"},
+  {id:"dem_internas",  icon:"◧",  label:"Demandas Internas", color:"#6366f1"},
 ];
 
 const PERM_GROUPS={
@@ -10082,10 +10561,17 @@ const PERM_GROUPS={
     {key:"verCarreira",       label:"Histórico de Carreira",      desc:"Ver histórico de carreira"},
     {key:"verAvaliacao360",   label:"Avaliação 360",              desc:"Ver avaliações da equipe"},
   ],
+  dem_internas:[
+    {section:"Acesso"},
+    {key:"verDemandasInternas",   label:"Ver Demandas Internas",       desc:"Acesso ao submenu de demandas internas"},
+    {key:"criarDemandaInterna",   label:"Criar Demanda Interna",        desc:"Pode abrir novos cards internos"},
+    {key:"aprovarDemandaInterna", label:"Aprovar Demanda Interna",      desc:"Vê e aprova no menu Aprovações > Demanda Interna"},
+    {key:"verTodosInternos",      label:"Ver Todos os Cards Internos",  desc:"Vê cards de todos — sem isso, vê só os seus"},
+  ]
 };
 
-
 function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks}){
+  // Prioridade: livePerms (localStorage) → ACCESS_STORE (padrão hardcoded) → DEFAULT_PERMS
   const [perms,setPerms]=useState(()=>({
     ...DEFAULT_PERMS,
     ...(ACCESS_STORE[user.id]||{}),
@@ -10093,7 +10579,6 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   }));
   const [saved,setSaved]=useState(false);
   const [activeTab,setActiveTab]=useState("dashboard");
-  const [openSections,setOpenSections]=useState(new Set());
   const savedTimer=useRef(null);
   const isPartnerUser=user.level===1;
 
@@ -10104,318 +10589,121 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
   };
 
   const toggle=(key)=>{
-    if(isPartnerUser)return;
+    if(isPartnerUser)return; // sócios sempre têm tudo
     setPerms(p=>({...p,[key]:!p[key]}));
     setSaved(false);
   };
 
-  const toggleSection=(id)=>{
-    setOpenSections(prev=>{
-      const next=new Set(prev);
-      next.has(id)?next.delete(id):next.add(id);
-      return next;
-    });
-  };
-
   const save=async()=>{
+    // 1. Atualiza memória e localStorage imediatamente
     ACCESS_STORE[user.id]={...perms};
-    if(setLivePerms)setLivePerms(p=>({...p,[user.id]:{...perms}}));
+    if(setLivePerms) setLivePerms(p=>({...p,[user.id]:{...perms}}));
     try{localStorage.setItem(`pixels-perms-${user.id}`,JSON.stringify(perms));}catch(e){}
+
+    // 2. Salva no Supabase — busca o perfil pelo team_id para obter o UUID real
     try{
-      const{data:profileRow,error:findErr}=await _sb.from("profiles").select("id").eq("team_id",user.id).single();
+      // Primeiro busca o UUID real do perfil pelo team_id
+      const {data:profileRow,error:findErr}=await _sb
+        .from("profiles")
+        .select("id")
+        .eq("team_id",user.id)
+        .single();
+
       if(findErr||!profileRow){
-        await _sb.from("profiles").upsert({team_id:user.id,name:user.name,permissions:perms},{onConflict:"team_id"});
-        flashSaved();return;
+        // Perfil não existe — tenta fazer upsert pelo team_id diretamente
+        await _sb
+          .from("profiles")
+          .upsert({team_id:user.id, name:user.name, permissions:perms},{onConflict:"team_id"});
+        flashSaved();
+        return;
       }
-      await _sb.from("profiles").update({permissions:perms}).eq("id",profileRow.id);
+
+      // Atualiza pelo UUID real (sempre funciona independente de RLS por team_id)
+      await _sb
+        .from("profiles")
+        .update({permissions:perms})
+        .eq("id",profileRow.id);
+
     }catch(e){}
+
     flashSaved();
   };
 
-  // ── Ícone SVG igual ao NavIcon do menu ──────────────────
-  const TabIcon=({id,color,size=15})=>{
-    const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",flexShrink:0};
-    if(id==="dashboard")  return <svg {...p}><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>;
-    if(id==="demandas")   return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
-    if(id==="aprovacoes") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-5"/></svg>;
-    if(id==="chat")       return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
-    if(id==="clientes")   return <svg {...p}><rect x="2" y="7" width="20" height="15" rx="1"/><path d="M16 22V7M8 22V7"/><path d="M2 12h20"/><path d="M7 3h10l2 4H5l2-4z"/></svg>;
-    if(id==="analises")   return <svg {...p}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
-    if(id==="ia")         return <svg {...p}><path d="M13 2L4.09 12.26a1 1 0 00.92 1.74H11l-1 8 8.91-10.26a1 1 0 00-.92-1.74H13l1-8z"/></svg>;
-    if(id==="portal")     return <svg {...p}><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>;
-    if(id==="gestao")     return <svg {...p}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>;
-    if(id==="acessos")    return <svg {...p}><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/><circle cx="12" cy="16" r="1" fill={color}/></svg>;
-    if(id==="interno")    return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>;
-    return <svg {...p}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
-  };
+  const tasks=(propTasks||[]).filter(t=>t.assignee===user.id);
+  const done=tasks.filter(t=>t.status==="aprovado");
+  const open=tasks.filter(t=>t.status!=="aprovado"&&t.status!=="pausado");
+  const late=open.filter(t=>daysLeft(t.deadline)<0);
 
-  // ── Toggle switch ────────────────────────────────────────
-  const Toggle=({on,onClick})=>(
-    <div onClick={e=>{e.stopPropagation();if(!isPartnerUser)onClick();}}
-      style={{width:40,height:22,borderRadius:99,background:on?user.color:C.b2,cursor:isPartnerUser?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
-      <div style={{position:"absolute",top:3,left:on?20:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,0.25)"}}/>
-    </div>
-  );
+  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`2px solid ${user.color}`,borderRadius:22,width:"100%",maxWidth:680,maxHeight:"92vh",overflowY:"auto",display:"flex",flexDirection:"column",boxShadow:`0 0 60px ${user.color}30`}}>
 
-  // ── Linha de permissão ────────────────────────────────────
-  const PermRow=({item})=>{
-    const on=isPartnerUser?true:(perms[item.key]||false);
-    return(
-      <div onClick={()=>toggle(item.key)}
-        style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 4px",borderBottom:`1px solid ${C.b1}22`,cursor:isPartnerUser?"default":"pointer",transition:"background .1s"}}>
-        <div style={{flex:1,minWidth:0,paddingRight:16}}>
-          <div style={{color:on?C.tx:C.ts,fontSize:13,fontWeight:on?600:400,lineHeight:1.3}}>{item.label}</div>
-          <div style={{color:C.td,fontSize:11,marginTop:3,lineHeight:1.4}}>{item.desc}</div>
+      {/* Header */}
+      <div style={{background:`linear-gradient(135deg,${user.color},${user.color}88)`,padding:"20px 24px",borderRadius:"20px 20px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,zIndex:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{width:52,height:52,borderRadius:16,background:"rgba(255,255,255,0.2)",border:"2px solid rgba(255,255,255,0.4)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#fff"}}>{user.av}</div>
+          <div>
+            <div style={{color:"#fff",fontWeight:900,fontSize:18}}>{user.name}</div>
+            <div style={{color:"rgba(255,255,255,0.8)",fontSize:12,marginTop:2}}>{user.role} · Nível {user.level}</div>
+          </div>
         </div>
-        <Toggle on={on} onClick={()=>toggle(item.key)}/>
+        <button onClick={onClose} style={{background:"rgba(0,0,0,0.3)",border:"none",borderRadius:10,padding:"7px 13px",color:"#fff",cursor:"pointer",fontWeight:700}}>✕</button>
       </div>
-    );
-  };
 
-  // ── Accordion genérico ────────────────────────────────────
-  const Accordion=({id,label,items})=>{
-    const isOpen=openSections.has(id);
-    const activeCount=items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key])).length;
-    const total=items.filter(i=>i.key).length;
-    return(
-      <div style={{border:`1px solid ${C.b1}`,borderRadius:12,overflow:"hidden",marginBottom:8}}>
-        <button onClick={()=>toggleSection(id)}
-          style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:isOpen?user.color+"0c":C.s1,border:"none",cursor:"pointer",transition:"background .15s"}}>
-          <span style={{color:C.tx,fontWeight:600,fontSize:13}}>{label}</span>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            {total>0&&<span style={{background:user.color+"22",color:user.color,borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700}}>{activeCount}/{total}</span>}
-            <span style={{color:C.ts,fontSize:11,display:"inline-block",transform:isOpen?"rotate(180deg)":"none",transition:"transform .2s"}}>▾</span>
-          </div>
-        </button>
-        {isOpen&&(
-          <div style={{padding:"4px 16px 8px",background:C.card}}>
-            {items.map((item,i)=><PermRow key={item.key||i} item={item}/>)}
-          </div>
-        )}
+      {/* Quick stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,padding:"16px 24px 0"}}>
+        {[
+          {l:"Demandas",v:tasks.length,c:user.color},
+          {l:"Abertas",v:open.length,c:C.yw},
+          {l:"Aprovadas",v:done.length,c:C.gr},
+          {l:"Atrasadas",v:late.length,c:late.length>0?C.rd:C.td},
+        ].map(s=><div key={s.l} style={{background:`linear-gradient(135deg,${s.c}22,${s.c}0a)`,border:`1px solid ${s.c}33`,borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+          <div style={{color:s.c,fontWeight:900,fontSize:20}}>{s.v}</div>
+          <div style={{color:C.td,fontSize:10,marginTop:2}}>{s.l}</div>
+        </div>)}
       </div>
-    );
-  };
 
-  // ── Helper: parse PERM_GROUPS em seções ─────────────────
-  const parseSections=(groupKey,prefix)=>{
-    const sections=[];
-    let cur=null;
-    (PERM_GROUPS[groupKey]||[]).forEach(item=>{
-      if(item.section){
-        cur={id:prefix+"_"+item.section.toLowerCase().replace(/[\s&]+/g,"_"),label:item.section,items:[]};
-        sections.push(cur);
-      } else {
-        if(!cur){cur={id:prefix+"_geral",label:"Acesso Geral",items:[]};sections.push(cur);}
-        cur.items.push(item);
-      }
-    });
-    return sections;
-  };
-
-  // ── Contador por aba ────────────────────────────────────
-  const tabCount=(tabId)=>{
-    const items=(PERM_GROUPS[tabId]||[]).filter(i=>i.key);
-    return{active:items.filter(i=>isPartnerUser?true:perms[i.key]).length,total:items.length};
-  };
-
-  // ── Renderiza conteúdo da aba ativa ─────────────────────
-  const renderTabContent=()=>{
-    // Abas de lista direta (sem agrupamento)
-    const directTabs=["dashboard","aprovacoes","ia","portal","gestao","acessos"];
-    if(directTabs.includes(activeTab)){
-      return(PERM_GROUPS[activeTab]||[]).map((item,i)=>
-        item.key?<PermRow key={item.key} item={item}/>:null
-      );
-    }
-
-    // Demandas — 4 seções accordion
-    if(activeTab==="demandas"){
-      const sections=parseSections("demandas","dem");
-      return sections.map(s=><Accordion key={s.id} id={s.id} label={s.label} items={s.items}/>);
-    }
-
-    // Chat — 2 primeiros itens diretos + seções accordion
-    if(activeTab==="chat"){
-      const sections=parseSections("chat","chat");
-      const firstSection=sections[0];
-      const rest=sections.slice(1);
-      return <>
-        {firstSection&&firstSection.items.map(item=><PermRow key={item.key} item={item}/>)}
-        {rest.length>0&&<div style={{marginTop:8}}>{rest.map(s=><Accordion key={s.id} id={s.id} label={s.label} items={s.items}/>)}</div>}
-      </>;
-    }
-
-    // Análises — acesso direto + subpáginas accordion
-    if(activeTab==="analises"){
-      const sections=parseSections("analises","ana");
-      const firstSection=sections[0];
-      const rest=sections.slice(1);
-      return <>
-        {firstSection&&firstSection.items.map(item=><PermRow key={item.key} item={item}/>)}
-        {rest.length>0&&<div style={{marginTop:8}}>{rest.map(s=><Accordion key={s.id} id={s.id} label={s.label} items={s.items}/>)}</div>}
-      </>;
-    }
-
-    // Interno — acesso direto + subpáginas accordion
-    if(activeTab==="interno"){
-      const sections=parseSections("interno","int");
-      const firstSection=sections[0];
-      const rest=sections.slice(1);
-      return <>
-        {firstSection&&firstSection.items.map(item=><PermRow key={item.key} item={item}/>)}
-        {rest.length>0&&<div style={{marginTop:8}}>{rest.map(s=><Accordion key={s.id} id={s.id} label={s.label} items={s.items}/>)}</div>}
-      </>;
-    }
-
-    // Clientes — acesso global + accordion por cliente
-    if(activeTab==="clientes"){
-      const SUB_PERMS=["metricas","mindmap","concorrencia","links"];
-      const SUB_LABELS={metricas:"Métricas",mindmap:"Mapa Mental",concorrencia:"Concorrência",links:"Links & Acessos"};
-      const globalItems=(PERM_GROUPS.clientes||[]).filter(i=>i.key&&(i.key==="verClientes"||i.key==="verDadosCliente"));
-      const clientList=CLIENTS.map(c=>c.id);
-
-      return <>
-        {/* Permissões globais diretas */}
-        {globalItems.map(item=><PermRow key={item.key} item={item}/>)}
-
-        {/* Separador */}
-        <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,margin:"16px 0 8px",paddingBottom:6,borderBottom:`1px solid ${C.b1}`}}>Por Cliente</div>
-
-        {/* Accordion por cliente */}
-        {clientList.map(cid=>{
-          const cl=CLIENTS.find(c=>c.id===cid);
-          if(!cl)return null;
-          const mainKey="verCliente_"+cid;
-          const mainOn=isPartnerUser?true:(perms[mainKey]||false);
-          const isOpen=openSections.has("cl_"+cid);
-          const subItems=SUB_PERMS.map(sp=>({
-            key:"verCliente_"+cid+"_"+sp,
-            label:SUB_LABELS[sp],
-            desc:"Acesso a "+SUB_LABELS[sp].toLowerCase()+" do cliente",
-          }));
-          const activeSubCount=subItems.filter(i=>isPartnerUser?true:perms[i.key]).length;
-
-          return(
-            <div key={cid} style={{border:`1px solid ${mainOn?user.color+"44":C.b1}`,borderRadius:12,overflow:"hidden",marginBottom:8,transition:"border-color .2s"}}>
-
-              {/* Header do cliente */}
-              <div style={{display:"flex",alignItems:"center",gap:10,padding:"11px 14px",background:mainOn?user.color+"08":C.s1}}>
-                <div style={{width:30,height:30,borderRadius:8,overflow:"hidden",background:"#fff",border:`1px solid ${C.b1}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <ClientLogo clientId={cid} size="xs"/>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:C.tx,fontWeight:600,fontSize:13}}>{cl.name}</div>
-                  {mainOn&&<div style={{color:C.td,fontSize:10,marginTop:1}}>{activeSubCount}/4 ferramentas liberadas</div>}
-                </div>
-                {/* Toggle acesso principal */}
-                <Toggle on={mainOn} onClick={()=>toggle(mainKey)}/>
-                {/* Expandir sub-permissões */}
-                <button onClick={()=>toggleSection("cl_"+cid)}
-                  style={{background:"none",border:`1px solid ${C.b1}`,borderRadius:7,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.ts,fontSize:11,flexShrink:0,transition:"all .15s"}}
-                  onMouseEnter={e=>{e.currentTarget.style.background=user.color+"18";e.currentTarget.style.color=user.color;}}
-                  onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
-                  {isOpen?"▴":"▾"}
-                </button>
-              </div>
-
-              {/* Sub-permissões expandidas */}
-              {isOpen&&(
-                <div style={{borderTop:`1px solid ${C.b1}22`,padding:"10px 14px 12px",background:C.card}}>
-                  {!mainOn
-                    ?<div style={{color:C.td,fontSize:11,fontStyle:"italic",padding:"4px 0"}}>Ative o acesso ao cliente para liberar as ferramentas.</div>
-                    :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      {subItems.map(sub=>{
-                        const on=isPartnerUser?true:(perms[sub.key]||false);
-                        return(
-                          <div key={sub.key} onClick={()=>toggle(sub.key)}
-                            style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"9px 12px",background:on?user.color+"0e":C.s1,borderRadius:9,border:`1px solid ${on?user.color+"33":C.b1}`,cursor:isPartnerUser?"default":"pointer",transition:"all .15s"}}>
-                            <span style={{color:on?C.tx:C.ts,fontSize:12,fontWeight:on?600:400}}>{sub.label}</span>
-                            <Toggle on={on} onClick={()=>toggle(sub.key)}/>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  }
-                </div>
-              )}
-            </div>
-          );
+      {/* Tab Navigation */}
+      <div style={{display:"flex",gap:0,overflowX:"auto",borderBottom:`1px solid ${C.b1}`,background:C.s1,flexShrink:0}}>
+        {PERM_TABS.map(tab=>{
+          const items=PERM_GROUPS[tab.id]||[];
+          const activeItems=items.filter(i=>i.key&&(isPartnerUser?true:perms[i.key]));
+          const totalKeys=items.filter(i=>i.key).length;
+          const isActive=activeTab===tab.id;
+          return <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
+            style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"10px 14px",background:isActive?C.card:"transparent",border:"none",borderBottom:isActive?`2px solid ${tab.color}`:"2px solid transparent",color:isActive?tab.color:C.ts,cursor:"pointer",whiteSpace:"nowrap",transition:"all .12s",flexShrink:0,marginBottom:-1}}>
+            <span style={{fontSize:14}}>{tab.icon}</span>
+            <span style={{fontSize:10,fontWeight:isActive?700:500}}>{tab.label}</span>
+            {totalKeys>0&&<span style={{fontSize:8,color:isActive?tab.color:C.td}}>{activeItems.length}/{totalKeys}</span>}
+          </button>;
         })}
-      </>;
-    }
+      </div>
 
-    return null;
-  };
+      {/* Permissions — aba ativa */}
+      <div style={{padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flex:1}}>
+        {isPartnerUser&&<div style={{background:C.a+"18",border:`1px solid ${C.a}44`,borderRadius:12,padding:"10px 14px",color:C.a,fontSize:12,fontWeight:600}}>⚡ Sócios têm acesso total e irrestrito ao sistema.</div>}
 
-  return(
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()}
-        style={{background:C.card,border:`1px solid ${user.color}44`,borderRadius:22,width:"100%",maxWidth:720,maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 8px 60px rgba(0,0,0,0.35)"}}>
-
-        {/* ── Header ── */}
-        <div style={{background:`linear-gradient(135deg,${user.color},${user.color}99)`,padding:"18px 24px",borderRadius:"20px 20px 0 0",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:14}}>
-            <div style={{width:48,height:48,borderRadius:14,background:"rgba(255,255,255,0.2)",border:"2px solid rgba(255,255,255,0.35)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:900,color:"#fff"}}>{user.av}</div>
-            <div>
-              <div style={{color:"#fff",fontWeight:900,fontSize:17}}>{user.name}</div>
-              <div style={{color:"rgba(255,255,255,0.75)",fontSize:12,marginTop:2}}>{user.role} · Nível {user.level}</div>
+        {(PERM_GROUPS[activeTab]||[]).map((item,idx)=>{
+          if(item.section) return <div key={idx} style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginTop:idx>0?8:0,paddingBottom:6,borderBottom:`1px solid ${C.b1}`}}>{item.section}</div>;
+          const on=isPartnerUser?true:(perms[item.key]||false);
+          const tabColor=PERM_TABS.find(t=>t.id===activeTab)?.color||user.color;
+          return <div key={item.key} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:on?tabColor+"10":C.s1,borderRadius:10,border:`1px solid ${on?tabColor+"33":C.b1}`,transition:"all .15s",cursor:isPartnerUser?"default":"pointer"}} onClick={()=>toggle(item.key)}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:on?C.tx:C.ts,fontSize:13,fontWeight:on?700:500}}>{item.label}</div>
+              <div style={{color:C.td,fontSize:10,marginTop:1}}>{item.desc}</div>
             </div>
-          </div>
-          <button onClick={onClose} style={{background:"rgba(0,0,0,0.25)",border:"none",borderRadius:10,padding:"7px 14px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>✕</button>
-        </div>
-
-        {/* ── Body: sidebar + conteúdo ── */}
-        <div style={{display:"flex",flex:1,overflow:"hidden",borderRadius:"0 0 20px 20px"}}>
-
-          {/* Sidebar vertical de abas */}
-          <div style={{width:136,flexShrink:0,background:C.s1,borderRight:`1px solid ${C.b1}`,overflowY:"auto",padding:"10px 8px",display:"flex",flexDirection:"column",gap:2}}>
-            {PERM_TABS.map(tab=>{
-              const isActive=activeTab===tab.id;
-              const{active,total}=tabCount(tab.id);
-              const color=isActive?user.color:C.ts;
-              return(
-                <button key={tab.id}
-                  onClick={()=>{setActiveTab(tab.id);setOpenSections(new Set());}}
-                  style={{display:"flex",alignItems:"center",gap:9,padding:"9px 10px",borderRadius:9,border:"none",borderLeft:isActive?`3px solid ${user.color}`:"3px solid transparent",background:isActive?user.color+"15":"transparent",cursor:"pointer",textAlign:"left",transition:"all .12s",width:"100%"}}>
-                  <TabIcon id={tab.id} size={15} color={color}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{color,fontSize:11,fontWeight:isActive?700:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{tab.label}</div>
-                    {total>0&&<div style={{fontSize:9,marginTop:1,color:isActive?user.color:C.td}}>{active}/{total}</div>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Área de conteúdo */}
-          <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
-
-            {/* Aviso sócio */}
-            {isPartnerUser&&(
-              <div style={{margin:"12px 16px 0",flexShrink:0,background:C.a+"14",border:`1px solid ${C.a}33`,borderRadius:10,padding:"9px 14px",color:C.a,fontSize:12,fontWeight:600}}>
-                ⚡ Sócios têm acesso total e irrestrito ao sistema.
-              </div>
-            )}
-
-            {/* Permissões com scroll */}
-            <div style={{flex:1,overflowY:"auto",padding:"14px 20px"}}>
-              {renderTabContent()}
+            <div style={{width:42,height:24,borderRadius:99,background:on?tabColor:C.b2,cursor:isPartnerUser?"not-allowed":"pointer",position:"relative",transition:"background .2s",flexShrink:0,marginLeft:12}}>
+              <div style={{position:"absolute",top:3,left:on?20:3,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left .2s",boxShadow:"0 1px 4px rgba(0,0,0,0.3)"}}/>
             </div>
+          </div>;
+        })}
 
-            {/* Botão salvar fixo no rodapé */}
-            <div style={{padding:"12px 16px",borderTop:`1px solid ${C.b1}`,background:C.card,flexShrink:0}}>
-              <button onClick={save} disabled={saved}
-                style={{width:"100%",background:saved?"#22c55e":`linear-gradient(135deg,${user.color},${user.color}cc)`,color:"#fff",border:"none",borderRadius:11,padding:"13px 0",fontWeight:800,fontSize:14,cursor:saved?"default":"pointer",transition:"background .3s",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-                {saved?"✓ Permissões Salvas!":"💾 Salvar Permissões"}
-              </button>
-            </div>
-          </div>
-        </div>
+        <button onClick={save} disabled={saved} style={{background:`linear-gradient(135deg,${user.color},${user.color}88)`,color:"#fff",border:"none",borderRadius:12,padding:"14px 0",fontWeight:900,fontSize:15,cursor:saved?"default":"pointer",boxShadow:`0 4px 18px ${user.color}40`,marginTop:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:saved?0.8:1}}>
+          {saved?<>✓ Permissões Salvas!</>:<>💾 Salvar Permissões</>}
+        </button>
       </div>
     </div>
-  );
+  </div>;
 }
-
 
 /* ─── Constantes estáticas de CollabProfilePage ─── */
 const COLLAB_TABS=[
@@ -15086,24 +15374,6 @@ export default function AgencyOS(){
   const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};return{...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})};};
   const myPerms=getPerms(CURRENT_USER.id);
 
-  // ── Call state global (persiste entre páginas) ───────────
-  const [,callForceUpdate]=useState(0);
-  window._pixelsCallForceUpdate=()=>callForceUpdate(v=>v+1);
-
-  // Escuta encerramento de call pelo criador via Supabase broadcast
-  useEffect(()=>{
-    const ch=window._sb.channel("pixels-call-events")
-      .on("broadcast",{event:"call_ended"},(payload)=>{
-        const myCall=window._pixelsCallState;
-        if(myCall&&myCall.channelId===payload.payload?.channelId&&myCall.createdBy!==CURRENT_USER.id){
-          window._pixelsCallState=null;
-          callForceUpdate(v=>v+1);
-        }
-      })
-      .subscribe();
-    return()=>{window._sb.removeChannel(ch);};
-  },[]);
-
   // ── Fetch tasks do Supabase ───────────────────────────────
   const fetchTasks = async (token) => {
     const tok = token||tokenRef.current||getToken();
@@ -15386,9 +15656,12 @@ export default function AgencyOS(){
       case "demandas":
       case "demandas_kanban":      return p.verDemandas;
       case "demandas_cal_pub":     return p.verCalPub||isSocio;
-      case "aprovacoes":
+      case "demandas_internas":    return p.verDemandasInternas||isSocio;
+      case "demandas_cal_interno": return p.verInterno||isSocio;
+      case "aprovacoes":        return p.verAprovacoes||p.aprovarDemandaInterna||isSocio;
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
+      case "aprovacoes_internas":  return p.aprovarDemandaInterna||isSocio;
       case "chat":                 return p.verChat;
       case "clientes":             return p.verClientes;
       case "analises":
@@ -15429,7 +15702,7 @@ export default function AgencyOS(){
   // Pendências de aprovação — para destaque laranja no menu
   const pendingAprovacoes=tasks.filter(t=>
     !t.deletedAt&&(
-      t.status==="avaliacao"||(t.status==="demanda"&&!t.ajustar)
+      t.status==="avaliacao"||(t.status==="demanda"&&!t.ajustar)||t.status==="interno_avaliacao"
     )
   ).length;
 
@@ -15456,11 +15729,14 @@ export default function AgencyOS(){
       case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)} selfProfile={selfProfileData}/>:<NoPerm/>;
       case "demandas":
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
+      case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "demandas_cal_interno":  return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
+      case "aprovacoes_internas":   return (effectivePerms.aprovarDemandaInterna||isSocio)?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="internas"/>:<NoPerm/>;
       case "analises":
       case "analises_producao":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseProd)||isSocio?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
       case "analises_gargalos":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseGarg)||isSocio?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
@@ -15480,8 +15756,7 @@ export default function AgencyOS(){
       case "portal_chat":
       case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno":
-      case "interno":
-      case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
+      case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>; // legado
       case "interno_pontuacao":     return (effectivePerms.verInterno&&effectivePerms.verPontuacao)||isSocio?<PagePontuacao {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_mapeamento":    return (effectivePerms.verInterno&&effectivePerms.verMapeamento)||isSocio?<PageMapeamento {...p}/>:<NoPerm/>;
       case "interno_conexoes":      return (effectivePerms.verInterno&&effectivePerms.verConexoes)||isSocio?<PageConexoes {...p}/>:<NoPerm/>;
@@ -15506,95 +15781,6 @@ export default function AgencyOS(){
   const markRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));
 
   return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",position:"relative"}}>
-
-    {/* ── PIXELS CALL — painel flutuante global (persiste entre páginas) ── */}
-    {(()=>{
-      const callState=window._pixelsCallState;
-      if(!callState||!callState.url)return null;
-      const isMin=callState.minimized;
-      const isMax=callState.maximized;
-      const endCall=()=>{
-        if(callState.createdBy===CURRENT_USER.id){
-          try{window._sb.channel("pixels-call-events").send({type:"broadcast",event:"call_ended",payload:{channelId:callState.channelId}});}catch(e){}
-        }
-        window._pixelsCallState=null;
-        window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();
-      };
-      const update=(patch)=>{window._pixelsCallState={...callState,...patch};window._pixelsCallForceUpdate&&window._pixelsCallForceUpdate();};
-
-      // Maximizado — modal tela cheia
-      if(isMax) return(
-        <div style={{position:"fixed",inset:0,zIndex:600,background:"rgba(0,0,0,0.95)",display:"flex",flexDirection:"column"}}>
-          {/* Header fino */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 20px",background:"rgba(255,255,255,0.04)",borderBottom:"1px solid rgba(255,255,255,0.08)",flexShrink:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:7,height:7,borderRadius:"50%",background:"#22c55e"}}/>
-              <span style={{color:"rgba(255,255,255,0.9)",fontSize:12,fontWeight:600,letterSpacing:.3}}>Pixels Call · {callState.channelName}</span>
-            </div>
-            <div style={{display:"flex",gap:6}}>
-              <button onClick={()=>update({maximized:false})}
-                style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:7,padding:"5px 12px",color:"rgba(255,255,255,0.7)",fontSize:11,cursor:"pointer",fontWeight:600}}>
-                ↙ Minimizar
-              </button>
-              <button onClick={endCall}
-                style={{background:"#ef444420",border:"1px solid #ef444440",borderRadius:7,padding:"5px 14px",color:"#ef4444",fontSize:11,cursor:"pointer",fontWeight:700}}>
-                {callState.createdBy===CURRENT_USER.id?"Encerrar call":"Sair"}
-              </button>
-            </div>
-          </div>
-          <iframe
-            src={callState.url+"?userName="+encodeURIComponent(CURRENT_USER.name)}
-            allow="camera; microphone; fullscreen; display-capture; autoplay"
-            style={{flex:1,width:"100%",border:"none"}}
-          />
-        </div>
-      );
-
-      // Flutuante normal / minimizado
-      return(
-        <div style={{
-          position:"fixed",bottom:20,right:20,zIndex:500,
-          borderRadius:14,overflow:"hidden",
-          border:"1px solid rgba(124,58,237,0.3)",
-          boxShadow:"0 12px 48px rgba(0,0,0,0.5)",
-          background:"#111",
-          width:isMin?220:420,
-          transition:"width .25s ease",
-        }}>
-          {/* Header minimalista */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"7px 10px",background:"rgba(255,255,255,0.03)",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <div style={{width:6,height:6,borderRadius:"50%",background:"#22c55e",flexShrink:0}}/>
-              <span style={{color:"rgba(255,255,255,0.8)",fontSize:11,fontWeight:600}}>
-                {isMin?`Pixels Call · ${callState.channelName}`:`#${callState.channelName}`}
-              </span>
-            </div>
-            <div style={{display:"flex",gap:4}}>
-              {/* Minimizar */}
-              <button onClick={()=>update({minimized:!isMin,maximized:false})} title={isMin?"Expandir":"Minimizar"}
-                style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:5,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.6)",fontSize:12,cursor:"pointer"}}>
-                {isMin?"▲":"▼"}
-              </button>
-              {/* Maximizar */}
-              {!isMin&&<button onClick={()=>update({maximized:true,minimized:false})} title="Tela cheia"
-                style={{background:"rgba(255,255,255,0.07)",border:"none",borderRadius:5,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",color:"rgba(255,255,255,0.6)",fontSize:11,cursor:"pointer"}}>
-                ⤢
-              </button>}
-              {/* Sair/Encerrar */}
-              <button onClick={endCall} title={callState.createdBy===CURRENT_USER.id?"Encerrar call":"Sair"}
-                style={{background:"#ef444418",border:"none",borderRadius:5,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",color:"#ef4444",fontSize:12,cursor:"pointer",fontWeight:700}}>
-                ✕
-              </button>
-            </div>
-          </div>
-          {!isMin&&<iframe
-            src={callState.url+"?userName="+encodeURIComponent(CURRENT_USER.name)}
-            allow="camera; microphone; fullscreen; display-capture; autoplay"
-            style={{width:"100%",height:320,border:"none",display:"block"}}
-          />}
-        </div>
-      );
-    })()}
     {showSelfProfile&&<CollabProfilePage
       user={CURRENT_USER}
       profile={selfProfileData}
@@ -15703,7 +15889,7 @@ export default function AgencyOS(){
           return(<div key={n.id}>
             <button onClick={()=>{
               if(sideCollapsed&&!isMob){setSideCollapsed(false);try{localStorage.setItem("pixels-sidebar-collapsed","0");}catch(e){}}
-              if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded)nav(n.children[0].id);}
+              if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded){const firstVisible=n.children.find(c=>canSee(c,effectivePerms));if(firstVisible)nav(firstVisible.id);}}
               else nav(n.id);
             }}
             title={sideCollapsed&&!isMob?n.label:undefined}
@@ -15719,7 +15905,7 @@ export default function AgencyOS(){
               </span>}
             </button>
             {(!sideCollapsed||isMob)&&hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
-              {n.children.map(child=>(
+              {n.children.filter(child=>canSee(child,effectivePerms)).map(child=>(
                 <button key={child.id} onClick={()=>nav(child.id)}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:400,fontSize:11,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
                   <NavIcon id={child.id} size={14} color={page===child.id?C.a:C.ts}/><span style={{marginLeft:2}}>{child.label}</span>
