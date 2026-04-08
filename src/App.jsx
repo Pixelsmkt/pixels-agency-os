@@ -13154,11 +13154,21 @@ function PageRadarEntrega({ tasks, isMob }) {
 
   // ── Helpers ──
   // Melhoria 1: fallback createdAt → colEnteredAt → publishDate
-  const dataEntrada = (t) => {
-    if(t.createdAt)    return new Date(t.createdAt);
-    if(t.colEnteredAt) return new Date(t.colEnteredAt);
-    if(t.publishDate)  return new Date(t.publishDate+"T00:00:00");
+  const parseData = (s) => {
+    if(!s) return null;
+    // Tenta ISO primeiro (ex: "2026-04-08T14:30:00.000Z") — Demandas Internas
+    let d = new Date(s);
+    if(!isNaN(d)) return d;
+    // Tenta formato pt-BR "08/04/2026" ou "08/04/2026 às 14:30" — Fluxo de Demandas
+    const match = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if(match) return new Date(`${match[3]}-${match[2]}-${match[1]}T00:00:00`);
     return null;
+  };
+
+  const dataEntrada = (t) => {
+    return parseData(t.createdAt)
+        || parseData(t.colEnteredAt)
+        || (t.publishDate ? new Date(t.publishDate+"T00:00:00") : null);
   };
 
   const passaCliente = (t) => {
@@ -13184,9 +13194,9 @@ function PageRadarEntrega({ tasks, isMob }) {
   const _diffTotal = totalAnt>0  ? Math.round(((total-totalAnt)/totalAnt)*100)               : null;
 
   const calcTempo = (t) => {
-    const ini=t.createdAt?new Date(t.createdAt):null;
+    const ini=parseData(t.createdAt);
     const fim=t.completedAt?new Date(t.completedAt):null;
-    if(!ini||!fim)return null;
+    if(!ini||!fim||isNaN(ini)||isNaN(fim))return null;
     const d=Math.round((fim-ini)/86400000);
     return d>=0?d:null;
   };
@@ -13228,12 +13238,14 @@ function PageRadarEntrega({ tasks, isMob }) {
     return <span style={{background:up?C.gr+"20":C.rd+"20",color:up?C.gr:C.rd,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700,marginLeft:6}}>{up?"▲":"▼"} {Math.abs(diff)}%</span>;
   };
 
-  const fmtDataCard = (t) =>
-    t.completedAt    ? new Date(t.completedAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
-    : t.publishDate  ? new Date(t.publishDate+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
-    : t.colEnteredAt ? new Date(t.colEnteredAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
-    : t.createdAt    ? new Date(t.createdAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})
-    : "—";
+  const fmtDataCard = (t) => {
+    const opts = {day:"2-digit",month:"2-digit"};
+    const d = t.completedAt   ? new Date(t.completedAt)
+            : t.publishDate   ? new Date(t.publishDate+"T00:00:00")
+            : t.colEnteredAt  ? new Date(t.colEnteredAt)
+            : parseData(t.createdAt); // usa parseData para suportar formato pt-BR
+    return d&&!isNaN(d) ? d.toLocaleDateString("pt-BR",opts) : "—";
+  };
 
   // Melhoria 4: ItemRow com badge de origem e cliente
   const ItemRow = ({t, showOrigem})=>{
