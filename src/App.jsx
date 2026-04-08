@@ -13130,9 +13130,19 @@ function PageRadarEntrega({ tasks, isMob }) {
   const mesInicio = parseMonthKey(mesKey);
   const mesFim    = new Date(mesInicio.getFullYear(), mesInicio.getMonth()+1, 0, 23, 59, 59);
 
-  // Helper: data de entrada de um card no sistema
+  // Helper: data relevante do card para filtro de período
+  // Para publicações/executados: colEnteredAt = quando entrou na coluna final (mais preciso)
+  // Para demandas em andamento: createdAt = quando o card foi criado
   const dataEntrada = (t) => {
-    if(t.createdAt) return new Date(t.createdAt);
+    const finalStatuses = ["publicado","interno_executado"];
+    if(finalStatuses.includes(t.status)){
+      // card concluído — usa quando entrou na coluna final, ou completedAt
+      if(t.completedAt)  return new Date(t.completedAt);
+      if(t.colEnteredAt) return new Date(t.colEnteredAt);
+      if(t.publishDate)  return new Date(t.publishDate+"T00:00:00");
+    }
+    // card em andamento — usa quando foi criado
+    if(t.createdAt)    return new Date(t.createdAt);
     if(t.colEnteredAt) return new Date(t.colEnteredAt);
     return null;
   };
@@ -13320,23 +13330,39 @@ function PageRadarEntrega({ tasks, isMob }) {
       </div>
 
       {/* Métricas do período */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:10}}>
-        {[
-          {label:"Total no período", val:totalEntradas,           diff:diffTotal,  color:C.a,      sub:null},
-          {label:"Publicações",      val:publicacoes.length,      diff:_diffPubl,   color:"#6366f1", sub:mediaPubl?mediaPubl+"d médio":null},
-          {label:"Extras",           val:extras.length,           diff:_diffExtra,  color:"#f59e0b", sub:mediaExtra?mediaExtra+"d médio":null},
-          {label:"Concluídas",       val:publicacoes.length+extras.length, diff:null, color:C.gr, sub:null},
-        ].map((m,i)=>(
-          <div key={i} style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"14px 16px",position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:m.color}}/>
-            <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>{m.label}</div>
-            <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-              <span style={{color:m.color,fontWeight:900,fontSize:26,letterSpacing:-1}}>{m.val}</span>
-              <DiffBadge diff={m.diff}/>
-            </div>
-            {m.sub&&<div style={{color:C.td,fontSize:10,marginTop:3}}>{m.sub}</div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.5fr",gap:10}}>
+        {/* Publicações */}
+        <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"#6366f1"}}/>
+          <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Publicações / Conteúdos</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+            <span style={{color:"#6366f1",fontWeight:900,fontSize:28,letterSpacing:-1}}>{publicacoes.length}</span>
+            <DiffBadge diff={_diffPubl}/>
           </div>
-        ))}
+          {mediaPubl&&<div style={{color:C.td,fontSize:10,marginTop:3}}>{mediaPubl}d médio</div>}
+        </div>
+
+        {/* Extras */}
+        <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"#f59e0b"}}/>
+          <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Extras</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+            <span style={{color:"#f59e0b",fontWeight:900,fontSize:28,letterSpacing:-1}}>{extras.length}</span>
+            <DiffBadge diff={_diffExtra}/>
+          </div>
+          {mediaExtra&&<div style={{color:C.td,fontSize:10,marginTop:3}}>{mediaExtra}d médio</div>}
+        </div>
+
+        {/* Total — maior e destacado */}
+        <div style={{background:`linear-gradient(135deg,${C.a}18,${C.a}08)`,borderRadius:14,border:`2px solid ${C.a}44`,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:C.a}}/>
+          <div style={{color:C.a,fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Total no Período</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+            <span style={{color:C.a,fontWeight:900,fontSize:38,letterSpacing:-2,lineHeight:1}}>{publicacoes.length+extras.length}</span>
+            <DiffBadge diff={diffTotal}/>
+          </div>
+          <div style={{color:C.ts,fontSize:10,marginTop:6}}>{publicacoes.length} publ. + {extras.length} extras</div>
+        </div>
       </div>
 
       {/* Contadores por coluna — Fluxo de Demandas */}
