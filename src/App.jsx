@@ -19680,12 +19680,17 @@ PROMPT DE IMAGEM:
                 </button>
                 {gen.usarLinhas&&(<input type="number" min="1" max="50" value={gen.linhas} onChange={e=>setGenField("linhas",e.target.value)} placeholder="Ex: 3" style={{...inp,width:90,padding:"5px 8px"}}/>)}
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 <button onClick={()=>setGen(p=>({...p,usarPalavras:!p.usarPalavras}))}
-                  style={{background:gen.usarPalavras?"#8b5cf6":"transparent",border:"1px solid "+(gen.usarPalavras?"#8b5cf6":C.b1),borderRadius:20,padding:"4px 12px",fontSize:11,cursor:"pointer",color:gen.usarPalavras?"#fff":C.ts,fontWeight:gen.usarPalavras?700:400,transition:"all .15s",whiteSpace:"nowrap"}}>
+                  style={{background:gen.usarPalavras?"#8b5cf6":"transparent",border:"1px solid "+(gen.usarPalavras?"#8b5cf6":C.b1),borderRadius:20,padding:"4px 12px",fontSize:11,cursor:"pointer",color:gen.usarPalavras?"#fff":C.ts,fontWeight:gen.usarPalavras?700:400,transition:"all .15s",whiteSpace:"nowrap",alignSelf:"flex-start"}}>
                   💬 Por palavras
                 </button>
-                {gen.usarPalavras&&(<input type="number" min="1" max="1000" value={gen.palavras} onChange={e=>setGenField("palavras",e.target.value)} placeholder="Ex: 40" style={{...inp,width:90,padding:"5px 8px"}}/>)}
+                {gen.usarPalavras&&(<select value={gen.palavras} onChange={e=>setGenField("palavras",e.target.value)} style={inp}>
+                  <option value="">Selecionar quantidade...</option>
+                  {[10,20,30,40,50,60,70,80,90,100,120,150,180,200,250].map(n=>(
+                    <option key={n} value={String(n)}>{n} palavras</option>
+                  ))}
+                </select>)}
               </div>
             </div>
           </div>)}
