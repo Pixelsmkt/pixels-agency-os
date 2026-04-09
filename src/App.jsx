@@ -8785,11 +8785,13 @@ function PageChat({isMob, perms, tasks, setTasks}){
     const m={id:Date.now(),u:CURRENT_USER.name,uid:CURRENT_USER.id,av:CURRENT_USER.av,color:CURRENT_USER.color,time:nowTime(),reactions:[],...extra};
     setMsgs(p=>{
       const updated={...p,[activeCh]:[...(p[activeCh]||[]),m]};
-      // Sync client channels to localStorage so portal chat stays in sync
       if(activeCh.startsWith("cliente_")){
         const clientId=activeCh.replace("cliente_","");
         try{localStorage.setItem("pixels-chat-portal-"+clientId,JSON.stringify(updated[activeCh]));}catch(e){}
         if(window._sb)window._sb.from("portal_chat").upsert({client_id:clientId,mensagens:updated[activeCh]},{onConflict:"client_id"}).then(()=>{}).catch(()=>{});
+      } else {
+        // Salva canal interno no Supabase
+        if(window._sb)window._sb.from("chat_messages").upsert({canal:activeCh,mensagens:updated[activeCh],updated_at:new Date().toISOString()},{onConflict:"canal"}).then(()=>{}).catch(()=>{});
       }
       return updated;
     });
