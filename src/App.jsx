@@ -8716,12 +8716,6 @@ function PageChat({isMob, perms, tasks, setTasks}){
 
   const EMOJIS=["👍","🔥","🚀","✅","❤","😂","🎨","💪","⚡","🎯","👏","🙏","😎","🤝","💡","🏆"];
   const canSend=isSocio||!!p.enviarMensagem;
-  const canCall=isSocio||!!p.enviarMensagem;
-  const DAILY_DOMAIN="https://pixelsmarketing.daily.co";
-  const DAILY_ROOMS={geral:"pixels-geral",design:"pixels-design",video:"pixels-video",trafego:"pixels-trafego",social:"pixels-social",alertas:"pixels-alertas",cliente_bioter:"pixels-bioter",cliente_arabuta:"pixels-arabuta",cliente_climaves:"pixels-climaves",cliente_construschorr:"pixels-construschorr",cliente_vetservice:"pixels-vetservice"};
-  const getDailyUrl=(ch)=>{const r=DAILY_ROOMS[ch];return r?`${DAILY_DOMAIN}/${r}`:null;};
-  const [activeCall,setActiveCall]=useState(null);
-  const [showPixelsRoom,setShowPixelsRoom]=useState(false);
   const canCall=isSocio||!!p.enviarMensagem; // mesma permissão de acesso ao canal
 
   /* ── Daily.co room mapping ── */
@@ -9233,10 +9227,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
                   <span>{activeCall===activeCh?"Em call":"Pixels Call"}</span>
                 </button>
               )}
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
               <div style={{color:C.td,fontSize:11}}>{channelMsgs.length} msgs</div>
-              {canCall&&getDailyUrl(activeCh)&&<button onClick={()=>{setActiveCall(activeCh);setShowPixelsRoom(true);}} style={{background:"#7c3aed18",border:"1px solid #7c3aed44",borderRadius:8,padding:"4px 10px",color:"#a855f7",fontSize:11,fontWeight:700,cursor:"pointer"}}>📹 Pixels Call</button>}
-            </div>
             </div>
           </div>
 
@@ -9253,13 +9244,6 @@ function PageChat({isMob, perms, tasks, setTasks}){
             {!loading&&channelMsgs.map((m,i)=>{
               const isMe=m.uid===CURRENT_USER.id;
               const isAlert=m.type==="alert"||m.type==="success";
-              if(m.type==="shake")return(
-                <div key={m.id} style={{textAlign:"center",margin:"6px 0"}}>
-                  <span style={{background:"#f97316",color:"#fff",borderRadius:20,padding:"4px 14px",fontSize:11,fontWeight:700}}>
-                    📣 {m.un||m.u||"Alguém"} chamou sua atenção!
-                  </span>
-                </div>
-              );
               const prevMsg=channelMsgs[i-1];
               const grouped=prevMsg&&prevMsg.uid===m.uid&&!isAlert&&m.type==="text"&&prevMsg.type==="text";
 
@@ -9528,18 +9512,6 @@ function PageChat({isMob, perms, tasks, setTasks}){
         </div>
       </div>
     </>
-
-      {showPixelsRoom&&activeCall&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-          <div style={{background:"#0f0f0f",borderRadius:20,overflow:"hidden",width:"100%",maxWidth:900,border:"2px solid #a855f744",display:"flex",flexDirection:"column"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 18px",background:"#1a1a1a",borderBottom:"1px solid #333"}}>
-              <span style={{color:"#fff",fontWeight:700,fontSize:14}}>📹 Pixels Call — #{activeCall}</span>
-              <button onClick={()=>{setShowPixelsRoom(false);setActiveCall(null);}} style={{background:"#ef444420",border:"none",borderRadius:8,padding:"6px 14px",color:"#ef4444",fontSize:13,fontWeight:700,cursor:"pointer"}}>✕ Encerrar</button>
-            </div>
-            <iframe src={getDailyUrl(activeCall)} allow="camera; microphone; fullscreen; speaker; display-capture" style={{width:"100%",height:520,border:"none"}}/>
-          </div>
-        </div>
-      )}
   );
 }
 
