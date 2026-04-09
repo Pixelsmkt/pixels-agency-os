@@ -8810,13 +8810,14 @@ function PageChat({isMob, perms, tasks, setTasks}){
         .from("messages")
         .select("*")
         .eq("channel_id",channelId)
-        .order("created_at",{ascending:true})
-        .limit(500);
+        .order("created_at",{ascending:false})
+        .limit(400);
 
       if(error)throw error;
 
       if(data&&data.length>0){
-        setMsgs(prev=>({...prev,[channelId]:data.map(rowToMsg)}));
+        // Invertemos para mostrar do mais antigo ao mais recente na tela
+        setMsgs(prev=>({...prev,[channelId]:[...data].reverse().map(rowToMsg)}));
       } else {
         // Canal vazio — insere sementes se existirem
         const seeds=SEED_MSGS[channelId];
