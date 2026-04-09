@@ -279,8 +279,6 @@ const DEFAULT_PERMS={
   verMapeamento:false, verConexoes:false, verPontuacao:false, verCarreira:false, verAvaliacao360:false,
   // Análises — sub-páginas
   verAnaliseProd:false, verAnaliseGarg:false, verRelatorio:false,
-  // Acessos
-  editarAcessos:false,
   // Clientes por ID
   verCliente_construschorr:false, verCliente_bioter:false, verCliente_arabuta:false, verCliente_climaves:false, verCliente_vetservice:false, verCliente_pixels:false,
   verCliente_construschorr_metricas:false, verCliente_construschorr_mindmap:false, verCliente_construschorr_concorrencia:false, verCliente_construschorr_links:false, verCliente_bioter_metricas:false, verCliente_bioter_mindmap:false, verCliente_bioter_concorrencia:false, verCliente_bioter_links:false, verCliente_arabuta_metricas:false, verCliente_arabuta_mindmap:false, verCliente_arabuta_concorrencia:false, verCliente_arabuta_links:false, verCliente_climaves_metricas:false, verCliente_climaves_mindmap:false, verCliente_climaves_concorrencia:false, verCliente_climaves_links:false, verCliente_vetservice_metricas:false, verCliente_vetservice_mindmap:false, verCliente_vetservice_concorrencia:false, verCliente_vetservice_links:false, verCliente_pixels_metricas:false, verCliente_pixels_mindmap:false, verCliente_pixels_concorrencia:false, verCliente_pixels_links:false,
@@ -15969,7 +15967,6 @@ export default function AgencyOS(){
       case "portal_faturamento":
       case "portal_chat":
       case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks}/>:<NoPerm/>;
-      case "interno":
       case "interno":
       case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_pontuacao":     return (effectivePerms.verInterno&&effectivePerms.verPontuacao)||isSocio?<PagePontuacao {...p} tasks={tasks}/>:<NoPerm/>;
