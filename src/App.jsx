@@ -8751,6 +8751,8 @@ function PageChat({isMob, perms, tasks, setTasks}){
   };
   const activeCall=window._pixelsCallState?.channelId||null;
   const [showPixelsRoom,setShowPixelsRoom]=useState(false);
+  const [muted,setMuted]=useState(()=>localStorage.getItem("chat_muted")==="1");
+  const toggleMute=()=>setMuted(v=>{const n=!v;localStorage.setItem("chat_muted",n?"1":"0");return n;});
   const [ch,setCh]=useState(()=>ALL_VISIBLE[0]?.id||"geral");
   const activeCh=ALL_VISIBLE.find(c=>c.id===ch)?ch:(ALL_VISIBLE[0]?.id||"geral");
 
@@ -8809,7 +8811,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
         .select("*")
         .eq("channel_id",channelId)
         .order("created_at",{ascending:true})
-        .limit(200);
+        .limit(500);
 
       if(error)throw error;
 
@@ -8854,7 +8856,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
         const newMsg=rowToMsg(payload.new);
         // Som de mensagem recebida (de outro usuário, não shake)
         if(payload.new.user_id!==CURRENT_USER.id&&payload.new.type!=="shake"){
-          playMsgSound();
+          if(localStorage.getItem("chat_muted")!=="1")playMsgSound();
         }
         // Se é shake e não foi eu que enviei → toca nudge e treme
         if(payload.new.type==="shake"&&payload.new.user_id!==CURRENT_USER.id){
@@ -8882,10 +8884,14 @@ function PageChat({isMob, perms, tasks, setTasks}){
 
   /* ── Monta: carrega canal inicial + realtime ── */
   useEffect(()=>{
-    loadChannel(activeCh);
-    setupRealtime();
+    const tryInit=()=>{
+      if(!window._sb){ setTimeout(tryInit,200); return; }
+      loadChannel(activeCh);
+      setupRealtime();
+    };
+    tryInit();
     return()=>{
-      if(realtimeRef.current)sb.removeChannel(realtimeRef.current);
+      if(realtimeRef.current&&window._sb)window._sb.removeChannel(realtimeRef.current);
     };
   },[]);
 
@@ -9228,6 +9234,10 @@ function PageChat({isMob, perms, tasks, setTasks}){
                 </button>
               )}
               <div style={{color:C.td,fontSize:11}}>{channelMsgs.length} msgs</div>
+              <button onClick={toggleMute} title={muted?"Ativar sons":"Silenciar sons"}
+                style={{background:"transparent",border:`1px solid ${muted?"#ef444444":C.b1}`,borderRadius:8,padding:"5px 8px",cursor:"pointer",fontSize:13,color:muted?"#ef4444":C.td,transition:"all .15s"}}>
+                {muted?"🔕":"🔔"}
+              </button>
             </div>
           </div>
 
