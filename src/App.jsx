@@ -201,7 +201,7 @@ function applyTheme(key){
   const t=THEMES[key]||THEMES.dark;
   Object.assign(C,t);
   try{localStorage.setItem("pixels-theme",key);}catch(e){}
-  if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,theme:key},{onConflict:"user_id"}).catch(()=>{});
+  if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,theme:key},{onConflict:"user_id"}).then(()=>{}).catch(()=>{});
 }
 
 // Load saved theme on startup
@@ -3824,7 +3824,7 @@ function CFerramentas({cl,onMindmap}){
     setLinks(next);
     try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}
     setLinkForm({label:"",url:""});setShowLinkForm(false);
-    if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
   };
 
   var inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
@@ -4500,7 +4500,7 @@ function CFerramentas({cl,onMindmap}){
               <div style={{color:C.td,fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.url}</div>
             </div>
             <a href={l.url} target="_blank" rel="noopener" style={{background:C.a,color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:11,fontWeight:700,textDecoration:"none",flexShrink:0}}>Abrir</a>
-            <button onClick={()=>{var next=links.filter(function(x){return x.id!==l.id;});setLinks(next);try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});}}
+            <button onClick={()=>{var next=links.filter(function(x){return x.id!==l.id;});setLinks(next);try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});}}
               style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"4px"}}>×</button>
           </div>);
         })}
@@ -4900,7 +4900,7 @@ function CContatos({cl}){
   var save=function(list){
     setContacts(list);
     try{localStorage.setItem("pixels-contacts-"+cl.id,JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({contatos:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({contatos:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
   };
 
   var addOrUpdate=function(){
@@ -5066,7 +5066,7 @@ function CTimeline({cl}){
     var list=[entry,...notes];
     setNotes(list);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({notas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({notas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
     setForm({date:new Date().toLocaleDateString("pt-BR"),type:"reuniao",contactIds:[],text:"",tasks:[]});
     setNewTask({title:"",deadline:"",priority:"media"});
     setShowForm(false);
@@ -5082,7 +5082,7 @@ function CTimeline({cl}){
     });
     setNotes(updated);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(updated));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
     try{window.dispatchEvent(new CustomEvent("pixels-notes-updated"));}catch(e){}
   };
 
@@ -5090,7 +5090,7 @@ function CTimeline({cl}){
     var updated=notes.filter(function(n){return n.id!==noteId;});
     setNotes(updated);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(updated));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
   };
 
   // Filters
@@ -5406,7 +5406,7 @@ function CMetas({cl}){
   var save=function(list){
     setGoals(list);
     try{localStorage.setItem("pixels-goals-"+cl.id,JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({metas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({metas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
   };
 
   var add=function(){
@@ -7370,7 +7370,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   // Persiste colunas sempre que mudam
   useEffect(()=>{
     try{localStorage.setItem("pixels-cols-v1",JSON.stringify(cols));}catch(e){}
-    if(window._sb)window._sb.from("columns_config").upsert({user_id:CURRENT_USER.id,colunas:cols},{onConflict:"user_id"}).catch(()=>{});
+    if(window._sb)window._sb.from("columns_config").upsert({user_id:CURRENT_USER.id,colunas:cols},{onConflict:"user_id"}).then(()=>{}).catch(()=>{});
   },[cols]);
   const [showNewCol,setShowNewCol]=useState(false);
   const [deleteColConfirm,setDeleteColConfirm]=useState(null); // {colId, step:"senha"|"pin", senha:"", pin:""}
@@ -8898,7 +8898,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
       if(activeCh.startsWith("cliente_")){
         const clientId=activeCh.replace("cliente_","");
         try{localStorage.setItem("pixels-chat-portal-"+clientId,JSON.stringify(updated[activeCh]));}catch(e){}
-        if(window._sb)window._sb.from("portal_chat").upsert({client_id:clientId,mensagens:updated[activeCh]},{onConflict:"client_id"}).catch(()=>{});
+        if(window._sb)window._sb.from("portal_chat").upsert({client_id:clientId,mensagens:updated[activeCh]},{onConflict:"client_id"}).then(()=>{}).catch(()=>{});
       }
       return updated;
     });
@@ -11729,7 +11729,7 @@ function PageConexoes({isMob}){
   const [form,setForm]=useState({n:"",l:"",pw:"",cat:"",c:"#a140ff"});
 
   const saveCreds=(list)=>{setCreds(list);try{localStorage.setItem("pixels-creds",JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("content_library").upsert({tipo:"creds",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+    if(window._sb)window._sb.from("content_library").upsert({tipo:"creds",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
   };
   useEffect(()=>{
     if(!window._sb)return;
@@ -14430,7 +14430,7 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
   const saveWidgets=(w)=>{
     setWidgets(w);
     try{localStorage.setItem("pixels-dash-widgets-"+user.id,JSON.stringify(w));}catch(e){}
-    if(window._sb)window._sb.from("user_settings").upsert({user_id:user.id,dash_widgets:w},{onConflict:"user_id"}).catch(()=>{});
+    if(window._sb)window._sb.from("user_settings").upsert({user_id:user.id,dash_widgets:w},{onConflict:"user_id"}).then(()=>{}).catch(()=>{});
   };
 
   // Notificações do usuário (últimas 5)
@@ -15536,7 +15536,7 @@ export default function AgencyOS(){
   const toggleCollapse=()=>setSideCollapsed(v=>{
     const next=!v;
     try{localStorage.setItem("pixels-sidebar-collapsed",next?"1":"0");}catch(e){}
-    if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,sidebar_collapsed:next},{onConflict:"user_id"}).catch(()=>{});
+    if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,sidebar_collapsed:next},{onConflict:"user_id"}).then(()=>{}).catch(()=>{});
     return next;
   });
   const [showSelfProfile,setShowSelfProfile] = useState(false);
@@ -16101,7 +16101,7 @@ export default function AgencyOS(){
           return(<div key={n.id}>
             <button onClick={()=>{
               if(sideCollapsed&&!isMob){setSideCollapsed(false);try{localStorage.setItem("pixels-sidebar-collapsed","0");}catch(e){}
-              if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,sidebar_collapsed:false},{onConflict:"user_id"}).catch(()=>{});}
+              if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,sidebar_collapsed:false},{onConflict:"user_id"}).then(()=>{}).catch(()=>{});}
               if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded)nav(n.children[0].id);}
               else nav(n.id);
             }}
@@ -16252,7 +16252,7 @@ function PageSprint({isMob, tasks}){
     }};
     setCheckins(newCheckins);
     localStorage.setItem("pixels-checkins", JSON.stringify(newCheckins));
-    if(window._sb)window._sb.from("team_data").upsert({tipo:"checkins",dados:newCheckins,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"checkins",dados:newCheckins,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
     setCheckinText(""); setShowCheckin(false);
   };
 
@@ -17450,7 +17450,7 @@ function PageAvaliacao360(){
     const updated = [...reviews, newReview];
     setReviews(updated);
     localStorage.setItem("pixels-360-reviews", JSON.stringify(updated));
-    if(window._sb)window._sb.from("team_data").upsert({tipo:"360-reviews",dados:updated,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"360-reviews",dados:updated,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
     setSubmitted(true);
     setForm({target:"",qualidade:5,comunicacao:5,trabalhoEquipe:5,proatividade:5,obs:""});
   };
@@ -17554,7 +17554,7 @@ function PageCarreira(){
     const updated = {...careers, [selUser]:[...(careers[selUser]||[]), ev]};
     setCareers(updated);
     localStorage.setItem("pixels-careers", JSON.stringify(updated));
-    if(window._sb)window._sb.from("team_data").upsert({tipo:"careers",dados:updated,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"careers",dados:updated,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
     setForm({tipo:"conquista",titulo:"",desc:"",data:new Date().toISOString().slice(0,10),valor:""});
     setShowAdd(false);
   };
@@ -18520,11 +18520,11 @@ function PageContratos({tasks}){
   // ── Carrega do Supabase ao montar ──
   useEffect(()=>{
     if(!window._sb)return;
-    window._sb.from("contracts").select("dados").eq("client_id","_global").single()
+    window._sb.from("contracts").select("dados").eq("client_id","_global")
       .then(({data})=>{
-        if(data?.dados&&Array.isArray(data.dados)&&data.dados.length){
-          setContratos(data.dados);
-          try{localStorage.setItem("pixels-contratos",JSON.stringify(data.dados));}catch(e){}
+        if(data&&data[0]?.dados&&Array.isArray(data[0].dados)&&data[0].dados.length){
+          setContratos(data[0].dados);
+          try{localStorage.setItem("pixels-contratos",JSON.stringify(data[0].dados));}catch(e){}
         }
       }).catch(()=>{});
   },[]);
@@ -18771,7 +18771,7 @@ function PageCapacidade({tasks}){
   const [tab, setTab] = useState("alocacao"); // alocacao | onboarding
 
   const saveCapacidades = data=>{setCapacidades(data);try{localStorage.setItem("pixels-capacidades",JSON.stringify(data));}catch(e){}
-    if(window._sb)window._sb.from("team_data").upsert({tipo:"capacidades",dados:data,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"capacidades",dados:data,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
   };
   const setCapHoras = (uid, horas)=>saveCapacidades({...capacidades,[uid]:horas});
 
@@ -18802,7 +18802,7 @@ function PageCapacidade({tasks}){
     return DEFAULT_ONBOARDING_STEPS;
   });
   const saveOnbSteps = steps=>{setOnbSteps(steps);try{localStorage.setItem("pixels-onb-steps",JSON.stringify(steps));}catch(e){}
-    if(window._sb)window._sb.from("team_data").upsert({tipo:"onboarding",dados:steps,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+    if(window._sb)window._sb.from("team_data").upsert({tipo:"onboarding",dados:steps,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
   };
 
   const [onboarding, setOnboarding] = useState(()=>{try{return JSON.parse(localStorage.getItem("pixels-onboarding")||"{}");}catch(e){return{};}});
@@ -19250,10 +19250,10 @@ function PageIAPixels({isMob, tasks}){
   };
 
   const savePlaybooks = list=>{setPlaybooks(list);try{localStorage.setItem("pixels-playbooks",JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("content_library").upsert({tipo:"playbooks",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+    if(window._sb)window._sb.from("content_library").upsert({tipo:"playbooks",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
   };
   const saveBiblioteca = list=>{setBiblioteca(list);try{localStorage.setItem("pixels-biblioteca",JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("content_library").upsert({tipo:"biblioteca",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
+    if(window._sb)window._sb.from("content_library").upsert({tipo:"biblioteca",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
   };
 
   const addPlaybook = ()=>{
