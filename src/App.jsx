@@ -8522,6 +8522,36 @@ const getDomain=(url)=>{try{return new URL(url).hostname.replace(/^www\./,"");}c
 const isUrl=(txt)=>/https?:\/\/[^\s]+/.test(txt);
 const extractUrl=(txt)=>{const m=txt.match(/https?:\/\/[^\s]+/);return m?m[0]:null;};
 
+/* ── Som clássico estilo MSN Nudge via Web Audio API ── */
+const playShakeSound=()=>{
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    [[0,880],[0.12,660],[0.24,440]].forEach(([when,freq])=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.connect(gain);gain.connect(ctx.destination);
+      osc.type="sine";
+      osc.frequency.setValueAtTime(freq,ctx.currentTime+when);
+      gain.gain.setValueAtTime(0.4,ctx.currentTime+when);
+      gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+when+0.1);
+      osc.start(ctx.currentTime+when);
+      osc.stop(ctx.currentTime+when+0.12);
+    });
+    setTimeout(()=>{try{ctx.close();}catch(e){}},600);
+  }catch(e){}
+};
+
+/* ── Shake na tela ── */
+const triggerShake=()=>{
+  const el=document.getElementById("pixels-chat-area");
+  if(!el)return;
+  el.style.animation="none";
+  requestAnimationFrame(()=>{
+    el.style.animation="pixels-shake 0.5s ease";
+    setTimeout(()=>{el.style.animation="none";},550);
+  });
+};
+
 /* Status labels e cores para card preview */
 const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
 const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
@@ -8669,6 +8699,22 @@ function PageChat({isMob, perms, tasks, setTasks}){
 
   const EMOJIS=["👍","🔥","🚀","✅","❤","😂","🎨","💪","⚡","🎯","👏","🙏","😎","🤝","💡","🏆"];
   const canSend=isSocio||!!p.enviarMensagem;
+  const canCall=isSocio||!!p.enviarMensagem;
+
+  /* ── Daily.co room mapping ── */
+  const DAILY_DOMAIN="https://pixelsmarketing.daily.co";
+  const DAILY_ROOMS={
+    geral:"pixels-geral", design:"pixels-design", video:"pixels-video",
+    trafego:"pixels-trafego", social:"pixels-social", alertas:"pixels-alertas",
+    cliente_bioter:"pixels-bioter", cliente_arabuta:"pixels-arabuta",
+    cliente_climaves:"pixels-climaves", cliente_construschorr:"pixels-construschorr",
+    cliente_vetservice:"pixels-vetservice",
+  };
+  const getDailyUrl=(channelId)=>{const room=DAILY_ROOMS[channelId];if(!room)return null;return `${DAILY_DOMAIN}/${room}`;};
+
+  /* ── Call state ── */
+  const [activeCall,setActiveCall]=useState(null);
+  const [showPixelsRoom,setShowPixelsRoom]=useState(false);
 
   const [ch,setCh]=useState(()=>ALL_VISIBLE[0]?.id||"geral");
   const activeCh=ALL_VISIBLE.find(c=>c.id===ch)?ch:(ALL_VISIBLE[0]?.id||"geral");
@@ -8749,6 +8795,14 @@ function PageChat({isMob, perms, tasks, setTasks}){
     if(!ta)return;
     ta.style.height="auto";
     ta.style.height=Math.min(ta.scrollHeight,120)+"px";
+  };
+
+  /* ── Chamar atenção (shake) ── */
+  const sendShake=()=>{
+    if(!canSend)return;
+    playShakeSound();
+    triggerShake();
+    pushMsg({type:"shake",txt:""});
   };
 
   const send=()=>{
@@ -8945,7 +8999,15 @@ function PageChat({isMob, perms, tasks, setTasks}){
               </div>
               <div style={{color:C.td,fontSize:10}}>{activeChData?.desc}</div>
             </div>
-            <div style={{color:C.td,fontSize:11}}>{(msgs[activeCh]||[]).length} msgs</div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{color:C.td,fontSize:11}}>{(msgs[activeCh]||[]).length} msgs</div>
+              {canCall&&getDailyUrl(activeCh)&&(
+                <button onClick={()=>{setActiveCall(activeCh);setShowPixelsRoom(true);}}
+                  style={{background:"#7c3aed18",border:"1px solid #7c3aed44",borderRadius:8,padding:"4px 10px",color:"#a855f7",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                  📹 Pixels Call
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Messages */}
@@ -8954,9 +9016,17 @@ function PageChat({isMob, perms, tasks, setTasks}){
             {(msgs[activeCh]||[]).map((m,i)=>{
               const isMe=m.uid===CURRENT_USER.id;
               const isAlert=m.type==="alert"||m.type==="success";
+              const isShake=m.type==="shake";
               const prevMsg=(msgs[activeCh]||[])[i-1];
               const grouped=prevMsg&&prevMsg.uid===m.uid&&!isAlert&&m.type==="text"&&prevMsg.type==="text";
 
+              if(isShake)return(
+                <div key={m.id||i} style={{textAlign:"center",margin:"6px 0"}}>
+                  <span style={{background:"#f97316",color:"#fff",borderRadius:20,padding:"4px 14px",fontSize:11,fontWeight:700}}>
+                    📣 {m.un||"Alguém"} chamou sua atenção!
+                  </span>
+                </div>
+              );
               if(isAlert)return(
                 <div key={m.id} style={{margin:"4px 0",padding:"8px 14px",background:m.type==="success"?C.gr+"12":"#fff5f5",borderRadius:10,borderLeft:`3px solid ${m.type==="success"?C.gr:m.color}`,display:"flex",alignItems:"center",gap:8}}>
                   <div style={{flex:1,color:m.type==="success"?C.gr:m.color,fontSize:12,fontWeight:600}}>{m.txt}</div>
@@ -9162,7 +9232,10 @@ function PageChat({isMob, perms, tasks, setTasks}){
                   </button>
 
                   {/* Audio */}
-                  {!recording&&!audioPreviewUrl&&<button onClick={startRec} title="Gravar áudio"
+                  {!recording&&!audioPreviewUrl&&<button onClick={startRec} title="Chamar atenção"
+                  onClick={sendShake}
+                  style={{background:"transparent",border:"none",borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:16,opacity:canSend?1:0.4}}>📣</button>
+                  <button onClick={startRec} title="Gravar áudio"
                     style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🎙
                   </button>}
@@ -9198,6 +9271,29 @@ function PageChat({isMob, perms, tasks, setTasks}){
           </div>
         </div>
       </div>
+
+      {/* Pixels Call Modal */}
+      {showPixelsRoom&&activeCall&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"#0f0f0f",borderRadius:20,overflow:"hidden",width:"100%",maxWidth:900,border:"2px solid #a855f744",boxShadow:"0 0 60px #a855f730",display:"flex",flexDirection:"column"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 18px",background:"#1a1a1a",borderBottom:"1px solid #333"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:"#22c55e",boxShadow:"0 0 8px #22c55e"}}/>
+                <span style={{color:"#fff",fontWeight:700,fontSize:14}}>📹 Pixels Call — #{activeCall}</span>
+              </div>
+              <button onClick={()=>{setShowPixelsRoom(false);setActiveCall(null);}}
+                style={{background:"#ef444420",border:"none",borderRadius:8,padding:"6px 14px",color:"#ef4444",fontSize:13,fontWeight:700,cursor:"pointer"}}>
+                ✕ Encerrar
+              </button>
+            </div>
+            <iframe
+              src={getDailyUrl(activeCall)}
+              allow="camera; microphone; fullscreen; speaker; display-capture"
+              style={{width:"100%",height:520,border:"none"}}
+            />
+          </div>
+        </div>
+      )}
     </>
   );
 }
