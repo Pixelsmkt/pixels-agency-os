@@ -8783,16 +8783,19 @@ function PageChat({isMob, perms, tasks, setTasks}){
 
   const pushMsg=(extra)=>{
     const m={id:Date.now(),u:CURRENT_USER.name,uid:CURRENT_USER.id,av:CURRENT_USER.av,color:CURRENT_USER.color,time:nowTime(),reactions:[],...extra};
+    const ch=activeCh; // captura canal atual
     setMsgs(p=>{
-      const updated={...p,[activeCh]:[...(p[activeCh]||[]),m]};
-      if(activeCh.startsWith("cliente_")){
-        const clientId=activeCh.replace("cliente_","");
-        try{localStorage.setItem("pixels-chat-portal-"+clientId,JSON.stringify(updated[activeCh]));}catch(e){}
-        if(window._sb)window._sb.from("portal_chat").upsert({client_id:clientId,mensagens:updated[activeCh]},{onConflict:"client_id"}).then(()=>{}).catch(()=>{});
-      } else {
-        // Salva canal interno no Supabase
-        if(window._sb)window._sb.from("chat_messages").upsert({canal:activeCh,mensagens:updated[activeCh],updated_at:new Date().toISOString()},{onConflict:"canal"}).then(()=>{}).catch(()=>{});
-      }
+      const updated={...p,[ch]:[...(p[ch]||[]),m]};
+      // Persiste FORA do setter via setTimeout para evitar re-render issues
+      setTimeout(()=>{
+        if(ch.startsWith("cliente_")){
+          const clientId=ch.replace("cliente_","");
+          try{localStorage.setItem("pixels-chat-portal-"+clientId,JSON.stringify(updated[ch]));}catch(e){}
+          if(window._sb)window._sb.from("portal_chat").upsert({client_id:clientId,mensagens:updated[ch]},{onConflict:"client_id"}).then(()=>{}).catch(()=>{});
+        } else {
+          if(window._sb)window._sb.from("chat_messages").upsert({canal:ch,mensagens:updated[ch],updated_at:new Date().toISOString()},{onConflict:"canal"}).then(()=>{}).catch(e=>console.error("chat save error:",e));
+        }
+      },0);
       return updated;
     });
   };
