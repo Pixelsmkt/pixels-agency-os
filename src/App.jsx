@@ -18066,10 +18066,13 @@ export default function AgencyOS(){
       case "meudash":              return p.verDashboard;
       case "demandas":
       case "demandas_kanban":      return p.verDemandas;
+      case "demandas_internas":    return p.verDemandasInternas||isSocio;
+      case "demandas_cal_interno": return p.verInterno||isSocio;
       case "demandas_cal_pub":     return p.verCalPub||isSocio;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
+      case "aprovacoes_internas":  return p.aprovarDemandaInterna||isSocio;
       case "chat":                 return p.verChat;
       case "clientes":             return p.verClientes;
       case "analises":
@@ -18098,7 +18101,8 @@ export default function AgencyOS(){
       case "capacidade_onboarding":return p.verFinanceiro||isSocio;
       case "acessos":              return p.verAcessos||isSocio;
       case "interno":
-      case "interno_calendario":   return p.verInterno||isSocio;
+      case "interno_calendario":
+      case "interno_radar":        return p.verInterno||isSocio;
       case "interno_pontuacao":    return (p.verInterno&&p.verPontuacao)||isSocio;
       case "interno_mapeamento":   return (p.verInterno&&p.verMapeamento)||isSocio;
       case "interno_conexoes":     return (p.verInterno&&p.verConexoes)||isSocio;
@@ -18137,11 +18141,14 @@ export default function AgencyOS(){
       case "meudash_prioridade":    return effectivePerms.verDashboard?<PageDashboard {...p} onClient={goClient} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} onNavTo={nav} onNotif={()=>setNotifDrawer(true)} selfProfile={selfProfileData}/>:<NoPerm/>;
       case "demandas":
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
+      case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "demandas_cal_interno":  return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
+      case "aprovacoes_internas":  return (effectivePerms.aprovarDemandaInterna||isSocio)?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="internas"/>:<NoPerm/>;
       case "analises":
       case "analises_producao":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseProd)||isSocio?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
       case "analises_gargalos":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseGarg)||isSocio?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
@@ -18162,6 +18169,7 @@ export default function AgencyOS(){
       case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno":
       case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
+      case "interno_radar":         return (effectivePerms.verInterno||isSocio)?<PageRadarEntrega {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_pontuacao":     return (effectivePerms.verInterno&&effectivePerms.verPontuacao)||isSocio?<PagePontuacao {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_mapeamento":    return (effectivePerms.verInterno&&effectivePerms.verMapeamento)||isSocio?<PageMapeamento {...p}/>:<NoPerm/>;
       case "interno_conexoes":      return (effectivePerms.verInterno&&effectivePerms.verConexoes)||isSocio?<PageConexoes {...p}/>:<NoPerm/>;
