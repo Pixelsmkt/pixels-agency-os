@@ -19295,164 +19295,288 @@ function PageCapacidade({tasks}){
 /* ─── IA PIXELS ──────────────────────────── */
 function PageIAPixels({isMob, tasks}){
   const TASKS = tasks||[];
-  const [tab, setTab] = useState("diagnostico");
+  const sb = window._sb;
+  const [tab, setTab] = useState("conteudo");
   const [diagnostico, setDiagnostico] = useState({client:"",roas_meta:"",cpl_meta:"",invest_meta:"",roas_google:"",cpl_google:"",invest_google:"",resultado:null});
   const [loading, setLoading] = useState(false);
   const [playbooks, setPlaybooks] = useState(()=>{try{return JSON.parse(localStorage.getItem("pixels-playbooks")||"[]");}catch(e){return[];}});
   const [biblioteca, setBiblioteca] = useState(()=>{try{return JSON.parse(localStorage.getItem("pixels-biblioteca")||"[]");}catch(e){return[];}});
-
-  useEffect(()=>{
-    if(!window._sb)return;
-    window._sb.from("content_library").select("tipo,dados").in("tipo",["playbooks","biblioteca"])
-      .then(({data})=>{
-        if(!data)return;
-        data.forEach(row=>{
-          if(row.tipo==="playbooks"&&Array.isArray(row.dados)&&row.dados.length){
-            setPlaybooks(row.dados);
-            try{localStorage.setItem("pixels-playbooks",JSON.stringify(row.dados));}catch(e){}
-          }
-          if(row.tipo==="biblioteca"&&Array.isArray(row.dados)&&row.dados.length){
-            setBiblioteca(row.dados);
-            try{localStorage.setItem("pixels-biblioteca",JSON.stringify(row.dados));}catch(e){}
-          }
-        });
-      }).catch(()=>{});
-  },[]);
   const [showAddPb, setShowAddPb] = useState(false);
   const [showAddBib, setShowAddBib] = useState(false);
   const [pbForm, setPbForm] = useState({setor:"agro",titulo:"",etapas:"",kpis:"",obs:""});
   const [bibForm, setBibForm] = useState({titulo:"",contexto:"",aprendizado:"",clientId:"",tipo:"campanha"});
 
-  const inp = {background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  // ── GERADOR STATE ──
+  const [gen, setGen] = useState({client:"",unidade:"",categoria:"",subcategoria:"",tipo:"",duracao:"",linhas:"",palavras:"",usarLinhas:false,usarPalavras:false,objetivo:"engajamento",tom:"leve",formato:"foto",contexto:""});
+  const [genLoading, setGenLoading] = useState(false);
+  const [genResult, setGenResult] = useState(null);
+  const [clientBriefing, setClientBriefing] = useState(null);
+  const [historico, setHistorico] = useState([]);
+  const [showHistorico, setShowHistorico] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState(null);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+  const [savedMsg, setSavedMsg] = useState(null);
 
+  const inp = {background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
   const now = new Date();
 
-  /* ── Churn prediction engine ── */
+  // ── ESTRUTURA DE TIPOS ──
+  const ESTRUTURA = {
+    "📝 Texto & Legenda":{
+      subs:{
+        "Legenda":["Curta (1-2 linhas)","Média (3-5 linhas)","Longa (storytelling)","De carrossel (slide a slide)","Story curto (1 frase impactante)","Série de stories (3-5 cards)"],
+        "Texto":["Informativo","Institucional","Para folder / panfleto","Para jornal / revista","Para apresentação / pitch","Para e-mail marketing","Para proposta comercial","De lançamento","De promoção / oferta","De data comemorativa","De bastidores / humanização","De prova social / resultado","De autoridade / conquista"],
+        "Bio & Descrição":["Bio do Instagram","Descrição de produto","Descrição de serviço"],
+        "Resposta & Comentário":["Resposta de comentário","Resposta de DM","Resposta de avaliação negativa"]
+      }
+    },
+    "📱 WhatsApp":{
+      subs:{
+        "Disparo / Divulgação":["Disparo individual","Para grupo de clientes","Para grupo interno de equipe"],
+        "Relacionamento":["Boas-vindas (novo lead / cliente)","Follow-up pós reunião","Reativação de cliente sumido","Agradecimento","Convite para evento"],
+        "Gestão & Situação":["Gestão de crise com cliente","Explicação de situação / problema","Atualização de status (obra, pedido, projeto)","Apresentação da empresa","Proposta resumida"],
+        "Sequência de Nutrição":["Sequência de 3 mensagens","Sequência de 5 mensagens"]
+      }
+    },
+    "🎬 Roteiros de Vídeo":{
+      subs:{
+        "Institucional & Marca":["Vídeo institucional","Apresentação de equipe","Tour pelo espaço / obra","Lançamento de produto ou serviço"],
+        "Engajamento & Trend":["Reels / TikTok","Trend / áudio em alta","Bastidores do dia a dia","Antes e depois"],
+        "Educativo & Autoridade":["Vídeo educativo","FAQ (perguntas e respostas)","Motivacional","Data comemorativa"],
+        "Resultado & Prova Social":["Depoimento / prova social","Case de sucesso","Resultado conquistado","Comparação com concorrente"]
+      }
+    },
+    "📣 Anúncios — Vídeo":{
+      subs:{
+        "Persuasão & Funil":["Persuasivo (Problema → Agitação → Solução → CTA)","Topo de funil (descoberta)","Fundo de funil (decisão)","Remarketing (quem viu mas não comprou)"],
+        "Oferta & Promoção":["Oferta / promoção","Autoridade da marca","Depoimento de cliente","Gestão de crise em anúncio"]
+      }
+    },
+    "✍️ Anúncios — Texto":{
+      subs:{
+        "Feed & Stories":["Copy para anúncio no feed","Copy para anúncio em stories","Copy de remarketing","Copy de oferta relâmpago","Copy de autoridade","Copy de prova social"],
+        "Google Ads":["Headline + descrição","Oferta / promoção","Autoridade","Gestão de crise"]
+      }
+    },
+    "🚨 Gestão de Crise":{
+      subs:{
+        "Redes Sociais":["Nota de esclarecimento para feed","Comunicado oficial","Resposta pública a comentário negativo","Texto de posicionamento da marca"],
+        "WhatsApp":["Gestão de crise para cliente insatisfeito","Texto de retratação","Alinhamento interno com equipe"],
+        "Vídeo":["Roteiro de posicionamento do gestor","Roteiro de recuperação de imagem"],
+        "Comunicado Formal":["Comunicado formal de crise","Nota para imprensa / jornal","Agradecimento pós-crise","Texto de retratação formal"]
+      }
+    },
+    "✨ Outros":{
+      subs:{
+        "Headline & CTA":["Headline / título de post","CTA (chamada para ação)","Slogan / tagline de campanha"],
+        "Pauta & Calendário":["Ideia de post","Pauta de conteúdo","Calendário editorial"],
+        "Outras Plataformas":["LinkedIn","YouTube (descrição de vídeo)","Pinterest","Podcast (intro / encerramento)"],
+        "Eventos & Live":["Roteiro de live","Roteiro de webinar","FAQ para perfil / site","Texto de onboarding de cliente"]
+      }
+    }
+  };
+
+  const CATEGORIAS = Object.keys(ESTRUTURA);
+  const BIOTER_UNITS = ["Chapecó/SC","Toledo/PR","Castro/PR","Uberlândia/MG","Glória de Dourados/MS","Bioter Paraguay 🇵🇾"];
+  const OBJETIVOS = [{v:"engajamento",l:"❤ Engajamento"},{v:"venda",l:"💰 Venda"},{v:"autoridade",l:"🏆 Autoridade"},{v:"institucional",l:"🏢 Institucional"},{v:"awareness",l:"📢 Awareness"},{v:"lead",l:"🎯 Lead"}];
+  const TONS = [{v:"leve",l:"😊 Leve"},{v:"tecnico",l:"🔬 Técnico"},{v:"emocional",l:"❤ Emocional"},{v:"comercial",l:"💰 Comercial"},{v:"institucional",l:"🏢 Institucional"},{v:"trend",l:"🔥 Trend"}];
+  const FORMATOS = [{v:"foto",l:"📸 Foto"},{v:"video_curto",l:"🎬 Vídeo Curto"},{v:"reels",l:"📱 Reels"},{v:"stories",l:"💬 Stories"},{v:"carrossel",l:"🃏 Carrossel"},{v:"anuncio",l:"📣 Anúncio"}];
+
+  const subcats = gen.categoria ? Object.keys(ESTRUTURA[gen.categoria]?.subs||{}) : [];
+  const tipos = gen.subcategoria ? (ESTRUTURA[gen.categoria]?.subs[gen.subcategoria]||[]) : [];
+  const isVideo = gen.categoria==="🎬 Roteiros de Vídeo"||gen.categoria==="📣 Anúncios — Vídeo"||(gen.categoria==="🚨 Gestão de Crise"&&gen.subcategoria==="Vídeo");
+  const isTexto = !isVideo;
+  const isBio = gen.tipo==="Bio do Instagram";
+  const selectedClient = CLIENTS.find(c=>c.id===gen.client);
+  const isBioter = selectedClient?.name?.toLowerCase().includes("bioter");
+  const canGenerate = gen.client&&gen.tipo&&gen.contexto.trim().length>3;
+
+  useEffect(()=>{
+    if(!gen.client||!sb){setClientBriefing(null);return;}
+    setClientBriefing(null);
+    sb.from("clients").select("briefing,contatos,notas,metas").eq("client_id",gen.client).single()
+      .then(({data})=>{if(data)setClientBriefing(data);})
+      .catch(()=>{setClientBriefing(null);});
+  },[gen.client]);
+
+  useEffect(()=>{
+    if(!sb)return;
+    sb.from("content_library").select("*").eq("tipo","geracao_ia").order("created_at",{ascending:false}).limit(50)
+      .then(({data})=>{if(data)setHistorico(data);})
+      .catch(()=>{});
+  },[]);
+
+  const setGenField = (field,val,reset=[])=>{
+    setGen(p=>{const n={...p,[field]:val};reset.forEach(r=>n[r]="");return n;});
+  };
+
+  const buildPrompt = ()=>{
+    const cl = CLIENTS.find(c=>c.id===gen.client);
+    const briefingTxt = clientBriefing?.briefing||"Sem briefing cadastrado.";
+    const unidadeTxt = gen.unidade?`\nUnidade: ${gen.unidade}`:"";
+    const duracaoTxt = isVideo&&gen.duracao?`\nDuração: ${gen.duracao}`:"";
+    const limites = [];
+    if(isBio) limites.push("Máximo 150 caracteres.");
+    else{
+      if(gen.usarLinhas&&gen.linhas) limites.push(`Máximo ${gen.linhas} linhas.`);
+      if(gen.usarPalavras&&gen.palavras) limites.push(`Máximo ${gen.palavras} palavras.`);
+    }
+    const limiteTxt = limites.length>0?`\n- Respeite o limite: ${limites.join(" ")}`:"";
+
+    return `Você é o Pixels AI, especialista em produção de conteúdo para redes sociais e marketing digital.
+
+REGRAS ABSOLUTAS:
+- Siga rigorosamente o tom de voz e padrão do cliente
+- NÃO crie informações que não foram fornecidas
+- Evite textos genéricos ou clichês
+- Linguagem natural, fluida e adaptada ao público
+- Entregue conteúdo pronto para uso imediato${limiteTxt}
+
+BRIEFING DO CLIENTE:
+Cliente: ${cl?.name||gen.client}${unidadeTxt}
+${briefingTxt}
+
+PARÂMETROS DO PEDIDO:
+- Categoria: ${gen.categoria}
+- Subcategoria: ${gen.subcategoria}
+- Tipo: ${gen.tipo}
+- Objetivo: ${OBJETIVOS.find(o=>o.v===gen.objetivo)?.l||gen.objetivo}
+- Tom: ${TONS.find(t=>t.v===gen.tom)?.l||gen.tom}
+- Formato: ${FORMATOS.find(f=>f.v===gen.formato)?.l||gen.formato}${duracaoTxt}
+- Contexto: ${gen.contexto}
+
+REGRAS DE PRODUÇÃO:
+- Parágrafos curtos e objetivos
+- Emojis apenas quando natural e alinhado ao cliente
+- CTA quando fizer sentido para o objetivo
+- Hashtags no final se aplicável
+- Para roteiros: Gancho → Desenvolvimento → CTA
+- Para gestão de crise: tom firme, empático, sem drama excessivo
+- Para WhatsApp: linguagem direta e natural
+
+IMPORTANTE: Gere EXATAMENTE 3 variações numeradas (Versão 1, Versão 2, Versão 3), cada uma com abordagem diferente mantendo o padrão do cliente. Separe com "---" entre versões.
+
+Após as 3 versões, adicione:
+
+PROMPT DE IMAGEM:
+[Prompt detalhado em português para geração de imagem no formato ${gen.formato==="stories"||gen.formato==="reels"?"1080x1920":gen.formato==="carrossel"?"1080x1080":"1080x1350"}, alinhado com o conteúdo e identidade visual do cliente]`;
+  };
+
+  const gerarConteudo = async()=>{
+    if(!canGenerate)return;
+    const genSnapshot = {...gen}; // snapshot antes de qualquer mudança do usuário durante o fetch
+    setGenLoading(true);setGenResult(null);
+    try{
+      const res = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:buildPrompt()}]})
+      });
+      const data = await res.json();
+      if(!res.ok||data.error){
+        setGenResult({erro:`Erro da API: ${data.error?.message||"Tente novamente."}`,versoes:[],promptImg:""});
+        setGenLoading(false);return;
+      }
+      const text = data.content?.map(i=>i.text||"").join("\n")||"";
+      const promptImgMatch = text.match(/PROMPT DE IMAGEM:?\s*([\s\S]+)$/i);
+      const promptImg = promptImgMatch?promptImgMatch[1].trim():"";
+      const semPrompt = text.replace(/PROMPT DE IMAGEM:?[\s\S]+$/i,"").trim();
+      const partes = semPrompt.split(/---+/).map(p=>p.trim()).filter(Boolean);
+      const versoes = partes.map(p=>p.replace(/^[#*\s]*(versão|versao|version)\s*\d+[:#*\s]*/i,"").trim()).filter(Boolean);
+      if(versoes.length===0){
+        setGenResult({erro:"Não foi possível processar o resultado. Tente regerar.",versoes:[],promptImg:""});
+        setGenLoading(false);return;
+      }
+      setGenResult({versoes,promptImg,geradoEm:new Date().toISOString(),params:genSnapshot});
+    }catch(e){
+      setGenResult({erro:"Erro ao gerar. Verifique sua conexão.",versoes:[],promptImg:""});
+    }
+    setGenLoading(false);
+  };
+
+  const salvarGeracao = async(idx)=>{
+    if(!sb||!genResult)return;
+    const cl = CLIENTS.find(c=>c.id===genResult.params.client);
+    try{
+      await sb.from("content_library").insert({tipo:"geracao_ia",titulo:`${genResult.params.tipo} — ${cl?.name}`,contexto:genResult.params.contexto,aprendizado:genResult.versoes[idx]||"",client_id:genResult.params.client,created_at:new Date().toISOString(),criado_por:CURRENT_USER?.name||""});
+      setSavedMsg(idx);setTimeout(()=>setSavedMsg(null),2000);
+      setHistorico(prev=>[{titulo:`${genResult.params.tipo} — ${cl?.name}`,contexto:genResult.params.contexto,aprendizado:genResult.versoes[idx]||"",created_at:new Date().toISOString(),id:Date.now()},...prev]);
+    }catch(e){console.error("Erro ao salvar geração:",e);}
+  };
+
+  const copiar = async(texto,idx)=>{
+    try{
+      await navigator.clipboard.writeText(texto);
+      if(idx==="prompt"){setCopiedPrompt(true);setTimeout(()=>setCopiedPrompt(false),2000);}
+      else{setCopiedIdx(idx);setTimeout(()=>setCopiedIdx(null),2000);}
+    }catch(e){console.warn("Clipboard não disponível:",e);}
+  };
+
+  const abrirImagem = async(plat)=>{
+    if(genResult?.promptImg){try{await navigator.clipboard.writeText(genResult.promptImg);}catch(e){}}
+    window.open(plat==="chatgpt"?"https://chat.openai.com":"https://gemini.google.com","_blank");
+  };
+
+  const contarPalavras = t=>t.trim().split(/\s+/).filter(Boolean).length;
+
+  /* ── Churn ── */
   const churnAlerts = CLIENTS.map(cl=>{
-    const ct = TASKS.filter(t=>t.client===cl.id&&!t.deletedAt);
-    const late = ct.filter(t=>t.deadline&&new Date(t.deadline)<now&&t.status!=="aprovado").length;
-    const rework = ct.filter(t=>(t.timeline||[]).some(e=>e.to==="alteracao")).length;
-    const done = ct.filter(t=>t.status==="aprovado");
-    const recentDone = done.filter(t=>t.completedAt&&(now-new Date(t.completedAt))/(1000*60*60*24)<=30).length;
-    const avgScore = done.filter(t=>t.score!=null).reduce((s,t)=>s+(t.score||0),0)/Math.max(1,done.filter(t=>t.score!=null).length);
-
-    // Risk signals
-    const signals = [];
-    if(late>=3) signals.push({level:"alto", msg:late+" demandas atrasadas — cliente pode estar insatisfeito"});
-    else if(late>=1) signals.push({level:"medio", msg:late+" demanda(s) atrasada(s)"});
-    if(rework>=3) signals.push({level:"alto", msg:rework+" retrabalhos — qualidade abaixo do esperado"});
-    if(avgScore<7&&done.length>=3) signals.push({level:"medio", msg:"Score medio baixo ("+avgScore.toFixed(1)+"/10)"});
-    if(recentDone===0&&ct.length>2) signals.push({level:"medio", msg:"Nenhuma entrega nos ultimos 30 dias"});
-    if(cl.nps!=null&&cl.nps<=6) signals.push({level:"alto", msg:"NPS critico ("+cl.nps+"/10) — risco alto de cancelamento"});
-
-    const riskLevel = signals.some(s=>s.level==="alto")?"alto":signals.some(s=>s.level==="medio")?"medio":"baixo";
-    const riskScore = Math.min(100, signals.filter(s=>s.level==="alto").length*35 + signals.filter(s=>s.level==="medio").length*15);
-
-    // Suggested actions
-    const acoes = [];
-    if(late>=2) acoes.push("Reuniao urgente para realinhamento de prazos");
-    if(rework>=2) acoes.push("Revisão do processo de briefing e aprovação");
-    if(avgScore<7) acoes.push("Conversa sobre expectativas e qualidade");
-    if(cl.nps!=null&&cl.nps<=7) acoes.push("NPS baixo — ligacao de check-in proativa");
-    if(recentDone===0) acoes.push("Apresentar roadmap das proximas entregas");
-    if(acoes.length===0) acoes.push("Manter frequencia de comunicacao");
-
-    return {...cl, signals, riskLevel, riskScore, acoes, late, rework, avgScore:avgScore.toFixed(1)};
+    const ct=TASKS.filter(t=>t.client===cl.id&&!t.deletedAt);
+    const late=ct.filter(t=>t.deadline&&new Date(t.deadline)<now&&t.status!=="aprovado").length;
+    const rework=ct.filter(t=>(t.timeline||[]).some(e=>e.to==="alteracao")).length;
+    const done=ct.filter(t=>t.status==="aprovado");
+    const recentDone=done.filter(t=>t.completedAt&&(now-new Date(t.completedAt))/(1000*60*60*24)<=30).length;
+    const avgScore=done.filter(t=>t.score!=null).reduce((s,t)=>s+(t.score||0),0)/Math.max(1,done.filter(t=>t.score!=null).length);
+    const signals=[];
+    if(late>=3)signals.push({level:"alto",msg:late+" demandas atrasadas"});
+    else if(late>=1)signals.push({level:"medio",msg:late+" demanda(s) atrasada(s)"});
+    if(rework>=3)signals.push({level:"alto",msg:rework+" retrabalhos"});
+    if(avgScore<7&&done.length>=3)signals.push({level:"medio",msg:"Score medio baixo ("+avgScore.toFixed(1)+"/10)"});
+    if(recentDone===0&&ct.length>2)signals.push({level:"medio",msg:"Nenhuma entrega nos ultimos 30 dias"});
+    if(cl.nps!=null&&cl.nps<=6)signals.push({level:"alto",msg:"NPS critico ("+cl.nps+"/10)"});
+    const riskLevel=signals.some(s=>s.level==="alto")?"alto":signals.some(s=>s.level==="medio")?"medio":"baixo";
+    const riskScore=Math.min(100,signals.filter(s=>s.level==="alto").length*35+signals.filter(s=>s.level==="medio").length*15);
+    const acoes=[];
+    if(late>=2)acoes.push("Reuniao urgente");if(rework>=2)acoes.push("Revisao do briefing");
+    if(avgScore<7)acoes.push("Conversa sobre expectativas");if(cl.nps!=null&&cl.nps<=7)acoes.push("Check-in proativo");
+    if(recentDone===0)acoes.push("Apresentar roadmap");if(acoes.length===0)acoes.push("Manter frequencia");
+    return{...cl,signals,riskLevel,riskScore,acoes,late,rework,avgScore:avgScore.toFixed(1)};
   }).sort((a,b)=>b.riskScore-a.riskScore);
 
-  const RISCO_C = {alto:C.rd, medio:C.yw, baixo:C.gr};
-  const SETORES = ["agro","saude","construcao","varejo","servicos","educacao","tech","imobiliario","beleza","alimentacao"];
+  const RISCO_C={alto:C.rd,medio:C.yw,baixo:C.gr};
+  const SETORES=["agro","saude","construcao","varejo","servicos","educacao","tech","imobiliario","beleza","alimentacao"];
 
-  /* ── Diagnostico IA ── */
-  const runDiagnostico = ()=>{
-    if(!diagnostico.client)return;
-    setLoading(true);
+  const runDiagnostico=()=>{
+    if(!diagnostico.client)return;setLoading(true);
     setTimeout(()=>{
-      const cl = CLIENTS.find(c=>c.id===diagnostico.client);
-      const rMeta = parseFloat(diagnostico.roas_meta)||0;
-      const cplMeta = parseFloat(diagnostico.cpl_meta)||0;
-      const rGoogle = parseFloat(diagnostico.roas_google)||0;
-      const cplGoogle = parseFloat(diagnostico.cpl_google)||0;
-      const investMeta = parseFloat(diagnostico.invest_meta)||0;
-
-      const insights = [];
-      const recomendacoes = [];
-
-      // ROAS analysis
-      if(rMeta>0){
-        if(rMeta>=5) insights.push({tipo:"positivo", titulo:"ROAS Meta excelente", desc:"ROAS de "+rMeta+"x esta acima da media do setor (4x). Campanha performando bem."});
-        else if(rMeta>=3) insights.push({tipo:"neutro", titulo:"ROAS Meta adequado", desc:"ROAS de "+rMeta+"x. Margem para otimizacao. Considere testes de criativo."});
-        else{
-          insights.push({tipo:"alerta", titulo:"ROAS Meta abaixo do esperado", desc:"ROAS de "+rMeta+"x. Abaixo da meta de 4x. Requer atencao imediata."});
-          recomendacoes.push("Revisar segmentacao de publico — possivel fadiga de audiencia");
-          recomendacoes.push("Testar 3-5 novos criativos com abordagens diferentes");
-          recomendacoes.push("Revisar landing page — taxa de conversao pode estar baixa");
-        }
-      }
-
-      // CPL analysis
-      if(cplMeta>0){
-        if(cplMeta<=30) insights.push({tipo:"positivo", titulo:"CPL Meta eficiente", desc:"Custo por lead de R$"+cplMeta+" esta excelente para a maioria dos setores."});
-        else if(cplMeta<=80) insights.push({tipo:"neutro", titulo:"CPL Meta moderado", desc:"R$"+cplMeta+" por lead. Depende do ticket medio do cliente para avaliar."});
-        else{
-          insights.push({tipo:"alerta", titulo:"CPL Meta elevado", desc:"R$"+cplMeta+" por lead. Verificar qualidade dos leads e otimizar campanha."});
-          recomendacoes.push("Refinar publico para reduzir CPL — excluir audiencios que nao convertem");
-          recomendacoes.push("Testar anuncios de oferta direta vs awareness");
-        }
-      }
-
-      // Investment analysis
-      if(investMeta>0&&rMeta>0){
-        const receitaEst = investMeta * rMeta;
-        insights.push({tipo:"info", titulo:"Receita estimada Meta", desc:"Com investimento de R$"+investMeta.toLocaleString("pt-BR")+" e ROAS "+rMeta+"x, receita estimada: R$"+receitaEst.toLocaleString("pt-BR")});
-        if(rMeta>=4) recomendacoes.push("ROAS bom — considere escalar orcamento em 20-30%");
-      }
-
-      // Google analysis
-      if(rGoogle>0){
-        if(rGoogle<rMeta*0.7) recomendacoes.push("Google performando abaixo do Meta — revisar palavras-chave e lances");
-        if(rGoogle>=rMeta*1.2) recomendacoes.push("Google performando melhor que Meta — considere realocar orcamento");
-      }
-
-      if(recomendacoes.length===0) recomendacoes.push("Performance geral boa. Mantenha o ritmo de otimizacao semanal.");
-
-      setDiagnostico(p=>({...p, resultado:{insights, recomendacoes, cliente:cl?.name, analisadoEm:new Date().toISOString()}}));
-      setLoading(false);
-    }, 1800);
+      const cl=CLIENTS.find(c=>c.id===diagnostico.client);
+      const rMeta=parseFloat(diagnostico.roas_meta)||0,cplMeta=parseFloat(diagnostico.cpl_meta)||0;
+      const rGoogle=parseFloat(diagnostico.roas_google)||0,investMeta=parseFloat(diagnostico.invest_meta)||0;
+      const insights=[],recomendacoes=[];
+      if(rMeta>0){if(rMeta>=5)insights.push({tipo:"positivo",titulo:"ROAS Meta excelente",desc:"ROAS de "+rMeta+"x acima da media."});else if(rMeta>=3)insights.push({tipo:"neutro",titulo:"ROAS Meta adequado",desc:"ROAS de "+rMeta+"x."});else{insights.push({tipo:"alerta",titulo:"ROAS Meta abaixo",desc:"ROAS de "+rMeta+"x."});recomendacoes.push("Revisar segmentacao e criativos");}}
+      if(cplMeta>0){if(cplMeta<=30)insights.push({tipo:"positivo",titulo:"CPL eficiente",desc:"R$"+cplMeta+" por lead."});else if(cplMeta<=80)insights.push({tipo:"neutro",titulo:"CPL moderado",desc:"R$"+cplMeta+" por lead."});else{insights.push({tipo:"alerta",titulo:"CPL elevado",desc:"R$"+cplMeta+" por lead."});recomendacoes.push("Refinar publico para reduzir CPL");}}
+      if(investMeta>0&&rMeta>0){const r=investMeta*rMeta;insights.push({tipo:"info",titulo:"Receita estimada",desc:"R$"+investMeta.toLocaleString("pt-BR")+" × "+rMeta+"x = R$"+r.toLocaleString("pt-BR")});if(rMeta>=4)recomendacoes.push("Escalar orcamento em 20-30%");}
+      if(rGoogle>0){if(rGoogle<rMeta*0.7)recomendacoes.push("Google abaixo do Meta");if(rGoogle>=rMeta*1.2)recomendacoes.push("Realocar orcamento para Google");}
+      if(recomendacoes.length===0)recomendacoes.push("Performance boa. Mantenha o ritmo.");
+      setDiagnostico(p=>({...p,resultado:{insights,recomendacoes,cliente:cl?.name,analisadoEm:new Date().toISOString()}}));setLoading(false);
+    },1800);
   };
 
-  const savePlaybooks = list=>{setPlaybooks(list);try{localStorage.setItem("pixels-playbooks",JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("content_library").upsert({tipo:"playbooks",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
-  };
-  const saveBiblioteca = list=>{setBiblioteca(list);try{localStorage.setItem("pixels-biblioteca",JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("content_library").upsert({tipo:"biblioteca",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(()=>{}).catch(()=>{});
-  };
+  const savePlaybooks=list=>{setPlaybooks(list);try{localStorage.setItem("pixels-playbooks",JSON.stringify(list));}catch(e){}};
+  const saveBiblioteca=list=>{setBiblioteca(list);try{localStorage.setItem("pixels-biblioteca",JSON.stringify(list));}catch(e){}};
+  const addPlaybook=()=>{if(!pbForm.titulo.trim())return;savePlaybooks([...playbooks,{...pbForm,id:Date.now(),criadoEm:new Date().toISOString(),criadoPor:CURRENT_USER?.name||""}]);setPbForm({setor:"agro",titulo:"",etapas:"",kpis:"",obs:""});setShowAddPb(false);};
+  const addBib=()=>{if(!bibForm.titulo.trim())return;saveBiblioteca([...biblioteca,{...bibForm,id:Date.now(),criadoEm:new Date().toISOString(),criadoPor:CURRENT_USER?.name||""}]);setBibForm({titulo:"",contexto:"",aprendizado:"",clientId:"",tipo:"campanha"});setShowAddBib(false);};
 
-  const addPlaybook = ()=>{
-    if(!pbForm.titulo.trim())return;
-    savePlaybooks([...playbooks,{...pbForm,id:Date.now(),criadoEm:new Date().toISOString(),criadoPor:CURRENT_USER.name}]);
-    setPbForm({setor:"agro",titulo:"",etapas:"",kpis:"",obs:""}); setShowAddPb(false);
-  };
-  const addBib = ()=>{
-    if(!bibForm.titulo.trim())return;
-    saveBiblioteca([...biblioteca,{...bibForm,id:Date.now(),criadoEm:new Date().toISOString(),criadoPor:CURRENT_USER.name}]);
-    setBibForm({titulo:"",contexto:"",aprendizado:"",clientId:"",tipo:"campanha"}); setShowAddBib(false);
-  };
-
-  const TABS = [
-    {id:"diagnostico", icon:"🔬", label:"Diagnóstico de Campanha"},
-    {id:"churn",       icon:"⚠",  label:"Alerta de Churn"},
-    {id:"playbooks",   icon:"📖", label:"Playbooks"},
-    {id:"biblioteca",  icon:"💡", label:"Biblioteca de Aprendizados"},
-  ];
-
-  const TIPO_BIB = {campanha:"Campanha",criativo:"Criativo",publico:"Publico",oferta:"Oferta",processo:"Processo",cliente:"Cliente"};
-  const TIPO_BIB_C = {campanha:C.a,criativo:"#8b5cf6",publico:"#f59e0b",oferta:C.gr,processo:"#3b82f6",cliente:C.pk};
+  const TABS=[{id:"conteudo",icon:"✨",label:"Gerador de Conteúdo"},{id:"diagnostico",icon:"🔬",label:"Diagnóstico"},{id:"churn",icon:"⚠",label:"Alerta de Churn"},{id:"playbooks",icon:"📖",label:"Playbooks"},{id:"biblioteca",icon:"💡",label:"Biblioteca"}];
+  const TIPO_BIB={campanha:"Campanha",criativo:"Criativo",publico:"Publico",oferta:"Oferta",processo:"Processo",cliente:"Cliente",geracao_ia:"IA Gerada"};
+  const TIPO_BIB_C={campanha:C.a,criativo:"#8b5cf6",publico:"#f59e0b",oferta:C.gr,processo:"#3b82f6",cliente:C.pk,geracao_ia:"#6366f1"};
+  const CAT_COLORS={"📝 Texto & Legenda":"#7c3aed","📱 WhatsApp":"#22c55e","🎬 Roteiros de Vídeo":"#ef4444","📣 Anúncios — Vídeo":"#f59e0b","✍️ Anúncios — Texto":"#3b82f6","🚨 Gestão de Crise":C.rd,"✨ Outros":C.a};
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <style>{"@keyframes pixSpin{to{transform:rotate(360deg)}}"}</style>
     <div>
       <div style={{color:C.tx,fontWeight:900,fontSize:20}}>Pixels IA</div>
-      <div style={{color:C.td,fontSize:11,marginTop:2}}>Inteligencia artificial integrada ao ecossistema da agencia</div>
+      <div style={{color:C.td,fontSize:11,marginTop:2}}>Inteligência artificial integrada ao ecossistema da agência</div>
     </div>
 
     <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,overflowX:"auto"}}>
@@ -19463,262 +19587,376 @@ function PageIAPixels({isMob, tasks}){
       ))}
     </div>
 
-    {/* ── DIAGNOSTICO ── */}
-    {tab==="diagnostico"&&(<div style={{display:"grid",gridTemplateColumns:"380px 1fr",gap:16,alignItems:"start"}}>
-      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"20px"}}>
-        <div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:4}}>Dados da campanha</div>
-        <div style={{color:C.td,fontSize:11,marginBottom:16}}>Cole os numeros do Meta e Google para receber diagnostico e recomendacoes</div>
+    {/* ══ GERADOR ══ */}
+    {tab==="conteudo"&&(<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"390px 1fr",gap:16,alignItems:"start"}}>
 
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Cliente</div>
-            <select value={diagnostico.client} onChange={e=>setDiagnostico(p=>({...p,client:e.target.value}))} style={inp}>
+      {/* Painel esquerdo */}
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"18px",display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{color:C.tx,fontWeight:700,fontSize:14}}>✨ Gerador de Conteúdo</div>
+
+          {/* CAMPO 1 — Cliente */}
+          <div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:4,textTransform:"uppercase",letterSpacing:.5}}>Cliente *</div>
+            <select value={gen.client} onChange={e=>setGen(p=>({...p,client:e.target.value,unidade:""}))} style={inp}>
               <option value="">Selecionar cliente...</option>
               {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 
-          <div style={{color:C.tx,fontWeight:600,fontSize:12,marginTop:4,paddingTop:8,borderTop:"1px solid "+C.b1}}>Meta Ads</div>
-          {[{k:"roas_meta",p:"ROAS atual"},{k:"cpl_meta",p:"CPL (R$)"},{k:"invest_meta",p:"Investimento (R$)"}].map(f=>(
-            <div key={f.k}><div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div><input value={diagnostico[f.k]} onChange={e=>setDiagnostico(p=>({...p,[f.k]:e.target.value}))} placeholder="0" style={inp}/></div>
-          ))}
+          {/* CAMPO 2 — Unidade */}
+          {isBioter&&(<div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:4,textTransform:"uppercase",letterSpacing:.5}}>Unidade</div>
+            <select value={gen.unidade} onChange={e=>setGenField("unidade",e.target.value)} style={inp}>
+              <option value="">Todas as unidades</option>
+              {BIOTER_UNITS.map(u=><option key={u} value={u}>{u}</option>)}
+            </select>
+          </div>)}
 
-          <div style={{color:C.tx,fontWeight:600,fontSize:12,marginTop:4,paddingTop:8,borderTop:"1px solid "+C.b1}}>Google Ads</div>
-          {[{k:"roas_google",p:"ROAS atual"},{k:"cpl_google",p:"CPL (R$)"},{k:"invest_google",p:"Investimento (R$)"}].map(f=>(
-            <div key={f.k}><div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div><input value={diagnostico[f.k]} onChange={e=>setDiagnostico(p=>({...p,[f.k]:e.target.value}))} placeholder="0" style={inp}/></div>
-          ))}
-
-          <button onClick={runDiagnostico} disabled={!diagnostico.client||loading}
-            style={{background:diagnostico.client?`linear-gradient(135deg,${C.a},${C.aD})`:"#ccc",color:"#fff",border:"none",borderRadius:10,padding:"11px",fontWeight:700,fontSize:13,cursor:diagnostico.client?"pointer":"not-allowed",marginTop:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-            {loading?(<><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid rgba(255,255,255,.3)",borderTop:"2px solid #fff",animation:"mapSpin .8s linear infinite"}}/>Analisando...</>):"Analisar campanha"}
-          </button>
-          <style>{"@keyframes mapSpin{to{transform:rotate(360deg)}}"}</style>
-        </div>
-      </div>
-
-      {/* Results */}
-      <div>
-        {!diagnostico.resultado&&!loading&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"48px",textAlign:"center"}}>
-          <div style={{fontSize:48,marginBottom:12}}>🔬</div>
-          <div style={{color:C.tx,fontWeight:700,fontSize:16}}>Pronto para diagnosticar</div>
-          <div style={{color:C.td,fontSize:12,marginTop:4}}>Preencha os dados ao lado para receber insights e recomendacoes automaticas</div>
-        </div>)}
-
-        {loading&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"48px",textAlign:"center"}}>
-          <div style={{width:48,height:48,borderRadius:"50%",border:"4px solid "+C.a+"33",borderTop:"4px solid "+C.a,animation:"mapSpin .9s linear infinite",margin:"0 auto 16px"}}/>
-          <div style={{color:C.tx,fontWeight:700,fontSize:14}}>Analisando dados...</div>
-          <div style={{color:C.td,fontSize:12,marginTop:4}}>Processando metricas e gerando insights</div>
-        </div>)}
-
-        {diagnostico.resultado&&!loading&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-            <div style={{padding:"14px 18px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{color:C.tx,fontWeight:700,fontSize:14}}>Diagnostico — {diagnostico.resultado.cliente}</div>
-              <div style={{color:C.td,fontSize:10}}>{new Date(diagnostico.resultado.analisadoEm).toLocaleString("pt-BR")}</div>
-            </div>
-            <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:10}}>
-              {diagnostico.resultado.insights.map((ins,i)=>{
-                const col = ins.tipo==="positivo"?C.gr:ins.tipo==="alerta"?C.rd:ins.tipo==="neutro"?C.yw:C.bl;
-                const icon = ins.tipo==="positivo"?"✅":ins.tipo==="alerta"?"🔥":ins.tipo==="neutro"?"⚡":"ℹ";
-                return(<div key={i} style={{background:col+"10",border:"1px solid "+col+"33",borderRadius:12,padding:"12px 14px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
-                    <span style={{fontSize:14}}>{icon}</span>
-                    <span style={{color:col,fontWeight:700,fontSize:12}}>{ins.titulo}</span>
-                  </div>
-                  <div style={{color:C.tx,fontSize:12,lineHeight:1.5}}>{ins.desc}</div>
-                </div>);
+          {/* CAMPO 3A — Categoria */}
+          <div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Categoria *</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              {CATEGORIAS.map(cat=>{
+                const isActive=gen.categoria===cat;
+                const cor=CAT_COLORS[cat]||C.a;
+                return(
+                  <button key={cat} onClick={()=>setGen(p=>({...p,categoria:cat,subcategoria:"",tipo:""}))}
+                    style={{background:isActive?cor+"18":"transparent",color:isActive?cor:C.ts,border:"1px solid "+(isActive?cor:C.b1),borderRadius:10,padding:"8px 10px",fontSize:11,cursor:"pointer",fontWeight:isActive?700:400,transition:"all .15s",textAlign:"left"}}>
+                    {cat}
+                  </button>
+                );
               })}
             </div>
           </div>
 
-          <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-            <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:14}}>Recomendacoes</div>
-            <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:8}}>
-              {diagnostico.resultado.recomendacoes.map((rec,i)=>(
-                <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"9px 12px",background:C.s1,borderRadius:9}}>
-                  <div style={{width:22,height:22,borderRadius:7,background:C.a,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11,flexShrink:0}}>{i+1}</div>
-                  <span style={{color:C.tx,fontSize:12,lineHeight:1.5}}>{rec}</span>
-                </div>
+          {/* CAMPO 3B — Subcategoria */}
+          {gen.categoria&&subcats.length>0&&(<div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Subcategoria *</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {subcats.map(sub=>(
+                <button key={sub} onClick={()=>setGen(p=>({...p,subcategoria:sub,tipo:""}))}
+                  style={{background:gen.subcategoria===sub?(CAT_COLORS[gen.categoria]||"#7c3aed"):"transparent",color:gen.subcategoria===sub?"#fff":C.ts,border:"1px solid "+(gen.subcategoria===sub?(CAT_COLORS[gen.categoria]||"#7c3aed"):C.b1),borderRadius:20,padding:"5px 12px",fontSize:11,cursor:"pointer",fontWeight:gen.subcategoria===sub?700:400,transition:"all .15s"}}>
+                  {sub}
+                </button>
               ))}
+            </div>
+          </div>)}
+
+          {/* CAMPO 3C — Tipo Específico */}
+          {gen.subcategoria&&tipos.length>0&&(<div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Tipo *</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {tipos.map(t=>(
+                <button key={t} onClick={()=>setGenField("tipo",t)}
+                  style={{background:gen.tipo===t?"#0ea5e9":"transparent",color:gen.tipo===t?"#fff":C.ts,border:"1px solid "+(gen.tipo===t?"#0ea5e9":C.b1),borderRadius:20,padding:"5px 12px",fontSize:11,cursor:"pointer",fontWeight:gen.tipo===t?700:400,transition:"all .15s"}}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>)}
+
+          {/* CAMPO 4 — Duração */}
+          {isVideo&&gen.tipo&&(<div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Duração</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {["15s","30s","45s","60s","1-2min","Livre"].map(d=>(
+                <button key={d} onClick={()=>setGenField("duracao",gen.duracao===d?"":d)}
+                  style={{background:gen.duracao===d?"#f59e0b":"transparent",color:gen.duracao===d?"#fff":C.ts,border:"1px solid "+(gen.duracao===d?"#f59e0b":C.b1),borderRadius:20,padding:"5px 12px",fontSize:11,cursor:"pointer",fontWeight:gen.duracao===d?700:400,transition:"all .15s"}}>
+                  {d}
+                </button>
+              ))}
+            </div>
+          </div>)}
+
+          {/* CAMPO 5 — Tamanho */}
+          {isTexto&&gen.tipo&&!isBio&&(<div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Limite de Tamanho</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={()=>setGen(p=>({...p,usarLinhas:!p.usarLinhas}))}
+                  style={{background:gen.usarLinhas?C.a:"transparent",border:"1px solid "+(gen.usarLinhas?C.a:C.b1),borderRadius:20,padding:"4px 12px",fontSize:11,cursor:"pointer",color:gen.usarLinhas?"#fff":C.ts,fontWeight:gen.usarLinhas?700:400,transition:"all .15s",whiteSpace:"nowrap"}}>
+                  📏 Por linhas
+                </button>
+                {gen.usarLinhas&&(<input type="number" min="1" max="50" value={gen.linhas} onChange={e=>setGenField("linhas",e.target.value)} placeholder="Ex: 3" style={{...inp,width:90,padding:"5px 8px"}}/>)}
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <button onClick={()=>setGen(p=>({...p,usarPalavras:!p.usarPalavras}))}
+                  style={{background:gen.usarPalavras?"#8b5cf6":"transparent",border:"1px solid "+(gen.usarPalavras?"#8b5cf6":C.b1),borderRadius:20,padding:"4px 12px",fontSize:11,cursor:"pointer",color:gen.usarPalavras?"#fff":C.ts,fontWeight:gen.usarPalavras?700:400,transition:"all .15s",whiteSpace:"nowrap"}}>
+                  💬 Por palavras
+                </button>
+                {gen.usarPalavras&&(<input type="number" min="1" max="1000" value={gen.palavras} onChange={e=>setGenField("palavras",e.target.value)} placeholder="Ex: 40" style={{...inp,width:90,padding:"5px 8px"}}/>)}
+              </div>
+            </div>
+          </div>)}
+
+          {isBio&&gen.tipo&&(<div style={{background:"#0ea5e910",border:"1px solid #0ea5e933",borderRadius:8,padding:"7px 10px",color:"#0ea5e9",fontSize:11}}>ℹ Bio do Instagram → limite automático de 150 caracteres aplicado</div>)}
+
+          {/* CAMPO 6 — Objetivo */}
+          <div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Objetivo</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {OBJETIVOS.map(o=>(
+                <button key={o.v} onClick={()=>setGenField("objetivo",o.v)}
+                  style={{background:gen.objetivo===o.v?C.a:"transparent",color:gen.objetivo===o.v?"#fff":C.ts,border:"1px solid "+(gen.objetivo===o.v?C.a:C.b1),borderRadius:20,padding:"5px 12px",fontSize:11,cursor:"pointer",fontWeight:gen.objetivo===o.v?700:400,transition:"all .15s"}}>
+                  {o.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* CAMPO 7 — Tom */}
+          <div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Tom de Voz</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {TONS.map(t=>(
+                <button key={t.v} onClick={()=>setGenField("tom",t.v)}
+                  style={{background:gen.tom===t.v?"#7c3aed":"transparent",color:gen.tom===t.v?"#fff":C.ts,border:"1px solid "+(gen.tom===t.v?"#7c3aed":C.b1),borderRadius:20,padding:"5px 12px",fontSize:11,cursor:"pointer",fontWeight:gen.tom===t.v?700:400,transition:"all .15s"}}>
+                  {t.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* CAMPO 8 — Formato */}
+          <div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Formato de Publicação</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {FORMATOS.map(f=>(
+                <button key={f.v} onClick={()=>setGenField("formato",f.v)}
+                  style={{background:gen.formato===f.v?"#0ea5e9":"transparent",color:gen.formato===f.v?"#fff":C.ts,border:"1px solid "+(gen.formato===f.v?"#0ea5e9":C.b1),borderRadius:20,padding:"5px 12px",fontSize:11,cursor:"pointer",fontWeight:gen.formato===f.v?700:400,transition:"all .15s"}}>
+                  {f.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* CAMPO 9 — Contexto */}
+          <div>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,marginBottom:4,textTransform:"uppercase",letterSpacing:.5}}>Contexto do Post *</div>
+            <textarea value={gen.contexto} onChange={e=>setGenField("contexto",e.target.value)}
+              placeholder="Descreva o que é o post em 1 ou 2 linhas. Ex: obra concluída em Uberlândia, novo produto lançando, cliente aprovou projeto, promoção de fim de ano..."
+              style={{...inp,minHeight:80,resize:"vertical",lineHeight:1.5}}/>
+          </div>
+
+          {/* Badge briefing */}
+          {gen.client&&(<div style={{background:clientBriefing?.briefing?"#22c55e10":"#f59e0b10",border:"1px solid "+(clientBriefing?.briefing?"#22c55e33":"#f59e0b33"),borderRadius:8,padding:"7px 10px",display:"flex",alignItems:"center",gap:7}}>
+            <span style={{fontSize:12}}>{clientBriefing?.briefing?"✅":"⚠️"}</span>
+            <span style={{color:C.ts,fontSize:11}}>{clientBriefing?.briefing?"Briefing carregado — a IA usará as informações do cliente":"Sem briefing — cadastre na aba do cliente para melhores resultados"}</span>
+          </div>)}
+
+          {/* Botão gerar */}
+          <button onClick={gerarConteudo} disabled={!canGenerate||genLoading}
+            style={{background:canGenerate?"linear-gradient(135deg,#7c3aed,#6d28d9)":"#ccc",color:"#fff",border:"none",borderRadius:12,padding:"13px",fontWeight:700,fontSize:13,cursor:canGenerate&&!genLoading?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:canGenerate?"0 4px 14px #7c3aed44":"none",transition:"all .2s"}}>
+            {genLoading?(<><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid rgba(255,255,255,.3)",borderTop:"2px solid #fff",animation:"pixSpin .8s linear infinite"}}/>Gerando 3 versões...</>):"✨ Gerar Conteúdo"}
+          </button>
+        </div>
+
+        {/* Histórico */}
+        {historico.length>0&&(<div style={{background:C.card,borderRadius:12,border:"1px solid "+C.b1,overflow:"hidden"}}>
+          <button onClick={()=>setShowHistorico(v=>!v)} style={{width:"100%",background:"none",border:"none",padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",color:C.tx,fontWeight:600,fontSize:12}}>
+            <span>📂 Histórico ({historico.length})</span>
+            <span style={{color:C.td,fontSize:10}}>{showHistorico?"▲":"▼"}</span>
+          </button>
+          {showHistorico&&(<div style={{maxHeight:200,overflowY:"auto",padding:"0 12px 12px"}}>
+            {historico.slice(0,20).map((h,i)=>(
+              <div key={h.id||i} onClick={()=>{try{navigator.clipboard.writeText(h.aprendizado||"");}catch(e){}}}
+                style={{padding:"8px 10px",borderRadius:8,marginBottom:6,background:C.s1,cursor:"pointer"}}>
+                <div style={{color:C.tx,fontSize:11,fontWeight:600,marginBottom:2}}>{h.titulo}</div>
+                <div style={{color:C.td,fontSize:10}}>{(h.contexto||"").length>50?(h.contexto||"").slice(0,50)+"...":(h.contexto||"—")}</div>
+                <div style={{color:C.td,fontSize:9,marginTop:2}}>{h.created_at?new Date(h.created_at).toLocaleDateString("pt-BR"):"—"}</div>
+              </div>
+            ))}
+          </div>)}
+        </div>)}
+      </div>
+
+      {/* Painel direito */}
+      <div>
+        {!genResult&&!genLoading&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"60px 40px",textAlign:"center"}}>
+          <div style={{fontSize:56,marginBottom:16}}>✨</div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:18,marginBottom:8}}>Pronto para gerar</div>
+          <div style={{color:C.td,fontSize:13,lineHeight:1.7,maxWidth:340,margin:"0 auto"}}>Selecione o cliente, a categoria e o tipo de conteúdo, descreva o contexto e clique em gerar. A IA usará o briefing do cliente para criar 3 versões prontas para uso.</div>
+        </div>)}
+
+        {genLoading&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"60px 40px",textAlign:"center"}}>
+          <div style={{width:56,height:56,borderRadius:"50%",border:"4px solid #7c3aed33",borderTop:"4px solid #7c3aed",animation:"pixSpin .9s linear infinite",margin:"0 auto 20px"}}/>
+          <div style={{color:C.tx,fontWeight:700,fontSize:16,marginBottom:6}}>Gerando conteúdo...</div>
+          <div style={{color:C.td,fontSize:12}}>Analisando briefing e criando 3 variações</div>
+        </div>)}
+
+        {genResult&&!genLoading&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {genResult.erro&&(<div style={{background:C.rd+"10",border:"1px solid "+C.rd+"33",borderRadius:12,padding:"16px",color:C.rd,fontSize:13}}>{genResult.erro}</div>)}
+
+          {!genResult.erro&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between",background:"linear-gradient(135deg,#7c3aed08,transparent)"}}>
+              <div>
+                <div style={{color:C.tx,fontWeight:700,fontSize:14}}>✨ {genResult.params.tipo}</div>
+                <div style={{color:C.td,fontSize:11,marginTop:2}}>{CLIENTS.find(c=>c.id===genResult.params.client)?.name} · {genResult.params.subcategoria} · {TONS.find(t=>t.v===genResult.params.tom)?.l} · {new Date(genResult.geradoEm).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</div>
+              </div>
+              <button onClick={gerarConteudo} style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,padding:"6px 12px",color:C.ts,cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",gap:5}}>🔄 Regerar</button>
+            </div>
+
+            <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+              {genResult.versoes.map((v,i)=>{
+                const palavras=contarPalavras(v);
+                const chars=v.length;
+                return(<div key={i} style={{background:C.s1,borderRadius:12,border:"1px solid "+C.b1,overflow:"hidden"}}>
+                  <div style={{padding:"10px 14px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{color:C.tx,fontWeight:700,fontSize:12}}>Versão {i+1}</span>
+                      <span style={{background:C.b1,borderRadius:6,padding:"2px 8px",color:C.td,fontSize:10}}>{palavras} palavras · {chars} chars</span>
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <button onClick={()=>salvarGeracao(i)}
+                        style={{background:savedMsg===i?"#22c55e":"transparent",color:savedMsg===i?"#fff":C.ts,border:"1px solid "+(savedMsg===i?"#22c55e":C.b1),borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:11,transition:"all .15s"}}>
+                        {savedMsg===i?"✅ Salvo!":"💾 Salvar"}
+                      </button>
+                      <button onClick={()=>copiar(v,i)}
+                        style={{background:copiedIdx===i?"#22c55e":"#7c3aed",color:"#fff",border:"none",borderRadius:6,padding:"4px 12px",cursor:"pointer",fontSize:11,fontWeight:700,transition:"all .15s"}}>
+                        {copiedIdx===i?"✅ Copiado!":"📋 Copiar"}
+                      </button>
+                    </div>
+                  </div>
+                  <div style={{padding:"14px",color:C.tx,fontSize:13,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{v}</div>
+                </div>);
+              })}
+            </div>
+          </div>)}
+
+          {genResult.promptImg&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{color:C.tx,fontWeight:700,fontSize:13}}>🖼 Prompt de Imagem</div>
+                <div style={{color:C.td,fontSize:11,marginTop:1}}>{genResult.params.formato==="stories"||genResult.params.formato==="reels"?"1080×1920 (Stories/Reels)":genResult.params.formato==="carrossel"?"1080×1080 (Carrossel)":"1080×1350 (Feed)"}</div>
+              </div>
+              <button onClick={()=>copiar(genResult.promptImg,"prompt")}
+                style={{background:copiedPrompt?"#22c55e":"transparent",color:copiedPrompt?"#fff":C.ts,border:"1px solid "+(copiedPrompt?"#22c55e":C.b1),borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:11,fontWeight:700,transition:"all .15s"}}>
+                {copiedPrompt?"✅ Copiado!":"📋 Copiar Prompt"}
+              </button>
+            </div>
+            <div style={{padding:"14px 18px",color:C.ts,fontSize:12,lineHeight:1.6,fontStyle:"italic"}}>{genResult.promptImg}</div>
+            <div style={{padding:"0 18px 14px",display:"flex",gap:8}}>
+              <button onClick={()=>abrirImagem("chatgpt")} style={{flex:1,background:"#10a37f",color:"#fff",border:"none",borderRadius:10,padding:"10px",fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>🤖 Abrir no ChatGPT</button>
+              <button onClick={()=>abrirImagem("gemini")} style={{flex:1,background:"#4285f4",color:"#fff",border:"none",borderRadius:10,padding:"10px",fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>💎 Abrir no Gemini</button>
+            </div>
+            <div style={{padding:"0 18px 14px",color:C.td,fontSize:10,textAlign:"center"}}>O prompt é copiado automaticamente ao clicar — só cole na plataforma</div>
+          </div>)}
+        </div>)}
+      </div>
+    </div>)}
+
+    {/* ══ DIAGNÓSTICO ══ */}
+    {tab==="diagnostico"&&(<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"380px 1fr",gap:16,alignItems:"start"}}>
+      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"20px"}}>
+        <div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:4}}>Dados da campanha</div>
+        <div style={{color:C.td,fontSize:11,marginBottom:16}}>Cole os números do Meta e Google para diagnóstico</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Cliente</div><select value={diagnostico.client} onChange={e=>setDiagnostico(p=>({...p,client:e.target.value}))} style={inp}><option value="">Selecionar...</option>{CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div style={{color:C.tx,fontWeight:600,fontSize:12,paddingTop:8,borderTop:"1px solid "+C.b1}}>Meta Ads</div>
+          {[{k:"roas_meta",p:"ROAS"},{k:"cpl_meta",p:"CPL (R$)"},{k:"invest_meta",p:"Investimento (R$)"}].map(f=>(<div key={f.k}><div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div><input value={diagnostico[f.k]} onChange={e=>setDiagnostico(p=>({...p,[f.k]:e.target.value}))} placeholder="0" style={inp}/></div>))}
+          <div style={{color:C.tx,fontWeight:600,fontSize:12,paddingTop:8,borderTop:"1px solid "+C.b1}}>Google Ads</div>
+          {[{k:"roas_google",p:"ROAS"},{k:"cpl_google",p:"CPL (R$)"},{k:"invest_google",p:"Investimento (R$)"}].map(f=>(<div key={f.k}><div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div><input value={diagnostico[f.k]} onChange={e=>setDiagnostico(p=>({...p,[f.k]:e.target.value}))} placeholder="0" style={inp}/></div>))}
+          <button onClick={runDiagnostico} disabled={!diagnostico.client||loading} style={{background:diagnostico.client?"linear-gradient(135deg,"+C.a+","+C.aD+")":"#ccc",color:"#fff",border:"none",borderRadius:10,padding:"11px",fontWeight:700,fontSize:13,cursor:diagnostico.client?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            {loading?(<><div style={{width:16,height:16,borderRadius:"50%",border:"2px solid rgba(255,255,255,.3)",borderTop:"2px solid #fff",animation:"pixSpin .8s linear infinite"}}/>Analisando...</>):"Analisar campanha"}
+          </button>
+        </div>
+      </div>
+      <div>
+        {!diagnostico.resultado&&!loading&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"48px",textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>🔬</div><div style={{color:C.tx,fontWeight:700,fontSize:16}}>Pronto para diagnosticar</div><div style={{color:C.td,fontSize:12,marginTop:4}}>Preencha os dados ao lado</div></div>)}
+        {loading&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"48px",textAlign:"center"}}><div style={{width:48,height:48,borderRadius:"50%",border:"4px solid "+C.a+"33",borderTop:"4px solid "+C.a,animation:"pixSpin .9s linear infinite",margin:"0 auto 16px"}}/><div style={{color:C.tx,fontWeight:700}}>Analisando...</div></div>)}
+        {diagnostico.resultado&&!loading&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
+            <div style={{padding:"14px 18px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:14}}>Diagnóstico — {diagnostico.resultado.cliente}</div>
+            <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:10}}>
+              {diagnostico.resultado.insights.map((ins,i)=>{const col=ins.tipo==="positivo"?C.gr:ins.tipo==="alerta"?C.rd:ins.tipo==="neutro"?C.yw:C.bl;return(<div key={i} style={{background:col+"10",border:"1px solid "+col+"33",borderRadius:12,padding:"12px 14px"}}><div style={{display:"flex",gap:7,alignItems:"center",marginBottom:4}}><span style={{fontSize:13}}>{ins.tipo==="positivo"?"✅":ins.tipo==="alerta"?"🔥":ins.tipo==="neutro"?"⚡":"ℹ"}</span><span style={{color:col,fontWeight:700,fontSize:12}}>{ins.titulo}</span></div><div style={{color:C.tx,fontSize:12,lineHeight:1.5}}>{ins.desc}</div></div>);})}
+            </div>
+          </div>
+          <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
+            <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:14}}>Recomendações</div>
+            <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:8}}>
+              {diagnostico.resultado.recomendacoes.map((rec,i)=>(<div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"9px 12px",background:C.s1,borderRadius:9}}><div style={{width:22,height:22,borderRadius:7,background:C.a,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11,flexShrink:0}}>{i+1}</div><span style={{color:C.tx,fontSize:12,lineHeight:1.5}}>{rec}</span></div>))}
             </div>
           </div>
         </div>)}
       </div>
     </div>)}
 
-    {/* ── CHURN ALERTS ── */}
+    {/* ══ CHURN ══ */}
     {tab==="churn"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{background:C.a+"08",borderRadius:12,padding:"12px 16px",border:"1px solid "+C.a+"33",display:"flex",gap:10,alignItems:"center"}}>
-        <span style={{fontSize:16}}>⚡</span>
-        <div style={{color:C.tx,fontSize:12}}>Predicao de churn baseada em: demandas atrasadas, retrabalhos, score medio, NPS e frequencia de entregas. Atualizada em tempo real.</div>
-      </div>
-
-      {/* Summary */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-        {[
-          {l:"Risco Alto",v:churnAlerts.filter(c=>c.riskLevel==="alto").length,c:C.rd},
-          {l:"Risco Medio",v:churnAlerts.filter(c=>c.riskLevel==="medio").length,c:C.yw},
-          {l:"Saudaveis",v:churnAlerts.filter(c=>c.riskLevel==="baixo").length,c:C.gr},
-        ].map((k,i)=>(
-          <div key={i} style={{background:C.card,borderRadius:12,padding:"14px",border:"1px solid "+C.b1,textAlign:"center"}}>
-            <div style={{color:k.c,fontWeight:900,fontSize:28}}>{k.v}</div>
-            <div style={{color:C.td,fontSize:10,marginTop:3}}>{k.l}</div>
-          </div>
-        ))}
-      </div>
-
-      {churnAlerts.map((cl,i)=>(
-        <div key={cl.id} style={{background:C.card,borderRadius:16,border:"1px solid "+(cl.riskLevel==="alto"?C.rd+"44":cl.riskLevel==="medio"?C.yw+"44":C.b1),overflow:"hidden"}}>
-          <div style={{padding:"14px 18px",display:"flex",alignItems:"center",gap:12}}>
-            <div style={{width:44,height:44,borderRadius:13,background:cl.color+"22",border:"1px solid "+cl.color+"44",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,color:cl.color,flexShrink:0}}>{cl.name.slice(0,2).toUpperCase()}</div>
-            <div style={{flex:1}}>
-              <div style={{color:C.tx,fontWeight:700,fontSize:14}}>{cl.name}</div>
-              <div style={{display:"flex",gap:10,marginTop:3}}>
-                {cl.late>0&&<span style={{color:C.rd,fontSize:10}}>{cl.late} atrasadas</span>}
-                {cl.rework>0&&<span style={{color:C.or,fontSize:10}}>{cl.rework} retrabalhos</span>}
-                <span style={{color:C.td,fontSize:10}}>Score {cl.avgScore}/10</span>
-              </div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{color:RISCO_C[cl.riskLevel],fontWeight:900,fontSize:14}}>Risco {cl.riskLevel}</div>
-              <div style={{background:C.b1,borderRadius:99,height:4,width:80,marginTop:4,overflow:"hidden",marginLeft:"auto"}}>
-                <div style={{width:cl.riskScore+"%",height:"100%",background:RISCO_C[cl.riskLevel],borderRadius:99}}/>
-              </div>
-            </div>
-          </div>
-          {cl.signals.length>0&&(<div style={{padding:"0 18px 12px",display:"flex",flexDirection:"column",gap:5}}>
-            {cl.signals.map((s,si)=>(
-              <div key={si} style={{display:"flex",gap:7,alignItems:"flex-start",padding:"6px 10px",background:RISCO_C[s.level]+"10",borderRadius:7}}>
-                <span style={{color:RISCO_C[s.level],fontSize:11,flexShrink:0}}>{s.level==="alto"?"⚠":"•"}</span>
-                <span style={{color:C.tx,fontSize:11}}>{s.msg}</span>
-              </div>
-            ))}
-          </div>)}
-          {cl.acoes.length>0&&(<div style={{padding:"10px 18px",borderTop:"1px solid "+C.b1+"33",background:C.s1}}>
-            <div style={{color:C.td,fontSize:9,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.6}}>Acoes sugeridas</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {cl.acoes.map((a,ai)=>(
-                <span key={ai} style={{background:C.card,border:"1px solid "+C.b1,borderRadius:7,padding:"4px 10px",color:C.tx,fontSize:11}}>{a}</span>
-              ))}
-            </div>
-          </div>)}
+      <div style={{background:C.a+"08",borderRadius:12,padding:"12px 16px",border:"1px solid "+C.a+"33",display:"flex",gap:10,alignItems:"center"}}><span style={{fontSize:16}}>⚡</span><div style={{color:C.tx,fontSize:12}}>Predição de churn em tempo real baseada em atrasos, retrabalhos, score e NPS.</div></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{l:"Risco Alto",v:churnAlerts.filter(c=>c.riskLevel==="alto").length,c:C.rd},{l:"Risco Medio",v:churnAlerts.filter(c=>c.riskLevel==="medio").length,c:C.yw},{l:"Saudaveis",v:churnAlerts.filter(c=>c.riskLevel==="baixo").length,c:C.gr}].map((k,i)=>(<div key={i} style={{background:C.card,borderRadius:12,padding:"14px",border:"1px solid "+C.b1,textAlign:"center"}}><div style={{color:k.c,fontWeight:900,fontSize:28}}>{k.v}</div><div style={{color:C.td,fontSize:10,marginTop:3}}>{k.l}</div></div>))}</div>
+      {churnAlerts.map(cl=>(<div key={cl.id} style={{background:C.card,borderRadius:16,border:"1px solid "+(cl.riskLevel==="alto"?C.rd+"44":cl.riskLevel==="medio"?C.yw+"44":C.b1),overflow:"hidden"}}>
+        <div style={{padding:"14px 18px",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:44,height:44,borderRadius:13,background:(cl.color||C.a)+"22",border:"1px solid "+(cl.color||C.a)+"44",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,color:cl.color||C.a,flexShrink:0}}>{cl.name.slice(0,2).toUpperCase()}</div>
+          <div style={{flex:1}}><div style={{color:C.tx,fontWeight:700,fontSize:14}}>{cl.name}</div><div style={{display:"flex",gap:10,marginTop:3}}>{cl.late>0&&<span style={{color:C.rd,fontSize:10}}>{cl.late} atrasadas</span>}{cl.rework>0&&<span style={{color:C.or,fontSize:10}}>{cl.rework} retrabalhos</span>}<span style={{color:C.td,fontSize:10}}>Score {cl.avgScore}/10</span></div></div>
+          <div style={{textAlign:"right"}}><div style={{color:RISCO_C[cl.riskLevel],fontWeight:900,fontSize:14}}>Risco {cl.riskLevel}</div><div style={{background:C.b1,borderRadius:99,height:4,width:80,marginTop:4,overflow:"hidden",marginLeft:"auto"}}><div style={{width:cl.riskScore+"%",height:"100%",background:RISCO_C[cl.riskLevel],borderRadius:99}}/></div></div>
         </div>
-      ))}
+        {cl.signals.length>0&&(<div style={{padding:"0 18px 12px",display:"flex",flexDirection:"column",gap:5}}>{cl.signals.map((s,si)=>(<div key={si} style={{display:"flex",gap:7,padding:"6px 10px",background:RISCO_C[s.level]+"10",borderRadius:7}}><span style={{color:RISCO_C[s.level],fontSize:11}}>{s.level==="alto"?"⚠":"•"}</span><span style={{color:C.tx,fontSize:11}}>{s.msg}</span></div>))}</div>)}
+        {cl.acoes.length>0&&(<div style={{padding:"10px 18px",borderTop:"1px solid "+C.b1+"33",background:C.s1}}><div style={{color:C.td,fontSize:9,fontWeight:700,marginBottom:5,textTransform:"uppercase"}}>Ações sugeridas</div><div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{cl.acoes.map((a,ai)=>(<span key={ai} style={{background:C.card,border:"1px solid "+C.b1,borderRadius:7,padding:"4px 10px",color:C.tx,fontSize:11}}>{a}</span>))}</div></div>)}
+      </div>))}
     </div>)}
 
-    {/* ── PLAYBOOKS ── */}
+    {/* ══ PLAYBOOKS ══ */}
     {tab==="playbooks"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <button onClick={()=>setShowAddPb(true)} style={{background:`linear-gradient(135deg,${C.a},${C.aD})`,color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Novo playbook</button>
-      </div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setShowAddPb(true)} style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Novo playbook</button></div>
       {showAddPb&&(<div style={{background:C.card,borderRadius:14,border:"2px solid "+C.a+"44",padding:"18px"}}>
         <div style={{color:C.a,fontWeight:700,fontSize:13,marginBottom:12}}>Novo Playbook</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Setor</div>
-            <select value={pbForm.setor} onChange={e=>setPbForm(p=>({...p,setor:e.target.value}))} style={inp}>
-              {SETORES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
-            </select>
-          </div>
-          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Titulo *</div><input value={pbForm.titulo} onChange={e=>setPbForm(p=>({...p,titulo:e.target.value}))} style={inp}/></div>
-          <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Etapas do processo</div><textarea value={pbForm.etapas} onChange={e=>setPbForm(p=>({...p,etapas:e.target.value}))} placeholder="1. Briefing 2. Criacao..." style={{...inp,minHeight:70,resize:"vertical"}}/></div>
-          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>KPIs esperados</div><input value={pbForm.kpis} onChange={e=>setPbForm(p=>({...p,kpis:e.target.value}))} placeholder="ROAS 4x, CPL max R$50..." style={inp}/></div>
-          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Observacoes</div><input value={pbForm.obs} onChange={e=>setPbForm(p=>({...p,obs:e.target.value}))} style={inp}/></div>
+          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Setor</div><select value={pbForm.setor} onChange={e=>setPbForm(p=>({...p,setor:e.target.value}))} style={inp}>{SETORES.map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}</select></div>
+          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Título *</div><input value={pbForm.titulo} onChange={e=>setPbForm(p=>({...p,titulo:e.target.value}))} style={inp}/></div>
+          <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Etapas</div><textarea value={pbForm.etapas} onChange={e=>setPbForm(p=>({...p,etapas:e.target.value}))} style={{...inp,minHeight:70,resize:"vertical"}}/></div>
+          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>KPIs</div><input value={pbForm.kpis} onChange={e=>setPbForm(p=>({...p,kpis:e.target.value}))} style={inp}/></div>
+          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Obs</div><input value={pbForm.obs} onChange={e=>setPbForm(p=>({...p,obs:e.target.value}))} style={inp}/></div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:10}}>
           <button onClick={()=>setShowAddPb(false)} style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontSize:12}}>Cancelar</button>
           <button onClick={addPlaybook} style={{background:C.a,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Salvar</button>
         </div>
       </div>)}
-
-      {/* Built-in playbooks */}
-      {[
-        {setor:"agro",titulo:"Lancamento de safra",etapas:"1. Briefing com foco em produto/sazonalidade\n2. Criativos com prova social (depoimentos)\n3. Campanha de awareness no Meta\n4. Remarketing com oferta direta",kpis:"ROAS 3.5x+, CPL max R$45"},
-        {setor:"construcao",titulo:"Captacao de obras",etapas:"1. Definir raio geografico\n2. Criativos mostrando antes/depois\n3. Lead Ads com orcamento gratuito\n4. Nurturing via WhatsApp",kpis:"CPL max R$30, 20 leads/semana"},
-        {setor:"saude",titulo:"Clinica estetica",etapas:"1. Foco em transformacao e resultado\n2. Video curto mostrando procedimento\n3. Oferta de primeira consulta\n4. Remarketing com urgencia",kpis:"CPL max R$60, ROAS 5x"},
-      ].concat(playbooks).map((pb,i)=>(
-        <div key={pb.id||i} style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{background:C.a+"18",color:C.a,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700}}>{pb.setor}</span>
-              <span style={{color:C.tx,fontWeight:700,fontSize:13}}>{pb.titulo}</span>
-            </div>
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              {pb.criadoPor&&<span style={{color:C.td,fontSize:10}}>{pb.criadoPor}</span>}
-              {pb.id&&<button onClick={()=>savePlaybooks(playbooks.filter(x=>x.id!==pb.id))} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13}} onMouseEnter={e=>e.currentTarget.style.color=C.rd} onMouseLeave={e=>e.currentTarget.style.color=C.td}>x</button>}
-            </div>
-          </div>
-          <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 200px",gap:14}}>
-            <div>
-              <div style={{color:C.td,fontSize:10,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>Etapas</div>
-              <div style={{color:C.tx,fontSize:11,lineHeight:1.7,whiteSpace:"pre-line"}}>{pb.etapas}</div>
-            </div>
-            <div>
-              <div style={{color:C.td,fontSize:10,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>KPIs esperados</div>
-              <div style={{background:C.gr+"10",border:"1px solid "+C.gr+"33",borderRadius:8,padding:"8px 10px",color:C.gr,fontSize:11,fontWeight:600}}>{pb.kpis}</div>
-              {pb.obs&&<div style={{color:C.td,fontSize:11,marginTop:8}}>{pb.obs}</div>}
-            </div>
-          </div>
+      {[{setor:"agro",titulo:"Lançamento de safra",etapas:"1. Briefing com foco em produto/sazonalidade\n2. Criativos com prova social\n3. Campanha de awareness no Meta\n4. Remarketing com oferta direta",kpis:"ROAS 3.5x+, CPL max R$45"},{setor:"construcao",titulo:"Captação de obras",etapas:"1. Definir raio geográfico\n2. Criativos antes/depois\n3. Lead Ads com orçamento gratuito\n4. Nurturing via WhatsApp",kpis:"CPL max R$30, 20 leads/semana"},{setor:"saude",titulo:"Clínica estética",etapas:"1. Foco em transformação\n2. Vídeo curto mostrando procedimento\n3. Oferta de primeira consulta\n4. Remarketing com urgência",kpis:"CPL max R$60, ROAS 5x"}].concat(playbooks).map((pb,i)=>(<div key={pb.id||i} style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{background:C.a+"18",color:C.a,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700}}>{pb.setor}</span><span style={{color:C.tx,fontWeight:700,fontSize:13}}>{pb.titulo}</span></div>
+          {pb.id&&<button onClick={()=>savePlaybooks(playbooks.filter(x=>x.id!==pb.id))} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:16}}>×</button>}
         </div>
-      ))}
+        <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 200px",gap:14}}>
+          <div><div style={{color:C.td,fontSize:10,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>Etapas</div><div style={{color:C.tx,fontSize:11,lineHeight:1.7,whiteSpace:"pre-line"}}>{pb.etapas}</div></div>
+          <div><div style={{color:C.td,fontSize:10,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>KPIs</div><div style={{background:C.gr+"10",border:"1px solid "+C.gr+"33",borderRadius:8,padding:"8px 10px",color:C.gr,fontSize:11,fontWeight:600}}>{pb.kpis}</div></div>
+        </div>
+      </div>))}
     </div>)}
 
-    {/* ── BIBLIOTECA ── */}
+    {/* ══ BIBLIOTECA ══ */}
     {tab==="biblioteca"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <button onClick={()=>setShowAddBib(true)} style={{background:`linear-gradient(135deg,${C.a},${C.aD})`,color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Registrar aprendizado</button>
-      </div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}><button onClick={()=>setShowAddBib(true)} style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12,cursor:"pointer"}}>+ Registrar aprendizado</button></div>
       {showAddBib&&(<div style={{background:C.card,borderRadius:14,border:"2px solid "+C.a+"44",padding:"18px"}}>
         <div style={{color:C.a,fontWeight:700,fontSize:13,marginBottom:12}}>Novo Aprendizado</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Tipo</div>
-            <select value={bibForm.tipo} onChange={e=>setBibForm(p=>({...p,tipo:e.target.value}))} style={inp}>
-              {Object.entries(TIPO_BIB).map(([k,v])=><option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Cliente relacionado</div>
-            <select value={bibForm.clientId} onChange={e=>setBibForm(p=>({...p,clientId:e.target.value}))} style={inp}>
-              <option value="">Geral (todos)</option>
-              {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-          <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Titulo *</div><input value={bibForm.titulo} onChange={e=>setBibForm(p=>({...p,titulo:e.target.value}))} style={inp}/></div>
-          <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Contexto (o que foi testado)</div><textarea value={bibForm.contexto} onChange={e=>setBibForm(p=>({...p,contexto:e.target.value}))} style={{...inp,minHeight:60,resize:"vertical"}}/></div>
-          <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Aprendizado (o que funcionou ou nao)</div><textarea value={bibForm.aprendizado} onChange={e=>setBibForm(p=>({...p,aprendizado:e.target.value}))} style={{...inp,minHeight:60,resize:"vertical"}}/></div>
+          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Tipo</div><select value={bibForm.tipo} onChange={e=>setBibForm(p=>({...p,tipo:e.target.value}))} style={inp}>{Object.entries(TIPO_BIB).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></div>
+          <div><div style={{color:C.td,fontSize:10,marginBottom:3}}>Cliente</div><select value={bibForm.clientId} onChange={e=>setBibForm(p=>({...p,clientId:e.target.value}))} style={inp}><option value="">Geral</option>{CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+          <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Título *</div><input value={bibForm.titulo} onChange={e=>setBibForm(p=>({...p,titulo:e.target.value}))} style={inp}/></div>
+          <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Contexto</div><textarea value={bibForm.contexto} onChange={e=>setBibForm(p=>({...p,contexto:e.target.value}))} style={{...inp,minHeight:60,resize:"vertical"}}/></div>
+          <div style={{gridColumn:"1/-1"}}><div style={{color:C.td,fontSize:10,marginBottom:3}}>Aprendizado</div><textarea value={bibForm.aprendizado} onChange={e=>setBibForm(p=>({...p,aprendizado:e.target.value}))} style={{...inp,minHeight:60,resize:"vertical"}}/></div>
         </div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:10}}>
           <button onClick={()=>setShowAddBib(false)} style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontSize:12}}>Cancelar</button>
           <button onClick={addBib} style={{background:C.a,color:"#fff",border:"none",borderRadius:8,padding:"7px 18px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Salvar</button>
         </div>
       </div>)}
-
-      {biblioteca.length===0&&!showAddBib&&(<div style={{background:C.card,borderRadius:14,padding:"40px",textAlign:"center",border:"1px solid "+C.b1}}>
-        <div style={{fontSize:36,marginBottom:8}}>💡</div>
-        <div style={{color:C.tx,fontWeight:700}}>Biblioteca vazia</div>
-        <div style={{color:C.td,fontSize:12,marginTop:4}}>Registre aprendizados de campanhas, criativos e estrategias para consulta futura</div>
-      </div>)}
-
+      {biblioteca.length===0&&!showAddBib&&(<div style={{background:C.card,borderRadius:14,padding:"40px",textAlign:"center",border:"1px solid "+C.b1}}><div style={{fontSize:36,marginBottom:8}}>💡</div><div style={{color:C.tx,fontWeight:700}}>Biblioteca vazia</div><div style={{color:C.td,fontSize:12,marginTop:4}}>Registre aprendizados de campanhas para consulta futura</div></div>)}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
-        {biblioteca.sort((a,b)=>new Date(b.criadoEm)-new Date(a.criadoEm)).map((bib,i)=>{
-          const cl = CLIENTS.find(c=>c.id===bib.clientId);
-          const tc = TIPO_BIB_C[bib.tipo]||C.a;
-          return(<div key={bib.id} style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
+        {[...biblioteca].sort((a,b)=>new Date(b.criadoEm)-new Date(a.criadoEm)).map((bib,i)=>{
+          const cl=CLIENTS.find(c=>c.id===bib.clientId);const tc=TIPO_BIB_C[bib.tipo]||C.a;
+          return(<div key={bib.id||i} style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
             <div style={{padding:"11px 14px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <span style={{background:tc+"18",color:tc,borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:700}}>{TIPO_BIB[bib.tipo]||bib.tipo}</span>
-                {cl&&<span style={{background:cl.color+"18",color:cl.color,borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:700}}>{cl.name}</span>}
-              </div>
-              <button onClick={()=>saveBiblioteca(biblioteca.filter(x=>x.id!==bib.id))} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13}} onMouseEnter={e=>e.currentTarget.style.color=C.rd} onMouseLeave={e=>e.currentTarget.style.color=C.td}>x</button>
+              <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{background:tc+"18",color:tc,borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:700}}>{TIPO_BIB[bib.tipo]||bib.tipo}</span>{cl&&<span style={{background:(cl.color||C.a)+"18",color:cl.color||C.a,borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:700}}>{cl.name}</span>}</div>
+              <button onClick={()=>saveBiblioteca(biblioteca.filter(x=>x.id!==bib.id))} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:16}}>×</button>
             </div>
             <div style={{padding:"12px 14px"}}>
               <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:8}}>{bib.titulo}</div>
-              {bib.contexto&&(<div style={{marginBottom:8}}>
-                <div style={{color:C.td,fontSize:9,fontWeight:700,marginBottom:3,textTransform:"uppercase"}}>Contexto</div>
-                <div style={{color:C.ts,fontSize:11,lineHeight:1.5}}>{bib.contexto}</div>
-              </div>)}
-              {bib.aprendizado&&(<div style={{background:C.a+"08",borderRadius:8,padding:"8px 10px",borderLeft:"2px solid "+C.a}}>
-                <div style={{color:C.td,fontSize:9,fontWeight:700,marginBottom:3,textTransform:"uppercase"}}>Aprendizado</div>
-                <div style={{color:C.tx,fontSize:11,lineHeight:1.5}}>{bib.aprendizado}</div>
-              </div>)}
-              <div style={{color:C.td,fontSize:9,marginTop:8}}>{bib.criadoPor} · {new Date(bib.criadoEm).toLocaleDateString("pt-BR")}</div>
+              {bib.contexto&&(<div style={{marginBottom:8}}><div style={{color:C.td,fontSize:9,fontWeight:700,marginBottom:3,textTransform:"uppercase"}}>Contexto</div><div style={{color:C.ts,fontSize:11,lineHeight:1.5}}>{bib.contexto}</div></div>)}
+              {bib.aprendizado&&(<div style={{background:C.a+"08",borderRadius:8,padding:"8px 10px",borderLeft:"2px solid "+C.a}}><div style={{color:C.td,fontSize:9,fontWeight:700,marginBottom:3,textTransform:"uppercase"}}>Aprendizado</div><div style={{color:C.tx,fontSize:11,lineHeight:1.5}}>{bib.aprendizado}</div></div>)}
+              <div style={{color:C.td,fontSize:9,marginTop:8}}>{bib.criadoPor} · {bib.criadoEm?new Date(bib.criadoEm).toLocaleDateString("pt-BR"):"—"}</div>
             </div>
           </div>);
         })}
