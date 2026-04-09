@@ -11733,6 +11733,16 @@ function PageConexoes({isMob}){
   const saveCreds=(list)=>{setCreds(list);try{localStorage.setItem("pixels-creds",JSON.stringify(list));}catch(e){}
     if(window._sb)window._sb.from("content_library").upsert({tipo:"creds",dados:list,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).catch(()=>{});
   };
+  useEffect(()=>{
+    if(!window._sb)return;
+    window._sb.from("content_library").select("dados").eq("tipo","creds").single()
+      .then(({data})=>{
+        if(data?.dados&&Array.isArray(data.dados)&&data.dados.length){
+          setCreds(data.dados);
+          try{localStorage.setItem("pixels-creds",JSON.stringify(data.dados));}catch(e){}
+        }
+      }).catch(()=>{});
+  },[]);
   const addCred=()=>{if(!form.n.trim())return;saveCreds([...creds,{...form,id:Date.now()}]);setForm({n:"",l:"",pw:"",cat:"",c:"#a140ff"});setAdding(false);};
   const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
 
@@ -19121,6 +19131,24 @@ function PageIAPixels({isMob, tasks}){
   const [loading, setLoading] = useState(false);
   const [playbooks, setPlaybooks] = useState(()=>{try{return JSON.parse(localStorage.getItem("pixels-playbooks")||"[]");}catch(e){return[];}});
   const [biblioteca, setBiblioteca] = useState(()=>{try{return JSON.parse(localStorage.getItem("pixels-biblioteca")||"[]");}catch(e){return[];}});
+
+  useEffect(()=>{
+    if(!window._sb)return;
+    window._sb.from("content_library").select("tipo,dados").in("tipo",["playbooks","biblioteca"])
+      .then(({data})=>{
+        if(!data)return;
+        data.forEach(row=>{
+          if(row.tipo==="playbooks"&&Array.isArray(row.dados)&&row.dados.length){
+            setPlaybooks(row.dados);
+            try{localStorage.setItem("pixels-playbooks",JSON.stringify(row.dados));}catch(e){}
+          }
+          if(row.tipo==="biblioteca"&&Array.isArray(row.dados)&&row.dados.length){
+            setBiblioteca(row.dados);
+            try{localStorage.setItem("pixels-biblioteca",JSON.stringify(row.dados));}catch(e){}
+          }
+        });
+      }).catch(()=>{});
+  },[]);
   const [showAddPb, setShowAddPb] = useState(false);
   const [showAddBib, setShowAddBib] = useState(false);
   const [pbForm, setPbForm] = useState({setor:"agro",titulo:"",etapas:"",kpis:"",obs:""});
