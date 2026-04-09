@@ -9232,10 +9232,14 @@ function PageChat({isMob, perms, tasks, setTasks}){
                   </button>
 
                   {/* Audio */}
-                  {!recording&&!audioPreviewUrl&&<button onClick={startRec} title="Chamar atenção"
-                  onClick={sendShake}
-                  style={{background:"transparent",border:"none",borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:16,opacity:canSend?1:0.4}}>📣</button>
-                  <button onClick={startRec} title="Gravar áudio"
+                  {/* Chamar Atenção */}
+                  {canSend&&<button onClick={sendShake} title="Chamar atenção"
+                    style={{background:"transparent",border:"none",borderRadius:8,padding:"6px 8px",cursor:"pointer",fontSize:16,lineHeight:1,flexShrink:0}}>
+                    📣
+                  </button>}
+
+                  {/* Audio */}
+                  {!recording&&!audioPreviewUrl&&<button onClick={startRec} title="Gravar áudio"
                     style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:"6px 4px",lineHeight:1,flexShrink:0}}>
                     🎙
                   </button>}
