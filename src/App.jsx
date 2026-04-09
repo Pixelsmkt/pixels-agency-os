@@ -439,12 +439,15 @@ function NavIcon({id,size=18,color}){
 const NAV=[
   {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
-    {id:"demandas_kanban",  icon:"◈", label:"Fluxo de Demandas"},
-    {id:"demandas_cal_pub", icon:"▦", label:"Calendário de Publicações"},
+    {id:"demandas_kanban",     icon:"◈", label:"Fluxo de Demandas"},
+    {id:"demandas_internas",   icon:"◫", label:"Demandas Internas"},
+    {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de Publicações"},
+    {id:"demandas_cal_interno",icon:"▦", label:"Calendário Interno/Clientes"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de Copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Publicação"},
+    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação Demanda Interna"},
   ]},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
