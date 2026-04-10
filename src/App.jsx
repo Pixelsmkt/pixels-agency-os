@@ -6310,7 +6310,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     </div>
 
     {/* CONTENT */}
-    {tab==="dashboard"&&<CDashboard cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
+    {tab==="dashboard"&&<ClienteDashboard cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
     {tab==="redes"&&<CRedes cl={cl}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
