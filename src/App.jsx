@@ -563,6 +563,13 @@ function ClientLogo({clientId,size="sm"}){
     display:"inline-block"}}>{cl.abbr}</span>;
 }
 
+/* ─── CHIP ─────────────────────────────────── */
+const Chip=({color,children,sm})=>(
+  <span style={{display:"inline-flex",alignItems:"center",background:color+"22",color,borderRadius:99,padding:sm?"2px 8px":"3px 10px",fontSize:sm?9:11,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+    {children}
+  </span>
+);
+
 // ======= 00_mindmap_data.jsx =======
 // Dados estratégicos e mapas mentais de todos os clientes
 // Depende de: 00_globals.jsx (C para cores)
@@ -1435,6 +1442,23 @@ const LISTA_ORDER = ["publicado","agendado","aprovado","avaliacao","execucao","r
 // Depende de: 03_cliente_ferramentas (helpers de dados)
 
 const {LineChart,BarChart,AreaChart,PieChart,Pie,Cell,Bar:RBar,Line:RLine,Area:RArea,XAxis,YAxis,CartesianGrid,Tooltip:RTooltip,Legend:RLegend,ResponsiveContainer}=recharts;
+
+/* ── TT — Custom Recharts Tooltip ─────────── */
+const TT=({active,payload,label})=>{
+  if(!active||!payload||!payload.length)return null;
+  return(
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 12px",boxShadow:"0 4px 16px rgba(0,0,0,0.12)",fontSize:11}}>
+      {label&&<div style={{color:"#64748b",fontWeight:700,marginBottom:4}}>{label}</div>}
+      {payload.map((p,i)=>(
+        <div key={i} style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:p.color||p.fill||"#6366f1",flexShrink:0}}/>
+          <span style={{color:"#94a3b8"}}>{p.name}:</span>
+          <span style={{color:"#1e293b",fontWeight:700}}>{typeof p.value==="number"?p.value.toLocaleString("pt-BR"):p.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 // Simulate 8-week trend data per client
 const genTrend=(base,variance=0.15,weeks=8)=>Array.from({length:weeks},(_, i)=>{
@@ -3817,6 +3841,97 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
 
 // ======= 03_cliente_ferramentas.jsx =======
 // Ferramentas do cliente: CFerramentas + CInfo, CMetricas, CBriefing, CContatos, CTimeline, CMetas, CDrive
+
+/* ── CChecklistOnboarding ── */
+function CChecklistOnboarding({cl}){
+  const CHECKLIST_DEFAULT=[
+    {id:"briefing",    label:"Briefing preenchido",               done:true},
+    {id:"acesso_meta", label:"Acesso ao Meta Ads concedido",      done:true},
+    {id:"acesso_google",label:"Acesso ao Google Ads concedido",   done:false},
+    {id:"pixel",       label:"Pixel Meta instalado no site",      done:true},
+    {id:"tag",         label:"Google Tag Manager configurado",    done:false},
+    {id:"criativos",   label:"Criativos iniciais aprovados",      done:true},
+    {id:"planilha",    label:"Planilha de acompanhamento enviada",done:false},
+    {id:"reuniao",     label:"Reunião de kick-off realizada",     done:true},
+  ];
+  const [items,setItems]=useState(()=>{
+    try{const s=localStorage.getItem("pixels-checklist-"+cl.id);return s?JSON.parse(s):CHECKLIST_DEFAULT;}
+    catch{return CHECKLIST_DEFAULT;}
+  });
+  const toggle=(id)=>{
+    const next=items.map(i=>i.id===id?{...i,done:!i.done}:i);
+    setItems(next);
+    try{localStorage.setItem("pixels-checklist-"+cl.id,JSON.stringify(next));}catch{}
+  };
+  const done=items.filter(i=>i.done).length;
+  const pct=Math.round(done/items.length*100);
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+        <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Onboarding — {cl.name}</div>
+        <div style={{color:pct===100?C.gr:C.a,fontWeight:800,fontSize:13}}>{done}/{items.length} · {pct}%</div>
+      </div>
+      <div style={{background:C.b1,borderRadius:99,height:6,overflow:"hidden",marginBottom:8}}>
+        <div style={{width:pct+"%",height:"100%",background:pct===100?C.gr:C.a,borderRadius:99,transition:"width .3s"}}/>
+      </div>
+      {items.map(item=>(
+        <div key={item.id} onClick={()=>toggle(item.id)}
+          style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:C.card,borderRadius:10,
+            border:"1px solid "+(item.done?C.gr+"44":C.b1),cursor:"pointer",transition:"all .15s"}}>
+          <div style={{width:20,height:20,borderRadius:6,border:"2px solid "+(item.done?C.gr:C.b1),
+            background:item.done?C.gr:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            {item.done&&<span style={{color:"#fff",fontSize:11,fontWeight:900}}>✓</span>}
+          </div>
+          <span style={{color:item.done?C.ts:C.tx,fontSize:13,textDecoration:item.done?"line-through":"none"}}>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── ROIChannelCard ── */
+function ROIChannelCard({channel,color,icon,invest,setInvest,roas,setRoas,receita,setReceita,cplRoas,setCplRoas,marg,setMarg,liveCl,result,showAcr,setShowAcr,acr,setAcr,ticket,setTicket}){
+  const channelLabel=channel==="meta"?"Meta Ads":"Google Ads";
+  const liveData=channel==="meta"?liveCl?.meta:liveCl?.google;
+  const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  const lbl={color:C.ts,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:3,display:"block"};
+  return(
+    <div style={{background:C.card,border:"2px solid "+color+"33",borderRadius:14,padding:16,height:"100%",boxSizing:"border-box",display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
+        <span style={{fontSize:20}}>{icon}</span>
+        <div style={{color,fontWeight:800,fontSize:13}}>{channelLabel}</div>
+        {liveData&&<div style={{marginLeft:"auto",color:C.td,fontSize:9}}>atual: R${(liveData.spend||0).toLocaleString("pt-BR")} · ROAS {liveData.roas||"—"}x</div>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div><label style={lbl}>Investimento R$</label><input value={invest} onChange={e=>setInvest(e.target.value)} placeholder="Ex: 5000" style={{...inp,borderColor:invest?color+"55":C.b1}}/></div>
+        <div><label style={lbl}>ROAS esperado</label><input value={roas} onChange={e=>setRoas(e.target.value)} placeholder="Ex: 4.5" style={inp}/></div>
+        <div><label style={lbl}>Receita real R$ (opt)</label><input value={receita} onChange={e=>setReceita(e.target.value)} placeholder="Substitui ROAS" style={inp}/></div>
+        <div><label style={lbl}>CPL R$ (leads)</label><input value={cplRoas} onChange={e=>setCplRoas(e.target.value)} placeholder="Ex: 40" style={inp}/></div>
+        <div><label style={lbl}>Margem %</label><input value={marg} onChange={e=>setMarg(e.target.value)} placeholder="Ex: 30" style={inp}/></div>
+        <div><label style={lbl}>Ticket médio R$ (opt)</label><input value={ticket} onChange={e=>setTicket(e.target.value)} placeholder="Ex: 800" style={inp}/></div>
+      </div>
+      <div>
+        <button onClick={()=>setShowAcr(!showAcr)} style={{background:"none",border:"none",color:C.ts,fontSize:11,cursor:"pointer",padding:0,fontWeight:600}}>
+          {showAcr?"▼":"▶"} Simular acréscimo de investimento
+        </button>
+        {showAcr&&<input value={acr} onChange={e=>setAcr(e.target.value)} placeholder="+ R$ a acrescentar" style={{...inp,marginTop:6}}/>}
+      </div>
+      {result&&(
+        <div style={{background:color+"0d",border:"1px solid "+color+"33",borderRadius:10,padding:"10px 12px",marginTop:4}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            <div><div style={{color:C.td,fontSize:8}}>RECEITA</div><div style={{color,fontWeight:900,fontSize:15}}>R${Math.round(result.receita).toLocaleString("pt-BR")}</div></div>
+            <div><div style={{color:C.td,fontSize:8}}>LUCRO LÍQ.</div><div style={{color:result.lucroLiq>=0?"#16a34a":"#dc2626",fontWeight:900,fontSize:15}}>R${Math.round(result.lucroLiq).toLocaleString("pt-BR")}</div></div>
+            <div><div style={{color:C.td,fontSize:8}}>ROAS REAL</div><div style={{color,fontWeight:700,fontSize:12}}>{result.roas.toFixed(2)}x</div></div>
+            <div><div style={{color:C.td,fontSize:8}}>ROI</div><div style={{color:result.roi>=0?"#16a34a":"#dc2626",fontWeight:700,fontSize:12}}>{result.roi.toFixed(0)}%</div></div>
+          </div>
+          {result.leadsEst&&<div style={{color:C.ts,fontSize:9,marginTop:6}}>~{result.leadsEst.min}–{result.leadsEst.max} leads estimados</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Ferramentas do cliente: CFerramentas + CInfo, CMetricas, CBriefing, CContatos, CTimeline, CMetas, CDrive
 // + helpers de dados: genTrend, buildMetaData, buildGoogleData, buildInstaData
 
 function CFerramentas({cl,onMindmap}){
@@ -6194,11 +6309,10 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   var TASKS=tasks||(typeof []!=="undefined"?[]:[]);
   cl=getLiveClient(cl.id)||cl;
   var [tab,setTab]=useState("dashboard");
+  var [platformTab,setPlatformTab]=useState("meta");
+  var [concorrenciaTab,setConcorrenciaTab]=useState("social_insta");
   var isSocio=CURRENT_USER.level===1;
-  // Busca perms do usuário atual — suporta tanto prop quanto ACCESS_STORE
   var myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
-  var isSocio=CURRENT_USER.level===1;
-  // Permissão específica para este cliente
   var canSeeThisClient=isSocio||myPerms["verCliente_"+cl.id]!==false;
   var canSeeMetricas=isSocio||(myPerms.verMetricas&&myPerms["verCliente_"+cl.id+"_metricas"]!==false);
   var canSeeMindmap=isSocio||(myPerms.verMindmap&&myPerms["verCliente_"+cl.id+"_mindmap"]!==false);
@@ -6221,17 +6335,13 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     return Math.floor((new Date()-new Date(p[2]+"-"+p[1]+"-"+p[0]))/(1000*60*60*24));
   })();
 
-  // Abas controladas por permissão por cliente
   var TABS=[
-    {id:"dashboard",   label:"Dashboard"},
-    {id:"redes",       label:"Redes e Ads"},
+    {id:"dashboard",   label:"Redes & Ads"},
     {id:"ferramentas", label:"Ferramentas"},
     {id:"info",        label:"Informações"},
     ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
-    ...(canSeeLinks?[{id:"links",label:"Links & Acessos"}]:[]),
   ];
 
-  // Se a aba ativa foi removida por falta de permissão, volta para dashboard
   if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("dashboard");},0);
 
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
@@ -6310,17 +6420,10 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     </div>
 
     {/* CONTENT */}
-    {tab==="dashboard"&&<ClienteDashboard cl={cl} tasks={TASKS} onMindmap={onMindmap}/>}
-    {tab==="redes"&&<CRedes cl={cl}/>}
+    {tab==="dashboard"&&<ClienteDashboard cl={cl} tab={platformTab} setTab={setPlatformTab} isMob={isMob}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
-    {tab==="concorrencia"&&canSeeConcorrencia&&<ClienteConcorrencia cl={cl} tab={tab} setTab={setTab}/>}
-    {tab==="links"&&canSeeLinks&&<div>
-      <div style={{background:C.a+"12",border:"1px solid "+C.a+"33",borderRadius:10,padding:"10px 14px",marginBottom:16,color:C.a,fontSize:12,fontWeight:600}}>
-        🔗 Acesse a aba "Links" dentro de Redes e Ads para ver os links e acessos do cliente.
-      </div>
-      <CRedes cl={cl}/>
-    </div>}
+    {tab==="concorrencia"&&canSeeConcorrencia&&<ClienteConcorrencia cl={cl} tab={concorrenciaTab} setTab={setConcorrenciaTab}/>}
   </div>);
 }
 
@@ -15715,6 +15818,7 @@ export default function AgencyOS(){
     }catch{setSelfProfileData(null);}
   },[CURRENT_USER.id]);
   const [activeCl,setActiveCl]     = useState(null);
+  const [mindmapActiveCl,setMindmapActiveCl] = useState(false);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
   const [viewingAs,setViewingAs]   = useState(null);
 
@@ -16027,8 +16131,8 @@ export default function AgencyOS(){
   const effectivePerms = viewingAs?getPerms(viewingAs):myPerms;
   const isSocio        = effectiveUser.level===1;
   const unreadNotifs   = notifs.filter(n=>!n.read).length;
-  const nav=useCallback((id)=>{setPage(id);setActiveCl(null);setSideOpen(false);},[]);
-  const goClient=useCallback((id)=>{setActiveCl(id);setPage("clientes");setSideOpen(false);},[]);
+  const nav=useCallback((id)=>{setPage(id);setActiveCl(null);setMindmapActiveCl(false);setSideOpen(false);},[]);
+  const goClient=useCallback((id)=>{setActiveCl(id);setMindmapActiveCl(false);setPage("clientes");setSideOpen(false);},[]);
   const cur=NAV.find(n=>n.id===page)||NAV.flatMap(n=>n.children||[]).find(c=>c.id===page);
 
   // ── Navegação ─────────────────────────────────────────────
@@ -16103,7 +16207,12 @@ export default function AgencyOS(){
   const renderPage=()=>{
     if(page==="clientes"&&activeCl){
       const cl=CLIENTS.find(c=>c.id===activeCl);
-      if(cl) return <div style={{padding:4}}><button onClick={()=>setActiveCl(null)} style={{background:C.b1,border:"none",borderRadius:10,padding:"8px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:12,marginBottom:16}}>← Voltar</button><PageCliente cl={cl} isMob={isMob} tasks={tasks} setTasks={setTasks}/></div>;
+      if(cl){
+        if(mindmapActiveCl) return <MindMapEditor clientId={cl.id} onBack={()=>setMindmapActiveCl(false)}/>;
+        return <ClienteDetail cl={cl} isMob={isMob} tasks={tasks}
+          onMindmap={()=>setMindmapActiveCl(true)}
+          onBack={()=>{setActiveCl(null);setMindmapActiveCl(false);}}/>;
+      }
     }
     const p={isMob,perms:effectivePerms,viewingAs,setViewingAs};
     switch(page){
@@ -16158,7 +16267,7 @@ export default function AgencyOS(){
       onLoginClient={(p)=>{ls.set(PROFILE_KEY,p);setClientPortal(p);setAuthState("portal");}}
     />
   );
-  if(authState==="portal"&&clientPortalData) return <PortalCliente profile={clientPortalData} onLogout={handleLogout}/>;
+  if(authState==="portal"&&clientPortalData) return <PagePortalCliente isMob={isMob} tasks={tasks} initTab="dashboard"/>;
   if(!loaded) return <LoadingScreen msg="Carregando dados..."/>;
 
   // ── UI principal ──────────────────────────────────────────
