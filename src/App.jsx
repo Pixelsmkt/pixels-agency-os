@@ -6305,6 +6305,197 @@ function PageClientes({isMob, tasks}){
 /* ─── CLIENT DETAIL — 4 ABAS ────────────────── */
 
 // ======= 03_cliente_detalhe.jsx =======
+
+/* ── CAnalises — Dashboard Reportei com dados nativos do Supabase ── */
+function CAnalises({cl}){
+  var sb=window._sb;
+  var [data,setData]=useState(null);
+  var [loading,setLoading]=useState(true);
+  var [subTab,setSubTab]=useState("chapeco"); // só para Bioter
+
+  var isBioter=cl.id==="bioter";
+  var cacheIds=isBioter?["bioter_chapeco","bioter_toledo","bioter_castro"]:[cl.id];
+
+  var REPORTEI_URLS={
+    bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",
+    bioter_toledo:"https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",
+    bioter_castro:"https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",
+    climaves:"https://app.reportei.com/dashboard/h3MihpaCfhBoVdMvEgc9fHI1T6TzODBR",
+    vetservice:"https://app.reportei.com/dashboard/G42f7UB5R7V68m9BFDobFlW61f5ujXiX",
+    construschorr:"https://app.reportei.com/dashboard/4q3Ubekgg97cstORgg5yPBcR8Zvr3Jv3",
+    arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
+  };
+
+  useEffect(function(){
+    if(!sb){setLoading(false);return;}
+    setLoading(true);
+    sb.from("reportei_cache").select("client_id,data,updated_at").in("client_id",cacheIds)
+      .then(function(r){
+        if(r.data&&r.data.length>0){
+          var map={};
+          r.data.forEach(function(row){map[row.client_id]=row;});
+          setData(map);
+        }
+        setLoading(false);
+      }).catch(function(){setLoading(false);});
+  },[cl.id]);
+
+  var activeId=isBioter?"bioter_"+subTab:cl.id;
+  var row=data&&data[activeId];
+  var reporteiUrl=REPORTEI_URLS[activeId];
+
+  var SLUG_LABEL={
+    "fb_ads:spend":"Investido",
+    "fb_ads:reach":"Alcance",
+    "fb_ads:impressions":"Impressões",
+    "fb_ads:inline_link_clicks":"Cliques no Link",
+    "fb_ads:clicks":"Cliques",
+    "fb_ads:ctr":"CTR",
+    "fb_ads:cpc":"CPC",
+    "fb_ads:cpm":"CPM",
+    "fb_ads:frequency":"Frequência",
+    "fb_ads:actions_lead":"Leads",
+    "fb_ads:actions_cost_per_lead":"CPL",
+    "fb_ads:actions_landing_page_view":"Visitas LP",
+    "fb_ads:actions_post_engagement":"Engajamento",
+    "fb_ads:reach_facebook":"Alcance FB",
+    "fb_ads:reach_instagram":"Alcance IG",
+    "fb_ads:impressions_facebook":"Impressões FB",
+    "fb_ads:impressions_instagram":"Impressões IG",
+    "fb_ads:spend_facebook":"Invest. FB",
+    "fb_ads:spend_instagram":"Invest. IG",
+  };
+  var CURRENCY_SLUGS=["fb_ads:spend","fb_ads:cpc","fb_ads:cpm","fb_ads:actions_cost_per_lead","fb_ads:spend_facebook","fb_ads:spend_instagram"];
+  var PCT_SLUGS=["fb_ads:ctr"];
+  var HIGHLIGHT=["fb_ads:spend","fb_ads:reach","fb_ads:impressions","fb_ads:inline_link_clicks","fb_ads:actions_lead","fb_ads:actions_cost_per_lead"];
+
+  function parseMetrics(row){
+    if(!row||!row.data||!row.data.metrics)return[];
+    var fbAds=row.data.metrics.facebook_ads;
+    if(!fbAds||!fbAds.values||!fbAds.metrics_map)return[];
+    var valuesObj=fbAds.values;
+    var metricMap=fbAds.metrics_map;
+    var results=[];
+    Object.entries(metricMap).forEach(function(entry){
+      var metricId=entry[0];var slug=entry[1];
+      var label=SLUG_LABEL[slug];
+      if(!label)return;
+      var valEntry=valuesObj[metricId];
+      if(!valEntry)return;
+      var current=parseFloat(valEntry.current_period||valEntry.value||0);
+      var prev=parseFloat(valEntry.previous_period||0);
+      if(isNaN(current)||current===0)return;
+      var pct=prev>0?((current-prev)/prev*100):null;
+      var isCurrency=CURRENCY_SLUGS.includes(slug);
+      var isPct=PCT_SLUGS.includes(slug);
+      var formatted=isCurrency?"R$ "+current.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):
+        isPct?(current.toFixed(2)+"%"):
+        current>=1000?current.toLocaleString("pt-BR",{maximumFractionDigits:0}):
+        current.toLocaleString("pt-BR",{maximumFractionDigits:2});
+      results.push({slug,label,value:current,formatted,pct,highlight:HIGHLIGHT.includes(slug)});
+    });
+    return results;
+  }
+
+  var metrics=parseMetrics(row);
+  var highlights=metrics.filter(function(m){return m.highlight;});
+  var secondary=metrics.filter(function(m){return !m.highlight;});
+
+  var updatedAt=row&&row.updated_at?new Date(row.updated_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
+
+    {/* Sub-tabs Bioter */}
+    {isBioter&&(<div style={{display:"flex",gap:6,marginBottom:4}}>
+      {[{id:"chapeco",label:"Chapecó"},{id:"toledo",label:"Toledo"},{id:"castro",label:"Castro"}].map(function(u){
+        return(<button key={u.id} onClick={function(){setSubTab(u.id);}}
+          style={{background:subTab===u.id?cl.color+"22":"transparent",color:subTab===u.id?cl.color:C.ts,
+            border:"1px solid "+(subTab===u.id?cl.color:C.b1),borderRadius:20,padding:"5px 14px",
+            fontSize:11,fontWeight:subTab===u.id?700:400,cursor:"pointer"}}>
+          {u.label}
+        </button>);
+      })}
+    </div>)}
+
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:18}}>📊</span>
+        <div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:14}}>Análises — Meta Ads</div>
+          {row&&<div style={{color:C.td,fontSize:10,marginTop:1}}>Atualizado: {updatedAt} · {row.data&&row.data.period?"Período: "+row.data.period.start+" → "+row.data.period.end:""}</div>}
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
+          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"6px 14px",
+            color:C.ts,fontSize:11,fontWeight:600,cursor:"pointer",textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
+          ↗ Abrir no Reportei
+        </a>)}
+      </div>
+    </div>
+
+    {loading&&(<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:48,color:C.td,fontSize:13,gap:10}}>
+      <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
+      Carregando dados...
+    </div>)}
+
+    {!loading&&!row&&(<div style={{textAlign:"center",padding:48,color:C.td}}>
+      <div style={{fontSize:36,marginBottom:12}}>📡</div>
+      <div style={{fontWeight:700,fontSize:15,color:C.tx,marginBottom:6}}>Sem dados sincronizados</div>
+      <div style={{fontSize:12}}>Execute a Edge Function sync-reportei no Supabase para sincronizar.</div>
+      {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
+        style={{display:"inline-block",marginTop:16,background:cl.color,color:"#fff",borderRadius:8,padding:"8px 20px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
+        Abrir no Reportei ↗
+      </a>)}
+    </div>)}
+
+    {!loading&&row&&metrics.length===0&&(<div style={{textAlign:"center",padding:48,color:C.td}}>
+      <div style={{fontSize:36,marginBottom:12}}>📭</div>
+      <div style={{fontWeight:700,fontSize:15,color:C.tx,marginBottom:6}}>Dados sincronizados mas sem métricas</div>
+      <div style={{fontSize:12}}>Verifique se a integração Meta Ads está ativa no Reportei para este cliente.</div>
+    </div>)}
+
+    {!loading&&metrics.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+      {/* Cards destaque */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12}}>
+        {highlights.map(function(m){
+          return(<div key={m.slug} style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:cl.color,borderRadius:"14px 14px 0 0"}}/>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{m.label}</div>
+            <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.5}}>{m.formatted}</div>
+            {m.pct!==null&&(<div style={{display:"flex",alignItems:"center",gap:3,marginTop:4}}>
+              <span style={{color:m.pct>=0?C.gr:C.rd,fontSize:11,fontWeight:700}}>
+                {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
+              </span>
+              <span style={{color:C.td,fontSize:10}}>vs mês ant.</span>
+            </div>)}
+          </div>);
+        })}
+      </div>
+
+      {/* Cards secundários */}
+      {secondary.length>0&&(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
+        <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:12}}>Métricas Detalhadas</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:0}}>
+          {secondary.map(function(m,i){
+            return(<div key={m.slug} style={{padding:"12px 16px",borderBottom:i<secondary.length-1?"1px solid "+C.b1+"44":"none"}}>
+              <div style={{color:C.td,fontSize:10,marginBottom:3}}>{m.label}</div>
+              <div style={{color:C.tx,fontWeight:700,fontSize:14}}>{m.formatted}</div>
+              {m.pct!==null&&(<span style={{color:m.pct>=0?C.gr:C.rd,fontSize:10,fontWeight:600}}>
+                {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
+              </span>)}
+            </div>);
+          })}
+        </div>
+      </div>)}
+
+    </div>)}
+
+  </div>);
+}
+
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   var TASKS=tasks||(typeof []!=="undefined"?[]:[]);
   cl=getLiveClient(cl.id)||cl;
@@ -6337,6 +6528,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
 
   var TABS=[
     {id:"dashboard",   label:"Redes & Ads"},
+    {id:"analises",    label:"📊 Análises"},
     {id:"ferramentas", label:"Ferramentas"},
     {id:"info",        label:"Informações"},
     ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
@@ -6421,6 +6613,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
 
     {/* CONTENT */}
     {tab==="dashboard"&&<ClienteDashboard cl={cl} tab={platformTab} setTab={setPlatformTab} isMob={isMob}/>}
+    {tab==="analises"&&<CAnalises cl={cl}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
     {tab==="concorrencia"&&canSeeConcorrencia&&<ClienteConcorrencia cl={cl} tab={concorrenciaTab} setTab={setConcorrenciaTab}/>}
