@@ -6306,15 +6306,13 @@ function PageClientes({isMob, tasks}){
 
 // ======= 03_cliente_detalhe.jsx =======
 
-// ======= 03_cliente_detalhe.jsx =======
-
 /* ── CAnalises — Dados reais do Reportei via Supabase ── */
 function CAnalises({cl,isMob}){
   var sb=window._sb;
   var [rows,setRows]=useState(null);
   var [loading,setLoading]=useState(true);
-  var [subTab,setSubTab]=useState("chapeco");
-  var [showDebug,setShowDebug]=useState(false);
+  var [bioterUnit,setBioterUnit]=useState("chapeco");
+  var [canal,setCanal]=useState("geral");
 
   var isBioter=cl.id==="bioter";
   var cacheIds=isBioter?["bioter_chapeco","bioter_toledo","bioter_castro"]:[cl.id];
@@ -6329,126 +6327,114 @@ function CAnalises({cl,isMob}){
     arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
   };
 
-  var SLUG_LABEL={
-    "fb_ads:spend":"Investido","fb_ads:reach":"Alcance",
-    "fb_ads:impressions":"Impressões","fb_ads:inline_link_clicks":"Cliques no Link",
-    "fb_ads:clicks":"Cliques","fb_ads:ctr":"CTR","fb_ads:cpc":"CPC",
-    "fb_ads:cpm":"CPM","fb_ads:frequency":"Frequência",
-    "fb_ads:actions_lead":"Leads","fb_ads:actions_cost_per_lead":"CPL",
-    "fb_ads:actions_landing_page_view":"Visitas LP",
-    "fb_ads:actions_post_engagement":"Engajamento",
-    "fb_ads:reach_facebook":"Alcance FB","fb_ads:reach_instagram":"Alcance IG",
-    "fb_ads:impressions_facebook":"Impressões FB","fb_ads:impressions_instagram":"Impressões IG",
-    "fb_ads:spend_facebook":"Invest. FB","fb_ads:spend_instagram":"Invest. IG",
-    "fb_ads:actions_contacts":"Mensagens","fb_ads:cost_per_reach":"Custo/Alcance",
-    "fb_ads:actions_cost_per_lead":"CPL",
+  // Configuração de cada métrica com label, descrição, tipo e canal
+  var METRICAS={
+    // ── GERAL / META ADS ──
+    "fb_ads:spend":{label:"Investimento Total",desc:"Total investido no período",fmt:"currency",canal:"meta",destaque:true},
+    "fb_ads:reach":{label:"Alcance Total",desc:"Pessoas únicas que viram seus anúncios",fmt:"number",canal:"meta",destaque:true},
+    "fb_ads:impressions":{label:"Impressões Totais",desc:"Vezes que o anúncio foi exibido",fmt:"number",canal:"meta",destaque:true},
+    "fb_ads:inline_link_clicks":{label:"Cliques no Link",desc:"Pessoas que clicaram no link do anúncio",fmt:"number",canal:"meta",destaque:true},
+    "fb_ads:actions_lead":{label:"Leads Gerados",desc:"Formulários preenchidos via anúncio",fmt:"number",canal:"meta",destaque:true},
+    "fb_ads:actions_cost_per_lead":{label:"CPL",desc:"Custo médio por lead gerado",fmt:"currency",canal:"meta",destaque:true},
+    "fb_ads:ctr":{label:"CTR",desc:"% de pessoas que clicaram ao ver o anúncio",fmt:"percent",canal:"meta",destaque:false},
+    "fb_ads:cpc":{label:"CPC",desc:"Custo médio por clique",fmt:"currency",canal:"meta",destaque:false},
+    "fb_ads:cpm":{label:"CPM",desc:"Custo para atingir mil pessoas",fmt:"currency",canal:"meta",destaque:false},
+    "fb_ads:frequency":{label:"Frequência",desc:"Média de vezes que a mesma pessoa viu o anúncio (ideal: 1.5–3x)",fmt:"decimal",canal:"meta",destaque:false},
+    "fb_ads:actions_video_view":{label:"Views de Vídeo",desc:"Visualizações nos vídeos dos anúncios",fmt:"number",canal:"meta",destaque:false},
+    "fb_ads:actions_post_engagement":{label:"Engajamento",desc:"Total de interações com os anúncios",fmt:"number",canal:"meta",destaque:false},
+    // ── INSTAGRAM ──
+    "fb_ads:spend_instagram":{label:"Invest. Instagram",desc:"Valor investido em anúncios no Instagram",fmt:"currency",canal:"instagram",destaque:true},
+    "fb_ads:reach_instagram":{label:"Alcance Instagram",desc:"Pessoas únicas alcançadas no Instagram",fmt:"number",canal:"instagram",destaque:true},
+    "fb_ads:impressions_instagram":{label:"Impressões Instagram",desc:"Exibições totais no Instagram",fmt:"number",canal:"instagram",destaque:true},
+    // ── FACEBOOK ──
+    "fb_ads:spend_facebook":{label:"Invest. Facebook",desc:"Valor investido em anúncios no Facebook",fmt:"currency",canal:"facebook",destaque:true},
+    "fb_ads:reach_facebook":{label:"Alcance Facebook",desc:"Pessoas únicas alcançadas no Facebook",fmt:"number",canal:"facebook",destaque:true},
+    "fb_ads:impressions_facebook":{label:"Impressões Facebook",desc:"Exibições totais no Facebook",fmt:"number",canal:"facebook",destaque:true},
+    "fb_ads:actions_page_engagement":{label:"Engajamento FB",desc:"Total de interações na página do Facebook",fmt:"number",canal:"facebook",destaque:false},
+    // ── OUTROS ──
+    "fb_ads:actions_contacts":{label:"Contatos Iniciados",desc:"Mensagens iniciadas via anúncio",fmt:"number",canal:"meta",destaque:false},
+    "fb_ads:clicks":{label:"Cliques Totais",desc:"Total de cliques (todos os tipos)",fmt:"number",canal:"meta",destaque:false},
   };
-  var CURRENCY=["fb_ads:spend","fb_ads:cpc","fb_ads:cpm","fb_ads:actions_cost_per_lead",
-    "fb_ads:spend_facebook","fb_ads:spend_instagram","fb_ads:cost_per_reach"];
-  var PCT=["fb_ads:ctr"];
-  var HIGHLIGHT=["fb_ads:spend","fb_ads:reach","fb_ads:impressions",
-    "fb_ads:inline_link_clicks","fb_ads:actions_lead","fb_ads:actions_cost_per_lead"];
 
   useEffect(function(){
     if(!sb){setLoading(false);return;}
     setLoading(true);
     sb.from("reportei_cache").select("client_id,data,updated_at").in("client_id",cacheIds)
       .then(function(r){
-        if(r.data&&r.data.length>0){
-          var map={};
-          r.data.forEach(function(row){map[row.client_id]=row;});
-          setRows(map);
-        }else{setRows({});}
+        var map={};
+        if(r.data)r.data.forEach(function(row){map[row.client_id]=row;});
+        setRows(map);
         setLoading(false);
       }).catch(function(){setRows({});setLoading(false);});
   },[cl.id]);
 
-  var activeId=isBioter?"bioter_"+subTab:cl.id;
+  var activeId=isBioter?"bioter_"+bioterUnit:cl.id;
   var row=rows&&rows[activeId];
   var reporteiUrl=REPORTEI_URLS[activeId];
 
-  // Extrai valor de qualquer formato que a API retorne
-  function extractVal(entry){
-    if(entry===null||entry===undefined)return null;
-    if(typeof entry==="number")return entry;
-    if(typeof entry==="string")return parseFloat(entry)||null;
-    if(typeof entry==="object"){
-      // { current_period, previous_period }
-      var cur=entry.current_period??entry.current??entry.value??entry.total??null;
-      if(cur!==null)return parseFloat(cur)||null;
-      // pode ser um array de pontos { date, value }
-      if(Array.isArray(entry)){
-        var sum=entry.reduce(function(s,p){return s+(parseFloat(p.value)||0);},0);
-        return sum||null;
-      }
-    }
-    return null;
+  // Extrai valor e variação do formato REAL do Supabase:
+  // { values: "123" | 123, comparison: { difference: -81.89 } }
+  function extractMetric(entry){
+    if(!entry)return null;
+    var cur=parseFloat(entry.values);
+    if(isNaN(cur))return null;
+    var pct=entry.comparison&&entry.comparison.difference!==null?
+      parseFloat(entry.comparison.difference):null;
+    return{value:cur,pct:isNaN(pct)?null:pct};
   }
 
-  function extractPrev(entry){
-    if(!entry||typeof entry!=="object")return null;
-    var p=entry.previous_period??entry.previous??null;
-    return p!==null?parseFloat(p)||null:null;
+  function formatValue(value,fmt){
+    if(fmt==="currency")return"R$ "+value.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+    if(fmt==="percent")return value.toFixed(2)+"%";
+    if(fmt==="decimal")return value.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+    if(value>=1000000)return(value/1000000).toFixed(1)+"M";
+    if(value>=1000)return value.toLocaleString("pt-BR",{maximumFractionDigits:0});
+    return value.toLocaleString("pt-BR",{maximumFractionDigits:0});
   }
 
-  function parseMetrics(row){
-    if(!row||!row.data)return[];
-    var fbAds=row.data.metrics&&row.data.metrics.facebook_ads;
-    if(!fbAds)return[];
-
-    var results=[];
+  // Monta lista de métricas com dados reais
+  function buildMetrics(row,filtroCanal){
+    if(!row||!row.data||!row.data.metrics||!row.data.metrics.facebook_ads)return[];
+    var fbAds=row.data.metrics.facebook_ads;
     var values=fbAds.values||{};
     var mmap=fbAds.metrics_map||{};
-
-    // Tenta por ID (formato normal)
+    var results=[];
     Object.entries(mmap).forEach(function(e){
-      var metricId=e[0];var slug=e[1];
-      var label=SLUG_LABEL[slug];
-      if(!label)return;
-      var entry=values[metricId];
-      if(entry===undefined||entry===null)return;
-      var cur=extractVal(entry);
-      if(cur===null||cur===0)return;
-      var prev=extractPrev(entry);
-      var pct=prev&&prev>0?((cur-prev)/prev*100):null;
-      var isCur=CURRENCY.includes(slug);
-      var isPct=PCT.includes(slug);
-      var fmt=isCur?"R$ "+cur.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):
-        isPct?(cur.toFixed(2)+"%"):
-        cur>=1000000?(cur/1000000).toFixed(1)+"M":
-        cur>=1000?cur.toLocaleString("pt-BR",{maximumFractionDigits:0}):
-        cur.toLocaleString("pt-BR",{maximumFractionDigits:2});
-      results.push({slug,label,value:cur,formatted:fmt,pct,highlight:HIGHLIGHT.includes(slug)});
-    });
-
-    // Se não achou nada por ID, tenta por slug direto nas chaves
-    if(results.length===0){
-      Object.entries(values).forEach(function(e){
-        var key=e[0];var entry=e[1];
-        var label=SLUG_LABEL[key];
-        if(!label)return;
-        var cur=extractVal(entry);
-        if(cur===null||cur===0)return;
-        var prev=extractPrev(entry);
-        var pct=prev&&prev>0?((cur-prev)/prev*100):null;
-        var isCur=CURRENCY.includes(key);
-        var isPct=PCT.includes(key);
-        var fmt=isCur?"R$ "+cur.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}):
-          isPct?(cur.toFixed(2)+"%"):
-          cur>=1000000?(cur/1000000).toFixed(1)+"M":
-          cur>=1000?cur.toLocaleString("pt-BR",{maximumFractionDigits:0}):
-          cur.toLocaleString("pt-BR",{maximumFractionDigits:2});
-        results.push({slug:key,label,value:cur,formatted:fmt,pct,highlight:HIGHLIGHT.includes(key)});
+      var id=e[0];var slug=e[1];
+      var cfg=METRICAS[slug];
+      if(!cfg)return;
+      if(filtroCanal!=="geral"&&cfg.canal!==filtroCanal)return;
+      var extracted=extractMetric(values[id]);
+      if(!extracted||extracted.value===0)return;
+      results.push({
+        slug,label:cfg.label,desc:cfg.desc,fmt:cfg.fmt,
+        destaque:cfg.destaque,canal:cfg.canal,
+        value:extracted.value,formatted:formatValue(extracted.value,cfg.fmt),
+        pct:extracted.pct,
       });
-    }
-
+    });
+    // Ordenar: destaques primeiro, depois por valor absoluto
+    results.sort(function(a,b){
+      if(a.destaque&&!b.destaque)return -1;
+      if(!a.destaque&&b.destaque)return 1;
+      return 0;
+    });
     return results;
   }
 
-  var metrics=row?parseMetrics(row):[];
-  var highlights=metrics.filter(function(m){return m.highlight;});
-  var secondary=metrics.filter(function(m){return !m.highlight;});
-  var updatedAt=row&&row.updated_at?new Date(row.updated_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):null;
+  var CANAIS=[
+    {id:"geral",label:"Geral",icon:"📊"},
+    {id:"meta",label:"Meta Ads",icon:"📘"},
+    {id:"instagram",label:"Instagram",icon:"📸"},
+    {id:"facebook",label:"Facebook",icon:"👥"},
+  ];
+
+  var metrics=row?buildMetrics(row,canal):[];
+  var destaques=metrics.filter(function(m){return m.destaque;});
+  var detalhes=metrics.filter(function(m){return !m.destaque;});
+
+  var updatedAt=row&&row.updated_at?
+    new Date(row.updated_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):null;
   var period=row&&row.data&&row.data.period;
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -6456,108 +6442,139 @@ function CAnalises({cl,isMob}){
     {/* Sub-tabs Bioter */}
     {isBioter&&(<div style={{display:"flex",gap:6}}>
       {[{id:"chapeco",label:"Chapecó"},{id:"toledo",label:"Toledo"},{id:"castro",label:"Castro"}].map(function(u){
-        return(<button key={u.id} onClick={function(){setSubTab(u.id);}}
-          style={{background:subTab===u.id?cl.color+"22":"transparent",color:subTab===u.id?cl.color:C.ts,
-            border:"1px solid "+(subTab===u.id?cl.color:C.b1),borderRadius:20,padding:"5px 14px",
-            fontSize:11,fontWeight:subTab===u.id?700:400,cursor:"pointer"}}>
+        return(<button key={u.id} onClick={function(){setBioterUnit(u.id);setCanal("geral");}}
+          style={{background:bioterUnit===u.id?cl.color+"22":"transparent",color:bioterUnit===u.id?cl.color:C.ts,
+            border:"1px solid "+(bioterUnit===u.id?cl.color:C.b1),borderRadius:20,padding:"5px 14px",
+            fontSize:11,fontWeight:bioterUnit===u.id?700:400,cursor:"pointer"}}>
           {u.label}
         </button>);
       })}
     </div>)}
 
-    {/* Header */}
+    {/* Header com info do período */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
       <div>
-        <div style={{color:C.tx,fontWeight:700,fontSize:14}}>📊 Meta Ads — Dados Reais</div>
-        {updatedAt&&<div style={{color:C.td,fontSize:10,marginTop:2}}>
-          Atualizado: {updatedAt}{period?" · "+period.start+" → "+period.end:""}
+        <div style={{color:C.tx,fontWeight:700,fontSize:15}}>Análises de Performance</div>
+        {period&&<div style={{color:C.td,fontSize:11,marginTop:2}}>
+          Período: {period.start} → {period.end}
+          {updatedAt&&" · Atualizado: "+updatedAt}
         </div>}
       </div>
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
-          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"6px 14px",
-            color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
-          ↗ Reportei
-        </a>)}
-        {row&&(<button onClick={function(){setShowDebug(function(v){return !v;});}}
-          style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,padding:"4px 10px",
-            color:C.td,fontSize:10,cursor:"pointer"}}>
-          {showDebug?"Ocultar":"🔍 Debug"}
-        </button>)}
-      </div>
+      {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
+        style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"6px 14px",
+          color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
+        ↗ Ver no Reportei
+      </a>)}
     </div>
 
-    {/* Debug panel — mostra JSON bruto para diagnóstico */}
-    {showDebug&&row&&(<div style={{background:C.s1,borderRadius:10,border:"1px solid "+C.b1,padding:12,
-        maxHeight:200,overflowY:"auto",fontSize:10,color:C.td,fontFamily:"monospace",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>
-      {JSON.stringify(row.data&&row.data.metrics&&row.data.metrics.facebook_ads&&row.data.metrics.facebook_ads.values,null,2)||"(vazio)"}
-    </div>)}
+    {/* Sub-abas de canal */}
+    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1}}>
+      {CANAIS.map(function(c){
+        var ativo=canal===c.id;
+        return(<button key={c.id} onClick={function(){setCanal(c.id);}}
+          style={{background:"none",border:"none",
+            borderBottom:ativo?"2px solid "+cl.color:"2px solid transparent",
+            padding:"8px 16px",color:ativo?cl.color:C.ts,
+            fontWeight:ativo?700:400,fontSize:12,cursor:"pointer",
+            whiteSpace:"nowrap",marginBottom:-1,display:"flex",alignItems:"center",gap:5}}>
+          <span>{c.icon}</span>{c.label}
+        </button>);
+      })}
+    </div>
 
-    {loading&&(<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:48,color:C.td,fontSize:13,gap:10}}>
-      <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
+    {/* Loading */}
+    {loading&&(<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:48,gap:10,color:C.td}}>
+      <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,
+        borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
       Buscando dados...
     </div>)}
 
-    {!loading&&!row&&(<div style={{textAlign:"center",padding:48,color:C.td}}>
-      <div style={{fontSize:36,marginBottom:12}}>📡</div>
-      <div style={{fontWeight:700,fontSize:15,color:C.tx,marginBottom:6}}>Sem dados sincronizados</div>
-      <div style={{fontSize:12,marginBottom:16}}>Execute a Edge Function sync-reportei no Supabase.</div>
+    {/* Sem dados */}
+    {!loading&&!row&&(<div style={{textAlign:"center",padding:48}}>
+      <div style={{fontSize:40,marginBottom:12}}>📡</div>
+      <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>Sem dados sincronizados</div>
+      <div style={{color:C.td,fontSize:12,marginBottom:16}}>Execute a Edge Function sync-reportei no Supabase para sincronizar os dados.</div>
       {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
         style={{display:"inline-block",background:cl.color,color:"#fff",borderRadius:8,
-          padding:"8px 20px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
-        Abrir no Reportei ↗
-      </a>)}
-    </div>)}
-
-    {!loading&&row&&metrics.length===0&&(<div style={{textAlign:"center",padding:48,color:C.td}}>
-      <div style={{fontSize:36,marginBottom:12}}>📭</div>
-      <div style={{fontWeight:700,fontSize:15,color:C.tx,marginBottom:6}}>Dados no Supabase mas sem métricas legíveis</div>
-      <div style={{fontSize:12,marginBottom:12}}>Clique em 🔍 Debug para ver o JSON bruto e diagnosticar.</div>
-      {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
-        style={{display:"inline-block",background:cl.color,color:"#fff",borderRadius:8,
-          padding:"8px 20px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
+          padding:"9px 22px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
         Ver no Reportei ↗
       </a>)}
     </div>)}
 
-    {!loading&&metrics.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:12}}>
-        {highlights.map(function(m){
-          return(<div key={m.slug} style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,
-              padding:"16px 18px",position:"relative",overflow:"hidden"}}>
-            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:cl.color,borderRadius:"14px 14px 0 0"}}/>
-            <div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{m.label}</div>
-            <div style={{color:C.tx,fontWeight:800,fontSize:22,letterSpacing:-.5}}>{m.formatted}</div>
-            {m.pct!==null&&(<div style={{display:"flex",alignItems:"center",gap:3,marginTop:4}}>
-              <span style={{color:m.pct>=0?C.gr:C.rd,fontSize:11,fontWeight:700}}>
-                {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
-              </span>
-              <span style={{color:C.td,fontSize:10}}>vs mês ant.</span>
-            </div>)}
+    {/* Sem métricas no canal selecionado */}
+    {!loading&&row&&metrics.length===0&&(<div style={{textAlign:"center",padding:48}}>
+      <div style={{fontSize:40,marginBottom:12}}>📭</div>
+      <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>
+        Sem dados para {CANAIS.find(function(c){return c.id===canal;})?.label||canal}
+      </div>
+      <div style={{color:C.td,fontSize:12}}>
+        {canal==="instagram"?"Verifique se a integração do Instagram está conectada no Reportei.":
+         canal==="facebook"?"Verifique se a integração do Facebook está conectada no Reportei.":
+         "Nenhuma métrica disponível para o período selecionado."}
+      </div>
+    </div>)}
+
+    {/* Cards de destaque */}
+    {!loading&&destaques.length>0&&(<div style={{display:"grid",
+        gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(170px,1fr))",gap:12}}>
+      {destaques.map(function(m){
+        var positivo=m.pct===null?null:
+          // Para custo (currency), queda é boa; para o resto, alta é boa
+          (m.fmt==="currency"&&["fb_ads:cpc","fb_ads:cpm","fb_ads:actions_cost_per_lead",
+            "fb_ads:spend_instagram","fb_ads:spend_facebook","fb_ads:spend"].includes(m.slug))?
+          m.pct<=0:m.pct>=0;
+        return(<div key={m.slug} style={{background:C.card,borderRadius:14,
+            border:"1px solid "+C.b1,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,
+            background:cl.color,borderRadius:"14px 14px 0 0"}}/>
+          <div style={{color:C.td,fontSize:10,fontWeight:600,
+            textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>{m.label}</div>
+          <div style={{color:C.tx,fontWeight:800,fontSize:22,letterSpacing:-.5,marginBottom:4}}>
+            {m.formatted}
+          </div>
+          <div style={{color:C.td,fontSize:10,marginBottom:m.pct!==null?6:0}}>{m.desc}</div>
+          {m.pct!==null&&(<div style={{display:"flex",alignItems:"center",gap:4}}>
+            <span style={{color:positivo?C.gr:C.rd,fontSize:11,fontWeight:700}}>
+              {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
+            </span>
+            <span style={{color:C.td,fontSize:10}}>vs mês anterior</span>
+          </div>)}
+        </div>);
+      })}
+    </div>)}
+
+    {/* Cards de detalhe */}
+    {!loading&&detalhes.length>0&&(<div style={{background:C.card,borderRadius:14,
+        border:"1px solid "+C.b1,overflow:"hidden"}}>
+      <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,
+        color:C.tx,fontWeight:700,fontSize:12}}>Métricas Detalhadas</div>
+      <div style={{display:"grid",
+        gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(200px,1fr))"}}>
+        {detalhes.map(function(m,i){
+          var positivo=m.pct===null?null:
+            (m.fmt==="currency")?m.pct<=0:m.pct>=0;
+          return(<div key={m.slug} style={{padding:"14px 18px",
+              borderBottom:"1px solid "+C.b1+"44",
+              borderRight:i%2===0&&!isMob?"1px solid "+C.b1+"44":"none"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+              <div>
+                <div style={{color:C.td,fontSize:10,marginBottom:4}}>{m.label}</div>
+                <div style={{color:C.tx,fontWeight:700,fontSize:16}}>{m.formatted}</div>
+                <div style={{color:C.td,fontSize:10,marginTop:3}}>{m.desc}</div>
+              </div>
+              {m.pct!==null&&(<div style={{textAlign:"right",flexShrink:0}}>
+                <span style={{color:positivo?C.gr:C.rd,fontSize:11,fontWeight:700}}>
+                  {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
+                </span>
+              </div>)}
+            </div>
           </div>);
         })}
       </div>
-      {secondary.length>0&&(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-        <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:12}}>Métricas Detalhadas</div>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(140px,1fr))",gap:0}}>
-          {secondary.map(function(m,i){
-            return(<div key={m.slug} style={{padding:"12px 16px",
-                borderRight:i%2===0&&isMob?"1px solid "+C.b1+"44":"none",
-                borderBottom:"1px solid "+C.b1+"44"}}>
-              <div style={{color:C.td,fontSize:10,marginBottom:3}}>{m.label}</div>
-              <div style={{color:C.tx,fontWeight:700,fontSize:14}}>{m.formatted}</div>
-              {m.pct!==null&&(<span style={{color:m.pct>=0?C.gr:C.rd,fontSize:10,fontWeight:600}}>
-                {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
-              </span>)}
-            </div>);
-          })}
-        </div>
-      </div>)}
     </div>)}
 
   </div>);
 }
-
 
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   var TASKS=tasks||[];
@@ -6598,14 +6615,17 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {/* HEADER */}
     <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:16,flexWrap:"wrap"}}>
       <button onClick={onBack}
-        style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",gap:4,padding:0,flexShrink:0}}
+        style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,
+          fontWeight:600,display:"flex",alignItems:"center",gap:4,padding:0,flexShrink:0}}
         onMouseEnter={function(e){e.currentTarget.style.color=C.ts;}}
         onMouseLeave={function(e){e.currentTarget.style.color=C.td;}}>
         ← Clientes
       </button>
       <div style={{width:1,height:20,background:C.b1,flexShrink:0}}/>
-      <div style={{background:"#fff",borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center",justifyContent:"center",height:30,border:"1px solid #f1f5f9",flexShrink:0}}>
-        {CLIENT_LOGOS[cl.id]?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:68,objectFit:"contain"}}/>
+      <div style={{background:"#fff",borderRadius:8,padding:"4px 10px",display:"flex",
+          alignItems:"center",justifyContent:"center",height:30,border:"1px solid #f1f5f9",flexShrink:0}}>
+        {CLIENT_LOGOS[cl.id]
+          ?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:68,objectFit:"contain"}}/>
           :<span style={{color:cl.color,fontWeight:900,fontSize:11}}>{cl.abbr}</span>}
       </div>
       <div style={{flex:1,minWidth:100}}>
@@ -6625,10 +6645,14 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
                 <svg width="36" height="36" viewBox="0 0 36 36">
                   <circle cx="18" cy="18" r="14" fill="none" stroke={C.b1} strokeWidth="3"/>
                   <circle cx="18" cy="18" r="14" fill="none" stroke={item.color} strokeWidth="3"
-                    strokeDasharray={2*Math.PI*14} strokeDashoffset={2*Math.PI*14*(1-item.value/100)}
+                    strokeDasharray={2*Math.PI*14}
+                    strokeDashoffset={2*Math.PI*14*(1-item.value/100)}
                     strokeLinecap="round" transform="rotate(-90 18 18)"/>
                 </svg>
-                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:item.color,fontWeight:900,fontSize:10}}>{item.value}</div>
+                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",
+                  justifyContent:"center",color:item.color,fontWeight:900,fontSize:10}}>
+                  {item.value}
+                </div>
               </div>
             ):<div style={{color:item.color,fontWeight:800,fontSize:15}}>{item.value}</div>}
             <div style={{color:C.td,fontSize:9,marginTop:2}}>{item.label}</div>
@@ -6637,42 +6661,60 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
       </div>
     </div>
 
-    {/* ALERT STRIP */}
-    {(lateTasks.length>0||pendingCopy.length>0||pendingPub.length>0||(cl.payment&&cl.payment.status==="atrasado")||(lastMeetDays!==null&&lastMeetDays>25))&&(
+    {/* ALERTAS */}
+    {(lateTasks.length>0||pendingCopy.length>0||pendingPub.length>0||
+      (cl.payment&&cl.payment.status==="atrasado")||
+      (lastMeetDays!==null&&lastMeetDays>25))&&(
       <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
-        {lateTasks.length>0&&<div style={{background:C.rd+"18",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.rd,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+        {lateTasks.length>0&&(<div style={{background:C.rd+"18",border:"1px solid "+C.rd+"44",
+            borderRadius:8,padding:"5px 12px",fontSize:11,color:C.rd,fontWeight:700,
+            display:"flex",alignItems:"center",gap:5}}>
           <span>🔥</span>{lateTasks.length} atrasada(s)
-        </div>}
-        {(cl.payment&&cl.payment.status==="atrasado")&&<div style={{background:C.rd+"18",border:"1px solid "+C.rd+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.rd,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+        </div>)}
+        {(cl.payment&&cl.payment.status==="atrasado")&&(<div style={{background:C.rd+"18",
+            border:"1px solid "+C.rd+"44",borderRadius:8,padding:"5px 12px",fontSize:11,
+            color:C.rd,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
           <span>💸</span>Pag. atrasado
-        </div>}
-        {pendingCopy.length>0&&<div style={{background:C.a+"18",border:"1px solid "+C.a+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.a,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+        </div>)}
+        {pendingCopy.length>0&&(<div style={{background:C.a+"18",border:"1px solid "+C.a+"44",
+            borderRadius:8,padding:"5px 12px",fontSize:11,color:C.a,fontWeight:700,
+            display:"flex",alignItems:"center",gap:5}}>
           <span>📝</span>{pendingCopy.length} copy(ies) p/ aprovar
-        </div>}
-        {pendingPub.length>0&&<div style={{background:C.gr+"18",border:"1px solid "+C.gr+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.gr,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+        </div>)}
+        {pendingPub.length>0&&(<div style={{background:C.gr+"18",border:"1px solid "+C.gr+"44",
+            borderRadius:8,padding:"5px 12px",fontSize:11,color:C.gr,fontWeight:700,
+            display:"flex",alignItems:"center",gap:5}}>
           <span>🎨</span>{pendingPub.length} pub. p/ aprovar
-        </div>}
-        {lastMeetDays!==null&&lastMeetDays>25&&<div style={{background:C.yw+"18",border:"1px solid "+C.yw+"44",borderRadius:8,padding:"5px 12px",fontSize:11,color:C.yw,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+        </div>)}
+        {lastMeetDays!==null&&lastMeetDays>25&&(<div style={{background:C.yw+"18",
+            border:"1px solid "+C.yw+"44",borderRadius:8,padding:"5px 12px",fontSize:11,
+            color:C.yw,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
           <span>📅</span>Reunião há {lastMeetDays}d
-        </div>}
+        </div>)}
       </div>
     )}
 
-    {/* TABS */}
+    {/* TABS PRINCIPAIS */}
     <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,marginBottom:20,overflowX:"auto"}}>
       {TABS.map(function(t){
         return(<button key={t.id} onClick={function(){setTab(t.id);}}
-          style={{background:"none",border:"none",borderBottom:tab===t.id?"2px solid "+cl.color:"2px solid transparent",padding:"10px 20px",color:tab===t.id?cl.color:C.ts,fontWeight:tab===t.id?700:400,fontSize:13,cursor:"pointer",transition:"all .12s",whiteSpace:"nowrap",marginBottom:-1}}>
+          style={{background:"none",border:"none",
+            borderBottom:tab===t.id?"2px solid "+cl.color:"2px solid transparent",
+            padding:"10px 20px",color:tab===t.id?cl.color:C.ts,
+            fontWeight:tab===t.id?700:400,fontSize:13,cursor:"pointer",
+            transition:"all .12s",whiteSpace:"nowrap",marginBottom:-1}}>
           {t.label}
         </button>);
       })}
     </div>
 
-    {/* CONTENT */}
+    {/* CONTEÚDO */}
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
-    {tab==="concorrencia"&&canSeeConcorrencia&&<ClienteConcorrencia cl={cl} tab={concorrenciaTab} setTab={setConcorrenciaTab}/>}
+    {tab==="concorrencia"&&canSeeConcorrencia&&(
+      <ClienteConcorrencia cl={cl} tab={concorrenciaTab} setTab={setConcorrenciaTab}/>
+    )}
   </div>);
 }
 
