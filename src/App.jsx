@@ -570,6 +570,12 @@ const Chip=({color,children,sm})=>(
   </span>
 );
 
+/* ─── STATUS DE CARD ─────────────────────────
+   Labels e cores usados em vários módulos (chat, portal, card preview).
+   Movido para cá para remover dependência oculta entre 05_chat e 14_portal. */
+const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
+const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
+
 // ======= 00_mindmap_data.jsx =======
 // Dados estratégicos e mapas mentais de todos os clientes
 // Depende de: 00_globals.jsx (C para cores)
@@ -1984,10 +1990,17 @@ function InstagramRealData({cl,isMob}){
     })();
   },[cl.id,activeUnit]);
 
+  // Resetar dados ao trocar cliente para não mostrar dados do cliente anterior
+  useEffect(()=>{
+    setIgData(null);
+    setFbData(null);
+    setError("");
+  },[cl.id]);
+
   // Auto-fetch if authenticated and no recent data
   useEffect(()=>{
     if(auth&&!igData&&!loading)fetchRealData();
-  },[auth,activeUnit]);
+  },[auth,activeUnit,cl.id]);
 
   const findPageForHandle=(handle)=>{
     if(!auth?.pages)return null;
@@ -2500,6 +2513,8 @@ function GoogleAdsRealData({cl,onOpenLogin}){
     setLoading(false);
   };
 
+  // Resetar GA4 data ao trocar cliente
+  useEffect(()=>{setGa4Data(null);},[cl.id]);
   useEffect(()=>{if(auth&&ga4PropId&&!ga4Data&&!loading)fetchGA4();},[auth,cl.id,ga4PropId]);
 
   const fmtDuration=(s)=>{const m=Math.floor(s/60);const sec=s%60;return m+"m "+sec+"s";};
@@ -8577,16 +8592,20 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
     : allInternas.filter(t=>(t.assignees||[]).includes(CURRENT_USER.id)||t.createdBy===CURRENT_USER.id);
 
   // Verifica cards parados e notifica Vinicius+Gustavo a cada hora
+  // Usa ref para sempre ler a lista mais atualizada sem precisar recriar o interval
+  const allInternasRef=useRef(allInternas);
+  useEffect(()=>{allInternasRef.current=allInternas;},[allInternas]);
   useEffect(()=>{
     const check=()=>{
       if(!setNotifs||!isSocio) return;
       const now=new Date();
-      const paradas=allInternas.filter(t=>{
+      const current=allInternasRef.current||[];
+      const paradas=current.filter(t=>{
         if(t.status==="interno_executado"||t.status==="interno_aprovado"||!t.colEnteredAt)return false;
         const dias=Math.floor((now-new Date(t.colEnteredAt))/86400000);
         return dias>=2;
       });
-      const aguardando=allInternas.filter(t=>{
+      const aguardando=current.filter(t=>{
         if(t.status!=="interno_avaliacao"||!t.colEnteredAt)return false;
         return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=2;
       });
@@ -8614,7 +8633,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
     check();
     const iv=setInterval(check,60*60*1000); // a cada hora
     return()=>clearInterval(iv);
-  },[allInternas.length]);
+  },[isSocio,setNotifs]);
 
   const handleDragStart = (e,id) => { setDragId(id); e.dataTransfer.effectAllowed="move"; };
   const handleDragOver  = (e,colId) => { e.preventDefault(); setDragOver(colId); };
@@ -8979,9 +8998,89 @@ const triggerShake=()=>{
   });
 };
 
-/* Status labels e cores para card preview */
-const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
-const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
+/* CARD_STATUS_LABEL e CARD_STATUS_COLOR agora estão em 00_globals.jsx
+   (compartilhados com 14_portal.jsx e App.jsx) */
+
+/* ─── PIXELS CALL WIDGET ──────────────────────────────────
+   Widget flutuante que renderiza a videochamada Daily.co quando
+   window._pixelsCallState está setado. Antes desse componente,
+   clicar em "Pixels Call" apenas setava a state global mas nada
+   renderizava — resultado: tela branca.
+
+   Montado no shell (12_estrutura.jsx) para ficar visível em
+   qualquer página, permitindo ao usuário trocar de tela sem
+   perder a chamada. */
+function PixelsCallWidget(){
+  // Force-update local sincronizado com window._pixelsCallForceUpdate
+  const [,setTick]=useState(0);
+  useEffect(()=>{
+    window._pixelsCallForceUpdate=()=>setTick(v=>v+1);
+    return()=>{delete window._pixelsCallForceUpdate;};
+  },[]);
+
+  const state=window._pixelsCallState;
+  if(!state||!state.url) return null;
+
+  const {url,channelName,minimized}=state;
+
+  // Controles: minimizar / encerrar
+  const toggleMinimize=()=>{
+    window._pixelsCallState={...window._pixelsCallState,minimized:!minimized};
+    setTick(v=>v+1);
+  };
+  const endCall=()=>{
+    window._pixelsCallState=null;
+    setTick(v=>v+1);
+  };
+
+  // Posicionamento: minimizada = canto inferior direito pequeno
+  //                 aberta = centro da tela, ~70% da viewport
+  const widgetStyle=minimized
+    ?{position:"fixed",right:20,bottom:20,width:280,height:180,zIndex:9999,
+      borderRadius:14,overflow:"hidden",boxShadow:"0 10px 40px rgba(0,0,0,0.4)",
+      border:"2px solid #7c3aed",background:"#000",
+      transition:"all .25s ease"}
+    :{position:"fixed",right:24,bottom:24,width:"min(720px, 92vw)",
+      height:"min(520px, 78vh)",zIndex:9999,borderRadius:18,overflow:"hidden",
+      boxShadow:"0 20px 80px rgba(0,0,0,0.6)",border:"2px solid #7c3aed",
+      background:"#000",transition:"all .25s ease"};
+
+  const btnStyle={background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",
+    border:"1px solid rgba(255,255,255,0.2)",color:"#fff",cursor:"pointer",
+    width:32,height:32,borderRadius:"50%",display:"flex",alignItems:"center",
+    justifyContent:"center",fontSize:14,fontWeight:700,transition:"all .15s"};
+
+  return(
+    <div style={widgetStyle}>
+      {/* Barra superior com título + controles */}
+      <div style={{position:"absolute",top:8,left:0,right:0,display:"flex",
+        alignItems:"center",gap:6,padding:"0 10px",zIndex:2,pointerEvents:"none"}}>
+        <div style={{background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)",
+          borderRadius:99,padding:"4px 12px",color:"#fff",fontSize:11,
+          fontWeight:700,display:"flex",alignItems:"center",gap:6,pointerEvents:"auto"}}>
+          <span style={{color:"#22c55e"}}>●</span>
+          <span>{channelName||"Pixels Call"}</span>
+        </div>
+        <div style={{marginLeft:"auto",display:"flex",gap:6,pointerEvents:"auto"}}>
+          <button onClick={toggleMinimize} title={minimized?"Expandir":"Minimizar"}
+            style={btnStyle}>{minimized?"▢":"—"}</button>
+          <button onClick={endCall} title="Encerrar chamada"
+            style={{...btnStyle,background:"rgba(220,38,38,0.9)",
+              border:"1px solid rgba(255,255,255,0.3)"}}>✕</button>
+        </div>
+      </div>
+
+      {/* iframe Daily.co — requer camera + microphone + autoplay + fullscreen */}
+      <iframe
+        src={url}
+        title={channelName||"Pixels Call"}
+        allow="camera; microphone; autoplay; fullscreen; display-capture; speaker-selection"
+        allowFullScreen
+        style={{width:"100%",height:"100%",border:"none",background:"#000",display:"block"}}
+      />
+    </div>
+  );
+}
 
 /* ── Link Preview ── */
 function LinkPreview({url}){
@@ -9245,8 +9344,12 @@ function PageChat({isMob, perms, tasks, setTasks}){
     if(realtimeRef.current){
       sb.removeChannel(realtimeRef.current);
     }
+    // Nome de canal constante por usuário — evita acumulação de canais
+    // quando o hook re-executa após HMR ou múltiplas abas.
+    const channelName=`chat-realtime-${CURRENT_USER.id}`;
+    try{const existing=sb.getChannels().find(c=>c.topic===`realtime:${channelName}`);if(existing)sb.removeChannel(existing);}catch{}
     const channel=sb
-      .channel("chat-realtime-"+Date.now())
+      .channel(channelName)
       .on("postgres_changes",{event:"INSERT",schema:"public",table:"messages"},(payload)=>{
         const newMsg=rowToMsg(payload.new);
         // Som de mensagem recebida (de outro usuário, não shake)
@@ -13884,15 +13987,29 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const fileInputRef=useRef(null);
   const descRef=useRef(null);
   const captionRef=useRef(null);
-  // Inicializa contenteditable com conteúdo salvo (sem dangerouslySetInnerHTML)
+  // Sanitizador de HTML — permite apenas tags básicas de formatação.
+  // Remove <script>, <iframe>, event handlers (onerror, onclick...) e javascript:
+  const sanitizeRichText=(html)=>{
+    if(typeof html!=="string"||!html)return "";
+    return html
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"")
+      .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi,"")
+      .replace(/\son\w+\s*=\s*"[^"]*"/gi,"")
+      .replace(/\son\w+\s*=\s*'[^']*'/gi,"")
+      .replace(/\son\w+\s*=\s*[^\s>]*/gi,"")
+      .replace(/javascript:/gi,"")
+      .replace(/<(?!\/?(b|i|u|strong|em|br|p|div|span|ul|ol|li|a|h[1-6])\b)[^>]*>/gi,"");
+  };
+  // Inicializa contenteditable com conteúdo SANITIZADO (sem XSS)
   useEffect(()=>{
     if(descRef.current&&desc&&!descRef.current.innerHTML){
-      descRef.current.innerHTML=desc;
+      descRef.current.innerHTML=sanitizeRichText(desc);
     }
     if(captionRef.current&&caption&&!captionRef.current.innerHTML){
-      captionRef.current.innerHTML=caption;
+      captionRef.current.innerHTML=sanitizeRichText(caption);
     }
-  },[]);
+  },[task.id]);
   const isAssigned=(Array.isArray(task.assignees)?task.assignees:task.assignee?[task.assignee]:[]).includes(user.id);
   // Usa cardPerms (livePerms injetado pelo pai) — sempre atualizado em tempo real
   const userPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
@@ -13976,10 +14093,28 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
 
 
+  // Whitelist de MIME types permitidos — reduz risco de upload de executáveis
+  const ALLOWED_MIME_PREFIXES=["image/","video/","audio/","application/pdf","application/msword","application/vnd.openxmlformats","text/plain","application/zip","application/x-zip-compressed"];
+  const MAX_UPLOAD_SIZE=100*1024*1024; // 100 MB
+  const isMimeAllowed=(type)=>{
+    if(!type)return false;
+    return ALLOWED_MIME_PREFIXES.some(p=>type.startsWith(p)||type===p.replace(/\/$/,""));
+  };
+
   const handleFileUpload=async(e)=>{
     const files=Array.from(e.target.files||[]);
     e.target.value="";
     for(const file of files){
+      // Validação 1: Tamanho
+      if(file.size>MAX_UPLOAD_SIZE){
+        alert(`${file.name}: arquivo muito grande (máx 100 MB).`);
+        continue;
+      }
+      // Validação 2: Tipo MIME (evita upload de executáveis, scripts etc.)
+      if(!isMimeAllowed(file.type)){
+        alert(`${file.name}: tipo de arquivo não permitido (${file.type||"desconhecido"}).`);
+        continue;
+      }
       const ext=file.name.split(".").pop();
       const path=`tasks/${task.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
       const tempId=Date.now()+Math.random();
@@ -14966,9 +15101,10 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
     try{return JSON.parse(localStorage.getItem("pixels-dash-widgets-"+user.id)||'{"notifs":true,"clients":true,"stale":true}');}catch(e){return{notifs:true,clients:true,stale:true};}
   });
   // Resolve perms for the current user (to pass to CardModal)
+  // Deps incluem o user ID — quando muda (view-as ou troca de conta), recalcula
   const dashCardPerms=useMemo(()=>{
     try{const s=localStorage.getItem("pixels-perms-"+(currentUser||CURRENT_USER).id);return s?{...DEFAULT_PERMS,...JSON.parse(s)}:DEFAULT_PERMS;}catch(e){return DEFAULT_PERMS;}
-  },[]);
+  },[currentUser?.id]);
   const now=new Date();
   const _h=now.getHours();
   const greeting=_h<12?"Bom dia":_h<18?"Boa tarde":"Boa noite";
@@ -16259,7 +16395,7 @@ export default function AgencyOS(){
             if(profile.user_type==="client"){setClientPortal(profile);setAuthState("portal");}
             else{setCurrentProfile(profile);setAuthState("app");}
           }
-        }catch{}
+        }catch(e){console.warn("auth profile load failed:",e?.message||e);}
         fetchTasks(session.access_token);
       },0);
     });
@@ -16315,7 +16451,11 @@ export default function AgencyOS(){
           return merged;
         });
         setLoaded(true);
-      }catch{}
+      }catch(e){
+        // Network error ou Supabase down — não trava a UI, continua no próximo poll.
+        // Log apenas o primeiro erro para não inundar o console.
+        if(!window._pixelsPollErrored){console.warn("poll tasks failed:",e?.message||e);window._pixelsPollErrored=true;}
+      }
     };
 
     setTimeout(poll,500);
@@ -16326,7 +16466,12 @@ export default function AgencyOS(){
   // ── Realtime ──────────────────────────────────────────────
   useEffect(()=>{
     if(authState!=="app") return;
-    const ch=_sb.channel("pixels-rt-"+Date.now())
+    // Nome de canal constante por usuário — evita criar canais duplicados
+    // que consomem quota do Supabase Realtime e vazam listeners.
+    const channelName=`pixels-rt-tasks-${CURRENT_USER.id}`;
+    // Remove canal antigo se ainda existir (safety após HMR/re-render)
+    try{const existing=_sb.getChannels().find(c=>c.topic===`realtime:${channelName}`);if(existing)_sb.removeChannel(existing);}catch{}
+    const ch=_sb.channel(channelName)
       .on("postgres_changes",{event:"*",schema:"public",table:"tasks"},payload=>{
         if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
           const incoming=rowToTask(payload.new);
@@ -16374,7 +16519,9 @@ export default function AgencyOS(){
             ls.set("pixels-perms-"+u.id,perms);
           }
         });
-      }catch{}
+      }catch(e){
+        if(!window._pixelsPermsErrored){console.warn("poll perms failed:",e?.message||e);window._pixelsPermsErrored=true;}
+      }
     };
     poll();
     const iv=setInterval(poll,15000);
@@ -16558,13 +16705,20 @@ export default function AgencyOS(){
       onLoginClient={(p)=>{ls.set(PROFILE_KEY,p);setClientPortal(p);setAuthState("portal");}}
     />
   );
-  if(authState==="portal"&&clientPortalData) return <PagePortalCliente isMob={isMob} tasks={tasks} initTab="dashboard"/>;
+  if(authState==="portal"&&clientPortalData) return <PagePortalCliente
+    isMob={isMob}
+    tasks={tasks}
+    initTab="dashboard"
+    lockedClientId={clientPortalData.primary_client||clientPortalData.client_id||clientPortalData.id}
+  />;
   if(!loaded) return <LoadingScreen msg="Carregando dados..."/>;
 
   // ── UI principal ──────────────────────────────────────────
   const markRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));
 
   return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",position:"relative"}}>
+    {/* Widget de videochamada — persiste ao trocar de página */}
+    <PixelsCallWidget/>
     {showSelfProfile&&<CollabProfilePage
       user={CURRENT_USER}
       profile={selfProfileData}
@@ -18588,6 +18742,12 @@ function PortalSolicitar({tasks, selCl, cl}) {
 
   const enviar = async () => {
     if(!titulo.trim()){alert("Informe o título da solicitação.");return;}
+    if(!selCl||!cl){alert("Cliente inválido. Recarregue a página.");return;}
+    // Validação de tamanho — evita spam / ataques
+    if(titulo.length>200){alert("Título muito longo (máx 200 caracteres).");return;}
+    if(descricao.length>5000){alert("Descrição muito longa (máx 5000 caracteres).");return;}
+    // NOTA: validação de cliente deve ser reforçada por RLS no Supabase.
+    // Sem RLS, um cliente com acesso ao token pode inserir tasks em nome de outro.
     setEnviando(true);
     const id="portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
     const now=new Date().toISOString();
@@ -18699,15 +18859,23 @@ function PortalSolicitar({tasks, selCl, cl}) {
   );
 }
 
-function PagePortalCliente({isMob, tasks, initTab}){
+function PagePortalCliente({isMob, tasks, initTab, lockedClientId}){
   const TASKS=tasks||[];
-  const [selCl,setSelCl]=useState(CLIENTS.find(c=>c.status!=="interno")?.id||"");
+  // Se lockedClientId foi passado (cliente logado no portal), trava a seleção.
+  // Só sócio pode navegar entre clientes livremente.
+  const isSocio=CURRENT_USER.level===1;
+  const initialClient=lockedClientId||CLIENTS.find(c=>c.status!=="interno")?.id||"";
+  const [selCl,setSelCl]=useState(initialClient);
+  // Força selCl a permanecer no lockedClientId se foi passado
+  useEffect(()=>{
+    if(lockedClientId&&selCl!==lockedClientId)setSelCl(lockedClientId);
+  },[lockedClientId]);
   const [tab,setTab]=useState(initTab||"dashboard");
   const [analisesSub,setAnalisesSub]=useState("trafego");
 
   const cl=CLIENTS.find(c=>c.id===selCl);
-  const clTasks=TASKS.filter(t=>t.client===selCl&&!t.deletedAt);
-  const isSocio=CURRENT_USER.level===1;
+  // Guard: só inclui tarefas se selCl é válido (evita match com client=="")
+  const clTasks=selCl?TASKS.filter(t=>t.client===selCl&&!t.deletedAt):[];
 
   // Load client access config (modules enabled)
   const clientAccess=(()=>{
@@ -18742,7 +18910,7 @@ function PagePortalCliente({isMob, tasks, initTab}){
         <div style={{color:C.tx,fontWeight:900,fontSize:20}}>🌐 Portal do Cliente</div>
         <div style={{color:C.td,fontSize:11,marginTop:2}}>Visão exclusiva do cliente · sem informações internas</div>
       </div>
-      {isSocio&&<select value={selCl} onChange={e=>setSelCl(e.target.value)}
+      {isSocio&&!lockedClientId&&<select value={selCl} onChange={e=>setSelCl(e.target.value)}
         style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 14px",color:C.tx,fontSize:13,fontWeight:700,outline:"none",cursor:"pointer"}}>
         {CLIENTS.filter(c=>c.status!=="interno").map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
       </select>}
