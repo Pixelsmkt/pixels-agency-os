@@ -6359,19 +6359,18 @@ function PageClientes({isMob, tasks}){
 
 // ======= 03_cliente_detalhe.jsx =======
 
-/* ── CAnalises — Dados reais do Reportei via Supabase ──
-   Atualizado em 2026-04-19 pra consumir a API v2 da Reportei, que usa
-   "widgets de dashboard" em vez de métricas simples.
-   Formatos suportados:
-     - simple:     {values: 123,  comparison: {difference: -10}}
-     - array2d:    {values: [["85301","175914",...]]}  — extrai coluna específica
-     - timeseries: {labels: [...], values: [{data:["123"], name:"spend"}]}  — soma data[] */
+/* ── CAnalises — Dashboard Reportei embedado + cards resumidos ──
+   Estratégia simplificada (2026-04-20): em vez de extrair 200+ reference_keys
+   manualmente, embutimos o dashboard da Reportei via iframe. Mantemos os 2-3
+   cards principais em cima (leads + CPL) usando dados do Supabase cache.
+   Assim o cliente enxerga TUDO que a Reportei mostra, sempre atualizado. */
 function CAnalises({cl,isMob}){
   var sb=window._sb;
   var [rows,setRows]=useState(null);
   var [loading,setLoading]=useState(true);
   var [bioterUnit,setBioterUnit]=useState("chapeco");
-  var [canal,setCanal]=useState("geral");
+  var [iframeLoaded,setIframeLoaded]=useState(false);
+  var [iframeFailed,setIframeFailed]=useState(false);
 
   var isBioter=cl.id==="bioter";
   var cacheIds=isBioter?["bioter_chapeco","bioter_toledo","bioter_castro"]:[cl.id];
@@ -6386,90 +6385,17 @@ function CAnalises({cl,isMob}){
     arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
   };
 
-  // Config de cada widget. Cada entrada:
-  //   ref:    reference_key na Reportei v2
-  //   type:   "simple" | "array2d" | "timeseries"
-  //   col:    (array2d) índice da coluna a extrair
-  //   series: (timeseries) nome da série (ex "spend")
-  //   label, desc, fmt, canal, destaque
-  //   costInverted: se true, queda do valor é POSITIVA (verde)
-  var METRIC_CONFIG={
-    // ── Widget performance_by_platform: [reach, impressions, spend, cpm, clicks] ──
-    "perf_reach":      {ref:"fb_ads:performance_by_platform", type:"array2d", col:0,
-                        label:"Alcance Total", desc:"Pessoas únicas que viram os anúncios",
-                        fmt:"number", canal:"meta", destaque:true},
-    "perf_impressions":{ref:"fb_ads:performance_by_platform", type:"array2d", col:1,
-                        label:"Impressões", desc:"Vezes que o anúncio foi exibido",
-                        fmt:"number", canal:"meta", destaque:true},
-    "perf_spend":      {ref:"fb_ads:performance_by_platform", type:"array2d", col:2,
-                        label:"Investimento", desc:"Valor total investido no período",
-                        fmt:"currency", canal:"meta", destaque:true},
-    "perf_cpm":        {ref:"fb_ads:performance_by_platform", type:"array2d", col:3,
-                        label:"CPM", desc:"Custo para atingir mil pessoas",
-                        fmt:"currency", canal:"meta", destaque:false, costInverted:true},
-    "perf_clicks":     {ref:"fb_ads:performance_by_platform", type:"array2d", col:4,
-                        label:"Cliques Totais", desc:"Total de cliques nos anúncios",
-                        fmt:"number", canal:"meta", destaque:true},
-
-    // ── Métricas simples (TIPO 1) ──
-    "leads":           {ref:"fb_ads:facebook_leads", type:"simple",
-                        label:"Leads Gerados", desc:"Formulários preenchidos via anúncio",
-                        fmt:"number", canal:"meta", destaque:true},
-    "leads_cost":      {ref:"fb_ads:facebook_leads_cost", type:"simple",
-                        label:"CPL", desc:"Custo médio por lead gerado",
-                        fmt:"currency", canal:"meta", destaque:true, costInverted:true},
-    "purchase_roas":   {ref:"fb_ads:purchase_roas", type:"simple",
-                        label:"ROAS", desc:"Retorno por real investido",
-                        fmt:"decimal", canal:"meta", destaque:true},
-    "purchase_value":  {ref:"fb_ads:purchase_conversion_value", type:"simple",
-                        label:"Valor de Compras", desc:"Receita gerada pelas campanhas",
-                        fmt:"currency", canal:"meta", destaque:false},
-    "avg_ticket":      {ref:"fb_ads:average_ticket", type:"simple",
-                        label:"Ticket Médio", desc:"Valor médio por compra",
-                        fmt:"currency", canal:"meta", destaque:false},
-    "lp_conv_rate":    {ref:"fb_ads:landing_page_conversion_rate", type:"simple",
-                        label:"Taxa Conversão LP", desc:"% de visitantes que converteram",
-                        fmt:"percent", canal:"meta", destaque:false},
-    "video_view_rate": {ref:"fb_ads:video_view_rate", type:"simple",
-                        label:"Taxa View Vídeo", desc:"% dos vídeos assistidos",
-                        fmt:"percent", canal:"meta", destaque:false},
-    "connect_rate":    {ref:"fb_ads:connect_rate", type:"simple",
-                        label:"Taxa de Conexão", desc:"% de conexões bem-sucedidas",
-                        fmt:"percent", canal:"meta", destaque:false},
-
-    // ── Instagram ──
-    "ig_visits":       {ref:"fb_ads:instagram_profile_visits", type:"simple",
-                        label:"Visitas ao Perfil", desc:"Visitas ao perfil do Instagram",
-                        fmt:"number", canal:"instagram", destaque:true},
-    "ig_visits_cost":  {ref:"fb_ads:cost_per_instagram_profile_visits", type:"simple",
-                        label:"Custo p/ Visita IG", desc:"Custo por visita ao perfil",
-                        fmt:"currency", canal:"instagram", destaque:false, costInverted:true},
-    "roas_ig":         {ref:"fb_ads:roas_instagram", type:"simple",
-                        label:"ROAS Instagram", desc:"Retorno do investimento no Instagram",
-                        fmt:"decimal", canal:"instagram", destaque:true},
-
-    // ── Facebook ──
-    "roas_fb":         {ref:"fb_ads:roas_facebook", type:"simple",
-                        label:"ROAS Facebook", desc:"Retorno do investimento no Facebook",
-                        fmt:"decimal", canal:"facebook", destaque:true},
-
-    // ── Website / Compras ──
-    "website_roas":    {ref:"fb_ads:website_roas", type:"simple",
-                        label:"ROAS Website", desc:"Retorno via conversões no site",
-                        fmt:"decimal", canal:"meta", destaque:false},
-    "website_value":   {ref:"fb_ads:website_purchase_conversion_value", type:"simple",
-                        label:"Compras Website", desc:"Valor de compras via site",
-                        fmt:"currency", canal:"meta", destaque:false},
-
-    // ── Saldo ──
-    "balance":         {ref:"fb_ads:available_account_balance", type:"simple",
-                        label:"Saldo da Conta", desc:"Saldo disponível na conta de anúncios",
-                        fmt:"currency", canal:"meta", destaque:false},
+  // Config mínima: só 2 métricas-chave em cards resumidos em cima do iframe
+  var SUMMARY_METRICS={
+    "leads":      {ref:"fb_ads:facebook_leads",      label:"Leads", fmt:"number"},
+    "leads_cost": {ref:"fb_ads:facebook_leads_cost", label:"CPL",   fmt:"currency", costInverted:true},
   };
 
   useEffect(function(){
     if(!sb){setLoading(false);return;}
     setLoading(true);
+    setIframeLoaded(false);
+    setIframeFailed(false);
     sb.from("reportei_cache").select("client_id,data,updated_at").in("client_id",cacheIds)
       .then(function(r){
         var map={};
@@ -6479,23 +6405,26 @@ function CAnalises({cl,isMob}){
       }).catch(function(){setRows({});setLoading(false);});
   },[cl.id]);
 
+  // Reset do iframe ao trocar unidade do Bioter
+  useEffect(function(){
+    setIframeLoaded(false);
+    setIframeFailed(false);
+  },[bioterUnit]);
+
   var activeId=isBioter?"bioter_"+bioterUnit:cl.id;
   var row=rows&&rows[activeId];
   var reporteiUrl=REPORTEI_URLS[activeId];
 
-  // Detecta quais integrações o cliente tem na Reportei
-  var integrations=(row&&row.data&&row.data.metrics)?Object.keys(row.data.metrics):[];
-  var hasFacebookAds=integrations.indexOf("facebook_ads")>=0;
-  var hasOnlyFacebookPage=!hasFacebookAds&&integrations.indexOf("facebook")>=0;
-
-  // Procura o ID numérico duma métrica pela reference_key
-  function findEntryByRef(mmap,values,ref){
-    var id=null;
-    for(var k in mmap){if(mmap[k]===ref){id=k;break;}}
-    return id?values[id]:null;
+  // Busca reference_key no map e retorna a entrada do values
+  function findEntry(ref){
+    if(!row||!row.data||!row.data.metrics||!row.data.metrics.facebook_ads)return null;
+    var fbAds=row.data.metrics.facebook_ads;
+    var mmap=fbAds.metrics_map||{};
+    var values=fbAds.values||{};
+    for(var k in mmap){if(mmap[k]===ref)return values[k];}
+    return null;
   }
 
-  // Extração TIPO 1: {values:N, comparison:{difference:P}}
   function extractSimple(entry){
     if(!entry)return null;
     var cur=parseFloat(entry.values);
@@ -6508,48 +6437,6 @@ function CAnalises({cl,isMob}){
     return{value:cur,pct:pct};
   }
 
-  // Extração TIPO 2: {values:[[col0, col1, col2, ...]]} → pega values[0][col]
-  function extractArray2D(entry,col){
-    if(!entry||!entry.values||!Array.isArray(entry.values)||entry.values.length===0)return null;
-    var row0=entry.values[0];
-    if(!Array.isArray(row0)||col>=row0.length)return null;
-    var cur=parseFloat(row0[col]);
-    if(isNaN(cur))return null;
-    var pct=null;
-    // Tenta achar comparação no formato paralelo
-    if(entry.comparison){
-      var compDiff=entry.comparison.difference;
-      if(Array.isArray(compDiff)&&Array.isArray(compDiff[0])&&compDiff[0][col]!=null){
-        var p=parseFloat(compDiff[0][col]);
-        if(!isNaN(p))pct=p;
-      }
-    }
-    return{value:cur,pct:pct};
-  }
-
-  // Extração TIPO 3: {values:[{data:[...], name:"xxx"}]} → soma data da série
-  function extractTimeseries(entry,seriesName){
-    if(!entry||!entry.values||!Array.isArray(entry.values))return null;
-    var series=seriesName
-      ?entry.values.filter(function(s){return s.name===seriesName;})[0]
-      :entry.values[0];
-    if(!series||!Array.isArray(series.data))return null;
-    var sum=0;
-    for(var i=0;i<series.data.length;i++){
-      var n=parseFloat(series.data[i]);
-      if(!isNaN(n))sum+=n;
-    }
-    return{value:sum,pct:null};
-  }
-
-  function extractMetric(entry,config){
-    if(!config)return null;
-    if(config.type==="simple")return extractSimple(entry);
-    if(config.type==="array2d")return extractArray2D(entry,config.col);
-    if(config.type==="timeseries")return extractTimeseries(entry,config.series);
-    return null;
-  }
-
   function formatValue(value,fmt){
     if(fmt==="currency")return"R$ "+value.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
     if(fmt==="percent")return value.toFixed(2)+"%";
@@ -6559,57 +6446,37 @@ function CAnalises({cl,isMob}){
     return value.toLocaleString("pt-BR",{maximumFractionDigits:0});
   }
 
-  // Monta lista de métricas, iterando sobre METRIC_CONFIG e buscando cada uma
-  function buildMetrics(row,filtroCanal){
-    if(!row||!row.data||!row.data.metrics||!row.data.metrics.facebook_ads)return[];
-    var fbAds=row.data.metrics.facebook_ads;
-    var values=fbAds.values||{};
-    var mmap=fbAds.metrics_map||{};
-    var results=[];
-    Object.keys(METRIC_CONFIG).forEach(function(key){
-      var cfg=METRIC_CONFIG[key];
-      if(filtroCanal!=="geral"&&cfg.canal!==filtroCanal)return;
-      var entry=findEntryByRef(mmap,values,cfg.ref);
-      if(!entry)return;
-      var extracted=extractMetric(entry,cfg);
-      if(!extracted||extracted.value===0)return;
-      results.push({
-        key:key,label:cfg.label,desc:cfg.desc,fmt:cfg.fmt,
-        destaque:cfg.destaque,canal:cfg.canal,costInverted:!!cfg.costInverted,
-        value:extracted.value,formatted:formatValue(extracted.value,cfg.fmt),
-        pct:extracted.pct,
+  // Monta os 2 cards-resumo
+  function buildSummary(){
+    if(!row)return[];
+    var out=[];
+    Object.keys(SUMMARY_METRICS).forEach(function(k){
+      var cfg=SUMMARY_METRICS[k];
+      var ex=extractSimple(findEntry(cfg.ref));
+      if(!ex)return;
+      out.push({
+        key:k,label:cfg.label,fmt:cfg.fmt,costInverted:!!cfg.costInverted,
+        value:ex.value,formatted:formatValue(ex.value,cfg.fmt),pct:ex.pct,
       });
     });
-    // Destaques primeiro
-    results.sort(function(a,b){
-      if(a.destaque&&!b.destaque)return -1;
-      if(!a.destaque&&b.destaque)return 1;
-      return 0;
-    });
-    return results;
+    return out;
   }
 
-  var CANAIS=[
-    {id:"geral",label:"Geral",icon:"📊"},
-    {id:"meta",label:"Meta Ads",icon:"📘"},
-    {id:"instagram",label:"Instagram",icon:"📸"},
-    {id:"facebook",label:"Facebook",icon:"👥"},
-  ];
-
-  var metrics=row?buildMetrics(row,canal):[];
-  var destaques=metrics.filter(function(m){return m.destaque;});
-  var detalhes=metrics.filter(function(m){return !m.destaque;});
+  var summary=buildSummary();
 
   var updatedAt=row&&row.updated_at?
     new Date(row.updated_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):null;
   var period=row&&row.data&&row.data.period;
+
+  // Altura do iframe: mais alto no desktop
+  var iframeHeight=isMob?900:1400;
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
 
     {/* Sub-tabs Bioter */}
     {isBioter&&(<div style={{display:"flex",gap:6}}>
       {[{id:"chapeco",label:"Chapecó"},{id:"toledo",label:"Toledo"},{id:"castro",label:"Castro"}].map(function(u){
-        return(<button key={u.id} onClick={function(){setBioterUnit(u.id);setCanal("geral");}}
+        return(<button key={u.id} onClick={function(){setBioterUnit(u.id);}}
           style={{background:bioterUnit===u.id?cl.color+"22":"transparent",color:bioterUnit===u.id?cl.color:C.ts,
             border:"1px solid "+(bioterUnit===u.id?cl.color:C.b1),borderRadius:20,padding:"5px 14px",
             fontSize:11,fontWeight:bioterUnit===u.id?700:400,cursor:"pointer"}}>
@@ -6628,82 +6495,24 @@ function CAnalises({cl,isMob}){
         </div>}
       </div>
       {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
-        style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"6px 14px",
-          color:C.ts,fontSize:11,fontWeight:600,textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
-        ↗ Ver no Reportei
+        style={{background:C.a,border:"1px solid "+C.a,borderRadius:8,padding:"7px 16px",
+          color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none",
+          display:"flex",alignItems:"center",gap:5}}>
+        ↗ Abrir no Reportei
       </a>)}
     </div>
 
-    {/* Sub-abas de canal */}
-    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1}}>
-      {CANAIS.map(function(c){
-        var ativo=canal===c.id;
-        return(<button key={c.id} onClick={function(){setCanal(c.id);}}
-          style={{background:"none",border:"none",
-            borderBottom:ativo?"2px solid "+cl.color:"2px solid transparent",
-            padding:"8px 16px",color:ativo?cl.color:C.ts,
-            fontWeight:ativo?700:400,fontSize:12,cursor:"pointer",
-            whiteSpace:"nowrap",marginBottom:-1,display:"flex",alignItems:"center",gap:5}}>
-          <span>{c.icon}</span>{c.label}
-        </button>);
-      })}
-    </div>
-
-    {/* Loading */}
+    {/* Loading inicial do Supabase */}
     {loading&&(<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:48,gap:10,color:C.td}}>
       <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,
         borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
       Buscando dados...
     </div>)}
 
-    {/* Sem row algum na tabela */}
-    {!loading&&!row&&(<div style={{textAlign:"center",padding:48}}>
-      <div style={{fontSize:40,marginBottom:12}}>📡</div>
-      <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>Sem dados sincronizados</div>
-      <div style={{color:C.td,fontSize:12,marginBottom:16}}>Execute a Edge Function sync-reportei no Supabase para sincronizar os dados.</div>
-      {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
-        style={{display:"inline-block",background:cl.color,color:"#fff",borderRadius:8,
-          padding:"9px 22px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
-        Ver no Reportei ↗
-      </a>)}
-    </div>)}
-
-    {/* Só tem página orgânica do Facebook — precisa conectar Ads */}
-    {!loading&&row&&hasOnlyFacebookPage&&(<div style={{textAlign:"center",padding:40,
-        background:C.yw+"10",border:"1px solid "+C.yw+"44",borderRadius:14}}>
-      <div style={{fontSize:40,marginBottom:12}}>📘</div>
-      <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>
-        Conta de Anúncios não conectada
-      </div>
-      <div style={{color:C.td,fontSize:12,marginBottom:16,maxWidth:440,margin:"0 auto 16px"}}>
-        Este cliente tem apenas a <b>página do Facebook</b> conectada no Reportei,
-        sem a <b>conta de Meta Ads</b>. Para ver dados de campanhas pagas,
-        conecte a conta de anúncios diretamente no Reportei.
-      </div>
-      {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
-        style={{display:"inline-block",background:cl.color,color:"#fff",borderRadius:8,
-          padding:"9px 22px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
-        Configurar no Reportei ↗
-      </a>)}
-    </div>)}
-
-    {/* Tem facebook_ads mas não achou nenhuma métrica pro canal */}
-    {!loading&&row&&hasFacebookAds&&metrics.length===0&&(<div style={{textAlign:"center",padding:48}}>
-      <div style={{fontSize:40,marginBottom:12}}>📭</div>
-      <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>
-        Sem dados para {CANAIS.filter(function(c){return c.id===canal;})[0]?.label||canal}
-      </div>
-      <div style={{color:C.td,fontSize:12}}>
-        {canal==="instagram"?"Verifique se há campanhas ativas no Instagram no período.":
-         canal==="facebook"?"Verifique se há campanhas ativas no Facebook no período.":
-         "Nenhuma métrica com valor maior que zero no período selecionado."}
-      </div>
-    </div>)}
-
-    {/* Cards de destaque */}
-    {!loading&&destaques.length>0&&(<div style={{display:"grid",
-        gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(170px,1fr))",gap:12}}>
-      {destaques.map(function(m){
+    {/* 2 cards resumidos (só se houver dados) */}
+    {!loading&&summary.length>0&&(<div style={{display:"grid",
+        gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
+      {summary.map(function(m){
         var positivo=m.pct===null?null:(m.costInverted?m.pct<=0:m.pct>=0);
         return(<div key={m.key} style={{background:C.card,borderRadius:14,
             border:"1px solid "+C.b1,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
@@ -6711,10 +6520,9 @@ function CAnalises({cl,isMob}){
             background:cl.color,borderRadius:"14px 14px 0 0"}}/>
           <div style={{color:C.td,fontSize:10,fontWeight:600,
             textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>{m.label}</div>
-          <div style={{color:C.tx,fontWeight:800,fontSize:22,letterSpacing:-.5,marginBottom:4}}>
+          <div style={{color:C.tx,fontWeight:800,fontSize:26,letterSpacing:-.5,marginBottom:4}}>
             {m.formatted}
           </div>
-          <div style={{color:C.td,fontSize:10,marginBottom:m.pct!==null?6:0}}>{m.desc}</div>
           {m.pct!==null&&(<div style={{display:"flex",alignItems:"center",gap:4}}>
             <span style={{color:positivo?C.gr:C.rd,fontSize:11,fontWeight:700}}>
               {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
@@ -6725,32 +6533,52 @@ function CAnalises({cl,isMob}){
       })}
     </div>)}
 
-    {/* Cards de detalhe */}
-    {!loading&&detalhes.length>0&&(<div style={{background:C.card,borderRadius:14,
-        border:"1px solid "+C.b1,overflow:"hidden"}}>
-      <div style={{padding:"12px 18px",borderBottom:"1px solid "+C.b1,
-        color:C.tx,fontWeight:700,fontSize:12}}>Métricas Detalhadas</div>
-      <div style={{display:"grid",
-        gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(200px,1fr))"}}>
-        {detalhes.map(function(m,i){
-          var positivo=m.pct===null?null:(m.costInverted?m.pct<=0:m.pct>=0);
-          return(<div key={m.key} style={{padding:"14px 18px",
-              borderBottom:"1px solid "+C.b1+"44",
-              borderRight:i%2===0&&!isMob?"1px solid "+C.b1+"44":"none"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
-              <div>
-                <div style={{color:C.td,fontSize:10,marginBottom:4}}>{m.label}</div>
-                <div style={{color:C.tx,fontWeight:700,fontSize:16}}>{m.formatted}</div>
-                <div style={{color:C.td,fontSize:10,marginTop:3}}>{m.desc}</div>
-              </div>
-              {m.pct!==null&&(<div style={{textAlign:"right",flexShrink:0}}>
-                <span style={{color:positivo?C.gr:C.rd,fontSize:11,fontWeight:700}}>
-                  {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
-                </span>
-              </div>)}
-            </div>
-          </div>);
-        })}
+    {/* Container do iframe do Reportei */}
+    {!loading&&reporteiUrl&&!iframeFailed&&(<div style={{position:"relative",
+        background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
+      {/* Loading overlay enquanto o iframe carrega */}
+      {!iframeLoaded&&(<div style={{position:"absolute",inset:0,
+          display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+          background:C.card,color:C.td,zIndex:1}}>
+        <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,
+          borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
+        Carregando dashboard Reportei...
+      </div>)}
+      <iframe
+        src={reporteiUrl}
+        title={"Dashboard Reportei — "+cl.name}
+        onLoad={function(){setIframeLoaded(true);}}
+        onError={function(){setIframeFailed(true);}}
+        style={{width:"100%",height:iframeHeight,border:"none",display:"block",
+          background:"#fff"}}
+        allow="clipboard-write"
+      />
+    </div>)}
+
+    {/* Fallback: se o iframe falhar (CSP/X-Frame-Options), mostra card com link */}
+    {!loading&&reporteiUrl&&iframeFailed&&(<div style={{textAlign:"center",padding:48,
+        background:C.card,borderRadius:14,border:"1px solid "+C.b1}}>
+      <div style={{fontSize:40,marginBottom:12}}>📊</div>
+      <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>
+        Dashboard Reportei
+      </div>
+      <div style={{color:C.td,fontSize:12,marginBottom:16,maxWidth:400,margin:"0 auto 16px"}}>
+        O Reportei não permite embed — abra em nova aba pra ver todos os dados completos,
+        gráficos e comparações.
+      </div>
+      <a href={reporteiUrl} target="_blank" rel="noreferrer"
+        style={{display:"inline-block",background:cl.color,color:"#fff",borderRadius:8,
+          padding:"11px 26px",fontSize:13,fontWeight:700,textDecoration:"none"}}>
+        Abrir Dashboard ↗
+      </a>
+    </div>)}
+
+    {/* Sem URL Reportei configurada */}
+    {!loading&&!reporteiUrl&&(<div style={{textAlign:"center",padding:48,
+        background:C.card,borderRadius:14,border:"1px solid "+C.b1}}>
+      <div style={{fontSize:40,marginBottom:12}}>📡</div>
+      <div style={{color:C.tx,fontWeight:700,fontSize:15}}>
+        Sem dashboard Reportei configurado pra este cliente
       </div>
     </div>)}
 
