@@ -6359,7 +6359,13 @@ function PageClientes({isMob, tasks}){
 
 // ======= 03_cliente_detalhe.jsx =======
 
-/* ── CAnalises — Dados reais do Reportei via Supabase ── */
+/* ── CAnalises — Dados reais do Reportei via Supabase ──
+   Atualizado em 2026-04-19 pra consumir a API v2 da Reportei, que usa
+   "widgets de dashboard" em vez de métricas simples.
+   Formatos suportados:
+     - simple:     {values: 123,  comparison: {difference: -10}}
+     - array2d:    {values: [["85301","175914",...]]}  — extrai coluna específica
+     - timeseries: {labels: [...], values: [{data:["123"], name:"spend"}]}  — soma data[] */
 function CAnalises({cl,isMob}){
   var sb=window._sb;
   var [rows,setRows]=useState(null);
@@ -6380,33 +6386,85 @@ function CAnalises({cl,isMob}){
     arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
   };
 
-  // Configuração de cada métrica com label, descrição, tipo e canal
-  var METRICAS={
-    // ── GERAL / META ADS ──
-    "fb_ads:spend":{label:"Investimento Total",desc:"Total investido no período",fmt:"currency",canal:"meta",destaque:true},
-    "fb_ads:reach":{label:"Alcance Total",desc:"Pessoas únicas que viram seus anúncios",fmt:"number",canal:"meta",destaque:true},
-    "fb_ads:impressions":{label:"Impressões Totais",desc:"Vezes que o anúncio foi exibido",fmt:"number",canal:"meta",destaque:true},
-    "fb_ads:inline_link_clicks":{label:"Cliques no Link",desc:"Pessoas que clicaram no link do anúncio",fmt:"number",canal:"meta",destaque:true},
-    "fb_ads:actions_lead":{label:"Leads Gerados",desc:"Formulários preenchidos via anúncio",fmt:"number",canal:"meta",destaque:true},
-    "fb_ads:actions_cost_per_lead":{label:"CPL",desc:"Custo médio por lead gerado",fmt:"currency",canal:"meta",destaque:true},
-    "fb_ads:ctr":{label:"CTR",desc:"% de pessoas que clicaram ao ver o anúncio",fmt:"percent",canal:"meta",destaque:false},
-    "fb_ads:cpc":{label:"CPC",desc:"Custo médio por clique",fmt:"currency",canal:"meta",destaque:false},
-    "fb_ads:cpm":{label:"CPM",desc:"Custo para atingir mil pessoas",fmt:"currency",canal:"meta",destaque:false},
-    "fb_ads:frequency":{label:"Frequência",desc:"Média de vezes que a mesma pessoa viu o anúncio (ideal: 1.5–3x)",fmt:"decimal",canal:"meta",destaque:false},
-    "fb_ads:actions_video_view":{label:"Views de Vídeo",desc:"Visualizações nos vídeos dos anúncios",fmt:"number",canal:"meta",destaque:false},
-    "fb_ads:actions_post_engagement":{label:"Engajamento",desc:"Total de interações com os anúncios",fmt:"number",canal:"meta",destaque:false},
-    // ── INSTAGRAM ──
-    "fb_ads:spend_instagram":{label:"Invest. Instagram",desc:"Valor investido em anúncios no Instagram",fmt:"currency",canal:"instagram",destaque:true},
-    "fb_ads:reach_instagram":{label:"Alcance Instagram",desc:"Pessoas únicas alcançadas no Instagram",fmt:"number",canal:"instagram",destaque:true},
-    "fb_ads:impressions_instagram":{label:"Impressões Instagram",desc:"Exibições totais no Instagram",fmt:"number",canal:"instagram",destaque:true},
-    // ── FACEBOOK ──
-    "fb_ads:spend_facebook":{label:"Invest. Facebook",desc:"Valor investido em anúncios no Facebook",fmt:"currency",canal:"facebook",destaque:true},
-    "fb_ads:reach_facebook":{label:"Alcance Facebook",desc:"Pessoas únicas alcançadas no Facebook",fmt:"number",canal:"facebook",destaque:true},
-    "fb_ads:impressions_facebook":{label:"Impressões Facebook",desc:"Exibições totais no Facebook",fmt:"number",canal:"facebook",destaque:true},
-    "fb_ads:actions_page_engagement":{label:"Engajamento FB",desc:"Total de interações na página do Facebook",fmt:"number",canal:"facebook",destaque:false},
-    // ── OUTROS ──
-    "fb_ads:actions_contacts":{label:"Contatos Iniciados",desc:"Mensagens iniciadas via anúncio",fmt:"number",canal:"meta",destaque:false},
-    "fb_ads:clicks":{label:"Cliques Totais",desc:"Total de cliques (todos os tipos)",fmt:"number",canal:"meta",destaque:false},
+  // Config de cada widget. Cada entrada:
+  //   ref:    reference_key na Reportei v2
+  //   type:   "simple" | "array2d" | "timeseries"
+  //   col:    (array2d) índice da coluna a extrair
+  //   series: (timeseries) nome da série (ex "spend")
+  //   label, desc, fmt, canal, destaque
+  //   costInverted: se true, queda do valor é POSITIVA (verde)
+  var METRIC_CONFIG={
+    // ── Widget performance_by_platform: [reach, impressions, spend, cpm, clicks] ──
+    "perf_reach":      {ref:"fb_ads:performance_by_platform", type:"array2d", col:0,
+                        label:"Alcance Total", desc:"Pessoas únicas que viram os anúncios",
+                        fmt:"number", canal:"meta", destaque:true},
+    "perf_impressions":{ref:"fb_ads:performance_by_platform", type:"array2d", col:1,
+                        label:"Impressões", desc:"Vezes que o anúncio foi exibido",
+                        fmt:"number", canal:"meta", destaque:true},
+    "perf_spend":      {ref:"fb_ads:performance_by_platform", type:"array2d", col:2,
+                        label:"Investimento", desc:"Valor total investido no período",
+                        fmt:"currency", canal:"meta", destaque:true},
+    "perf_cpm":        {ref:"fb_ads:performance_by_platform", type:"array2d", col:3,
+                        label:"CPM", desc:"Custo para atingir mil pessoas",
+                        fmt:"currency", canal:"meta", destaque:false, costInverted:true},
+    "perf_clicks":     {ref:"fb_ads:performance_by_platform", type:"array2d", col:4,
+                        label:"Cliques Totais", desc:"Total de cliques nos anúncios",
+                        fmt:"number", canal:"meta", destaque:true},
+
+    // ── Métricas simples (TIPO 1) ──
+    "leads":           {ref:"fb_ads:facebook_leads", type:"simple",
+                        label:"Leads Gerados", desc:"Formulários preenchidos via anúncio",
+                        fmt:"number", canal:"meta", destaque:true},
+    "leads_cost":      {ref:"fb_ads:facebook_leads_cost", type:"simple",
+                        label:"CPL", desc:"Custo médio por lead gerado",
+                        fmt:"currency", canal:"meta", destaque:true, costInverted:true},
+    "purchase_roas":   {ref:"fb_ads:purchase_roas", type:"simple",
+                        label:"ROAS", desc:"Retorno por real investido",
+                        fmt:"decimal", canal:"meta", destaque:true},
+    "purchase_value":  {ref:"fb_ads:purchase_conversion_value", type:"simple",
+                        label:"Valor de Compras", desc:"Receita gerada pelas campanhas",
+                        fmt:"currency", canal:"meta", destaque:false},
+    "avg_ticket":      {ref:"fb_ads:average_ticket", type:"simple",
+                        label:"Ticket Médio", desc:"Valor médio por compra",
+                        fmt:"currency", canal:"meta", destaque:false},
+    "lp_conv_rate":    {ref:"fb_ads:landing_page_conversion_rate", type:"simple",
+                        label:"Taxa Conversão LP", desc:"% de visitantes que converteram",
+                        fmt:"percent", canal:"meta", destaque:false},
+    "video_view_rate": {ref:"fb_ads:video_view_rate", type:"simple",
+                        label:"Taxa View Vídeo", desc:"% dos vídeos assistidos",
+                        fmt:"percent", canal:"meta", destaque:false},
+    "connect_rate":    {ref:"fb_ads:connect_rate", type:"simple",
+                        label:"Taxa de Conexão", desc:"% de conexões bem-sucedidas",
+                        fmt:"percent", canal:"meta", destaque:false},
+
+    // ── Instagram ──
+    "ig_visits":       {ref:"fb_ads:instagram_profile_visits", type:"simple",
+                        label:"Visitas ao Perfil", desc:"Visitas ao perfil do Instagram",
+                        fmt:"number", canal:"instagram", destaque:true},
+    "ig_visits_cost":  {ref:"fb_ads:cost_per_instagram_profile_visits", type:"simple",
+                        label:"Custo p/ Visita IG", desc:"Custo por visita ao perfil",
+                        fmt:"currency", canal:"instagram", destaque:false, costInverted:true},
+    "roas_ig":         {ref:"fb_ads:roas_instagram", type:"simple",
+                        label:"ROAS Instagram", desc:"Retorno do investimento no Instagram",
+                        fmt:"decimal", canal:"instagram", destaque:true},
+
+    // ── Facebook ──
+    "roas_fb":         {ref:"fb_ads:roas_facebook", type:"simple",
+                        label:"ROAS Facebook", desc:"Retorno do investimento no Facebook",
+                        fmt:"decimal", canal:"facebook", destaque:true},
+
+    // ── Website / Compras ──
+    "website_roas":    {ref:"fb_ads:website_roas", type:"simple",
+                        label:"ROAS Website", desc:"Retorno via conversões no site",
+                        fmt:"decimal", canal:"meta", destaque:false},
+    "website_value":   {ref:"fb_ads:website_purchase_conversion_value", type:"simple",
+                        label:"Compras Website", desc:"Valor de compras via site",
+                        fmt:"currency", canal:"meta", destaque:false},
+
+    // ── Saldo ──
+    "balance":         {ref:"fb_ads:available_account_balance", type:"simple",
+                        label:"Saldo da Conta", desc:"Saldo disponível na conta de anúncios",
+                        fmt:"currency", canal:"meta", destaque:false},
   };
 
   useEffect(function(){
@@ -6425,15 +6483,71 @@ function CAnalises({cl,isMob}){
   var row=rows&&rows[activeId];
   var reporteiUrl=REPORTEI_URLS[activeId];
 
-  // Extrai valor e variação do formato REAL do Supabase:
-  // { values: "123" | 123, comparison: { difference: -81.89 } }
-  function extractMetric(entry){
+  // Detecta quais integrações o cliente tem na Reportei
+  var integrations=(row&&row.data&&row.data.metrics)?Object.keys(row.data.metrics):[];
+  var hasFacebookAds=integrations.indexOf("facebook_ads")>=0;
+  var hasOnlyFacebookPage=!hasFacebookAds&&integrations.indexOf("facebook")>=0;
+
+  // Procura o ID numérico duma métrica pela reference_key
+  function findEntryByRef(mmap,values,ref){
+    var id=null;
+    for(var k in mmap){if(mmap[k]===ref){id=k;break;}}
+    return id?values[id]:null;
+  }
+
+  // Extração TIPO 1: {values:N, comparison:{difference:P}}
+  function extractSimple(entry){
     if(!entry)return null;
     var cur=parseFloat(entry.values);
     if(isNaN(cur))return null;
-    var pct=entry.comparison&&entry.comparison.difference!==null?
-      parseFloat(entry.comparison.difference):null;
-    return{value:cur,pct:isNaN(pct)?null:pct};
+    var pct=null;
+    if(entry.comparison&&entry.comparison.difference!=null){
+      var p=parseFloat(entry.comparison.difference);
+      if(!isNaN(p))pct=p;
+    }
+    return{value:cur,pct:pct};
+  }
+
+  // Extração TIPO 2: {values:[[col0, col1, col2, ...]]} → pega values[0][col]
+  function extractArray2D(entry,col){
+    if(!entry||!entry.values||!Array.isArray(entry.values)||entry.values.length===0)return null;
+    var row0=entry.values[0];
+    if(!Array.isArray(row0)||col>=row0.length)return null;
+    var cur=parseFloat(row0[col]);
+    if(isNaN(cur))return null;
+    var pct=null;
+    // Tenta achar comparação no formato paralelo
+    if(entry.comparison){
+      var compDiff=entry.comparison.difference;
+      if(Array.isArray(compDiff)&&Array.isArray(compDiff[0])&&compDiff[0][col]!=null){
+        var p=parseFloat(compDiff[0][col]);
+        if(!isNaN(p))pct=p;
+      }
+    }
+    return{value:cur,pct:pct};
+  }
+
+  // Extração TIPO 3: {values:[{data:[...], name:"xxx"}]} → soma data da série
+  function extractTimeseries(entry,seriesName){
+    if(!entry||!entry.values||!Array.isArray(entry.values))return null;
+    var series=seriesName
+      ?entry.values.filter(function(s){return s.name===seriesName;})[0]
+      :entry.values[0];
+    if(!series||!Array.isArray(series.data))return null;
+    var sum=0;
+    for(var i=0;i<series.data.length;i++){
+      var n=parseFloat(series.data[i]);
+      if(!isNaN(n))sum+=n;
+    }
+    return{value:sum,pct:null};
+  }
+
+  function extractMetric(entry,config){
+    if(!config)return null;
+    if(config.type==="simple")return extractSimple(entry);
+    if(config.type==="array2d")return extractArray2D(entry,config.col);
+    if(config.type==="timeseries")return extractTimeseries(entry,config.series);
+    return null;
   }
 
   function formatValue(value,fmt){
@@ -6445,28 +6559,28 @@ function CAnalises({cl,isMob}){
     return value.toLocaleString("pt-BR",{maximumFractionDigits:0});
   }
 
-  // Monta lista de métricas com dados reais
+  // Monta lista de métricas, iterando sobre METRIC_CONFIG e buscando cada uma
   function buildMetrics(row,filtroCanal){
     if(!row||!row.data||!row.data.metrics||!row.data.metrics.facebook_ads)return[];
     var fbAds=row.data.metrics.facebook_ads;
     var values=fbAds.values||{};
     var mmap=fbAds.metrics_map||{};
     var results=[];
-    Object.entries(mmap).forEach(function(e){
-      var id=e[0];var slug=e[1];
-      var cfg=METRICAS[slug];
-      if(!cfg)return;
+    Object.keys(METRIC_CONFIG).forEach(function(key){
+      var cfg=METRIC_CONFIG[key];
       if(filtroCanal!=="geral"&&cfg.canal!==filtroCanal)return;
-      var extracted=extractMetric(values[id]);
+      var entry=findEntryByRef(mmap,values,cfg.ref);
+      if(!entry)return;
+      var extracted=extractMetric(entry,cfg);
       if(!extracted||extracted.value===0)return;
       results.push({
-        slug,label:cfg.label,desc:cfg.desc,fmt:cfg.fmt,
-        destaque:cfg.destaque,canal:cfg.canal,
+        key:key,label:cfg.label,desc:cfg.desc,fmt:cfg.fmt,
+        destaque:cfg.destaque,canal:cfg.canal,costInverted:!!cfg.costInverted,
         value:extracted.value,formatted:formatValue(extracted.value,cfg.fmt),
         pct:extracted.pct,
       });
     });
-    // Ordenar: destaques primeiro, depois por valor absoluto
+    // Destaques primeiro
     results.sort(function(a,b){
       if(a.destaque&&!b.destaque)return -1;
       if(!a.destaque&&b.destaque)return 1;
@@ -6542,7 +6656,7 @@ function CAnalises({cl,isMob}){
       Buscando dados...
     </div>)}
 
-    {/* Sem dados */}
+    {/* Sem row algum na tabela */}
     {!loading&&!row&&(<div style={{textAlign:"center",padding:48}}>
       <div style={{fontSize:40,marginBottom:12}}>📡</div>
       <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>Sem dados sincronizados</div>
@@ -6554,16 +6668,35 @@ function CAnalises({cl,isMob}){
       </a>)}
     </div>)}
 
-    {/* Sem métricas no canal selecionado */}
-    {!loading&&row&&metrics.length===0&&(<div style={{textAlign:"center",padding:48}}>
+    {/* Só tem página orgânica do Facebook — precisa conectar Ads */}
+    {!loading&&row&&hasOnlyFacebookPage&&(<div style={{textAlign:"center",padding:40,
+        background:C.yw+"10",border:"1px solid "+C.yw+"44",borderRadius:14}}>
+      <div style={{fontSize:40,marginBottom:12}}>📘</div>
+      <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>
+        Conta de Anúncios não conectada
+      </div>
+      <div style={{color:C.td,fontSize:12,marginBottom:16,maxWidth:440,margin:"0 auto 16px"}}>
+        Este cliente tem apenas a <b>página do Facebook</b> conectada no Reportei,
+        sem a <b>conta de Meta Ads</b>. Para ver dados de campanhas pagas,
+        conecte a conta de anúncios diretamente no Reportei.
+      </div>
+      {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
+        style={{display:"inline-block",background:cl.color,color:"#fff",borderRadius:8,
+          padding:"9px 22px",fontSize:12,fontWeight:700,textDecoration:"none"}}>
+        Configurar no Reportei ↗
+      </a>)}
+    </div>)}
+
+    {/* Tem facebook_ads mas não achou nenhuma métrica pro canal */}
+    {!loading&&row&&hasFacebookAds&&metrics.length===0&&(<div style={{textAlign:"center",padding:48}}>
       <div style={{fontSize:40,marginBottom:12}}>📭</div>
       <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>
-        Sem dados para {CANAIS.find(function(c){return c.id===canal;})?.label||canal}
+        Sem dados para {CANAIS.filter(function(c){return c.id===canal;})[0]?.label||canal}
       </div>
       <div style={{color:C.td,fontSize:12}}>
-        {canal==="instagram"?"Verifique se a integração do Instagram está conectada no Reportei.":
-         canal==="facebook"?"Verifique se a integração do Facebook está conectada no Reportei.":
-         "Nenhuma métrica disponível para o período selecionado."}
+        {canal==="instagram"?"Verifique se há campanhas ativas no Instagram no período.":
+         canal==="facebook"?"Verifique se há campanhas ativas no Facebook no período.":
+         "Nenhuma métrica com valor maior que zero no período selecionado."}
       </div>
     </div>)}
 
@@ -6571,12 +6704,8 @@ function CAnalises({cl,isMob}){
     {!loading&&destaques.length>0&&(<div style={{display:"grid",
         gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(170px,1fr))",gap:12}}>
       {destaques.map(function(m){
-        var positivo=m.pct===null?null:
-          // Para custo (currency), queda é boa; para o resto, alta é boa
-          (m.fmt==="currency"&&["fb_ads:cpc","fb_ads:cpm","fb_ads:actions_cost_per_lead",
-            "fb_ads:spend_instagram","fb_ads:spend_facebook","fb_ads:spend"].includes(m.slug))?
-          m.pct<=0:m.pct>=0;
-        return(<div key={m.slug} style={{background:C.card,borderRadius:14,
+        var positivo=m.pct===null?null:(m.costInverted?m.pct<=0:m.pct>=0);
+        return(<div key={m.key} style={{background:C.card,borderRadius:14,
             border:"1px solid "+C.b1,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,
             background:cl.color,borderRadius:"14px 14px 0 0"}}/>
@@ -6604,9 +6733,8 @@ function CAnalises({cl,isMob}){
       <div style={{display:"grid",
         gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(200px,1fr))"}}>
         {detalhes.map(function(m,i){
-          var positivo=m.pct===null?null:
-            (m.fmt==="currency")?m.pct<=0:m.pct>=0;
-          return(<div key={m.slug} style={{padding:"14px 18px",
+          var positivo=m.pct===null?null:(m.costInverted?m.pct<=0:m.pct>=0);
+          return(<div key={m.key} style={{padding:"14px 18px",
               borderBottom:"1px solid "+C.b1+"44",
               borderRight:i%2===0&&!isMob?"1px solid "+C.b1+"44":"none"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
