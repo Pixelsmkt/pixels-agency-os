@@ -6385,12 +6385,6 @@ function CAnalises({cl,isMob}){
     arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
   };
 
-  // Config mínima: só 2 métricas-chave em cards resumidos em cima do iframe
-  var SUMMARY_METRICS={
-    "leads":      {ref:"fb_ads:facebook_leads",      label:"Leads", fmt:"number"},
-    "leads_cost": {ref:"fb_ads:facebook_leads_cost", label:"CPL",   fmt:"currency", costInverted:true},
-  };
-
   useEffect(function(){
     if(!sb){setLoading(false);return;}
     setLoading(true);
@@ -6414,55 +6408,6 @@ function CAnalises({cl,isMob}){
   var activeId=isBioter?"bioter_"+bioterUnit:cl.id;
   var row=rows&&rows[activeId];
   var reporteiUrl=REPORTEI_URLS[activeId];
-
-  // Busca reference_key no map e retorna a entrada do values
-  function findEntry(ref){
-    if(!row||!row.data||!row.data.metrics||!row.data.metrics.facebook_ads)return null;
-    var fbAds=row.data.metrics.facebook_ads;
-    var mmap=fbAds.metrics_map||{};
-    var values=fbAds.values||{};
-    for(var k in mmap){if(mmap[k]===ref)return values[k];}
-    return null;
-  }
-
-  function extractSimple(entry){
-    if(!entry)return null;
-    var cur=parseFloat(entry.values);
-    if(isNaN(cur))return null;
-    var pct=null;
-    if(entry.comparison&&entry.comparison.difference!=null){
-      var p=parseFloat(entry.comparison.difference);
-      if(!isNaN(p))pct=p;
-    }
-    return{value:cur,pct:pct};
-  }
-
-  function formatValue(value,fmt){
-    if(fmt==="currency")return"R$ "+value.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
-    if(fmt==="percent")return value.toFixed(2)+"%";
-    if(fmt==="decimal")return value.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
-    if(value>=1000000)return(value/1000000).toFixed(1)+"M";
-    if(value>=1000)return value.toLocaleString("pt-BR",{maximumFractionDigits:0});
-    return value.toLocaleString("pt-BR",{maximumFractionDigits:0});
-  }
-
-  // Monta os 2 cards-resumo
-  function buildSummary(){
-    if(!row)return[];
-    var out=[];
-    Object.keys(SUMMARY_METRICS).forEach(function(k){
-      var cfg=SUMMARY_METRICS[k];
-      var ex=extractSimple(findEntry(cfg.ref));
-      if(!ex)return;
-      out.push({
-        key:k,label:cfg.label,fmt:cfg.fmt,costInverted:!!cfg.costInverted,
-        value:ex.value,formatted:formatValue(ex.value,cfg.fmt),pct:ex.pct,
-      });
-    });
-    return out;
-  }
-
-  var summary=buildSummary();
 
   var updatedAt=row&&row.updated_at?
     new Date(row.updated_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):null;
@@ -6507,30 +6452,6 @@ function CAnalises({cl,isMob}){
       <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,
         borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
       Buscando dados...
-    </div>)}
-
-    {/* 2 cards resumidos (só se houver dados) */}
-    {!loading&&summary.length>0&&(<div style={{display:"grid",
-        gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(200px,1fr))",gap:12}}>
-      {summary.map(function(m){
-        var positivo=m.pct===null?null:(m.costInverted?m.pct<=0:m.pct>=0);
-        return(<div key={m.key} style={{background:C.card,borderRadius:14,
-            border:"1px solid "+C.b1,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
-          <div style={{position:"absolute",top:0,left:0,right:0,height:3,
-            background:cl.color,borderRadius:"14px 14px 0 0"}}/>
-          <div style={{color:C.td,fontSize:10,fontWeight:600,
-            textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>{m.label}</div>
-          <div style={{color:C.tx,fontWeight:800,fontSize:26,letterSpacing:-.5,marginBottom:4}}>
-            {m.formatted}
-          </div>
-          {m.pct!==null&&(<div style={{display:"flex",alignItems:"center",gap:4}}>
-            <span style={{color:positivo?C.gr:C.rd,fontSize:11,fontWeight:700}}>
-              {m.pct>=0?"▲":"▼"}{Math.abs(m.pct).toFixed(1)}%
-            </span>
-            <span style={{color:C.td,fontSize:10}}>vs mês anterior</span>
-          </div>)}
-        </div>);
-      })}
     </div>)}
 
     {/* Container do iframe do Reportei */}
