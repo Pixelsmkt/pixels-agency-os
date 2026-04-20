@@ -18790,6 +18790,24 @@ function PagePortalCliente({isMob, tasks, initTab, lockedClientId}){
   },[lockedClientId]);
   const [tab,setTab]=useState(initTab||"dashboard");
   const [analisesSub,setAnalisesSub]=useState("trafego");
+  // Portal Análises — iframe do Reportei
+  const [portalBioterUnit,setPortalBioterUnit]=useState("chapeco");
+  const [portalIframeLoaded,setPortalIframeLoaded]=useState(false);
+  const [portalIframeFailed,setPortalIframeFailed]=useState(false);
+  const PORTAL_REPORTEI_URLS={
+    bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",
+    bioter_toledo:"https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",
+    bioter_castro:"https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",
+    climaves:"https://app.reportei.com/dashboard/h3MihpaCfhBoVdMvEgc9fHI1T6TzODBR",
+    vetservice:"https://app.reportei.com/dashboard/G42f7UB5R7V68m9BFDobFlW61f5ujXiX",
+    construschorr:"https://app.reportei.com/dashboard/4q3Ubekgg97cstORgg5yPBcR8Zvr3Jv3",
+    arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
+  };
+  // Reset do iframe ao trocar cliente ou unidade Bioter
+  useEffect(()=>{
+    setPortalIframeLoaded(false);
+    setPortalIframeFailed(false);
+  },[selCl,portalBioterUnit]);
 
   const cl=CLIENTS.find(c=>c.id===selCl);
   // Guard: só inclui tarefas se selCl é válido (evita match com client=="")
@@ -19003,97 +19021,95 @@ function PagePortalCliente({isMob, tasks, initTab, lockedClientId}){
       </div>
     )}
 
-    {/* ── ANÁLISES ── */}
-    {tab==="analises"&&(
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {/* Sub-tabs */}
-        <div style={{display:"flex",gap:3,background:C.s1,borderRadius:10,padding:3,alignSelf:"flex-start"}}>
-          {[["trafego","📊 Tráfego Pago"],["social","📱 Redes Sociais"]].map(([id,lbl])=>(
-            <button key={id} onClick={()=>setAnalisesSub(id)}
-              style={{background:analisesSub===id?cl.color:"transparent",color:analisesSub===id?"#fff":C.ts,border:"none",borderRadius:7,padding:"8px 16px",fontSize:12,fontWeight:analisesSub===id?700:400,cursor:"pointer",transition:"all .15s"}}>
-              {lbl}
+    {/* ── ANÁLISES — Dashboard Reportei embedado ── */}
+    {tab==="analises"&&(()=>{
+      const isBioter=cl.id==="bioter";
+      const activePortalId=isBioter?"bioter_"+portalBioterUnit:cl.id;
+      const portalReporteiUrl=PORTAL_REPORTEI_URLS[activePortalId];
+      const iframeH=isMob?900:1400;
+      return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+        {/* Sub-tabs Bioter (3 unidades) */}
+        {isBioter&&(<div style={{display:"flex",gap:6}}>
+          {[{id:"chapeco",label:"Chapecó"},{id:"toledo",label:"Toledo"},{id:"castro",label:"Castro"}].map(u=>(
+            <button key={u.id} onClick={()=>setPortalBioterUnit(u.id)}
+              style={{background:portalBioterUnit===u.id?cl.color+"22":"transparent",
+                color:portalBioterUnit===u.id?cl.color:C.ts,
+                border:"1px solid "+(portalBioterUnit===u.id?cl.color:C.b1),
+                borderRadius:20,padding:"5px 14px",fontSize:11,
+                fontWeight:portalBioterUnit===u.id?700:400,cursor:"pointer"}}>
+              {u.label}
             </button>
           ))}
+        </div>)}
+
+        {/* Header com botão abrir no Reportei */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+          <div>
+            <div style={{color:C.tx,fontWeight:700,fontSize:15}}>📊 Análises de Performance</div>
+            <div style={{color:C.td,fontSize:11,marginTop:2}}>
+              Dashboard completo com todos os dados das suas campanhas
+            </div>
+          </div>
+          {portalReporteiUrl&&(<a href={portalReporteiUrl} target="_blank" rel="noreferrer"
+            style={{background:cl.color,border:"1px solid "+cl.color,borderRadius:8,
+              padding:"7px 16px",color:"#fff",fontSize:11,fontWeight:700,
+              textDecoration:"none",display:"flex",alignItems:"center",gap:5}}>
+            ↗ Abrir em tela cheia
+          </a>)}
         </div>
 
-        {analisesSub==="trafego"&&(
-          <div style={{display:"flex",flexDirection:"column",gap:12}}>
-            {/* Meta Ads */}
-            {cl.meta&&<div style={{background:C.card,borderRadius:14,border:"1px solid #1877f244",padding:"16px 20px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                <div style={{width:28,height:28,background:"#1877f218",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📘</div>
-                <span style={{color:"#1877f2",fontWeight:700,fontSize:13}}>Meta Ads</span>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10}}>
-                {[
-                  {l:"Investimento",v:"R$ "+(cl.meta.spend||0).toLocaleString("pt-BR"),c:"#1877f2"},
-                  {l:"ROAS",v:(cl.meta.roas||0).toFixed(2)+"x",c:C.gr},
-                  {l:"Leads",v:cl.meta.leads||0,c:C.a},
-                  {l:"CPL",v:"R$ "+(cl.meta.cpc||0).toFixed(2),c:C.or},
-                ].map((k,i)=>(
-                  <div key={i} style={{background:C.s1,borderRadius:10,padding:"10px",textAlign:"center"}}>
-                    <div style={{color:k.c,fontWeight:900,fontSize:18}}>{k.v}</div>
-                    <div style={{color:C.td,fontSize:9,marginTop:2}}>{k.l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>}
+        {/* Iframe do Reportei */}
+        {portalReporteiUrl&&!portalIframeFailed&&(<div style={{position:"relative",
+            background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
+          {!portalIframeLoaded&&(<div style={{position:"absolute",inset:0,
+              display:"flex",alignItems:"center",justifyContent:"center",gap:10,
+              background:C.card,color:C.td,zIndex:1}}>
+            <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,
+              borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
+            Carregando dashboard...
+          </div>)}
+          <iframe
+            src={portalReporteiUrl}
+            title={"Dashboard — "+cl.name}
+            onLoad={()=>setPortalIframeLoaded(true)}
+            onError={()=>setPortalIframeFailed(true)}
+            style={{width:"100%",height:iframeH,border:"none",display:"block",background:"#fff"}}
+            allow="clipboard-write"
+          />
+        </div>)}
 
-            {/* Google Ads */}
-            {cl.google&&<div style={{background:C.card,borderRadius:14,border:"1px solid #34a85344",padding:"16px 20px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-                <div style={{width:28,height:28,background:"#34a85318",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🔍</div>
-                <span style={{color:"#34a853",fontWeight:700,fontSize:13}}>Google Ads</span>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10}}>
-                {[
-                  {l:"Investimento",v:"R$ "+(cl.google.spend||0).toLocaleString("pt-BR"),c:"#34a853"},
-                  {l:"ROAS",v:(cl.google.roas||0).toFixed(2)+"x",c:C.gr},
-                  {l:"Leads",v:cl.google.leads||0,c:C.a},
-                  {l:"CPC",v:"R$ "+(cl.google.cpc||0).toFixed(2),c:C.or},
-                ].map((k,i)=>(
-                  <div key={i} style={{background:C.s1,borderRadius:10,padding:"10px",textAlign:"center"}}>
-                    <div style={{color:k.c,fontWeight:900,fontSize:18}}>{k.v}</div>
-                    <div style={{color:C.td,fontSize:9,marginTop:2}}>{k.l}</div>
-                  </div>
-                ))}
-              </div>
-            </div>}
-
-            {!cl.meta&&!cl.google&&<div style={{background:C.card,borderRadius:14,padding:"40px",textAlign:"center",border:"1px dashed "+C.b1}}>
-              <div style={{fontSize:32,marginBottom:8}}>📊</div>
-              <div style={{color:C.tx,fontWeight:700}}>Dados de tráfego ainda não disponíveis</div>
-            </div>}
+        {/* Fallback se o iframe for bloqueado */}
+        {portalReporteiUrl&&portalIframeFailed&&(<div style={{textAlign:"center",padding:48,
+            background:C.card,borderRadius:14,border:"1px solid "+C.b1}}>
+          <div style={{fontSize:40,marginBottom:12}}>📊</div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>
+            Dashboard de Performance
           </div>
-        )}
-
-        {analisesSub==="social"&&(
-          <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"16px 20px"}}>
-            <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:14}}>📱 Performance — Redes Sociais</div>
-            {cl.social
-              ?<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:12}}>
-                {[
-                  {l:"Seguidores",v:(cl.social.followers||0).toLocaleString("pt-BR"),c:C.a,icon:"👥"},
-                  {l:"Crescimento",v:"+"+(cl.social.growth||0)+"%",c:C.gr,icon:"📈"},
-                  {l:"Alcance",v:(cl.social.reach||0).toLocaleString("pt-BR"),c:"#0284c7",icon:"🎯"},
-                  {l:"Engajamento",v:(cl.social.eng||0)+"%",c:C.or,icon:"❤"},
-                  {l:"Posts",v:cl.social.posts||0,c:"#8b5cf6",icon:"📸"},
-                  {l:"Stories",v:cl.social.stories||0,c:C.pk,icon:"⭕"},
-                  {l:"Reels",v:cl.social.reels||0,c:C.rd,icon:"🎬"},
-                ].map((k,i)=>(
-                  <div key={i} style={{background:"linear-gradient(135deg,"+k.c+"14,"+k.c+"06)",border:"1px solid "+k.c+"22",borderRadius:12,padding:"14px",textAlign:"center"}}>
-                    <div style={{fontSize:22,marginBottom:4}}>{k.icon}</div>
-                    <div style={{color:k.c,fontWeight:900,fontSize:20}}>{k.v}</div>
-                    <div style={{color:C.td,fontSize:9,marginTop:3}}>{k.l}</div>
-                  </div>
-                ))}
-              </div>
-              :<div style={{textAlign:"center",padding:"40px",color:C.td}}>Dados de redes sociais não disponíveis.</div>
-            }
+          <div style={{color:C.td,fontSize:12,marginBottom:16,maxWidth:400,margin:"0 auto 16px"}}>
+            Clique no botão para ver todos os dados completos das suas campanhas.
           </div>
-        )}
-      </div>
-    )}
+          <a href={portalReporteiUrl} target="_blank" rel="noreferrer"
+            style={{display:"inline-block",background:cl.color,color:"#fff",borderRadius:8,
+              padding:"11px 26px",fontSize:13,fontWeight:700,textDecoration:"none"}}>
+            Abrir Dashboard ↗
+          </a>
+        </div>)}
+
+        {/* Sem URL configurada */}
+        {!portalReporteiUrl&&(<div style={{textAlign:"center",padding:48,
+            background:C.card,borderRadius:14,border:"1px solid "+C.b1}}>
+          <div style={{fontSize:40,marginBottom:12}}>📡</div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:15}}>
+            Relatório em preparação
+          </div>
+          <div style={{color:C.td,fontSize:12,marginTop:6}}>
+            A equipe Pixels está configurando seu dashboard. Em breve disponível.
+          </div>
+        </div>)}
+
+      </div>);
+    })()}
 
     {/* ── FATURAMENTO ── */}
     {tab==="faturamento"&&(
