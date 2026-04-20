@@ -576,6 +576,38 @@ const Chip=({color,children,sm})=>(
 const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
 const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
 
+/* ─── ASK CLAUDE HELPER ─────────────────────────────
+   Chama a Edge Function `ask-claude` do Supabase, que faz proxy seguro para
+   a API da Anthropic. NUNCA exponha a chave da Anthropic no frontend!
+
+   Uso:
+     const data = await askClaude({
+       model: "claude-sonnet-4-20250514",
+       max_tokens: 500,
+       system: "Você é...",
+       messages: [{role:"user", content:"..."}]
+     });
+     const text = (data.content||[]).map(b=>b.text||"").join("");
+
+   Requer: Edge Function "ask-claude" deployada no Supabase.
+   Veja SUPABASE_EDGE_FUNCTION.md para instruções de deploy. */
+async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system,messages=[]}){
+  const sb=window._sb;
+  if(!sb)throw new Error("Supabase client indisponível");
+  const body={model,max_tokens,messages};
+  if(system)body.system=system;
+  const {data,error}=await sb.functions.invoke("ask-claude",{body});
+  if(error){
+    // Mensagem amigável se a Edge Function ainda não foi deployada
+    if(String(error.message||"").includes("Failed to send a request")){
+      throw new Error("Pixels IA indisponível: deploy a Edge Function 'ask-claude' no Supabase. Veja SUPABASE_EDGE_FUNCTION.md.");
+    }
+    throw error;
+  }
+  if(data?.error)throw new Error(data.error);
+  return data;
+}
+
 // ======= 00_mindmap_data.jsx =======
 // Dados estratégicos e mapas mentais de todos os clientes
 // Depende de: 00_globals.jsx (C para cores)
@@ -3384,15 +3416,15 @@ function ClienteConcorrencia({cl,tab,setTab}){
     .filter(a=>tab==="meta_ads"?a.platform==="meta":a.platform==="google")
     .filter(a=>!adSearchQuery||a.headline.toLowerCase().includes(adSearchQuery.toLowerCase())||a.competitor.toLowerCase().includes(adSearchQuery.toLowerCase()));
 
-  // AI analysis of a post
+  // AI analysis of a post — via Edge Function ask-claude
   const analyzePost=async(postId)=>{
     const post=posts.find(p=>p.id===postId);
     if(!post||post.analysis)return;
     setAnalyzingId(postId);
     try{
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,messages:[{role:"user",content:`Você é um estrategista de marketing digital especializado em análise de concorrência para agências brasileiras.
+      const d=await askClaude({
+        model:"claude-sonnet-4-20250514",max_tokens:400,
+        messages:[{role:"user",content:`Você é um estrategista de marketing digital especializado em análise de concorrência para agências brasileiras.
 
 Analise este post da concorrência:
 Plataforma: ${post.platform}
@@ -3406,11 +3438,14 @@ Faça uma análise estratégica CONCISA (máx 120 palavras) em pt-BR:
 1. 🎯 Gatilho principal usado
 2. ✅ 3 pontos fortes da estratégia
 3. ⚡ O que tornou esse conteúdo viral
-4. 💡 1 insight acionável para superar esse resultado`}]})});
-      const d=await resp.json();
+4. 💡 1 insight acionável para superar esse resultado`}]
+      });
       const analysis=d.content?.map(b=>b.text||"").join("")||"Análise indisponível.";
       setPosts(p=>p.map(x=>x.id===postId?{...x,analysis}:x));
-    }catch{setPosts(p=>p.map(x=>x.id===postId?{...x,analysis:"Erro ao conectar à Pixels IA. Tente novamente."}:x));}
+    }catch(e){
+      console.warn("analyzePost error:",e?.message||e);
+      setPosts(p=>p.map(x=>x.id===postId?{...x,analysis:"Erro ao conectar à Pixels IA. Tente novamente."}:x));
+    }
     setAnalyzingId(null);
   };
 
@@ -3420,9 +3455,9 @@ Faça uma análise estratégica CONCISA (máx 120 palavras) em pt-BR:
     if(!ad||ad.analysis)return;
     setAnalyzingId(adId);
     try{
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:350,messages:[{role:"user",content:`Você é especialista em tráfego pago e análise de criativos para agências de marketing brasileiro.
+      const d=await askClaude({
+        model:"claude-sonnet-4-20250514",max_tokens:350,
+        messages:[{role:"user",content:`Você é especialista em tráfego pago e análise de criativos para agências de marketing brasileiro.
 
 Analise este anúncio da concorrência:
 Plataforma: ${ad.platform==="meta"?"Meta Ads (Facebook/Instagram)":"Google Ads"}
@@ -3437,11 +3472,14 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
 1. 🎯 Objetivo da campanha
 2. ✅ Pontos fortes do criativo
 3. 🔥 Por que esse anúncio funciona
-4. 💡 Como superar com um criativo melhor`}]})});
-      const d=await resp.json();
+4. 💡 Como superar com um criativo melhor`}]
+      });
       const analysis=d.content?.map(b=>b.text||"").join("")||"Análise indisponível.";
       setAds(a=>a.map(x=>x.id===adId?{...x,analysis}:x));
-    }catch{setAds(a=>a.map(x=>x.id===adId?{...x,analysis:"Erro ao conectar à Pixels IA."}:x));}
+    }catch(e){
+      console.warn("analyzeAd error:",e?.message||e);
+      setAds(a=>a.map(x=>x.id===adId?{...x,analysis:"Erro ao conectar à Pixels IA."}:x));
+    }
     setAnalyzingId(null);
   };
 
@@ -7077,20 +7115,19 @@ function PixelsIAModal({onClose,setTasks,tasks}){
     setChatHistory(newHistory); setChatInput(""); setChatLoading(true);
     try{
       const msgs=newHistory.map(m=>({role:m.role==="assistant"?"assistant":"user",content:m.text}));
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_KEY||""},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",max_tokens:600,
-          system:`Você é a Pixels IA, assistente criativa da agência Pixels. Converse de forma amigável e direta. Ajude o sócio a refinar ideias de marketing digital. ${briefing?`Contexto do cliente: ${briefing}`:""}`,
-          messages:msgs
-        })
+      const data=await askClaude({
+        model:"claude-sonnet-4-20250514",max_tokens:600,
+        system:`Você é a Pixels IA, assistente criativa da agência Pixels. Converse de forma amigável e direta. Ajude o sócio a refinar ideias de marketing digital. ${briefing?`Contexto do cliente: ${briefing}`:""}`,
+        messages:msgs
       });
-      const data=await resp.json();
       const txt=(data.content||[]).map(b=>b.text||"").join("");
       setChatHistory(p=>[...p,{role:"assistant",text:txt}]);
       // Se mencionar ideia refinada, sugerir usar
       if(txt.length>50) setIdea(p=>p||txt.substring(0,200));
-    }catch(e){setChatHistory(p=>[...p,{role:"assistant",text:"Desculpe, erro de conexão. Tente novamente."}]);}
+    }catch(e){
+      console.warn("Pixels IA chat error:",e?.message||e);
+      setChatHistory(p=>[...p,{role:"assistant",text:"Desculpe, erro de conexão. Tente novamente."}]);
+    }
     setChatLoading(false);
   };
 
@@ -7098,21 +7135,21 @@ function PixelsIAModal({onClose,setTasks,tasks}){
     if(!idea.trim()&&!audioBlob){setError("Escreva sua ideia ou grave um áudio antes de gerar.");return;}
     setError(""); setStep("generating");
     try{
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_KEY||""},
-        body:JSON.stringify({
-          model:"claude-sonnet-4-20250514",max_tokens:1000,
-          system:`Você é a Pixels IA, assistente criativa de uma agência de marketing digital chamada Pixels. Transforme ideias em demandas de produção claras. Gere APENAS JSON válido sem markdown:\n{"titulo":"...","descricao":"...","formato":"...","objetivo":"...","pontos_atencao":"...","tags":["tag1","tag2"]}`,
-          messages:[{role:"user",content:`BRIEFING: ${briefing||"Sem cliente"}\n\nIDEIA: ${idea}\n\nDIRECIONAR PARA: ${recipient==="both"?"Hellen + Erick":recipient==="ellen"?"Hellen (Social Media)":"Erick (Meta/Google Ads)"}\n\nGere a demanda.`}]
-        })
+      const data=await askClaude({
+        model:"claude-sonnet-4-20250514",max_tokens:1000,
+        system:`Você é a Pixels IA, assistente criativa de uma agência de marketing digital chamada Pixels. Transforme ideias em demandas de produção claras. Gere APENAS JSON válido sem markdown:\n{"titulo":"...","descricao":"...","formato":"...","objetivo":"...","pontos_atencao":"...","tags":["tag1","tag2"]}`,
+        messages:[{role:"user",content:`BRIEFING: ${briefing||"Sem cliente"}\n\nIDEIA: ${idea}\n\nDIRECIONAR PARA: ${recipient==="both"?"Hellen + Erick":recipient==="ellen"?"Hellen (Social Media)":"Erick (Meta/Google Ads)"}\n\nGere a demanda.`}]
       });
-      const data=await resp.json();
       const text=(data.content||[]).map(b=>b.text||"").join("");
       let parsed;
       try{parsed=JSON.parse(text.replace(/```json|```/g,"").trim());}
       catch{parsed={titulo:"Demanda Pixels IA",descricao:text,formato:"",objetivo:"",pontos_atencao:"",tags:["ia"]}}
       setAiResult(parsed); setStep("result");
-    }catch(e){setError("Erro ao conectar com a Pixels IA.");setStep("form");}
+    }catch(e){
+      console.warn("Pixels IA generate error:",e?.message||e);
+      setError(e?.message||"Erro ao conectar com a Pixels IA.");
+      setStep("form");
+    }
   };
 
   const createCards=()=>{
@@ -10112,12 +10149,16 @@ function PublicacaoEditModal({task, onClose, onReject}){
     if(!feedback.trim())return;
     setAiLoading(true);
     try{
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json","x-api-key":import.meta.env.VITE_ANTHROPIC_KEY||""},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:300,messages:[{role:"user",content:`Você é assistente de feedback criativo da agência Pixels. O revisor deixou estas instruções para "${task.title}":\n\n"${feedback}"\n\nReescreva como feedback profissional em pt-BR, com bullet points. Seja construtivo. Máx 150 palavras.`}]})});
-      const d=await resp.json();
+      const d=await askClaude({
+        model:"claude-sonnet-4-20250514",max_tokens:300,
+        messages:[{role:"user",content:`Você é assistente de feedback criativo da agência Pixels. O revisor deixou estas instruções para "${task.title}":\n\n"${feedback}"\n\nReescreva como feedback profissional em pt-BR, com bullet points. Seja construtivo. Máx 150 palavras.`}]
+      });
       const text=d.content?.map(b=>b.text||"").join("")||"";
       setAiTranscript(text);setFeedback(p=>p+"\n\n🤖 Pixels IA:\n"+text);
-    }catch{setAiTranscript("Erro ao conectar à Pixels IA.");}
+    }catch(e){
+      console.warn("Pixels IA transcribe error:",e?.message||e);
+      setAiTranscript(e?.message||"Erro ao conectar à Pixels IA.");
+    }
     setAiLoading(false);
   };
 
@@ -20035,14 +20076,12 @@ PROMPT DE IMAGEM:
     const genSnapshot = {...gen}; // snapshot antes de qualquer mudança do usuário durante o fetch
     setGenLoading(true);setGenResult(null);
     try{
-      const res = await fetch("https://api.anthropic.com/v1/messages",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,messages:[{role:"user",content:buildPrompt()}]})
+      const data=await askClaude({
+        model:"claude-sonnet-4-20250514",max_tokens:2000,
+        messages:[{role:"user",content:buildPrompt()}]
       });
-      const data = await res.json();
-      if(!res.ok||data.error){
-        setGenResult({erro:`Erro da API: ${data.error?.message||"Tente novamente."}`,versoes:[],promptImg:""});
+      if(data.error){
+        setGenResult({erro:`Erro da API: ${data.error?.message||data.error}`,versoes:[],promptImg:""});
         setGenLoading(false);return;
       }
       const text = data.content?.map(i=>i.text||"").join("\n")||"";
@@ -20057,7 +20096,8 @@ PROMPT DE IMAGEM:
       }
       setGenResult({versoes,promptImg,geradoEm:new Date().toISOString(),params:genSnapshot});
     }catch(e){
-      setGenResult({erro:"Erro ao gerar. Verifique sua conexão.",versoes:[],promptImg:""});
+      console.warn("gerarConteudo error:",e?.message||e);
+      setGenResult({erro:e?.message||"Erro ao gerar. Verifique sua conexão.",versoes:[],promptImg:""});
     }
     setGenLoading(false);
   };
