@@ -14817,6 +14817,54 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             {!publishDate&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#9a3412",lineHeight:1.5}}>
               ⚠ Informe a data de publicação para aparecer no Calendário de Publicações
             </div>}
+
+            {/* ══ AÇÕES RÁPIDAS — placeholders em desenvolvimento ══ */}
+            <div style={{marginTop:4}}>
+              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>
+                ⚡ Ações Rápidas
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <button
+                  onClick={()=>alert("🚧 Em breve!\n\nBotão em desenvolvimento. Vai fazer upload da arte final diretamente pra pasta do cliente no Google Drive.")}
+                  style={{
+                    display:"flex",alignItems:"center",gap:10,
+                    background:"linear-gradient(135deg,#fef3c7,#fde68a)",
+                    border:"1px solid #f59e0b44",borderRadius:10,
+                    padding:"10px 14px",cursor:"pointer",
+                    transition:"all .15s",textAlign:"left",width:"100%",
+                  }}
+                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 2px 8px rgba(245,158,11,0.18)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}
+                >
+                  <span style={{fontSize:18}}>☁️</span>
+                  <div style={{flex:1}}>
+                    <div style={{color:"#92400e",fontWeight:700,fontSize:12}}>Enviar para o Drive</div>
+                    <div style={{color:"#a16207",fontSize:10,marginTop:1}}>Sobe a arte final na pasta do cliente</div>
+                  </div>
+                  <span style={{fontSize:9,background:"#f59e0b",color:"#fff",padding:"2px 6px",borderRadius:20,fontWeight:700}}>EM BREVE</span>
+                </button>
+
+                <button
+                  onClick={()=>alert("🚧 Em breve!\n\nBotão em desenvolvimento. Vai enviar a arte + legenda direto no grupo do WhatsApp do cliente quando a demanda for publicada.")}
+                  style={{
+                    display:"flex",alignItems:"center",gap:10,
+                    background:"linear-gradient(135deg,#dcfce7,#bbf7d0)",
+                    border:"1px solid #22c55e44",borderRadius:10,
+                    padding:"10px 14px",cursor:"pointer",
+                    transition:"all .15s",textAlign:"left",width:"100%",
+                  }}
+                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 2px 8px rgba(34,197,94,0.18)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}
+                >
+                  <span style={{fontSize:18}}>💬</span>
+                  <div style={{flex:1}}>
+                    <div style={{color:"#166534",fontWeight:700,fontSize:12}}>Enviar no WhatsApp</div>
+                    <div style={{color:"#15803d",fontSize:10,marginTop:1}}>Manda no grupo do cliente quando publicar</div>
+                  </div>
+                  <span style={{fontSize:9,background:"#22c55e",color:"#fff",padding:"2px 6px",borderRadius:20,fontWeight:700}}>EM BREVE</span>
+                </button>
+              </div>
+            </div>
           </>)}
           {/* ══ FIM AGENDADO ══ */}
 
