@@ -15539,28 +15539,61 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
         </div>
       </div>}
 
-      {/* INFOGRÁFICO DE CLIENTES */}
+      {/* INFOGRÁFICO DE CLIENTES — cards com logo + status claro */}
       {widgets.clients&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
-        <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:14}}>📊</span>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Demandas por Cliente</div>
+        <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:10,background:"#f8fafc"}}>
+          <div style={{width:32,height:32,borderRadius:10,background:"#2563eb",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📊</div>
+          <div>
+            <div style={{color:C.tx,fontWeight:800,fontSize:14}}>Demandas por Cliente</div>
+            <div style={{color:C.td,fontSize:10,marginTop:1}}>situação de cada cliente</div>
+          </div>
         </div>
-        <div style={{padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{padding:"12px",display:"flex",flexDirection:"column",gap:8}}>
           {byClient.length===0
-            ?<div style={{textAlign:"center",color:C.td,fontSize:12,padding:"16px 0"}}>Nenhuma demanda ativa</div>
+            ?<div style={{textAlign:"center",color:C.td,fontSize:12,padding:"24px 0"}}>
+              <div style={{fontSize:28,marginBottom:6}}>🎉</div>
+              <div>Sem demandas ativas</div>
+            </div>
             :byClient.map(cl=>{
-              const pct=Math.round((cl.count/maxCount)*100);
-              return <div key={cl.id}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <div style={{width:8,height:8,borderRadius:"50%",background:cl.color,flexShrink:0}}/>
-                    <span style={{color:C.tx,fontSize:12,fontWeight:600}}>{cl.abbr}</span>
-                    {cl.late>0&&<span style={{background:C.rd+"18",color:C.rd,borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:700}}>{cl.late} atrasada{cl.late>1?"s":""}</span>}
-                  </div>
-                  <span style={{color:cl.color,fontWeight:800,fontSize:13}}>{cl.count}</span>
+              const isLate=cl.late>0;
+              const statusColor=isLate?"#dc2626":"#16a34a";
+              const statusIcon=isLate?"🔥":"✅";
+              const statusLabel=isLate?`${cl.late} atrasada${cl.late>1?"s":""}`:"no prazo";
+              return <div key={cl.id} style={{
+                  background:isLate?"#fef2f2":"#f0fdf4",
+                  border:`1px solid ${isLate?"#fecaca":"#bbf7d0"}`,
+                  borderLeft:`4px solid ${statusColor}`,
+                  borderRadius:10,
+                  padding:"10px 14px",
+                  display:"flex",
+                  alignItems:"center",
+                  gap:12,
+                }}>
+                {/* Logo do cliente */}
+                <div style={{flexShrink:0,background:"#fff",borderRadius:8,padding:"4px 8px",
+                    border:"1px solid #e5e7eb",display:"flex",alignItems:"center",
+                    justifyContent:"center",minWidth:50,height:32}}>
+                  <ClientLogo clientId={cl.id} size="xs"/>
                 </div>
-                <div style={{background:C.b1,borderRadius:99,height:6,overflow:"hidden"}}>
-                  <div style={{width:pct+"%",height:"100%",background:cl.late>0?C.rd:cl.color,borderRadius:99,transition:"width .6s ease"}}/>
+
+                {/* Nome + status */}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:C.tx,fontWeight:800,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {cl.name}
+                  </div>
+                  <div style={{color:statusColor,fontSize:10,fontWeight:700,marginTop:2,display:"flex",alignItems:"center",gap:4}}>
+                    <span>{statusIcon}</span>
+                    <span>{statusLabel}</span>
+                  </div>
+                </div>
+
+                {/* Contagem grande */}
+                <div style={{textAlign:"center",flexShrink:0,background:statusColor,borderRadius:10,padding:"6px 12px",minWidth:50}}>
+                  <div style={{color:"#fff",fontWeight:900,fontSize:20,lineHeight:1}}>{cl.count}</div>
+                  <div style={{color:"#fff",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:2,opacity:0.95}}>
+                    {cl.count===1?"demanda":"demandas"}
+                  </div>
                 </div>
               </div>;
             })
