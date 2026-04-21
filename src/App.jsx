@@ -734,56 +734,717 @@ const Bar=({v,color,h=6})=>(
   </div>
 );
 
-function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks}){
+/* ─── DASHBOARD ADMIN PREMIUM (Vinicius, Gustavo) ───
+   Nível V4/G4: visão executiva completa com foco OPERACIONAL primeiro
+   Estrutura:
+   1. Banner de AÇÕES URGENTES (portal, atrasos, publicações, aprovações)
+   2. Pipeline Operacional (3 fluxos lado a lado)
+   3. Andamento de CADA Colaborador (tabela rica)
+   4. Aprovações Pendentes (copys + artes)
+   5. Publicações (hoje/semana/atrasadas)
+   6. Solicitações do Portal
+   7. KPIs Financeiros (MRR, ROAS, LTV, Churn, NPS)
+   8. Top Clientes + Clientes em Risco
+   9. Panorama completo dos Clientes
+   10. Pagamentos em Atraso + Demandas Atrasadas
+*/
+function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notifs,isMob}){
   const allTasks=propTasks||[];
+  const active=allTasks.filter(t=>!t.deletedAt);
+  const ativas=active.filter(t=>t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado");
+  const hojeStr=(()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  const ha7d=new Date(hoje);ha7d.setDate(hoje.getDate()-7);
+  const ha30d=new Date(hoje);ha30d.setDate(hoje.getDate()-30);
+  const daqui7d=new Date(hoje);daqui7d.setDate(hoje.getDate()+7);
+
+  // ═══ Demandas CLIENTES (kanban normal) ═══
+  const clientStatuses=["demanda","recebida","execucao","avaliacao","aprovado","agendado","publicado","pausado"];
+  const clientTasks=active.filter(t=>clientStatuses.includes(t.status));
+  const clientAtivas=clientTasks.filter(t=>t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado");
+
+  // ═══ Demandas INTERNAS ═══
+  const internStatuses=["interno_demanda","interno_execucao","interno_avaliacao","interno_aprovado","interno_executado"];
+  const internTasks=active.filter(t=>internStatuses.includes(t.status));
+  const internAtivas=internTasks.filter(t=>t.status!=="interno_aprovado"&&t.status!=="interno_executado");
+
+  // ═══ Solicitações do PORTAL (origem=portal) ═══
+  const portalRequests=active.filter(t=>t.origem==="portal");
+  const portalPendentes=portalRequests.filter(t=>t.status==="interno_demanda"||(t.assignees||[]).length===0);
+  const portalRecentes=portalRequests.filter(t=>t.createdAt&&new Date(t.createdAt)>=ha7d);
+
+  // ═══ KPIs Executivos ═══
   const mrr=CLIENTS.reduce((a,c)=>a+c.contract,0);
-  const totalLeads=CLIENTS.reduce((a,c)=>a+c.meta.leads+c.google.leads,0);
-  const avgRoas=(CLIENTS.reduce((a,c)=>a+c.meta.roas,0)/CLIENTS.length).toFixed(1);
-  const late=allTasks.filter(t=>!t.deletedAt&&t.status!=="aprovado"&&daysLeft(t.deadline)<0);
-  const allActive=allTasks.filter(t=>!t.deletedAt);
+  const avgRoas=(CLIENTS.reduce((a,c)=>a+(c.meta?.roas||0),0)/CLIENTS.length).toFixed(1);
+  const totalLeads=CLIENTS.reduce((a,c)=>a+(c.meta?.leads||0)+(c.google?.leads||0),0);
+  const avgHealth=Math.round(CLIENTS.reduce((a,c)=>a+c.health,0)/CLIENTS.length);
+  const avgNps=Math.round(CLIENTS.reduce((a,c)=>a+(c.nps||0),0)/CLIENTS.length);
+  const atrasadas=ativas.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;});
+  const noPrazoCount=ativas.length-atrasadas.length;
+  const noPrazoPct=ativas.length>0?Math.round((noPrazoCount/ativas.length)*100):100;
+  const ltvMedio=Math.round(CLIENTS.reduce((a,c)=>a+(c.contract*24),0)/CLIENTS.length); // LTV = 24 meses médios
+  const clientesAtivos=CLIENTS.length;
+
+  // ═══ Riscos críticos (exigem ação agora) ═══
+  const riscosCriticos=[];
+  CLIENTS.forEach(c=>{
+    if(c.health<60)riscosCriticos.push({type:"saude",client:c,msg:`Saúde em ${c.health}%`,color:"#dc2626"});
+    if(c.payment&&c.payment.status==="atrasado")riscosCriticos.push({type:"pag",client:c,msg:"Pagamento atrasado",color:"#dc2626"});
+    if(c.lastMeeting){
+      const p=c.lastMeeting.split("/");
+      const diasSemReuniao=Math.floor((new Date()-new Date(p[2]+"-"+p[1]+"-"+p[0]))/(1000*60*60*24));
+      if(diasSemReuniao>30)riscosCriticos.push({type:"reuniao",client:c,msg:`Reunião há ${diasSemReuniao}d`,color:"#ea580c"});
+    }
+  });
+  TEAM.filter(u=>u.level>1).forEach(u=>{
+    const uTasks=ativas.filter(t=>t.assignee===u.id||(t.assignees||[]).includes(u.id));
+    if(uTasks.length>=10)riscosCriticos.push({type:"sobrecarga",user:u,msg:`Sobrecarga: ${uTasks.length} demandas ativas`,color:"#ea580c"});
+  });
+
+  // ═══ Pipeline (funil) ═══
+  const pipeline=[
+    {label:"Copys",status:"demanda",color:"#a140ff",icon:"📝"},
+    {label:"Recebidas",status:"recebida",color:"#ec4899",icon:"📥"},
+    {label:"Execução",status:"execucao",color:"#eab308",icon:"⚙"},
+    {label:"Avaliação",status:"avaliacao",color:"#f97316",icon:"👀"},
+    {label:"Aprovado",status:"aprovado",color:"#16a34a",icon:"✅"},
+    {label:"Agendado",status:"agendado",color:"#2563eb",icon:"📅"},
+  ].map(s=>({...s,count:active.filter(t=>t.status===s.status).length}));
+  const pipelineMax=Math.max(...pipeline.map(p=>p.count),1);
+
+  // ═══ Top Clientes por MRR ═══
+  const topClientes=[...CLIENTS].sort((a,b)=>b.contract-a.contract).slice(0,5);
+
+  // ═══ Clientes em risco ═══
+  const clientesRisco=CLIENTS.filter(c=>c.health<60||(c.payment&&c.payment.status==="atrasado"))
+    .sort((a,b)=>a.health-b.health);
+
+  // ═══ Produtividade da equipe (últimos 30d) — reusa hoje/ha30d já declarados acima
+  const equipeStats=TEAM.filter(u=>u.level>1).map(u=>{
+    const done30d=active.filter(t=>{
+      if(t.status!=="aprovado"||!t.completedAt)return false;
+      if(t.assignee!==u.id&&!(t.assignees||[]).includes(u.id))return false;
+      return new Date(t.completedAt)>=ha30d;
+    }).length;
+    const activeNow=ativas.filter(t=>t.assignee===u.id||(t.assignees||[]).includes(u.id)).length;
+    const lateNow=atrasadas.filter(t=>t.assignee===u.id||(t.assignees||[]).includes(u.id)).length;
+    return {user:u,done30d,activeNow,lateNow};
+  }).sort((a,b)=>b.done30d-a.done30d);
+  const maxDone=Math.max(...equipeStats.map(e=>e.done30d),1);
+
+  // ═══ Pagamentos atrasados ═══
+  const pagAtras=CLIENTS.filter(c=>c.payment&&c.payment.status==="atrasado");
+
+  // ═══ Publicações ═══
+  const agendadas=active.filter(t=>t.status==="agendado");
+  const pubHoje=agendadas.filter(t=>t.publishDate===hojeStr);
+  const pubAtrasadas=agendadas.filter(t=>t.publishDate&&t.publishDate<hojeStr);
+  const pubSemana=agendadas.filter(t=>{
+    if(!t.publishDate)return false;
+    const pd=new Date(t.publishDate);
+    return pd>=hoje&&pd<=daqui7d;
+  });
+
+  // ═══ Aprovações pendentes ═══
+  const copysPendentes=clientTasks.filter(t=>t.status==="demanda"&&!t.ajustar);
+  const artesPendentes=clientTasks.filter(t=>t.status==="avaliacao");
+  const aprovacoesInternas=internTasks.filter(t=>t.status==="interno_avaliacao");
+
+  // ═══ Andamento detalhado por colaborador ═══
+  const equipeDetalhe=TEAM.filter(u=>u.level>1).map(u=>{
+    const todas=active.filter(t=>t.assignee===u.id||(t.assignees||[]).includes(u.id));
+    const emAtv=todas.filter(t=>!["aprovado","publicado","pausado","interno_aprovado","interno_executado"].includes(t.status));
+    const emExec=emAtv.filter(t=>t.status==="execucao"||t.status==="interno_execucao");
+    const emAval=emAtv.filter(t=>t.status==="avaliacao"||t.status==="interno_avaliacao");
+    const atras=emAtv.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;});
+    const urg=emAtv.filter(t=>{const d=daysLeft(t.deadline);return d===0;});
+    const done30d=todas.filter(t=>{
+      if(t.status!=="aprovado"&&t.status!=="interno_aprovado"&&t.status!=="interno_executado"&&t.status!=="publicado")return false;
+      if(!t.completedAt)return false;
+      return new Date(t.completedAt)>=ha30d;
+    }).length;
+    const prazoPct=emAtv.length>0?Math.round(((emAtv.length-atras.length-urg.length)/emAtv.length)*100):100;
+    const saudeC=prazoPct>=80?"#16a34a":prazoPct>=60?"#eab308":"#dc2626";
+    return {user:u,emAtv:emAtv.length,emExec:emExec.length,emAval:emAval.length,atras:atras.length,urg:urg.length,done30d,prazoPct,saudeC};
+  }).sort((a,b)=>b.done30d-a.done30d);
+
+  // ═══ Ações urgentes (tudo que precisa atenção AGORA) ═══
+  const acoesUrgentes=[];
+  if(portalPendentes.length>0)acoesUrgentes.push({type:"portal",count:portalPendentes.length,label:"Nova(s) solicitação(ões) do portal",color:"#2563eb",icon:"📩"});
+  if(pubAtrasadas.length>0)acoesUrgentes.push({type:"pubatras",count:pubAtrasadas.length,label:"Publicação(ões) atrasada(s)",color:"#dc2626",icon:"📤"});
+  if(atrasadas.length>0)acoesUrgentes.push({type:"atras",count:atrasadas.length,label:"Demanda(s) atrasada(s)",color:"#dc2626",icon:"🔥"});
+  if(copysPendentes.length>0)acoesUrgentes.push({type:"copys",count:copysPendentes.length,label:"Copy(s) aguardando aprovação",color:"#7c3aed",icon:"📝"});
+  if(artesPendentes.length>0)acoesUrgentes.push({type:"artes",count:artesPendentes.length,label:"Arte(s) aguardando aprovação",color:"#16a34a",icon:"🎨"});
+  if(pubHoje.length>0)acoesUrgentes.push({type:"pubhoje",count:pubHoje.length,label:"Publicação(ões) hoje",color:"#2563eb",icon:"🚀"});
+  if(pagAtras.length>0)acoesUrgentes.push({type:"pag",count:pagAtras.length,label:"Pagamento(s) atrasado(s)",color:"#dc2626",icon:"💸"});
+
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    {isViewing&&<div style={{background:C.a+"15",border:`1px solid ${C.a}33`,borderRadius:10,padding:"8px 14px",display:"flex",alignItems:"center",gap:10}}>
-      <Av l={user.av} color={user.color} size={28} uid={user.id}/>
-      <div style={{color:C.a,fontWeight:700,fontSize:12}}>👁 Visualizando como {user.name}</div>
+    {isViewing&&<div style={{background:"#f59e0b",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
+      👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
-      <Tile label="MRR Total"  val={f$(mrr)}       color={C.gr}  trend={8}/>
-      <Tile label="ROAS Médio" val={avgRoas+"x"}    color={C.a}   trend={12}/>
-      <Tile label="Leads Mês"  val={fN(totalLeads)} color={C.bl}  sub="Meta + Google"/>
-      <Tile label="Saúde Média" val={Math.round(CLIENTS.reduce((a,c)=>a+c.health,0)/CLIENTS.length)+"%"} color={C.yw}/>
+
+    {/* ═══ 0. AÇÕES URGENTES (TOPO - PRIORIDADE MÁXIMA) ═══ */}
+    {acoesUrgentes.length>0&&(
+      <div style={{background:"#fff",borderRadius:16,border:"2px solid #f59e0b",overflow:"hidden",boxShadow:"0 4px 16px rgba(245,158,11,0.15)"}}>
+        <div style={{background:"#f59e0b",padding:"14px 20px",display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⚡</div>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontWeight:900,fontSize:16,letterSpacing:-.3}}>Ações que exigem atenção AGORA</div>
+            <div style={{color:"#fff",fontSize:11,opacity:0.95,marginTop:2}}>{acoesUrgentes.reduce((a,x)=>a+x.count,0)} itens pendentes na operação</div>
+          </div>
+        </div>
+        <div style={{padding:"12px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          {acoesUrgentes.map(a=>(
+            <div key={a.type} style={{background:a.color,borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 2px 6px rgba(0,0,0,0.1)"}}>
+              <div style={{width:36,height:36,borderRadius:9,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{a.icon}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#fff",fontWeight:900,fontSize:22,lineHeight:1,letterSpacing:-.5}}>{a.count}</div>
+                <div style={{color:"#fff",fontSize:10,marginTop:2,fontWeight:600,opacity:0.95}}>{a.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ 0.5. VISÃO OPERACIONAL — 3 FLUXOS (Clientes + Internas + Portal) ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+      {/* Demandas de Clientes */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",background:"#a140ff",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>📋</div>
+          <div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Demandas Clientes</div>
+            <div style={{color:"#fff",fontSize:9,opacity:0.9,marginTop:1}}>fluxo principal</div>
+          </div>
+        </div>
+        <div style={{padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:12}}>
+            <span style={{color:"#a140ff",fontWeight:900,fontSize:32,letterSpacing:-1,lineHeight:1}}>{clientAtivas.length}</span>
+            <span style={{color:C.td,fontSize:11,fontWeight:700}}>ativas</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {[
+              {l:"Copys",s:"demanda",c:"#a140ff"},
+              {l:"Em Execução",s:"execucao",c:"#eab308"},
+              {l:"Em Avaliação",s:"avaliacao",c:"#f97316"},
+              {l:"Agendado",s:"agendado",c:"#2563eb"},
+            ].map(s=>{
+              const ct=clientTasks.filter(t=>t.status===s.s).length;
+              return <div key={s.s} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
+                <span style={{color:C.tx,fontWeight:600}}>● <span style={{color:s.c}}>{s.l}</span></span>
+                <span style={{color:s.c,fontWeight:900}}>{ct}</span>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Demandas Internas */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",background:"#6366f1",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>⚙</div>
+          <div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Demandas Internas</div>
+            <div style={{color:"#fff",fontSize:9,opacity:0.9,marginTop:1}}>operação da agência</div>
+          </div>
+        </div>
+        <div style={{padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:12}}>
+            <span style={{color:"#6366f1",fontWeight:900,fontSize:32,letterSpacing:-1,lineHeight:1}}>{internAtivas.length}</span>
+            <span style={{color:C.td,fontSize:11,fontWeight:700}}>ativas</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {[
+              {l:"Recebidas",s:"interno_demanda",c:"#6366f1"},
+              {l:"Em Execução",s:"interno_execucao",c:"#f97316"},
+              {l:"Em Avaliação",s:"interno_avaliacao",c:"#eab308"},
+              {l:"Aprovadas",s:"interno_aprovado",c:"#22c55e"},
+            ].map(s=>{
+              const ct=internTasks.filter(t=>t.status===s.s).length;
+              return <div key={s.s} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
+                <span style={{color:C.tx,fontWeight:600}}>● <span style={{color:s.c}}>{s.l}</span></span>
+                <span style={{color:s.c,fontWeight:900}}>{ct}</span>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Solicitações do Portal */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",background:"#16a34a",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>📩</div>
+          <div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Portal do Cliente</div>
+            <div style={{color:"#fff",fontSize:9,opacity:0.9,marginTop:1}}>solicitações recebidas</div>
+          </div>
+        </div>
+        <div style={{padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:12}}>
+            <span style={{color:"#16a34a",fontWeight:900,fontSize:32,letterSpacing:-1,lineHeight:1}}>{portalRequests.length}</span>
+            <span style={{color:C.td,fontSize:11,fontWeight:700}}>total</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
+              <span style={{color:C.tx,fontWeight:600}}>📩 <span style={{color:"#dc2626"}}>Sem responsável</span></span>
+              <span style={{color:"#dc2626",fontWeight:900}}>{portalPendentes.length}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
+              <span style={{color:C.tx,fontWeight:600}}>🆕 <span style={{color:"#16a34a"}}>Últimos 7d</span></span>
+              <span style={{color:"#16a34a",fontWeight:900}}>{portalRecentes.length}</span>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
+              <span style={{color:C.tx,fontWeight:600}}>⚙ <span style={{color:"#6366f1"}}>Em andamento</span></span>
+              <span style={{color:"#6366f1",fontWeight:900}}>{portalRequests.filter(t=>t.status==="interno_execucao").length}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    {late.length>0&&<Card style={{padding:16}} glow={C.rd}>
-      <div style={{color:C.rd,fontWeight:800,fontSize:12,marginBottom:10}}>🚨 Atrasadas</div>
-      {late.map(t=>{const u=TEAM.find(x=>x.id===t.assignee);const cl=CLIENTS.find(c=>c.id===t.client);return <div key={t.id} style={{background:C.card,borderLeft:`3px solid ${C.rd}`,padding:"9px 12px",borderRadius:"0 8px 8px 0",marginBottom:6,display:"flex",justifyContent:"space-between",boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>
-        <div><div style={{color:C.rd,fontWeight:700,fontSize:12}}>{t.title}</div><div style={{color:C.ts,fontSize:10}}>{u?.name} · {cl?.name} · {Math.abs(daysLeft(t.deadline))}d atrasado</div></div>
-        <Chip color={C.rd} sm>atrasado</Chip>
-      </div>;})}
-    </Card>}
-    <Card style={{padding:0}}>
-      <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.b1}`}}><span style={{color:C.tx,fontWeight:700,fontSize:13}}>Performance Clientes</span></div>
-      {CLIENTS.map(cl=><div key={cl.id} style={{padding:"12px 18px",borderBottom:`1px solid ${C.b1}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:8}}><ClientLogo clientId={cl.id} size="xs"/><div style={{color:C.tx,fontWeight:700,fontSize:13}}>{cl.name}</div></div><div style={{display:"flex",gap:10}}><span style={{color:cl.meta.roas>=4?C.gr:C.yw,fontWeight:700,fontSize:12}}>Meta {cl.meta.roas}x</span><span style={{color:hc(cl.health),fontWeight:900,fontSize:14}}>{cl.health}%</span></div></div>
-        <Bar v={cl.health} color={hc(cl.health)} h={4}/>
-      </div>)}
-    </Card>
+
+    {/* ═══ 0.75. ANDAMENTO DETALHADO POR COLABORADOR ═══ */}
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+      <div style={{padding:"12px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:32,height:32,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>👥</div>
+        <div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Andamento por Colaborador</div>
+          <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>situação de cada um em tempo real</div>
+        </div>
+      </div>
+      <div style={{overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead>
+            <tr style={{background:"#f8fafc"}}>
+              <th style={{padding:"10px 14px",textAlign:"left",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Colaborador</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Ativas</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Execução</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Avaliação</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Atrasadas</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Hoje</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>No Prazo</th>
+              <th style={{padding:"10px 14px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>Entregas 30d</th>
+            </tr>
+          </thead>
+          <tbody>
+            {equipeDetalhe.map(e=>(
+              <tr key={e.user.id} style={{borderTop:`1px solid ${C.b1}`}}>
+                <td style={{padding:"10px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <Av l={e.user.av} color={e.user.color} size={26} uid={e.user.id}/>
+                    <div>
+                      <div style={{color:C.tx,fontWeight:700,fontSize:12}}>{e.user.name}</div>
+                      <div style={{color:C.td,fontSize:9}}>{e.user.role}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:C.tx,fontWeight:800,fontSize:13}}>{e.emAtv}</td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:"#eab308",fontWeight:700,fontSize:12}}>{e.emExec||"—"}</td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:"#f97316",fontWeight:700,fontSize:12}}>{e.emAval||"—"}</td>
+                <td style={{padding:"10px 8px",textAlign:"center"}}>
+                  {e.atras>0?<span style={{background:"#dc2626",color:"#fff",borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:800}}>{e.atras}</span>:<span style={{color:C.td,fontSize:11}}>—</span>}
+                </td>
+                <td style={{padding:"10px 8px",textAlign:"center"}}>
+                  {e.urg>0?<span style={{background:"#ea580c",color:"#fff",borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:800}}>{e.urg}</span>:<span style={{color:C.td,fontSize:11}}>—</span>}
+                </td>
+                <td style={{padding:"10px 8px",textAlign:"center"}}>
+                  <span style={{background:e.saudeC,color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>{e.prazoPct}%</span>
+                </td>
+                <td style={{padding:"10px 14px",textAlign:"center",color:e.user.color,fontWeight:900,fontSize:14}}>{e.done30d}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {/* ═══ 0.85. PUBLICAÇÕES (hoje + semana + atrasadas) ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+      <div style={{background:pubAtrasadas.length>0?"#dc2626":"#64748b",borderRadius:14,padding:"14px 16px",color:"#fff"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚠</div>
+          <div style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Pub. Atrasadas</div>
+        </div>
+        <div style={{fontWeight:900,fontSize:28,letterSpacing:-.8,lineHeight:1}}>{pubAtrasadas.length}</div>
+        <div style={{fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>{pubAtrasadas.length===0?"nada atrasado":"publicações vencidas"}</div>
+      </div>
+      <div style={{background:"#2563eb",borderRadius:14,padding:"14px 16px",color:"#fff"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🚀</div>
+          <div style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Publica Hoje</div>
+        </div>
+        <div style={{fontWeight:900,fontSize:28,letterSpacing:-.8,lineHeight:1}}>{pubHoje.length}</div>
+        <div style={{fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>{pubHoje.length===0?"nenhuma":"agendadas pra hoje"}</div>
+      </div>
+      <div style={{background:"#0891b2",borderRadius:14,padding:"14px 16px",color:"#fff"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📅</div>
+          <div style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Pub. Esta Semana</div>
+        </div>
+        <div style={{fontWeight:900,fontSize:28,letterSpacing:-.8,lineHeight:1}}>{pubSemana.length}</div>
+        <div style={{fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>próximos 7 dias</div>
+      </div>
+    </div>
+
+    {/* ═══ 1. BANNER DE RISCOS CRÍTICOS ═══ */}
+    {riscosCriticos.length>0&&(
+      <div style={{background:"#fff",borderRadius:16,border:"2px solid #fecaca",overflow:"hidden",boxShadow:"0 2px 8px rgba(220,38,38,0.08)"}}>
+        <div style={{background:"#dc2626",padding:"12px 18px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:10,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🚨</div>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontWeight:800,fontSize:14}}>Riscos que exigem sua atenção</div>
+            <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>{riscosCriticos.length} {riscosCriticos.length===1?"alerta":"alertas"} críticos identificados</div>
+          </div>
+        </div>
+        <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
+          {riscosCriticos.slice(0,6).map((r,i)=>(
+            <div key={i} style={{background:r.color==="#dc2626"?"#fef2f2":"#fff7ed",border:`1px solid ${r.color==="#dc2626"?"#fecaca":"#fed7aa"}`,borderLeft:`4px solid ${r.color}`,borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:28,height:28,borderRadius:7,background:r.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
+                {r.type==="saude"?"💚":r.type==="pag"?"💸":r.type==="reuniao"?"📅":"⚡"}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:r.color,fontWeight:800,fontSize:12}}>
+                  {r.client?.name||r.user?.name}
+                </div>
+                <div style={{color:"#475569",fontSize:11,marginTop:1}}>{r.msg}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ 2. KPIs EXECUTIVOS (8 cards) ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+      {/* MRR */}
+      <div style={{background:"#16a34a",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(22,163,74,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>💰</div>
+          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>MRR Total</div>
+        </div>
+        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{f$(mrr)}</div>
+        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>▲ 5% vs mês anterior</div>
+      </div>
+
+      {/* ROAS */}
+      <div style={{background:"#7c3aed",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(124,58,237,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🎯</div>
+          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>ROAS Médio</div>
+        </div>
+        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{avgRoas}x</div>
+        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>Meta + Google</div>
+      </div>
+
+      {/* LTV */}
+      <div style={{background:"#0891b2",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(8,145,178,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>💎</div>
+          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>LTV Médio</div>
+        </div>
+        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{f$(ltvMedio)}</div>
+        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>24 meses estimados</div>
+      </div>
+
+      {/* Churn */}
+      <div style={{background:"#1e293b",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(30,41,59,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📉</div>
+          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Churn 90d</div>
+        </div>
+        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>0%</div>
+        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>sem perdas</div>
+      </div>
+
+      {/* Clientes Ativos */}
+      <div style={{background:"#ea580c",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(234,88,12,0.2)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>👔</div>
+          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Clientes</div>
+        </div>
+        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{clientesAtivos}</div>
+        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>ativos</div>
+      </div>
+
+      {/* No Prazo */}
+      <div style={{background:noPrazoPct>=80?"#16a34a":noPrazoPct>=60?"#eab308":"#dc2626",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⏰</div>
+          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>No Prazo</div>
+        </div>
+        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{noPrazoPct}%</div>
+        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>{atrasadas.length} atrasadas</div>
+      </div>
+
+      {/* Saúde Média */}
+      <div style={{background:avgHealth>=80?"#16a34a":avgHealth>=60?"#eab308":"#dc2626",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>💚</div>
+          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Saúde Média</div>
+        </div>
+        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{avgHealth}%</div>
+        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>{clientesRisco.length} em risco</div>
+      </div>
+
+      {/* NPS */}
+      <div style={{background:avgNps>=80?"#16a34a":avgNps>=60?"#eab308":"#dc2626",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⭐</div>
+          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>NPS</div>
+        </div>
+        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{avgNps}</div>
+        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>média da carteira</div>
+      </div>
+    </div>
+
+    {/* ═══ 3. PIPELINE DE DEMANDAS (FUNIL) ═══ */}
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+      <div style={{padding:"12px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎯</div>
+        <div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Pipeline de Demandas</div>
+          <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>{active.length} demandas em toda a operação</div>
+        </div>
+      </div>
+      <div style={{padding:"14px 16px",display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8}}>
+        {pipeline.map(p=>(
+          <div key={p.status} style={{textAlign:"center"}}>
+            <div style={{background:p.color,borderRadius:10,padding:"12px 6px",boxShadow:"0 2px 6px rgba(0,0,0,0.1)"}}>
+              <div style={{fontSize:20,marginBottom:4}}>{p.icon}</div>
+              <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-1,lineHeight:1}}>{p.count}</div>
+            </div>
+            <div style={{color:C.td,fontSize:10,fontWeight:700,marginTop:6,textTransform:"uppercase",letterSpacing:.3}}>{p.label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* ═══ 4. TOP CLIENTES + CLIENTES EM RISCO ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {/* Top Clientes */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",background:"#eab308",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:28,height:28,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🏆</div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Top Clientes (MRR)</div>
+        </div>
+        <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
+          {topClientes.map((cl,i)=>{
+            const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":null;
+            return <div key={cl.id} style={{background:"#fafbfc",border:`1px solid ${C.b1}`,borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:10}}>
+              <div style={{minWidth:24,textAlign:"center",flexShrink:0}}>
+                {medal?<span style={{fontSize:18}}>{medal}</span>:<span style={{color:C.td,fontSize:10,fontWeight:700}}>#{i+1}</span>}
+              </div>
+              <ClientLogo clientId={cl.id} size="xs"/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:C.tx,fontWeight:700,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                <div style={{color:C.td,fontSize:10}}>Saúde {cl.health}%</div>
+              </div>
+              <div style={{color:"#16a34a",fontWeight:900,fontSize:13,flexShrink:0}}>{f$(cl.contract)}</div>
+            </div>;
+          })}
+        </div>
+      </div>
+
+      {/* Clientes em Risco */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",background:clientesRisco.length>0?"#dc2626":"#16a34a",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:28,height:28,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{clientesRisco.length>0?"🚨":"✅"}</div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Clientes em Risco</div>
+        </div>
+        <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
+          {clientesRisco.length===0?(
+            <div style={{padding:"20px",textAlign:"center",color:C.td,fontSize:12}}>
+              <div style={{fontSize:24,marginBottom:6}}>🎉</div>
+              Nenhum cliente em risco
+            </div>
+          ):clientesRisco.map(cl=>(
+            <div key={cl.id} style={{background:"#fef2f2",border:"1px solid #fecaca",borderLeft:"4px solid #dc2626",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:10}}>
+              <ClientLogo clientId={cl.id} size="xs"/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#dc2626",fontWeight:800,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                <div style={{color:"#991b1b",fontSize:10,marginTop:1}}>
+                  {cl.health<60&&`Saúde ${cl.health}%`}
+                  {cl.payment?.status==="atrasado"&&cl.health<60?" · ":""}
+                  {cl.payment?.status==="atrasado"&&"pag. atrasado"}
+                </div>
+              </div>
+              <div style={{background:"#dc2626",color:"#fff",borderRadius:6,padding:"3px 8px",fontSize:9,fontWeight:800,flexShrink:0}}>URGENTE</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* ═══ 5. PRODUTIVIDADE DA EQUIPE (30d) ═══ */}
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+      <div style={{padding:"12px 18px",background:"#2563eb",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>👥</div>
+        <div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Produtividade da Equipe</div>
+          <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>entregas nos últimos 30 dias</div>
+        </div>
+      </div>
+      <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+        {equipeStats.map((e,i)=>{
+          const pct=(e.done30d/maxDone)*100;
+          const medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":null;
+          return <div key={e.user.id} style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:28,textAlign:"center",flexShrink:0}}>
+              {medal?<span style={{fontSize:16}}>{medal}</span>:<span style={{color:C.td,fontSize:10,fontWeight:700}}>#{i+1}</span>}
+            </div>
+            <Av l={e.user.av} color={e.user.color} size={28} uid={e.user.id}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <div>
+                  <span style={{color:C.tx,fontSize:12,fontWeight:700}}>{e.user.name}</span>
+                  <span style={{color:C.td,fontSize:10,marginLeft:6}}>· {e.user.role}</span>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center",fontSize:10,fontWeight:700}}>
+                  {e.lateNow>0&&<span style={{color:"#dc2626"}}>🔥{e.lateNow}</span>}
+                  <span style={{color:C.td}}>📋 {e.activeNow} ativas</span>
+                  <span style={{color:e.user.color,fontSize:14,fontWeight:900}}>{e.done30d}</span>
+                </div>
+              </div>
+              <div style={{background:C.b1,borderRadius:99,height:6,overflow:"hidden"}}>
+                <div style={{width:pct+"%",height:"100%",background:e.user.color,borderRadius:99,transition:"width .6s ease"}}/>
+              </div>
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+
+    {/* ═══ 6. TABELA DE CLIENTES (visão completa) ═══ */}
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+      <div style={{padding:"12px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📋</div>
+        <div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Panorama dos Clientes</div>
+          <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>visão completa da carteira</div>
+        </div>
+      </div>
+      <div style={{overflow:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead>
+            <tr style={{background:"#f8fafc"}}>
+              <th style={{padding:"10px 14px",textAlign:"left",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Cliente</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>MRR</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Saúde</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>ROAS</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>NPS</th>
+              <th style={{padding:"10px 14px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Pag.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {CLIENTS.map(cl=>{
+              const healthColor=cl.health>=80?"#16a34a":cl.health>=60?"#eab308":"#dc2626";
+              const roasColor=(cl.meta?.roas||0)>=4?"#16a34a":(cl.meta?.roas||0)>=2?"#eab308":"#dc2626";
+              const npsColor=(cl.nps||0)>=80?"#16a34a":(cl.nps||0)>=60?"#eab308":"#dc2626";
+              const pagStatus=cl.payment?.status||"pendente";
+              const pagColor=pagStatus==="pago"?"#16a34a":pagStatus==="atrasado"?"#dc2626":"#eab308";
+              return <tr key={cl.id} style={{borderTop:`1px solid ${C.b1}`}}>
+                <td style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
+                  <ClientLogo clientId={cl.id} size="xs"/>
+                  <span style={{color:C.tx,fontWeight:700}}>{cl.name}</span>
+                </td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:"#16a34a",fontWeight:800}}>{f$(cl.contract)}</td>
+                <td style={{padding:"10px 8px",textAlign:"center"}}>
+                  <span style={{background:healthColor,color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>
+                    {cl.health}%
+                  </span>
+                </td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:roasColor,fontWeight:800}}>{(cl.meta?.roas||0).toFixed(1)}x</td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:npsColor,fontWeight:800}}>{cl.nps||0}</td>
+                <td style={{padding:"10px 14px",textAlign:"center"}}>
+                  <span style={{background:pagColor,color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>
+                    {pagStatus==="pago"?"Pago":pagStatus==="atrasado"?"Atras":"Pend"}
+                  </span>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {/* ═══ 7. PAGAMENTOS ATRASADOS + ATRASADAS ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      {/* Pagamentos em Atraso */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",background:pagAtras.length>0?"#dc2626":"#16a34a",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:28,height:28,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>💸</div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Pagamentos em Atraso</div>
+        </div>
+        <div style={{padding:"10px 12px"}}>
+          {pagAtras.length===0?(
+            <div style={{padding:"20px",textAlign:"center",color:C.td,fontSize:12}}>
+              <div style={{fontSize:24,marginBottom:6}}>💚</div>
+              Todos em dia
+            </div>
+          ):pagAtras.map(cl=>(
+            <div key={cl.id} style={{background:"#fef2f2",border:"1px solid #fecaca",borderLeft:"4px solid #dc2626",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+              <ClientLogo clientId={cl.id} size="xs"/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#dc2626",fontWeight:800,fontSize:12}}>{cl.name}</div>
+                <div style={{color:"#991b1b",fontSize:10,marginTop:1}}>Venc: {cl.payment?.date||"—"}</div>
+              </div>
+              <div style={{color:"#dc2626",fontWeight:900,fontSize:14,flexShrink:0}}>{f$(cl.contract)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Demandas Atrasadas */}
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+        <div style={{padding:"12px 16px",background:atrasadas.length>0?"#ea580c":"#16a34a",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:28,height:28,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🔥</div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Demandas Atrasadas</div>
+        </div>
+        <div style={{padding:"10px 12px",maxHeight:260,overflowY:"auto"}}>
+          {atrasadas.length===0?(
+            <div style={{padding:"20px",textAlign:"center",color:C.td,fontSize:12}}>
+              <div style={{fontSize:24,marginBottom:6}}>✅</div>
+              Tudo em dia
+            </div>
+          ):atrasadas.slice(0,8).map(t=>{
+            const u=TEAM.find(x=>x.id===t.assignee);
+            const cl=CLIENTS.find(c=>c.id===t.client);
+            const d=Math.abs(daysLeft(t.deadline)||0);
+            return <div key={t.id} style={{background:"#fff7ed",border:"1px solid #fed7aa",borderLeft:"4px solid #ea580c",borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#9a3412",fontWeight:700,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                <div style={{color:"#c2410c",fontSize:10,marginTop:1}}>{cl?.name||"—"} · {u?.name||"—"}</div>
+              </div>
+              <div style={{background:"#ea580c",color:"#fff",borderRadius:6,padding:"3px 8px",fontSize:9,fontWeight:800,flexShrink:0}}>
+                {d}d atraso
+              </div>
+            </div>;
+          })}
+          {atrasadas.length>8&&<div style={{textAlign:"center",color:C.td,fontSize:10,paddingTop:6}}>
+            +{atrasadas.length-8} mais
+          </div>}
+        </div>
+      </div>
+    </div>
+
   </div>;
 }
 
-function RenderDash({user,isViewing=false,tasks,setTasks,notifs}){
+function RenderDash({user,isViewing=false,tasks,setTasks,notifs,isMob}){
   switch(user.dash){
-    case"partner":     return <DashPartner     user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs}/>;
-    case"coordinator": return <DashCoordinator user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs}/>;
-    case"gestor":      return <DashGestor      user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs}/>;
-    case"designer":    return <DashDesigner    user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs}/>;
-    case"editor":      return <DashEditor      user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs}/>;
-    default:           return <DashPartner     user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs}/>;
+    case"partner":     return <DashPartner     user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
+    case"coordinator": return <DashCoordinator user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
+    case"gestor":      return <DashGestor      user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
+    case"designer":    return <DashDesigner    user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
+    case"editor":      return <DashEditor      user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
+    default:           return <DashPartner     user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
   }
 }
 
 // DashColaborador unifica DashCoordinator, DashGestor, DashDesigner, DashEditor
 // icon é definido pelo campo user.dash via DASH_ICONS
 const DASH_ICONS={coordinator:"📱",gestor:"📊",designer:"🎨",editor:"🎬"};
-function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notifs}){
+function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notifs,isMob}){
   // Tasks DELE (individual): onde ele é o responsável principal
   const tasks=(propTasks||[]).filter(t=>t.assignee===user.id||(t.assignees||[]).includes(user.id));
   const setTasks=propSetTasks||(()=>{});
@@ -796,7 +1457,7 @@ function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,n
     :[];
   return <PriorityDashCore user={user} tasks={tasks} allTasks={allTasks}
     supervisedTasks={supervisedTasks} supervisedUsers={supervisedUsers}
-    setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs}/>;
+    setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>;
 }
 // Aliases para compatibilidade com RenderDash
 const DashCoordinator=DashColaborador;
@@ -975,7 +1636,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     <DashboardAlerts userId={effectiveUser.id} isMob={isMob}/>
 
     {/* ── Conteúdo personalizado por perfil ── */}
-    <RenderDash user={effectiveUser} isViewing={isViewingOther} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs}/>
+    <RenderDash user={effectiveUser} isViewing={isViewingOther} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs} isMob={isMob}/>
   </div>;
 }
 
@@ -15683,7 +16344,7 @@ const sortByPriority=(tasks)=>{
   });
 };
 
-function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,setTasks,isViewing,icon,currentUser,notifs}){
+function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,setTasks,isViewing,icon,currentUser,notifs,isMob}){
   const [openCard,setOpenCard]=useState(null);
   const [showCustomize,setShowCustomize]=useState(false);
   const [widgets,setWidgets]=useState(()=>{
