@@ -231,9 +231,35 @@ const TEAM = [
   { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"E", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false },
-  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo",      av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false },
-  { id:"joao",      name:"João",      role:"Editor de Vídeo",      av:"J", color:C.yw,  level:3, status:"online",  dash:"editor",      canDelete:false, canPixelsIA:false },
+  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, supervises:["joao"] },
+  { id:"joao",      name:"João",      role:"Editor de Vídeo",      av:"J", color:C.yw,  level:3, status:"online",  dash:"editor",      canDelete:false, canPixelsIA:false, supervisor:"guilherme" },
 ];
+
+// Relações de supervisão: quem supervisiona quem.
+// Quando um subordinado é atribuído a uma task, o supervisor é adicionado automaticamente.
+// Fonte de verdade: os campos "supervises" e "supervisor" dentro do TEAM acima.
+const SUPERVISORS={};
+const SUBORDINATES={};
+TEAM.forEach(u=>{
+  if(u.supervises)u.supervises.forEach(subId=>{SUPERVISORS[subId]=u.id;});
+  if(u.supervisor)SUBORDINATES[u.supervisor]=SUBORDINATES[u.supervisor]||[];
+});
+TEAM.forEach(u=>{
+  if(u.supervisor){
+    SUBORDINATES[u.supervisor]=SUBORDINATES[u.supervisor]||[];
+    if(!SUBORDINATES[u.supervisor].includes(u.id))SUBORDINATES[u.supervisor].push(u.id);
+  }
+});
+
+// Dado um array de assignees, garante que os supervisores dos subordinados estejam incluídos
+function ensureSupervisors(assignees){
+  const set=new Set(assignees||[]);
+  (assignees||[]).forEach(id=>{
+    const sup=SUPERVISORS[id];
+    if(sup)set.add(sup);
+  });
+  return Array.from(set);
+}
 
 /* ─── CURRENT USER (proxy dinâmico) ─────── */
 // Reflete o usuário logado via window._pixelsUser sem criar dependência estática
@@ -758,11 +784,19 @@ function RenderDash({user,isViewing=false,tasks,setTasks,notifs}){
 // icon é definido pelo campo user.dash via DASH_ICONS
 const DASH_ICONS={coordinator:"📱",gestor:"📊",designer:"🎨",editor:"🎬"};
 function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notifs}){
-  const tasks=(propTasks||[]).filter(t=>t.assignee===user.id);
+  // Tasks DELE (individual): onde ele é o responsável principal
+  const tasks=(propTasks||[]).filter(t=>t.assignee===user.id||(t.assignees||[]).includes(user.id));
   const setTasks=propSetTasks||(()=>{});
   // Ellen (coordinator) precisa ver todas as tasks pra gerenciar a equipe
   const allTasks=propTasks||[];
-  return <PriorityDashCore user={user} tasks={tasks} allTasks={allTasks} setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs}/>;
+  // Supervisionados (pra supervisores tipo Guilherme → João)
+  const supervisedUsers=user.supervises||[];
+  const supervisedTasks=supervisedUsers.length>0
+    ?(propTasks||[]).filter(t=>!t.deletedAt&&(supervisedUsers.includes(t.assignee)||supervisedUsers.some(s=>(t.assignees||[]).includes(s))))
+    :[];
+  return <PriorityDashCore user={user} tasks={tasks} allTasks={allTasks}
+    supervisedTasks={supervisedTasks} supervisedUsers={supervisedUsers}
+    setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs}/>;
 }
 // Aliases para compatibilidade com RenderDash
 const DashCoordinator=DashColaborador;
@@ -15346,11 +15380,27 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             {showAssigneesPicker&&<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:100,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",marginTop:3,overflow:"hidden"}}>
               {TEAM.map((u,i)=>{
                 const sel=assignees.includes(u.id);
-                return <button key={u.id} onClick={()=>sel?setAssignees(p=>p.filter(x=>x!==u.id)):setAssignees(p=>[...p,u.id])}
+                const sup=SUPERVISORS[u.id]; // Se este user tem supervisor, mostra um aviso
+                const supUser=sup?TEAM.find(x=>x.id===sup):null;
+                const toggle=()=>{
+                  if(sel){
+                    // Remove esse user. Se for subordinado, NÃO remove o supervisor (pode estar lá por outros motivos)
+                    setAssignees(p=>p.filter(x=>x!==u.id));
+                  }else{
+                    // Adiciona ele + auto-adiciona o supervisor se for subordinado
+                    setAssignees(p=>ensureSupervisors([...p,u.id]));
+                  }
+                };
+                return <button key={u.id} onClick={toggle}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",border:"none",borderTop:i>0?"1px solid #f8fafc":"none",background:sel?"#eef2ff":"#fff",cursor:"pointer",textAlign:"left",transition:"background .1s"}}>
                   <div style={{width:24,height:24,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:9,flexShrink:0}}>{u.av}</div>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#1e293b",fontSize:12,fontWeight:sel?700:400}}>{u.name}</div>
+                    <div style={{color:"#1e293b",fontSize:12,fontWeight:sel?700:400}}>
+                      {u.name}
+                      {supUser&&<span style={{background:"#ede9fe",color:"#7c3aed",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:700,marginLeft:6}}>
+                        + {supUser.name.split(" ")[0]} auto
+                      </span>}
+                    </div>
                     <div style={{color:"#94a3b8",fontSize:10}}>{u.role}</div>
                   </div>
                   <div style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${sel?"#6366f1":"#cbd5e1"}`,background:sel?"#6366f1":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -15514,7 +15564,7 @@ const sortByPriority=(tasks)=>{
   });
 };
 
-function PriorityDashCore({user,tasks,allTasks,setTasks,isViewing,icon,currentUser,notifs}){
+function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,setTasks,isViewing,icon,currentUser,notifs}){
   const [openCard,setOpenCard]=useState(null);
   const [showCustomize,setShowCustomize]=useState(false);
   const [widgets,setWidgets]=useState(()=>{
@@ -15540,8 +15590,10 @@ function PriorityDashCore({user,tasks,allTasks,setTasks,isViewing,icon,currentUs
   const isEditor=user.dash==="editor";
   const isDesigner=user.dash==="designer";
   const isCoordinator=user.dash==="coordinator";
+  const isSupervisor=(supervisedUsers||[]).length>0; // Guilherme supervisiona o João
   const showNewWidgets=isEditor||isDesigner; // Editor e Designer compartilham a mesma visão
   const showCoordinatorWidgets=isCoordinator; // Ellen tem widgets próprios
+  const showSupervisorWidget=isSupervisor&&(supervisedTasks||[]).length>0;
 
   // Categoriza demandas por saúde
   const _atrasadas=active.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;});
@@ -15597,6 +15649,20 @@ function PriorityDashCore({user,tasks,allTasks,setTasks,isViewing,icon,currentUs
       return pd>=hoje&&pd<fim;
     });
   })();
+
+  // ═══ Stats do supervisor (Guilherme → João) ═══
+  const supStats=isSupervisor?supervisedUsers.map(uid=>{
+    const sub=TEAM.find(u=>u.id===uid);
+    if(!sub)return null;
+    const subActive=(supervisedTasks||[]).filter(t=>t.assignee===uid||(t.assignees||[]).includes(uid))
+      .filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado");
+    const subLate=subActive.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;});
+    const subUrg=subActive.filter(t=>{const d=daysLeft(t.deadline);return d===0;});
+    const saudePct=subActive.length>0?Math.round(((subActive.length-subLate.length-subUrg.length)/subActive.length)*100):100;
+    const saudeC=saudePct>=80?"#16a34a":saudePct>=60?"#eab308":"#dc2626";
+    const saudeL=saudePct>=80?"saudável":saudePct>=60?"atenção":"crítica";
+    return {user:sub,total:subActive.length,late:subLate.length,urgent:subUrg.length,saudePct,saudeC,saudeL,tasks:subActive};
+  }).filter(Boolean):[];
 
   // Próximos 7 dias (começa hoje)
   const proximos7dias=(()=>{
@@ -15720,6 +15786,80 @@ function PriorityDashCore({user,tasks,allTasks,setTasks,isViewing,icon,currentUs
           <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {_proxPrazoTask?_proxPrazoTask.title.slice(0,24)+(_proxPrazoTask.title.length>24?"…":""):"sem prazos"}
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ SUPERVISIONADOS (Guilherme → João) ═══ */}
+    {showSupervisorWidget&&(
+      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{padding:"14px 20px",background:"#7c3aed",
+            display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>👁</div>
+          <div>
+            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Sob sua supervisão</div>
+            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>acompanhe as demandas da sua equipe</div>
+          </div>
+        </div>
+        <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:10}}>
+          {supStats.map(s=>{
+            const isLate=s.late>0;
+            return <div key={s.user.id}>
+              {/* Header do subordinado */}
+              <div style={{
+                  background:isLate?"#fef2f2":s.total>0?"#f0fdf4":"#f8fafc",
+                  border:`1px solid ${isLate?"#fecaca":s.total>0?"#bbf7d0":"#e5e7eb"}`,
+                  borderLeft:`5px solid ${s.saudeC}`,
+                  borderRadius:10,padding:"12px 16px",
+                  display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+                <Av l={s.user.av} color={s.user.color} size={40} uid={s.user.id}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                    <span style={{color:C.tx,fontWeight:800,fontSize:14}}>{s.user.name}</span>
+                    <span style={{color:C.td,fontSize:10}}>· {s.user.role}</span>
+                    <span style={{background:s.saudeC,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
+                      {s.saudeL}
+                    </span>
+                  </div>
+                  <div style={{display:"flex",gap:14,color:C.td,fontSize:11,fontWeight:600}}>
+                    <span>📋 <strong style={{color:C.tx}}>{s.total}</strong> ativas</span>
+                    {s.late>0&&<span style={{color:"#dc2626"}}>🔥 <strong>{s.late}</strong> atrasadas</span>}
+                    {s.urgent>0&&<span style={{color:"#ea580c"}}>⚡ <strong>{s.urgent}</strong> hoje</span>}
+                  </div>
+                </div>
+                <div style={{background:s.saudeC,borderRadius:10,padding:"6px 12px",flexShrink:0,minWidth:56,textAlign:"center"}}>
+                  <div style={{color:"#fff",fontWeight:900,fontSize:18,lineHeight:1}}>{s.saudePct}%</div>
+                  <div style={{color:"#fff",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:2,opacity:0.95}}>saúde</div>
+                </div>
+              </div>
+              {/* Lista das tasks do subordinado (top 3) */}
+              {s.tasks.length>0&&<div style={{display:"flex",flexDirection:"column",gap:4,paddingLeft:16}}>
+                {sortByPriority(s.tasks).slice(0,3).map(t=>{
+                  const prio=getDemandPriority(t);
+                  const cl=CLIENTS.find(c=>c.id===t.client);
+                  return <div key={t.id} onClick={()=>setOpenCard(t)}
+                      style={{background:"#fff",border:`1px solid ${C.b1}`,borderLeft:`3px solid ${prio.bg}`,
+                          borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8,
+                          cursor:"pointer",transition:"transform .1s"}}
+                      onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+                      onMouseLeave={e=>e.currentTarget.style.transform=""}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:prio.bg,flexShrink:0}}/>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:C.tx,fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                      <div style={{color:C.td,fontSize:9,marginTop:1}}>{cl?.abbr||"—"} · {prio.label}</div>
+                    </div>
+                    <span style={{color:prio.bg,fontSize:10,fontWeight:700,flexShrink:0}}>{prio.icon}</span>
+                  </div>;
+                })}
+                {s.tasks.length>3&&<div style={{color:C.td,fontSize:10,paddingLeft:4,fontWeight:600}}>
+                  +{s.tasks.length-3} demanda{s.tasks.length-3>1?"s":""} mais
+                </div>}
+              </div>}
+            </div>;
+          })}
         </div>
       </div>
     )}
