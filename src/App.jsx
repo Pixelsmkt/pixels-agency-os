@@ -935,6 +935,9 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
       </div>
     </div>
 
+    {/* ── ALERTAS URGENTES — criados por admins/social media ── */}
+    <DashboardAlerts userId={effectiveUser.id} isMob={isMob}/>
+
     {/* ── Conteúdo personalizado por perfil ── */}
     <RenderDash user={effectiveUser} isViewing={isViewingOther} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs}/>
   </div>;
@@ -10552,6 +10555,164 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 }
 
 // ======= 07_notificacoes.jsx =======
+
+/* ═══════════════════════════════════════════════════════════════
+   SISTEMA DE ALERTAS URGENTES (sócios + social media criam, todos recebem)
+   Armazenado em localStorage na chave "pixels-alerts".
+   Cada alerta: {id, forUid|"all", fromUid, message, level, createdAt, resolvedAt?}
+   ═══════════════════════════════════════════════════════════════ */
+
+const ALERTS_KEY="pixels-alerts";
+
+function loadAllAlerts(){
+  try{const s=localStorage.getItem(ALERTS_KEY);if(s)return JSON.parse(s);}catch(e){}
+  return [];
+}
+function saveAllAlerts(alerts){
+  try{localStorage.setItem(ALERTS_KEY,JSON.stringify(alerts));
+    // Dispara evento pro dashboard ouvir
+    window.dispatchEvent(new Event("pixels-alerts-changed"));
+  }catch(e){}
+}
+function loadActiveAlertsFor(uid){
+  return loadAllAlerts()
+    .filter(a=>(a.forUid===uid||a.forUid==="all")&&!a.resolvedAt)
+    .sort((a,b)=>{
+      // Urgente > Atenção > Lembrete; depois mais recente primeiro
+      const lv={urgente:0,atencao:1,lembrete:2};
+      if(lv[a.level]!==lv[b.level])return lv[a.level]-lv[b.level];
+      return new Date(b.createdAt)-new Date(a.createdAt);
+    });
+}
+function createAlert({forUid,fromUid,message,level}){
+  const alerts=loadAllAlerts();
+  alerts.push({
+    id:"alert-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+    forUid,fromUid,message,level:level||"atencao",
+    createdAt:new Date().toISOString(),
+  });
+  saveAllAlerts(alerts);
+}
+function resolveAlert(id){
+  const alerts=loadAllAlerts();
+  const idx=alerts.findIndex(a=>a.id===id);
+  if(idx>=0){alerts[idx].resolvedAt=new Date().toISOString();saveAllAlerts(alerts);}
+}
+function deleteAlertForever(id){
+  saveAllAlerts(loadAllAlerts().filter(a=>a.id!==id));
+}
+function timeAgoBR(iso){
+  const diff=Date.now()-new Date(iso).getTime();
+  const m=Math.floor(diff/60000);
+  if(m<1)return"agora";
+  if(m<60)return m+"min";
+  const h=Math.floor(m/60);
+  if(h<24)return h+"h";
+  const d=Math.floor(h/24);
+  return d+"d";
+}
+
+// Metadados de cada nível de urgência
+const ALERT_LEVELS={
+  urgente:{label:"URGENTE",icon:"🚨",color:"#dc2626",bg:"#fef2f2",border:"#fecaca"},
+  atencao:{label:"ATENÇÃO",icon:"⚠",color:"#ea580c",bg:"#fff7ed",border:"#fed7aa"},
+  lembrete:{label:"LEMBRETE",icon:"📌",color:"#2563eb",bg:"#eff6ff",border:"#bfdbfe"},
+};
+
+/* ─── COMPONENTE: DashboardAlerts ─── (usado no Dashboard de cada user) */
+function DashboardAlerts({userId,isMob}){
+  const [alerts,setAlerts]=useState(()=>loadActiveAlertsFor(userId));
+  // Recarrega alertas quando mudam (via evento)
+  useEffect(()=>{
+    const refresh=()=>setAlerts(loadActiveAlertsFor(userId));
+    window.addEventListener("pixels-alerts-changed",refresh);
+    window.addEventListener("storage",refresh);
+    return()=>{
+      window.removeEventListener("pixels-alerts-changed",refresh);
+      window.removeEventListener("storage",refresh);
+    };
+  },[userId]);
+  // Recarrega quando muda o userId (view as)
+  useEffect(()=>{setAlerts(loadActiveAlertsFor(userId));},[userId]);
+
+  const shown=alerts.slice(0,2);
+
+  // Estado vazio — card pequeno e discreto
+  if(shown.length===0){
+    return <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:14,
+        padding:"14px 18px",display:"flex",alignItems:"center",gap:12,
+        maxWidth:860,margin:"0 auto",width:"100%"}}>
+      <div style={{width:36,height:36,borderRadius:10,background:"#16a34a",
+          display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>✅</div>
+      <div>
+        <div style={{color:"#166534",fontWeight:800,fontSize:13}}>Tudo tranquilo!</div>
+        <div style={{color:"#15803d",fontSize:11,marginTop:1}}>
+          Você não tem alertas urgentes no momento.
+        </div>
+      </div>
+    </div>;
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:8,
+      maxWidth:860,margin:"0 auto",width:"100%"}}>
+    {shown.map(alert=>{
+      const lv=ALERT_LEVELS[alert.level]||ALERT_LEVELS.atencao;
+      const from=TEAM.find(u=>u.id===alert.fromUid);
+      return <div key={alert.id} style={{
+          background:lv.bg,
+          border:`2px solid ${lv.border}`,
+          borderLeft:`6px solid ${lv.color}`,
+          borderRadius:12,
+          padding:"12px 16px",
+          display:"flex",
+          alignItems:"center",
+          gap:12,
+          boxShadow:alert.level==="urgente"?`0 0 0 3px ${lv.color}22`:"none",
+          animation:alert.level==="urgente"?"pulse 2s ease-in-out infinite":"none",
+        }}>
+        {/* Ícone urgência */}
+        <div style={{width:44,height:44,borderRadius:12,background:lv.color,
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,
+            flexShrink:0,boxShadow:`0 2px 6px ${lv.color}55`}}>
+          {lv.icon}
+        </div>
+        {/* Conteúdo */}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+            <span style={{background:lv.color,color:"#fff",borderRadius:6,padding:"2px 8px",
+                fontSize:9,fontWeight:800,letterSpacing:.6}}>
+              {lv.label}
+            </span>
+            {from&&<span style={{color:lv.color,fontSize:11,fontWeight:700}}>
+              {from.name.split(" ")[0]}
+            </span>}
+            <span style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>
+              · há {timeAgoBR(alert.createdAt)}
+            </span>
+          </div>
+          <div style={{color:"#1e293b",fontSize:13,fontWeight:600,lineHeight:1.4}}>
+            {alert.message}
+          </div>
+        </div>
+        {/* Botão resolver */}
+        <button
+          onClick={()=>{resolveAlert(alert.id);setAlerts(loadActiveAlertsFor(userId));}}
+          title="Marcar como resolvido"
+          style={{background:"#fff",border:`1px solid ${lv.color}`,borderRadius:8,
+              padding:"6px 12px",color:lv.color,fontSize:10,fontWeight:800,
+              cursor:"pointer",flexShrink:0,whiteSpace:"nowrap"}}
+          onMouseEnter={e=>{e.currentTarget.style.background=lv.color;e.currentTarget.style.color="#fff";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color=lv.color;}}>
+          ✓ Li e resolvi
+        </button>
+      </div>;
+    })}
+    {alerts.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textAlign:"center"}}>
+      +{alerts.length-2} alerta{alerts.length-2>1?"s":""} na página de Notificações
+    </div>}
+  </div>;
+}
+
 /* ─── SEED NOTIFS — exemplos e histórico demo ─────────── */
 // IDs prefixados com "seed-" para não colidir com notifs reais do NOTIF_STORE
 const SEED_NOTIFS=[
@@ -10581,6 +10742,31 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
   const [expanded,setExpanded]=useState({}); // which panels show "ver mais"
   const markRead=(id)=>{if(setNotifs)setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));};
   const markAllCat=(cat)=>{if(setNotifs)setNotifs(p=>p.map(n=>n.category===cat?{...n,read:true}:n));};
+
+  // ═══ Alertas: quem pode criar? Sócios + Social Media (coordinator) ═══
+  const canCreateAlerts=CURRENT_USER.level===1||CURRENT_USER.dash==="coordinator";
+  const [allAlerts,setAllAlerts]=useState(()=>loadAllAlerts());
+  const [alertMsg,setAlertMsg]=useState("");
+  const [alertTarget,setAlertTarget]=useState("all");
+  const [alertLevel,setAlertLevel]=useState("atencao");
+  const refreshAlerts=()=>setAllAlerts(loadAllAlerts());
+  useEffect(()=>{
+    const h=()=>refreshAlerts();
+    window.addEventListener("pixels-alerts-changed",h);
+    return()=>window.removeEventListener("pixels-alerts-changed",h);
+  },[]);
+  const handleCreateAlert=()=>{
+    if(!alertMsg.trim()){alert("Digite a mensagem do alerta.");return;}
+    createAlert({
+      forUid:alertTarget,
+      fromUid:CURRENT_USER.id,
+      message:alertMsg.trim(),
+      level:alertLevel,
+    });
+    setAlertMsg("");
+    refreshAlerts();
+  };
+  const activeAlerts=allAlerts.filter(a=>!a.resolvedAt).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
 
   // Seed data by category
   const ALL_NOTIFS=[...(notifs||[]),...SEED_NOTIFS];
@@ -10621,6 +10807,123 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
         ✓ Marcar todas como lidas
       </button>}
     </div>
+
+    {/* ═══ SEÇÃO CRIAR ALERTA — só admins + social media ═══ */}
+    {canCreateAlerts&&(
+      <div style={{background:"#fff",borderRadius:14,border:"1px solid #e5e7eb",
+          marginBottom:20,overflow:"hidden",boxShadow:"0 2px 6px rgba(0,0,0,0.06)"}}>
+        {/* Header */}
+        <div style={{background:"#dc2626",padding:"14px 18px",display:"flex",
+            alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"#fff",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⚡</div>
+          <div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:14}}>Criar Alerta para Colaborador</div>
+            <div style={{color:"#fff",fontSize:10,marginTop:1,opacity:0.9}}>
+              aparece em destaque no dashboard do colaborador
+            </div>
+          </div>
+        </div>
+        {/* Form */}
+        <div style={{padding:"16px 18px",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+          {/* Colaborador alvo */}
+          <div>
+            <label style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,display:"block"}}>Enviar para</label>
+            <select value={alertTarget} onChange={e=>setAlertTarget(e.target.value)}
+                style={{width:"100%",padding:"9px 12px",border:"1px solid #e5e7eb",
+                    borderRadius:8,fontSize:13,background:"#fff",color:"#1e293b",fontWeight:600}}>
+              <option value="all">🌐 Todos os colaboradores</option>
+              {TEAM.filter(u=>u.id!==CURRENT_USER.id).map(u=>(
+                <option key={u.id} value={u.id}>{u.name} — {u.role}</option>
+              ))}
+            </select>
+          </div>
+          {/* Nível */}
+          <div>
+            <label style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,display:"block"}}>Nível de urgência</label>
+            <div style={{display:"flex",gap:6}}>
+              {Object.entries(ALERT_LEVELS).map(([key,lv])=>(
+                <button key={key} onClick={()=>setAlertLevel(key)}
+                    style={{flex:1,padding:"9px 0",border:"none",borderRadius:8,
+                        background:alertLevel===key?lv.color:"#f1f5f9",
+                        color:alertLevel===key?"#fff":"#64748b",
+                        fontSize:11,fontWeight:800,cursor:"pointer",
+                        display:"flex",alignItems:"center",justifyContent:"center",gap:4,
+                        transition:"all .12s"}}>
+                  <span>{lv.icon}</span>
+                  <span>{lv.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* Mensagem */}
+          <div style={{gridColumn:isMob?"1":"1 / -1"}}>
+            <label style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,display:"block"}}>Mensagem do alerta</label>
+            <textarea value={alertMsg} onChange={e=>setAlertMsg(e.target.value)}
+                placeholder="Ex: Terminar o vídeo da Bioter até 18h hoje!"
+                rows={2}
+                style={{width:"100%",padding:"10px 12px",border:"1px solid #e5e7eb",
+                    borderRadius:8,fontSize:13,color:"#1e293b",resize:"vertical",fontFamily:"inherit"}}/>
+          </div>
+          {/* Botão criar */}
+          <div style={{gridColumn:isMob?"1":"1 / -1"}}>
+            <button onClick={handleCreateAlert}
+                disabled={!alertMsg.trim()}
+                style={{width:"100%",padding:"11px 0",
+                    background:alertMsg.trim()?"#dc2626":"#e5e7eb",
+                    color:alertMsg.trim()?"#fff":"#94a3b8",
+                    border:"none",borderRadius:10,fontSize:13,fontWeight:800,
+                    cursor:alertMsg.trim()?"pointer":"not-allowed",
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                    transition:"transform .1s"}}>
+              ⚡ Criar alerta
+            </button>
+          </div>
+        </div>
+
+        {/* Lista de alertas ATIVOS (criados por qualquer um) */}
+        {activeAlerts.length>0&&<div style={{borderTop:"1px solid #e5e7eb",background:"#f8fafc"}}>
+          <div style={{padding:"10px 18px",color:"#475569",fontSize:11,fontWeight:800,
+              textTransform:"uppercase",letterSpacing:.6,display:"flex",alignItems:"center",gap:6}}>
+            <span>📋 Alertas Ativos</span>
+            <span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800}}>{activeAlerts.length}</span>
+          </div>
+          <div style={{padding:"0 12px 12px",display:"flex",flexDirection:"column",gap:6}}>
+            {activeAlerts.map(a=>{
+              const lv=ALERT_LEVELS[a.level]||ALERT_LEVELS.atencao;
+              const from=TEAM.find(u=>u.id===a.fromUid);
+              const target=a.forUid==="all"?"Todos":(TEAM.find(u=>u.id===a.forUid)?.name||a.forUid);
+              return <div key={a.id} style={{background:"#fff",border:`1px solid #e5e7eb`,
+                  borderLeft:`4px solid ${lv.color}`,borderRadius:8,padding:"10px 12px",
+                  display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:28,height:28,borderRadius:7,background:lv.bg,
+                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
+                  {lv.icon}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2,flexWrap:"wrap"}}>
+                    <span style={{background:lv.color,color:"#fff",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:800,letterSpacing:.4}}>
+                      {lv.label}
+                    </span>
+                    <span style={{color:"#475569",fontSize:10,fontWeight:700}}>→ {target}</span>
+                    <span style={{color:"#94a3b8",fontSize:9}}>· {from?.name.split(" ")[0]||"?"} · há {timeAgoBR(a.createdAt)}</span>
+                  </div>
+                  <div style={{color:"#1e293b",fontSize:12,fontWeight:500,lineHeight:1.4}}>{a.message}</div>
+                </div>
+                <button onClick={()=>{if(confirm("Remover este alerta?")){deleteAlertForever(a.id);refreshAlerts();}}}
+                    title="Remover alerta"
+                    style={{background:"none",border:"1px solid #e5e7eb",borderRadius:6,
+                        padding:"5px 9px",color:"#94a3b8",fontSize:10,cursor:"pointer",flexShrink:0}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e5e7eb";}}>
+                  🗑
+                </button>
+              </div>;
+            })}
+          </div>
+        </div>}
+      </div>
+    )}
 
     {/* 4 panels grid */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
