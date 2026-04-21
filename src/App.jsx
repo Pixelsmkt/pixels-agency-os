@@ -17949,7 +17949,7 @@ export default function AgencyOS(){
               </span>}
             </button>
             {(!sideCollapsed||isMob)&&hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
-              {n.children.map(child=>(
+              {n.children.filter(child=>canSee(child,effectivePerms)).map(child=>(
                 <button key={child.id} onClick={()=>nav(child.id)}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:400,fontSize:11,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
                   <NavIcon id={child.id} size={14} color={page===child.id?C.a:C.ts}/><span style={{marginLeft:2}}>{child.label}</span>
