@@ -768,7 +768,20 @@ const DashGestor=DashColaborador;
 const DashDesigner=DashColaborador;
 const DashEditor=DashColaborador;
 
-function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif,selfProfile}){
+function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,notifs,setNotifs,onNavTo,onNotif,selfProfile,viewingAs}){
+  // Quando estamos "visualizando como" outro colaborador, trocamos TUDO pra esse user
+  const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs) || CURRENT_USER) : CURRENT_USER;
+  const isViewingOther = !!viewingAs;
+  // Se estamos visualizando outro, NÃO usar selfProfile (é do user real logado)
+  // Em vez disso, tentar buscar o perfil do user visualizado do localStorage
+  const effectiveProfile = (()=>{
+    if(!isViewingOther) return selfProfile;
+    try{
+      const s=localStorage.getItem("pixels-selfprofile-"+effectiveUser.id);
+      return s?JSON.parse(s):null;
+    }catch{return null;}
+  })();
+
   const allTasks=propTasks||[];
   const active=allTasks.filter(t=>!t.deletedAt);
   const urgent=active.filter(t=>taskUrgencyLevel(t)===0);
@@ -781,17 +794,17 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   // Demandas do mês atual
   const mesAtual=now.getMonth();
   const anoAtual=now.getFullYear();
-  const isCEO=CURRENT_USER.level===1;
+  const isCEO=effectiveUser.level===1;
   // Concluídas do mês — aprovadas com completedAt no mês
   const conclMes=active.filter(t=>{
     if(t.status!=="aprovado"||!t.completedAt)return false;
-    if(!isCEO&&!((t.assignees||[t.assignee]).includes(CURRENT_USER.id)))return false;
+    if(!isCEO&&!((t.assignees||[t.assignee]).includes(effectiveUser.id)))return false;
     const d=new Date(t.completedAt);
     return d.getMonth()===mesAtual&&d.getFullYear()===anoAtual;
   }).length;
   // Solicitadas do mês — criadas no mês
   const solic=active.filter(t=>{
-    if(!isCEO&&!((t.assignees||[t.assignee]).includes(CURRENT_USER.id)))return false;
+    if(!isCEO&&!((t.assignees||[t.assignee]).includes(effectiveUser.id)))return false;
     if(!t.createdAt)return false;
     // createdAt é string pt-BR ou ISO
     try{
@@ -802,20 +815,29 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   // Em aberto
   const emAberto=active.filter(t=>{
     if(isCEO)return t.status!=="aprovado";
-    return t.status!=="aprovado"&&(t.assignees||[t.assignee]).includes(CURRENT_USER.id);
+    return t.status!=="aprovado"&&(t.assignees||[t.assignee]).includes(effectiveUser.id);
   }).length;
 
   const COVER_COLORS=["#7c3aed","#2563eb","#0891b2","#059669","#d97706","#dc2626","#db2777","#1e293b","#0f172a"];
   const [coverColor,setCoverColor]=useState(()=>{
-    try{const s=localStorage.getItem("pixels-covercolor-"+CURRENT_USER.id);return s||CURRENT_USER.color||"#7c3aed";}catch{return CURRENT_USER.color||"#7c3aed";}
+    try{const s=localStorage.getItem("pixels-covercolor-"+effectiveUser.id);return s||effectiveUser.color||"#7c3aed";}catch{return effectiveUser.color||"#7c3aed";}
   });
+  // Ao mudar o user visualizado, recarrega a cor da capa desse user
+  useEffect(()=>{
+    try{const s=localStorage.getItem("pixels-covercolor-"+effectiveUser.id);setCoverColor(s||effectiveUser.color||"#7c3aed");}catch{}
+  },[effectiveUser.id]);
   const [showColorPicker,setShowColorPicker]=useState(false);
-  const saveCoverColor=(c)=>{setCoverColor(c);setShowColorPicker(false);try{localStorage.setItem("pixels-covercolor-"+CURRENT_USER.id,c);}catch(e){}};
-  const photo=getProfilePhoto(CURRENT_USER.id);
-  const displayName=selfProfile?.nome||CURRENT_USER.name;
-  const displayRole=selfProfile?.funcao||CURRENT_USER.role;
+  const saveCoverColor=(c)=>{
+    // Só deixa salvar cor se for o próprio user, não se estiver visualizando outro
+    if(isViewingOther)return;
+    setCoverColor(c);setShowColorPicker(false);
+    try{localStorage.setItem("pixels-covercolor-"+effectiveUser.id,c);}catch(e){}
+  };
+  const photo=getProfilePhoto(effectiveUser.id);
+  const displayName=effectiveProfile?.nome||effectiveUser.name;
+  const displayRole=effectiveProfile?.funcao||effectiveUser.role;
 
-  const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(CURRENT_USER.id));
+  const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(effectiveUser.id));
 
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
     {/* ── CAPA DO PERFIL ── */}
@@ -865,7 +887,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           <div style={{width:isMob?100:150,height:isMob?100:150,borderRadius:"50%",border:"3px solid "+C.b1,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
             {photo
               ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?38:56}}>{CURRENT_USER.av}</span>
+              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?38:56}}>{effectiveUser.av}</span>
             }
           </div>
 
@@ -915,7 +937,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     </div>
 
     {/* ── Conteúdo personalizado por perfil ── */}
-    <RenderDash user={CURRENT_USER} isViewing={false} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs}/>
+    <RenderDash user={effectiveUser} isViewing={isViewingOther} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs}/>
   </div>;
 }
 
@@ -15082,6 +15104,61 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
   const mainPrio=main?getDemandPriority(main):null;
   const mainCl=main?CLIENTS.find(c=>c.id===main.client):null;
 
+  // ═══ Stats do editor/designer pra widgets novos ═══
+  const isEditor=user.dash==="editor";
+  const isDesigner=user.dash==="designer";
+  const showNewWidgets=isEditor; // Por enquanto só editor, depois replicar pra designer e outros
+
+  // Categoriza demandas por saúde
+  const _atrasadas=active.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;});
+  const _urgentes=active.filter(t=>{const d=daysLeft(t.deadline);return d===0;});
+  const _atencao=active.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d>=1&&d<=3;});
+  const _noPrazo=active.filter(t=>{const d=daysLeft(t.deadline);return d===null||d>3;});
+  const totalAtivas=active.length||1;
+  const onTimePct=Math.round(((_noPrazo.length+_atencao.length)/totalAtivas)*100);
+  const saudeGeral=_atrasadas.length===0&&_urgentes.length===0?100:
+    Math.round((_noPrazo.length/totalAtivas)*100);
+  const saudeColor=saudeGeral>=80?C.gr:saudeGeral>=60?C.yw:C.rd;
+  const saudeLabel=saudeGeral>=80?"saudável":saudeGeral>=60?"atenção":"crítica";
+
+  // Próximo prazo (mais próximo com deadline)
+  const _comPrazo=active.filter(t=>t.deadline&&!isNaN(daysLeft(t.deadline))).sort((a,b)=>daysLeft(a.deadline)-daysLeft(b.deadline));
+  const _proxPrazoTask=_comPrazo[0];
+  const _proxPrazoDays=_proxPrazoTask?daysLeft(_proxPrazoTask.deadline):null;
+  const proximoPrazoLabel=_proxPrazoDays===null?"—":
+    _proxPrazoDays<0?`${Math.abs(_proxPrazoDays)}d atrás`:
+    _proxPrazoDays===0?"Hoje":
+    _proxPrazoDays===1?"Amanhã":
+    `${_proxPrazoDays}d`;
+  const proximoPrazoColor=_proxPrazoDays===null?C.td:
+    _proxPrazoDays<0?"#dc2626":
+    _proxPrazoDays===0?"#ef4444":
+    _proxPrazoDays<=2?"#f97316":C.gr;
+
+  // Próximos 7 dias (começa hoje)
+  const proximos7dias=(()=>{
+    const hoje=new Date();hoje.setHours(0,0,0,0);
+    const dias=[];
+    const diasSemana=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+    for(let i=0;i<7;i++){
+      const d=new Date(hoje);d.setDate(hoje.getDate()+i);
+      const dayTasks=active.filter(t=>{
+        if(!t.deadline)return false;
+        const td=new Date(t.deadline);td.setHours(0,0,0,0);
+        return td.getTime()===d.getTime();
+      });
+      dias.push({
+        date:d,
+        label:i===0?"Hoje":i===1?"Amanhã":diasSemana[d.getDay()],
+        dayNum:d.getDate(),
+        tasks:dayTasks,
+        isHoje:i===0,
+        isWeekend:d.getDay()===0||d.getDay()===6,
+      });
+    }
+    return dias;
+  })();
+
   const handleDone=(t)=>{
     if(isViewing)return;
     setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"avaliacao",colEnteredAt:new Date().toISOString(),completedAt:now.toISOString().split("T")[0]}:x));
@@ -15156,6 +15233,45 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
         ⚙ Personalizar
       </button>
     </div>
+
+    {/* ═══ KPIs ESTRATÉGICOS (Editor de Vídeo) ═══ */}
+    {showNewWidgets&&active.length>0&&(
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,
+          maxWidth:860,margin:"0 auto",width:"100%"}}>
+        {/* % No Prazo */}
+        <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"12px 14px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:saudeColor,borderRadius:"14px 14px 0 0"}}/>
+          <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>🎯 No Prazo</div>
+          <div style={{color:saudeColor,fontWeight:900,fontSize:24,lineHeight:1}}>{onTimePct}%</div>
+          <div style={{color:C.td,fontSize:10,marginTop:3}}>{_noPrazo.length+_atencao.length} de {totalAtivas}</div>
+        </div>
+        {/* Total */}
+        <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"12px 14px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:user.color,borderRadius:"14px 14px 0 0"}}/>
+          <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>📋 Total Ativas</div>
+          <div style={{color:C.tx,fontWeight:900,fontSize:24,lineHeight:1}}>{active.length}</div>
+          <div style={{color:C.td,fontSize:10,marginTop:3}}>demandas em andamento</div>
+        </div>
+        {/* Atrasadas */}
+        <div style={{background:_atrasadas.length>0?"#dc262618":C.card,borderRadius:14,border:`1px solid ${_atrasadas.length>0?"#dc262644":C.b1}`,padding:"12px 14px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:_atrasadas.length>0?"#dc2626":C.gr,borderRadius:"14px 14px 0 0"}}/>
+          <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>
+            {_atrasadas.length>0?"🔥":"✅"} Atrasadas
+          </div>
+          <div style={{color:_atrasadas.length>0?"#dc2626":C.gr,fontWeight:900,fontSize:24,lineHeight:1}}>{_atrasadas.length}</div>
+          <div style={{color:C.td,fontSize:10,marginTop:3}}>{_atrasadas.length===0?"tudo em dia":"precisam de ação"}</div>
+        </div>
+        {/* Próximo prazo */}
+        <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"12px 14px",position:"relative",overflow:"hidden"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:proximoPrazoColor,borderRadius:"14px 14px 0 0"}}/>
+          <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>⏰ Próximo Prazo</div>
+          <div style={{color:proximoPrazoColor,fontWeight:900,fontSize:24,lineHeight:1}}>{proximoPrazoLabel}</div>
+          <div style={{color:C.td,fontSize:10,marginTop:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {_proxPrazoTask?_proxPrazoTask.title.slice(0,22)+(_proxPrazoTask.title.length>22?"…":""):"sem prazos"}
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ── TOPO: cartão grande + 5 pequenos — centralizado ── */}
     {active.length>0
@@ -15257,6 +15373,108 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
         </div>
       </div>
     }
+
+    {/* ═══ SAÚDE DAS DEMANDAS — heatmap horizontal (Editor) ═══ */}
+    {showNewWidgets&&active.length>0&&(
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden"}}>
+        <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.b1}`,
+            display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:14}}>🌡</span>
+            <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Saúde das Demandas</div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{color:saudeColor,fontWeight:900,fontSize:18,letterSpacing:-.5}}>{saudeGeral}%</span>
+            <span style={{background:saudeColor+"18",color:saudeColor,borderRadius:99,padding:"2px 10px",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{saudeLabel}</span>
+          </div>
+        </div>
+        <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:10}}>
+          {[
+            {label:"Atrasadas",count:_atrasadas.length,color:"#dc2626",icon:"🔴",desc:"precisam de ação imediata"},
+            {label:"Vencem hoje",count:_urgentes.length,color:"#ef4444",icon:"🟠",desc:"entregar ainda hoje"},
+            {label:"Atenção (1-3d)",count:_atencao.length,color:"#f59e0b",icon:"🟡",desc:"chegando no prazo"},
+            {label:"No prazo",count:_noPrazo.length,color:"#16a34a",icon:"🟢",desc:"sem pressão"},
+          ].map(row=>{
+            const pct=totalAtivas>0?(row.count/totalAtivas)*100:0;
+            return <div key={row.label}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:11}}>{row.icon}</span>
+                  <span style={{color:C.tx,fontSize:12,fontWeight:600}}>{row.label}</span>
+                  <span style={{color:C.td,fontSize:10}}>— {row.desc}</span>
+                </div>
+                <span style={{color:row.color,fontWeight:800,fontSize:14}}>{row.count}</span>
+              </div>
+              <div style={{background:C.b1,borderRadius:99,height:8,overflow:"hidden"}}>
+                <div style={{width:pct+"%",height:"100%",background:row.color,borderRadius:99,transition:"width .6s ease"}}/>
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ PRÓXIMOS 7 DIAS — timeline visual (Editor) ═══ */}
+    {showNewWidgets&&(
+      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden"}}>
+        <div style={{padding:"12px 18px",borderBottom:`1px solid ${C.b1}`,
+            display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:14}}>📅</span>
+          <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Próximos 7 dias</div>
+          <span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>clique em um dia pra ver os detalhes</span>
+        </div>
+        <div style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
+          {proximos7dias.map((dia,idx)=>{
+            const total=dia.tasks.length;
+            const atrasadasDia=dia.tasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;}).length;
+            const bgColor=dia.isHoje?user.color+"18":
+                          total===0?C.s1:
+                          atrasadasDia>0?"#dc262614":
+                          total>3?"#f59e0b14":
+                          "#16a34a14";
+            const borderColor=dia.isHoje?user.color+"66":
+                              total===0?C.b1:
+                              atrasadasDia>0?"#dc262644":
+                              total>3?"#f59e0b44":
+                              "#16a34a44";
+            const textColor=atrasadasDia>0?"#dc2626":total>3?"#d97706":total>0?"#16a34a":C.td;
+            return <div key={idx} onClick={()=>total>0&&setOpenCard(dia.tasks[0])}
+              style={{
+                background:bgColor,
+                border:`1px solid ${borderColor}`,
+                borderRadius:10,
+                padding:"10px 6px",
+                textAlign:"center",
+                cursor:total>0?"pointer":"default",
+                transition:"transform .1s",
+                opacity:dia.isWeekend&&total===0?0.55:1,
+              }}
+              onMouseEnter={e=>{if(total>0)e.currentTarget.style.transform="translateY(-2px)";}}
+              onMouseLeave={e=>e.currentTarget.style.transform=""}>
+              <div style={{color:dia.isHoje?user.color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>
+                {dia.label}
+              </div>
+              <div style={{color:dia.isHoje?user.color:C.tx,fontSize:16,fontWeight:900,lineHeight:1,marginTop:3,marginBottom:6}}>
+                {dia.dayNum}
+              </div>
+              <div style={{color:textColor,fontSize:20,fontWeight:900,lineHeight:1}}>
+                {total}
+              </div>
+              <div style={{color:C.td,fontSize:9,marginTop:2}}>
+                {total===0?"livre":total===1?"tarefa":"tarefas"}
+              </div>
+              {atrasadasDia>0&&(
+                <div style={{color:"#dc2626",fontSize:9,fontWeight:700,marginTop:3}}>
+                  🔥 {atrasadasDia} atras.
+                </div>
+              )}
+            </div>;
+          })}
+        </div>
+      </div>
+    )}
 
     {/* ── SEÇÃO INFERIOR: notificações (esq) + infográfico (dir) ── */}
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,maxWidth:860,margin:"0 auto",width:"100%"}}>
