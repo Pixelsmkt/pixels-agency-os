@@ -899,39 +899,38 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
             <div style={{color:C.td,fontSize:12}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
           </div>
 
-          {/* Demandas do mês + badges */}
+          {/* Demandas do mês — simplificado: concluídas / ativas + badge atrasadas */}
           {!isMob&&<div style={{flexShrink:0,textAlign:"right",background:C.s1,borderRadius:14,padding:"14px 20px",border:`1px solid ${C.b1}`,alignSelf:"flex-start",marginTop:0}}>
             <div style={{color:C.td,fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:6}}>Demandas do mês</div>
             <div style={{display:"flex",alignItems:"flex-end",gap:6,justifyContent:"flex-end"}}>
               <div style={{textAlign:"center"}}>
-                <div style={{color:C.tx,fontWeight:900,fontSize:40,lineHeight:1}}>{conclMes}</div>
+                <div style={{color:C.gr,fontWeight:900,fontSize:40,lineHeight:1}}>{conclMes}</div>
                 <div style={{color:C.td,fontSize:10,marginTop:2}}>concluídas</div>
               </div>
               <div style={{color:C.td,fontSize:28,fontWeight:300,marginBottom:8}}>/</div>
               <div style={{textAlign:"center"}}>
-                <div style={{color:C.tx,fontWeight:900,fontSize:40,lineHeight:1}}>{solic}</div>
-                <div style={{color:C.td,fontSize:10,marginTop:2}}>solicitadas</div>
+                <div style={{color:"#2563eb",fontWeight:900,fontSize:40,lineHeight:1}}>{emAberto}</div>
+                <div style={{color:C.td,fontSize:10,marginTop:2}}>ativas</div>
               </div>
             </div>
-            <div style={{display:"flex",gap:6,marginTop:10,justifyContent:"center",flexWrap:"wrap"}}>
-              {emAberto>0&&<span style={{background:C.a+"18",color:C.a,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700}}>{emAberto} em aberto</span>}
-              {lateMes.length>0&&<span style={{background:"#ef444418",color:"#ef4444",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700}}>{lateMes.length} atrasada{lateMes.length>1?"s":""}</span>}
-            </div>
+            {lateMes.length>0&&<div style={{display:"flex",gap:6,marginTop:10,justifyContent:"center"}}>
+              <span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:800}}>🔥 {lateMes.length} atrasada{lateMes.length>1?"s":""}</span>
+            </div>}
           </div>}
         </div>
 
         {/* Mobile: demandas abaixo */}
         {isMob&&<div style={{display:"flex",justifyContent:"space-between",marginTop:-16,paddingTop:8,borderTop:`1px solid ${C.b1}`}}>
           <div style={{textAlign:"center"}}>
-            <div style={{color:C.tx,fontWeight:900,fontSize:28}}>{conclMes}</div>
+            <div style={{color:C.gr,fontWeight:900,fontSize:28}}>{conclMes}</div>
             <div style={{color:C.td,fontSize:9}}>concluídas</div>
           </div>
           <div style={{color:C.td,fontSize:20,alignSelf:"center"}}>/</div>
           <div style={{textAlign:"center"}}>
-            <div style={{color:C.tx,fontWeight:900,fontSize:28}}>{solic}</div>
-            <div style={{color:C.td,fontSize:9}}>solicitadas</div>
+            <div style={{color:"#2563eb",fontWeight:900,fontSize:28}}>{emAberto}</div>
+            <div style={{color:C.td,fontSize:9}}>ativas</div>
           </div>
-          {emAberto>0&&<span style={{background:C.a+"18",color:C.a,borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,alignSelf:"center"}}>{emAberto} em aberto</span>}
+          {lateMes.length>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:800,alignSelf:"center"}}>🔥 {lateMes.length}</span>}
         </div>}
       </div>
     </div>
@@ -15222,8 +15221,8 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
           <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{onTimePct}%</div>
           <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>{_noPrazo.length+_atencao.length} de {totalAtivas} demandas</div>
         </div>
-        {/* Total */}
-        <div style={{background:user.color,borderRadius:16,padding:"16px 18px",
+        {/* Total — cor neutra (azul), sempre igual (é só info) */}
+        <div style={{background:"#2563eb",borderRadius:16,padding:"16px 18px",
             display:"flex",flexDirection:"column",gap:6,minHeight:120,
             boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
