@@ -228,7 +228,7 @@ const KANBAN_COLS = [
 const TEAM = [
   { id:"vinicius",  name:"Vinicius",  role:"CEO / Gestor",          av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
   { id:"gustavo",   name:"Gustavo",   role:"CEO / Gestor",          av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"E", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
+  { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false },
   { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, supervises:["joao"] },
@@ -7101,7 +7101,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
       files:[],cover:C.a,deletedAt:null,bioterUnit:null,isAlteracao:false,ajustar:false,caption:"",publishDate:"",publishTime:"09:00",checklist:[],timeline:[{type:"created",label:"Demanda criada via Pixels IA",atFmt:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name}],colEnteredAt:new Date().toISOString(),createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:CURRENT_USER.name
     };
     const cards=[];
-    if(recipient==="ellen"||recipient==="both") cards.push({...base,id:mkId(),assignee:"ellen",title:`[Ellen] ${base.title}`,tags:[...base.tags,"social"]});
+    if(recipient==="ellen"||recipient==="both") cards.push({...base,id:mkId(),assignee:"ellen",title:`[Hellen] ${base.title}`,tags:[...base.tags,"social"]});
     if(recipient==="erick"||recipient==="both") cards.push({...base,id:mkId(),assignee:"erick",title:`[Erick] ${base.title}`,tags:[...base.tags,"ads"]});
     setTasks(p=>[...p,...cards]);
     setCreatedCards(cards); setStep("done");
@@ -11613,6 +11613,7 @@ const COLLAB_TABS=[
   {id:"pets",icon:"🐾",label:"Pets"},
   {id:"curiosidades",icon:"✨",label:"Curiosidades"},
   {id:"bio",icon:"📝",label:"Bio"},
+  {id:"seguranca",icon:"🔐",label:"Segurança",selfOnly:true},
 ];
 
 /* ─── LBL — fora do componente para evitar remount a cada render ─── */
@@ -11630,7 +11631,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
   const [nome,setNome]=useState(p.nome||user.name);
   const [funcao,setFuncao]=useState(p.funcao||user.role);
   const [telefone,setTelefone]=useState(p.telefone||"");
-  const [email,setEmail]=useState(p.email||user.id+"@agenciapixels.com.br");
+  const [email,setEmail]=useState(p.email||user.id+"@pixelsmarketing.com.br");
   const [nascimento,setNascimento]=useState(p.nascimento||"");
   const [photo,setPhoto]=useState(p.photo||null);
   const [cidade,setCidade]=useState(p.cidade||"");
@@ -11700,6 +11701,64 @@ function CollabProfilePage({user,profile,onSave,onClose}){
     onClose();
   };
 
+  // ═══ Segurança: trocar senha ═══
+  const [currentPw,setCurrentPw]=useState("");
+  const [newPw,setNewPw]=useState("");
+  const [confirmPw,setConfirmPw]=useState("");
+  const [showPws,setShowPws]=useState(false);
+  const [pwLoading,setPwLoading]=useState(false);
+  const [pwMsg,setPwMsg]=useState(null);
+
+  const pwStrength=(()=>{
+    const s=newPw;
+    if(!s)return null;
+    let score=0;
+    if(s.length>=8)score++;
+    if(s.length>=12)score++;
+    if(/[A-Z]/.test(s)&&/[a-z]/.test(s))score++;
+    if(/\d/.test(s))score++;
+    if(/[^A-Za-z0-9]/.test(s))score++;
+    if(score<=2)return{level:"fraca",color:"#dc2626",pct:30};
+    if(score<=3)return{level:"média",color:"#eab308",pct:60};
+    if(score<=4)return{level:"boa",color:"#16a34a",pct:80};
+    return{level:"excelente",color:"#059669",pct:100};
+  })();
+
+  const handleChangePassword=async()=>{
+    setPwMsg(null);
+    if(!currentPw||!newPw||!confirmPw){
+      setPwMsg({type:"error",text:"Preencha todos os campos."});return;
+    }
+    if(newPw.length<8){
+      setPwMsg({type:"error",text:"A nova senha deve ter pelo menos 8 caracteres."});return;
+    }
+    if(newPw!==confirmPw){
+      setPwMsg({type:"error",text:"A confirmação não bate com a nova senha."});return;
+    }
+    if(newPw===currentPw){
+      setPwMsg({type:"error",text:"A nova senha tem que ser diferente da atual."});return;
+    }
+    setPwLoading(true);
+    try{
+      const sb=window._sb;
+      // 1) Verifica a senha atual tentando relogar
+      const{data:authData}=await sb.auth.getUser();
+      const userEmail=authData?.user?.email;
+      if(!userEmail){throw new Error("Email não encontrado na sessão. Faça login novamente.");}
+      const{error:loginErr}=await sb.auth.signInWithPassword({email:userEmail,password:currentPw});
+      if(loginErr){throw new Error("Senha atual incorreta.");}
+      // 2) Atualiza a senha
+      const{error:updErr}=await sb.auth.updateUser({password:newPw});
+      if(updErr)throw new Error(updErr.message||"Falha ao atualizar a senha.");
+      setPwMsg({type:"success",text:"✓ Senha alterada com sucesso! Use a nova senha no próximo login."});
+      setCurrentPw("");setNewPw("");setConfirmPw("");
+    }catch(e){
+      setPwMsg({type:"error",text:e.message||"Erro ao trocar senha."});
+    }finally{
+      setPwLoading(false);
+    }
+  };
+
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:22,width:"100%",maxWidth:700,marginTop:8,border:"2px solid "+user.color,boxShadow:"0 0 60px "+user.color+"30"}}>
@@ -11723,7 +11782,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
         </div>
 
         <div style={{display:"flex",gap:2,background:C.s1,padding:4,flexWrap:"wrap"}}>
-          {COLLAB_TABS.map(t=>(
+          {COLLAB_TABS.filter(t=>!t.selfOnly||user.id===CURRENT_USER.id).map(t=>(
             <button key={t.id} onClick={()=>setActiveTab(t.id)}
               style={{flex:1,minWidth:80,background:activeTab===t.id?"linear-gradient(135deg,"+user.color+","+user.color+"cc)":"transparent",border:"none",padding:"10px 6px",color:activeTab===t.id?"#fff":C.ts,fontWeight:activeTab===t.id?800:500,fontSize:11,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,borderRadius:8}}>
               <span style={{fontSize:14}}>{t.icon}</span>
@@ -11739,7 +11798,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
             <div><LBL t="Função / Cargo"/><input value={funcao} onChange={e=>setFuncao(e.target.value)} style={inp} placeholder="Ex: Designer, Editor..."/></div>
             <div><LBL t="Telefone / WhatsApp"/><input value={telefone} onChange={e=>setTelefone(e.target.value)} style={inp} placeholder="(49) 9 9900-0000"/></div>
             <div><LBL t="Data de Nascimento"/><input type="date" value={nascimento} onChange={e=>setNascimento(e.target.value)} style={inp}/></div>
-            <div style={{gridColumn:"1/-1"}}><LBL t="E-mail profissional"/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={inp} placeholder="email@agenciapixels.com.br"/></div>
+            <div style={{gridColumn:"1/-1"}}><LBL t="E-mail profissional"/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} style={inp} placeholder="email@pixelsmarketing.com.br"/></div>
           </div>)}
 
           {activeTab==="pessoal"&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -11835,6 +11894,66 @@ function CollabProfilePage({user,profile,onSave,onClose}){
             <div><LBL t="Habilidades e ferramentas"/><textarea value={habilidades} onChange={e=>setHabilidades(e.target.value)} rows={2} placeholder="Ex: Photoshop, Premiere, Google Ads..." style={{...inp,resize:"vertical",lineHeight:1.7}}/></div>
             <div><LBL t="Objetivos profissionais"/><textarea value={objetivos} onChange={e=>setObjetivos(e.target.value)} rows={2} placeholder="O que você quer alcançar na carreira?" style={{...inp,resize:"vertical",lineHeight:1.7}}/></div>
             <div><LBL t="Observacoes gerais"/><textarea value={obs} onChange={e=>setObs(e.target.value)} rows={2} placeholder="Disponibilidade, preferencias de trabalho..." style={{...inp,resize:"vertical",lineHeight:1.7}}/></div>
+          </div>)}
+
+          {/* ═══ ABA SEGURANÇA — trocar senha (só no próprio perfil) ═══ */}
+          {activeTab==="seguranca"&&user.id===CURRENT_USER.id&&(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:500}}>
+            <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:12,padding:"14px 16px",display:"flex",gap:12,alignItems:"flex-start"}}>
+              <div style={{width:36,height:36,borderRadius:10,background:"#2563eb",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🔐</div>
+              <div>
+                <div style={{color:"#1e40af",fontWeight:800,fontSize:13,marginBottom:3}}>Trocar sua senha</div>
+                <div style={{color:"#1e40af",fontSize:11,lineHeight:1.5}}>
+                  Use uma senha forte com letras maiúsculas, minúsculas, números e símbolos. Mínimo 8 caracteres.
+                </div>
+              </div>
+            </div>
+
+            <div><LBL t="Senha atual"/>
+              <input type={showPws?"text":"password"} value={currentPw} onChange={e=>setCurrentPw(e.target.value)}
+                style={inp} placeholder="Digite sua senha atual" autoComplete="current-password"/>
+            </div>
+
+            <div><LBL t="Nova senha"/>
+              <input type={showPws?"text":"password"} value={newPw} onChange={e=>setNewPw(e.target.value)}
+                style={inp} placeholder="Mínimo 8 caracteres" autoComplete="new-password"/>
+              {pwStrength&&<div style={{marginTop:6}}>
+                <div style={{background:"#e5e7eb",borderRadius:99,height:4,overflow:"hidden"}}>
+                  <div style={{width:pwStrength.pct+"%",height:"100%",background:pwStrength.color,transition:"width .3s"}}/>
+                </div>
+                <div style={{color:pwStrength.color,fontSize:10,fontWeight:700,marginTop:4,textTransform:"uppercase",letterSpacing:.5}}>
+                  Força: {pwStrength.level}
+                </div>
+              </div>}
+            </div>
+
+            <div><LBL t="Confirmar nova senha"/>
+              <input type={showPws?"text":"password"} value={confirmPw} onChange={e=>setConfirmPw(e.target.value)}
+                style={inp} placeholder="Digite a nova senha de novo"/>
+              {confirmPw&&newPw&&confirmPw!==newPw&&(
+                <div style={{color:"#dc2626",fontSize:10,fontWeight:700,marginTop:4}}>⚠ As senhas não batem</div>
+              )}
+            </div>
+
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",color:C.ts,fontSize:12}}>
+              <input type="checkbox" checked={showPws} onChange={e=>setShowPws(e.target.checked)}/>
+              Mostrar senhas
+            </label>
+
+            {pwMsg&&<div style={{
+              background:pwMsg.type==="success"?"#f0fdf4":"#fef2f2",
+              border:`1px solid ${pwMsg.type==="success"?"#bbf7d0":"#fecaca"}`,
+              color:pwMsg.type==="success"?"#166534":"#991b1b",
+              borderRadius:10,padding:"10px 14px",fontSize:12,fontWeight:600}}>
+              {pwMsg.text}
+            </div>}
+
+            <button onClick={handleChangePassword} disabled={pwLoading||!currentPw||!newPw||!confirmPw}
+              style={{background:pwLoading||!currentPw||!newPw||!confirmPw?"#cbd5e1":"#2563eb",
+                color:"#fff",border:"none",borderRadius:10,padding:"12px 0",
+                fontWeight:800,fontSize:13,cursor:pwLoading||!currentPw||!newPw||!confirmPw?"not-allowed":"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              {pwLoading?"Alterando...":"🔐 Trocar senha"}
+            </button>
           </div>)}
 
           <div style={{display:"flex",gap:10,marginTop:4,paddingTop:14,borderTop:"1px solid "+C.b1}}>
@@ -12166,7 +12285,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
               </div>
               <div>
                 <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{collabProfiles[u.id]?.nome||u.name}</div>
-                <div style={{color:C.td,fontSize:11,marginTop:1}}>{u.id+"@agenciapixels.com.br"}</div>
+                <div style={{color:C.td,fontSize:11,marginTop:1}}>{u.id+"@pixelsmarketing.com.br"}</div>
               </div>
             </div>
 
@@ -15650,6 +15769,64 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
     });
   })();
 
+  // ═══ Stats visuais da Ellen — gráficos e rankings ═══
+  // 1) Distribuição de tarefas da equipe por status (donut)
+  const _teamTasks=allActive.filter(t=>(t.assignee&&_equipeSuperv.some(u=>u.id===t.assignee))||(t.assignees||[]).some(a=>_equipeSuperv.some(u=>u.id===a)));
+  const _statusDistrib=(()=>{
+    const map={
+      atrasada:{label:"Atrasadas",count:0,color:"#dc2626"},
+      execucao:{label:"Em Execução",count:0,color:"#eab308"},
+      avaliacao:{label:"Em Avaliação",count:0,color:"#ea580c"},
+      demanda:{label:"Em Fila",color:"#7c3aed",count:0},
+      agendado:{label:"Agendadas",count:0,color:"#2563eb"},
+    };
+    _teamTasks.forEach(t=>{
+      const d=daysLeft(t.deadline);
+      const isLate=d!==null&&d<0;
+      if(isLate&&map.atrasada){map.atrasada.count++;return;}
+      const st=t.status==="recebida"?"demanda":t.status;
+      if(map[st])map[st].count++;
+    });
+    return Object.entries(map).map(([k,v])=>({key:k,...v})).filter(x=>x.count>0);
+  })();
+  const _totalDistrib=_statusDistrib.reduce((a,b)=>a+b.count,0)||1;
+
+  // 2) Ranking de produtividade (últimos 7 dias — tasks aprovadas)
+  const _ranking=(()=>{
+    const hoje=new Date();hoje.setHours(0,0,0,0);
+    const inicio=new Date(hoje);inicio.setDate(hoje.getDate()-7);
+    const rank=_equipeSuperv.map(u=>{
+      const done=(allTasks||[]).filter(t=>{
+        if(t.status!=="aprovado"||!t.completedAt)return false;
+        if(t.assignee!==u.id&&!(t.assignees||[]).includes(u.id))return false;
+        const d=new Date(t.completedAt);
+        return d>=inicio;
+      }).length;
+      return {user:u,done};
+    }).sort((a,b)=>b.done-a.done);
+    return rank;
+  })();
+  const _maxRank=Math.max(..._ranking.map(r=>r.done),1);
+
+  // 3) Tempo médio por status (gargalo)
+  const _tempoPorStatus=(()=>{
+    const status=[
+      {key:"execucao",label:"Execução",color:"#eab308"},
+      {key:"avaliacao",label:"Avaliação",color:"#ea580c"},
+      {key:"agendado",label:"Agendado",color:"#2563eb"},
+    ];
+    return status.map(s=>{
+      const tasks=_teamTasks.filter(t=>t.status===s.key&&t.colEnteredAt);
+      const totalDias=tasks.reduce((acc,t)=>{
+        const dias=(Date.now()-new Date(t.colEnteredAt).getTime())/86400000;
+        return acc+dias;
+      },0);
+      const media=tasks.length>0?totalDias/tasks.length:0;
+      return {...s,media:Math.round(media*10)/10,count:tasks.length};
+    });
+  })();
+  const _gargalo=_tempoPorStatus.slice().sort((a,b)=>b.media-a.media)[0];
+
   // ═══ Stats do supervisor (Guilherme → João) ═══
   const supStats=isSupervisor?supervisedUsers.map(uid=>{
     const sub=TEAM.find(u=>u.id===uid);
@@ -15973,6 +16150,146 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
                 <div style={{color:"#fff",fontWeight:900,fontSize:18,lineHeight:1}}>{e.saudePct}%</div>
                 <div style={{color:"#fff",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:2,opacity:0.95}}>saúde</div>
               </div>
+            </div>;
+          })}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ VISÃO VISUAL — Distribuição + Ranking (Ellen) ═══ */}
+    {showCoordinatorWidgets&&_teamTasks.length>0&&(
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,
+          maxWidth:860,margin:"0 auto",width:"100%"}}>
+
+        {/* Donut: Distribuição de status */}
+        <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,overflow:"hidden",
+            boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+          <div style={{padding:"14px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:10,background:"#fff",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🍩</div>
+            <div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Distribuição</div>
+              <div style={{color:"#fff",fontSize:10,marginTop:1,opacity:0.9}}>{_teamTasks.length} tarefas da equipe</div>
+            </div>
+          </div>
+          <div style={{padding:"16px",display:"flex",alignItems:"center",gap:16}}>
+            {/* Donut SVG */}
+            <div style={{position:"relative",width:120,height:120,flexShrink:0}}>
+              <svg width="120" height="120" viewBox="0 0 120 120" style={{transform:"rotate(-90deg)"}}>
+                <circle cx="60" cy="60" r="50" fill="none" stroke="#e5e7eb" strokeWidth="14"/>
+                {(()=>{
+                  let offset=0;
+                  const circ=2*Math.PI*50;
+                  return _statusDistrib.map((s,i)=>{
+                    const pct=s.count/_totalDistrib;
+                    const len=circ*pct;
+                    const el=<circle key={i} cx="60" cy="60" r="50" fill="none"
+                      stroke={s.color} strokeWidth="14"
+                      strokeDasharray={`${len} ${circ}`}
+                      strokeDashoffset={-offset}/>;
+                    offset+=len;
+                    return el;
+                  });
+                })()}
+              </svg>
+              <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                <div style={{color:C.tx,fontWeight:900,fontSize:28,lineHeight:1}}>{_teamTasks.length}</div>
+                <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:2}}>total</div>
+              </div>
+            </div>
+            {/* Legenda */}
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+              {_statusDistrib.map(s=>{
+                const pct=Math.round((s.count/_totalDistrib)*100);
+                return <div key={s.key} style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:10,height:10,borderRadius:3,background:s.color,flexShrink:0}}/>
+                  <span style={{color:C.tx,fontSize:11,fontWeight:600,flex:1}}>{s.label}</span>
+                  <span style={{color:s.color,fontSize:12,fontWeight:900}}>{s.count}</span>
+                  <span style={{color:C.td,fontSize:10,fontWeight:600,minWidth:32,textAlign:"right"}}>{pct}%</span>
+                </div>;
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Ranking de Produtividade */}
+        <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,overflow:"hidden",
+            boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+          <div style={{padding:"14px 18px",background:"#16a34a",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:10,background:"#fff",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🏆</div>
+            <div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Ranking 7 dias</div>
+              <div style={{color:"#fff",fontSize:10,marginTop:1,opacity:0.9}}>entregas concluídas</div>
+            </div>
+          </div>
+          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:8}}>
+            {_ranking.map((r,i)=>{
+              const pct=(r.done/_maxRank)*100;
+              const medalColor=i===0?"#fbbf24":i===1?"#94a3b8":i===2?"#b45309":null;
+              const medalIcon=i===0?"🥇":i===1?"🥈":i===2?"🥉":null;
+              return <div key={r.user.id} style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:24,textAlign:"center",flexShrink:0}}>
+                  {medalIcon?<span style={{fontSize:16}}>{medalIcon}</span>:<span style={{color:C.td,fontSize:10,fontWeight:700}}>#{i+1}</span>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <span style={{color:C.tx,fontSize:11,fontWeight:700}}>{r.user.name}</span>
+                    <span style={{color:medalColor||r.user.color,fontSize:12,fontWeight:900}}>{r.done}</span>
+                  </div>
+                  <div style={{background:"#e5e7eb",borderRadius:99,height:8,overflow:"hidden"}}>
+                    <div style={{width:pct+"%",height:"100%",background:medalColor||r.user.color,transition:"width .6s ease"}}/>
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ GARGALO DA SEMANA (Ellen) ═══ */}
+    {showCoordinatorWidgets&&_teamTasks.length>0&&(
+      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,overflow:"hidden",
+          maxWidth:860,margin:"0 auto",width:"100%",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{padding:"14px 18px",background:_gargalo&&_gargalo.media>=3?"#dc2626":"#475569",
+            display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:32,height:32,borderRadius:10,background:"#fff",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
+            {_gargalo&&_gargalo.media>=3?"⚠":"⏱"}
+          </div>
+          <div style={{flex:1}}>
+            <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Tempo Médio por Status</div>
+            <div style={{color:"#fff",fontSize:10,marginTop:1,opacity:0.9}}>
+              {_gargalo&&_gargalo.count>0?`Gargalo: ${_gargalo.label} (${_gargalo.media}d em média)`:"sem gargalos detectados"}
+            </div>
+          </div>
+        </div>
+        <div style={{padding:"16px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+          {_tempoPorStatus.map(s=>{
+            const isGargalo=_gargalo&&s.key===_gargalo.key&&s.media>=3;
+            return <div key={s.key} style={{
+                background:isGargalo?"#fef2f2":"#f8fafc",
+                border:`1px solid ${isGargalo?"#fecaca":"#e5e7eb"}`,
+                borderLeft:`5px solid ${s.color}`,
+                borderRadius:10,padding:"12px 14px"}}>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>
+                {s.label}
+              </div>
+              <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+                <span style={{color:isGargalo?"#dc2626":s.color,fontWeight:900,fontSize:26,lineHeight:1,letterSpacing:-1}}>
+                  {s.media}
+                </span>
+                <span style={{color:C.td,fontSize:11,fontWeight:700}}>dias</span>
+              </div>
+              <div style={{color:C.td,fontSize:10,marginTop:3,fontWeight:600}}>
+                {s.count===0?"nenhuma tarefa":`${s.count} tarefa${s.count>1?"s":""}`}
+              </div>
+              {isGargalo&&<div style={{background:"#dc2626",color:"#fff",borderRadius:6,
+                  padding:"3px 8px",fontSize:9,fontWeight:800,marginTop:6,display:"inline-block",letterSpacing:.3}}>
+                🔥 GARGALO
+              </div>}
             </div>;
           })}
         </div>
@@ -17232,9 +17549,32 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
       <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:400,height:400,borderRadius:"50%",background:C.a,opacity:.04,filter:"blur(80px)",pointerEvents:"none"}}/>
       <div style={{width:"100%",maxWidth:380,padding:"0 20px"}}>
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:36}}>
-          <div style={{width:60,height:60,borderRadius:18,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,marginBottom:14,boxShadow:`0 8px 32px ${C.a}40`}}>⬡</div>
-          <div style={{color:C.tx,fontWeight:900,fontSize:22,letterSpacing:-.5}}>Pixels Agency OS</div>
-          <div style={{color:C.td,fontSize:12,marginTop:4}}>Acesso restrito</div>
+          {/* Logo Pixels — grid 3x3 de pixels em gradiente roxo */}
+          <div style={{width:84,height:84,borderRadius:20,background:`linear-gradient(135deg,${C.a},${C.aD})`,
+              display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16,
+              boxShadow:`0 12px 40px ${C.a}55,inset 0 0 0 1px rgba(255,255,255,0.12)`,
+              position:"relative",overflow:"hidden"}}>
+            {/* Grid de pixels brancos formando padrão "P" */}
+            <svg width="52" height="52" viewBox="0 0 60 60">
+              {/* Linha 1 */}
+              <rect x="4"  y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
+              <rect x="22" y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
+              <rect x="40" y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.6"/>
+              {/* Linha 2 */}
+              <rect x="4"  y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
+              <rect x="22" y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
+              <rect x="40" y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
+              {/* Linha 3 */}
+              <rect x="4"  y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
+              <rect x="22" y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
+              <rect x="40" y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
+            </svg>
+          </div>
+          <div style={{color:C.tx,fontWeight:900,fontSize:26,letterSpacing:-.8,lineHeight:1}}>
+            <span style={{background:`linear-gradient(135deg,${C.a},${C.aL})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>PIXELS</span>
+          </div>
+          <div style={{color:C.ts,fontWeight:600,fontSize:12,letterSpacing:2,marginTop:6,textTransform:"uppercase"}}>Agency OS</div>
+          <div style={{color:C.td,fontSize:10,marginTop:10,fontWeight:500}}>Acesso restrito à equipe</div>
         </div>
         <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:20,padding:"28px 28px 24px",boxShadow:"0 24px 64px rgba(0,0,0,0.3)"}}>
           <div style={{marginBottom:14}}>
