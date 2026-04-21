@@ -15206,63 +15206,64 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
       </div>
     </div>
 
-    {/* ═══ KPIs ESTRATÉGICOS (Editor de Vídeo) — versão colorida ═══ */}
+    {/* ═══ KPIs ESTRATÉGICOS (Editor de Vídeo) — cores sólidas ═══ */}
     {showNewWidgets&&active.length>0&&(
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
         {/* % No Prazo */}
-        <div style={{background:`linear-gradient(135deg,${saudeColor}18,${saudeColor}06)`,
-            borderRadius:16,border:`2px solid ${saudeColor}44`,padding:"14px 16px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:110}}>
+        <div style={{background:saudeColor,borderRadius:16,padding:"16px 18px",
+            display:"flex",flexDirection:"column",gap:6,minHeight:120,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:saudeColor+"22",
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🎯</div>
-            <div style={{color:saudeColor,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>No Prazo</div>
+            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>No Prazo</div>
           </div>
-          <div style={{color:saudeColor,fontWeight:900,fontSize:32,lineHeight:1,letterSpacing:-1}}>{onTimePct}%</div>
-          <div style={{color:C.ts,fontSize:11,fontWeight:600}}>{_noPrazo.length+_atencao.length} de {totalAtivas} demandas</div>
+          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{onTimePct}%</div>
+          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>{_noPrazo.length+_atencao.length} de {totalAtivas} demandas</div>
         </div>
         {/* Total */}
-        <div style={{background:`linear-gradient(135deg,${user.color}18,${user.color}06)`,
-            borderRadius:16,border:`2px solid ${user.color}44`,padding:"14px 16px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:110}}>
+        <div style={{background:user.color,borderRadius:16,padding:"16px 18px",
+            display:"flex",flexDirection:"column",gap:6,minHeight:120,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:user.color+"22",
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>📋</div>
-            <div style={{color:user.color,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Total Ativas</div>
+            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Total Ativas</div>
           </div>
-          <div style={{color:user.color,fontWeight:900,fontSize:32,lineHeight:1,letterSpacing:-1}}>{active.length}</div>
-          <div style={{color:C.ts,fontSize:11,fontWeight:600}}>em andamento</div>
+          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{active.length}</div>
+          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>em andamento</div>
         </div>
         {/* Atrasadas */}
-        <div style={{background:_atrasadas.length>0?"linear-gradient(135deg,#dc262622,#dc262608)":"linear-gradient(135deg,#16a34a22,#16a34a08)",
-            borderRadius:16,border:`2px solid ${_atrasadas.length>0?"#dc262666":"#16a34a66"}`,
-            padding:"14px 16px",display:"flex",flexDirection:"column",gap:6,minHeight:110}}>
+        <div style={{background:_atrasadas.length>0?"#dc2626":"#16a34a",
+            borderRadius:16,padding:"16px 18px",
+            display:"flex",flexDirection:"column",gap:6,minHeight:120,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:_atrasadas.length>0?"#dc262633":"#16a34a33",
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>
               {_atrasadas.length>0?"🔥":"✅"}
             </div>
-            <div style={{color:_atrasadas.length>0?"#dc2626":"#16a34a",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>
+            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>
               Atrasadas
             </div>
           </div>
-          <div style={{color:_atrasadas.length>0?"#dc2626":"#16a34a",fontWeight:900,fontSize:32,lineHeight:1,letterSpacing:-1}}>{_atrasadas.length}</div>
-          <div style={{color:C.ts,fontSize:11,fontWeight:600}}>
-            {_atrasadas.length===0?"tudo em dia 🎉":"⚠ precisam de ação"}
+          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{_atrasadas.length}</div>
+          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>
+            {_atrasadas.length===0?"tudo em dia 🎉":"precisam de ação"}
           </div>
         </div>
         {/* Próximo prazo */}
-        <div style={{background:`linear-gradient(135deg,${proximoPrazoColor}22,${proximoPrazoColor}06)`,
-            borderRadius:16,border:`2px solid ${proximoPrazoColor}66`,padding:"14px 16px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:110}}>
+        <div style={{background:proximoPrazoColor,borderRadius:16,padding:"16px 18px",
+            display:"flex",flexDirection:"column",gap:6,minHeight:120,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:proximoPrazoColor+"33",
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⏰</div>
-            <div style={{color:proximoPrazoColor,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Próximo Prazo</div>
+            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Próximo Prazo</div>
           </div>
-          <div style={{color:proximoPrazoColor,fontWeight:900,fontSize:26,lineHeight:1,letterSpacing:-.8}}>{proximoPrazoLabel}</div>
-          <div style={{color:C.ts,fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          <div style={{color:"#ffffff",fontWeight:900,fontSize:30,lineHeight:1,letterSpacing:-.8}}>{proximoPrazoLabel}</div>
+          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {_proxPrazoTask?_proxPrazoTask.title.slice(0,24)+(_proxPrazoTask.title.length>24?"…":""):"sem prazos"}
           </div>
         </div>
@@ -15370,74 +15371,68 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
       </div>
     }
 
-    {/* ═══ SAÚDE DAS DEMANDAS — donut + barras coloridas (Editor) ═══ */}
+    {/* ═══ SAÚDE DAS DEMANDAS — donut + cards sólidos (Editor) ═══ */}
     {showNewWidgets&&active.length>0&&(
-      <div style={{background:`linear-gradient(135deg,${saudeColor}08,${C.card})`,
-          borderRadius:16,border:`2px solid ${saudeColor}44`,
-          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden"}}>
-        {/* Header */}
-        <div style={{padding:"14px 20px",borderBottom:`1px solid ${saudeColor}22`,
-            display:"flex",alignItems:"center",justifyContent:"space-between",
-            background:saudeColor+"12"}}>
+      <div style={{background:C.card,borderRadius:16,
+          border:`1px solid ${C.b1}`,
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        {/* Header sólido colorido */}
+        <div style={{padding:"14px 20px",background:saudeColor,
+            display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:32,height:32,borderRadius:10,background:saudeColor+"33",
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
                 display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🌡</div>
             <div>
-              <div style={{color:C.tx,fontWeight:800,fontSize:14}}>Saúde das Demandas</div>
-              <div style={{color:C.td,fontSize:10,marginTop:1}}>distribuição por urgência</div>
+              <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Saúde das Demandas</div>
+              <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>distribuição por urgência</div>
             </div>
           </div>
-          <span style={{background:saudeColor,color:"#fff",borderRadius:99,padding:"4px 14px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>
+          <span style={{background:"#ffffff",color:saudeColor,borderRadius:99,padding:"5px 16px",fontSize:11,fontWeight:900,textTransform:"uppercase",letterSpacing:.6}}>
             {saudeLabel}
           </span>
         </div>
 
-        {/* Conteúdo: donut à esquerda + barras à direita */}
+        {/* Conteúdo: donut à esquerda + cards sólidos à direita */}
         <div style={{padding:"20px",display:"grid",gridTemplateColumns:"auto 1fr",gap:24,alignItems:"center"}}>
           {/* Donut chart (SVG) */}
-          <div style={{position:"relative",width:130,height:130,flexShrink:0}}>
-            <svg width="130" height="130" viewBox="0 0 130 130" style={{transform:"rotate(-90deg)"}}>
-              <circle cx="65" cy="65" r="55" fill="none" stroke={C.b1} strokeWidth="14"/>
-              <circle cx="65" cy="65" r="55" fill="none" stroke={saudeColor} strokeWidth="14"
-                strokeDasharray={2*Math.PI*55}
-                strokeDashoffset={2*Math.PI*55*(1-saudeGeral/100)}
+          <div style={{position:"relative",width:140,height:140,flexShrink:0}}>
+            <svg width="140" height="140" viewBox="0 0 140 140" style={{transform:"rotate(-90deg)"}}>
+              <circle cx="70" cy="70" r="60" fill="none" stroke="#e5e7eb" strokeWidth="16"/>
+              <circle cx="70" cy="70" r="60" fill="none" stroke={saudeColor} strokeWidth="16"
+                strokeDasharray={2*Math.PI*60}
+                strokeDashoffset={2*Math.PI*60*(1-saudeGeral/100)}
                 strokeLinecap="round"
                 style={{transition:"stroke-dashoffset .8s ease"}}/>
             </svg>
             <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-              <div style={{color:saudeColor,fontWeight:900,fontSize:30,lineHeight:1,letterSpacing:-1}}>{saudeGeral}%</div>
-              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:2}}>saúde</div>
+              <div style={{color:saudeColor,fontWeight:900,fontSize:34,lineHeight:1,letterSpacing:-1}}>{saudeGeral}%</div>
+              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>saúde</div>
             </div>
           </div>
 
-          {/* Barras coloridas */}
-          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {/* Cards sólidos (2x2) */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             {[
-              {label:"Atrasadas",count:_atrasadas.length,color:"#dc2626",icon:"🔥",bg:"#fee2e2"},
-              {label:"Vencem hoje",count:_urgentes.length,color:"#ef4444",icon:"⚡",bg:"#fef2f2"},
-              {label:"Atenção (1-3d)",count:_atencao.length,color:"#f59e0b",icon:"⏳",bg:"#fef3c7"},
-              {label:"No prazo",count:_noPrazo.length,color:"#16a34a",icon:"✅",bg:"#dcfce7"},
+              {label:"Atrasadas",count:_atrasadas.length,color:"#dc2626",icon:"🔥"},
+              {label:"Vencem hoje",count:_urgentes.length,color:"#ea580c",icon:"⚡"},
+              {label:"Atenção 1-3d",count:_atencao.length,color:"#eab308",icon:"⏳"},
+              {label:"No prazo",count:_noPrazo.length,color:"#16a34a",icon:"✅"},
             ].map(row=>{
-              const pct=totalAtivas>0?(row.count/totalAtivas)*100:0;
               const isZero=row.count===0;
-              return <div key={row.label} style={{display:"flex",alignItems:"center",gap:10,
-                  background:isZero?C.s1:row.bg,
-                  borderRadius:10,padding:"8px 12px",
-                  border:`1px solid ${isZero?C.b1:row.color+"33"}`,
-                  opacity:isZero?0.55:1}}>
-                <div style={{width:28,height:28,borderRadius:8,
-                    background:isZero?C.b1:row.color+"22",
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
+              return <div key={row.label} style={{
+                background:isZero?"#e5e7eb":row.color,
+                borderRadius:12,padding:"12px 14px",
+                display:"flex",alignItems:"center",gap:10,
+                boxShadow:isZero?"none":"0 2px 6px rgba(0,0,0,0.1)"}}>
+                <div style={{width:36,height:36,borderRadius:10,
+                    background:"#ffffff",
+                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
                   {row.icon}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                    <span style={{color:isZero?C.td:row.color,fontSize:12,fontWeight:800}}>{row.label}</span>
-                    <span style={{color:isZero?C.td:row.color,fontWeight:900,fontSize:16,letterSpacing:-.3}}>{row.count}</span>
-                  </div>
-                  <div style={{background:isZero?C.b1:"#fff",borderRadius:99,height:6,overflow:"hidden"}}>
-                    <div style={{width:pct+"%",height:"100%",background:row.color,borderRadius:99,transition:"width .8s ease"}}/>
-                  </div>
+                  <div style={{color:isZero?"#64748b":"#ffffff",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{row.label}</div>
+                  <div style={{color:isZero?"#94a3b8":"#ffffff",fontWeight:900,fontSize:24,lineHeight:1,letterSpacing:-.5,marginTop:2}}>{row.count}</div>
                 </div>
               </div>;
             })}
@@ -15446,18 +15441,18 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
       </div>
     )}
 
-    {/* ═══ PRÓXIMOS 7 DIAS — timeline colorida (Editor) ═══ */}
+    {/* ═══ PRÓXIMOS 7 DIAS — cards sólidos coloridos (Editor) ═══ */}
     {showNewWidgets&&(
-      <div style={{background:C.card,borderRadius:16,border:`2px solid ${user.color}33`,
-          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden"}}>
-        <div style={{padding:"14px 20px",borderBottom:`1px solid ${user.color}22`,
-            background:`linear-gradient(135deg,${user.color}18,${user.color}06)`,
+      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{padding:"14px 20px",background:user.color,
             display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:32,height:32,borderRadius:10,background:user.color+"33",
+          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📅</div>
           <div>
-            <div style={{color:C.tx,fontWeight:800,fontSize:14}}>Próximos 7 dias</div>
-            <div style={{color:C.td,fontSize:10,marginTop:1}}>distribuição de prazos da semana</div>
+            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Próximos 7 dias</div>
+            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>distribuição de prazos da semana</div>
           </div>
         </div>
         <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
@@ -15465,50 +15460,50 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
             const total=dia.tasks.length;
             const atrasadasDia=dia.tasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;}).length;
             const urgentesDia=dia.tasks.filter(t=>{const d=daysLeft(t.deadline);return d===0;}).length;
-            // Cor dominante baseada no nível de urgência
-            const primary=atrasadasDia>0?"#dc2626":urgentesDia>0?"#ef4444":total>3?"#f59e0b":total>0?"#16a34a":null;
+            // Cor dominante sólida
+            const primary=atrasadasDia>0?"#dc2626":urgentesDia>0?"#ea580c":total>3?"#eab308":total>0?"#16a34a":null;
             const isHoje=dia.isHoje;
             const hasTask=total>0;
+            // Cor do card: se hoje, cor do usuário. Se tem tasks, cor da urgência. Senão, cinza claro.
+            const cardBg=isHoje?user.color:hasTask?primary:"#e5e7eb";
+            const textColor=isHoje||hasTask?"#ffffff":"#64748b";
 
             return <div key={idx} onClick={()=>hasTask&&setOpenCard(dia.tasks[0])}
               style={{
-                background:isHoje?`linear-gradient(135deg,${user.color}22,${user.color}08)`:
-                           hasTask?`linear-gradient(135deg,${primary}22,${primary}06)`:
-                           C.s1,
-                border:isHoje?`2px solid ${user.color}`:
-                       hasTask?`2px solid ${primary}66`:
-                       `1px solid ${C.b1}`,
+                background:cardBg,
                 borderRadius:12,
                 padding:"12px 6px",
                 textAlign:"center",
                 cursor:hasTask?"pointer":"default",
                 transition:"transform .15s,box-shadow .15s",
-                opacity:dia.isWeekend&&!hasTask?0.5:1,
+                opacity:dia.isWeekend&&!hasTask?0.6:1,
                 position:"relative",
                 overflow:"hidden",
+                boxShadow:hasTask||isHoje?"0 2px 6px rgba(0,0,0,0.12)":"none",
               }}
-              onMouseEnter={e=>{if(hasTask){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 4px 12px rgba(0,0,0,0.1)";}}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
+              onMouseEnter={e=>{if(hasTask){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 6px 14px rgba(0,0,0,0.18)";}}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=hasTask||isHoje?"0 2px 6px rgba(0,0,0,0.12)":"none";}}>
               {/* Dot "hoje" */}
               {isHoje&&<div style={{position:"absolute",top:6,right:6,width:8,height:8,
-                  borderRadius:"50%",background:user.color,boxShadow:`0 0 0 3px ${user.color}33`}}/>}
-              <div style={{color:isHoje?user.color:hasTask?primary:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>
+                  borderRadius:"50%",background:"#ffffff"}}/>}
+              <div style={{color:textColor,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,opacity:0.9}}>
                 {dia.label}
               </div>
-              <div style={{color:isHoje?user.color:C.tx,fontSize:18,fontWeight:900,lineHeight:1,marginTop:4,marginBottom:8,letterSpacing:-.5}}>
+              <div style={{color:textColor,fontSize:20,fontWeight:900,lineHeight:1,marginTop:4,marginBottom:8,letterSpacing:-.5}}>
                 {dia.dayNum}
               </div>
-              <div style={{background:hasTask?primary:C.b2,color:"#fff",
+              <div style={{background:"#ffffff",color:hasTask?primary:isHoje?user.color:"#64748b",
                   borderRadius:8,padding:"4px 0",margin:"0 auto",width:"80%",
-                  fontWeight:900,fontSize:22,lineHeight:1,letterSpacing:-.5}}>
+                  fontWeight:900,fontSize:24,lineHeight:1,letterSpacing:-.5}}>
                 {total}
               </div>
-              <div style={{color:C.td,fontSize:9,marginTop:4,fontWeight:600}}>
+              <div style={{color:textColor,fontSize:9,marginTop:4,fontWeight:600,opacity:0.9}}>
                 {total===0?"livre":total===1?"tarefa":"tarefas"}
               </div>
               {atrasadasDia>0&&(
-                <div style={{background:"#dc2626",color:"#fff",borderRadius:6,
-                    padding:"2px 6px",fontSize:8,fontWeight:800,marginTop:6,letterSpacing:.3}}>
+                <div style={{background:"#ffffff",color:"#dc2626",borderRadius:6,
+                    padding:"2px 6px",fontSize:9,fontWeight:900,marginTop:6,letterSpacing:.3,
+                    display:"inline-block"}}>
                   🔥 {atrasadasDia}
                 </div>
               )}
