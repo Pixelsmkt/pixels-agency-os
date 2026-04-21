@@ -760,7 +760,9 @@ const DASH_ICONS={coordinator:"📱",gestor:"📊",designer:"🎨",editor:"🎬"
 function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notifs}){
   const tasks=(propTasks||[]).filter(t=>t.assignee===user.id);
   const setTasks=propSetTasks||(()=>{});
-  return <PriorityDashCore user={user} tasks={tasks} setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs}/>;
+  // Ellen (coordinator) precisa ver todas as tasks pra gerenciar a equipe
+  const allTasks=propTasks||[];
+  return <PriorityDashCore user={user} tasks={tasks} allTasks={allTasks} setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs}/>;
 }
 // Aliases para compatibilidade com RenderDash
 const DashCoordinator=DashColaborador;
@@ -15512,7 +15514,7 @@ const sortByPriority=(tasks)=>{
   });
 };
 
-function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs}){
+function PriorityDashCore({user,tasks,allTasks,setTasks,isViewing,icon,currentUser,notifs}){
   const [openCard,setOpenCard]=useState(null);
   const [showCustomize,setShowCustomize]=useState(false);
   const [widgets,setWidgets]=useState(()=>{
@@ -15537,7 +15539,9 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
   // ═══ Stats do editor/designer pra widgets novos ═══
   const isEditor=user.dash==="editor";
   const isDesigner=user.dash==="designer";
-  const showNewWidgets=isEditor; // Por enquanto só editor, depois replicar pra designer e outros
+  const isCoordinator=user.dash==="coordinator";
+  const showNewWidgets=isEditor||isDesigner; // Editor e Designer compartilham a mesma visão
+  const showCoordinatorWidgets=isCoordinator; // Ellen tem widgets próprios
 
   // Categoriza demandas por saúde
   const _atrasadas=active.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;});
@@ -15564,6 +15568,35 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
     _proxPrazoDays<0?"#dc2626":
     _proxPrazoDays===0?"#ef4444":
     _proxPrazoDays<=2?"#f97316":C.gr;
+
+  // ═══ Stats da Ellen (coordinator) — precisa de allTasks ═══
+  const allActive=(allTasks||[]).filter(t=>!t.deletedAt&&t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado");
+  // Aprovações pendentes (status "demanda" ou "avaliacao" que a Ellen precisa aprovar)
+  const _aprovPendentes=allActive.filter(t=>t.status==="demanda"||t.status==="avaliacao");
+  // Publicar hoje (agendadas com data = hoje)
+  const _hojeStr=(()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");})();
+  const _publicaHoje=(allTasks||[]).filter(t=>t.status==="agendado"&&t.publishDate===_hojeStr);
+  // Equipe supervisionada (designer + editores)
+  const _equipeSuperv=TEAM.filter(u=>u.dash==="designer"||u.dash==="editor");
+  const equipeStats=_equipeSuperv.map(u=>{
+    const uTasks=allActive.filter(t=>t.assignee===u.id);
+    const uLate=uTasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;});
+    const uUrg=uTasks.filter(t=>{const d=daysLeft(t.deadline);return d===0;});
+    const saudePct=uTasks.length>0?Math.round(((uTasks.length-uLate.length-uUrg.length)/uTasks.length)*100):100;
+    const saudeC=saudePct>=80?"#16a34a":saudePct>=60?"#eab308":"#dc2626";
+    const saudeL=saudePct>=80?"saudável":saudePct>=60?"atenção":"crítica";
+    return {user:u,total:uTasks.length,late:uLate.length,urgent:uUrg.length,saudePct,saudeC,saudeL};
+  });
+  // Publicações esta semana (agendadas na próxima semana)
+  const _pubSemana=(()=>{
+    const hoje=new Date();hoje.setHours(0,0,0,0);
+    const fim=new Date(hoje);fim.setDate(hoje.getDate()+7);
+    return (allTasks||[]).filter(t=>{
+      if(t.status!=="agendado"||!t.publishDate)return false;
+      const pd=new Date(t.publishDate);
+      return pd>=hoje&&pd<fim;
+    });
+  })();
 
   // Próximos 7 dias (começa hoje)
   const proximos7dias=(()=>{
@@ -15687,6 +15720,263 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
           <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
             {_proxPrazoTask?_proxPrazoTask.title.slice(0,24)+(_proxPrazoTask.title.length>24?"…":""):"sem prazos"}
           </div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ KPIs DA ELLEN (Coordinator) ═══ */}
+    {showCoordinatorWidgets&&(
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,
+          maxWidth:860,margin:"0 auto",width:"100%"}}>
+        {/* Aprovações pendentes */}
+        <div style={{background:_aprovPendentes.length>0?"#ea580c":"#16a34a",
+            borderRadius:16,padding:"16px 18px",
+            display:"flex",flexDirection:"column",gap:6,minHeight:120,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>✍</div>
+            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Aprovar</div>
+          </div>
+          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{_aprovPendentes.length}</div>
+          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>
+            {_aprovPendentes.length===0?"tudo aprovado 🎉":"copys e artes pendentes"}
+          </div>
+        </div>
+        {/* Equipe — saúde agregada */}
+        <div style={{background:"#7c3aed",borderRadius:16,padding:"16px 18px",
+            display:"flex",flexDirection:"column",gap:6,minHeight:120,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>👥</div>
+            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Equipe</div>
+          </div>
+          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>
+            {equipeStats.reduce((a,e)=>a+e.total,0)}
+          </div>
+          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>
+            {equipeStats.filter(e=>e.late>0).length>0?
+              `${equipeStats.filter(e=>e.late>0).length} em risco`:
+              "equipe tranquila"}
+          </div>
+        </div>
+        {/* Publica hoje */}
+        <div style={{background:_publicaHoje.length>0?"#2563eb":"#64748b",
+            borderRadius:16,padding:"16px 18px",
+            display:"flex",flexDirection:"column",gap:6,minHeight:120,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>📤</div>
+            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Publica Hoje</div>
+          </div>
+          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{_publicaHoje.length}</div>
+          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>
+            {_publicaHoje.length===0?"sem publicações":"agendadas pra hoje"}
+          </div>
+        </div>
+        {/* Suas demandas */}
+        <div style={{background:user.color,borderRadius:16,padding:"16px 18px",
+            display:"flex",flexDirection:"column",gap:6,minHeight:120,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>📋</div>
+            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Minhas</div>
+          </div>
+          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{active.length}</div>
+          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>demandas ativas</div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ EQUIPE SUPERVISIONADA (Ellen) ═══ */}
+    {showCoordinatorWidgets&&(
+      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{padding:"14px 20px",background:"#7c3aed",
+            display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>👥</div>
+          <div>
+            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Sua Equipe</div>
+            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>saúde da fila de cada colaborador</div>
+          </div>
+        </div>
+        <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:10}}>
+          {equipeStats.map(e=>{
+            const isLate=e.late>0;
+            return <div key={e.user.id} style={{
+                background:isLate?"#fef2f2":e.total>0?"#f0fdf4":"#f8fafc",
+                border:`1px solid ${isLate?"#fecaca":e.total>0?"#bbf7d0":"#e5e7eb"}`,
+                borderLeft:`5px solid ${e.saudeC}`,
+                borderRadius:12,padding:"12px 16px",
+                display:"flex",alignItems:"center",gap:12}}>
+              <Av l={e.user.av} color={e.user.color} size={40} uid={e.user.id}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                  <span style={{color:C.tx,fontWeight:800,fontSize:14}}>{e.user.name}</span>
+                  <span style={{color:C.td,fontSize:10}}>· {e.user.role}</span>
+                  <span style={{background:e.saudeC,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
+                    {e.saudeL}
+                  </span>
+                </div>
+                <div style={{display:"flex",gap:14,color:C.td,fontSize:11,fontWeight:600}}>
+                  <span>📋 <strong style={{color:C.tx}}>{e.total}</strong> ativas</span>
+                  {e.late>0&&<span style={{color:"#dc2626"}}>🔥 <strong>{e.late}</strong> atrasadas</span>}
+                  {e.urgent>0&&<span style={{color:"#ea580c"}}>⚡ <strong>{e.urgent}</strong> hoje</span>}
+                </div>
+              </div>
+              <div style={{background:e.saudeC,borderRadius:10,padding:"6px 12px",flexShrink:0,minWidth:56,textAlign:"center"}}>
+                <div style={{color:"#fff",fontWeight:900,fontSize:18,lineHeight:1}}>{e.saudePct}%</div>
+                <div style={{color:"#fff",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:2,opacity:0.95}}>saúde</div>
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ APROVAÇÕES PENDENTES (Ellen) ═══ */}
+    {showCoordinatorWidgets&&_aprovPendentes.length>0&&(
+      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{padding:"14px 20px",background:"#ea580c",
+            display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>✍</div>
+          <div>
+            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Aprovações Pendentes</div>
+            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>copys e artes aguardando sua aprovação</div>
+          </div>
+        </div>
+        <div style={{padding:"12px",display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto"}}>
+          {_aprovPendentes.slice(0,8).map(t=>{
+            const cl=CLIENTS.find(c=>c.id===t.client);
+            const resp=TEAM.find(u=>u.id===t.assignee);
+            const isCopy=t.status==="demanda";
+            const dias=t.colEnteredAt?Math.floor((Date.now()-new Date(t.colEnteredAt))/86400000):0;
+            return <div key={t.id} onClick={()=>setOpenCard(t)}
+                style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,
+                    padding:"10px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",
+                    transition:"transform .1s"}}
+                onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+                onMouseLeave={e=>e.currentTarget.style.transform=""}>
+              <div style={{width:32,height:32,borderRadius:8,background:isCopy?"#7c3aed":"#16a34a",
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>
+                {isCopy?"📝":"🎨"}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:C.tx,fontWeight:700,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  {t.title}
+                </div>
+                <div style={{color:"#92400e",fontSize:10,marginTop:2,fontWeight:600}}>
+                  {cl?.name||"—"} · {resp?.name||"—"} · há {dias===0?"pouco":dias+"d"}
+                </div>
+              </div>
+              <span style={{background:isCopy?"#7c3aed":"#16a34a",color:"#fff",borderRadius:6,padding:"3px 10px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,flexShrink:0}}>
+                {isCopy?"Copy":"Arte"}
+              </span>
+            </div>;
+          })}
+          {_aprovPendentes.length>8&&<div style={{textAlign:"center",color:C.td,fontSize:11,padding:"8px"}}>
+            +{_aprovPendentes.length-8} mais na página de Aprovações
+          </div>}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ PUBLICAÇÕES DA SEMANA (Ellen) ═══ */}
+    {showCoordinatorWidgets&&(
+      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
+          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
+        <div style={{padding:"14px 20px",background:"#2563eb",
+            display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📤</div>
+          <div>
+            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Publicações da Semana</div>
+            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>{_pubSemana.length} agendadas nos próximos 7 dias</div>
+          </div>
+        </div>
+        {_pubSemana.length===0?(
+          <div style={{padding:"28px",textAlign:"center",color:C.td,fontSize:12}}>
+            <div style={{fontSize:28,marginBottom:6}}>📭</div>
+            Nenhuma publicação agendada nesta semana
+          </div>
+        ):(
+          <div style={{padding:"12px",display:"flex",flexDirection:"column",gap:6,maxHeight:260,overflowY:"auto"}}>
+            {_pubSemana.slice(0,10).map(t=>{
+              const cl=CLIENTS.find(c=>c.id===t.client);
+              const pd=new Date(t.publishDate+"T"+(t.publishTime||"09:00"));
+              const ehHoje=t.publishDate===_hojeStr;
+              return <div key={t.id} onClick={()=>setOpenCard(t)}
+                  style={{background:ehHoje?"#dbeafe":"#f8fafc",border:`1px solid ${ehHoje?"#93c5fd":"#e5e7eb"}`,
+                      borderLeft:`5px solid ${ehHoje?"#2563eb":cl?.color||"#94a3b8"}`,
+                      borderRadius:10,padding:"9px 14px",display:"flex",alignItems:"center",gap:10,
+                      cursor:"pointer",transition:"transform .1s"}}
+                  onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
+                  onMouseLeave={e=>e.currentTarget.style.transform=""}>
+                <div style={{textAlign:"center",flexShrink:0,minWidth:48}}>
+                  <div style={{color:ehHoje?"#2563eb":C.tx,fontWeight:900,fontSize:16,lineHeight:1}}>{pd.getDate()}</div>
+                  <div style={{color:ehHoje?"#2563eb":C.td,fontSize:9,fontWeight:700,textTransform:"uppercase"}}>
+                    {ehHoje?"HOJE":pd.toLocaleDateString("pt-BR",{weekday:"short"}).replace(".","")}
+                  </div>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:C.tx,fontWeight:700,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                    {t.title}
+                  </div>
+                  <div style={{color:C.td,fontSize:10,marginTop:2}}>
+                    {cl?.name||"—"} · {t.publishTime||"—"}
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* ═══ INTEGRAÇÕES — Drive + WhatsApp (placeholder, Ellen) ═══ */}
+    {showCoordinatorWidgets&&(
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,
+          maxWidth:860,margin:"0 auto",width:"100%"}}>
+        {/* Drive */}
+        <div style={{background:"#f59e0b",borderRadius:14,padding:"14px 16px",
+            display:"flex",alignItems:"center",gap:12,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+          <div style={{width:44,height:44,borderRadius:10,background:"#ffffff",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>☁️</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#ffffff",fontWeight:800,fontSize:13}}>Pastas no Drive</div>
+            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>
+              {_publicaHoje.length} materiais prontos pra upload
+            </div>
+          </div>
+          <span style={{background:"#ffffff",color:"#f59e0b",borderRadius:99,padding:"4px 10px",fontSize:10,fontWeight:800,flexShrink:0}}>
+            EM BREVE
+          </span>
+        </div>
+        {/* WhatsApp */}
+        <div style={{background:"#16a34a",borderRadius:14,padding:"14px 16px",
+            display:"flex",alignItems:"center",gap:12,
+            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+          <div style={{width:44,height:44,borderRadius:10,background:"#ffffff",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>💬</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#ffffff",fontWeight:800,fontSize:13}}>Envio no WhatsApp</div>
+            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>
+              {_publicaHoje.length} pra enviar nos grupos hoje
+            </div>
+          </div>
+          <span style={{background:"#ffffff",color:"#16a34a",borderRadius:99,padding:"4px 10px",fontSize:10,fontWeight:800,flexShrink:0}}>
+            EM BREVE
+          </span>
         </div>
       </div>
     )}
