@@ -15620,21 +15620,12 @@ function PriorityDashCore({user,tasks,setTasks,isViewing,icon,currentUser,notifs
   return <div style={{display:"flex",flexDirection:"column",gap:20}}>
     {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={currentUser||CURRENT_USER} cardPerms={dashCardPerms}/>}
 
-    {/* ── HEADER ── */}
-    <div style={{display:"flex",alignItems:"center",gap:12}}>
-      <Av l={user.av} color={user.color} size={44} status={user.status}/>
-      <div style={{flex:1}}>
-        <div style={{color:C.tx,fontWeight:900,fontSize:20,letterSpacing:-.3}}>
-          {isViewing?"Dashboard de "+user.name:(greeting+", "+user.name.split(" ")[0]+" "+icon)}
-        </div>
-        <div style={{color:C.ts,fontSize:12,marginTop:2}}>
-          {active.length===0?"Tudo em dia!":
-           mainPrio?.level===0?<span style={{color:"#ea580c",fontWeight:700}}>{active.filter(t=>t.ajustar||t.isAlteracao||t.status==="alteracao").length} ajuste(s) pendente(s)</span>:
-           mainPrio?.level===1?<span style={{color:"#dc2626",fontWeight:700}}>{active.filter(t=>(daysLeft(t.deadline)||0)<0).length} demanda(s) atrasada(s)</span>:
-           `${active.length} demanda(s) em andamento`}
-        </div>
-      </div>
-    </div>
+    {/* Banner "Visualizando como X" quando admin está vendo o dashboard de outro */}
+    {isViewing&&<div style={{background:"#f59e0b",color:"#fff",borderRadius:10,
+        padding:"8px 14px",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8,
+        maxWidth:860,margin:"0 auto",width:"100%"}}>
+      👁 Visualizando dashboard de <strong>{user.name}</strong>
+    </div>}
 
     {/* ═══ KPIs ESTRATÉGICOS (Editor de Vídeo) — cores sólidas ═══ */}
     {showNewWidgets&&active.length>0&&(
