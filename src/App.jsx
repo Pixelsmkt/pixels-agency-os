@@ -10619,12 +10619,59 @@ const ALERT_LEVELS={
   lembrete:{label:"LEMBRETE",icon:"📌",color:"#2563eb",bg:"#eff6ff",border:"#bfdbfe"},
 };
 
+// Timestamp da última vez que o user viu os alertas
+const alertSeenKey=(uid)=>"pixels-alerts-seen-"+uid;
+function getLastSeen(uid){
+  try{const s=localStorage.getItem(alertSeenKey(uid));return s?new Date(s).getTime():0;}catch{return 0;}
+}
+function markAlertsAsSeen(uid){
+  try{localStorage.setItem(alertSeenKey(uid),new Date().toISOString());}catch{}
+}
+
+// Som de sino (2 tons, Web Audio API — funciona em qualquer navegador)
+function playBellSound(){
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx)return;
+    const ctx=new Ctx();
+    const notes=[880,659]; // A5 + E5 (acorde de sino)
+    notes.forEach((freq,i)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.type="sine";
+      osc.frequency.value=freq;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      const start=ctx.currentTime+i*0.18;
+      gain.gain.setValueAtTime(0.35,start);
+      gain.gain.exponentialRampToValueAtTime(0.01,start+0.8);
+      osc.start(start);
+      osc.stop(start+0.8);
+    });
+    // Fecha contexto depois pra liberar memória
+    setTimeout(()=>{try{ctx.close();}catch{}},2000);
+  }catch(e){/* silently fail */}
+}
+
 /* ─── COMPONENTE: DashboardAlerts ─── (usado no Dashboard de cada user) */
 function DashboardAlerts({userId,isMob}){
   const [alerts,setAlerts]=useState(()=>loadActiveAlertsFor(userId));
+  const [welcomeModalAlerts,setWelcomeModalAlerts]=useState([]);
+  const prevAlertIdsRef=useRef(new Set(alerts.map(a=>a.id)));
+
   // Recarrega alertas quando mudam (via evento)
   useEffect(()=>{
-    const refresh=()=>setAlerts(loadActiveAlertsFor(userId));
+    const refresh=()=>{
+      const newList=loadActiveAlertsFor(userId);
+      // Detecta novos alertas (ID que não estava antes)
+      const prevIds=prevAlertIdsRef.current;
+      const newOnes=newList.filter(a=>!prevIds.has(a.id));
+      if(newOnes.length>0){
+        playBellSound();
+      }
+      prevAlertIdsRef.current=new Set(newList.map(a=>a.id));
+      setAlerts(newList);
+    };
     window.addEventListener("pixels-alerts-changed",refresh);
     window.addEventListener("storage",refresh);
     return()=>{
@@ -10632,14 +10679,95 @@ function DashboardAlerts({userId,isMob}){
       window.removeEventListener("storage",refresh);
     };
   },[userId]);
-  // Recarrega quando muda o userId (view as)
-  useEffect(()=>{setAlerts(loadActiveAlertsFor(userId));},[userId]);
+
+  // Recarrega quando muda o userId (view as) + checa "boas-vindas" com alertas pendentes
+  useEffect(()=>{
+    const list=loadActiveAlertsFor(userId);
+    setAlerts(list);
+    prevAlertIdsRef.current=new Set(list.map(a=>a.id));
+
+    // Ao entrar no dashboard: se tiver alertas CRIADOS DEPOIS da última vez que viu, mostra modal
+    const lastSeen=getLastSeen(userId);
+    const unseenAlerts=list.filter(a=>new Date(a.createdAt).getTime()>lastSeen);
+    if(unseenAlerts.length>0){
+      setWelcomeModalAlerts(unseenAlerts);
+      // Tentar tocar som — pode falhar se o user ainda não interagiu
+      playBellSound();
+    }
+  },[userId]);
+
+  const closeWelcomeModal=()=>{
+    markAlertsAsSeen(userId);
+    setWelcomeModalAlerts([]);
+  };
 
   const shown=alerts.slice(0,2);
 
+  // Modal de "boas-vindas" com alertas pendentes
+  const welcomeModal=welcomeModalAlerts.length>0&&(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:300,
+        display:"flex",alignItems:"center",justifyContent:"center",padding:20,
+        animation:"fadeIn .2s ease"}}
+        onClick={closeWelcomeModal}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,
+          padding:0,width:"100%",maxWidth:560,overflow:"hidden",
+          boxShadow:"0 20px 60px rgba(0,0,0,0.3)",
+          animation:"slideInUp .3s ease"}}>
+        {/* Header vermelho chamativo */}
+        <div style={{background:"#dc2626",padding:"22px 28px",color:"#fff",textAlign:"center"}}>
+          <div style={{fontSize:40,marginBottom:8}}>🔔</div>
+          <div style={{fontWeight:900,fontSize:20,letterSpacing:-.3}}>
+            Você tem {welcomeModalAlerts.length} alerta{welcomeModalAlerts.length>1?"s":""} pendente{welcomeModalAlerts.length>1?"s":""}!
+          </div>
+          <div style={{fontSize:12,marginTop:4,opacity:0.9}}>
+            Leia com atenção antes de começar o dia
+          </div>
+        </div>
+        {/* Lista de alertas */}
+        <div style={{padding:"18px 22px",maxHeight:"50vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:10}}>
+          {welcomeModalAlerts.map(a=>{
+            const lv=ALERT_LEVELS[a.level]||ALERT_LEVELS.atencao;
+            const from=TEAM.find(u=>u.id===a.fromUid);
+            return <div key={a.id} style={{background:lv.bg,border:`2px solid ${lv.border}`,
+                borderLeft:`6px solid ${lv.color}`,borderRadius:10,padding:"12px 14px",
+                display:"flex",alignItems:"flex-start",gap:10}}>
+              <div style={{width:38,height:38,borderRadius:10,background:lv.color,
+                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,
+                  flexShrink:0,boxShadow:`0 2px 6px ${lv.color}55`}}>
+                {lv.icon}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+                  <span style={{background:lv.color,color:"#fff",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.5}}>
+                    {lv.label}
+                  </span>
+                  {from&&<span style={{color:lv.color,fontSize:11,fontWeight:700}}>{from.name.split(" ")[0]}</span>}
+                  <span style={{color:"#94a3b8",fontSize:10}}>· há {timeAgoBR(a.createdAt)}</span>
+                </div>
+                <div style={{color:"#1e293b",fontSize:13,fontWeight:600,lineHeight:1.4}}>
+                  {a.message}
+                </div>
+              </div>
+            </div>;
+          })}
+        </div>
+        {/* Footer — botão fechar */}
+        <div style={{padding:"14px 22px 18px",borderTop:"1px solid #e5e7eb",
+            display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={closeWelcomeModal}
+              style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:10,
+                  padding:"11px 24px",fontWeight:800,fontSize:13,cursor:"pointer",
+                  display:"flex",alignItems:"center",gap:6}}>
+            ✓ Entendi, bora trabalhar!
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // Estado vazio — card pequeno e discreto
   if(shown.length===0){
-    return <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:14,
+    return <>{welcomeModal}<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:14,
         padding:"14px 18px",display:"flex",alignItems:"center",gap:12,
         maxWidth:860,margin:"0 auto",width:"100%"}}>
       <div style={{width:36,height:36,borderRadius:10,background:"#16a34a",
@@ -10650,10 +10778,10 @@ function DashboardAlerts({userId,isMob}){
           Você não tem alertas urgentes no momento.
         </div>
       </div>
-    </div>;
+    </div></>;
   }
 
-  return <div style={{display:"flex",flexDirection:"column",gap:8,
+  return <>{welcomeModal}<div style={{display:"flex",flexDirection:"column",gap:8,
       maxWidth:860,margin:"0 auto",width:"100%"}}>
     {shown.map(alert=>{
       const lv=ALERT_LEVELS[alert.level]||ALERT_LEVELS.atencao;
@@ -10710,7 +10838,7 @@ function DashboardAlerts({userId,isMob}){
     {alerts.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textAlign:"center"}}>
       +{alerts.length-2} alerta{alerts.length-2>1?"s":""} na página de Notificações
     </div>}
-  </div>;
+  </div></>;
 }
 
 /* ─── SEED NOTIFS — exemplos e histórico demo ─────────── */
