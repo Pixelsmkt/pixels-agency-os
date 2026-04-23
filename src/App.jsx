@@ -118,7 +118,8 @@ import * as recharts from "recharts";
 // Global mobile styles
 const MOBILE_CSS=`
   *{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
-  input,textarea,select{font-size:16px!important;}
+  html,body{margin:0;padding:0;overflow-x:hidden;-webkit-text-size-adjust:100%;}
+  input,textarea,select{font-size:16px!important;} /* evita zoom no iOS */
   button{touch-action:manipulation;-webkit-touch-callout:none;}
   img{max-width:100%;}
   ::-webkit-scrollbar{width:4px;height:4px;}
@@ -127,6 +128,20 @@ const MOBILE_CSS=`
   @keyframes slaPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.7;transform:scale(1.04);}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
   @keyframes slideInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  /* Ajustes específicos pra mobile (narrow viewport) */
+  @media (max-width:768px){
+    body{overscroll-behavior-y:contain;}
+    table{font-size:11px!important;}
+    table th,table td{padding:8px 6px!important;}
+    /* Touch targets maiores em botões pequenos */
+    button{min-height:32px;}
+    /* Wrapper de scroll horizontal com momentum iOS */
+    .scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;}
+    /* Modais ocupam tela toda */
+    [data-cardmodal]{margin:0!important;border-radius:12px 12px 0 0!important;}
+  }
+  /* Impede que elementos muito largos estourem a viewport */
+  .no-overflow{min-width:0;overflow-wrap:anywhere;}
 `;
 
 /* ─── PLATFORM LOGOS (SVG) ─────────────────── */
@@ -574,7 +589,7 @@ const NAV=[
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de Copys"},
-    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Publicação"},
+    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Conteúdo"},
     {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação Demanda Interna"},
   ]},
   {id:"chat",       icon:"◐", label:"Chat"},
@@ -1010,7 +1025,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     )}
 
     {/* ═══ 0.5. VISÃO OPERACIONAL — 3 FLUXOS (Clientes + Internas + Portal) ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
       {/* Demandas de Clientes */}
       <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:"#a140ff",display:"flex",alignItems:"center",gap:10}}>
@@ -1161,7 +1176,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     </div>
 
     {/* ═══ 0.85. PUBLICAÇÕES (hoje + semana + atrasadas) ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(3,1fr)",gap:12}}>
       <div style={{background:pubAtrasadas.length>0?"#dc2626":"#64748b",borderRadius:14,padding:"14px 16px",color:"#fff"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
           <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚠</div>
@@ -1217,7 +1232,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     )}
 
     {/* ═══ 2. KPIs EXECUTIVOS (8 cards) ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
       {/* MRR */}
       <div style={{background:"#16a34a",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(22,163,74,0.2)"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
@@ -1308,7 +1323,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>{active.length} demandas em toda a operação</div>
         </div>
       </div>
-      <div style={{padding:"14px 16px",display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8}}>
+      <div style={{padding:"14px 16px",display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(6,1fr)",gap:8}}>
         {pipeline.map(p=>(
           <div key={p.status} style={{textAlign:"center"}}>
             <div style={{background:p.color,borderRadius:10,padding:"12px 6px",boxShadow:"0 2px 6px rgba(0,0,0,0.1)"}}>
@@ -1322,7 +1337,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     </div>
 
     {/* ═══ 4. TOP CLIENTES + CLIENTES EM RISCO ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
       {/* Top Clientes */}
       <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:"#eab308",display:"flex",alignItems:"center",gap:10}}>
@@ -1470,7 +1485,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     </div>
 
     {/* ═══ 7. PAGAMENTOS ATRASADOS + ATRASADAS ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
       {/* Pagamentos em Atraso */}
       <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:pagAtras.length>0?"#dc2626":"#16a34a",display:"flex",alignItems:"center",gap:10}}>
@@ -1680,7 +1695,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
 
       {/* ── PARTE BRANCA ── */}
       <div style={{background:C.card,padding:isMob?"14px 16px 16px":"18px 24px 20px",position:"relative",borderRadius:"0 0 20px 20px"}}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:24,paddingTop:24,marginTop:0}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:isMob?12:24,paddingTop:isMob?16:24,marginTop:0,flexWrap:isMob?"wrap":"nowrap"}}>
 
           {/* Foto grande */}
           <div style={{width:isMob?100:150,height:isMob?100:150,borderRadius:"50%",border:"3px solid "+C.b1,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
@@ -7570,7 +7585,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       </div>
 
       {/* ── Legenda das cores do status ── */}
-      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px"}}>
+      <div style={{display:"flex",gap:isMob?6:10,flexWrap:"wrap",alignItems:"center",background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:isMob?"6px 10px":"8px 14px"}}>
         <span style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Status:</span>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <div style={{width:14,height:14,borderRadius:3,background:"#ea580c"}}/>
@@ -11233,7 +11248,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const isSocio=CURRENT_USER.level===1;
   const TABS=[
     {id:"copys",      label:"Aprovação de Copys",      count:copyQueue.length,    color:C.a},
-    {id:"publicacao", label:"Aprovação de Publicação", count:pubQueue.length,     color:C.gr},
+    {id:"publicacao", label:"Aprovação de Conteúdo", count:pubQueue.length,     color:C.gr},
     ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda Interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
     ...((perms?.verAprAjuste||isSocio)?[{id:"ajuste", label:"Ajustes Solicitados", count:ajusteQueue.length, color:C.or}]:[]),
   ];
@@ -11270,7 +11285,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     })()}
 
     <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>
-      {tab==="copys"?"Aprovação de Copys":tab==="internas"?"Aprovação de Demandas Internas":tab==="ajuste"?"Ajustes Solicitados":"Aprovação de Publicação"}
+      {tab==="copys"?"Aprovação de Copys":tab==="internas"?"Aprovação de Demandas Internas":tab==="ajuste"?"Ajustes Solicitados":"Aprovação de Conteúdo"}
     </div>
 
     {/* Empty state */}
@@ -12157,7 +12172,7 @@ const PERM_GROUPS={
     {key:"verAprovacoes",        label:"Acessar Aprovações",          desc:"Acesso ao módulo de aprovações"},
     {section:"Copys e Publicações"},
     {key:"verAprCopys",          label:"Aba Copys",                   desc:"Ver copys aguardando aprovação"},
-    {key:"verAprPublicacao",     label:"Aba Publicação",              desc:"Ver publicações agendadas para aprovar"},
+    {key:"verAprPublicacao",     label:"Aba Conteúdo",                desc:"Ver conteúdos para aprovar antes de publicar"},
     {key:"verAprAjuste",         label:"Aba Ajustes Solicitados",     desc:"Ver cards marcados para ajuste"},
     {key:"aprovar",              label:"Botão Aprovar (Copys/Pub)",   desc:"Pode aprovar ou solicitar ajuste em copys e publicações"},
     {section:"Demandas Internas"},
@@ -15254,6 +15269,13 @@ function LinkifiedText({text,color}){
 }
 
 function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
+  // ═══ Detecção de viewport mobile ═══
+  const [isMobile,setIsMobile]=useState(()=>typeof window!=="undefined"&&window.innerWidth<768);
+  useEffect(()=>{
+    const h=()=>setIsMobile(window.innerWidth<768);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
+  },[]);
   // Wrapper de onClose que limpa o stream de áudio se estiver ativo
   const onClose=()=>{
     if(window._activeAudioStream){
@@ -15438,7 +15460,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         return;
       }
     }
-    const updated={...task,title,desc,comments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:attachments,timeline:tl,checklist,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+    // ── Auto-linkify: processa URLs em texto pra virar <a> clicáveis ──
+    // Pega o conteúdo atual dos contentEditable (pode ter links digitados) e aplica autoLinkifyHTML
+    const descFinal=descRef.current?autoLinkifyHTML(sanitizeRichText(descRef.current.innerHTML||desc)):autoLinkifyHTML(sanitizeRichText(desc));
+    const captionFinal=captionRef.current?autoLinkifyHTML(sanitizeRichText(captionRef.current.innerHTML||caption)):autoLinkifyHTML(sanitizeRichText(caption));
+    const updated={...task,title,desc:descFinal,comments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:attachments,timeline:tl,checklist,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     setTasks(prev=>prev.map(t=>t.id===task.id?updated:t));
     if(updated.status==="agendado"&&task.status!=="agendado")notifyAgendado(updated);
     onClose();
@@ -15688,7 +15714,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>}
 
-    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:8}}>
+    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto"}}>
 
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
@@ -15800,7 +15826,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
 
       {/* ── BODY: 2-col grid ── */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 280px",minHeight:0}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 280px",minHeight:0}}>
 
         {/* ── LEFT PANEL ── */}
         <div style={{padding:"18px 22px",borderRight:"1px solid #f1f5f9",overflowY:"auto",maxHeight:"65vh"}}>
@@ -16872,7 +16898,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {/* ═══ KPIs ESTRATÉGICOS (Editor de Vídeo) — cores sólidas ═══ */}
     {showNewWidgets&&active.length>0&&(
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
         {/* % No Prazo */}
         <div style={{background:saudeColor,borderRadius:16,padding:"16px 18px",
@@ -17010,7 +17036,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {/* ═══ KPIs DA ELLEN (Coordinator) ═══ */}
     {showCoordinatorWidgets&&(
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
         {/* Aprovações pendentes */}
         <div style={{background:_aprovPendentes.length>0?"#ea580c":"#16a34a",
@@ -17233,7 +17259,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
             </div>
           </div>
         </div>
-        <div style={{padding:"16px",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+        <div style={{padding:"16px",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
           {_tempoPorStatus.map(s=>{
             const isGargalo=_gargalo&&s.key===_gargalo.key&&s.media>=3;
             return <div key={s.key} style={{
@@ -17429,7 +17455,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {/* ═══ INTEGRAÇÕES — Drive + WhatsApp (placeholder, Ellen) ═══ */}
     {showCoordinatorWidgets&&(
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
         {/* Drive */}
         <div style={{background:"#f59e0b",borderRadius:14,padding:"14px 16px",
@@ -17468,7 +17494,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {/* ── TOPO: cartão grande + 5 pequenos — centralizado ── */}
     {active.length>0
-      ?<div style={{display:"grid",gridTemplateColumns:"minmax(0,1fr) 260px",gap:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
+      ?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 260px",gap:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
 
         {/* CARTÃO PRINCIPAL */}
         {main&&<div onClick={()=>setOpenCard(main)} style={{
@@ -17651,7 +17677,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
             <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>distribuição de prazos da semana</div>
           </div>
         </div>
-        <div style={{padding:"16px 20px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
+        <div style={{padding:isMob?"12px 10px":"16px 20px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:isMob?4:8}}>
           {proximos7dias.map((dia,idx)=>{
             const total=dia.tasks.length;
             const atrasadasDia=dia.tasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;}).length;
@@ -17710,7 +17736,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
     )}
 
     {/* ── SEÇÃO INFERIOR: notificações (esq) + infográfico (dir) ── */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,maxWidth:860,margin:"0 auto",width:"100%"}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14,maxWidth:860,margin:"0 auto",width:"100%"}}>
 
       {/* NOTIFICAÇÕES */}
       {widgets.notifs&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
