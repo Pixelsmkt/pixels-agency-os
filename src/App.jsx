@@ -19395,18 +19395,26 @@ export default function AgencyOS(){
       <main style={{flex:1,overflowY:"auto",padding:isMob?"12px 12px 80px":"24px",WebkitOverflowScrolling:"touch"}}>
         {renderPage()}
       </main>
-      {isMob&&<nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.s1,borderTop:`1px solid ${C.b1}`,display:"flex",padding:"6px 0 env(safe-area-inset-bottom,8px)",flexShrink:0,zIndex:30,boxShadow:"0 -2px 12px rgba(0,0,0,0.1)"}}>
-        {MOBILE_NAV.map(n=>(
-          <button key={n.id} onClick={()=>nav(n.id)}
-            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"5px 2px",color:page===n.id?C.a:C.td,position:"relative",transition:"color .12s"}}>
-            <span style={{fontSize:18,lineHeight:1}}>{n.icon}</span>
-            <span style={{fontSize:9,fontWeight:page===n.id?700:400,lineHeight:1}}>{n.label}</span>
-            {page===n.id&&<div style={{position:"absolute",top:-1,left:"50%",transform:"translateX(-50%)",width:20,height:2,background:C.a,borderRadius:99}}/>}
-          </button>
-        ))}
-        <button onClick={()=>setSideOpen(true)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",padding:"5px 2px",color:C.td}}>
-          <span style={{fontSize:18,lineHeight:1}}>⋯</span>
-          <span style={{fontSize:9,fontWeight:400,lineHeight:1}}>Mais</span>
+      {isMob&&<nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.s1,borderTop:`1px solid ${C.b1}`,display:"flex",padding:"8px 0 env(safe-area-inset-bottom,10px)",flexShrink:0,zIndex:30,boxShadow:"0 -2px 12px rgba(0,0,0,0.1)"}}>
+        {MOBILE_NAV.map(n=>{
+          const ativo=page===n.id||(NAV.find(x=>x.id===n.id)?.children||[]).some(c=>c.id===page);
+          const cor=ativo?C.a:C.td;
+          return <button key={n.id} onClick={()=>nav(n.id)}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"4px 2px",color:cor,position:"relative",transition:"color .12s"}}>
+            <NavIcon id={n.id} size={22} color={cor}/>
+            <span style={{fontSize:9,fontWeight:ativo?700:500,lineHeight:1}}>{n.label}</span>
+            {ativo&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:24,height:3,background:C.a,borderRadius:99}}/>}
+          </button>;
+        })}
+        {/* Botão "Mais" — abre sidebar completo */}
+        <button onClick={()=>setSideOpen(true)}
+          style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"4px 2px",color:C.td,transition:"color .12s"}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.td} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="1"/>
+            <circle cx="19" cy="12" r="1"/>
+            <circle cx="5" cy="12" r="1"/>
+          </svg>
+          <span style={{fontSize:9,fontWeight:500,lineHeight:1}}>Mais</span>
         </button>
       </nav>}
     </div>
