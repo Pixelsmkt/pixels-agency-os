@@ -124,6 +124,9 @@ const MOBILE_CSS=`
   ::-webkit-scrollbar{width:4px;height:4px;}
   ::-webkit-scrollbar-track{background:transparent;}
   ::-webkit-scrollbar-thumb{background:rgba(161,64,255,0.3);border-radius:99px;}
+  @keyframes slaPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.7;transform:scale(1.04);}}
+  @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  @keyframes slideInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
 `;
 
 /* ─── PLATFORM LOGOS (SVG) ─────────────────── */
@@ -328,6 +331,105 @@ const ACCESS_STORE={
 /* ─── UTILS ──────────────────────────────── */
 const mkId=()=>Math.floor(Date.now()+Math.random()*999999);
 const daysLeft=d=>{const e=new Date(d),n=new Date();n.setHours(0,0,0,0);return Math.ceil((e-n)/86400000);};
+
+/* ─── SLA HELPERS — Prazo de entrega com dias úteis ─── */
+// Opções de SLA (em horas)
+const SLA_OPTIONS=[
+  {label:"12 horas",hours:12,emoji:"⚡"},
+  {label:"1 dia útil",hours:24,emoji:"🔥"},
+  {label:"2 dias úteis",hours:48,emoji:"⏱"},
+  {label:"3 dias úteis",hours:72,emoji:"⏰"},
+  {label:"4 dias úteis",hours:96,emoji:"📅"},
+  {label:"5 dias úteis",hours:120,emoji:"🗓"},
+];
+
+// Checa se uma data (Date) é dia útil (não sábado nem domingo)
+function isBusinessDay(d){const dow=d.getDay();return dow!==0&&dow!==6;}
+
+// Adiciona N horas a uma data, PULANDO fins de semana
+function addBusinessHours(startDate,hours){
+  const d=new Date(startDate);
+  let remaining=hours;
+  while(remaining>0){
+    d.setHours(d.getHours()+1);
+    // Se caiu em fim de semana, pula pra próxima segunda 09:00
+    if(!isBusinessDay(d)){
+      while(!isBusinessDay(d)){d.setDate(d.getDate()+1);}
+      d.setHours(9,0,0,0);
+      continue;
+    }
+    remaining--;
+  }
+  return d;
+}
+
+// Calcula quando o SLA vai vencer com base em slaStartAt + slaHours + pausas
+function calcSlaDeadline(task){
+  if(!task.slaHours||!task.slaStartAt)return null;
+  const startMs=new Date(task.slaStartAt).getTime();
+  const pausedMs=(task.slaPausedDuration||0)*1000;
+  // Se está pausado agora, soma o tempo desde slaPausedAt
+  let adjustedStart=startMs+pausedMs;
+  if(task.slaPausedAt){
+    adjustedStart+=(Date.now()-new Date(task.slaPausedAt).getTime());
+  }
+  return addBusinessHours(new Date(adjustedStart),task.slaHours);
+}
+
+// Retorna status do SLA: {deadline, msLeft, status: "ok"|"soon"|"overdue"|"paused"|"none"}
+function getSlaStatus(task){
+  if(!task||!task.slaHours||!task.slaStartAt)return{status:"none"};
+  if(task.slaPausedAt)return{status:"paused",pausedSince:task.slaPausedAt};
+  const deadline=calcSlaDeadline(task);
+  if(!deadline)return{status:"none"};
+  const msLeft=deadline.getTime()-Date.now();
+  const hoursLeft=msLeft/(1000*60*60);
+  let status="ok";
+  if(msLeft<0)status="overdue";
+  else if(hoursLeft<24)status="soon"; // menos de 1 dia
+  else if(hoursLeft<2)status="urgent"; // menos de 2h
+  return{status,deadline,msLeft,hoursLeft};
+}
+
+// Formato amigável do tempo restante ou atrasado
+function fmtSlaTime(msLeft){
+  const abs=Math.abs(msLeft);
+  const h=Math.floor(abs/(1000*60*60));
+  const m=Math.floor((abs%(1000*60*60))/(1000*60));
+  if(h>=24){const d=Math.floor(h/24);return d+"d "+(h%24)+"h";}
+  if(h>0)return h+"h "+m+"m";
+  return m+"m";
+}
+
+/* ─── SLA Hourglass — componente visual de contagem regressiva ─── */
+function SlaHourglass({task,compact}){
+  const [tick,setTick]=useState(0);
+  useEffect(()=>{const i=setInterval(()=>setTick(t=>t+1),30000);return()=>clearInterval(i);},[]);
+  const s=getSlaStatus(task);
+  if(s.status==="none")return null;
+  const colors={
+    ok:{bg:"#16a34a",label:"No prazo",icon:"⏳"},
+    soon:{bg:"#eab308",label:"Atenção",icon:"⚠"},
+    urgent:{bg:"#ea580c",label:"Urgente",icon:"🔥"},
+    overdue:{bg:"#dc2626",label:"Atrasado",icon:"🚨"},
+    paused:{bg:"#64748b",label:"Pausado",icon:"⏸"},
+  };
+  const c=colors[s.status]||colors.ok;
+  if(s.status==="paused"){
+    return <span style={{background:c.bg,color:"#fff",borderRadius:6,padding:compact?"2px 6px":"4px 10px",fontSize:compact?9:10,fontWeight:800,display:"inline-flex",alignItems:"center",gap:4}}>{c.icon} {c.label}</span>;
+  }
+  const shouldPulse=s.status==="urgent"||s.status==="overdue";
+  return <span style={{
+      background:c.bg,color:"#fff",borderRadius:6,
+      padding:compact?"2px 6px":"4px 10px",
+      fontSize:compact?9:10,fontWeight:800,
+      display:"inline-flex",alignItems:"center",gap:4,
+      animation:shouldPulse?"slaPulse 1.5s ease-in-out infinite":"none",
+      whiteSpace:"nowrap",
+    }}>
+    {c.icon} {s.status==="overdue"?`${fmtSlaTime(s.msLeft)} atrasado`:fmtSlaTime(s.msLeft)}
+  </span>;
+}
 const pct=(a,b)=>b>0?Math.round((a/b)*100):0;
 const dlLabel=d=>d<0?Math.abs(d)+"d atraso":d===0?"Hoje":d===1?"Amanhã":d+"d";
 const dlColor=d=>d<0?"#e53e3e":d<=2?"#dd6b20":d<=5?"#d69e2e":"#94a3b8";
@@ -7386,9 +7488,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 
-  // Só cards agendados com publishDate
+  // TODOS cards com publishDate preenchido (independente do status)
+  // Colore por status: em produção/aprovado/publicado
   const agendados = tasks.filter(t=>{
-    if(t.deletedAt || t.status!=="agendado") return false;
+    if(t.deletedAt || t.status==="pausado") return false;
     if(!t.publishDate) return false;
     // Filtro cliente
     if(filterClient!=="todos"){
@@ -7400,6 +7503,13 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     }
     return true;
   });
+
+  // Retorna cor do card baseado no status (laranja/verde/roxo)
+  const getPubColor=(status)=>{
+    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"}; // 🟣 roxo
+    if(status==="aprovado"||status==="agendado")return{bg:"#16a34a",border:"#bbf7d0",label:"Pronto"}; // 🟢 verde
+    return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"}; // 🟠 laranja (demanda, recebida, execucao, avaliacao)
+  };
 
   // Dias do mês
   const calDays=()=>{
@@ -7456,6 +7566,23 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             style={{background:C.ag,color:C.a,border:"1px solid "+C.a+"44",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
             Hoje
           </button>
+        </div>
+      </div>
+
+      {/* ── Legenda das cores do status ── */}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center",background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 14px"}}>
+        <span style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Status:</span>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:14,height:14,borderRadius:3,background:"#ea580c"}}/>
+          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟠 Em produção</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:14,height:14,borderRadius:3,background:"#16a34a"}}/>
+          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟢 Pronto para agendar</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:14,height:14,borderRadius:3,background:"#7c3aed"}}/>
+          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟣 Publicado</span>
         </div>
       </div>
 
@@ -7542,35 +7669,36 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                       const cl=CLIENTS.find(c=>c.id===t.client);
                       const assignee=TEAM.find(u=>(t.assignees||[t.assignee]||[]).includes(u.id));
                       const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
-                      const cardColor=cl?cl.color:C.a;
+                      // Cor do card baseada no STATUS (laranja/verde/roxo)
+                      const pubColor=getPubColor(t.status);
                       return(
                         <div key={t.id} onClick={()=>setOpenCard(t)}
                           style={{
-                            background:cardColor+"18",
-                            border:`1px solid ${cardColor}44`,
-                            borderLeft:`3px solid ${cardColor}`,
+                            background:pubColor.bg,
+                            borderLeft:`4px solid ${pubColor.bg}`,
                             borderRadius:5,
                             padding:"4px 6px",
                             cursor:"pointer",
                             transition:"all .1s",
+                            boxShadow:"0 1px 3px rgba(0,0,0,0.08)",
                           }}
-                          onMouseEnter={e=>{e.currentTarget.style.background=cardColor+"30";}}
-                          onMouseLeave={e=>{e.currentTarget.style.background=cardColor+"18";}}>
+                          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 3px 8px rgba(0,0,0,0.15)";}}
+                          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.08)";}}>
 
                           {/* Título */}
-                          <div style={{color:C.tx,fontSize:isMob?8:10,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>
+                          <div style={{color:"#fff",fontSize:isMob?8:10,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>
                             {t.title}
                           </div>
 
                           {/* Horário + Cliente + responsável */}
                           <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2,flexWrap:"wrap"}}>
-                            {t.publishTime&&<span style={{background:"#4db8ff22",color:"#0284c7",borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:800,whiteSpace:"nowrap"}}>
+                            {t.publishTime&&<span style={{background:"#ffffff",color:pubColor.bg,borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:800,whiteSpace:"nowrap"}}>
                               🕐 {t.publishTime}
                             </span>}
-                            {cl&&<span style={{color:cardColor,fontSize:8,fontWeight:700,whiteSpace:"nowrap"}}>
+                            {cl&&<span style={{color:"#fff",fontSize:8,fontWeight:700,whiteSpace:"nowrap",opacity:0.95}}>
                               {unit?unit.label.split("/")[0]:cl.abbr}
                             </span>}
-                            {assignee&&<span style={{background:assignee.color+"22",color:assignee.color,borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:700,whiteSpace:"nowrap"}}>
+                            {assignee&&<span style={{background:"rgba(255,255,255,0.25)",color:"#fff",borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:700,whiteSpace:"nowrap"}}>
                               {assignee.av}
                             </span>}
                           </div>
@@ -15082,6 +15210,49 @@ const thumbUrl=(url,w=300,q=60)=>{
 const isVid = a => a && a.type && a.type.startsWith("video/");
 const isAud = a => a && a.type && (a.type.startsWith("audio/") || (a.name && a.name.endsWith(".webm")));
 
+/* ─── AUTO-LINKIFY ───────────────────────────────────────
+   Detecta URLs em texto/HTML e transforma em links clicáveis.
+   Preserva <a> que já existem (não duplica). */
+function autoLinkifyHTML(html){
+  if(!html)return html;
+  // Divide em segmentos: pedaços DENTRO de <a> ficam intactos; pedaços FORA são processados
+  const parts=html.split(/(<a[\s\S]*?<\/a>)/gi);
+  return parts.map((part,i)=>{
+    if(i%2===1)return part; // é <a>...</a> — preservar
+    // URLs http/https
+    let out=part.replace(
+      /(https?:\/\/[^\s<>"']+)/gi,
+      url=>`<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">${url}</a>`
+    );
+    // URLs www. (sem protocolo)
+    out=out.replace(
+      /(^|[\s>(])(www\.[^\s<>"')]+)/gi,
+      (m,before,url)=>`${before}<a href="https://${url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">${url}</a>`
+    );
+    return out;
+  }).join("");
+}
+
+/* LinkifiedText — componente React pra texto puro (comentários, legendas) */
+function LinkifiedText({text,color}){
+  if(!text)return null;
+  const parts=text.split(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi);
+  return <>{parts.map((p,i)=>{
+    if(!p)return null;
+    if(/^https?:\/\//i.test(p)){
+      return <a key={i} href={p} target="_blank" rel="noopener noreferrer"
+        onClick={e=>e.stopPropagation()}
+        style={{color:color||"#2563eb",textDecoration:"underline",wordBreak:"break-all"}}>{p}</a>;
+    }
+    if(/^www\./i.test(p)){
+      return <a key={i} href={"https://"+p} target="_blank" rel="noopener noreferrer"
+        onClick={e=>e.stopPropagation()}
+        style={{color:color||"#2563eb",textDecoration:"underline",wordBreak:"break-all"}}>{p}</a>;
+    }
+    return <span key={i}>{p}</span>;
+  })}</>;
+}
+
 function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,canDelete,onTrash}){
   // Wrapper de onClose que limpa o stream de áudio se estiver ativo
   const onClose=()=>{
@@ -15138,6 +15309,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [publishDate,setPublishDate]=useState(task.publishDate||"");
   const [publishTime,setPublishTime]=useState(task.publishTime||"09:00");
   const [caption,setCaption]=useState(task.caption||"");
+  // ═══ SLA (prazo de entrega / ampulheta de cobrança) ═══
+  const [slaHours,setSlaHours]=useState(task.slaHours||null); // null | 12 | 24 | 48 | 72 | 96 | 120 | custom
+  const [slaStartAt,setSlaStartAt]=useState(task.slaStartAt||null); // ISO timestamp
+  const [slaPausedAt,setSlaPausedAt]=useState(task.slaPausedAt||null); // ISO se pausado
+  const [slaPausedDuration,setSlaPausedDuration]=useState(task.slaPausedDuration||0); // segundos pausados
+  // Quem pode definir SLA e data de publicação: só admin + coordinator
+  const canEditSLAandPub=(CURRENT_USER.level===1)||(CURRENT_USER.dash==="coordinator");
 
   // Re-sincroniza estados quando outra sessão edita este cartão via realtime
   // Só atualiza campos que o usuário NÃO modificou (evita sobrescrever edições em andamento)
@@ -15161,6 +15339,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setChecklist(task.checklist||[]);
       setPublishDate(task.publishDate||"");
       setPublishTime(task.publishTime||"09:00");
+      setSlaHours(task.slaHours||null);
+      setSlaStartAt(task.slaStartAt||null);
+      setSlaPausedAt(task.slaPausedAt||null);
+      setSlaPausedDuration(task.slaPausedDuration||0);
       setCaption(task.caption||"");
     }
   },[task]);
@@ -15177,7 +15359,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   // Remove <script>, <iframe>, event handlers (onerror, onclick...) e javascript:
   const sanitizeRichText=(html)=>{
     if(typeof html!=="string"||!html)return "";
-    return html
+    const cleaned=html
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
       .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"")
       .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi,"")
@@ -15186,6 +15368,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       .replace(/\son\w+\s*=\s*[^\s>]*/gi,"")
       .replace(/javascript:/gi,"")
       .replace(/<(?!\/?(b|i|u|strong|em|br|p|div|span|ul|ol|li|a|h[1-6])\b)[^>]*>/gi,"");
+    // AUTO-LINKIFY: converte URLs em <a> clicáveis (preservando <a> existentes)
+    return autoLinkifyHTML(cleaned);
   };
   // Inicializa contenteditable com conteúdo SANITIZADO (sem XSS)
   useEffect(()=>{
@@ -15245,7 +15429,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(caption!==task.caption)changed.push("texto da legenda");
     if(JSON.stringify(checklist)!==JSON.stringify(task.checklist||[]))changed.push("checklist");
     if(changed.length>0)tl.push({type:"edit",label:`Editado: ${changed.join(", ")}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
-    const updated={...task,title,desc,comments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:attachments,timeline:tl,checklist};
+    // ── Validação: deadline < publishDate+Time (se ambos preenchidos) ──
+    if(deadline&&publishDate){
+      const dd=new Date(deadline+"T23:59:59"); // deadline considera o dia todo
+      const pd=new Date(publishDate+"T"+(publishTime||"09:00"));
+      if(dd>=pd){
+        alert("⚠ O prazo de entrega precisa ser ANTES da data/hora de publicação.\n\nO deadline serve pra cobrar a equipe entregar a tempo de publicar. Ajuste uma das datas.");
+        return;
+      }
+    }
+    const updated={...task,title,desc,comments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:attachments,timeline:tl,checklist,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     setTasks(prev=>prev.map(t=>t.id===task.id?updated:t));
     if(updated.status==="agendado"&&task.status!=="agendado")notifyAgendado(updated);
     onClose();
@@ -15287,23 +15480,45 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     return ALLOWED_MIME_PREFIXES.some(p=>type.startsWith(p)||type===p.replace(/\/$/,""));
   };
 
+  const MAX_IMAGES_PER_CARD=20;
+  const genUniqueId=()=>(typeof crypto!=="undefined"&&crypto.randomUUID)?crypto.randomUUID():`tmp_${Date.now()}_${Math.random().toString(36).slice(2,11)}_${Math.random().toString(36).slice(2,11)}`;
+
   const handleFileUpload=async(e)=>{
     const files=Array.from(e.target.files||[]);
     e.target.value="";
-    for(const file of files){
-      // Validação 1: Tamanho
+    if(files.length===0)return;
+
+    // ── VALIDA LIMITE DE 20 IMAGENS ──
+    const currentImgs=attachments.filter(a=>isImg(a)&&!a.isAnnotation).length;
+    const newImgs=files.filter(f=>f.type&&f.type.startsWith("image/")).length;
+    const remaining=MAX_IMAGES_PER_CARD-currentImgs;
+    if(newImgs>0&&remaining<=0){
+      alert(`⚠️ Limite de ${MAX_IMAGES_PER_CARD} imagens atingido neste card.\n\nRemova alguma imagem existente antes de adicionar mais.`);
+      return;
+    }
+    if(newImgs>remaining){
+      alert(`⚠️ Você selecionou ${newImgs} imagem(ns), mas este card só comporta mais ${remaining}.\n\nLimite: ${MAX_IMAGES_PER_CARD} imagens por card. Remova alguma existente ou selecione menos.`);
+      return;
+    }
+
+    // ── UPLOAD EM PARALELO (muito mais rápido que sequencial) ──
+    const uploadOne=async(file)=>{
       if(file.size>MAX_UPLOAD_SIZE){
         alert(`${file.name}: arquivo muito grande (máx 100 MB).`);
-        continue;
+        return;
       }
-      // Validação 2: Tipo MIME (evita upload de executáveis, scripts etc.)
       if(!isMimeAllowed(file.type)){
         alert(`${file.name}: tipo de arquivo não permitido (${file.type||"desconhecido"}).`);
-        continue;
+        return;
       }
-      const ext=file.name.split(".").pop();
-      const path=`tasks/${task.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const tempId=Date.now()+Math.random();
+      // ID único robusto (crypto.randomUUID com fallback)
+      const tempId=genUniqueId();
+      const ext=(file.name.split(".").pop()||"bin").replace(/[^a-zA-Z0-9]/g,"");
+      // Path com 2 randoms + timestamp + tempId (praticamente impossível colidir)
+      const rnd1=Math.random().toString(36).slice(2,11);
+      const rnd2=Math.random().toString(36).slice(2,11);
+      const path=`tasks/${task.id}/${Date.now()}-${rnd1}-${rnd2}.${ext}`;
+      // Adiciona placeholder UPLOADING
       setAttachments(p=>[...p,{id:tempId,name:file.name,type:file.type,size:file.size,url:null,uploading:true,addedAt:nowFmt(),addedBy:user.name}]);
       try{
         const sb=window._sb;
@@ -15316,7 +15531,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         setAttachments(p=>p.filter(a=>a.id!==tempId));
         alert("Erro ao fazer upload de "+file.name+". Tente novamente.");
       }
-    }
+    };
+    // Processa todos em paralelo
+    await Promise.all(files.map(uploadOne));
   };
 
   const removeAttachment=(id)=>{
@@ -15598,7 +15815,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <span style={{color:"#0284c7",fontWeight:700,fontSize:12,textTransform:"uppercase",letterSpacing:.5}}>Texto da Legenda</span>
                 <span style={{marginLeft:"auto",background:"#4db8ff18",color:"#0284c7",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700}}>Pronto para publicação</span>
               </div>
-              <div style={{color:"#0f172a",fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{caption}</div>
+              <div style={{color:"#0f172a",fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap",wordBreak:"break-word"}}><LinkifiedText text={caption}/></div>
             </div>}
             {isAgendado&&!caption&&<div style={{background:"#fff7ed",border:"1px dashed #f97316",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:8}}>
               <span style={{fontSize:16}}>⚠</span>
@@ -15819,7 +16036,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         <span style={{fontSize:16}}>🎙</span>
                         <audio src={c.audioUrl} controls style={{height:28,flex:1}}/>
                       </div>
-                    :<div style={{background:"#f8fafc",border:"1px solid #f1f5f9",borderRadius:"0 10px 10px 10px",padding:"9px 13px",color:"#475569",fontSize:12,lineHeight:1.5}}>{c.text}</div>
+                    :<div style={{background:"#f8fafc",border:"1px solid #f1f5f9",borderRadius:"0 10px 10px 10px",padding:"9px 13px",color:"#475569",fontSize:12,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word"}}><LinkifiedText text={c.text}/></div>
                   }
                 </div>
               </div>)}
@@ -16054,6 +16271,83 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         {/* ── RIGHT SIDEBAR ── */}
         <div style={{padding:"16px 16px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto",maxHeight:"65vh",background:"#fafbfc",borderRadius:"0 0 22px 0",borderLeft:"1px solid #edf0f4"}}>
 
+          {/* ══ SLA + PUBLICAÇÃO (admin/coordinator) ══ */}
+          {canEditSLAandPub&&!isAgendado&&(
+            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:11,textTransform:"uppercase",letterSpacing:.6,display:"flex",alignItems:"center",gap:6}}>
+                🎯 Prazo & Publicação
+              </div>
+
+              {/* Seletor SLA (prazo de entrega) */}
+              <div>
+                <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:5}}>⏳ Prazo de Entrega (SLA)</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4}}>
+                  {SLA_OPTIONS.map(opt=>(
+                    <button key={opt.hours} onClick={()=>{
+                      if(!canEdit)return;
+                      setSlaHours(opt.hours);
+                      if(!slaStartAt)setSlaStartAt(new Date().toISOString());
+                    }}
+                      disabled={!canEdit}
+                      style={{background:slaHours===opt.hours?"#dc2626":"#f8fafc",
+                        color:slaHours===opt.hours?"#fff":"#475569",
+                        border:`1px solid ${slaHours===opt.hours?"#dc2626":"#e2e8f0"}`,
+                        borderRadius:7,padding:"6px 4px",fontSize:10,fontWeight:700,
+                        cursor:canEdit?"pointer":"not-allowed"}}>
+                      {opt.emoji} {opt.hours>=24?opt.hours/24+"d":opt.hours+"h"}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={()=>{
+                  if(!canEdit)return;
+                  const v=prompt("Prazo personalizado (em horas, ex: 168 = 7 dias):");
+                  if(v){
+                    const h=parseInt(v);
+                    if(h>0&&h<=720){
+                      setSlaHours(h);
+                      if(!slaStartAt)setSlaStartAt(new Date().toISOString());
+                    }else{alert("Valor inválido (1-720 horas).");}
+                  }
+                }} disabled={!canEdit}
+                  style={{width:"100%",background:"transparent",border:"1px dashed #cbd5e1",color:"#64748b",borderRadius:7,padding:"5px 0",fontSize:10,fontWeight:600,marginTop:4,cursor:canEdit?"pointer":"not-allowed"}}>
+                  ⚙ Personalizado
+                </button>
+                {slaHours&&<div style={{marginTop:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <SlaHourglass task={{slaHours,slaStartAt:slaStartAt||new Date().toISOString(),slaPausedAt,slaPausedDuration}}/>
+                  <button onClick={()=>{
+                    if(!canEdit)return;
+                    if(slaPausedAt){
+                      // Despausa: adiciona tempo pausado à duração total
+                      const pausedFor=Math.floor((Date.now()-new Date(slaPausedAt).getTime())/1000);
+                      setSlaPausedDuration((slaPausedDuration||0)+pausedFor);
+                      setSlaPausedAt(null);
+                    }else{
+                      setSlaPausedAt(new Date().toISOString());
+                    }
+                  }} disabled={!canEdit}
+                    style={{background:"#f1f5f9",border:"1px solid #cbd5e1",color:"#475569",borderRadius:6,padding:"3px 8px",fontSize:9,fontWeight:700,cursor:canEdit?"pointer":"not-allowed"}}>
+                    {slaPausedAt?"▶ Retomar":"⏸ Pausar"}
+                  </button>
+                  <button onClick={()=>{if(!canEdit)return;setSlaHours(null);setSlaStartAt(null);setSlaPausedAt(null);setSlaPausedDuration(0);}} disabled={!canEdit}
+                    style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:9,cursor:canEdit?"pointer":"not-allowed"}}>✕ remover</button>
+                </div>}
+              </div>
+
+              {/* Data/Hora de Publicação */}
+              <div>
+                <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:5}}>📅 Data/Hora de Publicação</div>
+                <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
+                  <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
+                    style={{...SI,fontSize:12,padding:"7px 10px"}}/>
+                  <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
+                    style={{...SI,fontSize:12,padding:"7px 10px"}}/>
+                </div>
+                <div style={{color:"#64748b",fontSize:9,marginTop:4,fontStyle:"italic"}}>
+                  {publishDate?"Aparece no Calendário de Publicação":"Preencha pra aparecer no calendário"}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* ══ AGENDADO: sidebar especial ══ */}
           {isAgendado&&(<>
@@ -16429,6 +16723,18 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       return pd>=hoje&&pd<fim;
     });
   })();
+
+  // ═══ SLAs (Hellen supervisionar prazos) ═══
+  const _slasHoje=allActive.filter(t=>{
+    if(!t.slaHours||!t.slaStartAt||t.slaPausedAt)return false;
+    const s=getSlaStatus(t);
+    return s.status==="soon"||s.status==="urgent";
+  });
+  const _slasAtrasados=allActive.filter(t=>{
+    if(!t.slaHours||!t.slaStartAt||t.slaPausedAt)return false;
+    const s=getSlaStatus(t);
+    return s.status==="overdue";
+  });
 
   // ═══ Stats visuais da Ellen — gráficos e rankings ═══
   // 1) Distribuição de tarefas da equipe por status (donut)
@@ -16954,6 +17260,67 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
             </div>;
           })}
         </div>
+      </div>
+    )}
+
+    {/* ═══ SLA WATCHER — prazos vencendo/atrasados (Hellen) ═══ */}
+    {showCoordinatorWidgets&&(_slasHoje.length>0||_slasAtrasados.length>0)&&(
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,
+          maxWidth:860,margin:"0 auto",width:"100%"}}>
+        {/* SLAs Atrasados */}
+        {_slasAtrasados.length>0&&(
+          <div style={{background:C.card,borderRadius:16,border:"1px solid #fecaca",overflow:"hidden",boxShadow:"0 2px 8px rgba(220,38,38,0.08)"}}>
+            <div style={{padding:"12px 16px",background:"#dc2626",display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🚨</div>
+              <div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:13}}>SLAs Atrasados</div>
+                <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>{_slasAtrasados.length} demanda{_slasAtrasados.length>1?"s":""} vencida{_slasAtrasados.length>1?"s":""}</div>
+              </div>
+            </div>
+            <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto"}}>
+              {_slasAtrasados.slice(0,5).map(t=>{
+                const cl=CLIENTS.find(c=>c.id===t.client);
+                const resp=TEAM.find(u=>u.id===t.assignee||(t.assignees||[]).includes(u.id));
+                return <div key={t.id} onClick={()=>setOpenCard(t)}
+                    style={{background:"#fef2f2",border:"1px solid #fecaca",borderLeft:"4px solid #dc2626",
+                        borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#dc2626",fontWeight:700,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                    <div style={{color:"#991b1b",fontSize:10,marginTop:1}}>{cl?.name||"—"} · {resp?.name||"—"}</div>
+                  </div>
+                  <SlaHourglass task={t} compact/>
+                </div>;
+              })}
+            </div>
+          </div>
+        )}
+        {/* SLAs Vencendo Hoje */}
+        {_slasHoje.length>0&&(
+          <div style={{background:C.card,borderRadius:16,border:"1px solid #fed7aa",overflow:"hidden",boxShadow:"0 2px 8px rgba(234,88,12,0.08)"}}>
+            <div style={{padding:"12px 16px",background:"#ea580c",display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>⏳</div>
+              <div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:13}}>SLAs Vencendo Hoje</div>
+                <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>{_slasHoje.length} prazo{_slasHoje.length>1?"s":""} apertando</div>
+              </div>
+            </div>
+            <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto"}}>
+              {_slasHoje.slice(0,5).map(t=>{
+                const cl=CLIENTS.find(c=>c.id===t.client);
+                const resp=TEAM.find(u=>u.id===t.assignee||(t.assignees||[]).includes(u.id));
+                return <div key={t.id} onClick={()=>setOpenCard(t)}
+                    style={{background:"#fff7ed",border:"1px solid #fed7aa",borderLeft:"4px solid #ea580c",
+                        borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#9a3412",fontWeight:700,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                    <div style={{color:"#c2410c",fontSize:10,marginTop:1}}>{cl?.name||"—"} · {resp?.name||"—"}</div>
+                  </div>
+                  <SlaHourglass task={t} compact/>
+                </div>;
+              })}
+            </div>
+          </div>
+        )}
       </div>
     )}
 
@@ -18687,7 +19054,7 @@ export default function AgencyOS(){
       case "demandas_kanban":      return p.verDemandas;
       case "demandas_internas":    return p.verDemandasInternas||isSocio;
       case "demandas_cal_interno": return p.verInterno||isSocio;
-      case "demandas_cal_pub":     return p.verCalPub||isSocio;
+      case "demandas_cal_pub":     return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
