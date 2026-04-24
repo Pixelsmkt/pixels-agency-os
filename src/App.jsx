@@ -866,6 +866,9 @@ const Bar=({v,color,h=6})=>(
    10. Pagamentos em Atraso + Demandas Atrasadas
 */
 function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notifs,isMob}){
+  const [openCard,setOpenCard]=useState(null);
+  const setTasks=propSetTasks||(()=>{});
+  const adminCardPerms=(()=>{try{const s=localStorage.getItem("pixels-perms-"+(CURRENT_USER).id);return s?{...DEFAULT_PERMS,...JSON.parse(s)}:DEFAULT_PERMS;}catch{return DEFAULT_PERMS;}})();
   const allTasks=propTasks||[];
   const active=allTasks.filter(t=>!t.deletedAt);
   const ativas=active.filter(t=>t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado");
@@ -952,6 +955,21 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   // ═══ Pagamentos atrasados ═══
   const pagAtras=CLIENTS.filter(c=>c.payment&&c.payment.status==="atrasado");
 
+  // ═══ Minhas Demandas (card grande + 5 laterais) — tanto clientes quanto internas ═══
+  const myTasks=active.filter(t=>{
+    const isMine=t.assignee===user.id||(t.assignees||[]).includes(user.id);
+    if(!isMine)return false;
+    // Ignora concluídas/publicadas/pausadas
+    if(["aprovado","publicado","pausado","interno_aprovado","interno_executado"].includes(t.status))return false;
+    return true;
+  });
+  // Usa o sortByPriority do 12_dashboard.jsx (disponível no bundle)
+  const mySorted=typeof sortByPriority==="function"?sortByPriority(myTasks):myTasks;
+  const myMain=mySorted[0]||null;
+  const myNext=mySorted.slice(1,6);
+  const myMainPrio=myMain&&typeof getDemandPriority==="function"?getDemandPriority(myMain):null;
+  const myMainCl=myMain?CLIENTS.find(c=>c.id===myMain.client):null;
+
   // ═══ Publicações ═══
   const agendadas=active.filter(t=>t.status==="agendado");
   const pubHoje=agendadas.filter(t=>t.publishDate===hojeStr);
@@ -996,6 +1014,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   if(pagAtras.length>0)acoesUrgentes.push({type:"pag",count:pagAtras.length,label:"Pagamento(s) atrasado(s)",color:"#dc2626",icon:"💸"});
 
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    {openCard&&<CardModal task={openCard} tasks={allTasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={CURRENT_USER} cardPerms={adminCardPerms}/>}
     {isViewing&&<div style={{background:"#f59e0b",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
@@ -1020,6 +1039,73 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               </div>
             </div>
           ))}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ 0.6. MINHAS DEMANDAS — 1 grande + 5 laterais ═══ */}
+    {myTasks.length>0&&(
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 280px",gap:12}}>
+        {/* CARD GRANDE — prioridade máxima */}
+        {myMain&&(
+          <div onClick={()=>setOpenCard(myMain)}
+            style={{background:"#fff",border:"1px solid #e5e7eb",borderLeft:`5px solid ${myMainPrio?.bg||"#16a34a"}`,borderRadius:12,padding:"18px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .12s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.06)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e5e7eb";e.currentTarget.style.boxShadow="none";}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                {myMainPrio&&<span style={{background:myMainPrio.bg,color:"#fff",borderRadius:5,padding:"2px 8px",fontSize:9,fontWeight:800,letterSpacing:.5}}>
+                  {myMainPrio.level===0?"ALTERAÇÃO":myMainPrio.level===1?"ATRASADO":myMainPrio.level===2?"URGENTE":"NO PRAZO"}
+                </span>}
+                <span style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Minha próxima demanda</span>
+              </div>
+              {myMainCl&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:5,padding:"2px 8px",fontSize:10,fontWeight:700}}>{myMainCl.abbr}</span>}
+            </div>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:18,lineHeight:1.3,letterSpacing:-.3}}>{myMain.title}</div>
+            {myMain.desc&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.6}}>{myMain.desc.replace(/<[^>]*>/g,"").slice(0,120)}{myMain.desc.length>120?"...":""}</div>}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:10,borderTop:"1px solid #f1f5f9",marginTop:"auto"}}>
+              <span style={{color:myMainPrio?.bg||"#16a34a",fontSize:11,fontWeight:700}}>
+                {myMainPrio?.icon&&myMainPrio.icon+" "}{myMainPrio?.label||"No prazo"}
+              </span>
+              <span style={{color:"#2563eb",fontSize:12,fontWeight:600}}>Abrir →</span>
+            </div>
+          </div>
+        )}
+
+        {/* 5 CARDS LATERAIS — próximas */}
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {myNext.length===0&&<div style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:10,padding:"18px",textAlign:"center"}}>
+            <div style={{fontSize:24,marginBottom:6}}>🎉</div>
+            <div style={{color:"#64748b",fontSize:11,fontWeight:600}}>Só a principal por enquanto</div>
+          </div>}
+          {myNext.map(t=>{
+            const prio=typeof getDemandPriority==="function"?getDemandPriority(t):{bg:"#94a3b8",label:"",icon:""};
+            const cl=CLIENTS.find(c=>c.id===t.client);
+            const dl=typeof daysLeft==="function"?daysLeft(t.deadline):null;
+            return <div key={t.id} onClick={()=>setOpenCard(t)}
+              style={{background:"#fff",border:"1px solid #e5e7eb",borderLeft:`3px solid ${prio.bg}`,borderRadius:8,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,transition:"all .1s"}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateX(2px)";e.currentTarget.style.borderColor="#cbd5e1";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.borderColor="#e5e7eb";}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontWeight:600,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{cl?.abbr||(t.status?.startsWith("interno_")?"Interna":"—")}</div>
+              </div>
+              <span style={{color:prio.bg,fontWeight:700,fontSize:10,flexShrink:0}}>
+                {prio.level<=1?prio.label:dl===null?"—":dl===0?"Hoje":dl+"d"}
+              </span>
+            </div>;
+          })}
+          {/* Mini totais */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:2}}>
+            <div style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16}}>{myTasks.length}</div>
+              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Minhas</div>
+            </div>
+            <div style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
+              <div style={{color:"#dc2626",fontWeight:800,fontSize:16}}>{myTasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;}).length}</div>
+              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Atrasadas</div>
+            </div>
+          </div>
         </div>
       </div>
     )}
