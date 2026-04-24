@@ -130,18 +130,43 @@ const MOBILE_CSS=`
   @keyframes slideInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
   /* Ajustes específicos pra mobile (narrow viewport) */
   @media (max-width:768px){
-    body{overscroll-behavior-y:contain;}
+    body{overscroll-behavior-y:contain;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+    /* Tabelas mais compactas */
     table{font-size:11px!important;}
     table th,table td{padding:8px 6px!important;}
-    /* Touch targets maiores em botões pequenos */
-    button{min-height:32px;}
-    /* Wrapper de scroll horizontal com momentum iOS */
-    .scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;}
-    /* Modais ocupam tela toda */
-    [data-cardmodal]{margin:0!important;border-radius:12px 12px 0 0!important;}
+    /* Touch targets: mínimo 44×44 (Apple HIG) */
+    button{min-height:36px;touch-action:manipulation;}
+    a{min-height:36px;}
+    /* Scroll horizontal com momentum iOS + esconder scrollbar */
+    .scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;scrollbar-width:none;}
+    .scroll-x::-webkit-scrollbar{display:none;}
+    /* Modais ocupam tela toda em mobile */
+    [data-cardmodal]{margin:0!important;border-radius:16px 16px 0 0!important;}
+    /* Desabilita double-tap zoom em elementos interativos */
+    button,a,[role="button"]{-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;}
+    /* Previne seleção acidental em áreas clicáveis */
+    .no-select{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
+    /* Padding lateral consistente em telas principais */
+    main{padding-left:14px!important;padding-right:14px!important;}
+    /* Headers sticky precisam de bg sólido pra não ficar transparente */
+    .sticky-header{background:#fff!important;}
+    /* Inputs e textareas com padding maior pra touch */
+    input,textarea,select{padding:10px 14px!important;min-height:44px;}
+    textarea{min-height:80px;}
+    /* Grid responsivo: colunas maiores sempre, nunca apertar */
+    .grid-auto-mobile{grid-template-columns:1fr!important;}
+    /* Títulos não quebram letras */
+    h1,h2,h3,h4{word-break:normal;overflow-wrap:break-word;}
+    /* Cards sem sombra excessiva no mobile (performance) */
+    .shadow-reduce{box-shadow:0 1px 3px rgba(0,0,0,0.06)!important;}
   }
   /* Impede que elementos muito largos estourem a viewport */
   .no-overflow{min-width:0;overflow-wrap:anywhere;}
+  /* Status bar safe area (iOS) */
+  .safe-top{padding-top:max(10px,env(safe-area-inset-top));}
+  .safe-bottom{padding-bottom:max(10px,env(safe-area-inset-bottom));}
+  /* Animação suave no bottom-nav ativo */
+  @keyframes navActive{from{transform:scale(0.9);opacity:0;}to{transform:scale(1);opacity:1;}}
 `;
 
 /* ─── PLATFORM LOGOS (SVG) ─────────────────── */
@@ -19392,43 +19417,53 @@ export default function AgencyOS(){
     </aside>
 
     <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,overflow:"hidden"}}>
-      {isMob&&<div style={{background:C.s1,borderBottom:`1px solid ${C.b1}`,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexShrink:0,position:"sticky",top:0,zIndex:30}}>
-        <button onClick={()=>setSideOpen(v=>!v)} style={{background:"none",border:"none",color:C.tx,fontSize:22,cursor:"pointer",padding:"2px 4px",lineHeight:1,flexShrink:0}}>☰</button>
+      {isMob&&<div style={{background:"#ffffff",borderBottom:`1px solid ${C.b1}`,padding:"10px 14px env(safe-area-inset-top,10px) 14px",paddingTop:"max(10px,env(safe-area-inset-top,10px))",display:"flex",alignItems:"center",gap:12,flexShrink:0,position:"sticky",top:0,zIndex:30,backdropFilter:"saturate(180%) blur(16px)",WebkitBackdropFilter:"saturate(180%) blur(16px)"}}>
+        <button onClick={()=>setSideOpen(v=>!v)} aria-label="Menu"
+          style={{background:C.s1,border:"none",color:C.tx,cursor:"pointer",padding:0,lineHeight:1,flexShrink:0,width:40,height:40,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="7" x2="21" y2="7"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="17" x2="15" y2="17"/>
+          </svg>
+        </button>
         <div style={{flex:1,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-          <span style={{fontSize:16,flexShrink:0}}>{cur?.icon}</span>
-          <div style={{color:C.tx,fontWeight:800,fontSize:15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{activeCl?CLIENTS.find(c=>c.id===activeCl)?.name:cur?.label}</div>
+          <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{activeCl?CLIENTS.find(c=>c.id===activeCl)?.name:cur?.label}</div>
         </div>
-        <div style={{display:"flex",gap:6,flexShrink:0}}>
-          <button onClick={()=>setNotifDrawer(v=>!v)} style={{position:"relative",background:"none",border:"none",color:C.ts,cursor:"pointer",fontSize:18,padding:"2px 4px",lineHeight:1}}>
-            🔔
-            {unreadNotifs>0&&<div style={{position:"absolute",top:-2,right:-2,background:C.rd,color:"#fff",borderRadius:99,padding:"0 4px",fontSize:8,fontWeight:900,minWidth:14,textAlign:"center",lineHeight:"14px"}}>{unreadNotifs}</div>}
+        <div style={{display:"flex",gap:6,flexShrink:0,alignItems:"center"}}>
+          <button onClick={()=>setNotifDrawer(v=>!v)} aria-label="Notificações"
+            style={{position:"relative",background:C.s1,border:"none",cursor:"pointer",padding:0,width:40,height:40,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={C.ts} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+            </svg>
+            {unreadNotifs>0&&<div style={{position:"absolute",top:4,right:4,background:C.rd,color:"#fff",borderRadius:99,padding:"0 4px",fontSize:9,fontWeight:800,minWidth:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff"}}>{unreadNotifs>9?"9+":unreadNotifs}</div>}
           </button>
-          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={28} status="online" uid={CURRENT_USER.id}/>
+          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={36} status="online" uid={CURRENT_USER.id}/>
         </div>
       </div>}
-      <main style={{flex:1,overflowY:"auto",padding:isMob?"12px 12px 80px":"24px",WebkitOverflowScrolling:"touch"}}>
+      <main style={{flex:1,overflowY:"auto",padding:isMob?"16px 14px 90px":"24px",WebkitOverflowScrolling:"touch",scrollBehavior:"smooth"}}>
         {renderPage()}
       </main>
-      {isMob&&<nav style={{position:"fixed",bottom:0,left:0,right:0,background:C.s1,borderTop:`1px solid ${C.b1}`,display:"flex",padding:"8px 0 env(safe-area-inset-bottom,10px)",flexShrink:0,zIndex:30,boxShadow:"0 -2px 12px rgba(0,0,0,0.1)"}}>
+      {isMob&&<nav style={{position:"fixed",bottom:0,left:0,right:0,background:"rgba(255,255,255,0.92)",borderTop:`1px solid ${C.b1}`,display:"flex",padding:"8px 4px env(safe-area-inset-bottom,10px)",flexShrink:0,zIndex:30,boxShadow:"0 -4px 20px rgba(0,0,0,0.08)",backdropFilter:"saturate(180%) blur(20px)",WebkitBackdropFilter:"saturate(180%) blur(20px)"}}>
         {MOBILE_NAV.map(n=>{
           const ativo=page===n.id||(NAV.find(x=>x.id===n.id)?.children||[]).some(c=>c.id===page);
-          const cor=ativo?C.a:C.td;
+          const cor=ativo?C.a:"#64748b";
           return <button key={n.id} onClick={()=>nav(n.id)}
-            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"4px 2px",color:cor,position:"relative",transition:"color .12s"}}>
-            <NavIcon id={n.id} size={22} color={cor}/>
-            <span style={{fontSize:9,fontWeight:ativo?700:500,lineHeight:1}}>{n.label}</span>
-            {ativo&&<div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",width:24,height:3,background:C.a,borderRadius:99}}/>}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"6px 2px",color:cor,position:"relative",transition:"color .15s",minHeight:56}}>
+            <div style={{background:ativo?C.a+"18":"transparent",borderRadius:10,padding:"4px 12px",transition:"background .15s",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <NavIcon id={n.id} size={22} color={cor}/>
+            </div>
+            <span style={{fontSize:10,fontWeight:ativo?700:500,lineHeight:1,letterSpacing:-.1}}>{n.label}</span>
           </button>;
         })}
         {/* Botão "Mais" — abre sidebar completo */}
-        <button onClick={()=>setSideOpen(true)}
-          style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"4px 2px",color:C.td,transition:"color .12s"}}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.td} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <button onClick={()=>setSideOpen(true)} aria-label="Mais opções"
+          style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"6px 2px",color:"#64748b",transition:"color .15s",minHeight:56}}>
+          <div style={{borderRadius:10,padding:"4px 12px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="1"/>
             <circle cx="19" cy="12" r="1"/>
             <circle cx="5" cy="12" r="1"/>
           </svg>
-          <span style={{fontSize:9,fontWeight:500,lineHeight:1}}>Mais</span>
+          </div>
+          <span style={{fontSize:10,fontWeight:500,lineHeight:1,letterSpacing:-.1}}>Mais</span>
         </button>
       </nav>}
     </div>
