@@ -1000,23 +1000,23 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
 
-    {/* ═══ 0. AÇÕES URGENTES (TOPO - PRIORIDADE MÁXIMA) ═══ */}
+    {/* ═══ 0. AÇÕES URGENTES (TOPO) ═══ */}
     {acoesUrgentes.length>0&&(
-      <div style={{background:"#fff",borderRadius:16,border:"2px solid #f59e0b",overflow:"hidden",boxShadow:"0 4px 16px rgba(245,158,11,0.15)"}}>
-        <div style={{background:"#f59e0b",padding:"14px 20px",display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:36,height:36,borderRadius:10,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>⚡</div>
-          <div style={{flex:1}}>
-            <div style={{color:"#fff",fontWeight:900,fontSize:16,letterSpacing:-.3}}>Ações que exigem atenção AGORA</div>
-            <div style={{color:"#fff",fontSize:11,opacity:0.95,marginTop:2}}>{acoesUrgentes.reduce((a,x)=>a+x.count,0)} itens pendentes na operação</div>
+      <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb"}}>
+        <div style={{padding:"14px 18px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f1f5f9"}}>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Ações que exigem atenção</div>
+            <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{acoesUrgentes.reduce((a,x)=>a+x.count,0)} itens pendentes</div>
           </div>
+          <div style={{background:"#fef3c7",color:"#92400e",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,letterSpacing:.3}}>URGENTE</div>
         </div>
-        <div style={{padding:"12px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+        <div style={{padding:"12px",display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
           {acoesUrgentes.map(a=>(
-            <div key={a.type} style={{background:a.color,borderRadius:10,padding:"12px 14px",display:"flex",alignItems:"center",gap:10,boxShadow:"0 2px 6px rgba(0,0,0,0.1)"}}>
-              <div style={{width:36,height:36,borderRadius:9,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{a.icon}</div>
+            <div key={a.type} style={{background:"#fff",border:"1px solid #e5e7eb",borderLeft:`3px solid ${a.color}`,borderRadius:8,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:18,flexShrink:0}}>{a.icon}</span>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#fff",fontWeight:900,fontSize:22,lineHeight:1,letterSpacing:-.5}}>{a.count}</div>
-                <div style={{color:"#fff",fontSize:10,marginTop:2,fontWeight:600,opacity:0.95}}>{a.label}</div>
+                <div style={{color:a.color,fontWeight:800,fontSize:20,lineHeight:1,letterSpacing:-.3}}>{a.count}</div>
+                <div style={{color:"#64748b",fontSize:10,marginTop:3,fontWeight:500}}>{a.label}</div>
               </div>
             </div>
           ))}
@@ -1027,94 +1027,94 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {/* ═══ 0.5. VISÃO OPERACIONAL — 3 FLUXOS (Clientes + Internas + Portal) ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
       {/* Demandas de Clientes */}
-      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
-        <div style={{padding:"12px 16px",background:"#a140ff",display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:32,height:32,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>📋</div>
-          <div>
-            <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Demandas Clientes</div>
-            <div style={{color:"#fff",fontSize:9,opacity:0.9,marginTop:1}}>fluxo principal</div>
-          </div>
+      <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"16px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Demandas Clientes</div>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#a140ff"}}/>
         </div>
-        <div style={{padding:"14px 16px"}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:12}}>
-            <span style={{color:"#a140ff",fontWeight:900,fontSize:32,letterSpacing:-1,lineHeight:1}}>{clientAtivas.length}</span>
-            <span style={{color:C.td,fontSize:11,fontWeight:700}}>ativas</span>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {[
-              {l:"Copys",s:"demanda",c:"#a140ff"},
-              {l:"Em Execução",s:"execucao",c:"#eab308"},
-              {l:"Em Avaliação",s:"avaliacao",c:"#f97316"},
-              {l:"Agendado",s:"agendado",c:"#2563eb"},
-            ].map(s=>{
-              const ct=clientTasks.filter(t=>t.status===s.s).length;
-              return <div key={s.s} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
-                <span style={{color:C.tx,fontWeight:600}}>● <span style={{color:s.c}}>{s.l}</span></span>
-                <span style={{color:s.c,fontWeight:900}}>{ct}</span>
-              </div>;
-            })}
-          </div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:14}}>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:34,letterSpacing:-1,lineHeight:1}}>{clientAtivas.length}</span>
+          <span style={{color:"#94a3b8",fontSize:12,fontWeight:500}}>ativas</span>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:7,borderTop:"1px solid #f1f5f9",paddingTop:12}}>
+          {[
+            {l:"Copys",s:"demanda",c:"#a140ff"},
+            {l:"Em Execução",s:"execucao",c:"#eab308"},
+            {l:"Em Avaliação",s:"avaliacao",c:"#f97316"},
+            {l:"Agendado",s:"agendado",c:"#2563eb"},
+          ].map(s=>{
+            const ct=clientTasks.filter(t=>t.status===s.s).length;
+            return <div key={s.s} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
+              <span style={{color:"#475569",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:s.c}}/>
+                {s.l}
+              </span>
+              <span style={{color:"#0f172a",fontWeight:700}}>{ct}</span>
+            </div>;
+          })}
         </div>
       </div>
 
       {/* Demandas Internas */}
-      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
-        <div style={{padding:"12px 16px",background:"#6366f1",display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:32,height:32,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>⚙</div>
-          <div>
-            <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Demandas Internas</div>
-            <div style={{color:"#fff",fontSize:9,opacity:0.9,marginTop:1}}>operação da agência</div>
-          </div>
+      <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"16px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Demandas Internas</div>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#6366f1"}}/>
         </div>
-        <div style={{padding:"14px 16px"}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:12}}>
-            <span style={{color:"#6366f1",fontWeight:900,fontSize:32,letterSpacing:-1,lineHeight:1}}>{internAtivas.length}</span>
-            <span style={{color:C.td,fontSize:11,fontWeight:700}}>ativas</span>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {[
-              {l:"Recebidas",s:"interno_demanda",c:"#6366f1"},
-              {l:"Em Execução",s:"interno_execucao",c:"#f97316"},
-              {l:"Em Avaliação",s:"interno_avaliacao",c:"#eab308"},
-              {l:"Aprovadas",s:"interno_aprovado",c:"#22c55e"},
-            ].map(s=>{
-              const ct=internTasks.filter(t=>t.status===s.s).length;
-              return <div key={s.s} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
-                <span style={{color:C.tx,fontWeight:600}}>● <span style={{color:s.c}}>{s.l}</span></span>
-                <span style={{color:s.c,fontWeight:900}}>{ct}</span>
-              </div>;
-            })}
-          </div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:14}}>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:34,letterSpacing:-1,lineHeight:1}}>{internAtivas.length}</span>
+          <span style={{color:"#94a3b8",fontSize:12,fontWeight:500}}>ativas</span>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:7,borderTop:"1px solid #f1f5f9",paddingTop:12}}>
+          {[
+            {l:"Recebidas",s:"interno_demanda",c:"#6366f1"},
+            {l:"Em Execução",s:"interno_execucao",c:"#f97316"},
+            {l:"Em Avaliação",s:"interno_avaliacao",c:"#eab308"},
+            {l:"Aprovadas",s:"interno_aprovado",c:"#22c55e"},
+          ].map(s=>{
+            const ct=internTasks.filter(t=>t.status===s.s).length;
+            return <div key={s.s} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
+              <span style={{color:"#475569",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
+                <div style={{width:6,height:6,borderRadius:"50%",background:s.c}}/>
+                {s.l}
+              </span>
+              <span style={{color:"#0f172a",fontWeight:700}}>{ct}</span>
+            </div>;
+          })}
         </div>
       </div>
 
       {/* Solicitações do Portal */}
-      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
-        <div style={{padding:"12px 16px",background:"#16a34a",display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:32,height:32,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>📩</div>
-          <div>
-            <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Portal do Cliente</div>
-            <div style={{color:"#fff",fontSize:9,opacity:0.9,marginTop:1}}>solicitações recebidas</div>
-          </div>
+      <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"16px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Portal do Cliente</div>
+          <div style={{width:6,height:6,borderRadius:"50%",background:"#16a34a"}}/>
         </div>
-        <div style={{padding:"14px 16px"}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:12}}>
-            <span style={{color:"#16a34a",fontWeight:900,fontSize:32,letterSpacing:-1,lineHeight:1}}>{portalRequests.length}</span>
-            <span style={{color:C.td,fontSize:11,fontWeight:700}}>total</span>
+        <div style={{display:"flex",alignItems:"baseline",gap:6,marginBottom:14}}>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:34,letterSpacing:-1,lineHeight:1}}>{portalRequests.length}</span>
+          <span style={{color:"#94a3b8",fontSize:12,fontWeight:500}}>solicitações</span>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:7,borderTop:"1px solid #f1f5f9",paddingTop:12}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
+            <span style={{color:"#475569",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#dc2626"}}/>
+              Sem responsável
+            </span>
+            <span style={{color:"#0f172a",fontWeight:700}}>{portalPendentes.length}</span>
           </div>
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
-              <span style={{color:C.tx,fontWeight:600}}>📩 <span style={{color:"#dc2626"}}>Sem responsável</span></span>
-              <span style={{color:"#dc2626",fontWeight:900}}>{portalPendentes.length}</span>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
-              <span style={{color:C.tx,fontWeight:600}}>🆕 <span style={{color:"#16a34a"}}>Últimos 7d</span></span>
-              <span style={{color:"#16a34a",fontWeight:900}}>{portalRecentes.length}</span>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:11}}>
-              <span style={{color:C.tx,fontWeight:600}}>⚙ <span style={{color:"#6366f1"}}>Em andamento</span></span>
-              <span style={{color:"#6366f1",fontWeight:900}}>{portalRequests.filter(t=>t.status==="interno_execucao").length}</span>
-            </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
+            <span style={{color:"#475569",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#16a34a"}}/>
+              Últimos 7 dias
+            </span>
+            <span style={{color:"#0f172a",fontWeight:700}}>{portalRecentes.length}</span>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12}}>
+            <span style={{color:"#475569",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:"#6366f1"}}/>
+              Em andamento
+            </span>
+            <span style={{color:"#0f172a",fontWeight:700}}>{portalRequests.filter(t=>t.status==="interno_execucao").length}</span>
           </div>
         </div>
       </div>
@@ -1175,32 +1175,19 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       </div>
     </div>
 
-    {/* ═══ 0.85. PUBLICAÇÕES (hoje + semana + atrasadas) ═══ */}
+    {/* ═══ 0.85. PUBLICAÇÕES ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(3,1fr)",gap:12}}>
-      <div style={{background:pubAtrasadas.length>0?"#dc2626":"#64748b",borderRadius:14,padding:"14px 16px",color:"#fff"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚠</div>
-          <div style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Pub. Atrasadas</div>
+      {[
+        {label:"Pub. Atrasadas",value:pubAtrasadas.length,sub:pubAtrasadas.length===0?"nada atrasado":"publicações vencidas",color:pubAtrasadas.length>0?"#dc2626":"#16a34a"},
+        {label:"Publica Hoje",value:pubHoje.length,sub:pubHoje.length===0?"nenhuma":"agendadas",color:"#2563eb"},
+        {label:"Esta Semana",value:pubSemana.length,sub:"próximos 7 dias",color:"#0f172a"},
+      ].map(k=>(
+        <div key={k.label} style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>{k.label}</div>
+          <div style={{color:k.color,fontWeight:800,fontSize:26,letterSpacing:-.8,lineHeight:1}}>{k.value}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:6,fontWeight:500}}>{k.sub}</div>
         </div>
-        <div style={{fontWeight:900,fontSize:28,letterSpacing:-.8,lineHeight:1}}>{pubAtrasadas.length}</div>
-        <div style={{fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>{pubAtrasadas.length===0?"nada atrasado":"publicações vencidas"}</div>
-      </div>
-      <div style={{background:"#2563eb",borderRadius:14,padding:"14px 16px",color:"#fff"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🚀</div>
-          <div style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Publica Hoje</div>
-        </div>
-        <div style={{fontWeight:900,fontSize:28,letterSpacing:-.8,lineHeight:1}}>{pubHoje.length}</div>
-        <div style={{fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>{pubHoje.length===0?"nenhuma":"agendadas pra hoje"}</div>
-      </div>
-      <div style={{background:"#0891b2",borderRadius:14,padding:"14px 16px",color:"#fff"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📅</div>
-          <div style={{fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Pub. Esta Semana</div>
-        </div>
-        <div style={{fontWeight:900,fontSize:28,letterSpacing:-.8,lineHeight:1}}>{pubSemana.length}</div>
-        <div style={{fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>próximos 7 dias</div>
-      </div>
+      ))}
     </div>
 
     {/* ═══ 1. BANNER DE RISCOS CRÍTICOS ═══ */}
@@ -1234,103 +1221,44 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {/* ═══ 2. KPIs EXECUTIVOS (8 cards) ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
       {/* MRR */}
-      <div style={{background:"#16a34a",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(22,163,74,0.2)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>💰</div>
-          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>MRR Total</div>
-        </div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{f$(mrr)}</div>
-        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>▲ 5% vs mês anterior</div>
-      </div>
-
-      {/* ROAS */}
-      <div style={{background:"#7c3aed",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(124,58,237,0.2)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🎯</div>
-          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>ROAS Médio</div>
-        </div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{avgRoas}x</div>
-        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>Meta + Google</div>
-      </div>
-
-      {/* LTV */}
-      <div style={{background:"#0891b2",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(8,145,178,0.2)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>💎</div>
-          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>LTV Médio</div>
-        </div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{f$(ltvMedio)}</div>
-        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>24 meses estimados</div>
-      </div>
-
-      {/* Churn */}
-      <div style={{background:"#1e293b",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(30,41,59,0.2)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>📉</div>
-          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Churn 90d</div>
-        </div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>0%</div>
-        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>sem perdas</div>
-      </div>
-
-      {/* Clientes Ativos */}
-      <div style={{background:"#ea580c",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(234,88,12,0.2)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>👔</div>
-          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Clientes</div>
-        </div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{clientesAtivos}</div>
-        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>ativos</div>
-      </div>
-
-      {/* No Prazo */}
-      <div style={{background:noPrazoPct>=80?"#16a34a":noPrazoPct>=60?"#eab308":"#dc2626",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⏰</div>
-          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>No Prazo</div>
-        </div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{noPrazoPct}%</div>
-        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>{atrasadas.length} atrasadas</div>
-      </div>
-
-      {/* Saúde Média */}
-      <div style={{background:avgHealth>=80?"#16a34a":avgHealth>=60?"#eab308":"#dc2626",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>💚</div>
-          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Saúde Média</div>
-        </div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{avgHealth}%</div>
-        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>{clientesRisco.length} em risco</div>
-      </div>
-
-      {/* NPS */}
-      <div style={{background:avgNps>=80?"#16a34a":avgNps>=60?"#eab308":"#dc2626",borderRadius:14,padding:"14px 16px",boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⭐</div>
-          <div style={{color:"#fff",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>NPS</div>
-        </div>
-        <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,lineHeight:1}}>{avgNps}</div>
-        <div style={{color:"#fff",fontSize:10,marginTop:4,opacity:0.9,fontWeight:600}}>média da carteira</div>
-      </div>
+      {/* KPI card helper */}
+      {(()=>{
+        const Kpi=({label,value,sub,color})=>(
+          <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"16px"}}>
+            <div style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>{label}</div>
+            <div style={{color:color||"#0f172a",fontWeight:800,fontSize:26,letterSpacing:-.8,lineHeight:1}}>{value}</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:6,fontWeight:500}}>{sub}</div>
+          </div>
+        );
+        return <>
+          <Kpi label="MRR Total" value={f$(mrr)} sub="▲ 5% vs mês anterior" color="#16a34a"/>
+          <Kpi label="ROAS Médio" value={avgRoas+"x"} sub="Meta + Google" color="#0f172a"/>
+          <Kpi label="LTV Médio" value={f$(ltvMedio)} sub="24 meses estimados" color="#0f172a"/>
+          <Kpi label="Churn 90d" value="0%" sub="sem perdas" color="#16a34a"/>
+          <Kpi label="Clientes" value={clientesAtivos} sub="ativos" color="#0f172a"/>
+          <Kpi label="No Prazo" value={noPrazoPct+"%"} sub={atrasadas.length+" atrasadas"}
+            color={noPrazoPct>=80?"#16a34a":noPrazoPct>=60?"#eab308":"#dc2626"}/>
+          <Kpi label="Saúde Média" value={avgHealth+"%"} sub={clientesRisco.length+" em risco"}
+            color={avgHealth>=80?"#16a34a":avgHealth>=60?"#eab308":"#dc2626"}/>
+          <Kpi label="NPS" value={avgNps} sub="média da carteira"
+            color={avgNps>=80?"#16a34a":avgNps>=60?"#eab308":"#dc2626"}/>
+        </>;
+      })()}
     </div>
 
-    {/* ═══ 3. PIPELINE DE DEMANDAS (FUNIL) ═══ */}
-    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
-      <div style={{padding:"12px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🎯</div>
+    {/* ═══ 3. PIPELINE DE DEMANDAS ═══ */}
+    <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb"}}>
+      <div style={{padding:"14px 18px 10px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
-          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Pipeline de Demandas</div>
-          <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>{active.length} demandas em toda a operação</div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Pipeline de Demandas</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{active.length} demandas na operação</div>
         </div>
       </div>
       <div style={{padding:"14px 16px",display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(6,1fr)",gap:8}}>
         {pipeline.map(p=>(
-          <div key={p.status} style={{textAlign:"center"}}>
-            <div style={{background:p.color,borderRadius:10,padding:"12px 6px",boxShadow:"0 2px 6px rgba(0,0,0,0.1)"}}>
-              <div style={{fontSize:20,marginBottom:4}}>{p.icon}</div>
-              <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-1,lineHeight:1}}>{p.count}</div>
-            </div>
-            <div style={{color:C.td,fontSize:10,fontWeight:700,marginTop:6,textTransform:"uppercase",letterSpacing:.3}}>{p.label}</div>
+          <div key={p.status} style={{background:"#fff",border:"1px solid #e5e7eb",borderTop:`3px solid ${p.color}`,borderRadius:8,padding:"12px 6px",textAlign:"center"}}>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>{p.label}</div>
+            <div style={{color:p.color,fontWeight:800,fontSize:26,letterSpacing:-1,lineHeight:1}}>{p.count}</div>
           </div>
         ))}
       </div>
