@@ -13834,6 +13834,7 @@ const VIEWS=[
   {id:"timeline", label:"📊 Histórico"},
   {id:"insights", label:"🔬 Insights"},
   {id:"roi",      label:"💰 ROI por Pessoa"},
+  {id:"uso",      label:"🔥 Uso do App"},
 ];
 const SCORE_TABLE_HEADERS=["Pos","Colaborador","Entregues","Retrabalho","Score"];
 const TIMELINE_TABLE_HEADERS=["Demanda","Cliente","Responsável","Início","Prazo","Entrega","Dias","Retrabalho","Score","Status"];
@@ -15167,7 +15168,177 @@ function PagePontuacao({tasks}){
       })}
     </div>)}
 
+    {/* ── USO DO APP — ranking de minutos/horas (gamificação) ── */}
+    {view==="uso"&&<UsoDoAppView/>}
+
   </div>);
+}
+
+/* ─── USO DO APP — ranking gamificado de tempo no app ─── */
+function UsoDoAppView(){
+  const sb=window._sb;
+  const [activity,setActivity]=useState([]); // todas as linhas user_activity_daily
+  const [presence,setPresence]=useState({}); // last_seen_at de cada user
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
+
+  useEffect(()=>{
+    if(!sb){setError("Supabase não disponível");setLoading(false);return;}
+    (async()=>{
+      try{
+        const [actRes,presRes]=await Promise.all([
+          sb.from("user_activity_daily").select("*"),
+          sb.from("user_presence").select("*"),
+        ]);
+        if(actRes.error)throw actRes.error;
+        setActivity(actRes.data||[]);
+        const pmap={};
+        (presRes.data||[]).forEach(r=>{pmap[r.user_id]=r;});
+        setPresence(pmap);
+      }catch(e){setError(e?.message||"Erro ao carregar atividade");}
+      setLoading(false);
+    })();
+  },[]);
+
+  if(loading)return<div style={{padding:40,textAlign:"center",color:C.td,fontSize:12}}>Carregando ranking de uso...</div>;
+  if(error)return<div style={{padding:20,background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:12,color:"#991b1b",fontSize:12}}>
+    <strong>Tabela ainda não criada no Supabase.</strong><br/>Rode o SQL que está logo abaixo da implementação pra criar a estrutura. Mensagem técnica: {error}
+  </div>;
+
+  // Datas de referência
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayStr=today.toISOString().split("T")[0];
+  const weekStart=new Date(today);weekStart.setDate(today.getDate()-6); // últimos 7 dias incluindo hoje
+  const monthStart=new Date(today);monthStart.setDate(today.getDate()-29); // últimos 30 dias
+
+  // Calcula stats por usuário
+  const stats=TEAM.map(m=>{
+    const rows=activity.filter(a=>a.user_id===m.id);
+    const today_min=rows.find(a=>a.day===todayStr)?.minutes_active||0;
+    const week_min=rows.filter(a=>{const d=new Date(a.day+"T00:00:00");return d>=weekStart&&d<=today;}).reduce((s,a)=>s+(a.minutes_active||0),0);
+    const month_min=rows.filter(a=>{const d=new Date(a.day+"T00:00:00");return d>=monthStart&&d<=today;}).reduce((s,a)=>s+(a.minutes_active||0),0);
+    const total_min=rows.reduce((s,a)=>s+(a.minutes_active||0),0);
+    // Streak: dias seguidos com atividade (a partir de hoje pra trás)
+    const days=new Set(rows.filter(a=>(a.minutes_active||0)>0).map(a=>a.day));
+    let streak=0;
+    for(let i=0;i<365;i++){
+      const d=new Date(today);d.setDate(today.getDate()-i);
+      const ds=d.toISOString().split("T")[0];
+      if(days.has(ds))streak++;
+      else if(i>0)break; // permite que hoje ainda esteja zerado mas streak conta de ontem pra trás
+    }
+    const lastSeen=presence[m.id]?.last_seen_at;
+    const ps=getPresenceStatus(lastSeen);
+    return{user:m,today_min,week_min,month_min,total_min,streak,ps,lastSeen};
+  });
+
+  // Ranking ordenado por mês (principal), desempate por total
+  const ranked=[...stats].sort((a,b)=>b.month_min-a.month_min||b.total_min-a.total_min);
+  const totalEquipe=stats.reduce((s,x)=>s+x.month_min,0);
+  const maxMonth=Math.max(1,...stats.map(x=>x.month_min));
+
+  const fmtTime=(min)=>{
+    if(min<60)return min+"min";
+    const h=Math.floor(min/60);
+    const m=min%60;
+    if(m===0)return h+"h";
+    return h+"h"+String(m).padStart(2,"0");
+  };
+
+  // Classificação de engajamento (média diária do mês)
+  const tier=(monthMin)=>{
+    const avgDay=monthMin/30;
+    if(avgDay>=180)return{label:"Power User",color:"#a140ff",emoji:"🔥"};
+    if(avgDay>=60)return{label:"Engajado",color:"#16a34a",emoji:"💚"};
+    if(avgDay>=30)return{label:"Frequência ok",color:"#eab308",emoji:"👍"};
+    if(avgDay>0)return{label:"Pouco uso",color:"#f97316",emoji:"📉"};
+    return{label:"Sem registro",color:"#94a3b8",emoji:"💤"};
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Header com totalizador */}
+      <div style={{background:"linear-gradient(135deg,#a140ff10,#a140ff05)",border:"0.5px solid #e9d5ff",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+        <div>
+          <div style={{color:"#a140ff",fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Engajamento da equipe</div>
+          <div style={{color:C.tx,fontWeight:600,fontSize:18}}>{fmtTime(totalEquipe)} de uso nos últimos 30 dias</div>
+          <div style={{color:C.td,fontSize:12,marginTop:2}}>Quanto mais tempo no app, mais engajamento — quem aparece pouco precisa de check-in.</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:"#a140ff",fontSize:32,fontWeight:600,lineHeight:1}}>{stats.filter(s=>s.month_min>0).length}<span style={{color:C.td,fontSize:14,fontWeight:400}}>/{TEAM.length}</span></div>
+          <div style={{color:C.td,fontSize:11,marginTop:2}}>ativos este mês</div>
+        </div>
+      </div>
+
+      {/* Ranking */}
+      <div style={{background:C.card,borderRadius:14,border:"0.5px solid "+C.b1,overflow:"hidden"}}>
+        <div style={{padding:"14px 20px",borderBottom:"0.5px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div>
+            <div style={{color:C.tx,fontWeight:600,fontSize:14}}>Ranking · 30 dias</div>
+            <div style={{color:C.td,fontSize:11,marginTop:2}}>Ordenado por tempo de uso no mês</div>
+          </div>
+        </div>
+        {ranked.map((s,rank)=>{
+          const t=tier(s.month_min);
+          const pct=Math.round((s.month_min/maxMonth)*100);
+          const isTop3=rank<3;
+          const med=rank===0?"🥇":rank===1?"🥈":rank===2?"🥉":"";
+          return(
+            <div key={s.user.id} style={{display:"grid",gridTemplateColumns:"50px 1fr 100px 100px 100px 110px",gap:10,padding:"14px 20px",borderBottom:rank<ranked.length-1?"0.5px solid "+C.b1:"none",alignItems:"center",background:isTop3?"#a140ff05":"transparent",transition:"background .15s"}}>
+              {/* Posição/medalha */}
+              <div style={{textAlign:"center"}}>
+                {med?<span style={{fontSize:22}}>{med}</span>:<span style={{color:C.td,fontWeight:500,fontSize:13}}>#{rank+1}</span>}
+              </div>
+              {/* Avatar + nome + status */}
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+                <div style={{position:"relative",flexShrink:0}}>
+                  <div style={{width:34,height:34,borderRadius:"50%",background:s.user.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:13}}>{s.user.av}</div>
+                  <div style={{position:"absolute",bottom:-1,right:-1,width:11,height:11,borderRadius:"50%",background:s.ps.color,border:`2px solid ${C.card}`}}/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:C.tx,fontWeight:500,fontSize:13,lineHeight:1.2}}>{s.user.name}</div>
+                  <div style={{color:t.color,fontSize:10,fontWeight:500,marginTop:2}}>{t.emoji} {t.label}</div>
+                </div>
+              </div>
+              {/* Hoje */}
+              <div style={{textAlign:"center"}}>
+                <div style={{color:s.today_min>0?C.tx:C.td,fontSize:14,fontWeight:s.today_min>0?500:400}}>{s.today_min>0?fmtTime(s.today_min):"—"}</div>
+                <div style={{color:C.td,fontSize:9,marginTop:2}}>hoje</div>
+              </div>
+              {/* Semana */}
+              <div style={{textAlign:"center"}}>
+                <div style={{color:s.week_min>0?C.tx:C.td,fontSize:14,fontWeight:s.week_min>0?500:400}}>{s.week_min>0?fmtTime(s.week_min):"—"}</div>
+                <div style={{color:C.td,fontSize:9,marginTop:2}}>7 dias</div>
+              </div>
+              {/* Mês — destaque */}
+              <div style={{textAlign:"center"}}>
+                <div style={{color:s.month_min>0?"#a140ff":C.td,fontSize:18,fontWeight:600,lineHeight:1.1}}>{s.month_min>0?fmtTime(s.month_min):"—"}</div>
+                <div style={{height:4,background:C.b1,borderRadius:99,overflow:"hidden",marginTop:5}}>
+                  <div style={{width:pct+"%",height:"100%",background:"#a140ff",borderRadius:99,transition:"width .6s ease"}}/>
+                </div>
+              </div>
+              {/* Streak */}
+              <div style={{textAlign:"center"}}>
+                <div style={{color:s.streak>0?"#f97316":C.td,fontSize:14,fontWeight:s.streak>=7?600:500}}>
+                  {s.streak>0?<>🔥 {s.streak}d</>:"—"}
+                </div>
+                <div style={{color:C.td,fontSize:9,marginTop:2}}>{s.streak>=7?"streak":"dias seguidos"}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legenda + nota técnica */}
+      <div style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:12,padding:"12px 16px",display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{color:C.td,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Como funciona</div>
+        <div style={{color:C.ts,fontSize:11,lineHeight:1.6}}>
+          A cada minuto que a pessoa está com a aba do app aberta e ativa, contamos +1 minuto. Aba em segundo plano não conta.
+          Streak é o número de dias seguidos com pelo menos 1 minuto de uso (rompe se ficar 1 dia inteiro sem abrir).
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ======= 10_radar_entrega.jsx =======
@@ -19491,6 +19662,9 @@ export default function AgencyOS(){
           user_id:CURRENT_USER.id,
           last_seen_at:now,
         },{onConflict:"user_id"});
+        // Incrementa contador de minutos do dia (gamificação de uso)
+        sb.rpc("inc_user_activity",{p_user:CURRENT_USER.id})
+          .catch(e=>console.warn("[activity] increment:",e?.message||e));
       }catch(e){console.warn("[presence] heartbeat:",e?.message||e);}
     };
 
