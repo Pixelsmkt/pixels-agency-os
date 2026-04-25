@@ -1391,8 +1391,143 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       </div>
     )}
 
-    {/* ═══ 0.5. VISÃO OPERACIONAL — 3 FLUXOS (Clientes + Internas + Portal) ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
+    {/* ═══ TAB BAR ═══ */}
+    <div style={{display:"flex",gap:isMob?2:4,padding:isMob?3:4,background:"#f1f5f9",borderRadius:10,overflowX:"auto"}}>
+      {[
+        {id:"alerta",label:isMob?"Alerta":"🚨 Alerta",badge:alertaCount},
+        {id:"demandas",label:isMob?"Demandas":"📊 Demandas em andamento"},
+        {id:"metricas",label:isMob?"Métricas":"💼 Métricas dos clientes"},
+        {id:"metas",label:isMob?"Metas":"🎯 Metas da empresa"},
+      ].map(t=>(
+        <button key={t.id} onClick={()=>setActiveTab(t.id)} style={{
+          flex:isMob?"0 0 auto":1,background:activeTab===t.id?"#fff":"transparent",
+          border:"none",borderRadius:8,padding:isMob?"7px 12px":"9px 16px",
+          fontSize:isMob?11:12,fontWeight:activeTab===t.id?700:500,
+          color:activeTab===t.id?"#0f172a":"#64748b",cursor:"pointer",
+          boxShadow:activeTab===t.id?"0 1px 4px rgba(0,0,0,0.08)":"none",
+          whiteSpace:"nowrap",transition:"all .15s",
+          display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+        }}>
+          {t.label}
+          {t.badge>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:800,minWidth:16,textAlign:"center"}}>{t.badge}</span>}
+        </button>
+      ))}
+    </div>
+
+    {/* ═══ TAB ALERTA — Brief do Dia ═══ */}
+    {activeTab==="alerta"&&(
+      <div style={{background:"linear-gradient(135deg,#fef2f2,#fee2e2)",border:"1px solid #fecaca",borderRadius:12,padding:"16px 18px"}}>
+        <div style={{color:"#7f1d1d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Brief do dia</div>
+        {briefParts.length===0?(
+          <div style={{color:"#0f172a",fontSize:14,lineHeight:1.7}}>
+            <span style={{fontSize:18,marginRight:6}}>✨</span>
+            Tudo tranquilo por aqui. Nenhum alerta crítico no momento.
+          </div>
+        ):(
+          <div style={{color:"#0f172a",fontSize:14,lineHeight:1.7}}>
+            Você tem <strong style={{color:"#dc2626"}}>{briefParts.join(", ")}</strong>{clientesRisco.length>0?<>. <strong style={{color:"#ea580c"}}>{clientesRisco.length} {clientesRisco.length===1?"cliente em risco":"clientes em risco"}</strong> também merecem atenção</>:""}.
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* ═══ TAB ALERTA — 3 KPIs ═══ */}
+    {activeTab==="alerta"&&(
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr 1fr":"repeat(3,1fr)",gap:10}}>
+        <div style={{background:pagAtras.length>0?"#fef2f2":"#f0fdf4",border:`1px solid ${pagAtras.length>0?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:pagAtras.length>0?"#7f1d1d":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pagamentos atrasados</div>
+          <div style={{color:pagAtras.length>0?"#dc2626":"#16a34a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6}}>{f$(pagAtras.reduce((a,c)=>a+c.contract,0))}</div>
+          <div style={{color:pagAtras.length>0?"#991b1b":"#15803d",fontSize:11,marginTop:4}}>{pagAtras.length} {pagAtras.length===1?"cliente":"clientes"}</div>
+        </div>
+        <div style={{background:atrasadas.length>0?"#fef2f2":"#f0fdf4",border:`1px solid ${atrasadas.length>0?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:atrasadas.length>0?"#7f1d1d":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Demandas atrasadas</div>
+          <div style={{color:atrasadas.length>0?"#dc2626":"#16a34a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6}}>{atrasadas.length}</div>
+          <div style={{color:atrasadas.length>0?"#991b1b":"#15803d",fontSize:11,marginTop:4}}>{atrasadas.length===0?"tudo no prazo":"precisam de ação"}</div>
+        </div>
+        <div style={{background:pubAtrasadas.length>0?"#fff7ed":"#f0fdf4",border:`1px solid ${pubAtrasadas.length>0?"#fed7aa":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:pubAtrasadas.length>0?"#7c2d12":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pub. vencidas</div>
+          <div style={{color:pubAtrasadas.length>0?"#ea580c":"#16a34a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6}}>{pubAtrasadas.length}</div>
+          <div style={{color:pubAtrasadas.length>0?"#9a3412":"#15803d",fontSize:11,marginTop:4}}>{pubAtrasadas.length===0?"tudo publicado":"agendar urgente"}</div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ TAB ALERTA — Aprovações pendentes ═══ */}
+    {activeTab==="alerta"&&(copysPendentes.length+artesPendentes.length+aprovacoesInternas.length)>0&&(
+      <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"14px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Aprovações pendentes</div>
+          <div style={{color:"#64748b",fontSize:11}}>{copysPendentes.length+artesPendentes.length+aprovacoesInternas.length} aguardando</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
+          <div style={{background:"#faf5ff",border:"1px solid #e9d5ff",borderLeft:"3px solid #a140ff",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{color:"#a140ff",fontWeight:800,fontSize:18}}>{copysPendentes.length}</div>
+            <div style={{color:"#581c87",fontSize:10,fontWeight:600,marginTop:2}}>📝 Copys aguardando</div>
+          </div>
+          <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderLeft:"3px solid #f97316",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{color:"#f97316",fontWeight:800,fontSize:18}}>{artesPendentes.length}</div>
+            <div style={{color:"#7c2d12",fontSize:10,fontWeight:600,marginTop:2}}>🎨 Artes aguardando</div>
+          </div>
+          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderLeft:"3px solid #2563eb",borderRadius:8,padding:"10px 12px"}}>
+            <div style={{color:"#2563eb",fontWeight:800,fontSize:18}}>{aprovacoesInternas.length}</div>
+            <div style={{color:"#1e3a8a",fontSize:10,fontWeight:600,marginTop:2}}>🔒 Internas aguardando</div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ TAB ALERTA — Ações Urgentes (cards detalhados) ═══ */}
+    {activeTab==="alerta"&&acoesUrgentes.length>0&&(
+      <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb"}}>
+        <div style={{padding:"14px 18px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f1f5f9"}}>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Detalhamento</div>
+            <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{acoesUrgentes.reduce((a,x)=>a+x.count,0)} itens pendentes</div>
+          </div>
+          <div style={{background:"#fef3c7",color:"#92400e",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,letterSpacing:.3}}>URGENTE</div>
+        </div>
+        <div style={{padding:"12px",display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          {acoesUrgentes.map(a=>(
+            <div key={a.type} style={{background:"#fff",border:"1px solid #e5e7eb",borderLeft:`3px solid ${a.color}`,borderRadius:8,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:18,flexShrink:0}}>{a.icon}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:a.color,fontWeight:800,fontSize:20,lineHeight:1,letterSpacing:-.3}}>{a.count}</div>
+                <div style={{color:"#64748b",fontSize:10,marginTop:3,fontWeight:500}}>{a.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ TAB DEMANDAS — 4 KPIs operacionais ═══ */}
+    {activeTab==="demandas"&&(
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Em produção</div>
+          <div style={{color:"#eab308",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{emProducao}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>cards ativos</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Em avaliação</div>
+          <div style={{color:"#f97316",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{emAvaliacao}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>aguardando aprovação</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Aprovadas</div>
+          <div style={{color:"#16a34a",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{aprovadasTotal}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>prontas p/ agendar</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Publicadas</div>
+          <div style={{color:"#2563eb",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{publicadasMes}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>este mês</div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ 0.5. VISÃO OPERACIONAL — 3 FLUXOS (Clientes + Internas + Portal) — TAB DEMANDAS ═══ */}
+    {activeTab==="demandas"&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
       {/* Demandas de Clientes */}
       <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb",padding:"16px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
@@ -1485,10 +1620,38 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           </div>
         </div>
       </div>
-    </div>
+    </div>}
 
-    {/* ═══ 0.75. ANDAMENTO DETALHADO POR COLABORADOR ═══ */}
-    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+    {/* ═══ TAB DEMANDAS — Carga por pessoa (NOVO) ═══ */}
+    {activeTab==="demandas"&&(
+      <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Carga por pessoa</div>
+          <div style={{color:"#64748b",fontSize:11}}>{ativas.length} demandas ativas distribuídas</div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {cargaPorPessoa.map(c=>{
+            const pct=(c.count/maxCarga)*100;
+            const overload=c.count>=10;
+            return <div key={c.user.id} style={{display:"flex",alignItems:"center",gap:10}}>
+              <Av l={c.user.av} color={c.user.color} size={26} uid={c.user.id}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{c.user.name}</span>
+                  <span style={{color:overload?"#dc2626":"#64748b",fontSize:11,fontWeight:overload?800:600}}>{c.count}{overload?" 🔥":""}</span>
+                </div>
+                <div style={{height:6,background:"#e5e7eb",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:pct+"%",height:"100%",background:overload?"#dc2626":c.user.color,borderRadius:99,transition:"width .4s ease"}}/>
+                </div>
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ 0.75. ANDAMENTO DETALHADO POR COLABORADOR — TAB DEMANDAS ═══ */}
+    {activeTab==="demandas"&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
       <div style={{padding:"12px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:32,height:32,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>👥</div>
         <div>
@@ -1540,10 +1703,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           </tbody>
         </table>
       </div>
-    </div>
+    </div>}
 
-    {/* ═══ 0.85. PUBLICAÇÕES ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(3,1fr)",gap:12}}>
+    {/* ═══ 0.85. PUBLICAÇÕES — TAB DEMANDAS ═══ */}
+    {activeTab==="demandas"&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(3,1fr)",gap:12}}>
       {[
         {label:"Pub. Atrasadas",value:pubAtrasadas.length,sub:pubAtrasadas.length===0?"nada atrasado":"publicações vencidas",color:pubAtrasadas.length>0?"#dc2626":"#16a34a"},
         {label:"Publica Hoje",value:pubHoje.length,sub:pubHoje.length===0?"nenhuma":"agendadas",color:"#2563eb"},
@@ -1555,10 +1718,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           <div style={{color:"#94a3b8",fontSize:11,marginTop:6,fontWeight:500}}>{k.sub}</div>
         </div>
       ))}
-    </div>
+    </div>}
 
-    {/* ═══ 1. BANNER DE RISCOS CRÍTICOS ═══ */}
-    {riscosCriticos.length>0&&(
+    {/* ═══ 1. BANNER DE RISCOS CRÍTICOS — TAB ALERTA ═══ */}
+    {activeTab==="alerta"&&riscosCriticos.length>0&&(
       <div style={{background:"#fff",borderRadius:16,border:"2px solid #fecaca",overflow:"hidden",boxShadow:"0 2px 8px rgba(220,38,38,0.08)"}}>
         <div style={{background:"#dc2626",padding:"12px 18px",display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:32,height:32,borderRadius:10,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🚨</div>
@@ -1585,8 +1748,8 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       </div>
     )}
 
-    {/* ═══ 2. KPIs EXECUTIVOS (8 cards) ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+    {/* ═══ 2. KPIs EXECUTIVOS (8 cards) — TAB METAS ═══ */}
+    {activeTab==="metas"&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
       {/* MRR */}
       {/* KPI card helper */}
       {(()=>{
@@ -1611,10 +1774,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
             color={avgNps>=80?"#16a34a":avgNps>=60?"#eab308":"#dc2626"}/>
         </>;
       })()}
-    </div>
+    </div>}
 
-    {/* ═══ 3. PIPELINE DE DEMANDAS ═══ */}
-    <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb"}}>
+    {/* ═══ 3. PIPELINE DE DEMANDAS — TAB DEMANDAS ═══ */}
+    {activeTab==="demandas"&&<div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb"}}>
       <div style={{padding:"14px 18px 10px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Pipeline de Demandas</div>
@@ -1629,12 +1792,128 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           </div>
         ))}
       </div>
-    </div>
+    </div>}
 
-    {/* ═══ 4. TOP CLIENTES + CLIENTES EM RISCO ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
-      {/* Top Clientes */}
-      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+    {/* ═══ TAB DEMANDAS — Velocity + Gargalos (NOVO) ═══ */}
+    {activeTab==="demandas"&&(
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+        {/* Velocity */}
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Velocity · 4 últimas semanas</div>
+            <div style={{color:"#64748b",fontSize:11}}>{velocityTrend} média {velocityAvg}/sem</div>
+          </div>
+          <svg viewBox="0 0 280 90" style={{width:"100%",height:90}}>
+            {velocity.map((v,i)=>{
+              const h=Math.max(4,(v/velocityMax)*65);
+              const x=20+i*60;
+              const y=80-h;
+              return <g key={i}>
+                <rect x={x} y={y} width={40} height={h} rx={3} fill="#7F77DD"/>
+                <text x={x+20} y={y-3} textAnchor="middle" fontSize="11" fontWeight="600" fill="#0f172a">{v}</text>
+                <text x={x+20} y={88} textAnchor="middle" fontSize="9" fill="#94a3b8">S{4-i}</text>
+              </g>;
+            })}
+          </svg>
+        </div>
+        {/* Gargalos */}
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:12}}>Gargalos detectados</div>
+          {gargalos.length===0?(
+            <div style={{padding:"24px 0",textAlign:"center"}}>
+              <div style={{fontSize:28,marginBottom:6}}>✅</div>
+              <div style={{color:"#16a34a",fontSize:12,fontWeight:600}}>Nenhum gargalo · fluxo saudável</div>
+            </div>
+          ):gargalos.map((g,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:i<gargalos.length-1?"1px solid #f1f5f9":"none"}}>
+              <span style={{fontSize:14}}>⚠</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{g.label}</div>
+                <div style={{color:"#94a3b8",fontSize:11}}>{g.stuck} {g.stuck===1?"card parado":"cards parados"} há 4+ dias</div>
+              </div>
+              <div style={{width:8,height:8,borderRadius:"50%",background:g.color}}/>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* ═══ TAB MÉTRICAS — 4 Hero Numbers (NOVO) ═══ */}
+    {activeTab==="metricas"&&(
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Spend total · mês</div>
+          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{f$(spendTotal)}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Meta + Google somados</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>ROAS médio</div>
+          <div style={{color:Number(avgRoas)>=4?"#16a34a":Number(avgRoas)>=2?"#eab308":"#dc2626",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{avgRoas}×</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>{clientesAtivos} clientes ativos</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Leads gerados</div>
+          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{totalLeads.toLocaleString("pt-BR")}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Meta + Google · mês</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Followers totais</div>
+          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{(followersTotal/1000).toFixed(1)}k</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>todas as redes</div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ TAB MÉTRICAS — Top 5 ROAS / Bottom (NOVO) ═══ */}
+    {activeTab==="metricas"&&(
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",background:"#16a34a",display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:14}}>🏆</span>
+            <div style={{color:"#fff",fontWeight:700,fontSize:13}}>Top 5 ROAS</div>
+          </div>
+          <div style={{padding:"10px 12px"}}>
+            {top5Roas.length===0?<div style={{padding:"16px",textAlign:"center",color:"#94a3b8",fontSize:12}}>Sem dados de ROAS ainda</div>:top5Roas.map((cl,i)=>(
+              <div key={cl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<top5Roas.length-1?"1px solid #f1f5f9":"none"}}>
+                <ClientLogo clientId={cl.id} size="xs"/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                </div>
+                <div style={{color:"#16a34a",fontWeight:800,fontSize:14}}>{(cl.meta?.roas||0).toFixed(1)}×</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+          <div style={{padding:"12px 16px",background:bottomRoas.length>0?"#dc2626":"#16a34a",display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontSize:14}}>{bottomRoas.length>0?"⚠":"✓"}</span>
+            <div style={{color:"#fff",fontWeight:700,fontSize:13}}>Atenção · ROAS &lt; 2×</div>
+          </div>
+          <div style={{padding:"10px 12px"}}>
+            {bottomRoas.length===0?(
+              <div style={{padding:"24px",textAlign:"center"}}>
+                <div style={{fontSize:24,marginBottom:6}}>💚</div>
+                <div style={{color:"#16a34a",fontSize:12,fontWeight:600}}>Todos os ROAS saudáveis</div>
+              </div>
+            ):bottomRoas.map((cl,i)=>(
+              <div key={cl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<bottomRoas.length-1?"1px solid #f1f5f9":"none"}}>
+                <ClientLogo clientId={cl.id} size="xs"/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{cl.name}</div>
+                  <div style={{color:"#94a3b8",fontSize:10}}>revisar campanhas</div>
+                </div>
+                <div style={{color:"#dc2626",fontWeight:800,fontSize:14}}>{(cl.meta?.roas||0).toFixed(1)}×</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ═══ 4. TOP CLIENTES + CLIENTES EM RISCO — split: Top→Métricas, Risco→Alerta ═══ */}
+    {(activeTab==="metricas"||activeTab==="alerta")&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+      {/* Top Clientes — só Métricas */}
+      {activeTab==="metricas"&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:"#eab308",display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:28,height:28,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🏆</div>
           <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Top Clientes (MRR)</div>
@@ -1655,10 +1934,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
             </div>;
           })}
         </div>
-      </div>
+      </div>}
 
-      {/* Clientes em Risco */}
-      <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+      {/* Clientes em Risco — só Alerta */}
+      {activeTab==="alerta"&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:clientesRisco.length>0?"#dc2626":"#16a34a",display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:28,height:28,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>{clientesRisco.length>0?"🚨":"✅"}</div>
           <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Clientes em Risco</div>
@@ -1684,11 +1963,11 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
             </div>
           ))}
         </div>
-      </div>
-    </div>
+      </div>}
+    </div>}
 
-    {/* ═══ 5. PRODUTIVIDADE DA EQUIPE (30d) ═══ */}
-    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+    {/* ═══ 5. PRODUTIVIDADE DA EQUIPE (30d) — TAB DEMANDAS ═══ */}
+    {activeTab==="demandas"&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
       <div style={{padding:"12px 18px",background:"#2563eb",display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>👥</div>
         <div>
@@ -1724,10 +2003,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           </div>;
         })}
       </div>
-    </div>
+    </div>}
 
-    {/* ═══ 6. TABELA DE CLIENTES (visão completa) ═══ */}
-    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
+    {/* ═══ 6. TABELA DE CLIENTES (visão completa) — TAB MÉTRICAS ═══ */}
+    {activeTab==="metricas"&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
       <div style={{padding:"12px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📋</div>
         <div>
@@ -1777,10 +2056,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           </tbody>
         </table>
       </div>
-    </div>
+    </div>}
 
-    {/* ═══ 7. PAGAMENTOS ATRASADOS + ATRASADAS ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+    {/* ═══ 7. PAGAMENTOS ATRASADOS + ATRASADAS — TAB ALERTA ═══ */}
+    {activeTab==="alerta"&&<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
       {/* Pagamentos em Atraso */}
       <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
         <div style={{padding:"12px 16px",background:pagAtras.length>0?"#dc2626":"#16a34a",display:"flex",alignItems:"center",gap:10}}>
@@ -1837,7 +2116,89 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           </div>}
         </div>
       </div>
-    </div>
+    </div>}
+
+    {/* ═══ TAB METAS — Health Score gauge (NOVO) ═══ */}
+    {activeTab==="metas"&&(
+      <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:14,padding:"20px",textAlign:"center"}}>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:8}}>Health Score da agência</div>
+        <svg viewBox="0 0 200 110" style={{width:200,height:110,maxWidth:"100%"}}>
+          <path d="M 20 100 A 80 80 0 0 1 180 100" stroke="#e5e7eb" strokeWidth="14" fill="none"/>
+          <path d={(()=>{
+            // Calcula path do arco proporcional ao healthScore
+            const angle=Math.PI*(1-healthScore/100);
+            const x=100+80*Math.cos(angle);
+            const y=100-80*Math.sin(angle);
+            const largeArc=healthScore>50?1:0;
+            return `M 20 100 A 80 80 0 0 ${largeArc} ${x.toFixed(1)} ${y.toFixed(1)}`;
+          })()} stroke={healthScore>=80?"#16a34a":healthScore>=60?"#eab308":"#dc2626"} strokeWidth="14" fill="none" strokeLinecap="round"/>
+          <text x="100" y="85" textAnchor="middle" fontSize="34" fontWeight="800" fill="#0f172a">{healthScore}</text>
+          <text x="100" y="103" textAnchor="middle" fontSize="11" fill="#94a3b8">de 100</text>
+        </svg>
+        <div style={{color:"#64748b",fontSize:12,marginTop:6}}>SLA {slaScore}% · NPS {npsScore} · Churn {churnPct}% · Crescimento {growthScore}%</div>
+      </div>
+    )}
+
+    {/* ═══ TAB METAS — 4 metas vs atual (NOVO) ═══ */}
+    {activeTab==="metas"&&(()=>{
+      const mrrPct=Math.min(100,Math.round((mrr/METAS.mrr)*100));
+      const novosPct=Math.min(100,Math.round((novosClientesMes/METAS.novosClientesMes)*100));
+      const npsPct=Math.min(100,Math.round((avgNps/METAS.nps)*100));
+      const churnOK=churnPct<=METAS.churn;
+      const cores=[
+        mrrPct>=80?"#16a34a":mrrPct>=60?"#eab308":"#dc2626",
+        novosPct>=80?"#16a34a":novosPct>=60?"#eab308":"#dc2626",
+        npsPct>=80?"#16a34a":npsPct>=60?"#eab308":"#dc2626",
+        churnOK?"#16a34a":"#dc2626",
+      ];
+      const Card=({label,atual,meta,pct,sub,color})=>(
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"12px 14px"}}>
+          <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
+          <div style={{color:"#0f172a",fontSize:isMob?16:18,fontWeight:800,letterSpacing:-.3,marginTop:4}}>{atual}</div>
+          <div style={{color:"#94a3b8",fontSize:11,margin:"4px 0 6px"}}>{sub}</div>
+          <div style={{height:5,background:"#e5e7eb",borderRadius:99,overflow:"hidden"}}>
+            <div style={{width:pct+"%",height:"100%",background:color,borderRadius:99,transition:"width .5s ease"}}/>
+          </div>
+        </div>
+      );
+      return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+        <Card label="MRR" atual={f$(mrr)} meta={f$(METAS.mrr)} pct={mrrPct} sub={`meta ${f$(METAS.mrr)} · ${mrrPct}%`} color={cores[0]}/>
+        <Card label="Novos clientes" atual={novosClientesMes} meta={METAS.novosClientesMes} pct={novosPct} sub={`meta ${METAS.novosClientesMes} · ${novosPct}%`} color={cores[1]}/>
+        <Card label="NPS médio" atual={avgNps} meta={METAS.nps} pct={npsPct} sub={`meta ${METAS.nps} · ${npsPct}%`} color={cores[2]}/>
+        <Card label="Churn" atual={churnPct+"%"} meta={"<"+METAS.churn+"%"} pct={churnOK?100:churnPct*20} sub={`meta < ${METAS.churn}% ${churnOK?"✓":""}`} color={cores[3]}/>
+      </div>;
+    })()}
+
+    {/* ═══ TAB METAS — Histórico de Receita 12 meses (NOVO) ═══ */}
+    {activeTab==="metas"&&(
+      <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Receita · 12 meses</div>
+          <div style={{color:"#64748b",fontSize:11}}>placeholder · conectar histórico real depois</div>
+        </div>
+        <svg viewBox="0 0 600 130" style={{width:"100%",height:130}}>
+          <line x1="0" y1="105" x2="600" y2="105" stroke="#e5e7eb" strokeWidth="0.5"/>
+          {/* Linha de meta */}
+          {(()=>{const yMeta=110-(METAS.mrr/receita12mMax)*90;return <>
+            <line x1="0" y1={yMeta} x2="600" y2={yMeta} stroke="#94a3b8" strokeWidth="0.5" strokeDasharray="2,3"/>
+            <text x="2" y={yMeta-3} fontSize="9" fill="#94a3b8">meta {f$(METAS.mrr)}</text>
+          </>;})()}
+          {/* Polyline da receita */}
+          {(()=>{
+            const pts=receita12m.map((v,i)=>{const x=20+(i*(560/11));const y=110-(v/receita12mMax)*90;return `${x.toFixed(1)},${y.toFixed(1)}`;}).join(" ");
+            return <polyline points={pts} stroke="#7F77DD" strokeWidth="2" fill="none"/>;
+          })()}
+          {/* Bolinhas */}
+          {receita12m.map((v,i)=>{const x=20+(i*(560/11));const y=110-(v/receita12mMax)*90;return <circle key={i} cx={x} cy={y} r="3" fill="#7F77DD"/>;})}
+          {/* Última bolinha destacada */}
+          {(()=>{const x=20+(11*(560/11));const y=110-(receita12m[11]/receita12mMax)*90;return <circle cx={x} cy={y} r="5" fill="#7F77DD" stroke="#fff" strokeWidth="2"/>;})()}
+          {/* Labels do eixo */}
+          <text x="20" y="125" fontSize="9" fill="#94a3b8">12m atrás</text>
+          <text x="300" y="125" fontSize="9" fill="#94a3b8" textAnchor="middle">6m</text>
+          <text x="580" y="125" fontSize="9" fill="#94a3b8" textAnchor="end">Hoje</text>
+        </svg>
+      </div>
+    )}
 
   </div>;
 }
