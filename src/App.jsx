@@ -878,6 +878,37 @@ function getUrgencyColor(level){
   return(["#e53e3e","#f97316",C.yw,C.gr])[level]??C.gr;
 }
 
+/* ─── PRESENCE / STATUS ONLINE ───────────────
+   Calcula status baseado no último heartbeat.
+   - online: ativo nos últimos 10 min
+   - ausente: 10 min a 2h sem atividade
+   - offline: mais de 2h ou nunca acessou
+*/
+function getPresenceStatus(lastSeenAt){
+  if(!lastSeenAt)return{status:"offline",label:"Offline",color:"#94a3b8"};
+  const now=Date.now();
+  const last=new Date(lastSeenAt).getTime();
+  if(isNaN(last))return{status:"offline",label:"Offline",color:"#94a3b8"};
+  const diffMin=(now-last)/60000;
+  if(diffMin<=10)return{status:"online",label:"Online",color:"#16a34a"};
+  if(diffMin<=120)return{status:"ausente",label:"Ausente",color:"#eab308"};
+  return{status:"offline",label:"Offline",color:"#94a3b8"};
+}
+
+// Formata "última atividade às XX:XX do dia DD/MM/YY"
+function fmtLastSeen(lastSeenAt){
+  if(!lastSeenAt)return"Nunca acessou o app";
+  const d=new Date(lastSeenAt);
+  if(isNaN(d.getTime()))return"Sem registro";
+  const today=new Date();today.setHours(0,0,0,0);
+  const ds=new Date(d);ds.setHours(0,0,0,0);
+  const time=d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  if(ds.getTime()===today.getTime())return`Última atividade às ${time} de hoje`;
+  const yesterday=new Date(today);yesterday.setDate(today.getDate()-1);
+  if(ds.getTime()===yesterday.getTime())return`Última atividade às ${time} de ontem`;
+  return`Última atividade às ${time} do dia ${d.toLocaleDateString("pt-BR")}`;
+}
+
 /* ─── HELPER: getProfilePhoto ───────────────── */
 // Busca foto do localStorage para qualquer userId
 function getProfilePhoto(uid){
@@ -10254,7 +10285,7 @@ const rowToMsg=(row)=>({
 /* ── Sementes (vazias) — canais começam realmente vazios ── */
 const SEED_MSGS={};
 
-function PageChat({isMob, perms, tasks, setTasks}){
+function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
   const sb=window._sb;
   const isSocio=CURRENT_USER.level===1;
   const p=perms||{};
@@ -10748,17 +10779,29 @@ function PageChat({isMob, perms, tasks, setTasks}){
               ))}
             </>}
 
-            {visibleInternal.length>0&&<>
-              <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px"}}>Membros</div>
-              {TEAM.map(m=>(
-                <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",borderRadius:8}}>
-                  <div style={{position:"relative",flexShrink:0}}>
-                    <div style={{width:24,height:24,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:9}}>{m.av}</div>
-                    <div style={{position:"absolute",bottom:0,right:0,width:7,height:7,borderRadius:"50%",background:m.status==="online"?C.gr:"#94a3b8",border:`1.5px solid ${C.s1}`}}/>
+            {visibleInternal.length>0&&isSocio&&<>
+              <div style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,padding:"14px 6px 5px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span>Membros</span>
+                <span style={{background:"#a140ff22",color:"#a140ff",borderRadius:99,padding:"1px 6px",fontSize:8,fontWeight:600,letterSpacing:0,textTransform:"none"}}>admin</span>
+              </div>
+              {TEAM.map(m=>{
+                const presence=(presenceMap||{})[m.id];
+                const lastSeen=presence?.last_seen_at||null;
+                const ps=getPresenceStatus(lastSeen);
+                const tooltip=fmtLastSeen(lastSeen);
+                return(
+                  <div key={m.id} title={tooltip} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,cursor:"default"}}>
+                    <div style={{position:"relative",flexShrink:0}}>
+                      <div style={{width:26,height:26,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:10}}>{m.av}</div>
+                      <div style={{position:"absolute",bottom:-1,right:-1,width:9,height:9,borderRadius:"50%",background:ps.color,border:`2px solid ${C.s1}`}}/>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:C.ts,fontSize:11,fontWeight:500,lineHeight:1.2}}>{m.name.split(" ")[0]}</div>
+                      <div style={{color:ps.color,fontSize:9,fontWeight:500,marginTop:1}}>{ps.label}</div>
+                    </div>
                   </div>
-                  <span style={{color:C.ts,fontSize:11}}>{m.name.split(" ")[0]}</span>
-                </div>
-              ))}
+                );
+              })}
             </>}
           </div>
         </div>}
@@ -19372,11 +19415,74 @@ export default function AgencyOS(){
   const [mindmapActiveCl,setMindmapActiveCl] = useState(false);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
   const [viewingAs,setViewingAs]   = useState(null);
+  // ═══ PRESENCE — quem está online/ausente/offline ═══
+  const [presenceMap,setPresenceMap] = useState({});
 
   useEffect(()=>{
     const h=()=>setIsMob(window.innerWidth<768);
     window.addEventListener("resize",h);
     return()=>window.removeEventListener("resize",h);
+  },[]);
+
+  // ═══ PRESENCE HEARTBEAT + REALTIME ═══
+  // Envia "tô vivo" a cada 60s pra Supabase, escuta presença dos outros via realtime,
+  // e re-renderiza a cada minuto pra recalcular status (online/ausente/offline).
+  useEffect(()=>{
+    const sb=window._sb;
+    if(!sb||!CURRENT_USER?.id)return;
+
+    const heartbeat=async()=>{
+      if(typeof document!=="undefined"&&document.hidden)return;
+      try{
+        const now=new Date().toISOString();
+        await sb.from("user_presence").upsert({
+          user_id:CURRENT_USER.id,
+          last_seen_at:now,
+        },{onConflict:"user_id"});
+      }catch(e){console.warn("[presence] heartbeat:",e?.message||e);}
+    };
+
+    // 1ª batida + carrega estado inicial de todos
+    heartbeat();
+    sb.from("user_presence").select("*").then(({data,error})=>{
+      if(error){console.warn("[presence] fetch:",error.message);return;}
+      if(data){
+        const map={};
+        data.forEach(r=>{map[r.user_id]=r;});
+        setPresenceMap(map);
+      }
+    });
+
+    // Heartbeat a cada 60s
+    const hbInterval=setInterval(heartbeat,60000);
+
+    // Quando volta da aba inativa, manda heartbeat na hora
+    const onVisible=()=>{if(!document.hidden)heartbeat();};
+    document.addEventListener("visibilitychange",onVisible);
+
+    // Realtime: escuta mudanças de presença dos outros
+    let channel=null;
+    try{
+      channel=sb.channel("presence_"+CURRENT_USER.id)
+        .on("postgres_changes",{event:"*",schema:"public",table:"user_presence"},(payload)=>{
+          const row=payload.new||payload.old;
+          if(!row?.user_id)return;
+          setPresenceMap(prev=>({...prev,[row.user_id]:row}));
+        })
+        .subscribe();
+    }catch(e){console.warn("[presence] realtime:",e?.message||e);}
+
+    // Re-render a cada 60s pra atualizar status (online→ausente→offline)
+    const tickInterval=setInterval(()=>{
+      setPresenceMap(p=>({...p}));
+    },60000);
+
+    return()=>{
+      clearInterval(hbInterval);
+      clearInterval(tickInterval);
+      document.removeEventListener("visibilitychange",onVisible);
+      try{if(channel)sb.removeChannel(channel);}catch(e){}
+    };
   },[]);
 
   // Tasks
@@ -19788,7 +19894,7 @@ export default function AgencyOS(){
       case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
-      case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
