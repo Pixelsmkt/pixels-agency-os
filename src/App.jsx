@@ -1330,12 +1330,12 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         {/* CARD GRANDE — prioridade máxima */}
         {myMain&&(
           <div onClick={()=>setOpenCard(myMain)}
-            style={{background:"#fff",border:"1px solid #e5e7eb",borderLeft:`5px solid ${myMainPrio?.bg||"#16a34a"}`,borderRadius:12,padding:"18px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .12s"}}
-            onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.06)";}}
-            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e5e7eb";e.currentTarget.style.boxShadow="none";}}>
+            style={{background:"#fff",border:"0.5px solid #e5e7eb",borderLeft:`5px solid ${myMainPrio?.bg||"#16a34a"}`,borderRadius:12,padding:"18px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .12s"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor="#a140ff";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor="#e5e7eb";}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
-                {myMainPrio&&<span style={{background:myMainPrio.bg,color:"#fff",borderRadius:5,padding:"2px 8px",fontSize:9,fontWeight:800,letterSpacing:.5}}>
+                {myMainPrio&&<span style={{background:myMainPrio.bg,color:"#fff",borderRadius:5,padding:"2px 8px",fontSize:9,fontWeight:600,letterSpacing:.5}}>
                   {myMainPrio.level===0?"ALTERAÇÃO":myMainPrio.level===1?"ATRASADO":myMainPrio.level===2?"URGENTE":"NO PRAZO"}
                 </span>}
                 <span style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Minha próxima demanda</span>
@@ -1344,7 +1344,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
             </div>
             <div style={{color:"#0f172a",fontWeight:700,fontSize:18,lineHeight:1.3,letterSpacing:-.3}}>{myMain.title}</div>
             {myMain.desc&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.6}}>{myMain.desc.replace(/<[^>]*>/g,"").slice(0,120)}{myMain.desc.length>120?"...":""}</div>}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:10,borderTop:"1px solid #f1f5f9",marginTop:"auto"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:10,borderTop:"0.5px solid #f1f5f9",marginTop:"auto"}}>
               <span style={{color:myMainPrio?.bg||"#16a34a",fontSize:11,fontWeight:700}}>
                 {myMainPrio?.icon&&myMainPrio.icon+" "}{myMainPrio?.label||"No prazo"}
               </span>
@@ -1355,7 +1355,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 
         {/* 5 CARDS LATERAIS — próximas */}
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {myNext.length===0&&<div style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:10,padding:"18px",textAlign:"center"}}>
+          {myNext.length===0&&<div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"18px",textAlign:"center"}}>
             <div style={{fontSize:24,marginBottom:6}}>🎉</div>
             <div style={{color:"#64748b",fontSize:11,fontWeight:600}}>Só a principal por enquanto</div>
           </div>}
@@ -1364,7 +1364,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
             const cl=CLIENTS.find(c=>c.id===t.client);
             const dl=typeof daysLeft==="function"?daysLeft(t.deadline):null;
             return <div key={t.id} onClick={()=>setOpenCard(t)}
-              style={{background:"#fff",border:"1px solid #e5e7eb",borderLeft:`3px solid ${prio.bg}`,borderRadius:8,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,transition:"all .1s"}}
+              style={{background:"#fff",border:"0.5px solid #e5e7eb",borderLeft:`3px solid ${prio.bg}`,borderRadius:8,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,transition:"all .1s"}}
               onMouseEnter={e=>{e.currentTarget.style.transform="translateX(2px)";e.currentTarget.style.borderColor="#cbd5e1";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.borderColor="#e5e7eb";}}>
               <div style={{flex:1,minWidth:0}}>
@@ -1378,12 +1378,12 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           })}
           {/* Mini totais */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:2}}>
-            <div style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:16}}>{myTasks.length}</div>
+            <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
+              <div style={{color:"#0f172a",fontWeight:600,fontSize:16}}>{myTasks.length}</div>
               <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Minhas</div>
             </div>
-            <div style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
-              <div style={{color:"#dc2626",fontWeight:800,fontSize:16}}>{myTasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;}).length}</div>
+            <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"8px",textAlign:"center"}}>
+              <div style={{color:"#dc2626",fontWeight:600,fontSize:16}}>{myTasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;}).length}</div>
               <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Atrasadas</div>
             </div>
           </div>
@@ -1392,7 +1392,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     )}
 
     {/* ═══ TAB BAR (roxo Pixels) ═══ */}
-    <div style={{display:"flex",gap:isMob?4:6,padding:isMob?4:6,background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflowX:"auto"}}>
+    <div style={{display:"flex",gap:isMob?4:6,padding:isMob?4:6,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,overflowX:"auto"}}>
       {[
         {id:"alerta",label:isMob?"Alerta":"Alerta",badge:alertaCount},
         {id:"demandas",label:isMob?"Demandas":"Demandas"},
@@ -1410,14 +1410,14 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           display:"flex",alignItems:"center",justifyContent:"center",gap:7,
         }}>
           {t.label}
-          {t.badge>0&&<span style={{background:activeTab===t.id?"rgba(255,255,255,0.25)":"#a140ff",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800,minWidth:18,textAlign:"center"}}>{t.badge}</span>}
+          {t.badge>0&&<span style={{background:activeTab===t.id?"rgba(255,255,255,0.25)":"#a140ff",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:600,minWidth:18,textAlign:"center"}}>{t.badge}</span>}
         </button>
       ))}
     </div>
 
     {/* ═══ TAB ALERTA — Brief do Dia ═══ */}
     {activeTab==="alerta"&&(
-      <div style={{background:"linear-gradient(135deg,#faf5ff,#f5f0ff)",border:"1px solid #e9d5ff",borderRadius:12,padding:"16px 18px"}}>
+      <div style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 18px"}}>
         <div style={{color:"#a140ff",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Brief do dia</div>
         {briefParts.length===0?(
           <div style={{color:"#0f172a",fontSize:14,lineHeight:1.7}}>
@@ -1435,19 +1435,19 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {/* ═══ TAB ALERTA — 3 KPIs ═══ */}
     {activeTab==="alerta"&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr 1fr":"repeat(3,1fr)",gap:10}}>
-        <div style={{background:pagAtras.length>0?"#fef2f2":"#f0fdf4",border:`1px solid ${pagAtras.length>0?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:pagAtras.length>0?"#fef2f2":"#f0fdf4",border:`0.5px solid ${pagAtras.length>0?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:pagAtras.length>0?"#7f1d1d":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pagamentos atrasados</div>
-          <div style={{color:pagAtras.length>0?"#dc2626":"#16a34a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6}}>{f$(pagAtras.reduce((a,c)=>a+c.contract,0))}</div>
+          <div style={{color:pagAtras.length>0?"#dc2626":"#16a34a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6}}>{f$(pagAtras.reduce((a,c)=>a+c.contract,0))}</div>
           <div style={{color:pagAtras.length>0?"#991b1b":"#15803d",fontSize:11,marginTop:4}}>{pagAtras.length} {pagAtras.length===1?"cliente":"clientes"}</div>
         </div>
-        <div style={{background:atrasadas.length>0?"#fef2f2":"#f0fdf4",border:`1px solid ${atrasadas.length>0?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:atrasadas.length>0?"#fef2f2":"#f0fdf4",border:`0.5px solid ${atrasadas.length>0?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:atrasadas.length>0?"#7f1d1d":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Demandas atrasadas</div>
-          <div style={{color:atrasadas.length>0?"#dc2626":"#16a34a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6}}>{atrasadas.length}</div>
+          <div style={{color:atrasadas.length>0?"#dc2626":"#16a34a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6}}>{atrasadas.length}</div>
           <div style={{color:atrasadas.length>0?"#991b1b":"#15803d",fontSize:11,marginTop:4}}>{atrasadas.length===0?"tudo no prazo":"precisam de ação"}</div>
         </div>
-        <div style={{background:pubAtrasadas.length>0?"#fff7ed":"#f0fdf4",border:`1px solid ${pubAtrasadas.length>0?"#fed7aa":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:pubAtrasadas.length>0?"#fff7ed":"#f0fdf4",border:`0.5px solid ${pubAtrasadas.length>0?"#fed7aa":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:pubAtrasadas.length>0?"#7c2d12":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pub. vencidas</div>
-          <div style={{color:pubAtrasadas.length>0?"#ea580c":"#16a34a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6}}>{pubAtrasadas.length}</div>
+          <div style={{color:pubAtrasadas.length>0?"#ea580c":"#16a34a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6}}>{pubAtrasadas.length}</div>
           <div style={{color:pubAtrasadas.length>0?"#9a3412":"#15803d",fontSize:11,marginTop:4}}>{pubAtrasadas.length===0?"tudo publicado":"agendar urgente"}</div>
         </div>
       </div>
@@ -1499,15 +1499,15 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       if(aprovacoesInternas.length>0)items.push({icon:"🔒",title:`${aprovacoesInternas.length} ${aprovacoesInternas.length===1?"demanda interna":"demandas internas"} aguardando`,sub:"Avaliação dos sócios",onClick:null});
 
       if(items.length===0)return (
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"32px",textAlign:"center"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"32px",textAlign:"center"}}>
           <div style={{fontSize:36,marginBottom:8}}>✨</div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:15}}>Nada pendente!</div>
           <div style={{color:"#64748b",fontSize:12,marginTop:4}}>Toda agência queria ter um dia assim</div>
         </div>
       );
       return (
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
-          <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+          <div style={{padding:"14px 18px",borderBottom:"0.5px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>O que precisa de você agora</div>
             <div style={{background:"#a140ff",color:"#fff",borderRadius:99,padding:"3px 12px",fontSize:11,fontWeight:700}}>{items.length}</div>
           </div>
@@ -1517,7 +1517,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
                 style={{
                   display:"flex",alignItems:"center",gap:12,
                   padding:"11px 18px",
-                  borderBottom:i<items.length-1?"1px solid #f8fafc":"none",
+                  borderBottom:i<items.length-1?"0.5px solid #f1f5f9":"none",
                   cursor:it.onClick?"pointer":"default",
                   transition:"background .12s",
                 }}
@@ -1539,24 +1539,24 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {/* ═══ TAB DEMANDAS — 4 KPIs operacionais ═══ */}
     {activeTab==="demandas"&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Em produção</div>
-          <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{emProducao}</div>
+          <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{emProducao}</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>cards ativos</div>
         </div>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Em avaliação</div>
-          <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{emAvaliacao}</div>
+          <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{emAvaliacao}</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>aguardando aprovação</div>
         </div>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Aprovadas</div>
-          <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{aprovadasTotal}</div>
+          <div style={{color:"#0f172a",fontSize:isMob?22:26,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{aprovadasTotal}</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>prontas p/ agendar</div>
         </div>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Publicadas</div>
-          <div style={{color:"#a140ff",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{publicadasMes}</div>
+          <div style={{color:"#a140ff",fontSize:isMob?22:26,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{publicadasMes}</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>este mês</div>
         </div>
       </div>
@@ -1564,7 +1564,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 
     {/* ═══ TAB DEMANDAS — Carga por pessoa (NOVO) ═══ */}
     {activeTab==="demandas"&&(
-      <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+      <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Carga por pessoa</div>
           <div style={{color:"#64748b",fontSize:11}}>{ativas.length} demandas ativas distribuídas</div>
@@ -1578,7 +1578,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                   <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{c.user.name}</span>
-                  <span style={{color:overload?"#dc2626":"#64748b",fontSize:11,fontWeight:overload?800:600}}>{c.count}{overload?" 🔥":""}</span>
+                  <span style={{color:overload?"#dc2626":"#64748b",fontSize:11,fontWeight:overload?600:500}}>{c.count}</span>
                 </div>
                 <div style={{height:6,background:"#e5e7eb",borderRadius:99,overflow:"hidden"}}>
                   <div style={{width:pct+"%",height:"100%",background:overload?"#dc2626":c.user.color,borderRadius:99,transition:"width .4s ease"}}/>
@@ -1594,8 +1594,8 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 
 
     {/* ═══ 3. PIPELINE DE DEMANDAS — TAB DEMANDAS ═══ */}
-    {activeTab==="demandas"&&<div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb"}}>
-      <div style={{padding:"14px 18px 10px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    {activeTab==="demandas"&&<div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e5e7eb"}}>
+      <div style={{padding:"14px 18px 10px",borderBottom:"0.5px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Pipeline de Demandas</div>
           <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{active.length} demandas na operação</div>
@@ -1603,9 +1603,9 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       </div>
       <div style={{padding:"14px 16px",display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(6,1fr)",gap:8}}>
         {pipeline.map(p=>(
-          <div key={p.status} style={{background:"#fff",border:"1px solid #e5e7eb",borderTop:"3px solid #a140ff",borderRadius:8,padding:"12px 6px",textAlign:"center"}}>
+          <div key={p.status} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderTop:"3px solid #a140ff",borderRadius:8,padding:"12px 6px",textAlign:"center"}}>
             <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>{p.label}</div>
-            <div style={{color:"#a140ff",fontWeight:800,fontSize:26,letterSpacing:-1,lineHeight:1}}>{p.count}</div>
+            <div style={{color:"#a140ff",fontWeight:600,fontSize:26,letterSpacing:-1,lineHeight:1}}>{p.count}</div>
           </div>
         ))}
       </div>
@@ -1615,7 +1615,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {activeTab==="demandas"&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
         {/* Velocity */}
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
             <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Velocity · 4 últimas semanas</div>
             <div style={{color:"#64748b",fontSize:11}}>{velocityTrend} média {velocityAvg}/sem</div>
@@ -1634,7 +1634,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
           </svg>
         </div>
         {/* Gargalos */}
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:12}}>Gargalos detectados</div>
           {gargalos.length===0?(
             <div style={{padding:"24px 0",textAlign:"center"}}>
@@ -1642,7 +1642,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               <div style={{color:"#16a34a",fontSize:12,fontWeight:600}}>Nenhum gargalo · fluxo saudável</div>
             </div>
           ):gargalos.map((g,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:i<gargalos.length-1?"1px solid #f1f5f9":"none"}}>
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",borderBottom:i<gargalos.length-1?"0.5px solid #f1f5f9":"none"}}>
               <span style={{fontSize:14}}>⚠</span>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{g.label}</div>
@@ -1658,24 +1658,24 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {/* ═══ TAB MÉTRICAS — 4 Hero Numbers (NOVO) ═══ */}
     {activeTab==="metricas"&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Spend total · mês</div>
-          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{f$(spendTotal)}</div>
+          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{f$(spendTotal)}</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Meta + Google somados</div>
         </div>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>ROAS médio</div>
-          <div style={{color:Number(avgRoas)>=4?"#16a34a":Number(avgRoas)>=2?"#eab308":"#dc2626",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{avgRoas}×</div>
+          <div style={{color:Number(avgRoas)>=4?"#16a34a":Number(avgRoas)>=2?"#eab308":"#dc2626",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{avgRoas}×</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>{clientesAtivos} clientes ativos</div>
         </div>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Leads gerados</div>
-          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{totalLeads.toLocaleString("pt-BR")}</div>
+          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{totalLeads.toLocaleString("pt-BR")}</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Meta + Google · mês</div>
         </div>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 16px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Followers totais</div>
-          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{(followersTotal/1000).toFixed(1)}k</div>
+          <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6,lineHeight:1}}>{(followersTotal/1000).toFixed(1)}k</div>
           <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>todas as redes</div>
         </div>
       </div>
@@ -1684,27 +1684,27 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {/* ═══ TAB MÉTRICAS — Top 5 ROAS / Bottom (NOVO) ═══ */}
     {activeTab==="metricas"&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",background:"#16a34a",display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:14}}>🏆</span>
-            <div style={{color:"#fff",fontWeight:700,fontSize:13}}>Top 5 ROAS</div>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+          <div style={{padding:"14px 16px 10px",borderBottom:"0.5px solid #f1f5f9"}}>
+            <div style={{color:"#0f172a",fontWeight:500,fontSize:13}}>Top 5 ROAS</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>maior retorno por real investido</div>
           </div>
-          <div style={{padding:"10px 12px"}}>
+          <div style={{padding:"10px 14px"}}>
             {top5Roas.length===0?<div style={{padding:"16px",textAlign:"center",color:"#94a3b8",fontSize:12}}>Sem dados de ROAS ainda</div>:top5Roas.map((cl,i)=>(
-              <div key={cl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<top5Roas.length-1?"1px solid #f1f5f9":"none"}}>
+              <div key={cl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<top5Roas.length-1?"0.5px solid #f1f5f9":"none"}}>
                 <ClientLogo clientId={cl.id} size="xs"/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:"#0f172a",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
                 </div>
-                <div style={{color:"#16a34a",fontWeight:800,fontSize:14}}>{(cl.meta?.roas||0).toFixed(1)}×</div>
+                <div style={{color:"#16a34a",fontWeight:600,fontSize:14}}>{(cl.meta?.roas||0).toFixed(1)}×</div>
               </div>
             ))}
           </div>
         </div>
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",background:bottomRoas.length>0?"#dc2626":"#16a34a",display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:14}}>{bottomRoas.length>0?"⚠":"✓"}</span>
-            <div style={{color:"#fff",fontWeight:700,fontSize:13}}>Atenção · ROAS &lt; 2×</div>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+          <div style={{padding:"14px 16px 10px",borderBottom:"0.5px solid #f1f5f9"}}>
+            <div style={{color:"#0f172a",fontWeight:500,fontSize:13}}>Atenção · ROAS &lt; 2×</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>revisar campanhas</div>
           </div>
           <div style={{padding:"10px 12px"}}>
             {bottomRoas.length===0?(
@@ -1713,13 +1713,13 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
                 <div style={{color:"#16a34a",fontSize:12,fontWeight:600}}>Todos os ROAS saudáveis</div>
               </div>
             ):bottomRoas.map((cl,i)=>(
-              <div key={cl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<bottomRoas.length-1?"1px solid #f1f5f9":"none"}}>
+              <div key={cl.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:i<bottomRoas.length-1?"0.5px solid #f1f5f9":"none"}}>
                 <ClientLogo clientId={cl.id} size="xs"/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{cl.name}</div>
                   <div style={{color:"#94a3b8",fontSize:10}}>revisar campanhas</div>
                 </div>
-                <div style={{color:"#dc2626",fontWeight:800,fontSize:14}}>{(cl.meta?.roas||0).toFixed(1)}×</div>
+                <div style={{color:"#dc2626",fontWeight:600,fontSize:14}}>{(cl.meta?.roas||0).toFixed(1)}×</div>
               </div>
             ))}
           </div>
@@ -1729,24 +1729,21 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 
 
     {/* ═══ 6. TABELA DE CLIENTES (visão completa) — TAB MÉTRICAS ═══ */}
-    {activeTab==="metricas"&&<div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden"}}>
-      <div style={{padding:"12px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>📋</div>
-        <div>
-          <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Panorama dos Clientes</div>
-          <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>visão completa da carteira</div>
-        </div>
+    {activeTab==="metricas"&&<div style={{background:C.card,borderRadius:12,border:`0.5px solid ${C.b1}`,overflow:"hidden"}}>
+      <div style={{padding:"14px 18px",borderBottom:`0.5px solid ${C.b1}`}}>
+        <div style={{color:"#0f172a",fontWeight:500,fontSize:13}}>Panorama dos clientes</div>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>visão completa da carteira</div>
       </div>
       <div style={{overflow:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead>
             <tr style={{background:"#f8fafc"}}>
-              <th style={{padding:"10px 14px",textAlign:"left",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Cliente</th>
-              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>MRR</th>
-              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Saúde</th>
-              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>ROAS</th>
-              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>NPS</th>
-              <th style={{padding:"10px 14px",textAlign:"center",color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Pag.</th>
+              <th style={{padding:"10px 14px",textAlign:"left",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Cliente</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>MRR</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Saúde</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>ROAS</th>
+              <th style={{padding:"10px 8px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>NPS</th>
+              <th style={{padding:"10px 14px",textAlign:"center",color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Pag.</th>
             </tr>
           </thead>
           <tbody>
@@ -1756,21 +1753,21 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               const npsColor=(cl.nps||0)>=80?"#16a34a":(cl.nps||0)>=60?"#eab308":"#dc2626";
               const pagStatus=cl.payment?.status||"pendente";
               const pagColor=pagStatus==="pago"?"#16a34a":pagStatus==="atrasado"?"#dc2626":"#eab308";
-              return <tr key={cl.id} style={{borderTop:`1px solid ${C.b1}`}}>
+              return <tr key={cl.id} style={{borderTop:`0.5px solid ${C.b1}`}}>
                 <td style={{padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
                   <ClientLogo clientId={cl.id} size="xs"/>
                   <span style={{color:C.tx,fontWeight:700}}>{cl.name}</span>
                 </td>
-                <td style={{padding:"10px 8px",textAlign:"center",color:"#16a34a",fontWeight:800}}>{f$(cl.contract)}</td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:"#16a34a",fontWeight:600}}>{f$(cl.contract)}</td>
                 <td style={{padding:"10px 8px",textAlign:"center"}}>
-                  <span style={{background:healthColor,color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:800}}>
+                  <span style={{background:healthColor,color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:600}}>
                     {cl.health}%
                   </span>
                 </td>
-                <td style={{padding:"10px 8px",textAlign:"center",color:roasColor,fontWeight:800}}>{(cl.meta?.roas||0).toFixed(1)}x</td>
-                <td style={{padding:"10px 8px",textAlign:"center",color:npsColor,fontWeight:800}}>{cl.nps||0}</td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:roasColor,fontWeight:600}}>{(cl.meta?.roas||0).toFixed(1)}x</td>
+                <td style={{padding:"10px 8px",textAlign:"center",color:npsColor,fontWeight:600}}>{cl.nps||0}</td>
                 <td style={{padding:"10px 14px",textAlign:"center"}}>
-                  <span style={{background:pagColor,color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>
+                  <span style={{background:pagColor,color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>
                     {pagStatus==="pago"?"Pago":pagStatus==="atrasado"?"Atras":"Pend"}
                   </span>
                 </td>
@@ -1784,7 +1781,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 
     {/* ═══ TAB METAS — Health Score gauge (NOVO) ═══ */}
     {activeTab==="metas"&&(
-      <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:14,padding:"20px",textAlign:"center"}}>
+      <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"20px",textAlign:"center"}}>
         <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:8}}>Health Score da agência</div>
         <svg viewBox="0 0 200 110" style={{width:200,height:110,maxWidth:"100%"}}>
           <path d="M 20 100 A 80 80 0 0 1 180 100" stroke="#e5e7eb" strokeWidth="14" fill="none"/>
@@ -1816,9 +1813,9 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         churnOK?"#16a34a":"#dc2626",
       ];
       const Card=({label,atual,meta,pct,sub,color})=>(
-        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"12px 14px"}}>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"12px 14px"}}>
           <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
-          <div style={{color:"#0f172a",fontSize:isMob?16:18,fontWeight:800,letterSpacing:-.3,marginTop:4}}>{atual}</div>
+          <div style={{color:"#0f172a",fontSize:isMob?16:18,fontWeight:600,letterSpacing:-.3,marginTop:4}}>{atual}</div>
           <div style={{color:"#94a3b8",fontSize:11,margin:"4px 0 6px"}}>{sub}</div>
           <div style={{height:5,background:"#e5e7eb",borderRadius:99,overflow:"hidden"}}>
             <div style={{width:pct+"%",height:"100%",background:color,borderRadius:99,transition:"width .5s ease"}}/>
@@ -1835,7 +1832,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 
     {/* ═══ TAB METAS — Histórico de Receita 12 meses (NOVO) ═══ */}
     {activeTab==="metas"&&(
-      <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+      <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Receita · 12 meses</div>
           <div style={{color:"#64748b",fontSize:11}}>placeholder · conectar histórico real depois</div>
@@ -1973,9 +1970,9 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
 
   const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(effectiveUser.id));
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:1100,margin:"0 auto",width:"100%"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto",width:"100%"}}>
     {/* ── CAPA COMPACTA — fina barra colorida + linha branca com info ── */}
-    <div style={{position:"relative",marginBottom:4,borderRadius:14,overflow:"hidden",border:`1px solid ${C.b1}`,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+    <div style={{position:"relative",marginBottom:4,borderRadius:12,overflow:"hidden",border:`0.5px solid ${C.b1}`}}>
 
       {/* ── BARRA COLORIDA SLIM ── */}
       <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?32:40,width:"100%",position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px"}}>
@@ -1991,7 +1988,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="#fff"/><circle cx="17.5" cy="10.5" r=".5" fill="#fff"/><circle cx="8.5" cy="7.5" r=".5" fill="#fff"/><circle cx="6.5" cy="12.5" r=".5" fill="#fff"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
             {!isMob&&"Cor"}
           </button>
-          {showColorPicker&&<div style={{position:"absolute",top:30,left:0,background:C.card,borderRadius:10,padding:10,boxShadow:"0 8px 24px rgba(0,0,0,0.2)",display:"flex",gap:6,flexWrap:"wrap",maxWidth:180,zIndex:10}}>
+          {showColorPicker&&<div style={{position:"absolute",top:30,left:0,background:C.card,borderRadius:10,padding:10,border:`0.5px solid ${C.b1}`,display:"flex",gap:6,flexWrap:"wrap",maxWidth:180,zIndex:10}}>
             {COVER_COLORS.map(cor=>(
               <button key={cor} onClick={()=>saveCoverColor(cor)}
                 style={{width:24,height:24,borderRadius:6,background:cor,border:coverColor===cor?"2px solid "+C.a:"1px solid transparent",cursor:"pointer"}}/>
@@ -2006,7 +2003,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
             <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 01-3.46 0"/>
           </svg>
-          {unread>0&&<span style={{color:"#fff",fontSize:12,fontWeight:800,lineHeight:1}}>{unread}</span>}
+          {unread>0&&<span style={{color:"#fff",fontSize:12,fontWeight:600,lineHeight:1}}>{unread}</span>}
         </button>
       </div>
 
@@ -2014,17 +2011,17 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
       <div style={{background:C.card,padding:isMob?"12px 12px":"14px 18px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:isMob?"wrap":"nowrap"}}>
 
         {/* Foto — totalmente abaixo da barra (não cortada) */}
-        <div style={{width:isMob?72:96,height:isMob?72:96,borderRadius:"50%",border:"3px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
+        <div style={{width:isMob?72:96,height:isMob?72:96,borderRadius:"50%",border:"3px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center"}}>
           {photo
             ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-            :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?28:38}}>{effectiveUser.av}</span>
+            :<span style={{color:"#fff",fontWeight:600,fontSize:isMob?28:38}}>{effectiveUser.av}</span>
           }
         </div>
 
         {/* Nome + cargo + data — linha única compacta */}
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
-            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?16:19,letterSpacing:-.3,lineHeight:1.2}}>{displayName}</div>
+            <div style={{color:C.tx,fontWeight:600,fontSize:isMob?16:19,letterSpacing:-.3,lineHeight:1.2}}>{displayName}</div>
             <div style={{color:C.td,fontSize:11}}>· {greeting}</div>
           </div>
           <div style={{color:C.ts,fontSize:11,fontWeight:500,marginTop:2}}>{displayRole}{!isMob&&<span style={{color:C.td}}> · {now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</span>}</div>
@@ -2033,12 +2030,12 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
         {/* Demandas do mês — pill compacto à direita */}
         <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:12}}>
           <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-            <span style={{color:C.gr,fontWeight:800,fontSize:isMob?16:18,lineHeight:1}}>{conclMes}</span>
+            <span style={{color:C.gr,fontWeight:600,fontSize:isMob?16:18,lineHeight:1}}>{conclMes}</span>
             <span style={{color:C.td,fontSize:10}}>/</span>
-            <span style={{color:C.tx,fontWeight:800,fontSize:isMob?16:18,lineHeight:1}}>{emAberto}</span>
+            <span style={{color:C.tx,fontWeight:600,fontSize:isMob?16:18,lineHeight:1}}>{emAberto}</span>
             <span style={{color:C.td,fontSize:9,marginLeft:3}}>{isMob?"":"demandas"}</span>
           </div>
-          {lateMes.length>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,whiteSpace:"nowrap"}}>🔥 {lateMes.length}</span>}
+          {lateMes.length>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:500,whiteSpace:"nowrap"}}>{lateMes.length} atrasada{lateMes.length>1?"s":""}</span>}
         </div>
       </div>
     </div>
