@@ -2011,13 +2011,13 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
       </div>
 
       {/* ── LINHA BRANCA COMPACTA — foto + nome + stats em UMA linha ── */}
-      <div style={{background:C.card,padding:isMob?"10px 12px":"12px 18px",display:"flex",alignItems:"center",gap:isMob?10:16,flexWrap:isMob?"wrap":"nowrap"}}>
+      <div style={{background:C.card,padding:isMob?"12px 12px":"14px 18px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:isMob?"wrap":"nowrap"}}>
 
-        {/* Foto média (overlap leve com a capa) */}
-        <div style={{width:isMob?56:72,height:isMob?56:72,borderRadius:"50%",border:"3px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",marginTop:isMob?-30:-44,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
+        {/* Foto — totalmente abaixo da barra (não cortada) */}
+        <div style={{width:isMob?72:96,height:isMob?72:96,borderRadius:"50%",border:"3px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
           {photo
             ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-            :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?22:28}}>{effectiveUser.av}</span>
+            :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?28:38}}>{effectiveUser.av}</span>
           }
         </div>
 
