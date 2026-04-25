@@ -10251,20 +10251,8 @@ const rowToMsg=(row)=>({
   ...(row.content||{}),
 });
 
-/* ── Sementes para canais sem histórico ── */
-const SEED_MSGS={
-  geral:[
-    {uid:"vinicius",u:"Vinicius",av:"V",color:C.a,type:"text",txt:"Bom dia time! ROAS do Bioter subindo essa semana 🚀",reactions:[{e:"🚀",users:["gustavo","ellen"]}]},
-    {uid:"ellen",u:"Hellen",av:"E",color:C.pk,type:"text",txt:"Criativos do Climaves prontos para aprovação! Já enviou para o menu ✅",reactions:[]},
-    {uid:"gustavo",u:"Gustavo",av:"G",color:C.aL,type:"text",txt:"Vinicius, precisamos revisar a estratégia de leads do VetService. Agende 30min hoje?",reactions:[{e:"👍",users:["vinicius"]}]},
-    {uid:"andre",u:"André",av:"A",color:"#e040fb",type:"text",txt:"Stories Arabuta finalizados! Foram pro quadro de aprovação",reactions:[{e:"✅",users:["ellen","vinicius"]}]},
-  ],
-  alertas:[
-    {uid:"sistema",u:"Sistema",av:"⚡",color:C.rd,type:"alert",txt:"🚨 Climaves: Budget Google estourou (101%)"},
-    {uid:"sistema",u:"Sistema",av:"⚡",color:C.rd,type:"alert",txt:"🔥 Tour Bioter Toledo — 2 dias sem atualização"},
-    {uid:"sistema",u:"Sistema",av:"⚡",color:C.gr,type:"success",txt:"✅ Bioter ROAS subiu para 4.8x — acima da meta!"},
-  ],
-};
+/* ── Sementes (vazias) — canais começam realmente vazios ── */
+const SEED_MSGS={};
 
 function PageChat({isMob, perms, tasks, setTasks}){
   const sb=window._sb;
@@ -10401,25 +10389,8 @@ function PageChat({isMob, perms, tasks, setTasks}){
         // Invertemos para mostrar do mais antigo ao mais recente na tela
         setMsgs(prev=>({...prev,[channelId]:[...data].reverse().map(rowToMsg)}));
       } else {
-        // Canal vazio — insere sementes se existirem
-        const seeds=SEED_MSGS[channelId];
-        if(seeds&&seeds.length>0){
-          const rows=seeds.map(s=>({
-            channel_id:channelId,
-            user_id:s.uid,
-            user_name:s.u,
-            user_av:s.av,
-            user_color:s.color,
-            type:s.type||"text",
-            content:{txt:s.txt||""},
-            reactions:s.reactions||[],
-          }));
-          const{data:inserted}=await sb.from("messages").insert(rows).select();
-          if(inserted)setMsgs(prev=>({...prev,[channelId]:inserted.map(rowToMsg)}));
-          else setMsgs(prev=>({...prev,[channelId]:[]}));
-        } else {
-          setMsgs(prev=>({...prev,[channelId]:[]}));
-        }
+        // Canal vazio — fica vazio (sem auto-seed de mensagens fake)
+        setMsgs(prev=>({...prev,[channelId]:[]}));
       }
     }catch(e){
       console.warn("Erro ao carregar mensagens:",e);
