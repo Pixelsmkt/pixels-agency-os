@@ -15527,17 +15527,39 @@ const BRIEFING_CAMPOS=[
   {k:"produto",label:"Produto / Serviço"},
 ];
 
-const isImg = a => a && a.type && a.type.startsWith("image/");
-const thumbUrl=(url,w=300,q=60)=>{
-  if(!url||url.startsWith("data:"))return url;
-  return url.replace("/object/public/","/render/image/public/")+`?width=${w}&quality=${q}&resize=cover`;
+// Detecta imagem por MIME type OU por extensão do nome (fallback se type ausente)
+const isImg = a => {
+  if(!a)return false;
+  if(a.type&&a.type.startsWith("image/"))return true;
+  // Fallback: detecta por extensão do nome (caso type esteja vazio em dados antigos)
+  if(a.name){
+    const ext=(a.name.split(".").pop()||"").toLowerCase();
+    return ["jpg","jpeg","png","gif","webp","heic","heif","svg","bmp"].includes(ext);
+  }
+  return false;
 };
+// Gera URL de miniatura — NÃO transforma por padrão (Supabase Image Transform exige plano pago)
+// Retorna a URL original; thumbnail vem do <img> que carrega a imagem direto.
+const thumbUrl=(url)=>url||"";
 
-// Gera URL de miniatura via Supabase Image Transform (só para URLs do Storage)
-// Miniatura: 300px, qualidade 60% — original abre no click
-
-const isVid = a => a && a.type && a.type.startsWith("video/");
-const isAud = a => a && a.type && (a.type.startsWith("audio/") || (a.name && a.name.endsWith(".webm")));
+const isVid = a => {
+  if(!a)return false;
+  if(a.type&&a.type.startsWith("video/"))return true;
+  if(a.name){
+    const ext=(a.name.split(".").pop()||"").toLowerCase();
+    return ["mp4","mov","webm","avi","mkv","m4v"].includes(ext);
+  }
+  return false;
+};
+const isAud = a => {
+  if(!a)return false;
+  if(a.type&&(a.type.startsWith("audio/")||(a.name&&a.name.endsWith(".webm"))))return true;
+  if(a.name){
+    const ext=(a.name.split(".").pop()||"").toLowerCase();
+    return ["mp3","wav","m4a","ogg","webm"].includes(ext);
+  }
+  return false;
+};
 
 /* ─── AUTO-LINKIFY ───────────────────────────────────────
    Detecta URLs em texto/HTML e transforma em links clicáveis.
@@ -16760,11 +16782,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,marginTop:4}}>🖼 Imagens ({imgAttachments.length})</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
                   {imgAttachments.map((a,i)=>(
-                    <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",aspectRatio:"1"}}>
+                    <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
                       <img src={thumbUrl(a.url)} alt={a.name}
                         loading="lazy"
                         onClick={()=>setLightbox({url:a.url,name:a.name})}
+                        onError={e=>{console.warn("[img] falhou:",a.url);e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
                         style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                      <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:4,padding:8,background:"#f8fafc",color:"#94a3b8",fontSize:9,textAlign:"center"}}>
+                        <span style={{fontSize:24}}>🖼</span>
+                        <span style={{wordBreak:"break-word",lineHeight:1.3}}>{a.name||"imagem"}</span>
+                        <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#a140ff",fontSize:9,fontWeight:700,marginTop:4}}>Abrir →</a>
+                      </div>
                       <div style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:700}}>#{i+1}</div>
                       {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
                     </div>
@@ -16845,7 +16873,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 10px",cursor:"grab"}}>
                         <span style={{color:"#cbd5e1",fontSize:16}}>⠿</span>
                         <span style={{background:"#6366f1",color:"#fff",borderRadius:5,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0}}>#{i+1}</span>
-                        <img src={thumbUrl(a.url,100,70)} alt="" loading="lazy" style={{width:44,height:44,objectFit:"cover",borderRadius:6,flexShrink:0}}/>
+                        <img src={thumbUrl(a.url)} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}} style={{width:44,height:44,objectFit:"cover",borderRadius:6,flexShrink:0,background:"#f1f5f9"}}/>
                         <div style={{flex:1,minWidth:0,color:"#334155",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                       </div>
                     ))}
