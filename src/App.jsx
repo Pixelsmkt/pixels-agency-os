@@ -19339,7 +19339,11 @@ export default function AgencyOS(){
   },[currentProfile,loggedUser]);
 
   const [themeKey,setThemeKey]     = useState(_themeKey);
-  const [page,setPage]             = useState("meudash");
+  // ═══ PÁGINA ATUAL — persiste em localStorage para sobreviver F5 ═══
+  const [page,setPage]             = useState(()=>{
+    try{const s=localStorage.getItem("pixels-current-page");return s||"meudash";}catch{return "meudash";}
+  });
+  useEffect(()=>{try{localStorage.setItem("pixels-current-page",page);}catch(e){}},[page]);
   const [expanded,setExpanded]     = useState({});
   const [notifDrawer,setNotifDrawer] = useState(false);
   const [isMob,setIsMob]           = useState(()=>window.innerWidth<768);
@@ -19364,7 +19368,11 @@ export default function AgencyOS(){
       setSelfProfileData(saved?JSON.parse(saved):null);
     }catch{setSelfProfileData(null);}
   },[CURRENT_USER.id]);
-  const [activeCl,setActiveCl]     = useState(null);
+  // Cliente ativo — também persiste em localStorage para F5 não perder o cliente aberto
+  const [activeCl,setActiveCl]     = useState(()=>{
+    try{const s=localStorage.getItem("pixels-active-client");return s||null;}catch{return null;}
+  });
+  useEffect(()=>{try{if(activeCl)localStorage.setItem("pixels-active-client",activeCl);else localStorage.removeItem("pixels-active-client");}catch(e){}},[activeCl]);
   const [mindmapActiveCl,setMindmapActiveCl] = useState(false);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
   const [viewingAs,setViewingAs]   = useState(null);
