@@ -1973,99 +1973,73 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
 
   const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(effectiveUser.id));
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    {/* ── CAPA DO PERFIL ── */}
-    <div style={{boxShadow:"0 4px 24px rgba(0,0,0,0.15)",position:"relative",marginBottom:8,borderRadius:20}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:1100,margin:"0 auto",width:"100%"}}>
+    {/* ── CAPA COMPACTA — fina barra colorida + linha branca com info ── */}
+    <div style={{position:"relative",marginBottom:4,borderRadius:14,overflow:"hidden",border:`1px solid ${C.b1}`,boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
 
-      {/* ── PARTE COLORIDA ── */}
-      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?85:120,width:"100%",position:"relative",borderRadius:"20px 20px 0 0",display:"flex",flexDirection:"column",justifyContent:"center",padding:"0 0 16px 0"}}>
-
-        {/* Coluna esquerda: editar + cor da capa */}
-        <div style={{position:"absolute",top:14,left:14,display:"flex",flexDirection:"column",gap:6}}>
-          <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
-            style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:9,padding:"6px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            Editar perfil
+      {/* ── BARRA COLORIDA SLIM ── */}
+      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?32:40,width:"100%",position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px"}}>
+        {/* Botões compactos esquerda */}
+        <div style={{display:"flex",gap:6,position:"relative"}}>
+          <button onClick={()=>window._openMyProfile&&window._openMyProfile()} title="Editar perfil"
+            style={{background:"rgba(255,255,255,0.22)",border:"none",borderRadius:7,padding:"4px 9px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            {!isMob&&"Editar"}
           </button>
-          <button onClick={()=>setShowColorPicker(v=>!v)}
-            style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:9,padding:"6px 14px",color:"rgba(255,255,255,0.85)",fontSize:12,fontWeight:600,cursor:"pointer",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",gap:6}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="rgba(255,255,255,0.85)"/><circle cx="17.5" cy="10.5" r=".5" fill="rgba(255,255,255,0.85)"/><circle cx="8.5" cy="7.5" r=".5" fill="rgba(255,255,255,0.85)"/><circle cx="6.5" cy="12.5" r=".5" fill="rgba(255,255,255,0.85)"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-            Cor da capa
+          <button onClick={()=>setShowColorPicker(v=>!v)} title="Cor da capa"
+            style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:7,padding:"4px 9px",color:"rgba(255,255,255,0.95)",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="#fff"/><circle cx="17.5" cy="10.5" r=".5" fill="#fff"/><circle cx="8.5" cy="7.5" r=".5" fill="#fff"/><circle cx="6.5" cy="12.5" r=".5" fill="#fff"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+            {!isMob&&"Cor"}
           </button>
-          {showColorPicker&&<div style={{background:C.card,borderRadius:14,padding:12,boxShadow:"0 8px 24px rgba(0,0,0,0.25)",display:"flex",gap:8,flexWrap:"wrap",maxWidth:200,zIndex:10}}>
+          {showColorPicker&&<div style={{position:"absolute",top:30,left:0,background:C.card,borderRadius:10,padding:10,boxShadow:"0 8px 24px rgba(0,0,0,0.2)",display:"flex",gap:6,flexWrap:"wrap",maxWidth:180,zIndex:10}}>
             {COVER_COLORS.map(cor=>(
               <button key={cor} onClick={()=>saveCoverColor(cor)}
-                style={{width:28,height:28,borderRadius:7,background:cor,border:coverColor===cor?"3px solid "+C.a:"2px solid transparent",cursor:"pointer",transition:"all .15s"}}/>
+                style={{width:24,height:24,borderRadius:6,background:cor,border:coverColor===cor?"2px solid "+C.a:"1px solid transparent",cursor:"pointer"}}/>
             ))}
           </div>}
         </div>
 
-        {/* Sino — direita */}
+        {/* Sino direita compacto */}
         <button onClick={()=>onNotif&&onNotif()}
-          style={{position:"absolute",top:14,right:14,background:"#f97316",border:"none",borderRadius:14,padding:"8px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:10,boxShadow:"none"}}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          style={{background:unread>0?"#a140ff":"rgba(255,255,255,0.2)",border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 01-3.46 0"/>
           </svg>
-          {unread>0&&<span style={{color:"#fff",fontSize:20,fontWeight:900,lineHeight:1}}>{unread}</span>}
+          {unread>0&&<span style={{color:"#fff",fontSize:12,fontWeight:800,lineHeight:1}}>{unread}</span>}
         </button>
-
-
       </div>
 
-      {/* ── PARTE BRANCA ── */}
-      <div style={{background:C.card,padding:isMob?"14px 16px 16px":"18px 24px 20px",position:"relative",borderRadius:"0 0 20px 20px"}}>
-        <div style={{display:"flex",alignItems:"flex-start",gap:isMob?12:24,paddingTop:isMob?16:24,marginTop:0,flexWrap:isMob?"wrap":"nowrap"}}>
+      {/* ── LINHA BRANCA COMPACTA — foto + nome + stats em UMA linha ── */}
+      <div style={{background:C.card,padding:isMob?"10px 12px":"12px 18px",display:"flex",alignItems:"center",gap:isMob?10:16,flexWrap:isMob?"wrap":"nowrap"}}>
 
-          {/* Foto grande */}
-          <div style={{width:isMob?100:150,height:isMob?100:150,borderRadius:"50%",border:"3px solid "+C.b1,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 24px rgba(0,0,0,0.2)"}}>
-            {photo
-              ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-              :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?38:56}}>{effectiveUser.av}</span>
-            }
-          </div>
-
-          {/* Nome + cargo + data */}
-          <div style={{flex:1,minWidth:0,paddingBottom:0}}>
-            <div style={{color:C.td,fontSize:isMob?12:13,fontWeight:600,marginBottom:4}}>{greeting}</div>
-            <div style={{color:C.tx,fontWeight:900,fontSize:isMob?36:62,letterSpacing:-2,lineHeight:1,marginBottom:8}}>{displayName}</div>
-            <div style={{color:C.ts,fontSize:14,fontWeight:600,marginBottom:4}}>{displayRole}</div>
-            <div style={{color:C.td,fontSize:12}}>{now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
-          </div>
-
-          {/* Demandas do mês — simplificado: concluídas / ativas + badge atrasadas */}
-          {!isMob&&<div style={{flexShrink:0,textAlign:"right",background:C.s1,borderRadius:14,padding:"14px 20px",border:`1px solid ${C.b1}`,alignSelf:"flex-start",marginTop:0}}>
-            <div style={{color:C.td,fontSize:10,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginBottom:6}}>Demandas do mês</div>
-            <div style={{display:"flex",alignItems:"flex-end",gap:6,justifyContent:"flex-end"}}>
-              <div style={{textAlign:"center"}}>
-                <div style={{color:C.gr,fontWeight:900,fontSize:40,lineHeight:1}}>{conclMes}</div>
-                <div style={{color:C.td,fontSize:10,marginTop:2}}>concluídas</div>
-              </div>
-              <div style={{color:C.td,fontSize:28,fontWeight:300,marginBottom:8}}>/</div>
-              <div style={{textAlign:"center"}}>
-                <div style={{color:"#2563eb",fontWeight:900,fontSize:40,lineHeight:1}}>{emAberto}</div>
-                <div style={{color:C.td,fontSize:10,marginTop:2}}>ativas</div>
-              </div>
-            </div>
-            {lateMes.length>0&&<div style={{display:"flex",gap:6,marginTop:10,justifyContent:"center"}}>
-              <span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"4px 12px",fontSize:11,fontWeight:800}}>🔥 {lateMes.length} atrasada{lateMes.length>1?"s":""}</span>
-            </div>}
-          </div>}
+        {/* Foto média (overlap leve com a capa) */}
+        <div style={{width:isMob?56:72,height:isMob?56:72,borderRadius:"50%",border:"3px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center",marginTop:isMob?-30:-44,boxShadow:"0 2px 8px rgba(0,0,0,0.12)"}}>
+          {photo
+            ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+            :<span style={{color:"#fff",fontWeight:900,fontSize:isMob?22:28}}>{effectiveUser.av}</span>
+          }
         </div>
 
-        {/* Mobile: demandas abaixo */}
-        {isMob&&<div style={{display:"flex",justifyContent:"space-between",marginTop:-16,paddingTop:8,borderTop:`1px solid ${C.b1}`}}>
-          <div style={{textAlign:"center"}}>
-            <div style={{color:C.gr,fontWeight:900,fontSize:28}}>{conclMes}</div>
-            <div style={{color:C.td,fontSize:9}}>concluídas</div>
+        {/* Nome + cargo + data — linha única compacta */}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?16:19,letterSpacing:-.3,lineHeight:1.2}}>{displayName}</div>
+            <div style={{color:C.td,fontSize:11}}>· {greeting}</div>
           </div>
-          <div style={{color:C.td,fontSize:20,alignSelf:"center"}}>/</div>
-          <div style={{textAlign:"center"}}>
-            <div style={{color:"#2563eb",fontWeight:900,fontSize:28}}>{emAberto}</div>
-            <div style={{color:C.td,fontSize:9}}>ativas</div>
+          <div style={{color:C.ts,fontSize:11,fontWeight:500,marginTop:2}}>{displayRole}{!isMob&&<span style={{color:C.td}}> · {now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</span>}</div>
+        </div>
+
+        {/* Demandas do mês — pill compacto à direita */}
+        <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:12}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+            <span style={{color:C.gr,fontWeight:800,fontSize:isMob?16:18,lineHeight:1}}>{conclMes}</span>
+            <span style={{color:C.td,fontSize:10}}>/</span>
+            <span style={{color:C.tx,fontWeight:800,fontSize:isMob?16:18,lineHeight:1}}>{emAberto}</span>
+            <span style={{color:C.td,fontSize:9,marginLeft:3}}>{isMob?"":"demandas"}</span>
           </div>
-          {lateMes.length>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:800,alignSelf:"center"}}>🔥 {lateMes.length}</span>}
-        </div>}
+          {lateMes.length>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:800,whiteSpace:"nowrap"}}>🔥 {lateMes.length}</span>}
+        </div>
       </div>
     </div>
 
