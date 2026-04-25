@@ -1077,6 +1077,11 @@ const Bar=({v,color,h=6})=>(
 */
 function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notifs,isMob}){
   const [openCard,setOpenCard]=useState(null);
+  // ═══ TAB ATIVA ═══ (alerta | demandas | metricas | metas)
+  const [activeTab,setActiveTab]=useState(()=>{
+    try{return localStorage.getItem("pixels-dash-tab")||"alerta";}catch{return "alerta";}
+  });
+  useEffect(()=>{try{localStorage.setItem("pixels-dash-tab",activeTab);}catch(e){}},[activeTab]);
   const setTasks=propSetTasks||(()=>{});
   const adminCardPerms=(()=>{try{const s=localStorage.getItem("pixels-perms-"+(CURRENT_USER).id);return s?{...DEFAULT_PERMS,...JSON.parse(s)}:DEFAULT_PERMS;}catch{return DEFAULT_PERMS;}})();
   const allTasks=propTasks||[];
@@ -1223,37 +1228,103 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   if(pubHoje.length>0)acoesUrgentes.push({type:"pubhoje",count:pubHoje.length,label:"Publicação(ões) hoje",color:"#2563eb",icon:"🚀"});
   if(pagAtras.length>0)acoesUrgentes.push({type:"pag",count:pagAtras.length,label:"Pagamento(s) atrasado(s)",color:"#dc2626",icon:"💸"});
 
+  // ═══ NOVAS COMPUTAÇÕES PARA AS TABS ═══
+
+  // Brief do Dia — narrativa que sintetiza ações urgentes em texto
+  const briefParts=[];
+  if(atrasadas.length>0)briefParts.push(`${atrasadas.length} demanda${atrasadas.length>1?"s atrasadas":" atrasada"}`);
+  if(pagAtras.length>0)briefParts.push(`${pagAtras.length} pagamento${pagAtras.length>1?"s vencidos":" vencido"}`);
+  if(pubAtrasadas.length>0)briefParts.push(`${pubAtrasadas.length} publicação${pubAtrasadas.length>1?"ões atrasadas":" atrasada"}`);
+  if(pubHoje.length>0)briefParts.push(`${pubHoje.length} publicação${pubHoje.length>1?"ões hoje":" hoje"}`);
+  const aprovTotal=copysPendentes.length+artesPendentes.length;
+  if(aprovTotal>0)briefParts.push(`${aprovTotal} aprovação${aprovTotal>1?"ões pendentes":" pendente"}`);
+
+  // Total de alertas para badge na tab
+  const alertaCount=atrasadas.length+pagAtras.length+pubAtrasadas.length+clientesRisco.length;
+
+  // Tab Demandas — KPIs operacionais
+  const emProducao=active.filter(t=>t.status==="execucao"||t.status==="interno_execucao").length;
+  const emAvaliacao=active.filter(t=>t.status==="avaliacao"||t.status==="interno_avaliacao").length;
+  const aprovadasTotal=active.filter(t=>t.status==="aprovado"||t.status==="interno_aprovado").length;
+  const publicadasMes=active.filter(t=>{
+    if(t.status!=="publicado"||!t.completedAt)return false;
+    const d=new Date(t.completedAt);
+    return d.getFullYear()===hoje.getFullYear()&&d.getMonth()===hoje.getMonth();
+  }).length;
+
+  // Carga por pessoa (avatar + barra horizontal)
+  const cargaPorPessoa=TEAM.filter(u=>u.level>1).map(u=>{
+    const count=ativas.filter(t=>t.assignee===u.id||(t.assignees||[]).includes(u.id)).length;
+    return {user:u,count};
+  }).sort((a,b)=>b.count-a.count);
+  const maxCarga=Math.max(...cargaPorPessoa.map(c=>c.count),1);
+
+  // Velocity — entregas por semana (4 últimas semanas)
+  const velocity=[3,2,1,0].map(weeksAgo=>{
+    const start=new Date(hoje);start.setDate(hoje.getDate()-(weeksAgo+1)*7);
+    const end=new Date(hoje);end.setDate(hoje.getDate()-weeksAgo*7);
+    return active.filter(t=>{
+      if(t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="interno_aprovado"&&t.status!=="interno_executado")return false;
+      if(!t.completedAt)return false;
+      const d=new Date(t.completedAt);
+      return d>=start&&d<end;
+    }).length;
+  });
+  const velocityMax=Math.max(...velocity,1);
+  const velocityAvg=(velocity.reduce((a,b)=>a+b,0)/velocity.length).toFixed(1);
+  const velocityTrend=velocity[3]>velocity[0]?"↑":velocity[3]<velocity[0]?"↓":"→";
+
+  // Gargalos detectados — coluna com cards parados há 4+ dias
+  const gargalos=pipeline.map(p=>{
+    const stuck=active.filter(t=>{
+      if(t.status!==p.status||!t.colEnteredAt)return false;
+      const days=Math.floor((new Date()-new Date(t.colEnteredAt))/(1000*60*60*24));
+      return days>=4;
+    }).length;
+    return {label:p.label,color:p.color,stuck};
+  }).filter(g=>g.stuck>0);
+
+  // Tab Métricas — 4 hero numbers
+  const spendTotal=CLIENTS.reduce((a,c)=>a+(c.meta?.spend||0)+(c.google?.spend||0),0);
+  const followersTotal=CLIENTS.reduce((a,c)=>a+(c.social?.followers||0),0);
+  // totalLeads e avgRoas já calculados acima
+
+  // Top 5 ROAS / Bottom (alerta)
+  const top5Roas=[...CLIENTS].filter(c=>(c.meta?.roas||0)>0).sort((a,b)=>(b.meta?.roas||0)-(a.meta?.roas||0)).slice(0,5);
+  const bottomRoas=CLIENTS.filter(c=>(c.meta?.roas||0)>0&&(c.meta?.roas||0)<2).sort((a,b)=>(a.meta?.roas||0)-(b.meta?.roas||0));
+
+  // Tab Metas — metas hardcoded (depois cria tela editável)
+  const METAS={mrr:75000,novosClientesMes:3,nps:90,churn:3};
+  const novosClientesMes=CLIENTS.filter(c=>{
+    if(!c.since)return false;
+    // since formato "Mar 2025" — comparação simplificada com mês atual
+    const meses=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    const atual=meses[hoje.getMonth()]+" "+hoje.getFullYear();
+    return c.since===atual;
+  }).length;
+  const churnPct=0; // placeholder — sem tracking real ainda
+
+  // Health Score composto da agência (0-100)
+  const slaScore=noPrazoPct;
+  const npsScore=avgNps;
+  const churnScore=Math.max(0,100-churnPct*20);
+  const growthScore=80; // placeholder — depois conectar com histórico real
+  const healthScore=Math.round(slaScore*0.3+npsScore*0.3+churnScore*0.2+growthScore*0.2);
+
+  // Receita histórica 12 meses — placeholder com dados sintéticos crescentes
+  const receita12m=Array.from({length:12},(_,i)=>{
+    const fator=0.55+i*0.04; // crescimento simulado
+    return Math.round(mrr*fator);
+  });
+  const receita12mMax=Math.max(...receita12m);
+
   return <div style={{display:"flex",flexDirection:"column",gap:16}}>
     {openCard&&<CardModal task={openCard} tasks={allTasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={CURRENT_USER} cardPerms={adminCardPerms}/>}
     {isViewing&&<div style={{background:"#f59e0b",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
 
-    {/* ═══ 0. AÇÕES URGENTES (TOPO) ═══ */}
-    {acoesUrgentes.length>0&&(
-      <div style={{background:"#fff",borderRadius:12,border:"1px solid #e5e7eb"}}>
-        <div style={{padding:"14px 18px 10px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:"1px solid #f1f5f9"}}>
-          <div>
-            <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Ações que exigem atenção</div>
-            <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{acoesUrgentes.reduce((a,x)=>a+x.count,0)} itens pendentes</div>
-          </div>
-          <div style={{background:"#fef3c7",color:"#92400e",borderRadius:6,padding:"4px 10px",fontSize:10,fontWeight:700,letterSpacing:.3}}>URGENTE</div>
-        </div>
-        <div style={{padding:"12px",display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
-          {acoesUrgentes.map(a=>(
-            <div key={a.type} style={{background:"#fff",border:"1px solid #e5e7eb",borderLeft:`3px solid ${a.color}`,borderRadius:8,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
-              <span style={{fontSize:18,flexShrink:0}}>{a.icon}</span>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:a.color,fontWeight:800,fontSize:20,lineHeight:1,letterSpacing:-.3}}>{a.count}</div>
-                <div style={{color:"#64748b",fontSize:10,marginTop:3,fontWeight:500}}>{a.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
-
-    {/* ═══ 0.6. MINHAS DEMANDAS — 1 grande + 5 laterais ═══ */}
+    {/* ═══ HEADER FIXO — MINHAS DEMANDAS ═══ */}
     {myTasks.length>0&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 280px",gap:12}}>
         {/* CARD GRANDE — prioridade máxima */}
