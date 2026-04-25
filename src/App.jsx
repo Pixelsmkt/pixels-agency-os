@@ -15177,32 +15177,43 @@ function PagePontuacao({tasks}){
 /* ─── USO DO APP — ranking gamificado de tempo no app ─── */
 function UsoDoAppView(){
   const sb=window._sb;
-  const [activity,setActivity]=useState([]); // todas as linhas user_activity_daily
-  const [presence,setPresence]=useState({}); // last_seen_at de cada user
+  const [activity,setActivity]=useState([]);
+  const [presence,setPresence]=useState({});
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState(null);
+  const [refreshing,setRefreshing]=useState(false);
+  const [lastFetch,setLastFetch]=useState(null);
+
+  const fetchData=async()=>{
+    if(!sb){setError("Supabase não disponível");setLoading(false);return;}
+    setRefreshing(true);
+    try{
+      const [actRes,presRes]=await Promise.all([
+        sb.from("user_activity_daily").select("*"),
+        sb.from("user_presence").select("*"),
+      ]);
+      if(actRes.error)throw actRes.error;
+      setActivity(actRes.data||[]);
+      const pmap={};
+      (presRes.data||[]).forEach(r=>{pmap[r.user_id]=r;});
+      setPresence(pmap);
+      setError(null);
+      setLastFetch(new Date());
+    }catch(e){setError(e?.message||"Erro ao carregar atividade");}
+    setLoading(false);
+    setRefreshing(false);
+  };
 
   useEffect(()=>{
-    if(!sb){setError("Supabase não disponível");setLoading(false);return;}
-    (async()=>{
-      try{
-        const [actRes,presRes]=await Promise.all([
-          sb.from("user_activity_daily").select("*"),
-          sb.from("user_presence").select("*"),
-        ]);
-        if(actRes.error)throw actRes.error;
-        setActivity(actRes.data||[]);
-        const pmap={};
-        (presRes.data||[]).forEach(r=>{pmap[r.user_id]=r;});
-        setPresence(pmap);
-      }catch(e){setError(e?.message||"Erro ao carregar atividade");}
-      setLoading(false);
-    })();
+    fetchData();
+    // Auto-refresh a cada 60s pra ver os minutos da equipe atualizando em tempo real
+    const i=setInterval(fetchData,60000);
+    return()=>clearInterval(i);
   },[]);
 
   if(loading)return<div style={{padding:40,textAlign:"center",color:C.td,fontSize:12}}>Carregando ranking de uso...</div>;
   if(error)return<div style={{padding:20,background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:12,color:"#991b1b",fontSize:12}}>
-    <strong>Tabela ainda não criada no Supabase.</strong><br/>Rode o SQL que está logo abaixo da implementação pra criar a estrutura. Mensagem técnica: {error}
+    <strong>Tabela ainda não criada no Supabase.</strong><br/>Rode o SQL pra criar <code>user_activity_daily</code>. Erro: {error}
   </div>;
 
   // Datas de referência
@@ -15275,8 +15286,15 @@ function UsoDoAppView(){
         <div style={{padding:"14px 20px",borderBottom:"0.5px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div>
             <div style={{color:C.tx,fontWeight:600,fontSize:14}}>Ranking · 30 dias</div>
-            <div style={{color:C.td,fontSize:11,marginTop:2}}>Ordenado por tempo de uso no mês</div>
+            <div style={{color:C.td,fontSize:11,marginTop:2}}>
+              Ordenado por tempo de uso no mês
+              {lastFetch&&<span style={{marginLeft:8,color:"#a140ff"}}>· atualizado às {lastFetch.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}</span>}
+            </div>
           </div>
+          <button onClick={fetchData} disabled={refreshing}
+            style={{background:refreshing?"#e5e7eb":"#a140ff",color:refreshing?"#94a3b8":"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:11,fontWeight:500,cursor:refreshing?"wait":"pointer",display:"flex",alignItems:"center",gap:6}}>
+            {refreshing?"Atualizando...":"↻ Atualizar agora"}
+          </button>
         </div>
         {ranked.map((s,rank)=>{
           const t=tier(s.month_min);
@@ -19662,10 +19680,35 @@ export default function AgencyOS(){
           user_id:CURRENT_USER.id,
           last_seen_at:now,
         },{onConflict:"user_id"});
-        // Incrementa contador de minutos do dia (gamificação de uso)
-        sb.rpc("inc_user_activity",{p_user:CURRENT_USER.id})
-          .catch(e=>console.warn("[activity] increment:",e?.message||e));
-      }catch(e){console.warn("[presence] heartbeat:",e?.message||e);}
+      }catch(e){console.warn("[presence] heartbeat falhou:",e?.message||e);}
+      // Incrementa contador de minutos do dia (gamificação) — independente do presence
+      try{
+        const today=new Date().toISOString().split("T")[0];
+        // 1. Tenta ler o registro do dia
+        const {data:existing,error:readErr}=await sb
+          .from("user_activity_daily")
+          .select("minutes_active")
+          .eq("user_id",CURRENT_USER.id)
+          .eq("day",today)
+          .maybeSingle();
+        if(readErr&&readErr.code!=="PGRST116"){
+          console.warn("[activity] read falhou:",readErr.message);
+          return;
+        }
+        if(existing){
+          // 2a. Existe — incrementa
+          const {error:upErr}=await sb.from("user_activity_daily")
+            .update({minutes_active:(existing.minutes_active||0)+1,updated_at:new Date().toISOString()})
+            .eq("user_id",CURRENT_USER.id)
+            .eq("day",today);
+          if(upErr)console.warn("[activity] update falhou:",upErr.message);
+        }else{
+          // 2b. Não existe — insere com 1
+          const {error:insErr}=await sb.from("user_activity_daily")
+            .insert({user_id:CURRENT_USER.id,day:today,minutes_active:1});
+          if(insErr)console.warn("[activity] insert falhou:",insErr.message);
+        }
+      }catch(e){console.warn("[activity] heartbeat:",e?.message||e);}
     };
 
     // 1ª batida + carrega estado inicial de todos
