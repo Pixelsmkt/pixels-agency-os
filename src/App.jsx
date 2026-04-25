@@ -248,7 +248,7 @@ function applyTheme(key){
   const t=THEMES[key]||THEMES.dark;
   Object.assign(C,t);
   try{localStorage.setItem("pixels-theme",key);}catch(e){}
-  if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,theme:key},{onConflict:"user_id"}).then(()=>{}).catch(()=>{});
+  if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,theme:key},{onConflict:"user_id"}).then(()=>{}).catch(e=>console.warn("[theme] save falhou:",e?.message||e));
 }
 
 // Load saved theme on startup
@@ -368,6 +368,190 @@ const ACCESS_STORE={
   guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
   joao:    {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
 };
+
+/* ─── SAFE STORAGE — wrapper localStorage com quota check ─── */
+// Captura QuotaExceededError automaticamente. Tenta limpar caches antigos.
+const safeStorage={
+  get(key,fallback=null){
+    try{const v=localStorage.getItem(key);return v===null?fallback:v;}
+    catch(e){console.warn("[safeStorage] get failed:",key,e?.message);return fallback;}
+  },
+  set(key,value){
+    try{localStorage.setItem(key,typeof value==="string"?value:JSON.stringify(value));return true;}
+    catch(e){
+      // Quota cheia → tenta limpar caches antigos (chaves "pixels-cache-*" ou similares)
+      if(e?.name==="QuotaExceededError"||e?.code===22){
+        try{
+          const keys=Object.keys(localStorage);
+          const oldCaches=keys.filter(k=>k.startsWith("pixels-thumb-")||k.startsWith("pixels-cache-"));
+          oldCaches.forEach(k=>localStorage.removeItem(k));
+          // Tenta de novo após limpar
+          localStorage.setItem(key,typeof value==="string"?value:JSON.stringify(value));
+          return true;
+        }catch{
+          console.warn("[safeStorage] localStorage cheio. Não foi possível salvar:",key);
+          return false;
+        }
+      }
+      console.warn("[safeStorage] set failed:",key,e?.message);
+      return false;
+    }
+  },
+  remove(key){try{localStorage.removeItem(key);}catch(e){console.warn("[safeStorage] remove failed:",e?.message);}},
+  getJSON(key,fallback=null){
+    try{const v=localStorage.getItem(key);return v===null?fallback:JSON.parse(v);}
+    catch(e){console.warn("[safeStorage] getJSON failed:",key,e?.message);return fallback;}
+  },
+};
+
+/* ─── TOAST/NOTIFICATION SYSTEM — substituto pro alert() ───
+   Uso:
+     pixelsToast.success("Salvo!");
+     pixelsToast.error("Falhou");
+     pixelsToast.info("Aviso");
+     pixelsToast.warning("Atenção");
+   Modal de confirmação:
+     pixelsConfirm("Tem certeza?").then(yes=>{ if(yes) ... });
+*/
+const _toastQueue=[];
+let _toastContainer=null;
+function _ensureToastContainer(){
+  if(_toastContainer)return _toastContainer;
+  if(typeof document==="undefined")return null;
+  const div=document.createElement("div");
+  div.id="pixels-toast-container";
+  Object.assign(div.style,{
+    position:"fixed",top:"max(20px,env(safe-area-inset-top))",right:"20px",
+    zIndex:"99999",display:"flex",flexDirection:"column",gap:"8px",
+    pointerEvents:"none",maxWidth:"360px",
+  });
+  document.body.appendChild(div);
+  _toastContainer=div;
+  return div;
+}
+function _showToast(type,msg,duration=3500){
+  const container=_ensureToastContainer();
+  if(!container){console.log(`[${type}] ${msg}`);return;}
+  const colors={
+    success:{bg:"#16a34a",icon:"✓"},
+    error:{bg:"#dc2626",icon:"✕"},
+    info:{bg:"#2563eb",icon:"ℹ"},
+    warning:{bg:"#f59e0b",icon:"⚠"},
+  };
+  const c=colors[type]||colors.info;
+  const toast=document.createElement("div");
+  Object.assign(toast.style,{
+    background:c.bg,color:"#fff",padding:"12px 16px",borderRadius:"10px",
+    boxShadow:"0 8px 32px rgba(0,0,0,0.18)",fontSize:"13px",fontWeight:"600",
+    display:"flex",alignItems:"center",gap:"10px",pointerEvents:"auto",
+    cursor:"pointer",fontFamily:"'Outfit',system-ui,sans-serif",
+    transform:"translateX(100%)",opacity:"0",
+    transition:"all .25s cubic-bezier(.22,1,.36,1)",
+  });
+  toast.innerHTML=`<span style="font-size:16px;flex-shrink:0">${c.icon}</span><span style="line-height:1.4"></span>`;
+  toast.children[1].textContent=msg; // safe text
+  toast.onclick=()=>_dismissToast(toast);
+  container.appendChild(toast);
+  requestAnimationFrame(()=>{toast.style.transform="translateX(0)";toast.style.opacity="1";});
+  setTimeout(()=>_dismissToast(toast),duration);
+}
+function _dismissToast(toast){
+  if(!toast.parentNode)return;
+  toast.style.transform="translateX(100%)";toast.style.opacity="0";
+  setTimeout(()=>{try{toast.remove();}catch{}},250);
+}
+const pixelsToast={
+  success:(m,d)=>_showToast("success",m,d),
+  error:(m,d)=>_showToast("error",m,d||5000),
+  info:(m,d)=>_showToast("info",m,d),
+  warning:(m,d)=>_showToast("warning",m,d||4500),
+};
+
+// Modal de input custom (substitui prompt())
+function pixelsPrompt(message,opts={}){
+  return new Promise(resolve=>{
+    if(typeof document==="undefined")return resolve(window.prompt(message,opts.defaultValue||""));
+    const overlay=document.createElement("div");
+    Object.assign(overlay.style,{
+      position:"fixed",inset:"0",background:"rgba(15,23,42,0.6)",zIndex:"99998",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",
+      animation:"fadeIn .15s ease",backdropFilter:"blur(4px)",
+    });
+    const box=document.createElement("div");
+    Object.assign(box.style,{
+      background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"440px",width:"100%",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
+      animation:"slideInUp .2s ease",
+    });
+    const title=document.createElement("div");
+    Object.assign(title.style,{color:"#0f172a",fontSize:"15px",fontWeight:"700",marginBottom:"14px",lineHeight:"1.4"});
+    title.textContent=message;
+    box.appendChild(title);
+    const input=document.createElement("input");
+    input.type=opts.inputType||"text";
+    input.placeholder=opts.placeholder||"";
+    input.value=opts.defaultValue||"";
+    Object.assign(input.style,{width:"100%",padding:"10px 14px",border:"1px solid #cbd5e1",borderRadius:"10px",fontSize:"14px",outline:"none",fontFamily:"inherit",marginBottom:"16px",boxSizing:"border-box"});
+    box.appendChild(input);
+    const btns=document.createElement("div");
+    Object.assign(btns.style,{display:"flex",gap:"8px",justifyContent:"flex-end"});
+    const close=(val)=>{document.body.removeChild(overlay);resolve(val);};
+    const cancel=document.createElement("button");
+    cancel.textContent=opts.cancelText||"Cancelar";
+    Object.assign(cancel.style,{background:"#f1f5f9",border:"none",color:"#475569",padding:"10px 20px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit"});
+    cancel.onclick=()=>close(null);
+    const ok=document.createElement("button");
+    ok.textContent=opts.okText||"OK";
+    Object.assign(ok.style,{background:"#2563eb",border:"none",color:"#fff",padding:"10px 20px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit"});
+    ok.onclick=()=>close(input.value);
+    input.onkeydown=(e)=>{if(e.key==="Enter")close(input.value);if(e.key==="Escape")close(null);};
+    btns.appendChild(cancel);btns.appendChild(ok);
+    box.appendChild(btns);
+    overlay.appendChild(box);
+    overlay.onclick=(e)=>{if(e.target===overlay)close(null);};
+    document.body.appendChild(overlay);
+    setTimeout(()=>input.focus(),50);
+  });
+}
+
+// Modal de confirmação custom (substitui confirm())
+function pixelsConfirm(message,opts={}){
+  return new Promise(resolve=>{
+    if(typeof document==="undefined")return resolve(window.confirm(message));
+    const overlay=document.createElement("div");
+    Object.assign(overlay.style,{
+      position:"fixed",inset:"0",background:"rgba(15,23,42,0.6)",zIndex:"99998",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",
+      animation:"fadeIn .15s ease",backdropFilter:"blur(4px)",
+    });
+    const box=document.createElement("div");
+    Object.assign(box.style,{
+      background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"420px",width:"100%",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
+      animation:"slideInUp .2s ease",
+    });
+    const title=document.createElement("div");
+    Object.assign(title.style,{color:"#0f172a",fontSize:"15px",fontWeight:"700",marginBottom:"16px",lineHeight:"1.4"});
+    title.textContent=message;
+    box.appendChild(title);
+    const btns=document.createElement("div");
+    Object.assign(btns.style,{display:"flex",gap:"8px",justifyContent:"flex-end"});
+    const cancel=document.createElement("button");
+    cancel.textContent=opts.cancelText||"Cancelar";
+    Object.assign(cancel.style,{background:"#f1f5f9",border:"none",color:"#475569",padding:"10px 20px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit"});
+    cancel.onclick=()=>{document.body.removeChild(overlay);resolve(false);};
+    const ok=document.createElement("button");
+    ok.textContent=opts.okText||"Confirmar";
+    Object.assign(ok.style,{background:opts.danger?"#dc2626":"#2563eb",border:"none",color:"#fff",padding:"10px 20px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit"});
+    ok.onclick=()=>{document.body.removeChild(overlay);resolve(true);};
+    btns.appendChild(cancel);btns.appendChild(ok);
+    box.appendChild(btns);
+    overlay.appendChild(box);
+    overlay.onclick=(e)=>{if(e.target===overlay){document.body.removeChild(overlay);resolve(false);}};
+    document.body.appendChild(overlay);
+    setTimeout(()=>ok.focus(),50);
+  });
+}
 
 /* ─── UTILS ──────────────────────────────── */
 const mkId=()=>Math.floor(Date.now()+Math.random()*999999);
@@ -4866,62 +5050,62 @@ function ROIChannelCard({channel,color,icon,invest,setInvest,roas,setRoas,receit
 // + helpers de dados: genTrend, buildMetaData, buildGoogleData, buildInstaData
 
 function CFerramentas({cl,onMindmap}){
-  var [toolTab,setToolTab]=useState("mindmap");
-  var live=getLiveClient(cl.id)||cl;
+  let[toolTab,setToolTab]=useState("mindmap");
+  let live=getLiveClient(cl.id)||cl;
   // ROI Calculator — por canal
-  var [channels,setChannels]=useState({meta:true,google:false});
+  let[channels,setChannels]=useState({meta:true,google:false});
   // Meta — Atual
-  var [investMetaA,setInvestMetaA]=useState(()=>live.meta&&live.meta.spend?String(Math.round(live.meta.spend)):"");
-  var [roasMetaA,setRoasMetaA]=useState(()=>live.meta&&live.meta.roas?String(live.meta.roas):"");
-  var [recMetaA,setRecMetaA]=useState("");
-  var [cplMetaA,setCplMetaA]=useState(()=>{var l=live.meta;return l&&l.leads>0&&l.spend>0?String(Math.round(l.spend/l.leads)):"";});
+  let[investMetaA,setInvestMetaA]=useState(()=>live.meta&&live.meta.spend?String(Math.round(live.meta.spend)):"");
+  let[roasMetaA,setRoasMetaA]=useState(()=>live.meta&&live.meta.roas?String(live.meta.roas):"");
+  let[recMetaA,setRecMetaA]=useState("");
+  let[cplMetaA,setCplMetaA]=useState(()=>{let l=live.meta;return l&&l.leads>0&&l.spend>0?String(Math.round(l.spend/l.leads)):"";});
   // Google — Atual
-  var [investGoogA,setInvestGoogA]=useState(()=>live.google&&live.google.spend?String(Math.round(live.google.spend)):"");
-  var [roasGoogA,setRoasGoogA]=useState(()=>live.google&&live.google.roas?String(live.google.roas):"");
-  var [recGoogA,setRecGoogA]=useState("");
-  var [cplGoogA,setCplGoogA]=useState(()=>{var g=live.google;return g&&g.leads>0&&g.spend>0?String(Math.round(g.spend/g.leads)):"";});
+  let[investGoogA,setInvestGoogA]=useState(()=>live.google&&live.google.spend?String(Math.round(live.google.spend)):"");
+  let[roasGoogA,setRoasGoogA]=useState(()=>live.google&&live.google.roas?String(live.google.roas):"");
+  let[recGoogA,setRecGoogA]=useState("");
+  let[cplGoogA,setCplGoogA]=useState(()=>{let g=live.google;return g&&g.leads>0&&g.spend>0?String(Math.round(g.spend/g.leads)):"";});
   // Margem única — usada em TODOS os cálculos (atual + previsões)
-  var [margOtim,setMargOtim]=useState("30");
+  let[margOtim,setMargOtim]=useState("30");
   // Aumentar investimento — toggle + valor acrescido por canal
-  var [showAcrMeta,setShowAcrMeta]=useState(false);
-  var [acrMeta,setAcrMeta]=useState("");
-  var [showAcrGoog,setShowAcrGoog]=useState(false);
-  var [acrGoog,setAcrGoog]=useState("");
+  let[showAcrMeta,setShowAcrMeta]=useState(false);
+  let[acrMeta,setAcrMeta]=useState("");
+  let[showAcrGoog,setShowAcrGoog]=useState(false);
+  let[acrGoog,setAcrGoog]=useState("");
   // Ticket médio por canal
-  var [ticketMeta,setTicketMeta]=useState("");
-  var [ticketGoog,setTicketGoog]=useState("");
+  let[ticketMeta,setTicketMeta]=useState("");
+  let[ticketGoog,setTicketGoog]=useState("");
   // Histórico de simulações
-  var [simulations,setSimulations]=useState(function(){
+  let[simulations,setSimulations]=useState(function(){
     try{return JSON.parse(localStorage.getItem("pixels-roi-sims-"+cl.id)||"[]");}catch(e){return[];}
   });
-  var [showSimHistory,setShowSimHistory]=useState(false);
+  let[showSimHistory,setShowSimHistory]=useState(false);
   // Modo apresentação
-  var [apresentacao,setApresentacao]=useState(false);
+  let[apresentacao,setApresentacao]=useState(false);
 
-  var TOOLS=[
+  let TOOLS=[
     {id:"mindmap",label:"Mapa Mental"},
     {id:"checklist",label:"Checklist Onboarding"},
     {id:"roi",label:"Calculadora ROI"},
     {id:"links",label:"Links Úteis"},
   ];
 
-  var [links,setLinks]=useState(function(){
-    try{var s=localStorage.getItem("pixels-links-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
+  let[links,setLinks]=useState(function(){
+    try{let s=localStorage.getItem("pixels-links-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
     return [];
   });
-  var [linkForm,setLinkForm]=useState({label:"",url:""});
-  var [showLinkForm,setShowLinkForm]=useState(false);
+  let[linkForm,setLinkForm]=useState({label:"",url:""});
+  let[showLinkForm,setShowLinkForm]=useState(false);
 
-  var addLink=function(){
+  let addLink=function(){
     if(!linkForm.url.trim())return;
-    var next=[...links,{id:Date.now(),...linkForm}];
+    let next=[...links,{id:Date.now(),...linkForm}];
     setLinks(next);
     try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}
     setLinkForm({label:"",url:""});setShowLinkForm(false);
-    if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(e=>console.warn("[cliente_ferramentas] db update falhou:",e?.message||e));
   };
 
-  var inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  let inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
 
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
     {/* Tool tabs */}
@@ -4950,56 +5134,56 @@ function CFerramentas({cl,onMindmap}){
 
     {/* Calculadora ROI */}
     {toolTab==="roi"&&(()=>{
-      var pn=v=>parseFloat(String(v).replace(",","."))||0;
-      var fmt=v=>v.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
-      var fmtR=v=>"R$ "+fmt(v);
-      var leadsRange=(inv,cplV)=>{if(!cplV||pn(cplV)<=0)return null;var mid=Math.round(pn(inv)/pn(cplV));return{mid,min:Math.round(mid*0.80),max:Math.round(mid*1.20)};};
+      let pn=v=>parseFloat(String(v).replace(",","."))||0;
+      let fmt=v=>v.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+      let fmtR=v=>"R$ "+fmt(v);
+      let leadsRange=(inv,cplV)=>{if(!cplV||pn(cplV)<=0)return null;let mid=Math.round(pn(inv)/pn(cplV));return{mid,min:Math.round(mid*0.80),max:Math.round(mid*1.20)};};
 
-      var calc=(invest,roas,receitaReal,margin,cplV)=>{
-        var i=pn(invest),m=pn(margin)||30;
+      let calc=(invest,roas,receitaReal,margin,cplV)=>{
+        let i=pn(invest),m=pn(margin)||30;
         if(!i)return null;
-        var receita=receitaReal&&pn(receitaReal)>0?pn(receitaReal):(roas&&pn(roas)>0?i*pn(roas):0);
+        let receita=receitaReal&&pn(receitaReal)>0?pn(receitaReal):(roas&&pn(roas)>0?i*pn(roas):0);
         if(!receita)return null;
-        var r=receita/i;
-        var lucroLiq=receita*(m/100)-i;
-        var roi=i>0?(lucroLiq/i)*100:0;
-        var leadsEst=cplV&&pn(cplV)>0?leadsRange(i,cplV):null;
+        let r=receita/i;
+        let lucroLiq=receita*(m/100)-i;
+        let roi=i>0?(lucroLiq/i)*100:0;
+        let leadsEst=cplV&&pn(cplV)>0?leadsRange(i,cplV):null;
         return{receita,lucroLiq,roi,leadsEst,invest:i,roas:r};
       };
 
-      var rMetaA  = channels.meta  ? calc(investMetaA, roasMetaA, recMetaA, margOtim, cplMetaA) : null;
-      var rGoogA  = channels.google? calc(investGoogA, roasGoogA, recGoogA, margOtim, cplGoogA) : null;
+      let rMetaA  = channels.meta  ? calc(investMetaA, roasMetaA, recMetaA, margOtim, cplMetaA) : null;
+      let rGoogA  = channels.google? calc(investGoogA, roasGoogA, recGoogA, margOtim, cplGoogA) : null;
 
-      var totalInvestA = (rMetaA?rMetaA.invest:0)+(rGoogA?rGoogA.invest:0);
-      var totalRecA    = (rMetaA?rMetaA.receita:0)+(rGoogA?rGoogA.receita:0);
-      var totalRoasA   = totalInvestA>0?totalRecA/totalInvestA:0;
+      let totalInvestA = (rMetaA?rMetaA.invest:0)+(rGoogA?rGoogA.invest:0);
+      let totalRecA    = (rMetaA?rMetaA.receita:0)+(rGoogA?rGoogA.receita:0);
+      let totalRoasA   = totalInvestA>0?totalRecA/totalInvestA:0;
 
       // Effective invest B — atual + acrescido (se toggle ativo)
-      var effMetaInvest = channels.meta ? (showAcrMeta&&pn(acrMeta)>0 ? pn(investMetaA)+pn(acrMeta) : pn(investMetaA)) : 0;
-      var effGoogInvest = channels.google? (showAcrGoog&&pn(acrGoog)>0 ? pn(investGoogA)+pn(acrGoog) : pn(investGoogA)) : 0;
-      var totalInvestB  = effMetaInvest + effGoogInvest;
+      let effMetaInvest = channels.meta ? (showAcrMeta&&pn(acrMeta)>0 ? pn(investMetaA)+pn(acrMeta) : pn(investMetaA)) : 0;
+      let effGoogInvest = channels.google? (showAcrGoog&&pn(acrGoog)>0 ? pn(investGoogA)+pn(acrGoog) : pn(investGoogA)) : 0;
+      let totalInvestB  = effMetaInvest + effGoogInvest;
 
-      var baseRoas = totalRoasA>0?totalRoasA:(live.meta&&live.meta.roas||3);
-      var mOtim    = pn(margOtim)||30;
+      let baseRoas = totalRoasA>0?totalRoasA:(live.meta&&live.meta.roas||3);
+      let mOtim    = pn(margOtim)||30;
 
       // FIX 1: leads com investimento fixo (não multiplicado por f.mult)
-      var FORECASTS = totalInvestB>0?[
+      let FORECASTS = totalInvestB>0?[
         {id:"pessimist",label:"Pessimista",emoji:"😐",color:"#f59e0b",mult:0.80,desc:"ROAS −20%"},
         {id:"healthy",  label:"Saudável",  emoji:"✅",color:"#16a34a",mult:1.00,desc:"ROAS estável"},
         {id:"great",    label:"Otimista",  emoji:"🚀",color:"#4f46e8",mult:1.20,desc:"ROAS +20%"},
         {id:"super",    label:"Incrível",  emoji:"⚡",color:"#c026d3",mult:1.40,desc:"ROAS +40%"},
       ].map(f=>{
-        var r=baseRoas*f.mult;
-        var receita=totalInvestB*r;
-        var lucroLiq=receita*(mOtim/100)-totalInvestB;
-        var roi=totalInvestB>0?(lucroLiq/totalInvestB)*100:0;
-        var diffReceita=totalRecA>0?receita-totalRecA:null; // FIX 2
-        var metaLeads=channels.meta&&effMetaInvest>0&&pn(cplMetaA)>0?leadsRange(effMetaInvest,pn(cplMetaA)):null; // FIX 1
-        var googLeads=channels.google&&effGoogInvest>0&&pn(cplGoogA)>0?leadsRange(effGoogInvest,pn(cplGoogA)):null;
+        let r=baseRoas*f.mult;
+        let receita=totalInvestB*r;
+        let lucroLiq=receita*(mOtim/100)-totalInvestB;
+        let roi=totalInvestB>0?(lucroLiq/totalInvestB)*100:0;
+        let diffReceita=totalRecA>0?receita-totalRecA:null; // FIX 2
+        let metaLeads=channels.meta&&effMetaInvest>0&&pn(cplMetaA)>0?leadsRange(effMetaInvest,pn(cplMetaA)):null; // FIX 1
+        let googLeads=channels.google&&effGoogInvest>0&&pn(cplGoogA)>0?leadsRange(effGoogInvest,pn(cplGoogA)):null;
         return{...f,roas:r,receita,lucroLiq,roi,diffReceita,metaLeads,googLeads};
       }):[];
 
-      var bothCh = channels.meta&&channels.google;
+      let bothCh = channels.meta&&channels.google;
 
       return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
 
@@ -5139,8 +5323,8 @@ function CFerramentas({cl,onMindmap}){
 
         {/* ══ BARRA DE AÇÕES ══ */}
         {(rMetaA||rGoogA)&&(()=>{
-          var saveSim=()=>{
-            var snap={
+          let saveSim=()=>{
+            let snap={
               id:Date.now(),
               date:new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}),
               client:cl.name,
@@ -5149,7 +5333,7 @@ function CFerramentas({cl,onMindmap}){
               marg:margOtim,
               forecasts:FORECASTS.map(f=>({label:f.label,emoji:f.emoji,color:f.color,receita:f.receita,lucroLiq:f.lucroLiq,roi:f.roi,roas:f.roas})),
             };
-            var next=[snap,...simulations].slice(0,15);
+            let next=[snap,...simulations].slice(0,15);
             setSimulations(next);
             try{localStorage.setItem("pixels-roi-sims-"+cl.id,JSON.stringify(next));}catch(e){}
           };
@@ -5226,18 +5410,18 @@ function CFerramentas({cl,onMindmap}){
 
         {/* ══ MODO APRESENTAÇÃO — OVERLAY ══ */}
         {apresentacao&&(()=>{
-          var fmtAp=v=>v.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
-          var fmtRAp=v=>"R$ "+fmtAp(v);
-          var totalRecA2=(rMetaA?rMetaA.receita:0)+(rGoogA?rGoogA.receita:0);
-          var totalLucA2=(rMetaA?rMetaA.lucroLiq:0)+(rGoogA?rGoogA.lucroLiq:0);
-          var totalInvA2=(rMetaA?rMetaA.invest:0)+(rGoogA?rGoogA.invest:0);
-          var totalRoasA2=totalInvA2>0?totalRecA2/totalInvA2:0;
-          var dateStr=new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
-          var tsStr=new Date().toLocaleString("pt-BR");
+          let fmtAp=v=>v.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+          let fmtRAp=v=>"R$ "+fmtAp(v);
+          let totalRecA2=(rMetaA?rMetaA.receita:0)+(rGoogA?rGoogA.receita:0);
+          let totalLucA2=(rMetaA?rMetaA.lucroLiq:0)+(rGoogA?rGoogA.lucroLiq:0);
+          let totalInvA2=(rMetaA?rMetaA.invest:0)+(rGoogA?rGoogA.invest:0);
+          let totalRoasA2=totalInvA2>0?totalRecA2/totalInvA2:0;
+          let dateStr=new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+          let tsStr=new Date().toLocaleString("pt-BR");
 
           // ── Gera HTML limpo para PDF/PNG ─────────────────────
-          var buildHTML=(forPrint)=>{
-            var cards=(f,big)=>`
+          let buildHTML=(forPrint)=>{
+            let cards=(f,big)=>`
               <div style="background:${f.color}10;border:2px solid ${f.color}44;border-radius:14px;padding:${big?"20px":"16px"};text-align:center;break-inside:avoid;">
                 <div style="font-size:${big?"32":"24"}px;margin-bottom:6px">${f.emoji}</div>
                 <div style="color:${f.color};font-weight:800;font-size:${big?"16":"13"}px;margin-bottom:8px">${f.label}</div>
@@ -5259,7 +5443,7 @@ function CFerramentas({cl,onMindmap}){
                 </div>
               </div>`;
 
-            var metaCard=rMetaA?`
+            let metaCard=rMetaA?`
               <div style="background:#fff;border-radius:14px;padding:16px;border:1px solid #1877f244;break-inside:avoid">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
                   <div style="width:28px;height:28px;background:#1877f218;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px">📘</div>
@@ -5274,7 +5458,7 @@ function CFerramentas({cl,onMindmap}){
                 </div>
               </div>`:"";
 
-            var googCard=rGoogA?`
+            let googCard=rGoogA?`
               <div style="background:#fff;border-radius:14px;padding:16px;border:1px solid #34a85344;break-inside:avoid">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
                   <div style="width:28px;height:28px;background:#34a85318;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px">🔍</div>
@@ -5289,7 +5473,7 @@ function CFerramentas({cl,onMindmap}){
                 </div>
               </div>`:"";
 
-            var totalCard=totalRecA2>0&&rMetaA&&rGoogA?`
+            let totalCard=totalRecA2>0&&rMetaA&&rGoogA?`
               <div style="background:linear-gradient(135deg,#a140ff18,#6600cc10);border-radius:14px;padding:16px;border:1px solid #a140ff33;break-inside:avoid">
                 <div style="color:#a140ff;font-weight:700;font-size:11px;margin-bottom:10px">⬡ TOTAL COMBINADO</div>
                 <div style="color:#0f172a;font-weight:900;font-size:22px;letter-spacing:-.5px">${fmtRAp(totalRecA2)}</div>
@@ -5300,7 +5484,7 @@ function CFerramentas({cl,onMindmap}){
                 </div>
               </div>`:"";
 
-            var forecastSection=FORECASTS.length>0?`
+            let forecastSection=FORECASTS.length>0?`
               <div style="break-before:${forPrint?"avoid":"auto"}">
                 <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:14px;margin-top:8px">🎯 Projeções de Crescimento — Margem ${margOtim}%</div>
                 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
@@ -5346,12 +5530,12 @@ function CFerramentas({cl,onMindmap}){
           };
 
           // ── Exportar PDF ──────────────────────────────────────
-          var handlePDF=()=>{
-            var w=window.open("","_blank","width=1000,height=750");
-            if(!w)return;
-            w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head>
+          let handlePDF=()=>{
+            // escape de texto interpolado em HTML — evita injeção via cl.name
+            const esc=s=>String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+            const html=`<!DOCTYPE html><html lang="pt-BR"><head>
               <meta charset="UTF-8"/>
-              <title>Análise ${cl.name} — Pixels Agência</title>
+              <title>Análise ${esc(cl.name)} — Pixels Agência</title>
               <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
               <style>
                 *{margin:0;padding:0;box-sizing:border-box;}
@@ -5376,18 +5560,30 @@ function CFerramentas({cl,onMindmap}){
                 </div>
               </div>
               ${buildHTML(true)}
-            </body></html>`);
-            w.document.close();
+            </body></html>`;
+            // Em vez de document.write (descontinuado e com riscos de parser),
+            // entregamos o HTML como Blob URL para a nova janela.
+            try{
+              const blob=new Blob([html],{type:"text/html;charset=utf-8"});
+              const url=URL.createObjectURL(blob);
+              const w=window.open(url,"_blank","width=1000,height=750");
+              if(!w){URL.revokeObjectURL(url);pixelsToast.warning("Permita pop-ups para abrir o PDF.");return;}
+              // libera a URL após a janela carregar (60s margem de segurança)
+              setTimeout(()=>{try{URL.revokeObjectURL(url);}catch(e){}},60000);
+            }catch(e){
+              console.warn("Falha ao gerar PDF:",e);
+              pixelsToast.error("Não foi possível abrir a janela do PDF.");
+            }
           };
 
           // ── Exportar PNG via html2canvas ──────────────────────
-          var [exporting,setExporting]=useState(false);
-          var [exportMsg,setExportMsg]=useState("");
-          var handlePNG=()=>{
+          let[exporting,setExporting]=useState(false);
+          let[exportMsg,setExportMsg]=useState("");
+          let handlePNG=()=>{
             setExporting(true);
             setExportMsg("Preparando imagem...");
-            var doCapture=()=>{
-              var el=document.getElementById("ap-capture");
+            let doCapture=()=>{
+              let el=document.getElementById("ap-capture");
               if(!el||!window.html2canvas){setExporting(false);setExportMsg("Erro ao carregar biblioteca.");return;}
               setExportMsg("Capturando...");
               window.html2canvas(el,{
@@ -5398,7 +5594,7 @@ function CFerramentas({cl,onMindmap}){
                 logging:false,
                 windowWidth:1000,
               }).then(canvas=>{
-                var link=document.createElement("a");
+                let link=document.createElement("a");
                 link.download="Analise_"+cl.name.replace(/\s+/g,"_")+"_"+new Date().toLocaleDateString("pt-BR").replace(/\//g,"-")+".png";
                 link.href=canvas.toDataURL("image/png",1.0);
                 link.click();
@@ -5407,7 +5603,7 @@ function CFerramentas({cl,onMindmap}){
               }).catch(()=>{setExporting(false);setExportMsg("Erro na captura. Tente o PDF.");});
             };
             if(window.html2canvas){doCapture();return;}
-            var s=document.createElement("script");
+            let s=document.createElement("script");
             s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
             s.onload=doCapture;
             s.onerror=()=>{setExporting(false);setExportMsg("Sem conexão para carregar biblioteca.");};
@@ -5594,7 +5790,7 @@ function CFerramentas({cl,onMindmap}){
               <div style={{color:C.td,fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.url}</div>
             </div>
             <a href={l.url} target="_blank" rel="noopener" style={{background:C.a,color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:11,fontWeight:700,textDecoration:"none",flexShrink:0}}>Abrir</a>
-            <button onClick={()=>{var next=links.filter(function(x){return x.id!==l.id;});setLinks(next);try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});}}
+            <button onClick={()=>{let next=links.filter(function(x){return x.id!==l.id;});setLinks(next);try{localStorage.setItem("pixels-links-"+cl.id,JSON.stringify(next));}catch(e){}if(window._sb)window._sb.from("clients").update({links:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(e=>console.warn("[cliente_ferramentas] db update falhou:",e?.message||e));}}
               style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"4px"}}>×</button>
           </div>);
         })}
@@ -5605,9 +5801,9 @@ function CFerramentas({cl,onMindmap}){
 
 /* ── INFORMAÇÕES TAB ───────────────────────── */
 function CInfo({cl}){
-  var [infoTab,setInfoTab]=useState("briefing");
-  var isSocio=CURRENT_USER&&CURRENT_USER.level===1;
-  var INFO_TABS=[
+  let[infoTab,setInfoTab]=useState("briefing");
+  let isSocio=CURRENT_USER&&CURRENT_USER.level===1;
+  let INFO_TABS=[
     {id:"briefing", label:"Briefing"},
     {id:"contatos", label:"Contatos"},
     {id:"timeline", label:"Linha do Tempo"},
@@ -5635,16 +5831,16 @@ function CInfo({cl}){
 
 /* ── MÉTRICAS EDITÁVEIS (sócios) ──────────── */
 function CMetricas({cl}){
-  var live=getLiveClient(cl.id);
-  var [meta,setMeta]=useState({spend:live.meta&&live.meta.spend||0,budget:live.meta&&live.meta.budget||0,roas:live.meta&&live.meta.roas||0,leads:live.meta&&live.meta.leads||0,cpc:live.meta&&live.meta.cpc||0,ctr:live.meta&&live.meta.ctr||0});
-  var [google,setGoogle]=useState({spend:live.google&&live.google.spend||0,budget:live.google&&live.google.budget||0,roas:live.google&&live.google.roas||0,leads:live.google&&live.google.leads||0,cpc:live.google&&live.google.cpc||0,ctr:live.google&&live.google.ctr||0});
-  var [social,setSocial]=useState({followers:live.social&&live.social.followers||0,growth:live.social&&live.social.growth||0,reach:live.social&&live.social.reach||0,eng:live.social&&live.social.eng||0,posts:live.social&&live.social.posts||0});
-  var [contract,setContract]=useState(live.contract||0);
-  var [health,setHealth]=useState(live.health||0);
-  var [nps,setNps]=useState(live.nps||0);
-  var [saved,setSaved]=useState(false);
-  var ninp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"7px 10px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
-  var lbl={color:C.ts,fontSize:11,fontWeight:600,marginBottom:3,display:"block"};
+  let live=getLiveClient(cl.id);
+  let[meta,setMeta]=useState({spend:live.meta&&live.meta.spend||0,budget:live.meta&&live.meta.budget||0,roas:live.meta&&live.meta.roas||0,leads:live.meta&&live.meta.leads||0,cpc:live.meta&&live.meta.cpc||0,ctr:live.meta&&live.meta.ctr||0});
+  let[google,setGoogle]=useState({spend:live.google&&live.google.spend||0,budget:live.google&&live.google.budget||0,roas:live.google&&live.google.roas||0,leads:live.google&&live.google.leads||0,cpc:live.google&&live.google.cpc||0,ctr:live.google&&live.google.ctr||0});
+  let[social,setSocial]=useState({followers:live.social&&live.social.followers||0,growth:live.social&&live.social.growth||0,reach:live.social&&live.social.reach||0,eng:live.social&&live.social.eng||0,posts:live.social&&live.social.posts||0});
+  let[contract,setContract]=useState(live.contract||0);
+  let[health,setHealth]=useState(live.health||0);
+  let[nps,setNps]=useState(live.nps||0);
+  let[saved,setSaved]=useState(false);
+  let ninp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"7px 10px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  let lbl={color:C.ts,fontSize:11,fontWeight:600,marginBottom:3,display:"block"};
   function save(){
     saveLiveClient(cl.id,{
       meta:{spend:+meta.spend,budget:+meta.budget,roas:+meta.roas,leads:+meta.leads,cpc:+meta.cpc,ctr:+meta.ctr},
@@ -5696,7 +5892,7 @@ function CMetricas({cl}){
 
 /* ── BRIEFING ─────────────────────────────── */
 function CBriefing({cl}){
-  var DEFAULT_FIELDS=[
+  let DEFAULT_FIELDS=[
     {id:"empresa",      title:"Sobre a Empresa",          placeholder:"Descreva a empresa, história, missão, visão e valores..."},
     {id:"produto",      title:"Produto / Serviço",         placeholder:"O que vende? Diferenciais, preços, principais linhas..."},
     {id:"publico",      title:"Público-alvo",              placeholder:"Idade, gênero, localização, dores, desejos, comportamentos..."},
@@ -5707,14 +5903,14 @@ function CBriefing({cl}){
     {id:"obs",          title:"Observações Gerais",        placeholder:"Qualquer outra informação importante sobre esse cliente..."},
   ];
 
-  var STORAGE_KEY="pixels-briefing-"+cl.id;
+  let STORAGE_KEY="pixels-briefing-"+cl.id;
 
   // ── Carrega estado salvo (Supabase + localStorage fallback) ──
-  var loadSaved=function(){
-    try{var s=localStorage.getItem(STORAGE_KEY);if(s)return JSON.parse(s);}catch(e){}
+  let loadSaved=function(){
+    try{let s=localStorage.getItem(STORAGE_KEY);if(s)return JSON.parse(s);}catch(e){}
     return {};
   };
-  var saved0=loadSaved();
+  let saved0=loadSaved();
 
   // ── Carrega do Supabase ao montar ──
   useEffect(()=>{
@@ -5732,26 +5928,26 @@ function CBriefing({cl}){
       }).catch(()=>{});
   },[cl.id]);
 
-  var [tab,setTab]=useState("documento"); // "documento" | "campos"
-  var [rawText,setRawText]=useState(saved0.rawText||"");
-  var [answers,setAnswers]=useState(saved0.answers||{});
-  var [fields,setFields]=useState(saved0.fields&&saved0.fields.length?saved0.fields:DEFAULT_FIELDS);
-  var [savedOk,setSavedOk]=useState(false);
-  var [dragOver,setDragOver]=useState(false);
-  var [loading,setLoading]=useState(false);
-  var [loadingMsg,setLoadingMsg]=useState("");
-  var [aiError,setAiError]=useState("");
-  var [editingField,setEditingField]=useState(null);
-  var [editTitle,setEditTitle]=useState("");
-  var [editPlaceholder,setEditPlaceholder]=useState("");
-  var [addingField,setAddingField]=useState(false);
-  var [newTitle,setNewTitle]=useState("");
-  var [newPlaceholder,setNewPlaceholder]=useState("");
-  var fileRef=useRef(null);
+  let[tab,setTab]=useState("documento"); // "documento" | "campos"
+  let[rawText,setRawText]=useState(saved0.rawText||"");
+  let[answers,setAnswers]=useState(saved0.answers||{});
+  let[fields,setFields]=useState(saved0.fields&&saved0.fields.length?saved0.fields:DEFAULT_FIELDS);
+  let[savedOk,setSavedOk]=useState(false);
+  let[dragOver,setDragOver]=useState(false);
+  let[loading,setLoading]=useState(false);
+  let[loadingMsg,setLoadingMsg]=useState("");
+  let[aiError,setAiError]=useState("");
+  let[editingField,setEditingField]=useState(null);
+  let[editTitle,setEditTitle]=useState("");
+  let[editPlaceholder,setEditPlaceholder]=useState("");
+  let[addingField,setAddingField]=useState(false);
+  let[newTitle,setNewTitle]=useState("");
+  let[newPlaceholder,setNewPlaceholder]=useState("");
+  let fileRef=useRef(null);
 
   // ── Salvar tudo junto — localStorage + Supabase ──
-  var persist=function(rt,ans,flds){
-    var toSave={rawText:rt!==undefined?rt:rawText, answers:ans||answers, fields:flds||fields};
+  let persist=function(rt,ans,flds){
+    let toSave={rawText:rt!==undefined?rt:rawText, answers:ans||answers, fields:flds||fields};
     try{localStorage.setItem(STORAGE_KEY,JSON.stringify(toSave));setSavedOk(true);setTimeout(()=>setSavedOk(false),2500);}catch(e){}
     if(window._sb){
       window._sb.from("clients").update({
@@ -5761,19 +5957,19 @@ function CBriefing({cl}){
     }
   };
 
-  var saveRaw=function(){persist(rawText,answers,fields);};
+  let saveRaw=function(){persist(rawText,answers,fields);};
 
-  var saveAnswers=function(a){setAnswers(a);persist(rawText,a,fields);};
-  var saveFields=function(f){setFields(f);persist(rawText,answers,f);};
+  let saveAnswers=function(a){setAnswers(a);persist(rawText,a,fields);};
+  let saveFields=function(f){setFields(f);persist(rawText,answers,f);};
 
   // ── Ler arquivo ─────────────────────────────────
-  var handleFile=function(file){
+  let handleFile=function(file){
     if(!file)return;
-    var isTXT=file.type.startsWith("text/")||file.name.endsWith(".txt")||file.name.endsWith(".md");
-    var isDOCX=file.name.endsWith(".docx");
-    var isPDF=file.type==="application/pdf";
+    let isTXT=file.type.startsWith("text/")||file.name.endsWith(".txt")||file.name.endsWith(".md");
+    let isDOCX=file.name.endsWith(".docx");
+    let isPDF=file.type==="application/pdf";
     if(isTXT){
-      var r=new FileReader();
+      let r=new FileReader();
       r.onload=function(e){setRawText(e.target.result);};
       r.readAsText(file,"UTF-8");
     } else if(isPDF||isDOCX){
@@ -5783,32 +5979,32 @@ function CBriefing({cl}){
       setAiError("Formato não suportado. Use .txt, .md, ou cole o texto diretamente.");
     }
   };
-  var handleDrop=function(e){e.preventDefault();setDragOver(false);handleFile(e.dataTransfer.files[0]);};
+  let handleDrop=function(e){e.preventDefault();setDragOver(false);handleFile(e.dataTransfer.files[0]);};
 
   // ── IA: preencher campos a partir do texto ──────
-  var fillWithAI=async function(){
+  let fillWithAI=async function(){
     if(!rawText.trim()){setAiError("Cole o briefing antes de usar a IA.");return;}
     setLoading(true);setAiError("");setLoadingMsg("Analisando com IA…");
-    var fieldsList=fields.map(function(f){return '"'+f.id+'": "" // '+f.title;}).join("\n");
-    var prompt='Você recebeu o briefing de um cliente de agência de marketing chamado "'+cl.name+'".\nExtraia e organize as informações nos campos abaixo. Para cada campo, escreva apenas o conteúdo relevante em português. Se não houver informação para um campo, deixe "".\n\nResponda SOMENTE com um objeto JSON válido, sem nenhum texto antes ou depois:\n{\n'+fieldsList+'\n}';
+    let fieldsList=fields.map(function(f){return '"'+f.id+'": "" // '+f.title;}).join("\n");
+    let prompt='Você recebeu o briefing de um cliente de agência de marketing chamado "'+cl.name+'".\nExtraia e organize as informações nos campos abaixo. Para cada campo, escreva apenas o conteúdo relevante em português. Se não houver informação para um campo, deixe "".\n\nResponda SOMENTE com um objeto JSON válido, sem nenhum texto antes ou depois:\n{\n'+fieldsList+'\n}';
     try{
-      var res=await fetch("/api/anthropic/v1/messages",{
+      let res=await fetch("/api/anthropic/v1/messages",{
         method:"POST",headers:{"Content-Type":"application/json"},
         body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:2000,
           messages:[{role:"user",content:[{type:"text",text:rawText},{type:"text",text:prompt}]}]})
       });
-      if(!res.ok){var t=await res.text();setAiError("Erro HTTP "+res.status+": "+t.slice(0,100));setLoading(false);setLoadingMsg("");return;}
-      var json=await res.json();
+      if(!res.ok){let t=await res.text();setAiError("Erro HTTP "+res.status+": "+t.slice(0,100));setLoading(false);setLoadingMsg("");return;}
+      let json=await res.json();
       if(json.error){setAiError("Erro da API: "+json.error.message);setLoading(false);setLoadingMsg("");return;}
-      var raw=(json.content||[]).map(function(b){return b.type==="text"?b.text:"";}).join("").trim();
-      var match=raw.match(/\{[\s\S]*\}/);
+      let raw=(json.content||[]).map(function(b){return b.type==="text"?b.text:"";}).join("").trim();
+      let match=raw.match(/\{[\s\S]*\}/);
       if(!match){setAiError("Resposta inesperada da IA. Tente novamente.");setLoading(false);setLoadingMsg("");return;}
-      var parsed=JSON.parse(match[0]);
-      var merged={...answers};
+      let parsed=JSON.parse(match[0]);
+      let merged={...answers};
       Object.keys(parsed).forEach(function(k){if(parsed[k]&&parsed[k].trim())merged[k]=parsed[k];});
       saveAnswers(merged);
       setTab("campos");
-      var filled=Object.keys(merged).filter(function(k){return merged[k];}).length;
+      let filled=Object.keys(merged).filter(function(k){return merged[k];}).length;
       setLoadingMsg("✓ "+filled+" campo(s) preenchido(s)!");
       setTimeout(function(){setLoadingMsg("");},3000);
     }catch(err){
@@ -5818,27 +6014,27 @@ function CBriefing({cl}){
   };
 
   // ── Campos: gerenciar ────────────────────────────
-  var startEditField=function(f){setEditingField(f.id);setEditTitle(f.title);setEditPlaceholder(f.placeholder||"");};
-  var confirmEditField=function(){
+  let startEditField=function(f){setEditingField(f.id);setEditTitle(f.title);setEditPlaceholder(f.placeholder||"");};
+  let confirmEditField=function(){
     if(!editTitle.trim()){setEditingField(null);return;}
     saveFields(fields.map(function(f){return f.id===editingField?{...f,title:editTitle.trim(),placeholder:editPlaceholder.trim()}:f;}));
     setEditingField(null);
   };
-  var deleteField=function(id){
-    if(!window.confirm("Remover este campo?"))return;
-    var updated=fields.filter(function(f){return f.id!==id;});
-    var a2={...answers};delete a2[id];setAnswers(a2);saveFields(updated);
+  let deleteField=async function(id){
+    if(!await pixelsConfirm("Remover este campo?",{okText:"Remover",danger:true}))return;
+    let updated=fields.filter(function(f){return f.id!==id;});
+    let a2={...answers};delete a2[id];setAnswers(a2);saveFields(updated);
   };
-  var addField=function(){
+  let addField=function(){
     if(!newTitle.trim())return;
     saveFields([...fields,{id:"custom_"+Date.now(),title:newTitle.trim(),placeholder:newPlaceholder.trim()||"Digite aqui..."}]);
     setNewTitle("");setNewPlaceholder("");setAddingField(false);
   };
 
-  var pctFilled=fields.length>0?Math.round((fields.filter(function(f){return answers[f.id]&&answers[f.id].trim();}).length/fields.length)*100):0;
-  var hasRaw=rawText.trim().length>0;
-  var ninp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"7px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
-  var tinp={width:"100%",border:"none",background:"transparent",color:C.tx,fontSize:13,resize:"vertical",outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.8,padding:"14px 16px",boxSizing:"border-box"};
+  let pctFilled=fields.length>0?Math.round((fields.filter(function(f){return answers[f.id]&&answers[f.id].trim();}).length/fields.length)*100):0;
+  let hasRaw=rawText.trim().length>0;
+  let ninp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"7px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  let tinp={width:"100%",border:"none",background:"transparent",color:C.tx,fontSize:13,resize:"vertical",outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.8,padding:"14px 16px",boxSizing:"border-box"};
 
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
 
@@ -5933,7 +6129,7 @@ function CBriefing({cl}){
       </div>
 
       {fields.map(function(sec){
-        var isEditing=editingField===sec.id;
+        let isEditing=editingField===sec.id;
         return(<div key={sec.id} style={{background:C.card,borderRadius:14,overflow:"hidden",border:"1px solid "+(isEditing?C.a:C.b1),transition:"border .15s"}}>
           <div style={{padding:"9px 14px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:8}}>
             {isEditing?(
@@ -5952,7 +6148,7 @@ function CBriefing({cl}){
               </>
             )}
           </div>
-          <textarea value={answers[sec.id]||""} onChange={e=>{var d={...answers};d[sec.id]=e.target.value;saveAnswers(d);}}
+          <textarea value={answers[sec.id]||""} onChange={e=>{let d={...answers};d[sec.id]=e.target.value;saveAnswers(d);}}
             placeholder={sec.placeholder||"Digite aqui..."} rows={3}
             style={{...tinp,minHeight:60,padding:"10px 14px"}}/>
         </div>);
@@ -5973,7 +6169,7 @@ function CBriefing({cl}){
           <button onClick={()=>setAddingField(true)} style={{background:C.a+"14",color:C.a,border:"1px dashed "+C.a+"66",borderRadius:10,padding:"9px 16px",fontSize:12,fontWeight:700,cursor:"pointer",flex:1}}>
             + Adicionar campo
           </button>
-          <button onClick={()=>{if(window.confirm("Restaurar campos padrão?"))saveFields(DEFAULT_FIELDS);}} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 12px",fontSize:11,color:C.ts,cursor:"pointer"}}>↺</button>
+          <button onClick={async()=>{if(await pixelsConfirm("Restaurar campos padrão?",{okText:"Restaurar"}))saveFields(DEFAULT_FIELDS);}} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 12px",fontSize:11,color:C.ts,cursor:"pointer"}}>↺</button>
         </div>
       )}
     </div>)}
@@ -5983,24 +6179,24 @@ function CBriefing({cl}){
 
 /* ── CONTATOS (Info) ──────────────────────── */
 function CContatos({cl}){
-  var [contacts,setContacts]=useState(function(){
-    try{var s=localStorage.getItem("pixels-contacts-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
+  let[contacts,setContacts]=useState(function(){
+    try{let s=localStorage.getItem("pixels-contacts-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
     return cl.contacts||[];
   });
-  var [adding,setAdding]=useState(false);
-  var [form,setForm]=useState({name:"",role:"",phone:"",email:"",birthday:"",photo:"",notes:""});
-  var [editing,setEditing]=useState(null);
+  let[adding,setAdding]=useState(false);
+  let[form,setForm]=useState({name:"",role:"",phone:"",email:"",birthday:"",photo:"",notes:""});
+  let[editing,setEditing]=useState(null);
 
-  var save=function(list){
+  let save=function(list){
     setContacts(list);
     try{localStorage.setItem("pixels-contacts-"+cl.id,JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({contatos:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({contatos:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(e=>console.warn("[cliente_ferramentas] db update falhou:",e?.message||e));
   };
 
-  var addOrUpdate=function(){
+  let addOrUpdate=function(){
     if(!form.name.trim())return;
     if(editing!==null){
-      var updated=contacts.map(function(c,i){return i===editing?{...c,...form}:c;});
+      let updated=contacts.map(function(c,i){return i===editing?{...c,...form}:c;});
       save(updated);setEditing(null);
     } else {
       save([...contacts,{...form,id:Date.now()}]);
@@ -6009,11 +6205,11 @@ function CContatos({cl}){
     setAdding(false);
   };
 
-  var startEdit=function(i){
+  let startEdit=function(i){
     setForm({...contacts[i]});setEditing(i);setAdding(true);
   };
 
-  var inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  let inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
 
   return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -6030,7 +6226,7 @@ function CContatos({cl}){
         {[{k:"name",p:"Nome *"},{k:"role",p:"Cargo"},{k:"phone",p:"WhatsApp"},{k:"email",p:"E-mail"},{k:"birthday",p:"Aniversário (DD/MM)"},{k:"photo",p:"URL da foto (opcional)"}].map(function(f){
           return(<div key={f.k}>
             <div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div>
-            <input value={form[f.k]||""} onChange={e=>{var n={...form};n[f.k]=e.target.value;setForm(n);}} style={inp}/>
+            <input value={form[f.k]||""} onChange={e=>{let n={...form};n[f.k]=e.target.value;setForm(n);}} style={inp}/>
           </div>);
         })}
         <div style={{gridColumn:"1/-1"}}>
@@ -6052,8 +6248,8 @@ function CContatos({cl}){
 
     <div style={{display:"flex",flexDirection:"column",gap:8}}>
       {contacts.map(function(c,i){
-        var today=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
-        var isbirthday=c.birthday&&c.birthday.startsWith(today.slice(0,5));
+        let today=new Date().toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+        let isbirthday=c.birthday&&c.birthday.startsWith(today.slice(0,5));
         return(<div key={c.id||i} style={{background:C.card,borderRadius:14,padding:"14px 18px",border:"1px solid "+(isbirthday?C.yw:C.b1),display:"flex",alignItems:"center",gap:14}}>
           <div style={{width:48,height:48,borderRadius:"50%",overflow:"hidden",flexShrink:0,border:"2px solid "+cl.color+"44",background:cl.color+"18",display:"flex",alignItems:"center",justifyContent:"center"}}>
             {c.photo?<img src={c.photo} alt={c.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
@@ -6088,37 +6284,37 @@ function CContatos({cl}){
 /* ── TIMELINE (Info) ─────────────────────── */
 /* ── TIMELINE (Info) — com contatos e tarefas internas ─ */
 function CTimeline({cl}){
-  var [notes,setNotes]=useState(function(){
-    try{var s=localStorage.getItem("pixels-notes-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
+  let[notes,setNotes]=useState(function(){
+    try{let s=localStorage.getItem("pixels-notes-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
     return [];
   });
 
   // All contacts: team + client contacts from localStorage
-  var clientContacts=useState(function(){
-    try{var s=localStorage.getItem("pixels-contacts-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
+  let clientContacts=useState(function(){
+    try{let s=localStorage.getItem("pixels-contacts-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
     return cl.contacts||[];
   })[0];
 
-  var allContacts=[
+  let allContacts=[
     ...TEAM.map(function(u){return{id:"team_"+u.id,name:u.name,role:u.role,photo:"",color:u.color,av:u.av,source:"equipe"};}),
     ...clientContacts.map(function(c){return{id:c.id||("client_"+c.name),name:c.name,role:c.role||"Cliente",photo:c.photo||"",color:cl.color,av:(c.name||"?")[0],source:"cliente"};})
   ];
 
-  var [form,setForm]=useState({
+  let[form,setForm]=useState({
     date:new Date().toLocaleDateString("pt-BR"),
     type:"reuniao",
     contactIds:[],
     text:"",
     tasks:[],
   });
-  var [newTask,setNewTask]=useState({title:"",deadline:"",priority:"media"});
-  var [showForm,setShowForm]=useState(false);
-  var [expandedNote,setExpandedNote]=useState(null);
-  var [filterType,setFilterType]=useState("todos");
-  var [filterContact,setFilterContact]=useState("");
-  var [search,setSearch]=useState("");
+  let[newTask,setNewTask]=useState({title:"",deadline:"",priority:"media"});
+  let[showForm,setShowForm]=useState(false);
+  let[expandedNote,setExpandedNote]=useState(null);
+  let[filterType,setFilterType]=useState("todos");
+  let[filterContact,setFilterContact]=useState("");
+  let[search,setSearch]=useState("");
 
-  var typeConfig={
+  let typeConfig={
     reuniao:   {label:"Reunião",        color:"#3b82f6", icon:"📅"},
     contato:   {label:"Contato",        color:"#22c55e", icon:"💬"},
     feedback:  {label:"Feedback",       color:"#eab308", icon:"⭐"},
@@ -6128,27 +6324,27 @@ function CTimeline({cl}){
     nota:      {label:"Nota",           color:"#64748b", icon:"📝"},
   };
 
-  var addTask=function(){
+  let addTask=function(){
     if(!newTask.title.trim())return;
     setForm(function(p){return{...p,tasks:[...p.tasks,{id:Date.now(),...newTask,done:false}]};});
     setNewTask({title:"",deadline:"",priority:"media"});
   };
 
-  var removeFormTask=function(id){
+  let removeFormTask=function(id){
     setForm(function(p){return{...p,tasks:p.tasks.filter(function(t){return t.id!==id;})};});
   };
 
-  var toggleContact=function(id){
+  let toggleContact=function(id){
     setForm(function(p){
-      var has=p.contactIds.includes(id);
+      let has=p.contactIds.includes(id);
       return{...p,contactIds:has?p.contactIds.filter(function(x){return x!==id;}):[...p.contactIds,id]};
     });
   };
 
-  var saveNote=function(){
+  let saveNote=function(){
     if(!form.text.trim()&&form.tasks.length===0)return;
-    var selectedContacts=allContacts.filter(function(c){return form.contactIds.includes(c.id);});
-    var entry={
+    let selectedContacts=allContacts.filter(function(c){return form.contactIds.includes(c.id);});
+    let entry={
       id:Date.now(),
       date:form.date,
       type:form.type,
@@ -6157,10 +6353,10 @@ function CTimeline({cl}){
       text:form.text.trim(),
       tasks:form.tasks,
     };
-    var list=[entry,...notes];
+    let list=[entry,...notes];
     setNotes(list);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({notas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({notas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(e=>console.warn("[cliente_ferramentas] db update falhou:",e?.message||e));
     setForm({date:new Date().toLocaleDateString("pt-BR"),type:"reuniao",contactIds:[],text:"",tasks:[]});
     setNewTask({title:"",deadline:"",priority:"media"});
     setShowForm(false);
@@ -6169,63 +6365,63 @@ function CTimeline({cl}){
     try{window.dispatchEvent(new CustomEvent("pixels-notes-updated"));}catch(e){}
   };
 
-  var toggleTask=function(noteId,taskId){
-    var updated=notes.map(function(note){
+  let toggleTask=function(noteId,taskId){
+    let updated=notes.map(function(note){
       if(note.id!==noteId)return note;
       return{...note,tasks:(note.tasks||[]).map(function(t){return t.id===taskId?{...t,done:!t.done}:t;})};
     });
     setNotes(updated);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(updated));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(e=>console.warn("[cliente_ferramentas] db update falhou:",e?.message||e));
     try{window.dispatchEvent(new CustomEvent("pixels-notes-updated"));}catch(e){}
   };
 
-  var deleteNote=function(noteId){
-    var updated=notes.filter(function(n){return n.id!==noteId;});
+  let deleteNote=function(noteId){
+    let updated=notes.filter(function(n){return n.id!==noteId;});
     setNotes(updated);
     try{localStorage.setItem("pixels-notes-"+cl.id,JSON.stringify(updated));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({notas:updated,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(e=>console.warn("[cliente_ferramentas] db update falhou:",e?.message||e));
   };
 
   // Filters
-  var filtered=notes.filter(function(note){
+  let filtered=notes.filter(function(note){
     if(filterType!=="todos"&&note.type!==filterType)return false;
     if(filterContact&&!(note.contactIds||[]).includes(filterContact)&&!(note.contacts||[]).find(function(c){return c.id===filterContact;}))return false;
     if(search&&!note.text.toLowerCase().includes(search.toLowerCase())&&!(note.tasks||[]).some(function(t){return t.title.toLowerCase().includes(search.toLowerCase());}))return false;
     return true;
   });
 
-  var totalPending=notes.reduce(function(sum,n){return sum+(n.tasks||[]).filter(function(t){return !t.done;}).length;},0);
+  let totalPending=notes.reduce(function(sum,n){return sum+(n.tasks||[]).filter(function(t){return !t.done;}).length;},0);
 
-  var inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
-  var prioColors={alta:C.rd,media:C.yw,baixa:C.gr};
+  let inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  let prioColors={alta:C.rd,media:C.yw,baixa:C.gr};
 
   // Parse date string dd/mm/yyyy or yyyy-mm-dd
-  var parseDate=function(ds){
+  let parseDate=function(ds){
     if(!ds)return null;
     if(ds.includes("-"))return new Date(ds);
-    var p=ds.split("/");
+    let p=ds.split("/");
     if(p.length===3)return new Date(p[2]+"-"+p[1]+"-"+p[0]);
     return null;
   };
 
-  var daysLeft=function(ds){
-    var d=parseDate(ds);
+  let daysLeft=function(ds){
+    let d=parseDate(ds);
     if(!d)return null;
     return Math.ceil((d-new Date())/(1000*60*60*24));
   };
 
   // Format date for input[type=date] <-> display
-  var toInputDate=function(ds){
+  let toInputDate=function(ds){
     if(!ds)return "";
     if(ds.includes("-"))return ds;
-    var p=ds.split("/");
+    let p=ds.split("/");
     return p.length===3?p[2]+"-"+p[1]+"-"+p[0]:"";
   };
 
-  var fromInputDate=function(val){
+  let fromInputDate=function(val){
     if(!val)return "";
-    var p=val.split("-");
+    let p=val.split("-");
     return p.length===3?p[2]+"/"+p[1]+"/"+p[0]:val;
   };
 
@@ -6252,7 +6448,7 @@ function CTimeline({cl}){
       <div style={{display:"flex",gap:3,background:C.s1,borderRadius:10,padding:3,flexWrap:"wrap"}}>
         <button onClick={()=>setFilterType("todos")} style={{background:filterType==="todos"?C.a:"transparent",border:"none",borderRadius:7,padding:"5px 10px",color:filterType==="todos"?"#fff":C.ts,fontSize:11,cursor:"pointer",fontWeight:filterType==="todos"?700:400}}>Todos</button>
         {Object.entries(typeConfig).map(function(entry){
-          var k=entry[0],v=entry[1];
+          let k=entry[0],v=entry[1];
           return(<button key={k} onClick={()=>setFilterType(k)}
             style={{background:filterType===k?v.color:"transparent",border:"none",borderRadius:7,padding:"5px 10px",color:filterType===k?"#fff":C.ts,fontSize:11,cursor:"pointer",fontWeight:filterType===k?700:400,whiteSpace:"nowrap"}}>
             {v.icon} {v.label}
@@ -6310,7 +6506,7 @@ function CTimeline({cl}){
             {/* Equipe */}
             <div style={{width:"100%",color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",marginBottom:2}}>Equipe Pixels</div>
             {TEAM.map(function(u){
-              var sel=form.contactIds.includes("team_"+u.id);
+              let sel=form.contactIds.includes("team_"+u.id);
               return(<button key={u.id} onClick={()=>toggleContact("team_"+u.id)}
                 style={{display:"flex",alignItems:"center",gap:6,background:sel?u.color+"22":"transparent",border:"1px solid "+(sel?u.color:C.b1),borderRadius:99,padding:"4px 10px",cursor:"pointer",transition:"all .12s"}}>
                 <div style={{width:16,height:16,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:8,flexShrink:0}}>{u.av}</div>
@@ -6321,8 +6517,8 @@ function CTimeline({cl}){
             {clientContacts.length>0&&(<>
               <div style={{width:"100%",color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase",marginTop:4,marginBottom:2}}>Contatos do Cliente</div>
               {clientContacts.map(function(c){
-                var cid=c.id||("client_"+c.name);
-                var sel=form.contactIds.includes(cid);
+                let cid=c.id||("client_"+c.name);
+                let sel=form.contactIds.includes(cid);
                 return(<button key={cid} onClick={()=>toggleContact(cid)}
                   style={{display:"flex",alignItems:"center",gap:6,background:sel?cl.color+"22":"transparent",border:"1px solid "+(sel?cl.color:C.b1),borderRadius:99,padding:"4px 10px",cursor:"pointer",transition:"all .12s"}}>
                   <div style={{width:16,height:16,borderRadius:"50%",overflow:"hidden",flexShrink:0,background:cl.color+"22",border:"1px solid "+cl.color+"44",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -6355,7 +6551,7 @@ function CTimeline({cl}){
           <div style={{color:C.tx,fontWeight:700,fontSize:12,marginBottom:10}}>🎯 Tarefas / Demandas internas geradas nessa interação</div>
           {form.tasks.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:10}}>
             {form.tasks.map(function(t){
-              var dl=daysLeft(t.deadline);
+              let dl=daysLeft(t.deadline);
               return(<div key={t.id} style={{display:"flex",alignItems:"center",gap:8,background:C.card,borderRadius:8,padding:"7px 10px"}}>
                 <div style={{width:6,height:6,borderRadius:"50%",background:prioColors[t.priority]||C.a,flexShrink:0}}/>
                 <span style={{flex:1,color:C.tx,fontSize:11}}>{t.title}</span>
@@ -6406,10 +6602,10 @@ function CTimeline({cl}){
     <div style={{position:"relative",paddingLeft:36}}>
       <div style={{position:"absolute",left:15,top:0,bottom:0,width:2,background:C.b1,borderRadius:99}}/>
       {filtered.map(function(note,i){
-        var cfg=typeConfig[note.type]||typeConfig.nota;
-        var pendingTasks=(note.tasks||[]).filter(function(t){return !t.done;}).length;
-        var expanded=expandedNote===note.id;
-        var noteContacts=note.contacts||[];
+        let cfg=typeConfig[note.type]||typeConfig.nota;
+        let pendingTasks=(note.tasks||[]).filter(function(t){return !t.done;}).length;
+        let expanded=expandedNote===note.id;
+        let noteContacts=note.contacts||[];
 
         return(<div key={note.id} style={{position:"relative",marginBottom:14}}>
           {/* Timeline dot */}
@@ -6454,7 +6650,7 @@ function CTimeline({cl}){
 
               <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
                 <span style={{color:C.td,fontSize:10,whiteSpace:"nowrap"}}>{note.date}</span>
-                <button onClick={function(e){e.stopPropagation();if(window.confirm("Excluir este registro?"))deleteNote(note.id);}}
+                <button onClick={async function(e){e.stopPropagation();if(await pixelsConfirm("Excluir este registro?",{okText:"Excluir",danger:true}))deleteNote(note.id);}}
                   style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:12,padding:"2px 4px",lineHeight:1}}
                   onMouseEnter={e=>e.currentTarget.style.color=C.rd}
                   onMouseLeave={e=>e.currentTarget.style.color=C.td}>🗑</button>
@@ -6467,9 +6663,9 @@ function CTimeline({cl}){
               <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",marginBottom:8}}>Tarefas / Demandas internas</div>
               <div style={{display:"flex",flexDirection:"column",gap:5}}>
                 {(note.tasks||[]).map(function(t){
-                  var dl=daysLeft(t.deadline);
-                  var late=dl!==null&&dl<0;
-                  var urgent=dl!==null&&dl<=2&&dl>=0;
+                  let dl=daysLeft(t.deadline);
+                  let late=dl!==null&&dl<0;
+                  let urgent=dl!==null&&dl<=2&&dl>=0;
                   return(<button key={t.id} onClick={()=>toggleTask(note.id,t.id)}
                     style={{display:"flex",alignItems:"center",gap:8,background:t.done?C.gr+"08":late?C.rd+"08":C.s1,border:"1px solid "+(t.done?C.gr+"44":late?C.rd+"44":C.b1),borderRadius:9,padding:"8px 12px",cursor:"pointer",textAlign:"left",transition:"all .12s"}}>
                     <div style={{width:16,height:16,borderRadius:4,border:"2px solid "+(t.done?C.gr:prioColors[t.priority]||C.a),background:t.done?C.gr:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -6490,30 +6686,30 @@ function CTimeline({cl}){
 }
 
 function CMetas({cl}){
-  var [goals,setGoals]=useState(function(){
-    try{var s=localStorage.getItem("pixels-goals-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
+  let[goals,setGoals]=useState(function(){
+    try{let s=localStorage.getItem("pixels-goals-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
     return cl.goals||[];
   });
-  var [adding,setAdding]=useState(false);
-  var [form,setForm]=useState({title:"",target:"",current:"",unit:""});
+  let[adding,setAdding]=useState(false);
+  let[form,setForm]=useState({title:"",target:"",current:"",unit:""});
 
-  var save=function(list){
+  let save=function(list){
     setGoals(list);
     try{localStorage.setItem("pixels-goals-"+cl.id,JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({metas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(()=>{});
+    if(window._sb)window._sb.from("clients").update({metas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(e=>console.warn("[cliente_ferramentas] db update falhou:",e?.message||e));
   };
 
-  var add=function(){
+  let add=function(){
     if(!form.title.trim())return;
     save([...goals,{...form,id:Date.now(),target:parseFloat(form.target)||0,current:parseFloat(form.current)||0}]);
     setForm({title:"",target:"",current:"",unit:""});setAdding(false);
   };
 
-  var update=function(id,field,val){
+  let update=function(id,field,val){
     save(goals.map(function(g){return g.id===id?{...g,[field]:parseFloat(val)||0}:g;}));
   };
 
-  var inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  let inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
 
   return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -6532,7 +6728,7 @@ function CMetas({cl}){
       {[{k:"target",p:"Meta (target)"},{k:"current",p:"Valor atual"},{k:"unit",p:"Unidade (leads, x, %)"}].map(function(f){
         return(<div key={f.k}>
           <div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div>
-          <input value={form[f.k]} onChange={e=>{var n={...form};n[f.k]=e.target.value;setForm(n);}} style={inp}/>
+          <input value={form[f.k]} onChange={e=>{let n={...form};n[f.k]=e.target.value;setForm(n);}} style={inp}/>
         </div>);
       })}
       <div style={{gridColumn:"1/-1",display:"flex",gap:8,justifyContent:"flex-end"}}>
@@ -6547,8 +6743,8 @@ function CMetas({cl}){
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
       {goals.map(function(g,i){
-        var pct=g.target>0?Math.min(100,Math.round((g.current/g.target)*100)):0;
-        var col=pct>=100?C.gr:pct>=70?C.yw:pct>=40?C.or:C.rd;
+        let pct=g.target>0?Math.min(100,Math.round((g.current/g.target)*100)):0;
+        let col=pct>=100?C.gr:pct>=70?C.yw:pct>=40?C.or:C.rd;
         return(<div key={g.id||i} style={{background:C.card,borderRadius:14,padding:"16px",border:"1px solid "+C.b1,position:"relative"}}>
           <button onClick={()=>save(goals.filter(function(_,j){return j!==i;}))}
             style={{position:"absolute",top:10,right:10,background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13}}>×</button>
@@ -6573,19 +6769,19 @@ function CMetas({cl}){
 
 /* ── DRIVE (Info) ────────────────────────── */
 function CDrive({cl}){
-  var [driveUrl,setDriveUrl]=useState(function(){
-    try{var s=localStorage.getItem("pixels-drive-"+cl.id);if(s)return s;}catch(e){}
+  let[driveUrl,setDriveUrl]=useState(function(){
+    try{let s=localStorage.getItem("pixels-drive-"+cl.id);if(s)return s;}catch(e){}
     return cl.driveUrl||"";
   });
-  var [editing,setEditing]=useState(!driveUrl);
-  var [saved,setSaved]=useState(false);
+  let[editing,setEditing]=useState(!driveUrl);
+  let[saved,setSaved]=useState(false);
 
-  var save=function(){
+  let save=function(){
     cl.driveUrl=driveUrl.trim();
     try{localStorage.setItem("pixels-drive-"+cl.id,driveUrl.trim());setSaved(true);setTimeout(()=>setSaved(false),2000);setEditing(false);}catch(e){}
   };
 
-  var inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 12px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  let inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 12px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
 
   return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
@@ -6827,8 +7023,8 @@ function NovoClienteModal({onClose,onSave}){
 
 // ── Score calculator ───────────────────────────
 function calcScore(cl, tasks){
-  var live=getLiveClient(cl.id)||cl;
-  var score = 0;
+  let live=getLiveClient(cl.id)||cl;
+  let score = 0;
   // Saude (0-30)
   score += Math.round((live.health / 100) * 30);
   // Pagamento (0-25)
@@ -6838,8 +7034,8 @@ function calcScore(cl, tasks){
     else score += 0;
   }
   // Demandas no prazo (0-25)
-  var clTasks=(tasks||[]).filter(function(t){return t.client===cl.id&&!t.deletedAt;});
-  var late=clTasks.filter(function(t){
+  let clTasks=(tasks||[]).filter(function(t){return t.client===cl.id&&!t.deletedAt;});
+  let late=clTasks.filter(function(t){
     if(!t.deadline)return false;
     return Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24))<0&&t.status!=="aprovado";
   });
@@ -6852,12 +7048,12 @@ function calcScore(cl, tasks){
 // ── Sparkline component ─────────────────────────
 function Sparkline({data, color, width, height}){
   if(!data||data.length<2) return null;
-  var w=width||60, h=height||22;
-  var min=Math.min.apply(null,data), max=Math.max.apply(null,data);
-  var range=max-min||1;
-  var pts=data.map(function(v,i){
-    var x=(i/(data.length-1))*w;
-    var y=h-((v-min)/range)*(h-4)-2;
+  let w=width||60, h=height||22;
+  let min=Math.min.apply(null,data), max=Math.max.apply(null,data);
+  let range=max-min||1;
+  let pts=data.map(function(v,i){
+    let x=(i/(data.length-1))*w;
+    let y=h-((v-min)/range)*(h-4)-2;
     return x+","+y;
   }).join(" ");
   return(<svg width={w} height={h} style={{overflow:"visible"}}>
@@ -6867,7 +7063,7 @@ function Sparkline({data, color, width, height}){
 }
 
 function PageClientes({isMob, tasks}){
-  var TASKS = tasks || (typeof [] !== "undefined" ? [] : []);
+  let TASKS = tasks || (typeof [] !== "undefined" ? [] : []);
   const [activeClient,setActiveClient]=useState(null);
   const [activeSection,setActiveSection]=useState("dashboard");
   const [dashTab,setDashTab]=useState("meta");
@@ -6905,10 +7101,10 @@ function PageClientes({isMob, tasks}){
       onBack={()=>{setActiveClient(null);setActiveSection("dashboard");}}/>;
 
   // Filter
-  var filtered=allClients.filter(function(cl){
-    var matchSearch=search===""||cl.name.toLowerCase().includes(search.toLowerCase())||cl.sector.toLowerCase().includes(search.toLowerCase());
-    var live=getLiveClient(cl.id)||cl;
-    var matchStatus=filterStatus==="todos"||
+  let filtered=allClients.filter(function(cl){
+    let matchSearch=search===""||cl.name.toLowerCase().includes(search.toLowerCase())||cl.sector.toLowerCase().includes(search.toLowerCase());
+    let live=getLiveClient(cl.id)||cl;
+    let matchStatus=filterStatus==="todos"||
       (filterStatus==="ativo"&&cl.status==="ativo")||
       (filterStatus==="atencao"&&(cl.status==="atencao"||cl.status==="alerta"||live.health<60))||
       (filterStatus==="pagamento"&&cl.payment&&cl.payment.status==="atrasado");
@@ -6918,7 +7114,7 @@ function PageClientes({isMob, tasks}){
   // Sort
   if(sortCol){
     filtered=[...filtered].sort(function(a,b){
-      var va,vb;
+      let va,vb;
       if(sortCol==="score"){va=calcScore(a,TASKS);vb=calcScore(b,TASKS);}
       else if(sortCol==="saude"){va=getLiveClient(a.id).health||a.health;vb=getLiveClient(b.id).health||b.health;}
       else if(sortCol==="mrr"){va=getLiveClient(a.id).contract||a.contract;vb=getLiveClient(b.id).contract||b.contract;}
@@ -6930,13 +7126,13 @@ function PageClientes({isMob, tasks}){
 
   // CSV export
   const exportCSV=()=>{
-    var rows=[["Cliente","Setor","Saúde","Score","MRR","Pagamento","Última Reunião","Próxima Reunião"]];
+    let rows=[["Cliente","Setor","Saúde","Score","MRR","Pagamento","Última Reunião","Próxima Reunião"]];
     filtered.forEach(function(cl){
-      var lv=getLiveClient(cl.id)||cl;
+      let lv=getLiveClient(cl.id)||cl;
       rows.push([cl.name,cl.sector,lv.health,calcScore(cl,TASKS),lv.contract,cl.payment&&cl.payment.status||"—",cl.lastMeeting||"—",cl.nextMeeting||"—"]);
     });
-    var csv=rows.map(function(r){return r.join(",");}).join("\n");
-    var a=document.createElement("a");
+    let csv=rows.map(function(r){return r.join(",");}).join("\n");
+    let a=document.createElement("a");
     a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
     a.download="clientes_pixels.csv";a.click();
   };
@@ -7032,32 +7228,32 @@ function PageClientes({isMob, tasks}){
       {/* Rows */}
       {filtered.map(function(cl,idx){
         cl=getLiveClient(cl.id)||cl;
-        var isLast=idx===filtered.length-1;
-        var score=calcScore(cl,TASKS);
-        var scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
-        var healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
-        var clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
-        var activeTasks=clTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="pausado";});
-        var lateTasks=clTasks.filter(function(t){
+        let isLast=idx===filtered.length-1;
+        let score=calcScore(cl,TASKS);
+        let scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
+        let healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
+        let clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
+        let activeTasks=clTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="pausado";});
+        let lateTasks=clTasks.filter(function(t){
           if(!t.deadline)return false;
           return Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24))<0&&t.status!=="aprovado";
         });
-        var pendingApproval=clTasks.filter(function(t){return t.status==="demanda"||t.status==="avaliacao";});
-        var pay=cl.payment||{status:"—",date:""};
-        var payColor=pay.status==="pago"?C.gr:pay.status==="atrasado"?C.rd:pay.status==="pendente"?C.yw:C.td;
-        var payLabel=pay.status==="pago"?"Pago":pay.status==="atrasado"?"Atrasado":pay.status==="pendente"?"Pendente":pay.status==="interno"?"Interno":"—";
-        var nextDays=(function(){
+        let pendingApproval=clTasks.filter(function(t){return t.status==="demanda"||t.status==="avaliacao";});
+        let pay=cl.payment||{status:"—",date:""};
+        let payColor=pay.status==="pago"?C.gr:pay.status==="atrasado"?C.rd:pay.status==="pendente"?C.yw:C.td;
+        let payLabel=pay.status==="pago"?"Pago":pay.status==="atrasado"?"Atrasado":pay.status==="pendente"?"Pendente":pay.status==="interno"?"Interno":"—";
+        let nextDays=(function(){
           if(!cl.nextMeeting)return null;
-          var parts=cl.nextMeeting.split("/");
+          let parts=cl.nextMeeting.split("/");
           return Math.ceil((new Date(parts[2]+"-"+parts[1]+"-"+parts[0])-new Date())/(1000*60*60*24));
         })();
-        var nextColor=nextDays===null?C.td:nextDays<0?C.rd:nextDays<=3?C.yw:C.gr;
-        var nextLabel=nextDays===null?"—":nextDays<0?Math.abs(nextDays)+"d atras":nextDays===0?"Hoje":nextDays===1?"Amanha":nextDays+"d";
-        var mgr=TEAM.find(function(u){return u.id===cl.manager;});
+        let nextColor=nextDays===null?C.td:nextDays<0?C.rd:nextDays<=3?C.yw:C.gr;
+        let nextLabel=nextDays===null?"—":nextDays<0?Math.abs(nextDays)+"d atras":nextDays===0?"Hoje":nextDays===1?"Amanha":nextDays+"d";
+        let mgr=TEAM.find(function(u){return u.id===cl.manager;});
         // sparkline from history
-        var sparkData=(cl.history||[]).map(function(h){return h.mr||0;});
-        var ctLabel=cl.contractType==="mensal"?"Mensal":cl.contractType==="trimestral"?"Trim.":cl.contractType==="anual"?"Anual":cl.contractType==="interno"?"Interno":"—";
-        var ctColor=cl.contractType==="anual"?C.gr:cl.contractType==="trimestral"?C.bl:cl.contractType==="mensal"?C.a:C.td;
+        let sparkData=(cl.history||[]).map(function(h){return h.mr||0;});
+        let ctLabel=cl.contractType==="mensal"?"Mensal":cl.contractType==="trimestral"?"Trim.":cl.contractType==="anual"?"Anual":cl.contractType==="interno"?"Interno":"—";
+        let ctColor=cl.contractType==="anual"?C.gr:cl.contractType==="trimestral"?C.bl:cl.contractType==="mensal"?C.a:C.td;
 
         return(<div key={cl.id}
           onClick={()=>{setActiveClient(cl);setActiveSection("dashboard");setDashTab("meta");}}
@@ -7150,18 +7346,18 @@ function PageClientes({isMob, tasks}){
     {viewMode==="card"&&(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
       {filtered.map(function(cl){
         cl=getLiveClient(cl.id)||cl;
-        var score=calcScore(cl,TASKS);
-        var scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
-        var healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
-        var pay=cl.payment||{status:"—"};
-        var payColor=pay.status==="pago"?C.gr:pay.status==="atrasado"?C.rd:pay.status==="pendente"?C.yw:C.td;
-        var clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
-        var activeTasks=clTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="pausado";});
-        var lateTasks=clTasks.filter(function(t){
+        let score=calcScore(cl,TASKS);
+        let scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
+        let healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
+        let pay=cl.payment||{status:"—"};
+        let payColor=pay.status==="pago"?C.gr:pay.status==="atrasado"?C.rd:pay.status==="pendente"?C.yw:C.td;
+        let clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
+        let activeTasks=clTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="pausado";});
+        let lateTasks=clTasks.filter(function(t){
           if(!t.deadline)return false;
           return Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24))<0&&t.status!=="aprovado";
         });
-        var mgr=TEAM.find(function(u){return u.id===cl.manager;});
+        let mgr=TEAM.find(function(u){return u.id===cl.manager;});
         return(<div key={cl.id} onClick={()=>{setActiveClient(cl);setActiveSection("dashboard");setDashTab("meta");}}
           style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden",cursor:"pointer",transition:"all .12s"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor=cl.color+"66";e.currentTarget.style.transform="translateY(-2px)";}}
@@ -7243,17 +7439,17 @@ function PageClientes({isMob, tasks}){
    cards principais em cima (leads + CPL) usando dados do Supabase cache.
    Assim o cliente enxerga TUDO que a Reportei mostra, sempre atualizado. */
 function CAnalises({cl,isMob}){
-  var sb=window._sb;
-  var [rows,setRows]=useState(null);
-  var [loading,setLoading]=useState(true);
-  var [bioterUnit,setBioterUnit]=useState("chapeco");
-  var [iframeLoaded,setIframeLoaded]=useState(false);
-  var [iframeFailed,setIframeFailed]=useState(false);
+  let sb=window._sb;
+  let [rows,setRows]=useState(null);
+  let [loading,setLoading]=useState(true);
+  let [bioterUnit,setBioterUnit]=useState("chapeco");
+  let [iframeLoaded,setIframeLoaded]=useState(false);
+  let [iframeFailed,setIframeFailed]=useState(false);
 
-  var isBioter=cl.id==="bioter";
-  var cacheIds=isBioter?["bioter_chapeco","bioter_toledo","bioter_castro"]:[cl.id];
+  let isBioter=cl.id==="bioter";
+  let cacheIds=isBioter?["bioter_chapeco","bioter_toledo","bioter_castro"]:[cl.id];
 
-  var REPORTEI_URLS={
+  let REPORTEI_URLS={
     bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",
     bioter_toledo:"https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",
     bioter_castro:"https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",
@@ -7270,7 +7466,7 @@ function CAnalises({cl,isMob}){
     setIframeFailed(false);
     sb.from("reportei_cache").select("client_id,data,updated_at").in("client_id",cacheIds)
       .then(function(r){
-        var map={};
+        let map={};
         if(r.data)r.data.forEach(function(row){map[row.client_id]=row;});
         setRows(map);
         setLoading(false);
@@ -7283,16 +7479,16 @@ function CAnalises({cl,isMob}){
     setIframeFailed(false);
   },[bioterUnit]);
 
-  var activeId=isBioter?"bioter_"+bioterUnit:cl.id;
-  var row=rows&&rows[activeId];
-  var reporteiUrl=REPORTEI_URLS[activeId];
+  let activeId=isBioter?"bioter_"+bioterUnit:cl.id;
+  let row=rows&&rows[activeId];
+  let reporteiUrl=REPORTEI_URLS[activeId];
 
-  var updatedAt=row&&row.updated_at?
+  let updatedAt=row&&row.updated_at?
     new Date(row.updated_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):null;
-  var period=row&&row.data&&row.data.period;
+  let period=row&&row.data&&row.data.period;
 
   // Altura do iframe: mais alto no desktop
-  var iframeHeight=isMob?900:1400;
+  let iframeHeight=isMob?900:1400;
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
 
@@ -7385,31 +7581,31 @@ function CAnalises({cl,isMob}){
 }
 
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
-  var TASKS=tasks||[];
+  let TASKS=tasks||[];
   cl=getLiveClient(cl.id)||cl;
-  var [tab,setTab]=useState("analises");
-  var [concorrenciaTab,setConcorrenciaTab]=useState("social_insta");
-  var isSocio=CURRENT_USER.level===1;
-  var myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
-  var canSeeConcorrencia=isSocio||(myPerms.verConcorrencia&&myPerms["verCliente_"+cl.id+"_concorrencia"]!==false);
+  let [tab,setTab]=useState("analises");
+  let [concorrenciaTab,setConcorrenciaTab]=useState("social_insta");
+  let isSocio=CURRENT_USER.level===1;
+  let myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
+  let canSeeConcorrencia=isSocio||(myPerms.verConcorrencia&&myPerms["verCliente_"+cl.id+"_concorrencia"]!==false);
 
-  var score=calcScore(cl,TASKS);
-  var scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
-  var healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
-  var clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
-  var lateTasks=clTasks.filter(function(t){
+  let score=calcScore(cl,TASKS);
+  let scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
+  let healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
+  let clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
+  let lateTasks=clTasks.filter(function(t){
     if(!t.deadline)return false;
     return Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24))<0&&t.status!=="aprovado";
   });
-  var pendingCopy=clTasks.filter(function(t){return t.status==="demanda"&&!t.ajustar;});
-  var pendingPub=clTasks.filter(function(t){return t.status==="avaliacao";});
-  var lastMeetDays=(function(){
+  let pendingCopy=clTasks.filter(function(t){return t.status==="demanda"&&!t.ajustar;});
+  let pendingPub=clTasks.filter(function(t){return t.status==="avaliacao";});
+  let lastMeetDays=(function(){
     if(!cl.lastMeeting)return null;
-    var p=cl.lastMeeting.split("/");
+    let p=cl.lastMeeting.split("/");
     return Math.floor((new Date()-new Date(p[2]+"-"+p[1]+"-"+p[0]))/(1000*60*60*24));
   })();
 
-  var TABS=[
+  let TABS=[
     {id:"analises",    label:"📊 Análises"},
     {id:"ferramentas", label:"Ferramentas"},
     {id:"info",        label:"Informações"},
@@ -8437,7 +8633,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   // Persiste colunas sempre que mudam
   useEffect(()=>{
     try{localStorage.setItem("pixels-cols-v1",JSON.stringify(cols));}catch(e){}
-    if(window._sb)window._sb.from("columns_config").upsert({user_id:CURRENT_USER.id,colunas:cols},{onConflict:"user_id"}).then(()=>{}).catch(()=>{});
+    if(window._sb)window._sb.from("columns_config").upsert({user_id:CURRENT_USER.id,colunas:cols},{onConflict:"user_id"}).then(()=>{}).catch(e=>console.warn("[demandas] db update falhou:",e?.message||e));
   },[cols]);
   const [showNewCol,setShowNewCol]=useState(false);
   const [deleteColConfirm,setDeleteColConfirm]=useState(null); // {colId, step:"senha"|"pin", senha:"", pin:""}
@@ -8514,10 +8710,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const removeCol=(colId)=>{
     // Só colunas custom podem ser removidas — colunas padrão são protegidas
     const col=cols.find(c=>c.id===colId);
-    if(!col?.custom){alert("Colunas padrão não podem ser excluídas.");return;}
-    if(!canNewCol){alert("Você não tem permissão para excluir colunas.");return;}
+    if(!col?.custom){pixelsToast.warning("Colunas padrão não podem ser excluídas.");return;}
+    if(!canNewCol){pixelsToast.warning("Você não tem permissão para excluir colunas.");return;}
     const colTasks=tasks.filter(t=>!t.deletedAt&&t.status===colId);
-    if(colTasks.length>0){alert("Mova ou conclua todas as demandas desta coluna antes de removê-la.");return;}
+    if(colTasks.length>0){pixelsToast.warning("Mova ou conclua todas as demandas desta coluna antes de removê-la.",5000);return;}
     // Abrir modal de confirmação senha + PIN
     setDeleteColConfirm({colId,step:"senha",senha:"",pin:""});
   };
@@ -8527,8 +8723,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const {colId,senha,pin}=deleteColConfirm;
     // Verificar senha do usuário atual no Supabase — usa a senha em memória não disponível
     // Por isso verificamos apenas o PIN fixo de admin + que o usuário é admin
-    if(CURRENT_USER.level!==1){alert("Apenas administradores podem excluir colunas.");setDeleteColConfirm(null);return;}
-    if(pin!=="2125"){alert("PIN incorreto.");return;}
+    if(CURRENT_USER.level!==1){pixelsToast.warning("Apenas administradores podem excluir colunas.");setDeleteColConfirm(null);return;}
+    if(pin!=="2125"){pixelsToast.error("PIN incorreto.");return;}
     setCols(p=>p.filter(c=>c.id!==colId));
     setDeleteColConfirm(null);
   };
@@ -8579,35 +8775,42 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     :cols.filter(col=>COL_PERM[col.id]===true||COL_PERM[col.id]===undefined);
 
   const moveTask=(id,toColId)=>{
-    setTasks(p=>p.map(t=>{
-      if(t.id!==id)return t;
-      if(t.status==="demanda"){
-        // Copys nunca podem ser arrastadas — saem APENAS pelo fluxo de aprovação
-        alert("Este cartão está em Copys e precisa ser aprovado pelos gestores antes de prosseguir. Acesse o menu Aprovações.");
-        return t;
-      }
-      const fromIdx=cols.findIndex(c=>c.id===t.status);
-      const toIdx=cols.findIndex(c=>c.id===toColId);
-      // Enforce one-column-at-a-time (allow any direction but only ±1)
-      if(Math.abs(toIdx-fromIdx)>1){
-        const direction=toIdx>fromIdx?"avançar":"voltar";
-        alert(`Não é possível ${direction} mais de uma coluna por vez. O cartão deve passar por "${cols[fromIdx+(toIdx>fromIdx?1:-1)]?.label}" primeiro.`);
-        return t;
-      }
-      const entry=mkTimelineEntry(t.status,toColId,cols);
+    // ── Validação ANTES do setTasks (evita toast duplicado em StrictMode) ──
+    const t=tasks.find(x=>x.id===id);
+    if(!t){setDrag(null);setOver(null);return;}
+    if(t.status==="demanda"){
+      // Copys nunca podem ser arrastadas — saem APENAS pelo fluxo de aprovação
+      pixelsToast.warning("Este cartão precisa ser aprovado pelos gestores antes de prosseguir.",5000);
+      setDrag(null);setOver(null);
+      return;
+    }
+    const fromIdx=cols.findIndex(c=>c.id===t.status);
+    const toIdx=cols.findIndex(c=>c.id===toColId);
+    if(fromIdx<0||toIdx<0){setDrag(null);setOver(null);return;}
+    if(fromIdx===toIdx){setDrag(null);setOver(null);return;} // mesma coluna, ignora
+    // Enforce one-column-at-a-time (allow any direction but only ±1)
+    if(Math.abs(toIdx-fromIdx)>1){
+      pixelsToast.warning(`Mova uma coluna por vez. Passe por "${cols[fromIdx+(toIdx>fromIdx?1:-1)]?.label}" primeiro.`,5000);
+      setDrag(null);setOver(null);
+      return;
+    }
+    // Validação OK — agora persiste (updater puro)
+    setTasks(p=>p.map(x=>{
+      if(x.id!==id)return x;
+      const entry=mkTimelineEntry(x.status,toColId,cols);
       return {
-        ...t,
+        ...x,
         status:toColId,
         colEnteredAt:new Date().toISOString(),
-        completedAt:(toColId==="aprovado"||toColId==="publicado")?new Date().toISOString().split("T")[0]:t.completedAt,
-        timeline:[...(t.timeline||[]),entry],
+        completedAt:(toColId==="aprovado"||toColId==="publicado")?new Date().toISOString().split("T")[0]:x.completedAt,
+        timeline:[...(x.timeline||[]),entry],
       };
     }));
     setDrag(null);setOver(null);
   };
 
   const handleDelete=id=>{
-    if(!canDelete){alert("Você não tem permissão para excluir demandas.");return;}
+    if(!canDelete){pixelsToast.warning("Você não tem permissão para excluir demandas.");return;}
     setShowTrashConfirm(id);
   };
 
@@ -9462,7 +9665,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
     if(!task) return;
     if(task.status===colId){setDragId(null);return;} // mesma coluna — ignora
     if(colId==="interno_aprovado"&&!isSocio&&!myPerms.aprovarDemandaInterna){
-      alert("Apenas aprovadores podem mover para Aprovado."); return;
+      pixelsToast.warning("Apenas aprovadores podem mover para Aprovado."); return;
     }
     const now=new Date().toISOString();
     const fromCol=INTERNO_COLS.find(c=>c.id===task.status);
@@ -9536,8 +9739,8 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
     setOpenCard(null);
   };
 
-  const deleteCard = (id) => {
-    if(!confirm("Excluir esta demanda interna?")) return;
+  const deleteCard = async (id) => {
+    if(!await pixelsConfirm("Excluir esta demanda interna?",{okText:"Excluir",danger:true})) return;
     const now=new Date().toISOString();
     if(setTasks) setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:now}:t));
     if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(()=>{}).catch(err=>console.error("deleteCard supabase:",err));
@@ -10352,7 +10555,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
       }
       // Persiste no Supabase (ignora IDs locais otimistas)
       if(!String(msgId).startsWith("local-")){
-        sb.from("messages").update({reactions:newReactions}).eq("id",msgId).then(()=>{});
+        sb.from("messages").update({reactions:newReactions}).eq("id",msgId).then(({error})=>{if(error)console.warn("[chat] reactions:",error.message);}).catch(e=>console.warn("[chat] reactions exception:",e?.message||e));
       }
       return{...m,reactions:newReactions};
     })}));
@@ -10445,7 +10648,7 @@ function PageChat({isMob, perms, tasks, setTasks}){
       mr.onstop=()=>{const blob=new Blob(chunks,{type:"audio/webm"});const url=URL.createObjectURL(blob);setAudioBlob(blob);setAudioPreviewUrl(url);stream.getTracks().forEach(t=>t.stop());};
       mr.start();setRecording(true);setRecSecs(0);
       recTimerRef.current=setInterval(()=>setRecSecs(s=>s+1),1000);
-    }catch{alert("Microfone não disponível ou permissão negada.");}
+    }catch{pixelsToast.error("Microfone não disponível ou permissão negada.");}
   };
   const stopRec=()=>{mediaRecRef.current?.stop();clearInterval(recTimerRef.current);setRecording(false);};
   const cancelAudio=()=>{setAudioBlob(null);setAudioPreviewUrl(null);};
@@ -10922,7 +11125,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
       mr.onstop=()=>{setAudioURL(URL.createObjectURL(new Blob(chunks,{type:"audio/webm"})));stream.getTracks().forEach(t=>t.stop());};
       mr.start();mediaRecRef.current=mr;setIsRecording(true);setRecSeconds(0);
       recTimerRef.current=setInterval(()=>setRecSeconds(s=>s+1),1000);
-    }catch{alert("Microfone não disponível.");}
+    }catch{pixelsToast.error("Microfone não disponível.");}
   };
   const stopRec=()=>{mediaRecRef.current?.stop();clearInterval(recTimerRef.current);setIsRecording(false);};
 
@@ -11208,7 +11411,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     const toLabel=isInterna?"Aprovado (Interna)":"Aprovado";
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}];
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl}:t));
-    if(window._sb)window._sb.from("tasks").update({status:toStatus,completed_at:new Date().toISOString().split("T")[0],timeline:newTl}).eq("id",task.id).then(()=>{});
+    if(window._sb)window._sb.from("tasks").update({status:toStatus,completed_at:new Date().toISOString().split("T")[0],timeline:newTl}).eq("id",task.id).then(({error})=>{if(error)console.warn("[aprovacoes] aprovar:",error.message);}).catch(e=>console.warn("[aprovacoes] aprovar exception:",e?.message||e));
     // Notify everyone + specific notification to social media assignees
     const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
     const socialTeam=TEAM.filter(u=>u.role&&u.role.toLowerCase().includes("social"));
@@ -11261,7 +11464,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
         is_alteracao:!isInterna,
         files:newFiles,
         comments:newComments,
-      }).eq("id",task.id).then(()=>{});
+      }).eq("id",task.id).then(({error})=>{if(error)console.warn("[aprovacoes] ajustar:",error.message);}).catch(e=>console.warn("[aprovacoes] ajustar exception:",e?.message||e));
     }
     pushNotif({type:"urgente",icon:"⚠",title:"⚠ Ajuste necessário",body:'"'+task.title+'" voltou para Em Execução com solicitação de ajuste.',user:CURRENT_USER.name,at:"Agora"});
     setCardIdx(0);setImgIdx(0);setEditModal(null);
@@ -11764,7 +11967,7 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
     return()=>window.removeEventListener("pixels-alerts-changed",h);
   },[]);
   const handleCreateAlert=()=>{
-    if(!alertMsg.trim()){alert("Digite a mensagem do alerta.");return;}
+    if(!alertMsg.trim()){pixelsToast.warning("Digite a mensagem do alerta.");return;}
     createAlert({
       forUid:alertTarget,
       fromUid:CURRENT_USER.id,
@@ -11918,7 +12121,7 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
                   </div>
                   <div style={{color:"#1e293b",fontSize:12,fontWeight:500,lineHeight:1.4}}>{a.message}</div>
                 </div>
-                <button onClick={()=>{if(confirm("Remover este alerta?")){deleteAlertForever(a.id);refreshAlerts();}}}
+                <button onClick={async()=>{if(await pixelsConfirm("Remover este alerta?",{okText:"Remover",danger:true})){deleteAlertForever(a.id);refreshAlerts();}}}
                     title="Remover alerta"
                     style={{background:"none",border:"1px solid #e5e7eb",borderRadius:6,
                         padding:"5px 9px",color:"#94a3b8",fontSize:10,cursor:"pointer",flexShrink:0}}
@@ -13414,7 +13617,7 @@ function StorageManager({tasks}){
             Total: {fmtSize(orphans.reduce((s,o)=>s+o.size,0))}
           </div>}
         </div>
-        {orphans.length>0&&<button onClick={()=>{if(window.confirm(`Deletar permanentemente ${orphans.length} arquivo(s) órfão(s)? Esta ação não pode ser desfeita.`))deleteOrphans();}}
+        {orphans.length>0&&<button onClick={async()=>{if(await pixelsConfirm(`Deletar permanentemente ${orphans.length} arquivo(s) órfão(s)? Esta ação não pode ser desfeita.`,{okText:"Deletar",danger:true}))deleteOrphans();}}
           disabled={deleting}
           style={{background:C.rd,color:"#fff",border:"none",borderRadius:9,padding:"8px 18px",fontWeight:700,fontSize:12,cursor:deleting?"wait":"pointer",opacity:deleting?0.7:1}}>
           {deleting?"⏳ Deletando...":"🗑 Deletar todos os órfãos"}
@@ -15410,7 +15613,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   },[task]);
   const isAgendado=task.status==="agendado"||task.status==="publicado";
   const notifyAgendado=(t)=>{
-    try{NOTIF_STORE.items.unshift({id:"notif-ag-"+Date.now(),type:"agendado",category:"demanda",icon:"📅",title:"Publicação Agendada",body:`📅 "${t.title}" foi agendado para ${t.publishDate||"data não definida"}${t.publishTime?" às "+t.publishTime:""}.`,read:false,at:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name});}catch(e){}
+    const notif={id:"notif-ag-"+Date.now(),type:"agendado",category:"demanda",icon:"📅",title:"Publicação Agendada",body:`📅 "${t.title}" foi agendado para ${t.publishDate||"data não definida"}${t.publishTime?" às "+t.publishTime:""}.`,read:false,at:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name};
+    // Usa setter do React quando disponível (preferido) — não muta o store diretamente
+    if(typeof window!=="undefined"&&typeof window._setNotifs==="function"){
+      try{window._setNotifs(p=>[notif,...p]);}catch(e){console.warn("[notify] setNotifs falhou:",e?.message);}
+    }else{
+      // Fallback: ainda atualiza NOTIF_STORE em última instância
+      try{NOTIF_STORE.items=[notif,...NOTIF_STORE.items];}catch(e){console.warn("[notify] store update falhou:",e?.message);}
+    }
   };
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
@@ -15447,13 +15657,22 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const userPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
   const canEdit=(userPerms.editarDemanda||user.level<=2)||isAssigned;
 
-  // Fix 3 — cleanup do interval de gravação se o modal desmontar enquanto isRecording=true
-  useEffect(()=>()=>clearInterval(recTimerRef.current),[]);
+  // Fix 3 — cleanup do interval de gravação + para o MediaRecorder se o modal desmontar
+  useEffect(()=>()=>{
+    clearInterval(recTimerRef.current);
+    // Para o MediaRecorder se ainda estiver gravando — evita áudio fantasma após o fechar
+    try{
+      if(mediaRecRef.current&&mediaRecRef.current.state!=="inactive"){
+        mediaRecRef.current.stop();
+      }
+    }catch(e){console.warn("[cardmodal] mediaRec stop:",e?.message||e);}
+  },[]);
 
   const hasChanges=useCallback(()=>{
     if(title!==(task.title||""))return true;
     if(desc!==(task.desc||""))return true;
     if(JSON.stringify(assignees)!==JSON.stringify(task.assignees||[task.assignee]))return true;
+    if(JSON.stringify(watchers)!==JSON.stringify(task.watchers||[]))return true;
     if(priority!==(task.priority||""))return true;
     if(deadline!==(task.deadline||""))return true;
     if(sector!==(task.sector||""))return true;
@@ -15462,20 +15681,55 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(publishDate!==(task.publishDate||""))return true;
     if(publishTime!==(task.publishTime||"09:00"))return true;
     if(caption!==(task.caption||""))return true;
+    if(cover!==(task.cover||null))return true;
+    // Compara só anexos finalizados (ignora placeholders de upload)
+    const taskFiles=(task.files||[]).map(f=>f.id||f.url);
+    const curFiles=attachments.filter(a=>!a.uploading&&a.url).map(f=>f.id||f.url);
+    if(JSON.stringify(taskFiles.sort())!==JSON.stringify(curFiles.sort()))return true;
     return false;
-  },[title,desc,assignees,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,task]);
+  },[title,desc,assignees,watchers,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,cover,attachments,task]);
+
+  // Conta uploads em andamento (placeholders com uploading:true sem url ainda)
+  const uploadingCount=attachments.filter(a=>a.uploading).length;
+
+  // Avisa antes de fechar a aba/recarregar enquanto uploads estão em andamento
+  useEffect(()=>{
+    if(uploadingCount===0)return;
+    const handler=(e)=>{
+      e.preventDefault();
+      e.returnValue=""; // exigido por alguns navegadores
+      return "";
+    };
+    window.addEventListener("beforeunload",handler);
+    return()=>window.removeEventListener("beforeunload",handler);
+  },[uploadingCount]);
+
+  // Sanitiza anexos antes de persistir: remove flags de UI (uploading/progress)
+  // e descarta placeholders que ainda não terminaram (sem url) — defesa em profundidade
+  const cleanAttachments=(arr)=>arr
+    .filter(a=>!a.uploading&&a.url) // só anexos que terminaram o upload
+    .map(({uploading,progress,...rest})=>rest);
 
   const handleClose=useCallback(()=>{
+    if(uploadingCount>0){
+      pixelsToast.warning(`Aguarde os ${uploadingCount} upload(s) terminarem antes de fechar — senão você perde os arquivos.`,6000);
+      return;
+    }
     if(hasChanges()){setShowUnsavedDialog(true);}
     else{onClose();}
-  },[hasChanges,onClose]);
+  },[hasChanges,onClose,uploadingCount]);
 
   const save=()=>{
+    // ── Bloqueia save com uploads em andamento ──
+    if(uploadingCount>0){
+      pixelsToast.warning(`Aguarde os ${uploadingCount} upload(s) terminarem antes de salvar.`,5000);
+      return;
+    }
     // Validações obrigatórias
-    if(!client){alert("Selecione um cliente antes de salvar.");return;}
-    if(!sector){alert("Selecione um setor antes de salvar.");return;}
-    if(!assignees||assignees.length===0){alert("Selecione pelo menos um responsável antes de salvar.");return;}
-    if(!priority){alert("Selecione a prioridade antes de salvar.");return;}
+    if(!client){pixelsToast.warning("Selecione um cliente antes de salvar.");return;}
+    if(!sector){pixelsToast.warning("Selecione um setor antes de salvar.");return;}
+    if(!assignees||assignees.length===0){pixelsToast.warning("Selecione pelo menos um responsável antes de salvar.");return;}
+    if(!priority){pixelsToast.warning("Selecione a prioridade antes de salvar.");return;}
     // Pega timeline atual da lista (não da prop task que pode estar stale)
     const currentTask=tasks.find(t=>t.id===task.id)||task;
     const tl=[...(currentTask.timeline||[])];
@@ -15496,7 +15750,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const dd=new Date(deadline+"T23:59:59"); // deadline considera o dia todo
       const pd=new Date(publishDate+"T"+(publishTime||"09:00"));
       if(dd>=pd){
-        alert("⚠ O prazo de entrega precisa ser ANTES da data/hora de publicação.\n\nO deadline serve pra cobrar a equipe entregar a tempo de publicar. Ajuste uma das datas.");
+        pixelsToast.warning("O prazo de entrega precisa ser ANTES da data/hora de publicação.",6000);
         return;
       }
     }
@@ -15504,17 +15758,42 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     // Pega o conteúdo atual dos contentEditable (pode ter links digitados) e aplica autoLinkifyHTML
     const descFinal=descRef.current?autoLinkifyHTML(sanitizeRichText(descRef.current.innerHTML||desc)):autoLinkifyHTML(sanitizeRichText(desc));
     const captionFinal=captionRef.current?autoLinkifyHTML(sanitizeRichText(captionRef.current.innerHTML||caption)):autoLinkifyHTML(sanitizeRichText(caption));
-    const updated={...task,title,desc:descFinal,comments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:attachments,timeline:tl,checklist,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
-    setTasks(prev=>prev.map(t=>t.id===task.id?updated:t));
-    if(updated.status==="agendado"&&task.status!=="agendado")notifyAgendado(updated);
+    // Usa updater functional — preserva comments/timeline mais recentes do `prev`
+    // (caso outro usuário tenha adicionado algo via realtime entre o open e o save)
+    const cleanedFiles=cleanAttachments(attachments);
+    setTasks(prev=>prev.map(t=>{
+      if(t.id!==task.id)return t;
+      // Merge inteligente: pega comments/timeline do `prev` (mais recente) + acrescenta os que estão só locais
+      const prevComments=t.comments||[];
+      const prevIds=new Set(prevComments.map(c=>c.id));
+      const localOnly=(comments||[]).filter(c=>!prevIds.has(c.id));
+      const mergedComments=[...prevComments,...localOnly];
+      const prevTimeline=t.timeline||[];
+      const tlIds=new Set(prevTimeline.map(x=>x.atFmt+"-"+(x.label||x.type||"")));
+      const newTl=tl.filter(x=>!tlIds.has(x.atFmt+"-"+(x.label||x.type||"")));
+      const mergedTimeline=[...prevTimeline,...newTl];
+      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+    }));
     onClose();
   };
 
   const handleConclusionConfirm=()=>{
-    const currentTask=tasks.find(t=>t.id===task.id)||task;
-    const tl=[...(currentTask.timeline||[])];
-    tl.push({type:"status",fromLabel:"Em Execução",toLabel:"Concluído p/ Avaliação",from:"execucao",to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
-    setTasks(prev=>prev.map(t=>t.id===task.id?{...t,status:"avaliacao",colEnteredAt:new Date().toISOString(),timeline:tl,checklist,desc,title,assignee:assignees[0],assignees,sector,client,priority,deadline,cover,files:attachments,comments}:t));
+    // ── Bloqueia conclusão com uploads em andamento ──
+    if(uploadingCount>0){
+      pixelsToast.warning(`Aguarde os ${uploadingCount} upload(s) terminarem antes de concluir.`,5000);
+      return;
+    }
+    const cleanedFiles=cleanAttachments(attachments);
+    const newTlEntry={type:"status",fromLabel:"Em Execução",toLabel:"Concluído p/ Avaliação",from:"execucao",to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    // Updater functional + merge — preserva alterações concorrentes de outros usuários
+    setTasks(prev=>prev.map(t=>{
+      if(t.id!==task.id)return t;
+      const prevComments=t.comments||[];
+      const prevIds=new Set(prevComments.map(c=>c.id));
+      const localOnly=(comments||[]).filter(c=>!prevIds.has(c.id));
+      const mergedComments=[...prevComments,...localOnly];
+      return{...t,status:"avaliacao",colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newTlEntry],checklist,desc,title,assignee:assignees[0],assignees,sector,client,priority,deadline,cover,files:cleanedFiles,comments:mergedComments};
+    }));
     setConclusionStep(null);
     onClose();
   };
@@ -15525,13 +15804,25 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     try{
       const mentions=(txt.match(/@([\w]+)/g)||[]).map(m=>m.slice(1).toLowerCase());
       const mentionedIds=TEAM.filter(u=>mentions.some(m=>u.name.toLowerCase().startsWith(m)||u.id.toLowerCase().startsWith(m))).map(u=>u.id);
-      const c={id:Date.now(),user:user.name,av:user.av,color:user.color,text:txt,type:type||"text",time:nowFmt(),mentions:mentionedIds};
+      // ID com randomness — evita colisão se 2 comentários cliquem no mesmo ms
+      const cid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`c-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+      const c={id:cid,user:user.name,av:user.av,color:user.color,text:txt,type:type||"text",time:nowFmt(),mentions:mentionedIds};
       const newComments=[...comments,c];
       setComments(newComments);
       setComment("");
-      // Persiste o comentário imediatamente — não espera save()
-      setTasks(prev=>prev.map(t=>t.id===task.id?{...t,comments:newComments}:t));
-    }catch(e){}
+      // Persiste o comentário no task global imediatamente — usa updater pra garantir
+      // que pegamos a versão mais recente do task (importante se outro user editou em paralelo)
+      setTasks(prev=>prev.map(t=>{
+        if(t.id!==task.id)return t;
+        const existing=t.comments||[];
+        // Evita duplicar se o mesmo cid já estiver no task (idempotência contra StrictMode)
+        if(existing.some(x=>x.id===cid))return t;
+        return{...t,comments:[...existing,c]};
+      }));
+    }catch(e){
+      console.warn("[addComment]:",e?.message||e);
+      pixelsToast.error("Não foi possível enviar o comentário. Tente novamente.");
+    }
   };
 
   // ── Rich text helpers ──
@@ -15595,6 +15886,23 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }catch{resolve(null);}
   });
 
+  // Registry de XHRs ativos — permite abortar uploads pendentes se o modal desmontar
+  const xhrRegistryRef=useRef([]);
+
+  // Cleanup: ao desmontar o modal, aborta uploads pendentes e deleta paths parciais
+  useEffect(()=>()=>{
+    const list=xhrRegistryRef.current||[];
+    list.forEach(({xhr,path})=>{
+      try{xhr.abort();}catch(e){}
+      // Deleta upload parcial do storage (best-effort) — evita orfão
+      try{
+        const sb=window._sb;
+        if(sb&&path)sb.storage.from("pixels-files").remove([path]).catch(()=>{});
+      }catch(e){}
+    });
+    xhrRegistryRef.current=[];
+  },[]);
+
   // Upload via XMLHttpRequest com PROGRESS BAR + retry com backoff
   const uploadWithProgress=(file,path,onProgress,attempt=1)=>new Promise(async(resolve,reject)=>{
     try{
@@ -15607,12 +15915,20 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       if(!sbUrl)return reject(new Error("URL Supabase não configurada"));
       const url=`${sbUrl}/storage/v1/object/pixels-files/${path}`;
       const xhr=new XMLHttpRequest();
+      // Registra para poder abortar em unmount
+      const regEntry={xhr,path};
+      xhrRegistryRef.current.push(regEntry);
+      const unregister=()=>{
+        const idx=xhrRegistryRef.current.indexOf(regEntry);
+        if(idx>=0)xhrRegistryRef.current.splice(idx,1);
+      };
       xhr.upload.onprogress=(e)=>{
         if(e.lengthComputable&&onProgress){
           onProgress(Math.round((e.loaded/e.total)*100));
         }
       };
       xhr.onload=()=>{
+        unregister();
         if(xhr.status>=200&&xhr.status<300){
           resolve();
         }else if(xhr.status>=500&&attempt<3){
@@ -15625,6 +15941,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         }
       };
       xhr.onerror=()=>{
+        unregister();
         if(attempt<3){
           const delay=2000*Math.pow(2,attempt-1);
           console.warn(`Erro de rede, retry ${attempt+1}/3 em ${delay}ms`);
@@ -15633,7 +15950,20 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           reject(new Error("Erro de rede. Verifique sua conexão."));
         }
       };
-      xhr.ontimeout=()=>reject(new Error("Upload timeout"));
+      xhr.ontimeout=()=>{
+        unregister();
+        if(attempt<3){
+          const delay=2000*Math.pow(2,attempt-1);
+          console.warn(`Upload timeout, retry ${attempt+1}/3 em ${delay}ms`);
+          setTimeout(()=>uploadWithProgress(file,path,onProgress,attempt+1).then(resolve).catch(reject),delay);
+        }else{
+          reject(new Error("Upload timeout. Tente novamente com arquivo menor."));
+        }
+      };
+      xhr.onabort=()=>{
+        unregister();
+        reject(new Error("Upload cancelado."));
+      };
       xhr.open("POST",url);
       xhr.setRequestHeader("Authorization",`Bearer ${token}`);
       xhr.setRequestHeader("Content-Type",file.type||"application/octet-stream");
@@ -15665,11 +15995,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const newImgs=files.filter(f=>{const m=detectMime(f);return m&&m.startsWith("image/");}).length;
     const remaining=MAX_IMAGES_PER_CARD-currentImgs;
     if(newImgs>0&&remaining<=0){
-      alert(`⚠ Limite de ${MAX_IMAGES_PER_CARD} imagens atingido neste card.\n\nRemova alguma imagem existente antes de adicionar mais.`);
+      pixelsToast.warning(`Limite de ${MAX_IMAGES_PER_CARD} imagens atingido. Remova alguma antes de adicionar mais.`,5000);
       return;
     }
     if(newImgs>remaining){
-      alert(`⚠ Você selecionou ${newImgs} imagem(ns), mas este card só comporta mais ${remaining}.\n\nLimite: ${MAX_IMAGES_PER_CARD} imagens por card.`);
+      pixelsToast.warning(`Você selecionou ${newImgs} imagens, mas só cabem mais ${remaining} (limite: ${MAX_IMAGES_PER_CARD}).`,5000);
       return;
     }
 
@@ -15678,11 +16008,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     for(const file of files){
       const mime=detectMime(file);
       if(file.size>MAX_UPLOAD_SIZE){
-        alert(`${file.name}: arquivo muito grande (máx ${Math.round(MAX_UPLOAD_SIZE/1024/1024)} MB).`);
+        pixelsToast.error(`${file.name}: arquivo muito grande (máx ${Math.round(MAX_UPLOAD_SIZE/1024/1024)} MB).`);
         continue;
       }
       if(!isMimeAllowed(mime)){
-        alert(`${file.name}: tipo de arquivo não permitido (${mime}).`);
+        pixelsToast.error(`${file.name}: tipo não permitido (${mime}).`);
         continue;
       }
       validFiles.push({file,mime});
@@ -15717,9 +16047,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         const thumb=await thumbPromise;
         setAttachments(p=>p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,progress:100,storagePath:path,thumbnail:thumb}:a));
       }catch(err){
-        console.error("Upload erro:",err);
+        console.warn("Upload erro:",err?.message||err);
         setAttachments(p=>p.filter(a=>a.id!==tempId));
-        alert(`Erro ao enviar ${file.name}:\n${err.message||"erro desconhecido"}`);
+        // Não mostra toast quando o usuário cancelou (modal fechou) — evita spam de erro
+        const wasCanceled=String(err?.message||"").includes("cancelado");
+        if(!wasCanceled){
+          pixelsToast.error(`Erro ao enviar ${file.name}: ${err.message||"erro desconhecido"}`,6000);
+        }
       }
     };
 
@@ -15729,8 +16063,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
   const removeAttachment=(id)=>{
     const att=attachments.find(a=>a.id===id);
-    if(att?.storagePath){try{window._sb.storage.from("pixels-files").remove([att.storagePath]);}catch(e){}}
+    // Remove do estado IMEDIATAMENTE (UI responsiva)
     setAttachments(p=>p.filter(a=>a.id!==id));
+    // Storage delete em background — loga falhas pra debug (rotina de varrer órfãos no /acessos cobre)
+    if(att?.storagePath){
+      try{
+        window._sb.storage.from("pixels-files").remove([att.storagePath])
+          .then(({error})=>{if(error)console.warn("[removeAttachment] storage:",error.message);})
+          .catch(e=>console.warn("[removeAttachment] storage exception:",e?.message||e));
+      }catch(e){console.warn("[removeAttachment] sync exception:",e?.message||e);}
+    }
   };
 
   const startRec=async()=>{
@@ -15744,14 +16086,19 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       mr.onstop=()=>{setAudioURL(URL.createObjectURL(new Blob(chunks,{type:"audio/webm"})));stream.getTracks().forEach(t=>t.stop());};
       mr.start();mediaRecRef.current=mr;setIsRecording(true);setRecSeconds(0);
       recTimerRef.current=setInterval(()=>setRecSeconds(s=>s+1),1000);
-    }catch{alert("Microfone não disponível.");}
+    }catch(e){
+      console.warn("[startRec] microfone:",e?.message||e);
+      pixelsToast.error("Microfone não disponível.");
+    }
   };
   const stopRec=()=>{mediaRecRef.current?.stop();clearInterval(recTimerRef.current);setIsRecording(false);};
   const saveAudio=()=>{
     if(!audioURL)return;
-    const att={id:Date.now(),name:`Áudio ${nowFmt()}.webm`,type:"audio/webm",url:audioURL,size:0,addedAt:nowFmt(),addedBy:user.name};
+    const aid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`a-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+    const cid=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`c-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+    const att={id:aid,name:`Áudio ${nowFmt()}.webm`,type:"audio/webm",url:audioURL,size:0,addedAt:nowFmt(),addedBy:user.name};
     setAttachments(p=>[...p,att]);
-    const c={id:Date.now()+1,user:user.name,av:user.av,color:user.color,text:"",type:"audio",audioUrl:audioURL,time:nowFmt()};
+    const c={id:cid,user:user.name,av:user.av,color:user.color,text:"",type:"audio",audioUrl:audioURL,time:nowFmt()};
     setComments(p=>[...p,c]);
     setAudioURL(null);
   };
@@ -15759,7 +16106,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
   const addCheckItem=()=>{
     if(!newCheckItem.trim())return;
-    setChecklist(p=>[...p,{id:Date.now(),text:newCheckItem.trim(),done:false}]);
+    const id=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`ck-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+    setChecklist(p=>[...p,{id,text:newCheckItem.trim(),done:false}]);
     setNewCheckItem("");
   };
   const toggleCheckItem=(id)=>setChecklist(p=>p.map(i=>i.id===id?{...i,done:!i.done}:i));
@@ -15769,10 +16117,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
   const timeline_all=[...(task.createdAt?[{type:"created",label:`Criado por ${task.createdBy||"sistema"}`,atFmt:task.createdAt}]:[]),...(task.timeline||[])];
 
-  const imgAttachments=attachments.filter(a=>isImg(a)&&!a.isAnnotation); // exclude annotated corrections (shown in dedicated panel)
-  const vidAttachments=attachments.filter(a=>isVid(a));
-  const audAttachments=attachments.filter(a=>isAud(a));
-  const otherAttachments=attachments.filter(a=>!isImg(a)&&!isVid(a)&&!isAud(a)&&!a.isAnnotation);
+  // Filtros para grids — exclui placeholders de upload (a.uploading) pra evitar src=null quebrado
+  const imgAttachments=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url);
+  const vidAttachments=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url);
+  const audAttachments=attachments.filter(a=>isAud(a)&&!a.uploading&&a.url);
+  const otherAttachments=attachments.filter(a=>!isImg(a)&&!isVid(a)&&!isAud(a)&&!a.isAnnotation&&!a.uploading&&a.url);
   const filesCount=attachments.filter(a=>!a.isAnnotation).length; // don't count annotated corrections in badge
 
   // Show "move to execution" prompt to assignees OR to editors/designers who can pick up the work
@@ -15781,9 +16130,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   );
 
   const moveToExecucao=()=>{
-    const tl=[...(task.timeline||[])];
-    tl.push({type:"status",fromLabel:"Demanda",toLabel:"Em Execução",from:"recebida",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
-    setTasks(prev=>prev.map(t=>t.id===task.id?{...t,status:"execucao",colEnteredAt:new Date().toISOString(),timeline:tl}:t));
+    const newEntry={type:"status",fromLabel:"Demanda",toLabel:"Em Execução",from:"recebida",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    // Updater functional — pega timeline mais recente do `prev` e só anexa a entrada nova
+    setTasks(prev=>prev.map(t=>t.id===task.id?{...t,status:"execucao",colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newEntry]}:t));
     setShowMovePrompt(false);
   };
 
@@ -16045,7 +16394,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             <div key={f.id} style={{borderRadius:10,overflow:"hidden",border:"2px solid #f97316",background:"#fff",cursor:"pointer"}}
                               onClick={()=>{
                                 const w=window.open("","_blank","width=900,height=700");
-                                if(w){w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${f.url}" style="max-width:100%;max-height:100vh;object-fit:contain"/></body></html>`);w.document.close();}
+                                if(w){try{const u=new URL(f.url);w.document.title=f.name||"Imagem";Object.assign(w.document.body.style,{margin:"0",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"});const img=w.document.createElement("img");img.src=u.toString();Object.assign(img.style,{maxWidth:"100%",maxHeight:"100vh",objectFit:"contain"});w.document.body.appendChild(img);}catch(e){w.close();}}
                               }}>
                               <img src={f.url} alt={"Anotação "+(i+1)} style={{width:"100%",maxHeight:320,objectFit:"contain",display:"block",background:"#f8f8f8"}}/>
                               <div style={{padding:"6px 10px",background:"#fff7ed",display:"flex",alignItems:"center",gap:6}}>
@@ -16412,6 +16761,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             const arr=[...prev];
                             const fromIdx=arr.findIndex(x=>x.id===fromId);
                             const toIdx=arr.findIndex(x=>x.id===a.id);
+                            // Guarda contra ids inexistentes (ex: item removido durante o drag) — evita splice(-1,1) que removeria o último item
+                            if(fromIdx<0||toIdx<0)return prev;
                             const [moved]=arr.splice(fromIdx,1);
                             arr.splice(toIdx,0,moved);
                             return arr;
@@ -16520,15 +16871,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     </button>
                   ))}
                 </div>
-                <button onClick={()=>{
+                <button onClick={async()=>{
                   if(!canEdit)return;
-                  const v=prompt("Prazo personalizado (em horas, ex: 168 = 7 dias):");
+                  const v=await pixelsPrompt("Prazo personalizado (em horas, ex: 168 = 7 dias):",{inputType:"number",placeholder:"168"});
                   if(v){
                     const h=parseInt(v);
                     if(h>0&&h<=720){
                       setSlaHours(h);
                       if(!slaStartAt)setSlaStartAt(new Date().toISOString());
-                    }else{alert("Valor inválido (1-720 horas).");}
+                    }else{pixelsToast.warning("Valor inválido (1-720 horas).");}
                   }
                 }} disabled={!canEdit}
                   style={{width:"100%",background:"transparent",border:"1px dashed #cbd5e1",color:"#64748b",borderRadius:7,padding:"5px 0",fontSize:10,fontWeight:600,marginTop:4,cursor:canEdit?"pointer":"not-allowed"}}>
@@ -16609,7 +16960,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 <button
-                  onClick={()=>alert("🚧 Em breve!\n\nBotão em desenvolvimento. Vai fazer upload da arte final diretamente pra pasta do cliente no Google Drive.")}
+                  onClick={()=>pixelsToast.info("🚧 Em breve! Vai fazer upload da arte final pra pasta do cliente no Google Drive.",5000)}
                   style={{
                     display:"flex",alignItems:"center",gap:10,
                     background:"linear-gradient(135deg,#fef3c7,#fde68a)",
@@ -16629,7 +16980,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </button>
 
                 <button
-                  onClick={()=>alert("🚧 Em breve!\n\nBotão em desenvolvimento. Vai enviar a arte + legenda direto no grupo do WhatsApp do cliente quando a demanda for publicada.")}
+                  onClick={()=>pixelsToast.info("🚧 Em breve! Vai enviar a arte + legenda direto no WhatsApp do cliente.",5000)}
                   style={{
                     display:"flex",alignItems:"center",gap:10,
                     background:"linear-gradient(135deg,#dcfce7,#bbf7d0)",
@@ -18791,7 +19142,7 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
     if(!email.trim()){setError("Digite seu e-mail acima primeiro.");return;}
     const {error:e}=await _sb.auth.resetPasswordForEmail(email.trim(),{redirectTo:window.location.origin});
     if(e) setError("Erro ao enviar e-mail.");
-    else{setError("");alert("E-mail de recuperação enviado!");}
+    else{setError("");pixelsToast.success("E-mail de recuperação enviado!");}
   };
 
   return(
@@ -19154,7 +19505,9 @@ export default function AgencyOS(){
     };
 
     setTimeout(poll,500);
-    const iv=setInterval(poll,3000);
+    // Polling reduzido pra 30s — temos realtime channel cobrindo updates instantâneos
+    // O poll serve só como safety net pra reconexões/perdas de WebSocket
+    const iv=setInterval(poll,30000);
     return()=>{active=false;clearInterval(iv);};
   },[authState]);
 
@@ -19221,7 +19574,7 @@ export default function AgencyOS(){
     poll();
     const iv=setInterval(poll,15000);
     return()=>clearInterval(iv);
-  },[authState,livePerms]);
+  },[authState]); // ← removido livePerms (causava recriação do interval a cada update)
 
   // ── Auto-publish ──────────────────────────────────────────
   useEffect(()=>{
@@ -21409,7 +21762,7 @@ function PortalCard({task, cl}){
           <div style={{display:"grid",gridTemplateColumns:finalFiles.length>1?"repeat(auto-fill,minmax(140px,1fr))":"1fr",gap:8}}>
             {finalFiles.map(f=>(
               <div key={f.id} style={{borderRadius:10,overflow:"hidden",border:"1px solid "+C.b1,cursor:"pointer"}}
-                onClick={()=>{const w=window.open("","_blank","width=900,height=700");if(w){w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${f.url}" style="max-width:100%;max-height:100vh;object-fit:contain"/></body></html>`);w.document.close();}}}>
+                onClick={()=>{const w=window.open("","_blank","width=900,height=700");if(w){try{const u=new URL(f.url);w.document.title=f.name||"Imagem";Object.assign(w.document.body.style,{margin:"0",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"});const img=w.document.createElement("img");img.src=u.toString();Object.assign(img.style,{maxWidth:"100%",maxHeight:"100vh",objectFit:"contain"});w.document.body.appendChild(img);}catch(e){w.close();}}}}>
                 {f.type?.startsWith("image/")
                   ?<img src={f.url} alt={f.name} style={{width:"100%",height:finalFiles.length>1?140:280,objectFit:"cover",display:"block"}}/>
                   :<video src={f.url} style={{width:"100%",height:finalFiles.length>1?140:280,objectFit:"cover",display:"block"}} controls/>
@@ -21454,11 +21807,11 @@ function PortalSolicitar({tasks, selCl, cl}) {
   };
 
   const enviar = async () => {
-    if(!titulo.trim()){alert("Informe o título da solicitação.");return;}
-    if(!selCl||!cl){alert("Cliente inválido. Recarregue a página.");return;}
+    if(!titulo.trim()){pixelsToast.warning("Informe o título da solicitação.");return;}
+    if(!selCl||!cl){pixelsToast.error("Cliente inválido. Recarregue a página.");return;}
     // Validação de tamanho — evita spam / ataques
-    if(titulo.length>200){alert("Título muito longo (máx 200 caracteres).");return;}
-    if(descricao.length>5000){alert("Descrição muito longa (máx 5000 caracteres).");return;}
+    if(titulo.length>200){pixelsToast.warning("Título muito longo (máx 200 caracteres).");return;}
+    if(descricao.length>5000){pixelsToast.warning("Descrição muito longa (máx 5000 caracteres).");return;}
     // NOTA: validação de cliente deve ser reforçada por RLS no Supabase.
     // Sem RLS, um cliente com acesso ao token pode inserir tasks em nome de outro.
     setEnviando(true);
@@ -22375,7 +22728,7 @@ function PageCapacidade({tasks}){
               <div style={{color:C.td,fontSize:12,marginTop:2}}>Este template é aplicado a todos os clientes novos</div>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>{if(confirm("Restaurar checklist padrão da Pixels?"))saveOnbSteps(DEFAULT_ONBOARDING_STEPS);}}
+              <button onClick={async()=>{if(await pixelsConfirm("Restaurar checklist padrão da Pixels?",{okText:"Restaurar"}))saveOnbSteps(DEFAULT_ONBOARDING_STEPS);}}
                 style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 14px",color:C.ts,fontSize:11,fontWeight:600,cursor:"pointer"}}>
                 ↺ Restaurar padrão
               </button>
