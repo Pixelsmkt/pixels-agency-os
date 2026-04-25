@@ -10289,6 +10289,8 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
   const sb=window._sb;
   const isSocio=CURRENT_USER.level===1;
   const p=perms||{};
+  // Hover tooltip da presença (admin only)
+  const [hoverMember,setHoverMember]=useState(null);
 
   /* ── Canal definitions ── */
   const INTERNAL_CHANNELS=[
@@ -10788,9 +10790,13 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
                 const presence=(presenceMap||{})[m.id];
                 const lastSeen=presence?.last_seen_at||null;
                 const ps=getPresenceStatus(lastSeen);
-                const tooltip=fmtLastSeen(lastSeen);
+                const tooltipText=fmtLastSeen(lastSeen);
+                const isHover=hoverMember===m.id;
                 return(
-                  <div key={m.id} title={tooltip} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,cursor:"default"}}>
+                  <div key={m.id}
+                    onMouseEnter={()=>setHoverMember(m.id)}
+                    onMouseLeave={()=>setHoverMember(null)}
+                    style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,cursor:"default",position:"relative",background:isHover?"rgba(161,64,255,0.06)":"transparent",transition:"background .12s"}}>
                     <div style={{position:"relative",flexShrink:0}}>
                       <div style={{width:26,height:26,borderRadius:"50%",background:m.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:10}}>{m.av}</div>
                       <div style={{position:"absolute",bottom:-1,right:-1,width:9,height:9,borderRadius:"50%",background:ps.color,border:`2px solid ${C.s1}`}}/>
@@ -10799,6 +10805,40 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
                       <div style={{color:C.ts,fontSize:11,fontWeight:500,lineHeight:1.2}}>{m.name.split(" ")[0]}</div>
                       <div style={{color:ps.color,fontSize:9,fontWeight:500,marginTop:1}}>{ps.label}</div>
                     </div>
+                    {/* Custom tooltip — aparece imediato, sem delay do navegador */}
+                    {isHover&&(
+                      <div style={{
+                        position:"absolute",
+                        left:"calc(100% + 8px)",
+                        top:"50%",
+                        transform:"translateY(-50%)",
+                        background:"#0f172a",
+                        color:"#fff",
+                        padding:"8px 12px",
+                        borderRadius:8,
+                        fontSize:11,
+                        whiteSpace:"nowrap",
+                        zIndex:1000,
+                        boxShadow:"0 4px 14px rgba(0,0,0,0.18)",
+                        pointerEvents:"none",
+                      }}>
+                        <div style={{fontWeight:600,marginBottom:3}}>{m.name}</div>
+                        <div style={{color:ps.color,fontSize:10,fontWeight:500,marginBottom:2}}>● {ps.label}</div>
+                        <div style={{color:"#cbd5e1",fontSize:10}}>{tooltipText}</div>
+                        {/* Setinha apontando pra esquerda */}
+                        <div style={{
+                          position:"absolute",
+                          left:-5,
+                          top:"50%",
+                          transform:"translateY(-50%)",
+                          width:0,
+                          height:0,
+                          borderTop:"5px solid transparent",
+                          borderBottom:"5px solid transparent",
+                          borderRight:"5px solid #0f172a",
+                        }}/>
+                      </div>
+                    )}
                   </div>
                 );
               })}
