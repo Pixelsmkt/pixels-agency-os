@@ -128,6 +128,7 @@ const MOBILE_CSS=`
   @keyframes slaPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.7;transform:scale(1.04);}}
   @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
   @keyframes slideInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
   /* Ajustes específicos pra mobile (narrow viewport) */
   @media (max-width:768px){
     body{overscroll-behavior-y:contain;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
@@ -15539,14 +15540,120 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
   // Whitelist de MIME types permitidos — reduz risco de upload de executáveis
   const ALLOWED_MIME_PREFIXES=["image/","video/","audio/","application/pdf","application/msword","application/vnd.openxmlformats","text/plain","application/zip","application/x-zip-compressed"];
-  const MAX_UPLOAD_SIZE=100*1024*1024; // 100 MB
+  const MAX_UPLOAD_SIZE=500*1024*1024; // 500 MB (era 100 MB)
+  const MAX_IMAGES_PER_CARD=20;
+  const MAX_PARALLEL_UPLOADS=3; // máximo 3 uploads simultâneos
+
+  // Mapa extensão → MIME (fallback quando file.type vem vazio)
+  const EXT_TO_MIME={
+    jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",gif:"image/gif",webp:"image/webp",heic:"image/heic",svg:"image/svg+xml",
+    mp4:"video/mp4",mov:"video/quicktime",webm:"video/webm",avi:"video/x-msvideo",mkv:"video/x-matroska",
+    mp3:"audio/mpeg",wav:"audio/wav",m4a:"audio/mp4",ogg:"audio/ogg",
+    pdf:"application/pdf",doc:"application/msword",docx:"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls:"application/vnd.ms-excel",xlsx:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    txt:"text/plain",csv:"text/csv",zip:"application/zip",
+  };
+
+  const detectMime=(file)=>{
+    if(file.type)return file.type;
+    const ext=(file.name.split(".").pop()||"").toLowerCase();
+    return EXT_TO_MIME[ext]||"application/octet-stream";
+  };
+
   const isMimeAllowed=(type)=>{
     if(!type)return false;
     return ALLOWED_MIME_PREFIXES.some(p=>type.startsWith(p)||type===p.replace(/\/$/,""));
   };
 
-  const MAX_IMAGES_PER_CARD=20;
   const genUniqueId=()=>(typeof crypto!=="undefined"&&crypto.randomUUID)?crypto.randomUUID():`tmp_${Date.now()}_${Math.random().toString(36).slice(2,11)}_${Math.random().toString(36).slice(2,11)}`;
+
+  // Gera thumbnail de vídeo (captura frame no segundo 1)
+  const generateVideoThumbnail=(file)=>new Promise((resolve)=>{
+    try{
+      const video=document.createElement("video");
+      video.preload="metadata";
+      video.muted=true;
+      video.playsInline=true;
+      video.src=URL.createObjectURL(file);
+      video.onloadedmetadata=()=>{
+        video.currentTime=Math.min(1,video.duration/2);
+      };
+      video.onseeked=()=>{
+        const canvas=document.createElement("canvas");
+        const w=Math.min(320,video.videoWidth);
+        const ratio=w/video.videoWidth;
+        canvas.width=w;
+        canvas.height=video.videoHeight*ratio;
+        canvas.getContext("2d").drawImage(video,0,0,canvas.width,canvas.height);
+        const thumb=canvas.toDataURL("image/jpeg",0.6);
+        URL.revokeObjectURL(video.src);
+        resolve(thumb);
+      };
+      video.onerror=()=>{URL.revokeObjectURL(video.src);resolve(null);};
+      // Timeout: se demorar mais de 5s, desiste
+      setTimeout(()=>{try{URL.revokeObjectURL(video.src);}catch{}resolve(null);},5000);
+    }catch{resolve(null);}
+  });
+
+  // Upload via XMLHttpRequest com PROGRESS BAR + retry com backoff
+  const uploadWithProgress=(file,path,onProgress,attempt=1)=>new Promise(async(resolve,reject)=>{
+    try{
+      const sb=window._sb;
+      const{data:{session}}=await sb.auth.getSession();
+      const token=session?.access_token;
+      if(!token)return reject(new Error("Sessão expirada. Faça login novamente."));
+      // Pega URL do Supabase (window._sb tem o config interno)
+      const sbUrl=sb.supabaseUrl||sb.rest?.url?.replace("/rest/v1","")||"";
+      if(!sbUrl)return reject(new Error("URL Supabase não configurada"));
+      const url=`${sbUrl}/storage/v1/object/pixels-files/${path}`;
+      const xhr=new XMLHttpRequest();
+      xhr.upload.onprogress=(e)=>{
+        if(e.lengthComputable&&onProgress){
+          onProgress(Math.round((e.loaded/e.total)*100));
+        }
+      };
+      xhr.onload=()=>{
+        if(xhr.status>=200&&xhr.status<300){
+          resolve();
+        }else if(xhr.status>=500&&attempt<3){
+          // Retry só pra erros 5xx (servidor)
+          const delay=2000*Math.pow(2,attempt-1);
+          console.warn(`Upload falhou (HTTP ${xhr.status}), retry ${attempt+1}/3 em ${delay}ms`);
+          setTimeout(()=>uploadWithProgress(file,path,onProgress,attempt+1).then(resolve).catch(reject),delay);
+        }else{
+          reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText?.slice(0,200)||"erro desconhecido"}`));
+        }
+      };
+      xhr.onerror=()=>{
+        if(attempt<3){
+          const delay=2000*Math.pow(2,attempt-1);
+          console.warn(`Erro de rede, retry ${attempt+1}/3 em ${delay}ms`);
+          setTimeout(()=>uploadWithProgress(file,path,onProgress,attempt+1).then(resolve).catch(reject),delay);
+        }else{
+          reject(new Error("Erro de rede. Verifique sua conexão."));
+        }
+      };
+      xhr.ontimeout=()=>reject(new Error("Upload timeout"));
+      xhr.open("POST",url);
+      xhr.setRequestHeader("Authorization",`Bearer ${token}`);
+      xhr.setRequestHeader("Content-Type",file.type||"application/octet-stream");
+      xhr.setRequestHeader("x-upsert","false");
+      xhr.timeout=30*60*1000; // 30 minutos pra arquivos muito grandes
+      xhr.send(file);
+    }catch(e){reject(e);}
+  });
+
+  // Fila com concorrência limitada
+  const runWithConcurrency=async(items,concurrency,worker)=>{
+    const queue=[...items];
+    const workers=Array(Math.min(concurrency,queue.length)).fill(null).map(async()=>{
+      while(queue.length>0){
+        const item=queue.shift();
+        if(item)await worker(item);
+      }
+    });
+    await Promise.all(workers);
+  };
 
   const handleFileUpload=async(e)=>{
     const files=Array.from(e.target.files||[]);
@@ -15555,50 +15662,69 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
     // ── VALIDA LIMITE DE 20 IMAGENS ──
     const currentImgs=attachments.filter(a=>isImg(a)&&!a.isAnnotation).length;
-    const newImgs=files.filter(f=>f.type&&f.type.startsWith("image/")).length;
+    const newImgs=files.filter(f=>{const m=detectMime(f);return m&&m.startsWith("image/");}).length;
     const remaining=MAX_IMAGES_PER_CARD-currentImgs;
     if(newImgs>0&&remaining<=0){
-      alert(`⚠️ Limite de ${MAX_IMAGES_PER_CARD} imagens atingido neste card.\n\nRemova alguma imagem existente antes de adicionar mais.`);
+      alert(`⚠ Limite de ${MAX_IMAGES_PER_CARD} imagens atingido neste card.\n\nRemova alguma imagem existente antes de adicionar mais.`);
       return;
     }
     if(newImgs>remaining){
-      alert(`⚠️ Você selecionou ${newImgs} imagem(ns), mas este card só comporta mais ${remaining}.\n\nLimite: ${MAX_IMAGES_PER_CARD} imagens por card. Remova alguma existente ou selecione menos.`);
+      alert(`⚠ Você selecionou ${newImgs} imagem(ns), mas este card só comporta mais ${remaining}.\n\nLimite: ${MAX_IMAGES_PER_CARD} imagens por card.`);
       return;
     }
 
-    // ── UPLOAD EM PARALELO (muito mais rápido que sequencial) ──
-    const uploadOne=async(file)=>{
+    // ── PRÉ-VALIDAÇÃO (tamanho + MIME) ──
+    const validFiles=[];
+    for(const file of files){
+      const mime=detectMime(file);
       if(file.size>MAX_UPLOAD_SIZE){
-        alert(`${file.name}: arquivo muito grande (máx 100 MB).`);
-        return;
+        alert(`${file.name}: arquivo muito grande (máx ${Math.round(MAX_UPLOAD_SIZE/1024/1024)} MB).`);
+        continue;
       }
-      if(!isMimeAllowed(file.type)){
-        alert(`${file.name}: tipo de arquivo não permitido (${file.type||"desconhecido"}).`);
-        return;
+      if(!isMimeAllowed(mime)){
+        alert(`${file.name}: tipo de arquivo não permitido (${mime}).`);
+        continue;
       }
-      // ID único robusto (crypto.randomUUID com fallback)
+      validFiles.push({file,mime});
+    }
+    if(validFiles.length===0)return;
+
+    // ── UPLOAD COM FILA + PROGRESS + RETRY ──
+    const uploadOne=async({file,mime})=>{
       const tempId=genUniqueId();
-      const ext=(file.name.split(".").pop()||"bin").replace(/[^a-zA-Z0-9]/g,"");
-      // Path com 2 randoms + timestamp + tempId (praticamente impossível colidir)
+      const ext=(file.name.split(".").pop()||"bin").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
       const rnd1=Math.random().toString(36).slice(2,11);
       const rnd2=Math.random().toString(36).slice(2,11);
       const path=`tasks/${task.id}/${Date.now()}-${rnd1}-${rnd2}.${ext}`;
-      // Adiciona placeholder UPLOADING
-      setAttachments(p=>[...p,{id:tempId,name:file.name,type:file.type,size:file.size,url:null,uploading:true,addedAt:nowFmt(),addedBy:user.name}]);
+      const isVideo=mime.startsWith("video/");
+
+      // Gera thumbnail de vídeo em paralelo (não bloqueia upload)
+      const thumbPromise=isVideo?generateVideoThumbnail(file):Promise.resolve(null);
+
+      // Adiciona placeholder UPLOADING (com progress 0)
+      setAttachments(p=>[...p,{
+        id:tempId,name:file.name,type:mime,size:file.size,url:null,
+        uploading:true,progress:0,addedAt:nowFmt(),addedBy:user.name,
+      }]);
+
       try{
         const sb=window._sb;
-        const{error}=await sb.storage.from("pixels-files").upload(path,file,{upsert:false});
-        if(error)throw error;
+        // Upload com progress callback
+        await uploadWithProgress(file,path,(pct)=>{
+          setAttachments(p=>p.map(a=>a.id===tempId?{...a,progress:pct}:a));
+        });
         const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
-        setAttachments(p=>p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,storagePath:path}:a));
+        const thumb=await thumbPromise;
+        setAttachments(p=>p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,progress:100,storagePath:path,thumbnail:thumb}:a));
       }catch(err){
         console.error("Upload erro:",err);
         setAttachments(p=>p.filter(a=>a.id!==tempId));
-        alert("Erro ao fazer upload de "+file.name+". Tente novamente.");
+        alert(`Erro ao enviar ${file.name}:\n${err.message||"erro desconhecido"}`);
       }
     };
-    // Processa todos em paralelo
-    await Promise.all(files.map(uploadOne));
+
+    // Roda em paralelo limitado a MAX_PARALLEL_UPLOADS
+    await runWithConcurrency(validFiles,MAX_PARALLEL_UPLOADS,uploadOne);
   };
 
   const removeAttachment=(id)=>{
@@ -16168,18 +16294,44 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <div style={{fontSize:12}}>Nenhum arquivo ainda</div>
               </div>}
 
-              {attachments.some(a=>a.uploading)&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"8px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                <div style={{fontSize:14}}>⏳</div>
-                <div style={{flex:1}}>
-                  <div style={{color:"#1d4ed8",fontSize:11,fontWeight:700}}>Enviando {attachments.filter(a=>a.uploading).length} arquivo(s)...</div>
-                  <div style={{color:"#93c5fd",fontSize:10}}>Aguarde antes de salvar</div>
+              {/* ── Lista de uploads com progress bar individual ── */}
+              {attachments.filter(a=>a.uploading).length>0&&(
+                <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 12px",marginBottom:12}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                    <div style={{width:16,height:16,borderRadius:"50%",border:"2px solid #93c5fd",borderTopColor:"#1d4ed8",animation:"spin 0.8s linear infinite"}}/>
+                    <div style={{flex:1}}>
+                      <div style={{color:"#1d4ed8",fontSize:11,fontWeight:700}}>
+                        Enviando {attachments.filter(a=>a.uploading).length} arquivo(s)...
+                      </div>
+                      <div style={{color:"#93c5fd",fontSize:10}}>Aguarde antes de salvar (não feche o modal)</div>
+                    </div>
+                  </div>
+                  {/* Lista cada upload com progress */}
+                  <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                    {attachments.filter(a=>a.uploading).map(a=>{
+                      const pct=a.progress||0;
+                      const sizeMB=(a.size/1024/1024).toFixed(1);
+                      return <div key={a.id} style={{background:"#fff",border:"1px solid #dbeafe",borderRadius:6,padding:"6px 10px"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:6}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
+                            <span style={{fontSize:11}}>
+                              {a.type?.startsWith("image/")?"🖼":a.type?.startsWith("video/")?"🎬":a.type?.startsWith("audio/")?"🎙":"📄"}
+                            </span>
+                            <span style={{color:"#1e293b",fontSize:10,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                            <span style={{color:"#64748b",fontSize:9}}>{sizeMB} MB</span>
+                            <span style={{color:pct===100?"#16a34a":"#1d4ed8",fontSize:11,fontWeight:800,minWidth:32,textAlign:"right"}}>{pct}%</span>
+                          </div>
+                        </div>
+                        <div style={{background:"#dbeafe",borderRadius:99,height:4,overflow:"hidden"}}>
+                          <div style={{width:pct+"%",height:"100%",background:pct===100?"#16a34a":"#1d4ed8",borderRadius:99,transition:"width .2s ease"}}/>
+                        </div>
+                      </div>;
+                    })}
+                  </div>
                 </div>
-              </div>}
-              {attachments.some(a=>a.uploading)&&<div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"8px 12px",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                <div style={{fontSize:14}}>⏳</div>
-                <div><div style={{color:"#1d4ed8",fontSize:11,fontWeight:700}}>Enviando {attachments.filter(a=>a.uploading).length} arquivo(s)...</div>
-                <div style={{color:"#93c5fd",fontSize:10}}>Aguarde antes de salvar</div></div>
-              </div>}
+              )}
 
               {imgAttachments.length>0&&<>
                 <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,marginTop:4}}>🖼 Imagens ({imgAttachments.length})</div>
@@ -16199,15 +16351,20 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
               {vidAttachments.length>0&&<>
                 <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>🎬 Vídeos ({vidAttachments.length})</div>
-                {vidAttachments.map(a=>(
-                  <div key={a.id} style={{background:"#f8fafc",borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",marginBottom:8}}>
-                    <video src={a.url} controls style={{width:"100%",maxHeight:180,display:"block"}}/>
+                {vidAttachments.map(a=>{
+                  const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
+                  return <div key={a.id} style={{background:"#f8fafc",borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",marginBottom:8}}>
+                    {/* Vídeo com thumbnail como poster (mais leve no kanban) */}
+                    <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",maxHeight:180,display:"block",background:"#000"}}/>
                     <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{color:"#64748b",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{a.name}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#1e293b",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
+                        {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
+                      </div>
                       {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
                     </div>
-                  </div>
-                ))}
+                  </div>;
+                })}
               </>}
 
               {audAttachments.length>0&&<>
