@@ -8778,6 +8778,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     // ── Validação ANTES do setTasks (evita toast duplicado em StrictMode) ──
     const t=tasks.find(x=>x.id===id);
     if(!t){setDrag(null);setOver(null);return;}
+    // Mesma coluna primeiro — evita toast ruidoso em drag-drop sem movimento real
+    if(t.status===toColId){setDrag(null);setOver(null);return;}
     if(t.status==="demanda"){
       // Copys nunca podem ser arrastadas — saem APENAS pelo fluxo de aprovação
       pixelsToast.warning("Este cartão precisa ser aprovado pelos gestores antes de prosseguir.",5000);
@@ -8787,7 +8789,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const fromIdx=cols.findIndex(c=>c.id===t.status);
     const toIdx=cols.findIndex(c=>c.id===toColId);
     if(fromIdx<0||toIdx<0){setDrag(null);setOver(null);return;}
-    if(fromIdx===toIdx){setDrag(null);setOver(null);return;} // mesma coluna, ignora
     // Enforce one-column-at-a-time (allow any direction but only ±1)
     if(Math.abs(toIdx-fromIdx)>1){
       pixelsToast.warning(`Mova uma coluna por vez. Passe por "${cols[fromIdx+(toIdx>fromIdx?1:-1)]?.label}" primeiro.`,5000);
@@ -15669,11 +15670,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   },[]);
 
   const hasChanges=useCallback(()=>{
+    // Normaliza prioridade — "media" é tratado como "" no estado local (força escolha explícita)
+    // sem essa normalização, todo cartão com priority=media dispararia "deseja salvar?" no abrir
+    const taskPriorityNorm=(task.priority&&task.priority!=="media")?task.priority:"";
     if(title!==(task.title||""))return true;
     if(desc!==(task.desc||""))return true;
     if(JSON.stringify(assignees)!==JSON.stringify(task.assignees||[task.assignee]))return true;
     if(JSON.stringify(watchers)!==JSON.stringify(task.watchers||[]))return true;
-    if(priority!==(task.priority||""))return true;
+    if(priority!==taskPriorityNorm)return true;
     if(deadline!==(task.deadline||""))return true;
     if(sector!==(task.sector||""))return true;
     if(client!==(task.client||""))return true;
@@ -15682,8 +15686,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(publishTime!==(task.publishTime||"09:00"))return true;
     if(caption!==(task.caption||""))return true;
     if(cover!==(task.cover||null))return true;
-    // Compara só anexos finalizados (ignora placeholders de upload)
-    const taskFiles=(task.files||[]).map(f=>f.id||f.url);
+    // Compara só anexos finalizados (ignora placeholders de upload em ambos os lados)
+    const taskFiles=(task.files||[]).filter(f=>!f.uploading&&f.url).map(f=>f.id||f.url);
     const curFiles=attachments.filter(a=>!a.uploading&&a.url).map(f=>f.id||f.url);
     if(JSON.stringify(taskFiles.sort())!==JSON.stringify(curFiles.sort()))return true;
     return false;
