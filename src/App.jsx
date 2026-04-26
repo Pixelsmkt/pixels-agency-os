@@ -15746,7 +15746,7 @@ function RichToolbar({elRef}){
       {content}
     </button>
   );
-  return <div style={{display:"flex",gap:4,padding:"5px 10px",background:"#f8fafc",borderRadius:"8px 8px 0 0",borderBottom:"1px solid #e2e8f0",flexWrap:"wrap",alignItems:"center"}}>
+  return <div style={{display:"flex",gap:4,padding:"6px 10px",background:"#f8fafc",borderRadius:"8px 8px 0 0",borderBottom:"1px solid #e2e8f0",flexWrap:"wrap",alignItems:"center",position:"sticky",top:0,zIndex:5}}>
     {btn(<b style={{fontWeight:900}}>N</b>,"bold",null,"Negrito")}
     {btn(<i>I</i>,"italic",null,"Itálico")}
     {btn(<u>S</u>,"underline",null,"Sublinhado")}
