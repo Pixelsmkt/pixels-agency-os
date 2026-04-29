@@ -848,16 +848,18 @@ const NAV=[
 
 /* ─── HOOK: useOpenCardSync ─────────────────── */
 // Mantém o card aberto sincronizado com a versão mais recente de tasks.
-// Usado em 04_calendario e 04_demandas para atualizar o modal em tempo real.
+// IMPORTANTE: NÃO fecha o cartão automaticamente — se o cartão sumir do array
+// (ex: race do polling ao voltar de aba minimizada), só fica esperando voltar.
+// O usuário fecha manualmente pelo X. Evita o bug "minimizei e fechou".
 function useOpenCardSync(openCard, setOpenCard, tasks){
   useEffect(()=>{
     if(!openCard)return;
-    const updated=(tasks||[]).find(t=>t.id===openCard.id);
-    if(!updated){
-      setOpenCard(null); // card foi deletado
-    } else if(updated!==openCard){
-      setOpenCard(updated); // sincroniza com versão mais recente
+    if(!tasks||tasks.length===0)return; // tasks ainda não carregou — mantém o card aberto
+    const updated=tasks.find(t=>String(t.id)===String(openCard.id));
+    if(updated&&updated!==openCard){
+      setOpenCard(updated); // sincroniza referência (atualizações de outras sessões)
     }
+    // NÃO chama setOpenCard(null) mesmo se não achar — evita fechar em race condition
   },[tasks]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
