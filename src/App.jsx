@@ -8702,9 +8702,20 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const trash = (tasks||[]).filter(t=>t.deletedAt);
   const [drag,setDrag]=useState(null);
   const [over,setOver]=useState(null);
+  const [dragOverId,setDragOverId]=useState(null); // {id, before:bool} pra reorder dentro da coluna
   const [openCard,setOpenCard]=useState(null);
   // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
   useOpenCardSync(openCard,setOpenCard,tasks);
+  // Auto-abre cartão recém-criado assim que ele aparece em `tasks` (resolve race com polling do Supabase)
+  const [pendingOpenId,setPendingOpenId]=useState(null);
+  useEffect(()=>{
+    if(!pendingOpenId)return;
+    const found=(tasks||[]).find(t=>String(t.id)===String(pendingOpenId));
+    if(found){
+      setOpenCard(found);
+      setPendingOpenId(null);
+    }
+  },[tasks,pendingOpenId]);
   const [quickCreate,setQuickCreate]=useState(null); // {colId} — seletor rápido
   const [viewMode,setViewMode]=useState("cartao");
   const [filterUser,setFilterUser]=useState("todos");
@@ -8784,7 +8795,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         read:false,at:"Agora",user:activeUserName,category:"demanda"
       },...p].slice(0,50));
     }
-    setOpenCard(newTask);
+    // Marca pra abrir assim que a task aparecer em `tasks` (evita race com polling)
+    setPendingOpenId(newTask.id);
   };
 
   // Sócios: abre seletor de responsável. Colaboradores: cria direto para si
@@ -8871,6 +8883,34 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const visibleCols=isAdmin
     ?cols
     :cols.filter(col=>COL_PERM[col.id]===true||COL_PERM[col.id]===undefined);
+
+  // ─── REORDENAR DENTRO DA MESMA COLUNA ─────────────────────────
+  // Calcula nova position usando "fractional indexing": fica entre o card de cima e o de baixo.
+  // Permite reordenar infinitamente sem reescalar todas as positions.
+  const reorderTask=(draggedId,targetId,placeBefore)=>{
+    if(String(draggedId)===String(targetId))return;
+    const dragged=tasks.find(t=>String(t.id)===String(draggedId));
+    const target=tasks.find(t=>String(t.id)===String(targetId));
+    if(!dragged||!target||dragged.status!==target.status)return;
+    // Pega cards da mesma coluna ordenados por position (com fallback pra createdAt)
+    const colTasks=tasks
+      .filter(x=>x.status===target.status&&!x.deletedAt&&String(x.id)!==String(draggedId))
+      .sort((a,b)=>(a.position??999999)-(b.position??999999));
+    const targetIdx=colTasks.findIndex(x=>String(x.id)===String(targetId));
+    if(targetIdx<0)return;
+    let newPos;
+    if(placeBefore){
+      // Coloca ANTES do target: position = média entre o anterior e o target
+      const prev=colTasks[targetIdx-1];
+      newPos=prev?((prev.position||0)+(target.position||0))/2:(target.position||0)-1;
+    }else{
+      // Coloca DEPOIS do target: position = média entre target e o próximo
+      const next=colTasks[targetIdx+1];
+      newPos=next?((target.position||0)+(next.position||0))/2:(target.position||0)+1;
+    }
+    setTasks(p=>p.map(x=>String(x.id)===String(draggedId)?{...x,position:newPos}:x));
+    setDrag(null);setOver(null);setDragOverId(null);
+  };
 
   const moveTask=(id,toColId)=>{
     // ── Validação ANTES do setTasks (evita toast duplicado em StrictMode) ──
@@ -9170,7 +9210,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
         <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(240px,1fr))`,gap:10,overflowX:"auto",paddingBottom:8}}>
           {visibleCols.map(col=>{
-          const colTasks=visible.filter(t=>t.status===col.id);
+          const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>(a.position??999999)-(b.position??999999));
           const isDraggingOver=over===col.id;
           return <div key={col.id}
             onDragOver={e=>{e.preventDefault();setOver(col.id);}}
@@ -9223,10 +9263,30 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const isAjustar=t.ajustar===true&&t.status==="demanda";
                 const cardBg=isAlteracao?"#ea580c":isAjustar?"#f97316":"#fff";
                 const cardBorder=isAlteracao?"#c2500a":isAjustar?"#ea6c00":urgColor;
+                const isOver=dragOverId&&dragOverId.id===t.id;
                 return <div key={t.id}
                   draggable={canDrag} onDragStart={()=>canDrag&&setDrag(t.id)}
+                  onDragOver={canDrag?e=>{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if(!drag||String(drag)===String(t.id))return;
+                    // Detecta se está em cima da metade superior ou inferior do card
+                    const r=e.currentTarget.getBoundingClientRect();
+                    const before=(e.clientY-r.top)<r.height/2;
+                    setDragOverId({id:t.id,before});
+                  }:undefined}
+                  onDrop={canDrag?e=>{
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if(!drag)return;
+                    const dragged=tasks.find(x=>String(x.id)===String(drag));
+                    // Reorder dentro da MESMA coluna
+                    if(dragged&&dragged.status===t.status&&String(dragged.id)!==String(t.id)){
+                      reorderTask(drag,t.id,dragOverId?.before??true);
+                    }
+                  }:undefined}
                   onClick={()=>setOpenCard(t)}
-                  style={{background:cardBg,border:`1px solid ${isAlteracao||isAjustar?"transparent":"rgba(0,0,0,0.08)"}`,borderLeft:`3px solid ${cardBorder}`,borderRadius:10,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)",transition:"box-shadow .12s",flexShrink:0}}
+                  style={{background:cardBg,border:`1px solid ${isAlteracao||isAjustar?"transparent":"rgba(0,0,0,0.08)"}`,borderLeft:`3px solid ${cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:10,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)",transition:"box-shadow .12s, border-color .12s",flexShrink:0}}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow="0 3px 10px rgba(0,0,0,0.14)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow=(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)"}>
                   {thumbUrl&&<div style={{height:120,background:thumbUrl.startsWith("#")?`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`:undefined,backgroundImage:thumbUrl.startsWith("http")||thumbUrl.startsWith("data:")?`url(${thumbUrl})`:undefined,backgroundSize:"cover",backgroundPosition:"center",borderRadius:"7px 7px 0 0"}}/>}
@@ -16789,6 +16849,18 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 suppressContentEditableWarning
                 onBlur={e=>setDesc(e.currentTarget.innerHTML)}
                 onMouseDown={e=>e.stopPropagation()}
+                onClick={e=>{
+                  // contentEditable engole cliques em <a> — interceptamos pra abrir o link
+                  const a=e.target.closest&&e.target.closest("a");
+                  if(!a)return;
+                  const href=a.getAttribute("href");
+                  if(!href)return;
+                  if(/^(https?:|mailto:|tel:)/i.test(href)){
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(href,"_blank","noopener,noreferrer");
+                  }
+                }}
                 style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
               {canEdit&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
                 <button onClick={save}
@@ -16964,6 +17036,18 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 suppressContentEditableWarning
                 onBlur={e=>setCaption(e.currentTarget.innerHTML)}
                 onMouseDown={e=>e.stopPropagation()}
+                onClick={e=>{
+                  // contentEditable engole cliques em <a> — interceptamos pra abrir o link
+                  const a=e.target.closest&&e.target.closest("a");
+                  if(!a)return;
+                  const href=a.getAttribute("href");
+                  if(!href)return;
+                  if(/^(https?:|mailto:|tel:)/i.test(href)){
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(href,"_blank","noopener,noreferrer");
+                  }
+                }}
                 style={{width:"100%",border:"none",padding:"14px 16px",color:"#1e293b",fontSize:13,lineHeight:1.8,outline:"none",fontFamily:"inherit",boxSizing:"border-box",minHeight:220,background:"transparent",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -19428,6 +19512,7 @@ const rowToTask = (r) => ({
   checklist:    Array.isArray(r.checklist) ? r.checklist : [],
   caption:      r.caption      || "",
   desc:         r.description  || "",
+  position:     r.position     ?? null,
 });
 
 const taskToRow = (t) => ({
@@ -19461,6 +19546,7 @@ const taskToRow = (t) => ({
   checklist:      t.checklist    || [],
   caption:        t.caption      || "",
   description:    t.desc         || "",
+  position:       t.position     ?? null,
 });
 
 // ── Helpers de usuário ────────────────────────────────────────
