@@ -16325,7 +16325,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   };
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
-  const fileInputRef=useRef(null);
+  const fileInputRef=useRef(null);    // Arquivos finais (designer/editor sobem)
+  const fileInputRefRef=useRef(null); // Imagens de referência (criador sobe)
   const descRef=useRef(null);
   const captionRef=useRef(null);
   // Sanitizador de HTML — permite apenas tags básicas de formatação.
@@ -16357,6 +16358,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   // Usa cardPerms (livePerms injetado pelo pai) — sempre atualizado em tempo real
   const userPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
   const canEdit=(userPerms.editarDemanda||user.level<=2)||isAssigned;
+  // ── Permissão pra REFERÊNCIAS ── só quem cria cartão (sócio/coord) ou criador da própria demanda
+  const canEditRef=userPerms.criarDemanda||user.level===1||(task.createdBy&&task.createdBy===user.name);
 
   // Fix 3 — cleanup do interval de gravação + para o MediaRecorder se o modal desmontar
   useEffect(()=>()=>{
@@ -16689,7 +16692,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     await Promise.all(workers);
   };
 
-  const handleFileUpload=async(e)=>{
+  const handleFileUpload=async(e,tipo="final")=>{
     const files=Array.from(e.target.files||[]);
     e.target.value="";
     if(files.length===0)return;
@@ -16739,6 +16742,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setAttachments(p=>[...p,{
         id:tempId,name:file.name,type:mime,size:file.size,url:null,
         uploading:true,progress:0,addedAt:nowFmt(),addedBy:user.name,
+        tipo,
       }]);
 
       try{
@@ -16822,8 +16826,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const timeline_all=[...(task.createdAt?[{type:"created",label:`Criado por ${task.createdBy||"sistema"}`,atFmt:task.createdAt}]:[]),...(task.timeline||[])];
 
   // Filtros para grids — exclui placeholders de upload (a.uploading) pra evitar src=null quebrado
-  const imgAttachments=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url);
-  const vidAttachments=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url);
+  // Default pra dados antigos sem `tipo`: vira "final" (preserva fluxo atual)
+  const isRef=(a)=>a.tipo==="referencia";
+  const isFin=(a)=>!a.tipo||a.tipo==="final";
+  const imgRef=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isRef(a));
+  const imgFin=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url&&isFin(a));
+  const vidRef=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isRef(a));
+  const vidFin=attachments.filter(a=>isVid(a)&&!a.uploading&&a.url&&isFin(a));
+  // Compat: agregados (usados em outros lugares — carrossel, contagens)
+  const imgAttachments=[...imgRef,...imgFin];
+  const vidAttachments=[...vidRef,...vidFin];
   const audAttachments=attachments.filter(a=>isAud(a)&&!a.uploading&&a.url);
   const otherAttachments=attachments.filter(a=>!isImg(a)&&!isVid(a)&&!isAud(a)&&!a.isAnnotation&&!a.uploading&&a.url);
   const filesCount=attachments.filter(a=>!a.isAnnotation).length; // don't count annotated corrections in badge
@@ -17410,45 +17422,96 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>
               )}
 
-              {imgAttachments.length>0&&<>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,marginTop:4}}>🖼 Imagens ({imgAttachments.length})</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
-                  {imgAttachments.map((a,i)=>(
-                    <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
-                      <img src={thumbUrl(a.url)} alt={a.name}
-                        loading="lazy"
-                        onClick={()=>setLightbox({url:a.url,name:a.name})}
-                        onError={e=>{console.warn("[img] falhou:",a.url);e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
-                        style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                      <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:4,padding:8,background:"#f8fafc",color:"#94a3b8",fontSize:9,textAlign:"center"}}>
-                        <span style={{fontSize:24}}>🖼</span>
-                        <span style={{wordBreak:"break-word",lineHeight:1.3}}>{a.name||"imagem"}</span>
-                        <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#a140ff",fontSize:9,fontWeight:700,marginTop:4}}>Abrir →</a>
-                      </div>
-                      <div style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:700}}>#{i+1}</div>
-                      {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+              {/* ── SEÇÃO 1: REFERÊNCIAS — só quem cria cartão sobe ── */}
+              {(imgRef.length>0||vidRef.length>0||canEditRef)&&(()=>{
+                const totalRef=imgRef.length+vidRef.length;
+                return(<div style={{marginTop:4,marginBottom:18}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid #e9d5ff"}}>
+                    <div>
+                      <div style={{color:"#a140ff",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>📌 Imagens de referência {totalRef>0?`(${totalRef})`:""}</div>
+                      <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>exemplos, sugestões e direcionamento pra equipe executar</div>
                     </div>
-                  ))}
-                </div>
-              </>}
+                    {canEditRef&&<button onClick={()=>fileInputRefRef.current?.click()} style={{background:"#a140ff15",color:"#a140ff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap"}}>+ adicionar</button>}
+                  </div>
+                  {totalRef===0&&(<div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>{canEditRef?"Nenhuma referência ainda — clique em adicionar pra subir exemplos.":"Sem referências pra esse cartão."}</div>)}
+                  {imgRef.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidRef.length>0?12:0}}>
+                    {imgRef.map((a,i)=>(
+                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
+                        <img src={thumbUrl(a.url)} alt={a.name} loading="lazy"
+                          onClick={()=>setLightbox({url:a.url,name:a.name})}
+                          onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                          style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:4,padding:8,background:"#faf5ff",color:"#94a3b8",fontSize:9,textAlign:"center"}}>
+                          <span style={{fontSize:24}}>🖼</span>
+                          <span style={{wordBreak:"break-word",lineHeight:1.3}}>{a.name||"imagem"}</span>
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#a140ff",fontSize:9,fontWeight:600,marginTop:4}}>Abrir →</a>
+                        </div>
+                        <div style={{position:"absolute",top:4,left:4,background:"#a140ff",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>ref #{i+1}</div>
+                        {canEditRef&&<button onClick={()=>removeAttachment(a.id)} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+                      </div>
+                    ))}
+                  </div>}
+                  {vidRef.length>0&&vidRef.map(a=>{
+                    const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
+                    return(<div key={a.id} style={{background:"#faf5ff",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",marginBottom:8}}>
+                      <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",maxHeight:180,display:"block",background:"#000"}}/>
+                      <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{color:"#a140ff",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Vídeo de referência</div>
+                          <div style={{color:"#1e293b",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
+                          {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
+                        </div>
+                        {canEditRef&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
+                      </div>
+                    </div>);
+                  })}
+                </div>);
+              })()}
 
-              {vidAttachments.length>0&&<>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>🎬 Vídeos ({vidAttachments.length})</div>
-                {vidAttachments.map(a=>{
-                  const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                  return <div key={a.id} style={{background:"#f8fafc",borderRadius:10,overflow:"hidden",border:"1px solid #e2e8f0",marginBottom:8}}>
-                    {/* Vídeo com thumbnail como poster (mais leve no kanban) */}
-                    <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",maxHeight:180,display:"block",background:"#000"}}/>
-                    <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{color:"#1e293b",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
-                        {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
-                      </div>
-                      {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
+              {/* ── SEÇÃO 2: ARQUIVOS PRONTOS — designer/editor sobem aqui ── */}
+              {(imgFin.length>0||vidFin.length>0||canEdit)&&(()=>{
+                const totalFin=imgFin.length+vidFin.length;
+                return(<div>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid #e2e8f0"}}>
+                    <div>
+                      <div style={{color:"#0f172a",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>🎨 Arquivos prontos {totalFin>0?`(${totalFin})`:""}</div>
+                      <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>arte final entregue pela equipe — pronto pra aprovação</div>
                     </div>
-                  </div>;
-                })}
-              </>}
+                    {canEdit&&<button onClick={()=>fileInputRef.current?.click()} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap"}}>+ adicionar</button>}
+                  </div>
+                  {totalFin===0&&(<div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>{canEdit?"Sem arte final ainda — clique em adicionar pra subir o entregável.":"Sem arquivos finais entregues."}</div>)}
+                  {imgFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidFin.length>0?12:0}}>
+                    {imgFin.map((a,i)=>(
+                      <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
+                        <img src={thumbUrl(a.url)} alt={a.name} loading="lazy"
+                          onClick={()=>setLightbox({url:a.url,name:a.name})}
+                          onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                          style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:4,padding:8,background:"#f8fafc",color:"#94a3b8",fontSize:9,textAlign:"center"}}>
+                          <span style={{fontSize:24}}>🖼</span>
+                          <span style={{wordBreak:"break-word",lineHeight:1.3}}>{a.name||"imagem"}</span>
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#a140ff",fontSize:9,fontWeight:600,marginTop:4}}>Abrir →</a>
+                        </div>
+                        <div style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>#{i+1}</div>
+                        {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+                      </div>
+                    ))}
+                  </div>}
+                  {vidFin.length>0&&vidFin.map(a=>{
+                    const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
+                    return(<div key={a.id} style={{background:"#f8fafc",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",marginBottom:8}}>
+                      <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",maxHeight:180,display:"block",background:"#000"}}/>
+                      <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{color:"#1e293b",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
+                          {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
+                        </div>
+                        {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
+                      </div>
+                    </div>);
+                  })}
+                </div>);
+              })()}
 
               {audAttachments.length>0&&<>
                 <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>🎙 Áudios ({audAttachments.length})</div>
@@ -17478,11 +17541,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </>}
 
             {filesTab==="ordem"&&<div>
-              {imgAttachments.length===0
-                ? <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"24px 0"}}><div style={{fontSize:28,marginBottom:8}}>🖼</div>Adicione imagens na aba Lista primeiro</div>
+              {imgFin.length===0
+                ? <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"24px 0"}}><div style={{fontSize:28,marginBottom:8}}>🖼</div>Adicione arquivos prontos na aba Lista primeiro</div>
                 : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <div style={{color:"#94a3b8",fontSize:10,marginBottom:4}}>Arraste para reordenar o carrossel de publicação</div>
-                    {imgAttachments.map((a,i)=>(
+                    <div style={{color:"#94a3b8",fontSize:10,marginBottom:4}}>Arraste para reordenar o carrossel de publicação (só arquivos finais entram)</div>
+                    {imgFin.map((a,i)=>(
                       <div key={a.id}
                         draggable
                         onDragStart={e=>e.dataTransfer.setData("text/plain",a.id)}
@@ -17513,13 +17576,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               }
             </div>}
 
-            {canEdit&&<div style={{marginTop:16}}>
-              <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
-              <button onClick={()=>fileInputRef.current?.click()}
-                style={{width:"100%",background:"#f8fafc",border:"2px dashed #e2e8f0",borderRadius:12,padding:"14px",display:"flex",alignItems:"center",justifyContent:"center",gap:8,cursor:"pointer",color:"#94a3b8",fontSize:12,fontWeight:600}}>
-                <span style={{fontSize:18}}>📎</span> Anexar arquivo
-              </button>
-            </div>}
+            {/* Inputs file ocultos — disparados pelos botões "+ adicionar" de cada seção */}
+            <input type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
+            <input type="file" ref={fileInputRefRef} onChange={e=>handleFileUpload(e,"referencia")} multiple style={{display:"none"}} accept="image/*,video/*"/>
           </div>}
 
           {/* ÁUDIO */}
