@@ -5904,11 +5904,12 @@ function CInfo({cl}){
   let[infoTab,setInfoTab]=useState("briefing");
   let isSocio=CURRENT_USER&&CURRENT_USER.level===1;
   let INFO_TABS=[
-    {id:"briefing", label:"Briefing"},
-    {id:"contatos", label:"Contatos"},
-    {id:"timeline", label:"Linha do Tempo"},
-    {id:"metas",    label:"Metas"},
-    {id:"drive",    label:"Drive"},
+    {id:"briefing",    label:"Briefing"},
+    {id:"orientacoes", label:"Orientações para a equipe"},
+    {id:"contatos",    label:"Contatos"},
+    {id:"timeline",    label:"Linha do Tempo"},
+    {id:"metas",       label:"Metas"},
+    {id:"drive",       label:"Drive"},
   ];
   if(isSocio)INFO_TABS.push({id:"metricas",label:"Métricas ✏"});
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
@@ -5921,6 +5922,7 @@ function CInfo({cl}){
       })}
     </div>
     {infoTab==="briefing"&&<CBriefing cl={cl}/>}
+    {infoTab==="orientacoes"&&<COrientacoes cl={cl}/>}
     {infoTab==="contatos"&&<CContatos cl={cl}/>}
     {infoTab==="timeline"&&<CTimeline cl={cl}/>}
     {infoTab==="metas"&&<CMetas cl={cl}/>}
@@ -6782,6 +6784,259 @@ function CTimeline({cl}){
         </div>);
       })}
     </div>
+  </div>);
+}
+
+/* ─── COrientacoes — orientações para a equipe (logos, paleta, fontes, voz) ─── */
+function COrientacoes({cl}){
+  const sb=window._sb;
+  const [data,setData]=useState({logos:[],paleta:[],fontes:[],tomDeVoz:"",hashtags:[],ctaPadrao:"",naoFazer:"",site:"",redes:{instagram:"",facebook:"",youtube:"",linkedin:"",tiktok:""},driveUrl:""});
+  const [savedOk,setSavedOk]=useState(false);
+  const [uploading,setUploading]=useState(null);
+  const fileInputLogo=useRef(null);
+  const fileInputFonte=useRef(null);
+  const [pendingLogo,setPendingLogo]=useState(null); // {nome, modo:"upload"|"link"}
+  const [pendingFonte,setPendingFonte]=useState(null);
+  const [newColor,setNewColor]=useState({nome:"",hex:"#a140ff"});
+  const [newHashtag,setNewHashtag]=useState("");
+
+  useEffect(()=>{
+    if(!sb)return;
+    sb.from("clients").select("orientacoes").eq("client_id",cl.id).single()
+      .then(({data:row})=>{
+        if(row?.orientacoes){
+          const o=typeof row.orientacoes==="string"?JSON.parse(row.orientacoes):row.orientacoes;
+          setData(p=>({...p,...o,redes:{...p.redes,...(o.redes||{})}}));
+        }
+      })
+      .catch(e=>console.warn("[orientacoes] load:",e?.message||e));
+  },[cl.id]);
+
+  const persist=(next)=>{
+    setData(next);
+    if(!sb)return;
+    sb.from("clients").update({orientacoes:next,updated_by:CURRENT_USER.name}).eq("client_id",cl.id)
+      .then(({error})=>{
+        if(error){console.warn("[orientacoes] save:",error.message);return;}
+        setSavedOk(true);setTimeout(()=>setSavedOk(false),2000);
+      })
+      .catch(e=>console.warn("[orientacoes] save:",e?.message||e));
+  };
+
+  const uploadFile=async(file,kind)=>{
+    if(!file||!sb)return null;
+    setUploading(kind);
+    try{
+      const ext=(file.name.split(".").pop()||"bin").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
+      const rnd=Math.random().toString(36).slice(2,11);
+      const path=`orientacoes/${cl.id}/${kind}/${Date.now()}-${rnd}.${ext}`;
+      const {error}=await sb.storage.from("pixels-files").upload(path,file,{cacheControl:"3600",upsert:false});
+      if(error)throw error;
+      const {data:pub}=sb.storage.from("pixels-files").getPublicUrl(path);
+      setUploading(null);
+      return{url:pub.publicUrl,formato:ext.toUpperCase(),path};
+    }catch(e){
+      setUploading(null);
+      pixelsToast.error("Erro no upload: "+(e?.message||"desconhecido"));
+      return null;
+    }
+  };
+
+  const onSelectLogoFile=async(e)=>{
+    const file=e.target.files?.[0];
+    e.target.value="";
+    if(!file||!pendingLogo)return;
+    const up=await uploadFile(file,"logo");
+    if(!up)return;
+    const novo={nome:pendingLogo.nome||file.name,url:up.url,formato:up.formato,path:up.path};
+    persist({...data,logos:[...(data.logos||[]),novo]});
+    setPendingLogo(null);
+  };
+
+  const onSelectFonteFile=async(e)=>{
+    const file=e.target.files?.[0];
+    e.target.value="";
+    if(!file||!pendingFonte)return;
+    const up=await uploadFile(file,"fonte");
+    if(!up)return;
+    const novo={nome:pendingFonte.nome||file.name,uso:pendingFonte.uso||"",url:up.url,formato:up.formato,path:up.path};
+    persist({...data,fontes:[...(data.fontes||[]),novo]});
+    setPendingFonte(null);
+  };
+
+  const addLogoLink=async()=>{
+    const url=await pixelsPrompt("Cole a URL do logo (Drive, Dropbox, etc):");
+    if(!url||!url.trim())return;
+    const nome=await pixelsPrompt("Nome do logo (ex: Principal colorido, Branca, Ícone):");
+    if(!nome)return;
+    persist({...data,logos:[...(data.logos||[]),{nome:nome.trim(),url:url.trim(),formato:"LINK",externo:true}]});
+  };
+
+  const addFonteLink=async()=>{
+    const url=await pixelsPrompt("Cole a URL da fonte (Drive, Dropbox, Google Fonts...):");
+    if(!url||!url.trim())return;
+    const nome=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");
+    if(!nome)return;
+    const uso=await pixelsPrompt("Uso (ex: Títulos, Corpo, Destaques) — opcional:");
+    persist({...data,fontes:[...(data.fontes||[]),{nome:nome.trim(),uso:(uso||"").trim(),url:url.trim(),formato:"LINK",externo:true}]});
+  };
+
+  const removeItem=async(arr,idx,key)=>{
+    if(!await pixelsConfirm("Remover esse item?",{okText:"Remover",danger:true}))return;
+    const item=data[arr][idx];
+    // Se foi upload nosso, deleta do storage
+    if(item?.path&&!item.externo){try{sb.storage.from("pixels-files").remove([item.path]).catch(()=>{});}catch(e){}}
+    persist({...data,[arr]:data[arr].filter((_,i)=>i!==idx)});
+  };
+
+  const addColor=()=>{
+    if(!newColor.nome.trim())return;
+    persist({...data,paleta:[...(data.paleta||[]),{nome:newColor.nome.trim(),hex:newColor.hex}]});
+    setNewColor({nome:"",hex:"#a140ff"});
+  };
+  const removeColor=(idx)=>persist({...data,paleta:data.paleta.filter((_,i)=>i!==idx)});
+
+  const addHashtag=()=>{
+    let t=newHashtag.trim().replace(/^#+/,"");
+    if(!t)return;
+    if(!t.startsWith("#"))t="#"+t;
+    if((data.hashtags||[]).includes(t))return;
+    persist({...data,hashtags:[...(data.hashtags||[]),t]});
+    setNewHashtag("");
+  };
+  const removeHashtag=(t)=>persist({...data,hashtags:(data.hashtags||[]).filter(x=>x!==t)});
+
+  const inp={background:C.s1,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  const Section=({title,subtitle,children})=>(
+    <div style={{background:C.card,borderRadius:12,border:"0.5px solid "+C.b1,padding:"16px 18px",marginBottom:12}}>
+      <div style={{marginBottom:12}}>
+        <div style={{color:C.tx,fontWeight:500,fontSize:13}}>{title}</div>
+        {subtitle&&<div style={{color:C.td,fontSize:11,marginTop:2}}>{subtitle}</div>}
+      </div>
+      {children}
+    </div>
+  );
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
+    <input ref={fileInputLogo} type="file" accept="image/*,.svg,.pdf" style={{display:"none"}} onChange={onSelectLogoFile}/>
+    <input ref={fileInputFonte} type="file" accept=".ttf,.otf,.woff,.woff2,.zip" style={{display:"none"}} onChange={onSelectFonteFile}/>
+
+    {savedOk&&<div style={{background:"#dcfce7",border:"0.5px solid #86efac",color:"#166534",padding:"6px 12px",borderRadius:8,fontSize:11,marginBottom:12,textAlign:"center"}}>Salvo automaticamente</div>}
+
+    <Section title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8,marginBottom:10}}>
+        {(data.logos||[]).map((l,i)=>(
+          <div key={i} style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:10,overflow:"hidden",position:"relative"}}>
+            <div style={{aspectRatio:"1.4",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",padding:8}}>
+              <img src={l.url} alt={l.nome} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}} onError={e=>{e.currentTarget.style.display="none";}}/>
+            </div>
+            <div style={{padding:"8px 10px"}}>
+              <div style={{color:C.tx,fontSize:11,fontWeight:500,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.nome}</div>
+              <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"space-between"}}>
+                <a href={l.url} target="_blank" rel="noopener noreferrer" download={l.externo?undefined:l.nome} style={{color:"#a140ff",fontSize:10,textDecoration:"none",fontWeight:500}}>{l.externo?"Abrir ↗":"Baixar ↓"}</a>
+                <button onClick={()=>removeItem("logos",i)} style={{background:"transparent",border:"none",color:C.td,cursor:"pointer",fontSize:14,padding:0}}>×</button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={async()=>{const n=await pixelsPrompt("Nome do logo (ex: Principal, Branca, Ícone):");if(n){setPendingLogo({nome:n.trim()});fileInputLogo.current?.click();}}} disabled={uploading==="logo"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="logo"?"Enviando...":"+ Upload de logo"}</button>
+        <button onClick={addLogoLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
+      </div>
+    </Section>
+
+    <Section title="Paleta de cores" subtitle="Cores da marca — equipe copia o hex direto da aba Orientações no cartão">
+      {(data.paleta||[]).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8,marginBottom:10}}>
+        {data.paleta.map((c,i)=>(
+          <div key={i} style={{background:c.hex,borderRadius:10,padding:10,border:"0.5px solid "+C.b1,minHeight:64,display:"flex",flexDirection:"column",justifyContent:"space-between",position:"relative"}}>
+            <button onClick={()=>removeColor(i)} style={{position:"absolute",top:4,right:6,background:"rgba(255,255,255,0.7)",border:"none",borderRadius:4,color:"#000",cursor:"pointer",fontSize:11,padding:"0 6px",fontWeight:500}}>×</button>
+            <div style={{color:"#fff",fontSize:11,fontWeight:500,textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{c.nome}</div>
+            <div style={{color:"#fff",fontSize:11,fontFamily:"monospace",textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{c.hex.toUpperCase()}</div>
+          </div>
+        ))}
+      </div>}
+      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <input type="text" value={newColor.nome} onChange={e=>setNewColor(p=>({...p,nome:e.target.value}))} placeholder="Nome da cor" style={{...inp,width:160}}/>
+        <input type="color" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{width:48,height:36,border:"0.5px solid "+C.b1,borderRadius:8,cursor:"pointer",padding:2,background:C.s1}}/>
+        <input type="text" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{...inp,width:100,fontFamily:"monospace"}} placeholder="#000000"/>
+        <button onClick={addColor} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
+      </div>
+    </Section>
+
+    <Section title="Fontes" subtitle="Tipografias oficiais — equipe baixa o arquivo TTF/OTF/WOFF pra instalar">
+      {(data.fontes||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+        {data.fontes.map((f,i)=>(
+          <div key={i} style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,borderRadius:8,background:"#a140ff15",color:"#a140ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:500,flexShrink:0}}>Aa</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:C.tx,fontSize:13,fontWeight:500}}>{f.nome}</div>
+              <div style={{color:C.td,fontSize:10,marginTop:2}}>{f.uso?f.uso+" · ":""}{f.formato}{f.externo?" · link externo":""}</div>
+            </div>
+            <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.externo?undefined:f.nome} style={{color:"#a140ff",fontSize:11,textDecoration:"none",fontWeight:500,flexShrink:0}}>{f.externo?"Abrir ↗":"Baixar ↓"}</a>
+            <button onClick={()=>removeItem("fontes",i)} style={{background:"transparent",border:"none",color:C.td,cursor:"pointer",fontSize:16,padding:0}}>×</button>
+          </div>
+        ))}
+      </div>}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={async()=>{const n=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");if(!n)return;const u=await pixelsPrompt("Uso (ex: Títulos, Corpo) — opcional:");setPendingFonte({nome:n.trim(),uso:(u||"").trim()});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
+        <button onClick={addFonteLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
+      </div>
+    </Section>
+
+    <Section title="Tom de voz" subtitle="Como a marca fala — exemplos práticos ajudam">
+      <textarea value={data.tomDeVoz||""} onChange={e=>setData(p=>({...p,tomDeVoz:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Técnico mas acessível. Linguagem direta, evita gírias. Foca em resultado prático na fazenda. Usa produtor em vez de cliente."' rows={4} style={{...inp,minHeight:80,resize:"vertical",lineHeight:1.5}}/>
+    </Section>
+
+    <Section title="Hashtags padrão" subtitle="Tags que sempre entram nos posts desse cliente">
+      {(data.hashtags||[]).length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+        {data.hashtags.map((t)=>(
+          <span key={t} style={{background:"#a140ff15",color:"#a140ff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:500,display:"flex",alignItems:"center",gap:6}}>
+            {t}
+            <button onClick={()=>removeHashtag(t)} style={{background:"transparent",border:"none",color:"#a140ff",cursor:"pointer",fontSize:13,padding:0,lineHeight:1}}>×</button>
+          </span>
+        ))}
+      </div>}
+      <div style={{display:"flex",gap:6}}>
+        <input value={newHashtag} onChange={e=>setNewHashtag(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addHashtag();}} placeholder="#bioter" style={{...inp,flex:1}}/>
+        <button onClick={addHashtag} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
+      </div>
+    </Section>
+
+    <Section title="CTA padrão" subtitle="Chamada pra ação que costuma fechar os posts">
+      <input value={data.ctaPadrao||""} onChange={e=>setData(p=>({...p,ctaPadrao:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Acesse o link na bio →"' style={inp}/>
+    </Section>
+
+    <Section title="O que NÃO fazer" subtitle="Palavras proibidas, temas sensíveis, posturas a evitar">
+      <textarea value={data.naoFazer||""} onChange={e=>setData(p=>({...p,naoFazer:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Nunca usar a palavra barato. Não comparar diretamente com concorrentes. Evitar emojis em posts institucionais."' rows={3} style={{...inp,minHeight:60,resize:"vertical",lineHeight:1.5}}/>
+    </Section>
+
+    <Section title="Site & redes oficiais" subtitle="Pra usar em arte, em links de bio, em posts">
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        {[
+          {key:"site",label:"Site oficial",placeholder:"https://exemplo.com.br",root:"data"},
+          {key:"driveUrl",label:"Pasta no Drive",placeholder:"https://drive.google.com/...",root:"data"},
+          {key:"instagram",label:"Instagram",placeholder:"@bioter_oficial",root:"redes"},
+          {key:"facebook",label:"Facebook",placeholder:"@bioteragro",root:"redes"},
+          {key:"youtube",label:"YouTube",placeholder:"@canal-bioter",root:"redes"},
+          {key:"linkedin",label:"LinkedIn",placeholder:"linkedin.com/company/bioter",root:"redes"},
+          {key:"tiktok",label:"TikTok",placeholder:"@bioter",root:"redes"},
+        ].map(f=>(
+          <div key={f.key}>
+            <div style={{color:C.td,fontSize:10,marginBottom:3,fontWeight:500}}>{f.label}</div>
+            <input
+              value={f.root==="redes"?(data.redes?.[f.key]||""):(data[f.key]||"")}
+              onChange={e=>{
+                if(f.root==="redes")setData(p=>({...p,redes:{...p.redes,[f.key]:e.target.value}}));
+                else setData(p=>({...p,[f.key]:e.target.value}));
+              }}
+              onBlur={()=>persist(data)}
+              placeholder={f.placeholder}
+              style={inp}/>
+          </div>
+        ))}
+      </div>
+    </Section>
   </div>);
 }
 
@@ -16740,7 +16995,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
         {/* TABS */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9"}}>
-          {([["desc","Descrição"],["legenda","📝 Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
+          {([["desc","Descrição"],["legenda","📝 Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#94a3b8",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1}}>
               {lbl}
@@ -17258,6 +17513,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>}
           </div>}
 
+          {/* ORIENTAÇÕES — read-only, só quando o cartão tem cliente vinculado */}
+          {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client}/>}
+
           {/* HISTÓRICO */}
           {activeTab==="activity"&&<div>
             <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:16}}>Histórico de Atividade</div>
@@ -17608,6 +17866,164 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>
   </div>;
+}
+
+/* ─── OrientacoesView — read-only no card modal ───
+   Mostra logos, paleta, fontes, voz, hashtags e contatos do cliente vinculado.
+   Designer/social só consultam (edição vai pela página do cliente). */
+function OrientacoesView({clientId}){
+  const sb=window._sb;
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState(null);
+  const [copiedHex,setCopiedHex]=useState(null);
+  const cl=CLIENTS.find(c=>c.id===clientId);
+
+  useEffect(()=>{
+    if(!sb||!clientId){setLoading(false);return;}
+    setLoading(true);setError(null);
+    sb.from("clients").select("orientacoes").eq("client_id",clientId).single()
+      .then(({data:row,error:err})=>{
+        if(err&&err.code!=="PGRST116"){setError(err.message);setLoading(false);return;}
+        const o=row?.orientacoes;
+        setData(typeof o==="string"?(()=>{try{return JSON.parse(o);}catch{return null;}})():o||null);
+        setLoading(false);
+      })
+      .catch(e=>{setError(e?.message||"Erro");setLoading(false);});
+  },[clientId]);
+
+  const copyHex=async(hex)=>{
+    try{await navigator.clipboard.writeText(hex);setCopiedHex(hex);setTimeout(()=>setCopiedHex(null),1500);}catch(e){}
+  };
+
+  if(loading)return<div style={{padding:24,textAlign:"center",color:"#94a3b8",fontSize:12}}>Carregando orientações...</div>;
+  if(error)return<div style={{padding:16,background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:10,color:"#991b1b",fontSize:12}}>Erro ao carregar: {error}</div>;
+
+  const hasContent=data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site);
+
+  if(!hasContent)return(
+    <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
+      <div style={{fontSize:32,marginBottom:8}}>📋</div>
+      <div style={{color:"#0f172a",fontWeight:500,fontSize:13,marginBottom:4}}>Sem orientações cadastradas</div>
+      <div style={{color:"#64748b",fontSize:11,lineHeight:1.6,maxWidth:340,margin:"0 auto"}}>Vá em <strong>Clientes → {cl?.name||"esse cliente"} → Informações → Orientações para a equipe</strong> para cadastrar logos, paleta, fontes, tom de voz e mais.</div>
+    </div>
+  );
+
+  const SectionTitle=({label,sub})=>(
+    <div style={{margin:"4px 0 10px"}}>
+      <div style={{color:"#a140ff",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>{label}</div>
+      {sub&&<div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{sub}</div>}
+    </div>
+  );
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Hero do cliente */}
+      {cl&&<div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:44,height:44,borderRadius:10,background:cl.color+"22",border:`0.5px solid ${cl.color}44`,display:"flex",alignItems:"center",justifyContent:"center",color:cl.color,fontWeight:600,fontSize:14}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:500,fontSize:14}}>{cl.name}</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}</div>
+        </div>
+      </div>}
+
+      {/* Logos */}
+      {data.logos?.length>0&&<div>
+        <SectionTitle label="Logos" sub="clique pra abrir ou baixar"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8}}>
+          {data.logos.map((l,i)=>(
+            <div key={i} style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
+              <a href={l.url} target="_blank" rel="noopener noreferrer" download={l.externo?undefined:l.nome} style={{display:"block",aspectRatio:"1.4",background:"#f8fafc",alignItems:"center",justifyContent:"center",padding:8,textDecoration:"none"}}>
+                <img src={l.url} alt={l.nome} style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.currentTarget.style.display="none";}}/>
+              </a>
+              <div style={{padding:"8px 10px",borderTop:"0.5px solid #f1f5f9"}}>
+                <div style={{color:"#0f172a",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.nome}</div>
+                <a href={l.url} target="_blank" rel="noopener noreferrer" download={l.externo?undefined:l.nome} style={{color:"#a140ff",fontSize:10,fontWeight:500,textDecoration:"none",marginTop:3,display:"inline-block"}}>{l.externo?"Abrir ↗":"Baixar ↓"}</a>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>}
+
+      {/* Paleta */}
+      {data.paleta?.length>0&&<div>
+        <SectionTitle label="Paleta de cores" sub="clique pra copiar o hex"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+          {data.paleta.map((c,i)=>(
+            <button key={i} onClick={()=>copyHex(c.hex)} style={{background:c.hex,border:"0.5px solid rgba(0,0,0,0.1)",borderRadius:10,padding:10,minHeight:64,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:"pointer",textAlign:"left"}}>
+              <div style={{color:"#fff",fontSize:11,fontWeight:500,textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{c.nome}</div>
+              <div style={{color:"#fff",fontSize:11,fontFamily:"monospace",textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{copiedHex===c.hex?"copiado!":c.hex.toUpperCase()}</div>
+            </button>
+          ))}
+        </div>
+      </div>}
+
+      {/* Fontes */}
+      {data.fontes?.length>0&&<div>
+        <SectionTitle label="Fontes" sub="baixe os arquivos pra instalar"/>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {data.fontes.map((f,i)=>(
+            <div key={i} style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:36,height:36,borderRadius:8,background:"#a140ff15",color:"#a140ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:500,flexShrink:0}}>Aa</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:500}}>{f.nome}</div>
+                <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{f.uso?f.uso+" · ":""}{f.formato}{f.externo?" · link externo":""}</div>
+              </div>
+              <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.externo?undefined:f.nome} style={{color:"#a140ff",fontSize:11,textDecoration:"none",fontWeight:500,flexShrink:0}}>{f.externo?"Abrir ↗":"Baixar ↓"}</a>
+            </div>
+          ))}
+        </div>
+      </div>}
+
+      {/* Tom de voz */}
+      {data.tomDeVoz&&<div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+        <SectionTitle label="Tom de voz"/>
+        <div style={{color:"#0f172a",fontSize:13,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{data.tomDeVoz}</div>
+      </div>}
+
+      {/* Hashtags */}
+      {data.hashtags?.length>0&&<div>
+        <SectionTitle label="Hashtags padrão" sub="clique pra copiar"/>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {data.hashtags.map((t,i)=>(
+            <button key={i} onClick={()=>copyHex(t)} style={{background:"#a140ff15",color:"#a140ff",border:"none",borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:500,cursor:"pointer"}}>{copiedHex===t?"copiado!":t}</button>
+          ))}
+        </div>
+      </div>}
+
+      {/* CTA padrão */}
+      {data.ctaPadrao&&<div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px"}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>CTA padrão</div>
+        <div style={{color:"#0f172a",fontSize:13}}>{data.ctaPadrao}</div>
+      </div>}
+
+      {/* Não fazer */}
+      {data.naoFazer&&<div style={{background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{color:"#991b1b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>NÃO fazer</div>
+        <div style={{color:"#7f1d1d",fontSize:13,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{data.naoFazer}</div>
+      </div>}
+
+      {/* Contatos & links */}
+      {(data.site||data.driveUrl||(data.redes&&Object.values(data.redes).some(Boolean)))&&<div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+        <SectionTitle label="Contatos & links"/>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {data.site&&<a href={data.site.startsWith("http")?data.site:"https://"+data.site} target="_blank" rel="noopener noreferrer" style={{display:"flex",justifyContent:"space-between",fontSize:12,textDecoration:"none",alignItems:"center"}}>
+            <span style={{color:"#64748b"}}>Site oficial</span><span style={{color:"#a140ff",fontWeight:500}}>{data.site} ↗</span>
+          </a>}
+          {data.driveUrl&&<a href={data.driveUrl} target="_blank" rel="noopener noreferrer" style={{display:"flex",justifyContent:"space-between",fontSize:12,textDecoration:"none",alignItems:"center"}}>
+            <span style={{color:"#64748b"}}>Pasta no Drive</span><span style={{color:"#a140ff",fontWeight:500}}>Abrir Drive ↗</span>
+          </a>}
+          {data.redes&&Object.entries(data.redes).filter(([,v])=>v).map(([k,v])=>{
+            const labels={instagram:"Instagram",facebook:"Facebook",youtube:"YouTube",linkedin:"LinkedIn",tiktok:"TikTok"};
+            const urls={instagram:s=>"https://instagram.com/"+s.replace(/^@/,""),facebook:s=>"https://facebook.com/"+s.replace(/^@/,""),youtube:s=>s.startsWith("http")?s:"https://youtube.com/"+s,linkedin:s=>s.startsWith("http")?s:"https://"+s,tiktok:s=>"https://tiktok.com/@"+s.replace(/^@/,"")};
+            return(<a key={k} href={urls[k](v)} target="_blank" rel="noopener noreferrer" style={{display:"flex",justifyContent:"space-between",fontSize:12,textDecoration:"none",alignItems:"center"}}>
+              <span style={{color:"#64748b"}}>{labels[k]}</span><span style={{color:"#a140ff",fontWeight:500}}>{v} ↗</span>
+            </a>);
+          })}
+        </div>
+      </div>}
+    </div>
+  );
 }
 
 // ======= 12_dashboard.jsx =======
