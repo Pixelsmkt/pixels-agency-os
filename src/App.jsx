@@ -11497,10 +11497,12 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
 
 // ======= 06_aprovacoes.jsx =======
 function PublicacaoEditModal({task, onClose, onReject}){
-  // All images from finalMedia + file attachments
+  // Apenas arquivos FINAIS (referências do briefing não devem entrar na anotação de ajuste)
+  // Default pra dados antigos sem `tipo`: vira "final" (preserva fluxo legado)
+  const isFinalImg=(f)=>f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
   const allImgs=[
     ...(task.finalMedia||[]),
-    ...(task.files||[]).filter(f=>f.type?.startsWith("image/")).map(f=>f.url),
+    ...(task.files||[]).filter(isFinalImg).map(f=>f.url),
     ...(task.cover&&!task.finalMedia?.includes(task.cover)?[task.cover]:[]),
   ].filter(Boolean);
 
@@ -11809,10 +11811,16 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [imgIdx,setImgIdx]=useState(0);
   const [openCard,setOpenCard]=useState(null);
   const [editModal,setEditModal]=useState(null);
+  const [lastApproved,setLastApproved]=useState(null);
 
-  // FIX 1: reset cardIdx e imgIdx ao trocar de aba (initTab ou tab interno)
+  // FIX 1: reset cardIdx, imgIdx, lastApproved e modais ao trocar de aba
   useEffect(()=>{
-    if(initTab){setTab(initTab);setCardIdx(0);setImgIdx(0);}
+    if(initTab){
+      setTab(initTab);
+      setCardIdx(0);setImgIdx(0);
+      setLastApproved(null);
+      setOpenCard(null);setEditModal(null);
+    }
   },[initTab]);
 
   // FIX 2: isApprover usa perms.aprovar com fallback seguro
@@ -11823,14 +11831,21 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
 
+  // Sort estável por ID asc (FIFO — mais antigos primeiro). Evita reordenar
+  // a fila quando o cartão é editado e o polling retorna em ordem nova.
+  const sortStable=(arr)=>[...arr].sort((a,b)=>{
+    const ia=Number(a.id)||0,ib=Number(b.id)||0;
+    if(ia!==ib)return ia-ib;
+    return String(a.id).localeCompare(String(b.id));
+  });
   // Copy queue: cards in "demanda" without ajustar flag
-  const copyQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"&&!t.ajustar);
+  const copyQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"&&!t.ajustar));
   // Ajuste queue: cards marcados para ajuste
-  const ajusteQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_"));
+  const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_")));
   // Publication queue: cards in "avaliacao"
-  const pubQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.status==="avaliacao");
+  const pubQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="avaliacao"));
   // Demandas Internas queue
-  const internasQueue=(tasks||[]).filter(t=>!t.deletedAt&&t.status==="interno_avaliacao");
+  const internasQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="interno_avaliacao"));
 
   const pushNotif=(notif)=>{
     if(setGlobalNotifs)setGlobalNotifs(p=>[{id:"n"+Date.now(),read:false,...notif},...p]);
@@ -11839,30 +11854,32 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // ── COPY ACTIONS ──
   const approveCopy=(task)=>{
     if(!isApprover)return;
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demanda",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}]}:t));
-    pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",body:'"'+task.title+'" foi aprovada e está em Demandas',user:CURRENT_USER.name,at:"Agora"});
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demanda",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
+    pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",body:'"'+task.title+'" foi aprovada e está em Demandas',user:actor,at:"Agora"});
     setCardIdx(0);setImgIdx(0);
   };
 
   const markAjustar=(task)=>{
     if(!isApprover)return;
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:true,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"edit",label:"Marcada para ajuste por "+CURRENT_USER.name,at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}]}:t));
-    pushNotif({type:"ajuste",icon:"✎",title:"Ajuste solicitado na Copy",body:'"'+task.title+'" precisa de revisão. Verifique o feedback.',user:CURRENT_USER.name,at:"Agora"});
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:true,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"edit",label:"Marcada para ajuste por "+actor,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
+    pushNotif({type:"ajuste",icon:"✎",title:"Ajuste solicitado na Copy",body:'"'+task.title+'" precisa de revisão. Verifique o feedback.',user:actor,at:"Agora"});
     setCardIdx(0);setImgIdx(0);
   };
 
   // ── PUBLICATION ACTIONS ──
-  const [lastApproved,setLastApproved]=useState(null);
-
   const approvePub=(task)=>{
     if(!isApprover)return;
     const isInterna=task.status==="interno_avaliacao";
     const toStatus=isInterna?"interno_aprovado":"aprovado";
     const fromLabel=isInterna?"Concluído p/ Avaliação (Interna)":"Avaliação";
     const toLabel=isInterna?"Aprovado (Interna)":"Aprovado";
-    const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}];
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
+    // FIX 8: usa apenas setTasks (wrapper sincroniza com Supabase via syncTasks).
+    // O update direto no _sb era redundante e podia gerar race condition.
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl}:t));
-    if(window._sb)window._sb.from("tasks").update({status:toStatus,completed_at:new Date().toISOString().split("T")[0],timeline:newTl}).eq("id",task.id).then(({error})=>{if(error)console.warn("[aprovacoes] aprovar:",error.message);}).catch(e=>console.warn("[aprovacoes] aprovar exception:",e?.message||e));
     // Notify everyone + specific notification to social media assignees
     const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
     const socialTeam=TEAM.filter(u=>u.role&&u.role.toLowerCase().includes("social"));
@@ -11872,13 +11889,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       .map(u=>u.name)
       .join(", ");
     if(isInterna){
-      pushNotif({type:"aprovacao",icon:"✅",title:"Demanda Interna Aprovada",body:'"'+task.title+'" foi aprovada e pode ser executada.',user:CURRENT_USER.name,at:"Agora",taskId:task.id,category:"interno"});
+      pushNotif({type:"aprovacao",icon:"✅",title:"Demanda Interna Aprovada",body:'"'+task.title+'" foi aprovada e pode ser executada.',user:actor,at:"Agora",taskId:task.id,category:"interno"});
     } else {
       pushNotif({
         type:"aprovacao",icon:"🏆",
         title:"✅ Material aprovado — Agende a publicação!",
         body:'"'+task.title+'" foi aprovado. '+(targetNames?targetNames+", organize":"Organize")+' o agendamento no Calendário de Publicações.',
-        user:CURRENT_USER.name,at:"Agora",taskId:task.id,category:"agendamento"
+        user:actor,at:"Agora",taskId:task.id,category:"agendamento"
       });
       setLastApproved(task);
     }
@@ -11893,7 +11910,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     const toLabel=isInterna?"Em Execução (Ajuste Interno)":"Em Execução (Ajuste)";
     const newFiles=[...(task.files||[]),...(drawingFiles||[]),...(audioFiles||[])];
     const newComments=[...(task.comments||[]),...(comments||[])];
-    const tl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:CURRENT_USER.name}];
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const tl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
+    // FIX 8: removido update direto no _sb (era redundante, causava race condition).
+    // setTasks já sincroniza com Supabase pelo wrapper syncTasks.
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{
       ...t,
       status:toStatus,
@@ -11905,19 +11925,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       comments:newComments,
       timeline:tl,
     }:t));
-    if(window._sb){
-      window._sb.from("tasks").update({
-        status:toStatus,
-        col_entered_at:new Date().toISOString(),
-        timeline:tl,
-        priority:"alta",
-        ajustar:!isInterna,
-        is_alteracao:!isInterna,
-        files:newFiles,
-        comments:newComments,
-      }).eq("id",task.id).then(({error})=>{if(error)console.warn("[aprovacoes] ajustar:",error.message);}).catch(e=>console.warn("[aprovacoes] ajustar exception:",e?.message||e));
-    }
-    pushNotif({type:"urgente",icon:"⚠",title:"⚠ Ajuste necessário",body:'"'+task.title+'" voltou para Em Execução com solicitação de ajuste.',user:CURRENT_USER.name,at:"Agora"});
+    pushNotif({type:"urgente",icon:"⚠",title:"⚠ Ajuste necessário",body:'"'+task.title+'" voltou para Em Execução com solicitação de ajuste.',user:actor,at:"Agora"});
     setCardIdx(0);setImgIdx(0);setEditModal(null);
   };
 
@@ -11931,12 +11939,18 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const prev=()=>{setCardIdx(i=>Math.max(0,i-1));setImgIdx(0);};
   const next=()=>{setCardIdx(i=>Math.min(queue.length-1,i+1));setImgIdx(0);};
 
-  // FIX 5: resetar cardIdx e imgIdx ao trocar aba manualmente
-  const switchTab=(newTab)=>{setTab(newTab);setCardIdx(0);setImgIdx(0);};
+  // FIX 5: resetar cardIdx, imgIdx e lastApproved ao trocar aba manualmente
+  const switchTab=(newTab)=>{setTab(newTab);setCardIdx(0);setImgIdx(0);setLastApproved(null);};
 
+  // FIX 7: aprovação de conteúdo mostra APENAS imagens finais (refs do briefing
+  // não entram aqui — aparecem em "Visualizar/Editar" → aba Arquivos → Referências).
+  // Em "copys" e "ajuste" mostramos tudo (a copy pode ter reference image junto).
+  const isFinalImg=(f)=>f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
+  const isAnyImg=(f)=>f.type?.startsWith("image/");
+  const filterFn=tab==="publicacao"?isFinalImg:isAnyImg;
   const allImgs=current?[
     ...(current.cover?[current.cover]:[]),
-    ...(current.files||[]).filter(f=>f.type&&f.type.startsWith("image/")).map(f=>f.url),
+    ...(current.files||[]).filter(filterFn).map(f=>f.url),
   ].filter(Boolean):[];
 
   const isSocio=CURRENT_USER.level===1;
@@ -20394,7 +20408,7 @@ export default function AgencyOS(){
     if(!tok) return;
     tokenRef.current = tok;
     try{
-      const res = await fetch(`${SB_URL}/rest/v1/tasks?select=*`,{
+      const res = await fetch(`${SB_URL}/rest/v1/tasks?select=*&order=id.asc`,{
         headers:{"apikey":SB_ANON,"Authorization":"Bearer "+tok}
       });
       if(res.status===401){tokenRef.current=null;setAuthState("login");return;}
@@ -20526,7 +20540,7 @@ export default function AgencyOS(){
       tokenRef.current=tok;
       if(pendingRef.current.size>0) return; // aguarda confirmações pendentes
       try{
-        const res=await fetch(`${SB_URL}/rest/v1/tasks?select=*`,{
+        const res=await fetch(`${SB_URL}/rest/v1/tasks?select=*&order=id.asc`,{
           headers:{"apikey":SB_ANON,"Authorization":"Bearer "+tok}
         });
         if(res.status===401){tokenRef.current=null;setAuthState("login");return;}
