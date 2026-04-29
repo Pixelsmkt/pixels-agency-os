@@ -12022,22 +12022,61 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
         </div>}
 
         {/* Right sidebar */}
-        <div style={{width:"min(220px,100%)",flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{width:"min(340px,100%)",flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
 
           {/* Card info */}
-          <div style={{background:C.card,borderRadius:14,padding:"14px 16px",border:"1px solid "+C.b1}}>
-            {cl&&(<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-              <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,padding:"2px 6px",display:"flex",alignItems:"center"}}>
-                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:14,maxWidth:44,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:8,fontWeight:700}}>{cl.abbr}</span>)}
+          {(()=>{
+            const stripHtml=(html)=>{
+              if(!html)return"";
+              let t=String(html);
+              // Remove ProseMirror data attributes residuais (comuns quando texto vem de editor rico)
+              t=t.replace(/data-prosemirror-[a-z-]+="[^"]*"/gi,"");
+              // Substitui quebras estruturais por \n antes de remover tags
+              t=t.replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n");
+              // Remove restante de tags
+              t=t.replace(/<[^>]+>/g,"");
+              // Decodifica entidades comuns
+              t=t.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+              // Limpa quebras múltiplas
+              return t.replace(/\n{3,}/g,"\n\n").trim();
+            };
+            const captionTxt=stripHtml(current.caption);
+            const descTxt=stripHtml(current.desc);
+            return(
+              <div style={{background:C.card,borderRadius:12,padding:"14px 16px",border:"0.5px solid "+C.b1,display:"flex",flexDirection:"column",gap:12}}>
+                {/* Header: cliente + responsável */}
+                {cl&&(<div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:6,padding:"3px 8px",display:"flex",alignItems:"center"}}>
+                    {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:14,maxWidth:60,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:9,fontWeight:600}}>{cl.abbr}</span>)}
+                  </div>
+                  {assigneeUser&&(<span style={{color:C.td,fontSize:11}}>{assigneeUser.name}</span>)}
+                </div>)}
+
+                {/* Título */}
+                <div style={{color:C.tx,fontWeight:500,fontSize:14,lineHeight:1.4}}>{current.title}</div>
+
+                {/* Legenda (copy de fato — o que vai ser publicado) */}
+                {captionTxt&&(<div style={{borderTop:"0.5px solid "+C.b1,paddingTop:10}}>
+                  <div style={{color:"#a140ff",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Legenda</div>
+                  <div style={{color:C.tx,fontSize:12,lineHeight:1.6,maxHeight:240,overflowY:"auto",whiteSpace:"pre-wrap",wordBreak:"break-word",paddingRight:4}}>{captionTxt}</div>
+                </div>)}
+
+                {/* Briefing pra equipe (desc) */}
+                {descTxt&&(<div style={{borderTop:"0.5px solid "+C.b1,paddingTop:10}}>
+                  <div style={{color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Briefing pra equipe</div>
+                  <div style={{color:C.ts,fontSize:11,lineHeight:1.6,maxHeight:140,overflowY:"auto",whiteSpace:"pre-wrap",wordBreak:"break-word",paddingRight:4}}>{descTxt}</div>
+                </div>)}
+
+                {/* Caso não tenha nem legenda nem desc */}
+                {!captionTxt&&!descTxt&&(<div style={{color:C.td,fontSize:11,fontStyle:"italic"}}>Nenhuma legenda ou briefing preenchido — abra "Visualizar / Editar" pra ver detalhes do cartão.</div>)}
+
+                {/* Tags */}
+                {(current.tags||[]).length>0&&(<div style={{display:"flex",gap:5,flexWrap:"wrap",borderTop:"0.5px solid "+C.b1,paddingTop:10}}>
+                  {current.tags.map(tag=>(<span key={tag} style={{background:C.ag,color:C.a,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:500}}>{"#"+tag}</span>))}
+                </div>)}
               </div>
-              {assigneeUser&&(<span style={{color:C.td,fontSize:10}}>{assigneeUser.name}</span>)}
-            </div>)}
-            <div style={{color:C.tx,fontWeight:700,fontSize:14,lineHeight:1.4,marginBottom:6}}>{current.title}</div>
-            {current.desc&&(<div style={{color:C.ts,fontSize:11,lineHeight:1.5}}>{current.desc.slice(0,120)}{current.desc.length>120?"...":""}</div>)}
-            <div style={{marginTop:8,display:"flex",gap:5,flexWrap:"wrap"}}>
-              {(current.tags||[]).map(tag=>(<span key={tag} style={{background:C.ag,color:C.a,borderRadius:6,padding:"1px 8px",fontSize:9,fontWeight:700}}>{"#"+tag}</span>))}
-            </div>
-          </div>
+            );
+          })()}
 
           {/* Action buttons */}
           {isApprover?(<div style={{display:"flex",flexDirection:"column",gap:8}}>
