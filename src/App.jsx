@@ -9546,7 +9546,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   style={{background:cardBg,border:`1px solid ${isAlteracao||isAjustar?"transparent":"rgba(0,0,0,0.08)"}`,borderLeft:`3px solid ${cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:10,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)",transition:"box-shadow .12s, border-color .12s",flexShrink:0}}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow="0 3px 10px rgba(0,0,0,0.14)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow=(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)"}>
-                  {thumbUrl&&<div style={{height:120,background:thumbUrl.startsWith("#")?`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`:undefined,backgroundImage:thumbUrl.startsWith("http")||thumbUrl.startsWith("data:")?`url(${thumbUrl})`:undefined,backgroundSize:"cover",backgroundPosition:"center",borderRadius:"7px 7px 0 0"}}/>}
+                  {thumbUrl&&(thumbUrl.startsWith("#")
+                    ?<div style={{height:120,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,borderRadius:"7px 7px 0 0"}}/>
+                    :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"100%",height:"auto",borderRadius:"7px 7px 0 0",pointerEvents:"none"}}/>
+                  )}
                   <div style={{padding:"9px 10px"}}>
                     {urgLevel<2&&!isAlteracao&&!isAjustar&&<div style={{float:"right",background:urgColor+"22",color:urgColor,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700,marginLeft:6}}>{urgLevel===0?"🔥 Urg.":"❌ Atras."}</div>}
                     <div style={{color:(isAlteracao||isAjustar)?"#fff":"#1e293b",fontSize:12,fontWeight:700,lineHeight:1.4,marginBottom:(isAlteracao||isAjustar)?2:7,overflow:"hidden"}}>{t.title}</div>
