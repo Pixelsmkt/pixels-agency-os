@@ -8992,7 +8992,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       const saved=localStorage.getItem("pixels-cols-v1");
       if(saved){
         const parsed=JSON.parse(saved);
-        if(Array.isArray(parsed)&&parsed.length>0)return parsed;
+        if(Array.isArray(parsed)&&parsed.length>0){
+          // SELF-HEAL: garante que colunas oficiais (KANBAN_COLS) sempre existam.
+          // Se config salva está desatualizada (ex: sem "agendado"/"publicado"),
+          // adiciona as faltantes preservando ordem do user.
+          const savedIds=new Set(parsed.map(c=>c.id));
+          const missing=KANBAN_COLS.filter(k=>!savedIds.has(k.id));
+          return missing.length>0?[...parsed,...missing]:parsed;
+        }
       }
     }catch(e){}
     return KANBAN_COLS;
@@ -9182,15 +9189,24 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       setDrag(null);setOver(null);
       return;
     }
-    const fromIdx=cols.findIndex(c=>c.id===t.status);
-    const toIdx=cols.findIndex(c=>c.id===toColId);
-    if(fromIdx<0||toIdx<0){setDrag(null);setOver(null);return;}
-    // Enforce one-column-at-a-time (allow any direction but only ±1)
-    if(Math.abs(toIdx-fromIdx)>1){
-      pixelsToast.warning(`Mova uma coluna por vez. Passe por "${cols[fromIdx+(toIdx>fromIdx?1:-1)]?.label}" primeiro.`,5000);
+    if(t.status==="avaliacao"){
+      // Avaliação só sai via fluxo de Aprovação (Aprovar / Solicitar Ajuste)
+      pixelsToast.warning("Este cartão está aguardando aprovação. Use o menu Aprovações pra liberar.",5000);
       setDrag(null);setOver(null);
       return;
     }
+    const fromIdx=cols.findIndex(c=>c.id===t.status);
+    const toIdx=cols.findIndex(c=>c.id===toColId);
+    if(fromIdx<0||toIdx<0){
+      // Diagnóstico explícito — antes falhava silenciosamente
+      pixelsToast.error("Coluna inválida. Recarregue a página (F5) para sincronizar as colunas.",5000);
+      setDrag(null);setOver(null);
+      return;
+    }
+    // FIX: removida regra "±1 coluna por vez" — bloqueava transições legítimas
+    // (ex: Aprovado → Agendado quando havia coluna custom no meio). O user sabe
+    // o que está fazendo. As travas de processo (demanda/avaliação) acima já garantem
+    // o fluxo crítico de aprovação. Resto é livre.
     // Validação OK — agora persiste (updater puro)
     setTasks(p=>p.map(x=>{
       if(x.id!==id)return x;
@@ -9524,6 +9540,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const isOver=dragOverId&&dragOverId.id===t.id;
                 return <div key={t.id}
                   draggable={canDrag} onDragStart={()=>canDrag&&setDrag(t.id)}
+                  onDragEnd={canDrag?()=>{setDrag(null);setDragOverId(null);setOver(null);}:undefined}
                   onDragOver={canDrag?e=>{
                     e.preventDefault();
                     e.stopPropagation();
@@ -9538,10 +9555,17 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     e.stopPropagation();
                     if(!drag)return;
                     const dragged=tasks.find(x=>String(x.id)===String(drag));
-                    // Reorder dentro da MESMA coluna
-                    if(dragged&&dragged.status===t.status&&String(dragged.id)!==String(t.id)){
+                    if(!dragged){setDrag(null);setDragOverId(null);return;}
+                    if(String(dragged.id)===String(t.id)){setDrag(null);setDragOverId(null);return;}
+                    // Mesma coluna: reorder
+                    if(dragged.status===t.status){
                       reorderTask(drag,t.id,dragOverId?.before??true);
+                    } else {
+                      // FIX: Drop em card de OUTRA coluna agora muda o status (antes era silenciosamente ignorado).
+                      // Isso permite arrastar ex: Aprovado → Agendado mesmo soltando em cima de outro card.
+                      moveTask(drag,t.status);
                     }
+                    setDragOverId(null);
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   style={{background:cardBg,border:`1px solid ${isAlteracao||isAjustar?"transparent":"rgba(0,0,0,0.08)"}`,borderLeft:`3px solid ${cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:10,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)",transition:"box-shadow .12s, border-color .12s",flexShrink:0}}
@@ -9975,14 +9999,14 @@ function ScannerInterno({ tasks }) {
 }
 
 /* ── Card Kanban ────────────────────────────────── */
-function CardKanbanInterno({ task, onOpen, onDragStart }) {
+function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
   const pc  = PRIO_CFG[task.priority] || PRIO_CFG.media;
   const dl  = dlInt(task.deadline);
   const dlC = dl===null?null:dl<0?C.rd:dl<=2?C.yw:C.td;
   const aus = TEAM.filter(u=>(task.assignees||[]).includes(u.id));
   const ck  = task.checklist||[];
   return(
-    <div draggable onDragStart={e=>onDragStart(e,task.id)} onClick={()=>onOpen(task)}
+    <div draggable onDragStart={e=>onDragStart(e,task.id)} onDragEnd={onDragEnd} onClick={()=>onOpen(task)}
       style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",userSelect:"none"}}
       onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.12)"}
       onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
@@ -10077,6 +10101,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
   },[isSocio,setNotifs]);
 
   const handleDragStart = (e,id) => { setDragId(id); e.dataTransfer.effectAllowed="move"; };
+  const handleDragEnd   = () => { setDragId(null); setDragOver(null); }; // FIX: limpa estado quando drag é cancelado/abortado
   const handleDragOver  = (e,colId) => { e.preventDefault(); setDragOver(colId); };
   const handleDrop      = (e,colId) => {
     e.preventDefault(); setDragOver(null);
@@ -10085,7 +10110,9 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
     if(!task) return;
     if(task.status===colId){setDragId(null);return;} // mesma coluna — ignora
     if(colId==="interno_aprovado"&&!isSocio&&!myPerms.aprovarDemandaInterna){
-      pixelsToast.warning("Apenas aprovadores podem mover para Aprovado."); return;
+      pixelsToast.warning("Apenas aprovadores podem mover para Aprovado.");
+      setDragId(null); // FIX: reset dragId pra não travar próximos drags
+      return;
     }
     const now=new Date().toISOString();
     const fromCol=INTERNO_COLS.find(c=>c.id===task.status);
@@ -10232,7 +10259,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,padding:"0 2px"}}>
                   {colTasks.map(t=>(
-                    <CardKanbanInterno key={t.id} task={t} onOpen={setOpenCard} onDragStart={handleDragStart}/>
+                    <CardKanbanInterno key={t.id} task={t} onOpen={setOpenCard} onDragStart={handleDragStart} onDragEnd={handleDragEnd}/>
                   ))}
                   {colTasks.length===0&&<div style={{color:C.td,fontSize:11,textAlign:"center",padding:"20px 0",opacity:.5}}>Nenhuma demanda</div>}
                 </div>
