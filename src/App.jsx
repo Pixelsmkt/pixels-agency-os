@@ -9482,7 +9482,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
         </div>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(240px,1fr))`,gap:10,overflowX:"auto",paddingBottom:8}}>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",paddingBottom:8,justifyContent:"center"}}>
           {visibleCols.map(col=>{
           const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>(a.position??999999)-(b.position??999999));
           const isDraggingOver=over===col.id;
@@ -18766,65 +18766,48 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       <ContagemDemandasView user={user} isMob={isMob}/>
     ):(<>
 
-    {/* ═══ KPIs ESTRATÉGICOS (Editor de Vídeo) — cores sólidas ═══ */}
+    {/* ═══ KPIs ESTRATÉGICOS — minimalista (cards brancos com accent sutil) ═══ */}
     {showNewWidgets&&active.length>0&&(
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12,
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
         {/* % No Prazo */}
-        <div style={{background:saudeColor,borderRadius:16,padding:"16px 18px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:120,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>🎯</div>
-            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>No Prazo</div>
+        <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
+            border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>No Prazo</div>
+            <div style={{width:8,height:8,borderRadius:"50%",background:saudeColor}}/>
           </div>
-          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{onTimePct}%</div>
-          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>{_noPrazo.length+_atencao.length} de {totalAtivas} demandas</div>
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{onTimePct}%</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>{_noPrazo.length+_atencao.length} de {totalAtivas}</div>
         </div>
-        {/* Total — cor neutra (azul), sempre igual (é só info) */}
-        <div style={{background:"#2563eb",borderRadius:16,padding:"16px 18px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:120,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>📋</div>
-            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Total Ativas</div>
-          </div>
-          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{active.length}</div>
-          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>em andamento</div>
+        {/* Total */}
+        <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
+            border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Total Ativas</div>
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{active.length}</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>em andamento</div>
         </div>
-        {/* Atrasadas */}
-        <div style={{background:_atrasadas.length>0?"#dc2626":"#16a34a",
-            borderRadius:16,padding:"16px 18px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:120,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>
-              {_atrasadas.length>0?"🔥":"✅"}
-            </div>
-            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>
-              Atrasadas
-            </div>
+        {/* Atrasadas — única que pode ter destaque sólido se houver atraso */}
+        <div style={{background:_atrasadas.length>0?"#fef2f2":"#fff",borderRadius:12,padding:"14px 16px",
+            border:`0.5px solid ${_atrasadas.length>0?"#fecaca":"#e5e7eb"}`,
+            display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{color:_atrasadas.length>0?"#991b1b":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Atrasadas</div>
+            {_atrasadas.length>0&&<div style={{width:8,height:8,borderRadius:"50%",background:"#dc2626"}}/>}
           </div>
-          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{_atrasadas.length}</div>
-          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>
-            {_atrasadas.length===0?"tudo em dia 🎉":"precisam de ação"}
-          </div>
+          <div style={{color:_atrasadas.length>0?"#dc2626":"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{_atrasadas.length}</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>{_atrasadas.length===0?"tudo em dia":"precisam de ação"}</div>
         </div>
         {/* Próximo prazo */}
-        <div style={{background:proximoPrazoColor,borderRadius:16,padding:"16px 18px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:120,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>⏰</div>
-            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Próximo Prazo</div>
+        <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
+            border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Próximo Prazo</div>
+            {_proxPrazoDays!==null&&_proxPrazoDays<=2&&<div style={{width:8,height:8,borderRadius:"50%",background:proximoPrazoColor}}/>}
           </div>
-          <div style={{color:"#ffffff",fontWeight:900,fontSize:30,lineHeight:1,letterSpacing:-.8}}>{proximoPrazoLabel}</div>
-          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-            {_proxPrazoTask?_proxPrazoTask.title.slice(0,24)+(_proxPrazoTask.title.length>24?"…":""):"sem prazos"}
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:24,lineHeight:1,letterSpacing:-.5}}>{proximoPrazoLabel}</div>
+          <div style={{color:"#94a3b8",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+            {_proxPrazoTask?_proxPrazoTask.title.slice(0,28)+(_proxPrazoTask.title.length>28?"…":""):"sem prazos"}
           </div>
         </div>
       </div>
@@ -18832,47 +18815,38 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {/* ═══ SUPERVISIONADOS (Guilherme → João) ═══ */}
     {showSupervisorWidget&&(
-      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
-          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
-          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{padding:"14px 20px",background:"#7c3aed",
-            display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>👁</div>
-          <div>
-            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Sob sua supervisão</div>
-            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>acompanhe as demandas da sua equipe</div>
-          </div>
+      <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e5e7eb",
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden"}}>
+        <div style={{padding:"12px 18px",borderBottom:"0.5px solid #e5e7eb",
+            display:"flex",alignItems:"center",gap:8}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Sob sua supervisão</div>
         </div>
         <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:10}}>
           {supStats.map(s=>{
             const isLate=s.late>0;
             return <div key={s.user.id}>
-              {/* Header do subordinado */}
+              {/* Header do subordinado — minimalista */}
               <div style={{
-                  background:isLate?"#fef2f2":s.total>0?"#f0fdf4":"#f8fafc",
-                  border:`1px solid ${isLate?"#fecaca":s.total>0?"#bbf7d0":"#e5e7eb"}`,
-                  borderLeft:`5px solid ${s.saudeC}`,
-                  borderRadius:10,padding:"12px 16px",
+                  background:"#fff",
+                  border:"0.5px solid #e5e7eb",
+                  borderLeft:`3px solid ${s.saudeC}`,
+                  borderRadius:10,padding:"10px 14px",
                   display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-                <Av l={s.user.av} color={s.user.color} size={40} uid={s.user.id}/>
+                <Av l={s.user.av} color={s.user.color} size={32} uid={s.user.id}/>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                    <span style={{color:C.tx,fontWeight:800,fontSize:14}}>{s.user.name}</span>
-                    <span style={{color:C.td,fontSize:10}}>· {s.user.role}</span>
-                    <span style={{background:s.saudeC,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
-                      {s.saudeL}
-                    </span>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+                    <span style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{s.user.name}</span>
+                    <span style={{color:"#94a3b8",fontSize:10}}>· {s.user.role}</span>
                   </div>
-                  <div style={{display:"flex",gap:14,color:C.td,fontSize:11,fontWeight:600}}>
-                    <span>📋 <strong style={{color:C.tx}}>{s.total}</strong> ativas</span>
-                    {s.late>0&&<span style={{color:"#dc2626"}}>🔥 <strong>{s.late}</strong> atrasadas</span>}
-                    {s.urgent>0&&<span style={{color:"#ea580c"}}>⚡ <strong>{s.urgent}</strong> hoje</span>}
+                  <div style={{display:"flex",gap:12,color:"#94a3b8",fontSize:11}}>
+                    <span><strong style={{color:"#0f172a",fontWeight:600}}>{s.total}</strong> ativas</span>
+                    {s.late>0&&<span style={{color:"#dc2626"}}><strong>{s.late}</strong> atrasadas</span>}
+                    {s.urgent>0&&<span style={{color:"#ea580c"}}><strong>{s.urgent}</strong> hoje</span>}
                   </div>
                 </div>
-                <div style={{background:s.saudeC,borderRadius:10,padding:"6px 12px",flexShrink:0,minWidth:56,textAlign:"center"}}>
-                  <div style={{color:"#fff",fontWeight:900,fontSize:18,lineHeight:1}}>{s.saudePct}%</div>
-                  <div style={{color:"#fff",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:2,opacity:0.95}}>saúde</div>
+                <div style={{textAlign:"right",flexShrink:0,minWidth:48}}>
+                  <div style={{color:s.saudeC,fontWeight:600,fontSize:18,lineHeight:1}}>{s.saudePct}%</div>
+                  <div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>saúde</div>
                 </div>
               </div>
               {/* Lista das tasks do subordinado (top 3) */}
@@ -18906,115 +18880,78 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {/* ═══ KPIs DA ELLEN (Coordinator) ═══ */}
     {showCoordinatorWidgets&&(
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12,
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
         {/* Aprovações pendentes */}
-        <div style={{background:_aprovPendentes.length>0?"#ea580c":"#16a34a",
-            borderRadius:16,padding:"16px 18px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:120,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>✍</div>
-            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Aprovar</div>
+        <div style={{background:_aprovPendentes.length>0?"#fff7ed":"#fff",borderRadius:12,padding:"14px 16px",
+            border:`0.5px solid ${_aprovPendentes.length>0?"#fed7aa":"#e5e7eb"}`,
+            display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{color:_aprovPendentes.length>0?"#9a3412":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Aprovar</div>
+            {_aprovPendentes.length>0&&<div style={{width:8,height:8,borderRadius:"50%",background:"#ea580c"}}/>}
           </div>
-          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{_aprovPendentes.length}</div>
-          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>
-            {_aprovPendentes.length===0?"tudo aprovado 🎉":"copys e artes pendentes"}
-          </div>
+          <div style={{color:_aprovPendentes.length>0?"#ea580c":"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{_aprovPendentes.length}</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>{_aprovPendentes.length===0?"tudo aprovado":"copys e artes"}</div>
         </div>
         {/* Equipe — saúde agregada */}
-        <div style={{background:"#7c3aed",borderRadius:16,padding:"16px 18px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:120,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>👥</div>
-            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Equipe</div>
-          </div>
-          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>
-            {equipeStats.reduce((a,e)=>a+e.total,0)}
-          </div>
-          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>
-            {equipeStats.filter(e=>e.late>0).length>0?
-              `${equipeStats.filter(e=>e.late>0).length} em risco`:
-              "equipe tranquila"}
+        <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
+            border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Equipe</div>
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{equipeStats.reduce((a,e)=>a+e.total,0)}</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>
+            {equipeStats.filter(e=>e.late>0).length>0?`${equipeStats.filter(e=>e.late>0).length} em risco`:"tudo certo"}
           </div>
         </div>
         {/* Publica hoje */}
-        <div style={{background:_publicaHoje.length>0?"#2563eb":"#64748b",
-            borderRadius:16,padding:"16px 18px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:120,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>📤</div>
-            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Publica Hoje</div>
-          </div>
-          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{_publicaHoje.length}</div>
-          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>
-            {_publicaHoje.length===0?"sem publicações":"agendadas pra hoje"}
-          </div>
+        <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
+            border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Publica Hoje</div>
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{_publicaHoje.length}</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>{_publicaHoje.length===0?"sem publicações":"agendadas"}</div>
         </div>
         {/* Suas demandas */}
-        <div style={{background:user.color,borderRadius:16,padding:"16px 18px",
-            display:"flex",flexDirection:"column",gap:6,minHeight:120,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:20}}>📋</div>
-            <div style={{color:"#ffffff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Minhas</div>
-          </div>
-          <div style={{color:"#ffffff",fontWeight:900,fontSize:36,lineHeight:1,letterSpacing:-1}}>{active.length}</div>
-          <div style={{color:"#ffffff",fontSize:11,fontWeight:600,opacity:0.9}}>demandas ativas</div>
+        <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
+            border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Minhas</div>
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{active.length}</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>demandas ativas</div>
         </div>
       </div>
     )}
 
     {/* ═══ EQUIPE SUPERVISIONADA (Ellen) ═══ */}
     {showCoordinatorWidgets&&(
-      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
-          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
-          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{padding:"14px 20px",background:"#7c3aed",
-            display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>👥</div>
-          <div>
-            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Sua Equipe</div>
-            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>saúde da fila de cada colaborador</div>
-          </div>
+      <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e5e7eb",
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden"}}>
+        <div style={{padding:"12px 18px",borderBottom:"0.5px solid #e5e7eb"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Sua equipe</div>
         </div>
-        <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:10}}>
-          {equipeStats.map(e=>{
-            const isLate=e.late>0;
-            return <div key={e.user.id} style={{
-                background:isLate?"#fef2f2":e.total>0?"#f0fdf4":"#f8fafc",
-                border:`1px solid ${isLate?"#fecaca":e.total>0?"#bbf7d0":"#e5e7eb"}`,
-                borderLeft:`5px solid ${e.saudeC}`,
-                borderRadius:12,padding:"12px 16px",
+        <div style={{padding:"14px",display:"flex",flexDirection:"column",gap:8}}>
+          {equipeStats.map(e=>(
+            <div key={e.user.id} style={{
+                background:"#fff",
+                border:"0.5px solid #e5e7eb",
+                borderLeft:`3px solid ${e.saudeC}`,
+                borderRadius:10,padding:"10px 14px",
                 display:"flex",alignItems:"center",gap:12}}>
-              <Av l={e.user.av} color={e.user.color} size={40} uid={e.user.id}/>
+              <Av l={e.user.av} color={e.user.color} size={32} uid={e.user.id}/>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                  <span style={{color:C.tx,fontWeight:800,fontSize:14}}>{e.user.name}</span>
-                  <span style={{color:C.td,fontSize:10}}>· {e.user.role}</span>
-                  <span style={{background:e.saudeC,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>
-                    {e.saudeL}
-                  </span>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+                  <span style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{e.user.name}</span>
+                  <span style={{color:"#94a3b8",fontSize:10}}>· {e.user.role}</span>
                 </div>
-                <div style={{display:"flex",gap:14,color:C.td,fontSize:11,fontWeight:600}}>
-                  <span>📋 <strong style={{color:C.tx}}>{e.total}</strong> ativas</span>
-                  {e.late>0&&<span style={{color:"#dc2626"}}>🔥 <strong>{e.late}</strong> atrasadas</span>}
-                  {e.urgent>0&&<span style={{color:"#ea580c"}}>⚡ <strong>{e.urgent}</strong> hoje</span>}
+                <div style={{display:"flex",gap:12,color:"#94a3b8",fontSize:11}}>
+                  <span><strong style={{color:"#0f172a",fontWeight:600}}>{e.total}</strong> ativas</span>
+                  {e.late>0&&<span style={{color:"#dc2626"}}><strong>{e.late}</strong> atrasadas</span>}
+                  {e.urgent>0&&<span style={{color:"#ea580c"}}><strong>{e.urgent}</strong> hoje</span>}
                 </div>
               </div>
-              <div style={{background:e.saudeC,borderRadius:10,padding:"6px 12px",flexShrink:0,minWidth:56,textAlign:"center"}}>
-                <div style={{color:"#fff",fontWeight:900,fontSize:18,lineHeight:1}}>{e.saudePct}%</div>
-                <div style={{color:"#fff",fontSize:8,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:2,opacity:0.95}}>saúde</div>
+              <div style={{textAlign:"right",flexShrink:0,minWidth:48}}>
+                <div style={{color:e.saudeC,fontWeight:600,fontSize:18,lineHeight:1}}>{e.saudePct}%</div>
+                <div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>saúde</div>
               </div>
-            </div>;
-          })}
+            </div>
+          ))}
         </div>
       </div>
     )}
@@ -19075,16 +19012,11 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
           </div>
         </div>
 
-        {/* Ranking de Produtividade */}
-        <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,overflow:"hidden",
-            boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-          <div style={{padding:"14px 18px",background:"#16a34a",display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:32,height:32,borderRadius:10,background:"#fff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🏆</div>
-            <div>
-              <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Ranking 7 dias</div>
-              <div style={{color:"#fff",fontSize:10,marginTop:1,opacity:0.9}}>entregas concluídas</div>
-            </div>
+        {/* Ranking de Produtividade — minimalista */}
+        <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e5e7eb",overflow:"hidden"}}>
+          <div style={{padding:"12px 18px",borderBottom:"0.5px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Ranking 7 dias</div>
+            <div style={{color:"#94a3b8",fontSize:10}}>entregas</div>
           </div>
           <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:8}}>
             {_ranking.map((r,i)=>{
@@ -19165,13 +19097,10 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
           maxWidth:860,margin:"0 auto",width:"100%"}}>
         {/* SLAs Atrasados */}
         {_slasAtrasados.length>0&&(
-          <div style={{background:C.card,borderRadius:16,border:"1px solid #fecaca",overflow:"hidden",boxShadow:"0 2px 8px rgba(220,38,38,0.08)"}}>
-            <div style={{padding:"12px 16px",background:"#dc2626",display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>🚨</div>
-              <div>
-                <div style={{color:"#fff",fontWeight:800,fontSize:13}}>SLAs Atrasados</div>
-                <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>{_slasAtrasados.length} demanda{_slasAtrasados.length>1?"s":""} vencida{_slasAtrasados.length>1?"s":""}</div>
-              </div>
+          <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #fecaca",overflow:"hidden"}}>
+            <div style={{padding:"10px 16px",borderBottom:"0.5px solid #fecaca",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{color:"#dc2626",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>SLAs Atrasados</div>
+              <div style={{color:"#991b1b",fontSize:10}}>{_slasAtrasados.length} vencida{_slasAtrasados.length>1?"s":""}</div>
             </div>
             <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto"}}>
               {_slasAtrasados.slice(0,5).map(t=>{
@@ -19192,13 +19121,10 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
         )}
         {/* SLAs Vencendo Hoje */}
         {_slasHoje.length>0&&(
-          <div style={{background:C.card,borderRadius:16,border:"1px solid #fed7aa",overflow:"hidden",boxShadow:"0 2px 8px rgba(234,88,12,0.08)"}}>
-            <div style={{padding:"12px 16px",background:"#ea580c",display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:30,height:30,borderRadius:8,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14}}>⏳</div>
-              <div>
-                <div style={{color:"#fff",fontWeight:800,fontSize:13}}>SLAs Vencendo Hoje</div>
-                <div style={{color:"#fff",fontSize:10,opacity:0.9,marginTop:1}}>{_slasHoje.length} prazo{_slasHoje.length>1?"s":""} apertando</div>
-              </div>
+          <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #fed7aa",overflow:"hidden"}}>
+            <div style={{padding:"10px 16px",borderBottom:"0.5px solid #fed7aa",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{color:"#ea580c",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>SLAs Vencendo Hoje</div>
+              <div style={{color:"#9a3412",fontSize:10}}>{_slasHoje.length} apertando</div>
             </div>
             <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto"}}>
               {_slasHoje.slice(0,5).map(t=>{
@@ -19222,17 +19148,11 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {/* ═══ APROVAÇÕES PENDENTES (Ellen) ═══ */}
     {showCoordinatorWidgets&&_aprovPendentes.length>0&&(
-      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
-          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
-          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{padding:"14px 20px",background:"#ea580c",
-            display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>✍</div>
-          <div>
-            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Aprovações Pendentes</div>
-            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>copys e artes aguardando sua aprovação</div>
-          </div>
+      <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e5e7eb",
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden"}}>
+        <div style={{padding:"12px 18px",borderBottom:"0.5px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Aprovações Pendentes</div>
+          <div style={{color:"#94a3b8",fontSize:10}}>{_aprovPendentes.length} aguardando</div>
         </div>
         <div style={{padding:"12px",display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto"}}>
           {_aprovPendentes.slice(0,8).map(t=>{
@@ -19272,17 +19192,11 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {/* ═══ PUBLICAÇÕES DA SEMANA (Ellen) ═══ */}
     {showCoordinatorWidgets&&(
-      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
-          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
-          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{padding:"14px 20px",background:"#2563eb",
-            display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📤</div>
-          <div>
-            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Publicações da Semana</div>
-            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>{_pubSemana.length} agendadas nos próximos 7 dias</div>
-          </div>
+      <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e5e7eb",
+          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden"}}>
+        <div style={{padding:"12px 18px",borderBottom:"0.5px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Publicações da Semana</div>
+          <div style={{color:"#94a3b8",fontSize:10}}>{_pubSemana.length} próximos 7 dias</div>
         </div>
         {_pubSemana.length===0?(
           <div style={{padding:"28px",textAlign:"center",color:C.td,fontSize:12}}>
