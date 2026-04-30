@@ -274,9 +274,9 @@ const TEAM = [
   { id:"gustavo",   name:"Gustavo",   role:"CEO / Gestor",          av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
   { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
-  { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false },
-  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, supervises:["joao"] },
-  { id:"joao",      name:"João",      role:"Editor de Vídeo",      av:"J", color:C.yw,  level:3, status:"online",  dash:"editor",      canDelete:false, canPixelsIA:false, supervisor:"guilherme" },
+  { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
+  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, supervises:["joao"], pagamentoPorDemanda:true },
+  { id:"joao",      name:"João",      role:"Editor de Vídeo",      av:"J", color:C.yw,  level:3, status:"online",  dash:"editor",      canDelete:false, canPixelsIA:false, supervisor:"guilherme", pagamentoPorDemanda:true },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
@@ -839,6 +839,7 @@ const NAV=[
     {id:"interno_calendario", icon:"▦", label:"Calendário"},
     {id:"interno_radar",      icon:"◎", label:"Radar de Entrega"},
     {id:"interno_pontuacao",  icon:"◈", label:"Pontuação"},
+    {id:"interno_contagem",   icon:"▤", label:"Contagem da equipe"},
     {id:"interno_mapeamento", icon:"◉", label:"Mapeamento"},
     {id:"interno_conexoes",   icon:"◬", label:"Conexão e Contas"},
     {id:"interno_360",        icon:"◎", label:"Avaliação 360"},
@@ -11885,6 +11886,39 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl}:t));
     // Notify everyone + specific notification to social media assignees
     const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
+
+    // ── HISTÓRICO IMUTÁVEL: insere snapshot em demand_history (1 linha por assignee) ──
+    // Idempotente via UNIQUE(task_id, assignee_id) na tabela. Reaprovações não duplicam.
+    // Só conta assignees que recebem por demanda (pagamentoPorDemanda:true no TEAM).
+    try{
+      const sb=window._sb;
+      if(sb&&assignees.length>0){
+        const cl=CLIENTS.find(c=>c.id===task.client);
+        const stripHtml=(s)=>!s?"":String(s).replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").trim();
+        const rows=assignees
+          .map(aid=>TEAM.find(u=>u.id===aid))
+          .filter(u=>u&&u.pagamentoPorDemanda)
+          .map(u=>({
+            task_id:String(task.id),
+            assignee_id:u.id,
+            assignee_name:u.name,
+            task_title:task.title||"",
+            task_description:stripHtml(task.desc||""),
+            task_caption:stripHtml(task.caption||""),
+            client_id:task.client||null,
+            client_name:cl?.name||null,
+            approval_type:isInterna?"interna":"cliente",
+            approved_at:new Date().toISOString(),
+            approved_by:actor,
+          }));
+        if(rows.length>0){
+          sb.from("demand_history").upsert(rows,{onConflict:"task_id,assignee_id"})
+            .then(({error})=>{if(error)console.warn("[demand_history] upsert:",error.message);})
+            .catch(e=>console.warn("[demand_history] exception:",e?.message||e));
+        }
+      }
+    }catch(e){console.warn("[demand_history] try block:",e?.message||e);}
+
     const socialTeam=TEAM.filter(u=>u.role&&u.role.toLowerCase().includes("social"));
     const targetNames=[...new Set([...assignees,...socialTeam.map(u=>u.id)])]
       .map(id=>TEAM.find(u=>u.id===id))
@@ -15732,6 +15766,157 @@ function UsoDoAppView(){
   );
 }
 
+/* ─── PAGE CONTAGEM DA EQUIPE — visão admin (sócio) ─────────── */
+function PageContagemEquipe({isMob}){
+  const [items,setItems]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [drillUserId,setDrillUserId]=useState(null);
+  const [month,setMonth]=useState(()=>{
+    const d=new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  });
+
+  useEffect(()=>{
+    let active=true;
+    setLoading(true);
+    const sb=window._sb;
+    if(!sb){setLoading(false);return;}
+    const [y,m]=month.split("-").map(Number);
+    const start=new Date(y,m-1,1).toISOString();
+    const end=new Date(y,m,1).toISOString();
+    sb.from("demand_history")
+      .select("*")
+      .gte("approved_at",start)
+      .lt("approved_at",end)
+      .order("approved_at",{ascending:false})
+      .then(({data,error})=>{
+        if(!active)return;
+        if(error){console.warn("[contagem-equipe] fetch:",error.message);setLoading(false);return;}
+        setItems(data||[]);
+        setLoading(false);
+      });
+    return()=>{active=false;};
+  },[month]);
+
+  const prevMonth=()=>{
+    const [y,m]=month.split("-").map(Number);
+    const d=new Date(y,m-2,1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  };
+  const nextMonth=()=>{
+    const [y,m]=month.split("-").map(Number);
+    const d=new Date(y,m,1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  };
+  const monthLabel=(()=>{
+    const [y,m]=month.split("-").map(Number);
+    const lbl=new Date(y,m-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+    return lbl.charAt(0).toUpperCase()+lbl.slice(1);
+  })();
+
+  // Equipe que recebe por demanda
+  const equipe=TEAM.filter(u=>u.pagamentoPorDemanda);
+  // Agrega por colaborador
+  const stats=equipe.map(u=>{
+    const userItems=items.filter(i=>i.assignee_id===u.id);
+    const cliente=userItems.filter(i=>i.approval_type==="cliente").length;
+    const interna=userItems.filter(i=>i.approval_type==="interna").length;
+    return {user:u,items:userItems,total:userItems.length,cliente,interna};
+  });
+  const totalAgencia=stats.reduce((a,s)=>a+s.total,0);
+
+  // Drill-down view
+  if(drillUserId){
+    const drill=stats.find(s=>s.user.id===drillUserId);
+    if(!drill)return null;
+    return <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:860,margin:"0 auto",width:"100%"}}>
+      <button onClick={()=>setDrillUserId(null)} style={{alignSelf:"flex-start",background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"6px 12px",cursor:"pointer",fontSize:12,color:"#64748b"}}>← voltar</button>
+      <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"14px 18px"}}>
+        <div style={{fontSize:18,fontWeight:600,color:"#0f172a"}}>{drill.user.name}</div>
+        <div style={{fontSize:12,color:"#94a3b8",marginTop:2}}>{drill.user.role} · {monthLabel}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+        <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"14px 16px"}}>
+          <div style={{fontSize:10,color:"#64748b",fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Total</div>
+          <div style={{fontSize:28,fontWeight:600,color:"#0f172a"}}>{drill.total}</div>
+        </div>
+        <div style={{background:"#f0fdf4",border:"0.5px solid #bbf7d0",borderRadius:10,padding:"14px 16px"}}>
+          <div style={{fontSize:10,color:"#15803d",fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Cliente</div>
+          <div style={{fontSize:28,fontWeight:600,color:"#15803d"}}>{drill.cliente}</div>
+        </div>
+        <div style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:10,padding:"14px 16px"}}>
+          <div style={{fontSize:10,color:"#7c3aed",fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Interna</div>
+          <div style={{fontSize:28,fontWeight:600,color:"#7c3aed"}}>{drill.interna}</div>
+        </div>
+      </div>
+      {drill.items.length===0?(
+        <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12}}>Sem demandas aprovadas neste mês.</div>
+      ):(
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {drill.items.map(it=>(
+            <div key={it.id} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"11px 14px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:5}}>
+                <div style={{fontSize:13,fontWeight:500,minWidth:0,flex:1,color:"#0f172a"}}>{it.task_title||"(sem título)"}</div>
+                <span style={{background:it.approval_type==="cliente"?"#dcfce7":"#ede9fe",color:it.approval_type==="cliente"?"#15803d":"#7c3aed",fontSize:9,fontWeight:600,padding:"2px 7px",borderRadius:4,whiteSpace:"nowrap",textTransform:"uppercase",letterSpacing:.4}}>{it.approval_type==="cliente"?"Cliente":"Interna"}</span>
+              </div>
+              {it.task_description&&<div style={{fontSize:11,color:"#64748b",lineHeight:1.5,marginBottom:6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{it.task_description.length>240?it.task_description.slice(0,240)+"…":it.task_description}</div>}
+              <div style={{display:"flex",gap:8,fontSize:10,color:"#94a3b8",flexWrap:"wrap",alignItems:"center"}}>
+                {it.client_name&&<><span style={{fontWeight:500}}>{it.client_name}</span><span>·</span></>}
+                <span>Aprovado em {new Date(it.approved_at).toLocaleDateString("pt-BR")}</span>
+                {it.approved_by&&<><span>·</span><span>por {it.approved_by}</span></>}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>;
+  }
+
+  // Consolidated view
+  return <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:860,margin:"0 auto",width:"100%"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"12px 14px",flexWrap:"wrap",gap:8}}>
+      <div>
+        <div style={{fontSize:16,fontWeight:600,color:"#0f172a"}}>Contagem da equipe — {monthLabel}</div>
+        <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>Total da agência: <span style={{color:"#a140ff",fontWeight:600}}>{totalAgencia}</span> demandas aprovadas</div>
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={prevMonth} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,color:"#64748b"}}>‹ anterior</button>
+        <button onClick={()=>{const d=new Date();setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);}} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,color:"#64748b"}}>Hoje</button>
+        <button onClick={nextMonth} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,color:"#64748b"}}>próximo ›</button>
+      </div>
+    </div>
+
+    {loading?(
+      <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12}}>Carregando histórico...</div>
+    ):(
+      <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+        <div style={{padding:"10px 14px",borderBottom:"0.5px solid #e5e7eb",display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 32px",gap:10,fontSize:10,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.4}}>
+          <span>Colaborador</span>
+          <span>Cliente</span>
+          <span>Interna</span>
+          <span style={{textAlign:"right"}}>Total</span>
+          <span></span>
+        </div>
+        {stats.map(s=>(
+          <div key={s.user.id} onClick={()=>setDrillUserId(s.user.id)} style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr 80px 80px 80px 32px",gap:10,alignItems:"center",borderBottom:"0.5px solid #f1f5f9",cursor:"pointer",transition:"background .15s"}} onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+              <div style={{width:26,height:26,borderRadius:"50%",background:s.user.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:600,fontSize:11,flexShrink:0}}>{s.user.av}</div>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:500,color:"#0f172a"}}>{s.user.name}</div>
+                <div style={{fontSize:10,color:"#94a3b8"}}>{s.user.role}</div>
+              </div>
+            </div>
+            <span style={{fontSize:12,color:"#15803d",fontWeight:500}}>{s.cliente}</span>
+            <span style={{fontSize:12,color:"#7c3aed",fontWeight:500}}>{s.interna}</span>
+            <span style={{fontSize:14,fontWeight:600,color:"#0f172a",textAlign:"right"}}>{s.total}</span>
+            <span style={{color:"#cbd5e1",fontSize:14,textAlign:"center"}}>›</span>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>;
+}
+
 // ======= 10_radar_entrega.jsx =======
 
 const RADAR_ORIGENS = {
@@ -18182,9 +18367,128 @@ const sortByPriority=(tasks)=>{
   });
 };
 
+// ═══ CONTAGEM DE DEMANDAS — histórico imutável (lê de demand_history) ═══
+function ContagemDemandasView({user,isMob}){
+  const [items,setItems]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [month,setMonth]=useState(()=>{
+    const d=new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  });
+
+  useEffect(()=>{
+    let active=true;
+    setLoading(true);
+    const sb=window._sb;
+    if(!sb){setLoading(false);return;}
+    const [y,m]=month.split("-").map(Number);
+    const start=new Date(y,m-1,1).toISOString();
+    const end=new Date(y,m,1).toISOString();
+    sb.from("demand_history")
+      .select("*")
+      .eq("assignee_id",user.id)
+      .gte("approved_at",start)
+      .lt("approved_at",end)
+      .order("approved_at",{ascending:false})
+      .then(({data,error})=>{
+        if(!active)return;
+        if(error){console.warn("[demand_history] fetch:",error.message);setLoading(false);return;}
+        setItems(data||[]);
+        setLoading(false);
+      });
+    return()=>{active=false;};
+  },[user.id,month]);
+
+  const total=items.length;
+  const cliente=items.filter(i=>i.approval_type==="cliente").length;
+  const interna=items.filter(i=>i.approval_type==="interna").length;
+
+  const prevMonth=()=>{
+    const [y,m]=month.split("-").map(Number);
+    const d=new Date(y,m-2,1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  };
+  const nextMonth=()=>{
+    const [y,m]=month.split("-").map(Number);
+    const d=new Date(y,m,1);
+    setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  };
+  const isCurrentMonth=(()=>{
+    const d=new Date();
+    return month===`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  })();
+  const monthLabel=(()=>{
+    const [y,m]=month.split("-").map(Number);
+    const lbl=new Date(y,m-1,1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+    return lbl.charAt(0).toUpperCase()+lbl.slice(1);
+  })();
+
+  return <div style={{maxWidth:860,margin:"0 auto",width:"100%",display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"12px 14px",flexWrap:"wrap",gap:8}}>
+      <div style={{display:"flex",flexDirection:"column"}}>
+        <div style={{fontSize:14,fontWeight:500,color:"#0f172a"}}>{monthLabel}</div>
+        <div style={{fontSize:11,color:"#94a3b8"}}>Demandas aprovadas — {user.name}</div>
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={prevMonth} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,color:"#64748b"}}>‹ anterior</button>
+        {!isCurrentMonth&&<button onClick={()=>{const d=new Date();setMonth(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);}} style={{background:"#a140ff",border:"none",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,color:"#fff",fontWeight:500}}>Hoje</button>}
+        <button onClick={nextMonth} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,color:"#64748b"}}>próximo ›</button>
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr 1fr":"repeat(3,1fr)",gap:10}}>
+      <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"14px 16px"}}>
+        <div style={{fontSize:10,color:"#64748b",fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Total no mês</div>
+        <div style={{fontSize:28,fontWeight:600,color:"#0f172a"}}>{total}</div>
+      </div>
+      <div style={{background:"#f0fdf4",border:"0.5px solid #bbf7d0",borderRadius:10,padding:"14px 16px"}}>
+        <div style={{fontSize:10,color:"#15803d",fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>De clientes</div>
+        <div style={{fontSize:28,fontWeight:600,color:"#15803d"}}>{cliente}</div>
+      </div>
+      <div style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:10,padding:"14px 16px"}}>
+        <div style={{fontSize:10,color:"#7c3aed",fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Internas</div>
+        <div style={{fontSize:28,fontWeight:600,color:"#7c3aed"}}>{interna}</div>
+      </div>
+    </div>
+
+    {loading?(
+      <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12}}>Carregando histórico...</div>
+    ):total===0?(
+      <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12}}>Nenhuma demanda aprovada neste mês.</div>
+    ):(
+      <div>
+        <div style={{fontSize:10,fontWeight:600,color:"#94a3b8",textTransform:"uppercase",letterSpacing:.6,marginBottom:8,paddingLeft:2}}>Detalhamento</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {items.map(it=>(
+            <div key={it.id} style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"11px 14px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:5}}>
+                <div style={{fontSize:13,fontWeight:500,minWidth:0,flex:1,color:"#0f172a"}}>{it.task_title||"(sem título)"}</div>
+                <span style={{background:it.approval_type==="cliente"?"#dcfce7":"#ede9fe",color:it.approval_type==="cliente"?"#15803d":"#7c3aed",fontSize:9,fontWeight:600,padding:"2px 7px",borderRadius:4,whiteSpace:"nowrap",textTransform:"uppercase",letterSpacing:.4}}>{it.approval_type==="cliente"?"Cliente":"Interna"}</span>
+              </div>
+              {it.task_description&&<div style={{fontSize:11,color:"#64748b",lineHeight:1.5,marginBottom:6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{it.task_description.length>240?it.task_description.slice(0,240)+"…":it.task_description}</div>}
+              <div style={{display:"flex",gap:8,fontSize:10,color:"#94a3b8",flexWrap:"wrap",alignItems:"center"}}>
+                {it.client_name&&<><span style={{fontWeight:500}}>{it.client_name}</span><span>·</span></>}
+                <span>Aprovado em {new Date(it.approved_at).toLocaleDateString("pt-BR")}</span>
+                {it.approved_by&&<><span>·</span><span>por {it.approved_by}</span></>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>;
+}
+
 function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,setTasks,isViewing,icon,currentUser,notifs,isMob}){
   const [openCard,setOpenCard]=useState(null);
   const [showCustomize,setShowCustomize]=useState(false);
+  // Tab interna: "geral" (padrão) ou "contagem" (só visível pra quem recebe por demanda)
+  const [dashTab,setDashTab]=useState(()=>{
+    try{return localStorage.getItem("pixels-colab-dash-tab-"+user.id)||"geral";}catch(e){return"geral";}
+  });
+  useEffect(()=>{try{localStorage.setItem("pixels-colab-dash-tab-"+user.id,dashTab);}catch(e){}},[dashTab,user.id]);
+  const showContagemTab=!!user.pagamentoPorDemanda;
+  const effectiveDashTab=showContagemTab?dashTab:"geral";
   const [widgets,setWidgets]=useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-dash-widgets-"+user.id)||'{"notifs":true,"clients":true,"stale":true}');}catch(e){return{notifs:true,clients:true,stale:true};}
   });
@@ -18413,6 +18717,27 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
         maxWidth:860,margin:"0 auto",width:"100%"}}>
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
+
+    {/* ═══ TAB BAR (só pra quem recebe por demanda) ═══ */}
+    {showContagemTab&&<div style={{display:"flex",gap:isMob?4:6,padding:isMob?4:6,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
+      {[
+        {id:"geral",label:"Geral"},
+        {id:"contagem",label:"Contagem de demandas"},
+      ].map(t=>(
+        <button key={t.id} onClick={()=>setDashTab(t.id)} style={{
+          flex:1,
+          background:effectiveDashTab===t.id?"#a140ff":"transparent",
+          border:"none",borderRadius:8,padding:isMob?"8px 10px":"10px 16px",
+          fontSize:isMob?12:13,fontWeight:effectiveDashTab===t.id?600:500,
+          color:effectiveDashTab===t.id?"#fff":"#64748b",cursor:"pointer",
+          whiteSpace:"nowrap",transition:"all .18s",
+        }}>{t.label}</button>
+      ))}
+    </div>}
+
+    {effectiveDashTab==="contagem"?(
+      <ContagemDemandasView user={user} isMob={isMob}/>
+    ):(<>
 
     {/* ═══ KPIs ESTRATÉGICOS (Editor de Vídeo) — cores sólidas ═══ */}
     {showNewWidgets&&active.length>0&&(
@@ -19364,6 +19689,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       </div>}
 
     </div>
+    </>)}
   </div>;
 }
 
@@ -20737,6 +21063,7 @@ export default function AgencyOS(){
       case "interno_calendario":
       case "interno_radar":        return p.verInterno||isSocio;
       case "interno_pontuacao":    return (p.verInterno&&p.verPontuacao)||isSocio;
+      case "interno_contagem":     return isSocio; // Só sócio vê
       case "interno_mapeamento":   return (p.verInterno&&p.verMapeamento)||isSocio;
       case "interno_conexoes":     return (p.verInterno&&p.verConexoes)||isSocio;
       case "interno_360":          return (p.verInterno&&p.verAvaliacao360)||isSocio;
@@ -20809,6 +21136,7 @@ export default function AgencyOS(){
       case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_radar":         return (effectivePerms.verInterno||isSocio)?<PageRadarEntrega {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_pontuacao":     return (effectivePerms.verInterno&&effectivePerms.verPontuacao)||isSocio?<PagePontuacao {...p} tasks={tasks}/>:<NoPerm/>;
+      case "interno_contagem":      return isSocio?<PageContagemEquipe {...p}/>:<NoPerm/>;
       case "interno_mapeamento":    return (effectivePerms.verInterno&&effectivePerms.verMapeamento)||isSocio?<PageMapeamento {...p}/>:<NoPerm/>;
       case "interno_conexoes":      return (effectivePerms.verInterno&&effectivePerms.verConexoes)||isSocio?<PageConexoes {...p}/>:<NoPerm/>;
       case "interno_360":           return (effectivePerms.verInterno&&effectivePerms.verAvaliacao360)||isSocio?<PageAvaliacao360 {...p}/>:<NoPerm/>;
