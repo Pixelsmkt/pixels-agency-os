@@ -1533,41 +1533,82 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       if(aprovacoesInternas.length>0)items.push({icon:"🔒",title:`${aprovacoesInternas.length} ${aprovacoesInternas.length===1?"demanda interna":"demandas internas"} aguardando`,sub:"Avaliação dos sócios",onClick:null});
 
       if(items.length===0)return (
-        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"32px",textAlign:"center"}}>
-          <div style={{fontSize:36,marginBottom:8}}>✨</div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:15}}>Nada pendente!</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:4}}>Toda agência queria ter um dia assim</div>
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"40px 24px",textAlign:"center"}}>
+          <div style={{width:48,height:48,borderRadius:12,background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,margin:"0 auto 14px"}}>✨</div>
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:16,marginBottom:6}}>Tudo tranquilo</div>
+          <div style={{color:"#94a3b8",fontSize:13,lineHeight:1.6}}>Nada pendente. Toda agência queria ter um dia assim.</div>
         </div>
       );
-      return (
-        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
-          <div style={{padding:"14px 18px",borderBottom:"0.5px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>O que precisa de você agora</div>
-            <div style={{background:"#a140ff",color:"#fff",borderRadius:99,padding:"3px 12px",fontSize:11,fontWeight:700}}>{items.length}</div>
-          </div>
-          <div>
-            {items.map((it,i)=>(
-              <div key={i} onClick={it.onClick||undefined}
-                style={{
-                  display:"flex",alignItems:"center",gap:12,
-                  padding:"11px 18px",
-                  borderBottom:i<items.length-1?"0.5px solid #f1f5f9":"none",
-                  cursor:it.onClick?"pointer":"default",
-                  transition:"background .12s",
-                }}
-                onMouseEnter={e=>{if(it.onClick)e.currentTarget.style.background="#faf5ff";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
-                <span style={{fontSize:18,flexShrink:0,width:24,textAlign:"center"}}>{it.icon}</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontWeight:600,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.title}</div>
-                  <div style={{color:"#64748b",fontSize:11,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.sub}</div>
-                </div>
-                {it.onClick&&<span style={{color:"#a140ff",fontSize:12,fontWeight:600,flexShrink:0}}>Abrir →</span>}
+      // NOVO LAYOUT: 1 alerta principal grande + 4 menores na lateral
+      const mainItem=items[0];
+      const sideItems=items.slice(1,5);
+      const mainColor=mainItem.icon==="💸"||mainItem.icon==="🔥"?"#dc2626":mainItem.icon==="📤"?"#ea580c":mainItem.icon==="⚠"?"#dc2626":"#7c3aed";
+      const mainLabel=mainItem.icon==="💸"?"Pagamento atrasado":mainItem.icon==="🔥"?"Demanda atrasada":mainItem.icon==="📤"?"Publicação vencida":mainItem.icon==="⚠"?"Cliente em risco":mainItem.icon==="📝"?"Copy aguardando":mainItem.icon==="🎨"?"Arte aguardando":mainItem.icon==="🔒"?"Demanda interna":"Atenção";
+      return (<div style={{maxWidth:860,margin:"0 auto",width:"100%"}}>
+        <div style={{padding:"0 4px 8px"}}>
+          <div style={{fontSize:10,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.6}}>O que precisa de você agora</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 250px",gap:12}}>
+          {/* CARTÃO GRANDE — alerta #1 */}
+          <div onClick={mainItem.onClick||undefined} style={{
+            background:"#fff",
+            border:"0.5px solid #e5e7eb",
+            borderLeft:`4px solid ${mainColor}`,
+            borderRadius:12,
+            padding:"22px 24px",
+            minHeight:200,
+            cursor:mainItem.onClick?"pointer":"default",
+            display:"flex",
+            flexDirection:"column",
+            transition:"box-shadow .15s",
+          }}
+            onMouseEnter={e=>{if(mainItem.onClick)e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.06)";}}
+            onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <span style={{
+                  background:mainColor+"18",color:mainColor,
+                  fontSize:9,fontWeight:600,padding:"3px 9px",borderRadius:4,
+                  textTransform:"uppercase",letterSpacing:.4
+                }}>{mainItem.icon} {mainLabel}</span>
+                <span style={{fontSize:10,color:"#94a3b8"}}>#1 alerta</span>
               </div>
-            ))}
+              <span style={{fontSize:11,color:"#94a3b8",fontWeight:500}}>{items.length} {items.length===1?"item":"itens"}</span>
+            </div>
+            <div style={{color:"#0f172a",fontWeight:600,fontSize:18,lineHeight:1.3,marginBottom:8}}>{mainItem.title}</div>
+            <div style={{color:"#64748b",fontSize:12,lineHeight:1.6,marginBottom:14,flex:1}}>{mainItem.sub}</div>
+            {mainItem.onClick&&<div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",paddingTop:12,borderTop:"0.5px solid #f1f5f9",marginTop:"auto"}}>
+              <span style={{background:"#a140ff",color:"#fff",fontSize:11,fontWeight:500,padding:"6px 14px",borderRadius:6}}>Abrir →</span>
+            </div>}
+          </div>
+
+          {/* 4 PEQUENOS */}
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {sideItems.map((it,i)=>{
+              const sideColor=it.icon==="💸"||it.icon==="🔥"?"#dc2626":it.icon==="📤"?"#ea580c":it.icon==="⚠"?"#dc2626":"#7c3aed";
+              return <div key={i+1} onClick={it.onClick||undefined}
+                style={{
+                  background:"#fff",
+                  border:"0.5px solid #e5e7eb",
+                  borderLeft:`3px solid ${sideColor}`,
+                  borderRadius:8,
+                  padding:"9px 11px",
+                  cursor:it.onClick?"pointer":"default",
+                  transition:"transform .1s",
+                }}
+                onMouseEnter={e=>{if(it.onClick)e.currentTarget.style.transform="translateX(2px)";}}
+                onMouseLeave={e=>e.currentTarget.style.transform=""}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                  <span style={{fontSize:9,color:sideColor,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{it.icon} #{i+2}</span>
+                </div>
+                <div style={{fontSize:11,color:"#0f172a",fontWeight:500,lineHeight:1.3,marginBottom:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.title}</div>
+                <div style={{fontSize:9,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.sub}</div>
+              </div>;
+            })}
+            {items.length>5&&<div style={{textAlign:"center",padding:6,fontSize:10,color:"#94a3b8"}}>+ {items.length-5} {items.length-5===1?"alerta":"alertas"}</div>}
           </div>
         </div>
-      );
+      </div>);
     })()}
 
     {/* ═══ TAB DEMANDAS — 4 KPIs operacionais ═══ */}
@@ -19104,16 +19145,11 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
 
-        {/* Donut: Distribuição de status */}
-        <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,overflow:"hidden",
-            boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-          <div style={{padding:"14px 18px",background:"#0f172a",display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:32,height:32,borderRadius:10,background:"#fff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>🍩</div>
-            <div>
-              <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Distribuição</div>
-              <div style={{color:"#fff",fontSize:10,marginTop:1,opacity:0.9}}>{_teamTasks.length} tarefas da equipe</div>
-            </div>
+        {/* Donut: Distribuição de status — minimalista */}
+        <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e5e7eb",overflow:"hidden"}}>
+          <div style={{padding:"12px 18px",borderBottom:"0.5px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Distribuição</div>
+            <div style={{color:"#94a3b8",fontSize:10}}>{_teamTasks.length} tarefas</div>
           </div>
           <div style={{padding:"16px",display:"flex",alignItems:"center",gap:16}}>
             {/* Donut SVG */}
@@ -19186,22 +19222,14 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       </div>
     )}
 
-    {/* ═══ GARGALO DA SEMANA (Ellen) ═══ */}
+    {/* ═══ GARGALO DA SEMANA (Ellen) — minimalista ═══ */}
     {showCoordinatorWidgets&&_teamTasks.length>0&&(
-      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,overflow:"hidden",
-          maxWidth:860,margin:"0 auto",width:"100%",
-          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{padding:"14px 18px",background:_gargalo&&_gargalo.media>=3?"#dc2626":"#475569",
-            display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:32,height:32,borderRadius:10,background:"#fff",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>
-            {_gargalo&&_gargalo.media>=3?"⚠":"⏱"}
-          </div>
-          <div style={{flex:1}}>
-            <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Tempo Médio por Status</div>
-            <div style={{color:"#fff",fontSize:10,marginTop:1,opacity:0.9}}>
-              {_gargalo&&_gargalo.count>0?`Gargalo: ${_gargalo.label} (${_gargalo.media}d em média)`:"sem gargalos detectados"}
-            </div>
+      <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e5e7eb",overflow:"hidden",
+          maxWidth:860,margin:"0 auto",width:"100%"}}>
+        <div style={{padding:"12px 18px",borderBottom:"0.5px solid #e5e7eb",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Tempo médio por status</div>
+          <div style={{color:_gargalo&&_gargalo.media>=3?"#dc2626":"#94a3b8",fontSize:10,fontWeight:500}}>
+            {_gargalo&&_gargalo.count>0?`Gargalo: ${_gargalo.label} (${_gargalo.media}d)`:"sem gargalos"}
           </div>
         </div>
         <div style={{padding:"16px",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
@@ -19380,41 +19408,25 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       </div>
     )}
 
-    {/* ═══ INTEGRAÇÕES — Drive + WhatsApp (placeholder, Ellen) ═══ */}
+    {/* ═══ INTEGRAÇÕES — Drive + WhatsApp (placeholder, Ellen) — minimalista ═══ */}
     {showCoordinatorWidgets&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
-        {/* Drive */}
-        <div style={{background:"#f59e0b",borderRadius:14,padding:"14px 16px",
-            display:"flex",alignItems:"center",gap:12,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{width:44,height:44,borderRadius:10,background:"#ffffff",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>☁️</div>
+        <div style={{background:"#fff",borderRadius:10,border:"0.5px solid #e5e7eb",padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#94a3b8",flexShrink:0}}/>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{color:"#ffffff",fontWeight:800,fontSize:13}}>Pastas no Drive</div>
-            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>
-              {_publicaHoje.length} materiais prontos pra upload
-            </div>
+            <div style={{color:"#0f172a",fontWeight:500,fontSize:12}}>Pastas no Drive</div>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>{_publicaHoje.length} materiais prontos pra upload</div>
           </div>
-          <span style={{background:"#ffffff",color:"#f59e0b",borderRadius:99,padding:"4px 10px",fontSize:10,fontWeight:800,flexShrink:0}}>
-            EM BREVE
-          </span>
+          <span style={{background:"#f8fafc",color:"#94a3b8",borderRadius:4,padding:"2px 8px",fontSize:9,fontWeight:500,flexShrink:0,letterSpacing:.3}}>EM BREVE</span>
         </div>
-        {/* WhatsApp */}
-        <div style={{background:"#16a34a",borderRadius:14,padding:"14px 16px",
-            display:"flex",alignItems:"center",gap:12,
-            boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
-          <div style={{width:44,height:44,borderRadius:10,background:"#ffffff",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>💬</div>
+        <div style={{background:"#fff",borderRadius:10,border:"0.5px solid #e5e7eb",padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#94a3b8",flexShrink:0}}/>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{color:"#ffffff",fontWeight:800,fontSize:13}}>Envio no WhatsApp</div>
-            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>
-              {_publicaHoje.length} pra enviar nos grupos hoje
-            </div>
+            <div style={{color:"#0f172a",fontWeight:500,fontSize:12}}>Envio no WhatsApp</div>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>{_publicaHoje.length} pra enviar nos grupos hoje</div>
           </div>
-          <span style={{background:"#ffffff",color:"#16a34a",borderRadius:99,padding:"4px 10px",fontSize:10,fontWeight:800,flexShrink:0}}>
-            EM BREVE
-          </span>
+          <span style={{background:"#f8fafc",color:"#94a3b8",borderRadius:4,padding:"2px 8px",fontSize:9,fontWeight:500,flexShrink:0,letterSpacing:.3}}>EM BREVE</span>
         </div>
       </div>
     )}
