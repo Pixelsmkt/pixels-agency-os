@@ -10040,9 +10040,11 @@ function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
 }
 
 /* ── PageDemandasInternas ───────────────────────── */
-function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
-  const isSocio  = CURRENT_USER.level === 1;
-  const myPerms  = { ...DEFAULT_PERMS, ...(ACCESS_STORE?.[CURRENT_USER.id] || {}) };
+function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms, viewingAs }) {
+  // FIX BUG-AUDIT: respeita "Ver como" — usa effectiveUser pra todos os filtros e ações
+  const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs) || CURRENT_USER) : CURRENT_USER;
+  const isSocio  = effectiveUser.level === 1;
+  const myPerms  = perms || { ...DEFAULT_PERMS, ...(ACCESS_STORE?.[effectiveUser.id] || {}) };
   const canCreate = isSocio || myPerms.criarDemandaInterna;
   const canSeeAll = isSocio || myPerms.verTodosInternos;
 
@@ -10054,7 +10056,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
 
   const allInternas = (tasks||[]).filter(t=>!t.deletedAt&&INTERNO_COLS.find(c=>c.id===t.status));
   const visible = canSeeAll ? allInternas
-    : allInternas.filter(t=>(t.assignees||[]).includes(CURRENT_USER.id)||t.createdBy===CURRENT_USER.id);
+    : allInternas.filter(t=>(t.assignees||[]).includes(effectiveUser.id)||t.createdBy===effectiveUser.id);
 
   // Verifica cards parados e notifica Vinicius+Gustavo a cada hora
   // Usa ref para sempre ler a lista mais atualizada sem precisar recriar o interval
@@ -10117,10 +10119,10 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
     const now=new Date().toISOString();
     const fromCol=INTERNO_COLS.find(c=>c.id===task.status);
     const toCol=INTERNO_COLS.find(c=>c.id===colId);
-    const tl=[...(task.timeline||[]),{type:"status",from:task.status,to:colId,fromLabel:fromCol?.label||task.status,toLabel:toCol?.label||colId,at:now,atFmt:nowFmtInt(),user:CURRENT_USER.name}];
+    const tl=[...(task.timeline||[]),{type:"status",from:task.status,to:colId,fromLabel:fromCol?.label||task.status,toLabel:toCol?.label||colId,at:now,atFmt:nowFmtInt(),user:effectiveUser.name}];
     const updated={...task,status:colId,colEnteredAt:now,timeline:tl};
     if(colId==="interno_avaliacao"&&setNotifs){
-      setNotifs(p=>[{id:"ni_"+Date.now(),read:false,type:"interno_avaliacao",icon:"◫",title:"Demanda interna aguarda aprovação",body:`"${task.title}" foi enviada para avaliação.`,user:CURRENT_USER.name,at:"Agora",category:"interno"},...p]);
+      setNotifs(p=>[{id:"ni_"+Date.now(),read:false,type:"interno_avaliacao",icon:"◫",title:"Demanda interna aguarda aprovação",body:`"${task.title}" foi enviada para avaliação.`,user:effectiveUser.name,at:"Agora",category:"interno"},...p]);
     }
     if(setTasks) setTasks(p=>p.map(t=>t.id===dragId?updated:t));
     if(window._sb){
@@ -10138,10 +10140,10 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
     // Isso evita cards "fantasma" no state se o usuário fechar o modal sem salvar
     const t={
       id:"int-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),title:"Nova Demanda Interna",status:"interno_demanda",
-      priority:"media",deadline:"",assignees:[CURRENT_USER.id],checklist:[],desc:"",
-      createdBy:CURRENT_USER.id,createdAt:new Date().toISOString(),
+      priority:"media",deadline:"",assignees:[effectiveUser.id],checklist:[],desc:"",
+      createdBy:effectiveUser.id,createdAt:new Date().toISOString(),
       colEnteredAt:new Date().toISOString(),timeline:[],
-      assignee:CURRENT_USER.id,sector:"",client:"interno",tags:[],comments:[],files:[],
+      assignee:effectiveUser.id,sector:"",client:"interno",tags:[],comments:[],files:[],
       watchers:[],deletedAt:null,cover:null,ajustar:false,isAlteracao:false,
       score:null,publishDate:"",publishTime:"09:00",bioterUnit:"",
       _isNew:true,
@@ -10163,7 +10165,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
         priority:card.priority,deadline:card.deadline||null,deadline_time:card.deadlineTime||null,
         description:card.desc||"",checklist:card.checklist||[],
         timeline:card.timeline||[],client:card.client||"interno",origem:card.origem||"interno",sector:"",
-        created_by:card.createdBy||CURRENT_USER.id,
+        created_by:card.createdBy||effectiveUser.id,
         col_entered_at:card.colEnteredAt||null,
         tags:[],comments:[],files:[],watchers:[],cover:null,
         ajustar:false,is_alteracao:false,score:null,
@@ -10178,8 +10180,8 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs }) {
         id:"radar_"+Date.now(),read:false,
         type:"radar_demanda",icon:"⚡",
         title:`Nova demanda extra — ${clientName}`,
-        body:`${origemLabel} · "${card.title}" foi registrada por ${CURRENT_USER.name}`,
-        user:CURRENT_USER.name,at:"Agora",category:"radar",
+        body:`${origemLabel} · "${card.title}" foi registrada por ${effectiveUser.name}`,
+        user:effectiveUser.name,at:"Agora",category:"radar",
         targetUsers:["vinicius","gustavo"],
       },...p]);
     }
@@ -11073,6 +11075,12 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
   const stopRec=()=>{mediaRecRef.current?.stop();clearInterval(recTimerRef.current);setRecording(false);};
   const cancelAudio=()=>{setAudioBlob(null);setAudioPreviewUrl(null);};
 
+  // FIX BUG-AUDIT: cleanup ao desmontar — interrompe gravação e libera microfone
+  useEffect(()=>()=>{
+    try{mediaRecRef.current?.state==="recording"&&mediaRecRef.current.stop();}catch(e){}
+    clearInterval(recTimerRef.current);
+  },[]);
+
   const activeChData=ALL_VISIBLE.find(c=>c.id===activeCh);
   const isClientCh=activeChData?.group==="clientes";
   const clientChData=isClientCh?CLIENTS.find(c=>c.id===activeChData.clientId):null;
@@ -11612,6 +11620,12 @@ function PublicacaoEditModal({task, onClose, onReject}){
     }catch{pixelsToast.error("Microfone não disponível.");}
   };
   const stopRec=()=>{mediaRecRef.current?.stop();clearInterval(recTimerRef.current);setIsRecording(false);};
+
+  // FIX BUG-AUDIT: cleanup ao desmontar — para gravação se modal fechar mid-recording
+  useEffect(()=>()=>{
+    try{mediaRecRef.current?.state==="recording"&&mediaRecRef.current.stop();}catch(e){}
+    clearInterval(recTimerRef.current);
+  },[]);
 
   const transcribeWithAI=async()=>{
     if(!feedback.trim())return;
