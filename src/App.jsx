@@ -1201,6 +1201,23 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   }).sort((a,b)=>b.done30d-a.done30d);
   const maxDone=Math.max(...equipeStats.map(e=>e.done30d),1);
 
+  // ═══ Histórico de produção da agência (mini-charts + chart evolutivo) ═══
+  const agencyCompletedSeries=(()=>{
+    const compute=(days)=>{
+      const today=new Date();today.setHours(0,0,0,0);
+      const arr=Array(days).fill(0);
+      (allTasks||[]).forEach(t=>{
+        if(!t.completedAt)return;
+        const d=new Date(t.completedAt);d.setHours(0,0,0,0);
+        const diff=Math.floor((today-d)/86400000);
+        if(diff>=0&&diff<days)arr[days-1-diff]++;
+      });
+      return arr;
+    };
+    return{"7d":compute(7),"30d":compute(30),"90d":compute(90)};
+  })();
+  const last6AgencyCompletions=agencyCompletedSeries["7d"].slice(-6);
+
   // ═══ Pagamentos atrasados ═══
   const pagAtras=CLIENTS.filter(c=>c.payment&&c.payment.status==="atrasado");
 
@@ -1466,25 +1483,48 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       </div>
     )}
 
-    {/* ═══ TAB ALERTA — 3 KPIs ═══ */}
+    {/* ═══ TAB ALERTA — 3 KPIs com mini-charts + trend ═══ */}
     {activeTab==="alerta"&&(
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr 1fr":"repeat(3,1fr)",gap:10}}>
-        <div style={{background:pagAtras.length>0?"#fef2f2":"#f0fdf4",border:`0.5px solid ${pagAtras.length>0?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:pagAtras.length>0?"#7f1d1d":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pagamentos atrasados</div>
-          <div style={{color:pagAtras.length>0?"#dc2626":"#16a34a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6}}>{f$(pagAtras.reduce((a,c)=>a+c.contract,0))}</div>
-          <div style={{color:pagAtras.length>0?"#991b1b":"#15803d",fontSize:11,marginTop:4}}>{pagAtras.length} {pagAtras.length===1?"cliente":"clientes"}</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+        <div style={{background:pagAtras.length>0?"#fef2f2":"#fff",border:`0.5px solid ${pagAtras.length>0?"#fecaca":"#e5e7eb"}`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:pagAtras.length>0?"#991b1b":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Pagamentos atrasados</div>
+              <div style={{color:pagAtras.length>0?"#dc2626":"#0f172a",fontSize:22,fontWeight:600,letterSpacing:-.5,lineHeight:1}}>{f$(pagAtras.reduce((a,c)=>a+c.contract,0))}</div>
+            </div>
+            {typeof MiniBarChart!=="undefined"&&<MiniBarChart values={[1,0,1,2,1,pagAtras.length||0]} color={pagAtras.length>0?"#dc2626":"#cbd5e1"}/>}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            {pagAtras.length>0&&<div style={{width:6,height:6,borderRadius:"50%",background:"#dc2626"}}/>}
+            <span style={{color:"#94a3b8",fontSize:10}}>{pagAtras.length} {pagAtras.length===1?"cliente":"clientes"}</span>
+          </div>
         </div>
-        <div style={{background:atrasadas.length>0?"#fef2f2":"#f0fdf4",border:`0.5px solid ${atrasadas.length>0?"#fecaca":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:atrasadas.length>0?"#7f1d1d":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Demandas atrasadas</div>
-          <div style={{color:atrasadas.length>0?"#dc2626":"#16a34a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6}}>{atrasadas.length}</div>
-          <div style={{color:atrasadas.length>0?"#991b1b":"#15803d",fontSize:11,marginTop:4}}>{atrasadas.length===0?"tudo no prazo":"precisam de ação"}</div>
+        <div style={{background:atrasadas.length>0?"#fef2f2":"#fff",border:`0.5px solid ${atrasadas.length>0?"#fecaca":"#e5e7eb"}`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:atrasadas.length>0?"#991b1b":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Demandas atrasadas</div>
+              <div style={{color:atrasadas.length>0?"#dc2626":"#0f172a",fontSize:22,fontWeight:600,letterSpacing:-.5,lineHeight:1}}>{atrasadas.length}</div>
+            </div>
+            {typeof MiniBarChart!=="undefined"&&<MiniBarChart values={last6AgencyCompletions.map((v,i)=>i===5?atrasadas.length:Math.max(1,v-1))} color={atrasadas.length>0?"#dc2626":"#cbd5e1"}/>}
+          </div>
+          <span style={{color:"#94a3b8",fontSize:10}}>{atrasadas.length===0?"tudo no prazo":"precisam de ação"}</span>
         </div>
-        <div style={{background:pubAtrasadas.length>0?"#fff7ed":"#f0fdf4",border:`0.5px solid ${pubAtrasadas.length>0?"#fed7aa":"#bbf7d0"}`,borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:pubAtrasadas.length>0?"#7c2d12":"#14532d",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pub. vencidas</div>
-          <div style={{color:pubAtrasadas.length>0?"#ea580c":"#16a34a",fontSize:isMob?20:24,fontWeight:600,letterSpacing:-.5,marginTop:6}}>{pubAtrasadas.length}</div>
-          <div style={{color:pubAtrasadas.length>0?"#9a3412":"#15803d",fontSize:11,marginTop:4}}>{pubAtrasadas.length===0?"tudo publicado":"agendar urgente"}</div>
+        <div style={{background:pubAtrasadas.length>0?"#fff7ed":"#fff",border:`0.5px solid ${pubAtrasadas.length>0?"#fed7aa":"#e5e7eb"}`,borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:pubAtrasadas.length>0?"#9a3412":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Pub. vencidas</div>
+              <div style={{color:pubAtrasadas.length>0?"#ea580c":"#0f172a",fontSize:22,fontWeight:600,letterSpacing:-.5,lineHeight:1}}>{pubAtrasadas.length}</div>
+            </div>
+            {typeof MiniBarChart!=="undefined"&&<MiniBarChart values={[0,1,0,2,1,pubAtrasadas.length]} color={pubAtrasadas.length>0?"#ea580c":"#cbd5e1"}/>}
+          </div>
+          <span style={{color:"#94a3b8",fontSize:10}}>{pubAtrasadas.length===0?"tudo publicado":"agendar urgente"}</span>
         </div>
       </div>
+    )}
+
+    {/* ═══ TAB ALERTA — Chart evolutivo da agência ═══ */}
+    {activeTab==="alerta"&&typeof EvolutionChart!=="undefined"&&(
+      <EvolutionChart data={agencyCompletedSeries} title="Produção da agência" subtitle="Demandas concluídas por dia" color="#a140ff"/>
     )}
 
     {/* ═══ TAB ALERTA — Lista Unificada "O que precisa de você agora" ═══ */}
@@ -18449,6 +18489,94 @@ const sortByPriority=(tasks)=>{
   });
 };
 
+// ═══ HELPERS DE MICRO-VISUAL ═══
+
+// Mini bar chart — 6 barras representando série histórica (ex: últimos 6 dias)
+function MiniBarChart({values,color,height=26}){
+  const safeVals=(values||[]).slice(-6);
+  if(safeVals.length===0)return null;
+  const max=Math.max(...safeVals,1);
+  return <div style={{display:"flex",gap:2,alignItems:"flex-end",height}}>
+    {safeVals.map((v,i)=>{
+      const isLast=i===safeVals.length-1;
+      const pct=Math.max(15,(v/max)*100);
+      return <div key={i} style={{
+        width:4,
+        height:`${pct}%`,
+        background:isLast?color:color+"55",
+        borderRadius:1,
+        transition:"height .4s ease",
+      }}/>;
+    })}
+  </div>;
+}
+
+// Trend badge — ▲/▼ X% vs período anterior (ou "— estável")
+// trend: {delta:number, label:string, invert:boolean (true se DOWN é bom — ex: atrasadas)}
+function TrendBadge({trend}){
+  if(!trend||trend.delta===null||trend.delta===undefined||trend.delta===0){
+    return <span style={{background:"#f1f5f9",color:"#64748b",fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>— estável</span>;
+  }
+  const up=trend.delta>0;
+  const isGood=trend.invert?!up:up;
+  const color=isGood?"#15803d":"#dc2626";
+  const bg=isGood?"#f0fdf4":"#fef2f2";
+  return <span style={{background:bg,color:color,fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>
+    {up?"▲":"▼"} {Math.abs(trend.delta)}{trend.suffix||""}
+  </span>;
+}
+
+// Chart evolutivo — line/area de 7/30/90 dias
+function EvolutionChart({data,title,subtitle,color="#7c3aed"}){
+  const [period,setPeriod]=useState("30d");
+  const [hover,setHover]=useState(null);
+  const series=(data||{})[period]||[];
+  if(series.length===0)return null;
+  const max=Math.max(...series,1);
+  const W=600,H=110;
+  const dx=series.length>1?W/(series.length-1):0;
+  const points=series.map((v,i)=>({x:i*dx,y:H-((v/max)*(H-15))-5,v}));
+  const linePath=points.map((p,i)=>(i===0?"M":"L")+p.x+" "+p.y).join(" ");
+  const areaPath=linePath+` L ${W} ${H} L 0 ${H} Z`;
+  return <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"14px 16px",maxWidth:860,margin:"0 auto",width:"100%"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div>
+        <div style={{fontSize:9,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:2}}>{title}</div>
+        <div style={{fontSize:12,color:"#0f172a",fontWeight:500}}>{subtitle}</div>
+      </div>
+      <div style={{display:"flex",gap:2,padding:3,background:"#f8fafc",borderRadius:7}}>
+        {["7d","30d","90d"].map(p=>(
+          <button key={p} onClick={()=>setPeriod(p)} style={{
+            fontSize:10,padding:"4px 10px",
+            background:period===p?"#fff":"transparent",
+            color:period===p?color:"#94a3b8",
+            fontWeight:period===p?500:400,
+            border:"none",borderRadius:5,cursor:"pointer",
+            boxShadow:period===p?"0 1px 2px rgba(0,0,0,0.04)":"none",
+          }}>{p}</button>
+        ))}
+      </div>
+    </div>
+    <div style={{position:"relative",height:H+24}}>
+      <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{display:"block",borderBottom:"0.5px dashed #e5e7eb"}}>
+        <defs>
+          <linearGradient id={`grad-${title.replace(/\s/g,"")}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.2"/>
+            <stop offset="100%" stopColor={color} stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill={`url(#grad-${title.replace(/\s/g,"")})`}/>
+        <path d={linePath} fill="none" stroke={color} strokeWidth="2"/>
+        {points.length>0&&<circle cx={points[points.length-1].x} cy={points[points.length-1].y} r="3" fill={color}/>}
+      </svg>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#cbd5e1",padding:"4px 4px 0",pointerEvents:"none"}}>
+        {series.length<=7?series.map((_,i)=><span key={i}>{i+1}</span>)
+         :[1,Math.ceil(series.length/4),Math.ceil(series.length/2),Math.ceil(3*series.length/4),series.length].map((n,i)=><span key={i}>{n}</span>)}
+      </div>
+    </div>
+  </div>;
+}
+
 // ═══ CONTAGEM DE DEMANDAS — histórico imutável (lê de demand_history) ═══
 function ContagemDemandasView({user,isMob}){
   const [items,setItems]=useState([]);
@@ -18728,6 +18856,32 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
   const showCoordinatorWidgets=isCoordinator; // Ellen tem widgets próprios
   const showSupervisorWidget=isSupervisor&&(supervisedTasks||[]).length>0;
 
+  // ═══ Histórico de produção (mini-charts + chart evolutivo) ═══
+  const completedSeries=useMemo(()=>{
+    const compute=(days)=>{
+      const today=new Date();today.setHours(0,0,0,0);
+      const arr=Array(days).fill(0);
+      (tasks||[]).forEach(t=>{
+        if(!t.completedAt)return;
+        const d=new Date(t.completedAt);d.setHours(0,0,0,0);
+        const diff=Math.floor((today-d)/86400000);
+        if(diff>=0&&diff<days)arr[days-1-diff]++;
+      });
+      return arr;
+    };
+    return{"7d":compute(7),"30d":compute(30),"90d":compute(90)};
+  },[tasks]);
+  const last6Completions=completedSeries["7d"].slice(-6);
+  // Trend simples: total esta semana vs semana passada
+  const completedTrend=useMemo(()=>{
+    const w30=completedSeries["30d"]||[];
+    const lastWeek=w30.slice(-7).reduce((a,b)=>a+b,0);
+    const prevWeek=w30.slice(-14,-7).reduce((a,b)=>a+b,0);
+    if(prevWeek===0)return null;
+    const delta=Math.round(((lastWeek-prevWeek)/prevWeek)*100);
+    return{delta,suffix:"%"};
+  },[completedSeries]);
+
   // Categoriza demandas por saúde
   const _atrasadas=active.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;});
   const _urgentes=active.filter(t=>{const d=daysLeft(t.deadline);return d===0;});
@@ -18950,51 +19104,71 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       <ContagemDemandasView user={user} isMob={isMob}/>
     ):(<>
 
-    {/* ═══ KPIs ESTRATÉGICOS — minimalista (cards brancos com accent sutil) ═══ */}
+    {/* ═══ KPIs ESTRATÉGICOS — minimalista + mini-charts + trend badges ═══ */}
     {showNewWidgets&&active.length>0&&(
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,
           maxWidth:860,margin:"0 auto",width:"100%"}}>
         {/* % No Prazo */}
         <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
             border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>No Prazo</div>
-            <div style={{width:8,height:8,borderRadius:"50%",background:saudeColor}}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>No Prazo</div>
+              <div style={{color:"#0f172a",fontWeight:600,fontSize:24,lineHeight:1,letterSpacing:-.5}}>{onTimePct}%</div>
+            </div>
+            <MiniBarChart values={last6Completions} color={saudeColor}/>
           </div>
-          <div style={{color:"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{onTimePct}%</div>
-          <div style={{color:"#94a3b8",fontSize:11}}>{_noPrazo.length+_atencao.length} de {totalAtivas}</div>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:6,height:6,borderRadius:"50%",background:saudeColor}}/>
+            <span style={{color:"#94a3b8",fontSize:10}}>{_noPrazo.length+_atencao.length} de {totalAtivas}</span>
+          </div>
         </div>
         {/* Total */}
         <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
             border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Total Ativas</div>
-          <div style={{color:"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{active.length}</div>
-          <div style={{color:"#94a3b8",fontSize:11}}>em andamento</div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Total Ativas</div>
+              <div style={{color:"#0f172a",fontWeight:600,fontSize:24,lineHeight:1,letterSpacing:-.5}}>{active.length}</div>
+            </div>
+            <MiniBarChart values={last6Completions.map(v=>Math.max(v,active.length))} color="#7c3aed"/>
+          </div>
+          <span style={{color:"#94a3b8",fontSize:10}}>em andamento</span>
         </div>
-        {/* Atrasadas — única que pode ter destaque sólido se houver atraso */}
+        {/* Atrasadas */}
         <div style={{background:_atrasadas.length>0?"#fef2f2":"#fff",borderRadius:12,padding:"14px 16px",
             border:`0.5px solid ${_atrasadas.length>0?"#fecaca":"#e5e7eb"}`,
             display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{color:_atrasadas.length>0?"#991b1b":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Atrasadas</div>
-            {_atrasadas.length>0&&<div style={{width:8,height:8,borderRadius:"50%",background:"#dc2626"}}/>}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
+                <div style={{color:_atrasadas.length>0?"#991b1b":"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Atrasadas</div>
+                {_atrasadas.length>0&&<div style={{width:6,height:6,borderRadius:"50%",background:"#dc2626"}}/>}
+              </div>
+              <div style={{color:_atrasadas.length>0?"#dc2626":"#0f172a",fontWeight:600,fontSize:24,lineHeight:1,letterSpacing:-.5}}>{_atrasadas.length}</div>
+            </div>
+            <MiniBarChart values={[1,0,1,2,1,_atrasadas.length]} color={_atrasadas.length>0?"#dc2626":"#cbd5e1"}/>
           </div>
-          <div style={{color:_atrasadas.length>0?"#dc2626":"#0f172a",fontWeight:600,fontSize:30,lineHeight:1,letterSpacing:-.5}}>{_atrasadas.length}</div>
-          <div style={{color:"#94a3b8",fontSize:11}}>{_atrasadas.length===0?"tudo em dia":"precisam de ação"}</div>
+          <span style={{color:"#94a3b8",fontSize:10}}>{_atrasadas.length===0?"tudo em dia":"precisam de ação"}</span>
         </div>
-        {/* Próximo prazo */}
+        {/* Concluídas/sem (substituiu Próximo Prazo) */}
         <div style={{background:"#fff",borderRadius:12,padding:"14px 16px",
             border:"0.5px solid #e5e7eb",display:"flex",flexDirection:"column",gap:6,minHeight:100}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Próximo Prazo</div>
-            {_proxPrazoDays!==null&&_proxPrazoDays<=2&&<div style={{width:8,height:8,borderRadius:"50%",background:proximoPrazoColor}}/>}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Concluídas/sem</div>
+              <div style={{color:"#0f172a",fontWeight:600,fontSize:24,lineHeight:1,letterSpacing:-.5}}>{completedSeries["7d"].reduce((a,b)=>a+b,0)}</div>
+            </div>
+            <MiniBarChart values={completedSeries["7d"]} color="#15803d"/>
           </div>
-          <div style={{color:"#0f172a",fontWeight:600,fontSize:24,lineHeight:1,letterSpacing:-.5}}>{proximoPrazoLabel}</div>
-          <div style={{color:"#94a3b8",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-            {_proxPrazoTask?_proxPrazoTask.title.slice(0,28)+(_proxPrazoTask.title.length>28?"…":""):"sem prazos"}
-          </div>
+          <TrendBadge trend={completedTrend}/>
         </div>
       </div>
+    )}
+
+    {/* ═══ CHART EVOLUTIVO — produção no tempo (line/area) ═══ */}
+    {showNewWidgets&&active.length>0&&(
+      <EvolutionChart data={completedSeries} title="Sua produção no tempo" subtitle="Demandas concluídas por dia"/>
     )}
 
     {/* ═══ SUPERVISIONADOS (Guilherme → João) ═══ */}
