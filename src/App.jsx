@@ -18520,6 +18520,135 @@ function ContagemDemandasView({user,isMob}){
   </div>;
 }
 
+// ═══ CONTAGEM MINI — versão compacta da Contagem do mês (pra dashboard) ═══
+function ContagemMiniWidget({user,onSeeMore}){
+  const [stats,setStats]=useState({total:0,cliente:0,interna:0,loading:true});
+  useEffect(()=>{
+    let active=true;
+    const sb=window._sb;
+    if(!sb){setStats(s=>({...s,loading:false}));return;}
+    const d=new Date();
+    const start=new Date(d.getFullYear(),d.getMonth(),1).toISOString();
+    const end=new Date(d.getFullYear(),d.getMonth()+1,1).toISOString();
+    sb.from("demand_history").select("approval_type")
+      .eq("assignee_id",user.id)
+      .gte("approved_at",start)
+      .lt("approved_at",end)
+      .then(({data,error})=>{
+        if(!active)return;
+        if(error){console.warn("[contagem-mini]",error.message);setStats(s=>({...s,loading:false}));return;}
+        const items=data||[];
+        setStats({
+          total:items.length,
+          cliente:items.filter(i=>i.approval_type==="cliente").length,
+          interna:items.filter(i=>i.approval_type==="interna").length,
+          loading:false,
+        });
+      });
+    return()=>{active=false;};
+  },[user.id]);
+  const monthLabel=(()=>{
+    const d=new Date();
+    const lbl=d.toLocaleDateString("pt-BR",{month:"long"});
+    return lbl.charAt(0).toUpperCase()+lbl.slice(1);
+  })();
+  return <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"14px 16px",display:"flex",flexDirection:"column"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+      <div style={{fontSize:9,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Contagem do mês</div>
+      <span style={{fontSize:9,color:"#7c3aed"}}>{monthLabel}</span>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:10}}>
+      <div style={{textAlign:"center",padding:"10px 4px",background:"#f8fafc",borderRadius:6}}>
+        <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase",marginBottom:4,fontWeight:500}}>Total</div>
+        <div style={{fontSize:22,fontWeight:600,color:"#0f172a",lineHeight:1}}>{stats.loading?"…":stats.total}</div>
+      </div>
+      <div style={{textAlign:"center",padding:"10px 4px",background:"#f0fdf4",borderRadius:6}}>
+        <div style={{fontSize:9,color:"#15803d",textTransform:"uppercase",marginBottom:4,fontWeight:500}}>Cliente</div>
+        <div style={{fontSize:22,fontWeight:600,color:"#15803d",lineHeight:1}}>{stats.loading?"…":stats.cliente}</div>
+      </div>
+      <div style={{textAlign:"center",padding:"10px 4px",background:"#faf5ff",borderRadius:6}}>
+        <div style={{fontSize:9,color:"#7c3aed",textTransform:"uppercase",marginBottom:4,fontWeight:500}}>Interna</div>
+        <div style={{fontSize:22,fontWeight:600,color:"#7c3aed",lineHeight:1}}>{stats.loading?"…":stats.interna}</div>
+      </div>
+    </div>
+    <div style={{paddingTop:10,borderTop:"0.5px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:"auto"}}>
+      <span style={{fontSize:10,color:"#94a3b8"}}>Aprovadas neste mês</span>
+      <button onClick={onSeeMore} style={{background:"none",border:"none",fontSize:11,color:"#7c3aed",fontWeight:500,cursor:"pointer",padding:0}}>Ver detalhes →</button>
+    </div>
+  </div>;
+}
+
+// ═══ ATIVIDADE RECENTE — timeline cross-tasks (últimas 7 ações nas demandas do user) ═══
+function RecentActivityWidget({tasks,user,setOpenCard,isMob}){
+  // Agrega timeline de todas as tasks do user, ordena por data desc, pega últimas 7
+  const events=(()=>{
+    const all=[];
+    (tasks||[]).forEach(t=>{
+      (t.timeline||[]).forEach(ev=>{
+        if(!ev.at)return;
+        all.push({...ev,taskId:t.id,taskTitle:t.title,clientId:t.client});
+      });
+    });
+    return all.sort((a,b)=>new Date(b.at)-new Date(a.at)).slice(0,7);
+  })();
+  if(events.length===0)return null;
+  const evColor=(ev)=>{
+    if(ev.to==="aprovado"||ev.to==="interno_aprovado")return{bg:"#f0fdf4",color:"#15803d",label:"APROVADO"};
+    if(ev.to==="avaliacao")return{bg:"#fff7ed",color:"#ea580c",label:"AVALIAÇÃO"};
+    if(ev.to==="execucao"||ev.to==="interno_execucao")return{bg:"#fff7ed",color:"#ea580c",label:"AJUSTE"};
+    if(ev.type==="comment")return{bg:"#faf5ff",color:"#7c3aed",label:"COMENTÁRIO"};
+    if(ev.type==="created")return{bg:"#f0f9ff",color:"#075985",label:"CRIADA"};
+    return{bg:"#f8fafc",color:"#64748b",label:"MUDANÇA"};
+  };
+  const formatTime=(at)=>{
+    const ms=Date.now()-new Date(at);
+    const min=Math.floor(ms/60000);
+    if(min<1)return"agora";
+    if(min<60)return`há ${min}min`;
+    const h=Math.floor(min/60);
+    if(h<24)return`há ${h}h`;
+    const d=Math.floor(h/24);
+    if(d<7)return d===1?"ontem":`há ${d}d`;
+    return new Date(at).toLocaleDateString("pt-BR");
+  };
+  return <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:10,overflow:"hidden",maxWidth:860,margin:"0 auto",width:"100%"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"0.5px solid #f1f5f9"}}>
+      <div style={{fontSize:9,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Atividade recente</div>
+      <span style={{fontSize:10,color:"#94a3b8"}}>últimas {events.length} ações</span>
+    </div>
+    <div>
+      {events.map((ev,i)=>{
+        const cl=ev.clientId?CLIENTS.find(c=>c.id===ev.clientId):null;
+        const actor=ev.user||"Sistema";
+        const isUser=actor===user.name;
+        const actorObj=TEAM.find(u=>u.name===actor);
+        const cfg=evColor(ev);
+        const verb=ev.to==="aprovado"||ev.to==="interno_aprovado"?"aprovou":
+          ev.to==="avaliacao"?"enviou para avaliação":
+          ev.to==="execucao"||ev.to==="interno_execucao"?"solicitou ajuste em":
+          ev.type==="comment"?"comentou em":
+          ev.type==="created"?"criou":
+          ev.toLabel?`moveu para ${ev.toLabel} ·`:
+          "atualizou";
+        return <div key={`${ev.taskId}-${i}`}
+          onClick={()=>{const t=tasks.find(x=>x.id===ev.taskId);if(t)setOpenCard(t);}}
+          style={{display:"flex",gap:10,padding:"10px 16px",alignItems:"center",borderBottom:i<events.length-1?"0.5px solid #f8fafc":"none",cursor:"pointer",transition:"background .1s"}}
+          onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+          <div style={{width:24,height:24,borderRadius:"50%",background:actorObj?.color||"#94a3b8",color:"#fff",fontSize:10,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{actorObj?.av||actor[0]||"?"}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,color:"#0f172a",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              <strong>{isUser?"Você":actor}</strong> {verb} <span style={{color:"#7c3aed"}}>{ev.taskTitle}</span>
+            </div>
+            <div style={{fontSize:9,color:"#94a3b8",marginTop:1}}>{cl?.name||"—"} · {formatTime(ev.at)}</div>
+          </div>
+          {!isMob&&<span style={{background:cfg.bg,color:cfg.color,fontSize:9,padding:"2px 7px",borderRadius:3,fontWeight:600,letterSpacing:.3}}>{cfg.label}</span>}
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
 function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,setTasks,isViewing,icon,currentUser,notifs,isMob}){
   const [openCard,setOpenCard]=useState(null);
   const [showCustomize,setShowCustomize]=useState(false);
@@ -19290,247 +19419,191 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       </div>
     )}
 
-    {/* ── TOPO: cartão grande + 5 pequenos — centralizado ── */}
+    {/* ═══ NOVO LAYOUT: 1 cartão grande + 4 pequenos (foco em prioridade) ═══ */}
     {active.length>0
-      ?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 260px",gap:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
+      ?<div style={{maxWidth:860,margin:"0 auto",width:"100%"}}>
+        <div style={{padding:"0 4px 8px"}}>
+          <div style={{fontSize:10,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.6}}>Suas demandas — ordenadas por prioridade</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(0,1fr) 250px",gap:12}}>
 
-        {/* CARTÃO PRINCIPAL */}
-        {main&&<div onClick={()=>setOpenCard(main)} style={{
-          background:mainPrio.bg||C.card,
-          borderRadius:16,
-          border:"none",
-          padding:"20px 22px",
-          cursor:"pointer",
-          position:"relative",
-          overflow:"hidden",
-          display:"flex",
-          flexDirection:"column",
-          gap:12,
-          transition:"opacity .15s",
-        }}
-          onMouseEnter={e=>e.currentTarget.style.opacity=".92"}
-          onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
-          {/* Badge + cliente */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div style={{background:"rgba(0,0,0,0.18)",color:"#fff",borderRadius:99,padding:"3px 12px",fontSize:10,fontWeight:800,letterSpacing:.5}}>
-              {mainPrio.level===0?"✎ ALTERACAO":mainPrio.level===1?"⏰ ATRASADO":mainPrio.level===2?"🔥 URGENTE":"✅ NO PRAZO"}
-            </div>
-            {mainCl&&<div style={{background:"rgba(0,0,0,0.15)",color:"#fff",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700}}>{mainCl.abbr}</div>}
-          </div>
-          {/* Título */}
-          <div style={{color:"#fff",fontWeight:900,fontSize:20,lineHeight:1.3,letterSpacing:-.3}}>
-            {main.title}
-          </div>
-          {/* Desc */}
-          {main.desc&&<div style={{color:"rgba(255,255,255,0.8)",fontSize:12,lineHeight:1.6}}>
-            {main.desc.slice(0,100)}{main.desc.length>100?"...":""}
-          </div>}
-          {/* Footer */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.2)",marginTop:"auto"}}>
-            <span style={{color:"rgba(255,255,255,0.9)",fontSize:11,fontWeight:700}}>
-              {mainPrio.icon&&mainPrio.icon+" "}{mainPrio.label}
-            </span>
-            <div style={{display:"flex",gap:8}}>
-              <div style={{background:"rgba(0,0,0,0.15)",borderRadius:8,padding:"6px 14px",color:"#fff",fontWeight:600,fontSize:11}}>Ver →</div>
-              {!isViewing&&<button onClick={e=>{e.stopPropagation();handleDone(main);}}
-                style={{background:"rgba(255,255,255,0.25)",color:"#fff",border:"1px solid rgba(255,255,255,0.4)",borderRadius:8,padding:"6px 14px",fontWeight:700,fontSize:11,cursor:"pointer"}}>
-                ✓ Concluir
-              </button>}
-            </div>
-          </div>
-        </div>}
-
-        {/* 5 PRÓXIMAS */}
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {next.length===0&&<div style={{background:C.card,borderRadius:12,padding:"20px",textAlign:"center",border:`1px solid ${C.b1}`}}>
-            <div style={{fontSize:24,marginBottom:6}}>🎉</div>
-            <div style={{color:C.ts,fontSize:11}}>Sem mais demandas!</div>
-          </div>}
-          {next.map((t,i)=>{
-            const prio=getDemandPriority(t);
-            const cl=CLIENTS.find(c=>c.id===t.client);
-            const dl=daysLeft(t.deadline);
-            return <div key={t.id} onClick={()=>setOpenCard(t)}
-              style={{background:C.card,borderRadius:10,padding:"9px 12px",cursor:"pointer",
-                border:`1px solid ${C.b1}`,
-                display:"flex",gap:8,alignItems:"center",transition:"transform .1s"}}
-              onMouseEnter={e=>e.currentTarget.style.transform="translateX(3px)"}
-              onMouseLeave={e=>e.currentTarget.style.transform="translateX(0)"}>
-              {/* Bolinha de cor sólida */}
-              <div style={{width:10,height:10,borderRadius:"50%",background:prio.bg||"#16a34a",flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:C.tx,fontWeight:600,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
-                <div style={{color:C.td,fontSize:9,marginTop:1}}>{cl?.abbr||"—"}</div>
+          {/* CARTÃO GRANDE — #1 da fila */}
+          {main&&(()=>{
+            const prioColor=mainPrio.bg||"#94a3b8";
+            const dl=daysLeft(main.deadline);
+            const dlLabel=dl===null||isNaN(dl)?"sem prazo":dl<0?`${Math.abs(dl)}d atrasado`:dl===0?"prazo hoje":dl===1?"prazo amanhã":`${dl} dias`;
+            const stripHtml=(s)=>!s?"":String(s).replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").trim();
+            const desc=stripHtml(main.desc);
+            return <div onClick={()=>setOpenCard(main)} style={{
+              background:"#fff",
+              border:"0.5px solid #e5e7eb",
+              borderLeft:`4px solid ${prioColor}`,
+              borderRadius:12,
+              padding:"22px 24px",
+              minHeight:280,
+              cursor:"pointer",
+              display:"flex",
+              flexDirection:"column",
+              transition:"box-shadow .15s",
+            }}
+              onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.06)"}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{
+                    background:prioColor+"18",color:prioColor,
+                    fontSize:9,fontWeight:600,padding:"3px 9px",borderRadius:4,
+                    textTransform:"uppercase",letterSpacing:.4
+                  }}>{mainPrio.icon||"•"} {mainPrio.label}</span>
+                  <span style={{fontSize:10,color:"#94a3b8"}}>#1 da fila</span>
+                </div>
+                {main.sector&&<span style={{
+                  background:"#fff",border:"0.5px solid #e5e7eb",
+                  color:"#64748b",fontSize:10,padding:"3px 9px",borderRadius:4
+                }}>{main.sector}</span>}
               </div>
-              <div style={{color:prio.bg||"#16a34a",fontWeight:700,fontSize:10,flexShrink:0}}>
-                {prio.level<=1?prio.label:dl===null?"—":dl===0?"Hoje":dl+"d"}
+              {mainCl&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+                <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,fontWeight:600,padding:"2px 8px",borderRadius:3}}>{mainCl.abbr}</span>
+                <span style={{fontSize:11,color:"#94a3b8"}}>{dlLabel}</span>
+              </div>}
+              <div style={{color:"#0f172a",fontWeight:600,fontSize:20,lineHeight:1.3,marginBottom:8}}>{main.title}</div>
+              {desc&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.6,marginBottom:14,flex:1}}>
+                {desc.length>200?desc.slice(0,200)+"…":desc}
+              </div>}
+              {(main.tags||[]).length>0&&<div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+                {(main.tags||[]).slice(0,4).map(tag=>(
+                  <span key={tag} style={{background:"#ede9fe",color:"#7c3aed",fontSize:10,padding:"3px 8px",borderRadius:3,fontWeight:500}}>#{tag}</span>
+                ))}
+              </div>}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:12,borderTop:"0.5px solid #f1f5f9",marginTop:"auto"}}>
+                <span style={{fontSize:11,color:"#94a3b8"}}>Em execução</span>
+                <div style={{display:"flex",gap:6}}>
+                  {!isViewing&&<button onClick={e=>{e.stopPropagation();handleDone(main);}}
+                    style={{background:"#f0fdf4",color:"#15803d",border:"0.5px solid #bbf7d0",borderRadius:6,padding:"6px 12px",fontWeight:500,fontSize:11,cursor:"pointer"}}>
+                    ✓ Concluir
+                  </button>}
+                  <span style={{background:"#7c3aed",color:"#fff",fontSize:11,fontWeight:500,padding:"6px 14px",borderRadius:6}}>Abrir →</span>
+                </div>
               </div>
             </div>;
-          })}
-          {/* Mini totais */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:2}}>
-            <div style={{background:C.s1,borderRadius:8,padding:"8px",textAlign:"center"}}>
-              <div style={{color:C.a,fontWeight:900,fontSize:16}}>{active.length}</div>
-              <div style={{color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Total</div>
-            </div>
-            <div style={{background:C.s1,borderRadius:8,padding:"8px",textAlign:"center"}}>
-              <div style={{color:C.rd,fontWeight:900,fontSize:16}}>{active.filter(t=>(daysLeft(t.deadline)||0)<0).length}</div>
-              <div style={{color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase"}}>Atrasadas</div>
-            </div>
+          })()}
+
+          {/* 4 CARTÕES PEQUENOS — #2 a #5 */}
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {next.length===0&&<div style={{background:"#fff",borderRadius:10,padding:"20px",textAlign:"center",border:"0.5px solid #e5e7eb"}}>
+              <div style={{color:"#94a3b8",fontSize:11}}>Sem mais demandas na fila</div>
+            </div>}
+            {next.slice(0,4).map((t,i)=>{
+              const prio=getDemandPriority(t);
+              const cl=CLIENTS.find(c=>c.id===t.client);
+              const dl=daysLeft(t.deadline);
+              const dlLabel=dl===null||isNaN(dl)?"—":dl<0?`${Math.abs(dl)}d atraso`:dl===0?"hoje":dl===1?"amanhã":`${dl}d`;
+              const prioColor=prio.bg||"#94a3b8";
+              return <div key={t.id} onClick={()=>setOpenCard(t)}
+                style={{
+                  background:"#fff",
+                  border:"0.5px solid #e5e7eb",
+                  borderLeft:`3px solid ${prioColor}`,
+                  borderRadius:8,
+                  padding:"9px 11px",
+                  cursor:"pointer",
+                  transition:"transform .1s",
+                }}
+                onMouseEnter={e=>e.currentTarget.style.transform="translateX(2px)"}
+                onMouseLeave={e=>e.currentTarget.style.transform=""}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                  <span style={{fontSize:9,color:prioColor,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>#{i+2} · {prio.label}</span>
+                  <span style={{fontSize:9,color:"#94a3b8"}}>{dlLabel}</span>
+                </div>
+                <div style={{fontSize:12,color:"#0f172a",fontWeight:500,lineHeight:1.3,marginBottom:3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                {cl&&<div style={{display:"flex",gap:4,alignItems:"center"}}>
+                  <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:8,padding:"1px 5px",borderRadius:3,fontWeight:600}}>{cl.abbr}</span>
+                  {t.sector&&<span style={{fontSize:9,color:"#94a3b8"}}>{t.sector}</span>}
+                </div>}
+              </div>;
+            })}
+            {active.length>5&&<div style={{textAlign:"center",padding:6,fontSize:10,color:"#94a3b8"}}>+ {active.length-5} mais na fila</div>}
           </div>
         </div>
       </div>
 
-      :<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,padding:"40px 24px",textAlign:"center",maxWidth:860,margin:"0 auto",width:"100%"}}>
-        <div style={{width:64,height:64,borderRadius:20,background:user.color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 16px"}}>📭</div>
-        <div style={{color:C.tx,fontWeight:900,fontSize:18,marginBottom:6,letterSpacing:-.3}}>Sem demandas no momento</div>
-        <div style={{color:C.ts,fontSize:13,lineHeight:1.6}}>
-          Você não tem nenhuma demanda ativa no momento.<br/>
-          Novas demandas aparecerão aqui assim que forem atribuídas.
-        </div>
+      :<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,padding:"40px 24px",textAlign:"center",maxWidth:860,margin:"0 auto",width:"100%"}}>
+        <div style={{width:48,height:48,borderRadius:12,background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,margin:"0 auto 14px"}}>📭</div>
+        <div style={{color:"#0f172a",fontWeight:600,fontSize:16,marginBottom:6}}>Tudo tranquilo</div>
+        <div style={{color:"#94a3b8",fontSize:13,lineHeight:1.6}}>Nenhuma demanda ativa. Novas chegam aqui assim que atribuídas.</div>
       </div>
     }
 
-    {/* ═══ SAÚDE DAS DEMANDAS — donut + cards sólidos (Editor) ═══ */}
+    {/* ═══ NOVO: Saúde da fila (gauge SVG) + Contagem do mês (mini) — lado a lado ═══ */}
     {showNewWidgets&&active.length>0&&(
-      <div style={{background:C.card,borderRadius:16,
-          border:`1px solid ${C.b1}`,
-          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
-          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-        {/* Header sólido colorido */}
-        <div style={{padding:"14px 20px",background:saudeColor,
-            display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-                display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🌡</div>
-            <div>
-              <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Saúde das Demandas</div>
-              <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>distribuição por urgência</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
+        {/* SAÚDE DA FILA — gauge minimalista */}
+        <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"14px 16px"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+            <div style={{fontSize:9,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Saúde da fila</div>
+            <span style={{
+              fontSize:9,
+              color:saudeGeral>=80?"#15803d":saudeGeral>=60?"#b45309":"#dc2626",
+              background:saudeGeral>=80?"#f0fdf4":saudeGeral>=60?"#fef3c7":"#fef2f2",
+              padding:"2px 7px",borderRadius:3,fontWeight:600
+            }}>{saudeLabel}</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <div style={{position:"relative",width:90,height:90,flexShrink:0}}>
+              <svg width="90" height="90" viewBox="0 0 90 90">
+                <circle cx="45" cy="45" r="36" fill="none" stroke="#f1f5f9" strokeWidth="8"/>
+                <circle cx="45" cy="45" r="36" fill="none" stroke={saudeColor} strokeWidth="8"
+                  strokeDasharray={2*Math.PI*36}
+                  strokeDashoffset={2*Math.PI*36*(1-saudeGeral/100)}
+                  strokeLinecap="round"
+                  transform="rotate(-90 45 45)"
+                  style={{transition:"stroke-dashoffset .8s ease"}}/>
+              </svg>
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <div style={{fontSize:22,fontWeight:600,color:"#0f172a"}}>{saudeGeral}%</div>
+              </div>
+            </div>
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"0.5px solid #f1f5f9"}}>
+                <span style={{fontSize:11,color:"#94a3b8"}}>No prazo</span>
+                <span style={{fontSize:12,color:"#15803d",fontWeight:600}}>{_noPrazo.length}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"0.5px solid #f1f5f9"}}>
+                <span style={{fontSize:11,color:"#94a3b8"}}>Atenção</span>
+                <span style={{fontSize:12,color:"#b45309",fontWeight:600}}>{_atencao.length+_urgentes.length}</span>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0"}}>
+                <span style={{fontSize:11,color:"#94a3b8"}}>Atrasadas</span>
+                <span style={{fontSize:12,color:_atrasadas.length>0?"#dc2626":"#94a3b8",fontWeight:600}}>{_atrasadas.length}</span>
+              </div>
             </div>
           </div>
-          <span style={{background:"#ffffff",color:saudeColor,borderRadius:99,padding:"5px 16px",fontSize:11,fontWeight:900,textTransform:"uppercase",letterSpacing:.6}}>
-            {saudeLabel}
-          </span>
         </div>
 
-        {/* Conteúdo: donut à esquerda + cards sólidos à direita */}
-        <div style={{padding:"20px",display:"grid",gridTemplateColumns:"auto 1fr",gap:24,alignItems:"center"}}>
-          {/* Donut chart (SVG) */}
-          <div style={{position:"relative",width:140,height:140,flexShrink:0}}>
-            <svg width="140" height="140" viewBox="0 0 140 140" style={{transform:"rotate(-90deg)"}}>
-              <circle cx="70" cy="70" r="60" fill="none" stroke="#e5e7eb" strokeWidth="16"/>
-              <circle cx="70" cy="70" r="60" fill="none" stroke={saudeColor} strokeWidth="16"
-                strokeDasharray={2*Math.PI*60}
-                strokeDashoffset={2*Math.PI*60*(1-saudeGeral/100)}
-                strokeLinecap="round"
-                style={{transition:"stroke-dashoffset .8s ease"}}/>
-            </svg>
-            <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-              <div style={{color:saudeColor,fontWeight:900,fontSize:34,lineHeight:1,letterSpacing:-1}}>{saudeGeral}%</div>
-              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>saúde</div>
-            </div>
-          </div>
-
-          {/* Cards sólidos (2x2) */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {[
-              {label:"Atrasadas",count:_atrasadas.length,color:"#dc2626",icon:"🔥"},
-              {label:"Vencem hoje",count:_urgentes.length,color:"#ea580c",icon:"⚡"},
-              {label:"Atenção 1-3d",count:_atencao.length,color:"#eab308",icon:"⏳"},
-              {label:"No prazo",count:_noPrazo.length,color:"#16a34a",icon:"✅"},
-            ].map(row=>{
-              const isZero=row.count===0;
-              return <div key={row.label} style={{
-                background:isZero?"#e5e7eb":row.color,
-                borderRadius:12,padding:"12px 14px",
-                display:"flex",alignItems:"center",gap:10,
-                boxShadow:isZero?"none":"0 2px 6px rgba(0,0,0,0.1)"}}>
-                <div style={{width:36,height:36,borderRadius:10,
-                    background:"#ffffff",
-                    display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
-                  {row.icon}
+        {/* CONTAGEM MINI — só pra quem recebe por demanda. Senão: Próximo prazo expandido */}
+        {showContagemTab
+          ?<ContagemMiniWidget user={user} onSeeMore={()=>setDashTab("contagem")}/>
+          :<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{fontSize:9,color:"#94a3b8",fontWeight:500,textTransform:"uppercase",letterSpacing:.4}}>Próximo prazo</div>
+            {_proxPrazoTask?(
+              <div onClick={()=>setOpenCard(_proxPrazoTask)} style={{cursor:"pointer"}}>
+                <div style={{fontSize:24,fontWeight:600,color:"#0f172a",lineHeight:1.2}}>{proximoPrazoLabel}</div>
+                <div style={{fontSize:13,color:"#0f172a",fontWeight:500,marginTop:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_proxPrazoTask.title}</div>
+                <div style={{fontSize:10,color:"#94a3b8",marginTop:3}}>
+                  {(()=>{const cl=CLIENTS.find(c=>c.id===_proxPrazoTask.client);return cl?cl.name:"sem cliente";})()}
                 </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:isZero?"#64748b":"#ffffff",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{row.label}</div>
-                  <div style={{color:isZero?"#94a3b8":"#ffffff",fontWeight:900,fontSize:24,lineHeight:1,letterSpacing:-.5,marginTop:2}}>{row.count}</div>
-                </div>
-              </div>;
-            })}
+              </div>
+            ):(
+              <div style={{fontSize:13,color:"#94a3b8"}}>Sem prazos definidos</div>
+            )}
           </div>
-        </div>
+        }
       </div>
     )}
 
-    {/* ═══ PRÓXIMOS 7 DIAS — cards sólidos coloridos (Editor) ═══ */}
-    {showNewWidgets&&(
-      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,
-          maxWidth:860,margin:"0 auto",width:"100%",overflow:"hidden",
-          boxShadow:"0 2px 8px rgba(0,0,0,0.06)"}}>
-        <div style={{padding:"14px 20px",background:user.color,
-            display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:36,height:36,borderRadius:10,background:"#ffffff",
-              display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📅</div>
-          <div>
-            <div style={{color:"#ffffff",fontWeight:800,fontSize:14}}>Próximos 7 dias</div>
-            <div style={{color:"#ffffff",fontSize:10,marginTop:1,opacity:0.9}}>distribuição de prazos da semana</div>
-          </div>
-        </div>
-        <div style={{padding:isMob?"12px 10px":"16px 20px",display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:isMob?4:8}}>
-          {proximos7dias.map((dia,idx)=>{
-            const total=dia.tasks.length;
-            const atrasadasDia=dia.tasks.filter(t=>{const d=daysLeft(t.deadline);return d!==null&&d<0;}).length;
-            const urgentesDia=dia.tasks.filter(t=>{const d=daysLeft(t.deadline);return d===0;}).length;
-            // Cor dominante sólida
-            const primary=atrasadasDia>0?"#dc2626":urgentesDia>0?"#ea580c":total>3?"#eab308":total>0?"#16a34a":null;
-            const isHoje=dia.isHoje;
-            const hasTask=total>0;
-            // Cor do card: se hoje, cor do usuário. Se tem tasks, cor da urgência. Senão, cinza claro.
-            const cardBg=isHoje?user.color:hasTask?primary:"#e5e7eb";
-            const textColor=isHoje||hasTask?"#ffffff":"#64748b";
-
-            return <div key={idx} onClick={()=>hasTask&&setOpenCard(dia.tasks[0])}
-              style={{
-                background:cardBg,
-                borderRadius:12,
-                padding:"12px 6px",
-                textAlign:"center",
-                cursor:hasTask?"pointer":"default",
-                transition:"transform .15s,box-shadow .15s",
-                opacity:dia.isWeekend&&!hasTask?0.6:1,
-                position:"relative",
-                overflow:"hidden",
-                boxShadow:hasTask||isHoje?"0 2px 6px rgba(0,0,0,0.12)":"none",
-              }}
-              onMouseEnter={e=>{if(hasTask){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 6px 14px rgba(0,0,0,0.18)";}}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=hasTask||isHoje?"0 2px 6px rgba(0,0,0,0.12)":"none";}}>
-              {/* Dot "hoje" */}
-              {isHoje&&<div style={{position:"absolute",top:6,right:6,width:8,height:8,
-                  borderRadius:"50%",background:"#ffffff"}}/>}
-              <div style={{color:textColor,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,opacity:0.9}}>
-                {dia.label}
-              </div>
-              <div style={{color:textColor,fontSize:20,fontWeight:900,lineHeight:1,marginTop:4,marginBottom:8,letterSpacing:-.5}}>
-                {dia.dayNum}
-              </div>
-              <div style={{background:"#ffffff",color:hasTask?primary:isHoje?user.color:"#64748b",
-                  borderRadius:8,padding:"4px 0",margin:"0 auto",width:"80%",
-                  fontWeight:900,fontSize:24,lineHeight:1,letterSpacing:-.5}}>
-                {total}
-              </div>
-              <div style={{color:textColor,fontSize:9,marginTop:4,fontWeight:600,opacity:0.9}}>
-                {total===0?"livre":total===1?"tarefa":"tarefas"}
-              </div>
-              {atrasadasDia>0&&(
-                <div style={{background:"#ffffff",color:"#dc2626",borderRadius:6,
-                    padding:"2px 6px",fontSize:9,fontWeight:900,marginTop:6,letterSpacing:.3,
-                    display:"inline-block"}}>
-                  🔥 {atrasadasDia}
-                </div>
-              )}
-            </div>;
-          })}
-        </div>
-      </div>
+    {/* ═══ NOVO: Atividade recente — timeline cross-tasks ═══ */}
+    {showNewWidgets&&active.length>0&&(
+      <RecentActivityWidget tasks={tasks} user={user} setOpenCard={setOpenCard} isMob={isMob}/>
     )}
 
     {/* ── SEÇÃO INFERIOR: notificações (esq) + infográfico (dir) ── */}
