@@ -881,6 +881,25 @@ function getUrgencyColor(level){
   return(["#e53e3e","#f97316",C.yw,C.gr])[level]??C.gr;
 }
 
+// Cor determinística por hash do nome da tag — pílulas coloridas Trello-like
+const TAG_PALETTE=[
+  {bg:"#fef2f2",fg:"#991b1b"}, // red
+  {bg:"#fff7ed",fg:"#9a3412"}, // orange
+  {bg:"#fefce8",fg:"#854d0e"}, // yellow
+  {bg:"#f0fdf4",fg:"#15803d"}, // green
+  {bg:"#ecfeff",fg:"#155e75"}, // cyan
+  {bg:"#eff6ff",fg:"#1e40af"}, // blue
+  {bg:"#faf5ff",fg:"#7c3aed"}, // purple (Pixels)
+  {bg:"#fdf4ff",fg:"#86198f"}, // pink
+  {bg:"#f8fafc",fg:"#475569"}, // slate
+];
+function tagColor(tag){
+  if(!tag)return TAG_PALETTE[8];
+  let hash=0;
+  for(let i=0;i<tag.length;i++)hash=(hash*31+tag.charCodeAt(i))|0;
+  return TAG_PALETTE[Math.abs(hash)%TAG_PALETTE.length];
+}
+
 /* ─── PRESENCE / STATUS ONLINE ───────────────
    Calcula status baseado no último heartbeat.
    - online: ativo nos últimos 10 min
@@ -9619,6 +9638,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const cardBg=isAlteracao?"#ea580c":isAjustar?"#f97316":"#fff";
                 const cardBorder=isAlteracao?"#c2500a":isAjustar?"#ea6c00":urgColor;
                 const isOver=dragOverId&&dragOverId.id===t.id;
+                // CARD AGING — fade em cards parados >7d na MESMA coluna
+                const stoppedDays=t.colEnteredAt?Math.floor((Date.now()-new Date(t.colEnteredAt).getTime())/86400000):0;
+                const isStale=stoppedDays>=7&&!isAlteracao&&!isAjustar;
                 return <div key={t.id}
                   draggable={canDrag} onDragStart={()=>canDrag&&setDrag(t.id)}
                   onDragEnd={canDrag?()=>{setDrag(null);setDragOverId(null);setOver(null);}:undefined}
@@ -9649,7 +9671,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     setDragOverId(null);
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
-                  style={{background:cardBg,border:`1px solid ${isAlteracao||isAjustar?"transparent":"rgba(0,0,0,0.08)"}`,borderLeft:`3px solid ${cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:10,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)",transition:"box-shadow .12s, border-color .12s",flexShrink:0}}
+                  title={isStale?`Parado há ${stoppedDays} dias`:undefined}
+                  style={{background:cardBg,border:`1px solid ${isAlteracao||isAjustar?"transparent":"rgba(0,0,0,0.08)"}`,borderLeft:`3px solid ${cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:10,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow="0 3px 10px rgba(0,0,0,0.14)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow=(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)"}>
                   {thumbUrl&&(thumbUrl.startsWith("#")
@@ -9659,6 +9682,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   <div style={{padding:"9px 10px"}}>
                     {urgLevel<2&&!isAlteracao&&!isAjustar&&<div style={{float:"right",background:urgColor+"22",color:urgColor,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700,marginLeft:6}}>{urgLevel===0?"🔥 Urg.":"❌ Atras."}</div>}
                     <div style={{color:(isAlteracao||isAjustar)?"#fff":"#1e293b",fontSize:12,fontWeight:700,lineHeight:1.4,marginBottom:(isAlteracao||isAjustar)?2:7,overflow:"hidden"}}>{t.title}</div>
+                    {/* Tags coloridas (hash determinístico) */}
+                    {!isAlteracao&&!isAjustar&&(t.tags||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginBottom:6}}>
+                      {(t.tags||[]).slice(0,3).map(tag=>{const tc=tagColor(tag);return <span key={tag} style={{background:tc.bg,color:tc.fg,fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>#{tag}</span>;})}
+                      {(t.tags||[]).length>3&&<span style={{color:"#94a3b8",fontSize:9,padding:"1px 4px"}}>+{(t.tags||[]).length-3}</span>}
+                    </div>}
+                    {isStale&&!isAlteracao&&!isAjustar&&<div style={{color:"#94a3b8",fontSize:9,marginBottom:5,fontStyle:"italic"}}>parado há {stoppedDays}d</div>}
                     {isAlteracao&&<div style={{color:"rgba(255,255,255,0.95)",fontSize:11,fontWeight:900,textTransform:"uppercase",letterSpacing:1.5,marginBottom:7}}>⚠ AJUSTE NECESSARIO</div>}
                     {isAjustar&&<div style={{color:"rgba(255,255,255,0.95)",fontSize:11,fontWeight:900,textTransform:"uppercase",letterSpacing:1.5,marginBottom:7}}>✎ AJUSTAR</div>}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -16572,6 +16601,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [filesTab,setFilesTab]=useState("lista");
   const [cover,setCover]=useState(task.cover||null);
   const [showCoverPicker,setShowCoverPicker]=useState(false);
+  // ═══ TRELLO-LIKE: menu "..." + Watch + Drag-drop upload ═══
+  const [showActionsMenu,setShowActionsMenu]=useState(false);
+  const [dragOverFiles,setDragOverFiles]=useState(false);
+  const isWatching=watchers.includes((currentUser||CURRENT_USER).id);
   const [showCalendar,setShowCalendar]=useState(false);
   const [calViewMonth,setCalViewMonth]=useState(()=>{
     if(typeof task.deadline==='string'&&task.deadline){
@@ -17107,6 +17140,100 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
   };
 
+  // ═══ DOWNLOAD HELPER — baixa arquivo via blob (cross-origin safe) ═══
+  const downloadFile=async(url,name)=>{
+    try{
+      const r=await fetch(url);
+      if(!r.ok)throw new Error("fetch failed");
+      const b=await r.blob();
+      const u=URL.createObjectURL(b);
+      const a=document.createElement("a");
+      a.href=u;a.download=name||"arquivo";a.style.display="none";
+      document.body.appendChild(a);a.click();
+      setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
+    }catch(e){
+      console.warn("[downloadFile] fallback:",e?.message||e);
+      // Fallback: abre em nova aba (browser pode forçar download se header tiver)
+      window.open(url,"_blank","noopener");
+    }
+  };
+
+  // ═══ COPIAR LINK — gera URL com ?card=ID e copia ═══
+  const copyCardLink=async()=>{
+    try{
+      const url=`${window.location.origin}${window.location.pathname}?card=${encodeURIComponent(task.id)}`;
+      await navigator.clipboard.writeText(url);
+      pixelsToast.success("Link do cartão copiado!",3000);
+    }catch(e){
+      pixelsToast.warning("Não foi possível copiar. Copie manualmente: "+window.location.origin+"?card="+task.id,8000);
+    }
+    setShowActionsMenu(false);
+  };
+
+  // ═══ DUPLICAR CARTÃO — clona campos, reseta status/comments/timeline ═══
+  const duplicateCard=()=>{
+    const newId=typeof crypto!=="undefined"&&crypto.randomUUID?crypto.randomUUID():`t-${Date.now()}-${Math.random().toString(36).slice(2,9)}`;
+    const now=new Date();
+    const nowFmtStr=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    const dup={
+      id:newId,
+      title:`${title} (cópia)`,
+      desc,caption,
+      assignee:assignees[0]||user.id,
+      assignees:[...(assignees||[user.id])],
+      watchers:[],
+      client,sector,priority,
+      tags:[...(task.tags||[])],
+      checklist:(checklist||[]).map(c=>({...c,id:`ck-${Date.now()}-${Math.random().toString(36).slice(2,7)}`,done:false})),
+      // Reset estado
+      status:task.status==="demanda"?"demanda":"recebida",
+      ajustar:false,
+      isAlteracao:false,
+      cover,
+      // Limpa: arquivos, comentários, timeline (cartão novo)
+      files:[],
+      comments:[],
+      timeline:[{type:"created",label:`Demanda duplicada de "${task.title}" por ${user.name}`,at:now.toISOString(),atFmt:nowFmtStr,user:user.name}],
+      // Datas resetadas
+      startDate:now.toISOString().split("T")[0],
+      deadline:"",publishDate:"",publishTime:"09:00",
+      colEnteredAt:now.toISOString(),
+      createdAt:nowFmtStr,
+      createdBy:user.name,
+      completedAt:null,
+      score:null,
+      deletedAt:null,
+    };
+    setTasks(p=>[...p,dup]);
+    pixelsToast.success("Cartão duplicado! Procure por \""+title+" (cópia)\" no kanban.",5000);
+    setShowActionsMenu(false);
+    onClose();
+  };
+
+  // ═══ OBSERVAR (WATCH) — toggle user no array watchers ═══
+  const toggleWatch=()=>{
+    const uid=user.id;
+    const newWatchers=watchers.includes(uid)?watchers.filter(w=>w!==uid):[...watchers,uid];
+    setWatchers(newWatchers);
+    setTasks(p=>p.map(t=>t.id===task.id?{...t,watchers:newWatchers}:t));
+    pixelsToast.success(watchers.includes(uid)?"Você não está mais observando":"Você agora está observando este cartão",2500);
+    setShowActionsMenu(false);
+  };
+
+  // ═══ DRAG-DROP UPLOAD — handler pra área Arquivos ═══
+  const handleFilesDrop=(e)=>{
+    e.preventDefault();e.stopPropagation();
+    setDragOverFiles(false);
+    if(!canEdit&&!canEditRef){pixelsToast.warning("Sem permissão pra subir arquivos.");return;}
+    const files=Array.from(e.dataTransfer?.files||[]);
+    if(files.length===0)return;
+    // Cria evento sintético compatível com handleFileUpload
+    const fakeEvent={target:{files,value:""}};
+    // Default: sobe como "final" (pra criadores que tem ambas perms, sobe como ref se quiser usa botão)
+    const tipo=canEdit?"final":"referencia";
+    handleFileUpload(fakeEvent,tipo);
+  };
+
   const startRec=async()=>{
     try{
       const stream=await navigator.mediaDevices.getUserMedia({audio:true});
@@ -17207,7 +17334,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     {lightbox&&<div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div onClick={e=>e.stopPropagation()} style={{position:"relative",maxWidth:"90vw",maxHeight:"90vh",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
         <img src={lightbox.url} alt={lightbox.name} style={{maxWidth:"100%",maxHeight:"80vh",objectFit:"contain",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.6)"}}/>
-        <div style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{lightbox.name}</div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{lightbox.name}</div>
+          <button onClick={()=>downloadFile(lightbox.url,lightbox.name)} title="Baixar imagem"
+            style={{background:"rgba(255,255,255,0.12)",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+            onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.5)"}
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.12)"}>⬇ Baixar</button>
+        </div>
         <button onClick={()=>setLightbox(null)} style={{position:"absolute",top:-12,right:-12,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       </div>
     </div>}
@@ -17291,6 +17424,40 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               onBlur={()=>setIsEditingText(false)}/>
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"flex-start",position:"relative"}}>
+            {/* Botão "..." — menu de ações (Trello-like) */}
+            <div style={{position:"relative"}}>
+              <button onClick={()=>setShowActionsMenu(v=>!v)} title="Mais ações"
+                style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:showActionsMenu?"#f5f3ff":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#64748b",transition:"all .15s"}}
+                onMouseEnter={e=>{if(!showActionsMenu)e.currentTarget.style.background="#f8fafc";}}
+                onMouseLeave={e=>{if(!showActionsMenu)e.currentTarget.style.background="#fff";}}>⋯</button>
+              {showActionsMenu&&<>
+                <div onClick={()=>setShowActionsMenu(false)} style={{position:"fixed",inset:0,zIndex:299}}/>
+                <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:6,boxShadow:"0 8px 28px rgba(0,0,0,0.14)",display:"flex",flexDirection:"column",minWidth:200}}>
+                  <button onClick={copyCardLink}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <span style={{fontSize:14,width:18,textAlign:"center"}}>🔗</span>
+                    <span style={{flex:1}}>Copiar link</span>
+                  </button>
+                  <button onClick={toggleWatch}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <span style={{fontSize:14,width:18,textAlign:"center"}}>{isWatching?"👁":"👁‍🗨"}</span>
+                    <span style={{flex:1}}>{isWatching?"Parar de observar":"Observar"}</span>
+                    {isWatching&&<span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>ON</span>}
+                  </button>
+                  {canEdit&&<button onClick={duplicateCard}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <span style={{fontSize:14,width:18,textAlign:"center"}}>📋</span>
+                    <span style={{flex:1}}>Duplicar cartão</span>
+                  </button>}
+                </div>
+              </>}
+            </div>
             {/* Cor de Capa — compact swatch button */}
             {canEdit&&<div style={{position:"relative"}}>
               <button onClick={()=>setShowCoverPicker(v=>!v)} title="Cor de capa"
@@ -17701,10 +17868,18 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               ))}
             </div>
 
-            {filesTab==="lista"&&<>
-              {attachments.length===0&&<div style={{textAlign:"center",padding:"32px 0",color:"#cbd5e1"}}>
+            {filesTab==="lista"&&<div
+              onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEdit||canEditRef)setDragOverFiles(true);}}
+              onDragLeave={e=>{e.preventDefault();e.stopPropagation();setDragOverFiles(false);}}
+              onDrop={handleFilesDrop}
+              style={{position:"relative",borderRadius:10,border:dragOverFiles?"2px dashed #a140ff":"2px dashed transparent",background:dragOverFiles?"#faf5ff":"transparent",padding:dragOverFiles?12:0,transition:"all .15s",minHeight:dragOverFiles?100:0}}>
+              {dragOverFiles&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
+                <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)"}}>📥 Solte os arquivos aqui</div>
+              </div>}
+              {attachments.length===0&&!dragOverFiles&&<div style={{textAlign:"center",padding:"32px 0",color:"#cbd5e1"}}>
                 <div style={{fontSize:32,marginBottom:8}}>📎</div>
                 <div style={{fontSize:12}}>Nenhum arquivo ainda</div>
+                {(canEdit||canEditRef)&&<div style={{fontSize:10,marginTop:4,color:"#94a3b8"}}>Arraste arquivos aqui ou use o botão "+ adicionar"</div>}
               </div>}
 
               {/* ── Lista de uploads com progress bar individual ── */}
@@ -17771,7 +17946,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#a140ff",fontSize:9,fontWeight:600,marginTop:4}}>Abrir →</a>
                         </div>
                         <div style={{position:"absolute",top:4,left:4,background:"#a140ff",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>ref #{i+1}</div>
-                        {canEditRef&&<button onClick={()=>removeAttachment(a.id)} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+                        <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
+                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name);}} title="Baixar referência"
+                            style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,padding:"2px 6px",display:"flex",alignItems:"center"}}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
+                            onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>⬇</button>
+                          {canEditRef&&<button onClick={()=>removeAttachment(a.id)} style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+                        </div>
                       </div>
                     ))}
                   </div>}
@@ -17779,12 +17960,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
                     return(<div key={a.id} style={{background:"#faf5ff",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",marginBottom:8}}>
                       <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",maxHeight:180,display:"block",background:"#000"}}/>
-                      <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{color:"#a140ff",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Vídeo de referência</div>
                           <div style={{color:"#1e293b",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                           {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
                         </div>
+                        <button onClick={()=>downloadFile(a.url,a.name)} title="Baixar vídeo"
+                          style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:6,padding:"4px 10px",color:"#7c3aed",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0}}>⬇</button>
                         {canEditRef&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
                       </div>
                     </div>);
@@ -17817,7 +18000,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#a140ff",fontSize:9,fontWeight:600,marginTop:4}}>Abrir →</a>
                         </div>
                         <div style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>#{i+1}</div>
-                        {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{position:"absolute",top:4,right:4,background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+                        <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
+                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name);}} title="Baixar imagem"
+                            style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,padding:"2px 6px",display:"flex",alignItems:"center"}}
+                            onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
+                            onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>⬇</button>
+                          {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+                        </div>
                       </div>
                     ))}
                   </div>}
@@ -17825,11 +18014,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
                     return(<div key={a.id} style={{background:"#f8fafc",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",marginBottom:8}}>
                       <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",maxHeight:180,display:"block",background:"#000"}}/>
-                      <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{color:"#1e293b",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                           {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
                         </div>
+                        <button onClick={()=>downloadFile(a.url,a.name)} title="Baixar vídeo"
+                          style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"4px 10px",color:"#64748b",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0}}
+                          onMouseEnter={e=>{e.currentTarget.style.background="#ede9fe";e.currentTarget.style.color="#7c3aed";}}
+                          onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>⬇</button>
                         {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
                       </div>
                     </div>);
@@ -17857,12 +18050,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       <div style={{color:"#334155",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                       <div style={{color:"#94a3b8",fontSize:10}}>{a.addedBy} · {a.addedAt}</div>
                     </div>
-                    <a href={a.url} download={a.name} style={{background:"#f1f5f9",border:"none",borderRadius:7,padding:"5px 10px",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"none"}}>⬇</a>
+                    <a href={a.url} download={a.name} onClick={(e)=>{e.preventDefault();downloadFile(a.url,a.name);}} style={{background:"#f1f5f9",border:"none",borderRadius:7,padding:"5px 10px",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"none"}}>⬇</a>
                     {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
                   </div>
                 ))}
               </>}
-            </>}
+            </div>}
 
             {filesTab==="ordem"&&<div>
               {imgFin.length===0
@@ -21233,6 +21426,54 @@ export default function AgencyOS(){
   const goClient=useCallback((id)=>{setActiveCl(id);setMindmapActiveCl(false);setPage("clientes");setSideOpen(false);},[]);
   const cur=NAV.find(n=>n.id===page)||NAV.flatMap(n=>n.children||[]).find(c=>c.id===page);
 
+  // ═══ TRELLO-LIKE: Card global por URL + Busca global Ctrl+K ═══
+  const [globalCard,setGlobalCard]=useState(null);
+  const [searchOpen,setSearchOpen]=useState(false);
+  const [searchQuery,setSearchQuery]=useState("");
+
+  // Lê ?card=ID na URL e abre o card automaticamente
+  useEffect(()=>{
+    if(authState!=="app"||tasks.length===0)return;
+    try{
+      const params=new URLSearchParams(window.location.search);
+      const cid=params.get("card");
+      if(cid&&!globalCard){
+        const t=tasks.find(x=>String(x.id)===String(cid));
+        if(t)setGlobalCard(t);
+      }
+    }catch(e){console.warn("[card-link] parse error:",e?.message||e);}
+  },[authState,tasks.length]); // só quando tasks carregam
+
+  // Atalho Ctrl+K / Cmd+K pra busca global
+  useEffect(()=>{
+    const onKey=(e)=>{
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"){
+        e.preventDefault();
+        setSearchOpen(s=>!s);
+      }
+      if(e.key==="Escape"&&searchOpen){setSearchOpen(false);setSearchQuery("");}
+    };
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[searchOpen]);
+
+  // Resultados da busca global (filtra tasks por título/desc/cliente)
+  const searchResults=useMemo(()=>{
+    if(!searchQuery||searchQuery.length<2)return[];
+    const q=searchQuery.toLowerCase();
+    return (tasks||[])
+      .filter(t=>!t.deletedAt)
+      .filter(t=>{
+        const cl=CLIENTS.find(c=>c.id===t.client);
+        return (t.title||"").toLowerCase().includes(q)
+          ||(t.desc||"").toLowerCase().includes(q)
+          ||(t.caption||"").toLowerCase().includes(q)
+          ||(cl?.name||"").toLowerCase().includes(q)
+          ||(t.tags||[]).some(tag=>tag.toLowerCase().includes(q));
+      })
+      .slice(0,10);
+  },[searchQuery,tasks]);
+
   // ── Navegação ─────────────────────────────────────────────
   const canSee=(n,p)=>{
     switch(n.id){
@@ -21381,6 +21622,62 @@ export default function AgencyOS(){
   return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",position:"relative"}}>
     {/* Widget de videochamada — persiste ao trocar de página */}
     <PixelsCallWidget/>
+
+    {/* ═══ CARD MODAL GLOBAL — abre via URL ?card=ID ou Ctrl+K ═══ */}
+    {globalCard&&<CardModal task={globalCard} tasks={tasks} setTasks={setTasks}
+      onClose={()=>{
+        setGlobalCard(null);
+        // Limpa ?card= da URL sem reload
+        try{
+          const u=new URL(window.location.href);
+          u.searchParams.delete("card");
+          window.history.replaceState({},"",u.toString());
+        }catch(e){}
+      }}
+      currentUser={effectiveUser}/>}
+
+    {/* ═══ BUSCA GLOBAL Ctrl+K — modal overlay ═══ */}
+    {searchOpen&&<div onClick={()=>{setSearchOpen(false);setSearchQuery("");}}
+      style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{background:"#fff",borderRadius:14,width:"min(560px,92%)",maxHeight:"70vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"14px 18px",borderBottom:"0.5px solid #e5e7eb"}}>
+          <span style={{fontSize:16,color:"#94a3b8"}}>🔍</span>
+          <input autoFocus value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}
+            placeholder="Buscar demanda por título, descrição, cliente, tag..."
+            style={{flex:1,border:"none",outline:"none",fontSize:14,color:"#0f172a",background:"transparent"}}/>
+          <span style={{background:"#f1f5f9",color:"#94a3b8",padding:"3px 8px",borderRadius:4,fontSize:10,fontWeight:500}}>ESC</span>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"6px 0"}}>
+          {searchQuery.length<2&&<div style={{padding:"24px 18px",textAlign:"center",color:"#94a3b8",fontSize:13}}>
+            Digite pelo menos 2 caracteres pra buscar
+          </div>}
+          {searchQuery.length>=2&&searchResults.length===0&&<div style={{padding:"24px 18px",textAlign:"center",color:"#94a3b8",fontSize:13}}>
+            Nenhuma demanda encontrada com "<span style={{color:"#0f172a",fontWeight:500}}>{searchQuery}</span>"
+          </div>}
+          {searchResults.map(t=>{
+            const cl=CLIENTS.find(c=>c.id===t.client);
+            const u=TEAM.find(x=>x.id===t.assignee);
+            return <button key={t.id}
+              onClick={()=>{setGlobalCard(t);setSearchOpen(false);setSearchQuery("");}}
+              style={{display:"flex",alignItems:"center",gap:10,padding:"10px 18px",border:"none",background:"transparent",cursor:"pointer",width:"100%",textAlign:"left",borderBottom:"0.5px solid #f8fafc"}}
+              onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:cl?.color||"#94a3b8",flexShrink:0}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,color:"#0f172a",fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{cl?.name||"—"} {u?"· "+u.name:""}</div>
+              </div>
+              <span style={{fontSize:9,color:"#94a3b8",flexShrink:0}}>{t.status}</span>
+            </button>;
+          })}
+        </div>
+        {searchResults.length>0&&<div style={{padding:"8px 18px",borderTop:"0.5px solid #e5e7eb",fontSize:10,color:"#94a3b8",display:"flex",justifyContent:"space-between"}}>
+          <span>{searchResults.length} resultado{searchResults.length>1?"s":""}</span>
+          <span>Enter pra abrir o primeiro</span>
+        </div>}
+      </div>
+    </div>}
     {showSelfProfile&&<CollabProfilePage
       user={CURRENT_USER}
       profile={selfProfileData}
