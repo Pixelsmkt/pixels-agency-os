@@ -261,8 +261,8 @@ const KANBAN_COLS = [
   { id:"demanda",   label:"Copys",                  color:C.kDemanda,   dark:false },
   { id:"recebida",  label:"Demanda",                color:C.kRecebida,  dark:false },
   { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
-  { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
   { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
+  { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
   { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
   { id:"agendado",  label:"Agendado",               color:C.kAgendado,  dark:true  },
   { id:"publicado", label:"Publicado",              color:C.kPublicado, dark:true  },
@@ -9089,17 +9089,39 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [editingColId,setEditingColId]=useState(null);
   const [editingColLabel,setEditingColLabel]=useState("");
   const [cols,setCols]=useState(()=>{
+    // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem (força reset).
+    // Versão atual: v3 (Ajustes entre Em Execução e Concluído p/ Avaliação)
+    const COLS_VERSION="v3-ajustes-pos";
     try{
+      const savedVersion=localStorage.getItem("pixels-cols-version");
+      if(savedVersion!==COLS_VERSION){
+        // Versão mudou: rebuild com KANBAN_COLS canônico, preservando colunas customizadas
+        let customCols=[];
+        try{
+          const saved=localStorage.getItem("pixels-cols-v1");
+          if(saved){
+            const parsed=JSON.parse(saved);
+            if(Array.isArray(parsed)){
+              const officialIds=new Set(KANBAN_COLS.map(k=>k.id));
+              customCols=parsed.filter(p=>!officialIds.has(p.id));
+            }
+          }
+        }catch(e){}
+        localStorage.setItem("pixels-cols-version",COLS_VERSION);
+        return [...KANBAN_COLS,...customCols];
+      }
       const saved=localStorage.getItem("pixels-cols-v1");
       if(saved){
         const parsed=JSON.parse(saved);
         if(Array.isArray(parsed)&&parsed.length>0){
-          // SELF-HEAL: garante que colunas oficiais (KANBAN_COLS) sempre existam.
-          // Se config salva está desatualizada (ex: sem "agendado"/"publicado"),
-          // adiciona as faltantes preservando ordem do user.
+          // Self-heal defensivo: garante cols oficiais presentes
           const savedIds=new Set(parsed.map(c=>c.id));
           const missing=KANBAN_COLS.filter(k=>!savedIds.has(k.id));
-          return missing.length>0?[...parsed,...missing]:parsed;
+          if(missing.length===0)return parsed;
+          // Insere as missing nas posições canônicas em vez de só apender no final
+          const officialIds=new Set(KANBAN_COLS.map(k=>k.id));
+          const customCols=parsed.filter(p=>!officialIds.has(p.id));
+          return [...KANBAN_COLS,...customCols];
         }
       }
     }catch(e){}
@@ -9217,6 +9239,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     demanda:   !!myPerms.colCopys,
     recebida:  !!myPerms.colDemanda,
     execucao:  !!myPerms.colExecucao,
+    ajustes:   myPerms.colAjustes!==false, // default true (todos veem ajustes — designer/copywriter precisam)
     avaliacao: !!myPerms.colAvaliacao,
     aprovado:  !!myPerms.colAprovado,
     agendado:  !!myPerms.colAgendado,
@@ -18682,8 +18705,8 @@ const DASHBOARD_WIDGETS=[
 // Calcula a prioridade real da demanda
 // Retorna: { level: 0|1|2|3, label, color, icon }
 const getDemandPriority=(t)=>{
-  // 1º Alteração/Ajuste — LARANJA
-  const ajustar=t.ajustar===true||t.status==="alteracao"||t.isAlteracao;
+  // 1º Alteração/Ajuste — LARANJA (inclui status="ajustes" caso manual)
+  const ajustar=t.ajustar===true||t.status==="alteracao"||t.isAlteracao||t.status==="ajustes";
   if(ajustar) return {level:0,label:"Alteração",color:"#ea580c",bg:"#ea580c",text:"#fff",icon:"✎"};
   const dl=daysLeft(t.deadline);
   // 2º Atrasado — VERMELHO
