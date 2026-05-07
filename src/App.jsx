@@ -9672,32 +9672,49 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:cardBg,border:`1px solid ${isAlteracao||isAjustar?"transparent":"rgba(0,0,0,0.08)"}`,borderLeft:`3px solid ${cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:10,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
-                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 3px 10px rgba(0,0,0,0.14)"}
-                  onMouseLeave={e=>e.currentTarget.style.boxShadow=(isAlteracao||isAjustar)?"0 3px 12px rgba(249,115,22,0.5)":"0 1px 3px rgba(0,0,0,0.08)"}>
+                  style={{background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderLeft:`3px solid ${(isAlteracao||isAjustar)?"#ea580c":cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
+                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)"}
+                  onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
+                  {/* BARRAS COLORIDAS DE TAGS — estilo Trello label bars */}
+                  {(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
+                    {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
+                  </div>}
+                  {/* THUMBNAIL CAPADO 90px */}
                   {thumbUrl&&(thumbUrl.startsWith("#")
-                    ?<div style={{height:120,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,borderRadius:"7px 7px 0 0"}}/>
-                    :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"100%",height:"auto",borderRadius:"7px 7px 0 0",pointerEvents:"none"}}/>
+                    ?<div style={{height:80,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5}}/>
+                    :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5,pointerEvents:"none"}}/>
                   )}
-                  <div style={{padding:"9px 10px"}}>
-                    {urgLevel<2&&!isAlteracao&&!isAjustar&&<div style={{float:"right",background:urgColor+"22",color:urgColor,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700,marginLeft:6}}>{urgLevel===0?"🔥 Urg.":"❌ Atras."}</div>}
-                    <div style={{color:(isAlteracao||isAjustar)?"#fff":"#1e293b",fontSize:12,fontWeight:700,lineHeight:1.4,marginBottom:(isAlteracao||isAjustar)?2:7,overflow:"hidden"}}>{t.title}</div>
-                    {/* Tags coloridas (hash determinístico) */}
-                    {!isAlteracao&&!isAjustar&&(t.tags||[]).length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:3,marginBottom:6}}>
-                      {(t.tags||[]).slice(0,3).map(tag=>{const tc=tagColor(tag);return <span key={tag} style={{background:tc.bg,color:tc.fg,fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>#{tag}</span>;})}
-                      {(t.tags||[]).length>3&&<span style={{color:"#94a3b8",fontSize:9,padding:"1px 4px"}}>+{(t.tags||[]).length-3}</span>}
+                  <div style={{padding:"7px 9px"}}>
+                    {/* Badge de status pequeno (em vez do banner laranja) */}
+                    {(isAlteracao||isAjustar)&&<div style={{display:"flex",alignItems:"center",marginBottom:5}}>
+                      <span style={{background:"#fff7ed",color:"#ea580c",fontSize:8,padding:"2px 7px",borderRadius:3,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
+                        {isAlteracao?"⚠ ajuste necessário":"✎ ajustar copy"}
+                      </span>
                     </div>}
+                    {/* Badge de urgência minimalista */}
+                    {urgLevel<2&&!isAlteracao&&!isAjustar&&<div style={{display:"flex",alignItems:"center",marginBottom:5}}>
+                      <span style={{background:urgColor+"15",color:urgColor,borderRadius:3,padding:"2px 7px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
+                        {urgLevel===0?"🔥 urgente":"❌ atrasado"}
+                      </span>
+                    </div>}
+                    {/* Título */}
+                    <div style={{color:"#0f172a",fontSize:12,fontWeight:500,lineHeight:1.35,marginBottom:6,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{t.title}</div>
+                    {/* Stale indicator sutil */}
                     {isStale&&!isAlteracao&&!isAjustar&&<div style={{color:"#94a3b8",fontSize:9,marginBottom:5,fontStyle:"italic"}}>parado há {stoppedDays}d</div>}
-                    {isAlteracao&&<div style={{color:"rgba(255,255,255,0.95)",fontSize:11,fontWeight:900,textTransform:"uppercase",letterSpacing:1.5,marginBottom:7}}>⚠ AJUSTE NECESSARIO</div>}
-                    {isAjustar&&<div style={{color:"rgba(255,255,255,0.95)",fontSize:11,fontWeight:900,textTransform:"uppercase",letterSpacing:1.5,marginBottom:7}}>✎ AJUSTAR</div>}
+                    {/* RODAPÉ COM ÍCONES (estilo Trello) */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:5}}>
-                        {cl&&<span style={{background:(isAlteracao||isAjustar)?"rgba(0,0,0,0.2)":"#f1f5f9",color:(isAlteracao||isAjustar)?"#fff":"#64748b",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:700}}>{cl.abbr}</span>}
-                        <span style={{color:(isAlteracao||isAjustar)?"rgba(255,255,255,0.85)":days<0?"#e53e3e":days<=2?"#dd6b20":"#94a3b8",fontSize:10,fontWeight:days<0||days<=2?600:400}}>{days<0?`${Math.abs(days)}d atraso`:days===0?"Hoje":days===1?"Amanha":`${days}d`}</span>
+                      <div style={{display:"flex",alignItems:"center",gap:7,fontSize:10,color:"#94a3b8"}}>
+                        {cl&&<span style={{background:"#f1f5f9",color:"#64748b",borderRadius:3,padding:"1px 5px",fontSize:8,fontWeight:600}}>{cl.abbr}</span>}
+                        {days!==null&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days<=2?"#ea580c":"#94a3b8",fontWeight:days<=2?600:400,display:"flex",alignItems:"center",gap:2}}>
+                          🕒 {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
+                        </span>}
+                        {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:2}}>📎 {(t.files||[]).length}</span>}
+                        {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:2}}>💬 {(t.comments||[]).length}</span>}
+                        {(t.watchers||[]).length>0&&<span title={`${(t.watchers||[]).length} observador(es)`} style={{display:"flex",alignItems:"center",gap:2}}>👁 {(t.watchers||[]).length}</span>}
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:4}}>
-                        {canDelete&&<button onClick={e=>{e.stopPropagation();handleDelete(t.id);}} style={{background:"none",border:"none",color:(isAlteracao||isAjustar)?"rgba(255,255,255,0.6)":"transparent",cursor:"pointer",fontSize:12,padding:"0 2px"}} onMouseEnter={e=>e.currentTarget.style.color=(isAlteracao||isAjustar)?"#fff":"#aaa"} onMouseLeave={e=>e.currentTarget.style.color=(isAlteracao||isAjustar)?"rgba(255,255,255,0.6)":"transparent"}>x</button>}
-                        {u&&<div title={u.name} style={{width:22,height:22,borderRadius:"50%",background:(isAlteracao||isAjustar)?"rgba(0,0,0,0.2)":u.color,border:(isAlteracao||isAjustar)?"2px solid rgba(255,255,255,0.4)":"none",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:8}}>{u.av}</div>}
+                      <div style={{display:"flex",alignItems:"center",gap:3}}>
+                        {canDelete&&<button onClick={e=>{e.stopPropagation();handleDelete(t.id);}} title="Excluir" style={{background:"none",border:"none",color:"transparent",cursor:"pointer",fontSize:11,padding:"0 2px"}} onMouseEnter={e=>e.currentTarget.style.color="#cbd5e1"} onMouseLeave={e=>e.currentTarget.style.color="transparent"}>×</button>}
+                        {u&&<div title={u.name} style={{width:18,height:18,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:8}}>{u.av}</div>}
                       </div>
                     </div>
                   </div>
