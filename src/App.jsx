@@ -262,6 +262,7 @@ const KANBAN_COLS = [
   { id:"recebida",  label:"Demanda",                color:C.kRecebida,  dark:false },
   { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
   { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
+  { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
   { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
   { id:"agendado",  label:"Agendado",               color:C.kAgendado,  dark:true  },
   { id:"publicado", label:"Publicado",              color:C.kPublicado, dark:true  },
@@ -326,7 +327,7 @@ const DEFAULT_PERMS={
   filtroSetor:false, filtroCliente:false, filtroPerfil:false,
   // Colunas — abertas para todos por padrão (permissões finas definidas por sócio)
   colCopys:false, colDemanda:true, colExecucao:true, colAvaliacao:false,
-  colAprovado:false, colAgendado:false, colPublicado:false, colPausado:false, colAjuste:false,
+  colAjustes:true, colAprovado:false, colAgendado:false, colPublicado:false, colPausado:false, colAjuste:false,
   // Clientes
   verClientes:false, verDadosCliente:false, verMetricas:false,
   verConcorrencia:false, verMindmap:false, verLinksCliente:false,
@@ -12035,6 +12036,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const markAjustar=(task)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
+    // Copy ajuste mantém comportamento antigo: fica em "demanda" com flag ajustar:true
+    // (apenas ajuste de CONTEÚDO — requestAdjust — vai pra coluna "ajustes")
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:true,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"edit",label:"Marcada para ajuste por "+actor,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
     pushNotif({type:"ajuste",icon:"✎",title:"Ajuste solicitado na Copy",body:'"'+task.title+'" precisa de revisão. Verifique o feedback.',user:actor,at:"Agora"});
     setCardIdx(0);setImgIdx(0);
@@ -12110,9 +12113,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const requestAdjust=(task,feedback,drawingFiles,audioFiles,comments)=>{
     if(!isApprover)return;
     const isInterna=task.status==="interno_avaliacao";
-    const toStatus=isInterna?"interno_execucao":"execucao";
+    // FIX: Conteúdo (não-interna) vai pra coluna "ajustes" — mais organizado.
+    const toStatus=isInterna?"interno_execucao":"ajustes";
     const fromLabel=isInterna?"Concluído p/ Avaliação (Interna)":"Concluído p/ Avaliação";
-    const toLabel=isInterna?"Em Execução (Ajuste Interno)":"Em Execução (Ajuste)";
+    const toLabel=isInterna?"Em Execução (Ajuste Interno)":"Ajustes";
     const newFiles=[...(task.files||[]),...(drawingFiles||[]),...(audioFiles||[])];
     const newComments=[...(task.comments||[]),...(comments||[])];
     const actor=effectiveUser?.name||CURRENT_USER.name;
@@ -12124,6 +12128,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       status:toStatus,
       isAlteracao:!isInterna,
       ajustar:!isInterna,
+      ajusteOrigin:isInterna?undefined:"avaliacao",
       priority:"alta",
       colEnteredAt:new Date().toISOString(),
       files:newFiles,
@@ -16865,7 +16870,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       return;
     }
     const cleanedFiles=cleanAttachments(attachments);
-    const newTlEntry={type:"status",fromLabel:"Em Execução",toLabel:"Concluído p/ Avaliação",from:"execucao",to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    // Conteúdo: tanto "execucao" quanto "ajustes" vão pra "avaliacao"
+    const fromStatus=task.status;
+    const fromLabel=fromStatus==="ajustes"?"Ajustes":"Em Execução";
+    const newTlEntry={type:"status",fromLabel,toLabel:"Concluído p/ Avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
     // Updater functional + merge — preserva alterações concorrentes de outros usuários
     setTasks(prev=>prev.map(t=>{
       if(t.id!==task.id)return t;
@@ -16873,7 +16881,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const prevIds=new Set(prevComments.map(c=>c.id));
       const localOnly=(comments||[]).filter(c=>!prevIds.has(c.id));
       const mergedComments=[...prevComments,...localOnly];
-      return{...t,status:"avaliacao",colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newTlEntry],checklist,desc,title,assignee:assignees[0],assignees,sector,client,priority,deadline,cover,files:cleanedFiles,comments:mergedComments};
+      // Limpa flags de ajuste ao reenviar (cartão volta ao fluxo de avaliação normal)
+      const cleanFlags=fromStatus==="ajustes"?{isAlteracao:false,ajusteOrigin:null}:{};
+      return{...t,status:"avaliacao",...cleanFlags,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newTlEntry],checklist,desc,title,assignee:assignees[0],assignees,sector,client,priority,deadline,cover,files:cleanedFiles,comments:mergedComments};
     }));
     setConclusionStep(null);
     onClose();
@@ -17513,11 +17523,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 onMouseLeave={e=>{e.currentTarget.style.background="#fff0f0";}}>
                 🗑 Lixeira
               </button>}
-              {/* Demanda Concluida — execucao only */}
-              {canEdit&&task.status==="execucao"&&<button
+              {/* Demanda Concluida — execucao OU ajustes */}
+              {canEdit&&(task.status==="execucao"||task.status==="ajustes")&&<button
                 onClick={()=>setConclusionStep(1)}
                 style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontWeight:700,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(22,163,74,0.28)"}}>
-                Demanda Concluida
+                {task.status==="ajustes"?"Reenviar pra avaliação":"Demanda Concluida"}
               </button>}
               {/* Enviar para Aprovação — only for copy cards marked ajustar */}
               {canEdit&&task.ajustar===true&&task.status==="demanda"&&<button
@@ -20786,6 +20796,7 @@ const rowToTask = (r) => ({
   score:        r.score        ?? null,
   ajustar:      !!r.ajustar,
   isAlteracao:  !!r.is_alteracao,
+  ajusteOrigin: r.ajuste_origin || null,
   assignees:    Array.isArray(r.assignees) ? r.assignees : [],
   watchers:     Array.isArray(r.watchers)  ? r.watchers  : [],
   tags:         Array.isArray(r.tags)      ? r.tags      : [],
@@ -20820,6 +20831,7 @@ const taskToRow = (t) => ({
   score:          t.score        ?? null,
   ajustar:        !!t.ajustar,
   is_alteracao:   !!t.isAlteracao,
+  ajuste_origin:  t.ajusteOrigin || null,
   assignees:      t.assignees    || [],
   watchers:       t.watchers     || [],
   tags:           t.tags         || [],
