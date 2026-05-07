@@ -9089,9 +9089,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [editingColId,setEditingColId]=useState(null);
   const [editingColLabel,setEditingColLabel]=useState("");
   const [cols,setCols]=useState(()=>{
-    // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem (força reset).
-    // Versão atual: v3 (Ajustes entre Em Execução e Concluído p/ Avaliação)
-    const COLS_VERSION="v3-ajustes-pos";
+    // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
+    // Versão atual: v4 (cor vinho na coluna Ajustes)
+    const COLS_VERSION="v4-ajustes-vinho";
     try{
       const savedVersion=localStorage.getItem("pixels-cols-version");
       if(savedVersion!==COLS_VERSION){
