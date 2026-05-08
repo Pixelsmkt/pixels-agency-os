@@ -14796,7 +14796,7 @@ function BarChartV({items,colorKey="valor"}){
 
 /* ── ROI constants — fora do componente ── */
 const VALOR_POR_TAREFA=150;
-const SALARIOS={vinicius:5000,gustavo:5000,ellen:3200,erick:3500,andre:3000,guilherme:2800,joao:2600};
+const SALARIOS={vinicius:5000,gustavo:5000,ellen:3200,erick:3500,andre:3000,guilherme:2800,ramon:2600};
 
 /* ── MAPEAMENTO DE VENDAS ─────────────────── */
 function PageMapeamento(){
