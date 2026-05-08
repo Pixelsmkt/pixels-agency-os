@@ -276,8 +276,8 @@ const TEAM = [
   { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
-  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, supervises:["joao"], pagamentoPorDemanda:true },
-  { id:"joao",      name:"João",      role:"Editor de Vídeo",      av:"J", color:C.yw,  level:3, status:"online",  dash:"editor",      canDelete:false, canPixelsIA:false, supervisor:"guilherme", pagamentoPorDemanda:true },
+  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, supervises:["ramon"], pagamentoPorDemanda:true },
+  { id:"ramon",     name:"Ramon",     role:"Editor de Vídeo",      av:"R", color:C.yw,  level:3, status:"online",  dash:"editor",      canDelete:false, canPixelsIA:false, supervisor:"guilherme", pagamentoPorDemanda:true },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
@@ -367,7 +367,7 @@ const ACCESS_STORE={
   erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
   andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
   guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
-  joao:    {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
+  ramon:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
 };
 
 /* ─── SAFE STORAGE — wrapper localStorage com quota check ─── */
