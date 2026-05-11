@@ -9607,6 +9607,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",paddingBottom:8,justifyContent:"center"}}>
           {visibleCols.map(col=>{
           const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>(a.position??999999)-(b.position??999999));
+          // ═══ RANK POR ASSIGNEE — cada colaborador tem sua própria fila numerada (1, 2, 3...) ═══
+          // Sem filtro: aparecem vários #1 (um pra cada pessoa). Filtrado: sequência só de 1.
+          const cardRanks=new Map();
+          const _rankCounters={};
+          colTasks.forEach(t=>{
+            const aid=t.assignee||(t.assignees||[])[0];
+            if(!aid)return;
+            _rankCounters[aid]=(_rankCounters[aid]||0)+1;
+            cardRanks.set(t.id,_rankCounters[aid]);
+          });
           const isDraggingOver=over===col.id;
           return <div key={col.id}
             onDragOver={e=>{e.preventDefault();setOver(col.id);}}
@@ -9648,6 +9658,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1}}>
               {colTasks.map(t=>{
                 const u=TEAM.find(x=>x.id===t.assignee);
+                // Todos os responsáveis (stack de avatares — múltiplas iniciais)
+                const allAssigneeIds=Array.isArray(t.assignees)&&t.assignees.length>0?t.assignees:(t.assignee?[t.assignee]:[]);
+                const allAssignees=allAssigneeIds.map(id=>TEAM.find(x=>x.id===id)).filter(Boolean);
                 const cl=CLIENTS.find(c=>c.id===t.client);
                 const days=daysLeft(t.deadline);
                 const urgLevel=taskUrgencyLevel(t);
@@ -9657,6 +9670,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const thumbUrl=hasCover?hasCover:imgAttachment?imgAttachment.url:null;
                 const isAlteracao=t.status==="alteracao"||t.isAlteracao;
                 const isAjustar=t.ajustar===true&&t.status==="demanda";
+                // Número de ordem por colaborador (1, 2, 3...) — calculado em cardRanks
+                const cardRank=cardRanks.get(t.id);
+                // Badge sempre roxo Pixels (cor da marca)
+                const rankBg="#a140ff";
                 const cardBg=isAlteracao?"#ea580c":isAjustar?"#f97316":"#fff";
                 const cardBorder=isAlteracao?"#c2500a":isAjustar?"#ea6c00":urgColor;
                 const isOver=dragOverId&&dragOverId.id===t.id;
@@ -9694,9 +9711,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderLeft:`3px solid ${(isAlteracao||isAjustar)?"#ea580c":cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
+                  style={{position:"relative",background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderLeft:`3px solid ${(isAlteracao||isAjustar)?"#ea580c":cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
+                  {/* BADGE DE ORDEM POR COLABORADOR (1, 2, 3... no canto sup. esquerdo) */}
+                  {cardRank&&<div title={u?`#${cardRank} pra ${u.name}`:`#${cardRank}`} style={{position:"absolute",top:8,left:8,zIndex:2,background:rankBg,color:"#fff",fontSize:15,fontWeight:700,width:30,height:30,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.18)",pointerEvents:"none"}}>{cardRank}</div>}
                   {/* BARRAS COLORIDAS DE TAGS — estilo Trello label bars */}
                   {(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
@@ -9745,7 +9764,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:3}}>
                         {canDelete&&<button onClick={e=>{e.stopPropagation();handleDelete(t.id);}} title="Excluir" style={{background:"none",border:"none",color:"transparent",cursor:"pointer",fontSize:11,padding:"0 2px"}} onMouseEnter={e=>e.currentTarget.style.color="#cbd5e1"} onMouseLeave={e=>e.currentTarget.style.color="transparent"}>×</button>}
-                        {u&&<div title={u.name} style={{width:18,height:18,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:8}}>{u.av}</div>}
+                        {/* Stack de avatares — todos os responsáveis */}
+                        {allAssignees.length>0&&<div style={{display:"flex",alignItems:"center"}}>
+                          {allAssignees.slice(0,3).map((au,idx)=>(
+                            <div key={au.id} title={au.name} style={{width:18,height:18,borderRadius:"50%",background:au.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:8,border:"1.5px solid #fff",marginLeft:idx===0?0:-5,zIndex:allAssignees.length-idx,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>{au.av}</div>
+                          ))}
+                          {allAssignees.length>3&&<div title={allAssignees.slice(3).map(au=>au.name).join(", ")} style={{width:18,height:18,borderRadius:"50%",background:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:7,border:"1.5px solid #fff",marginLeft:-5,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>+{allAssignees.length-3}</div>}
+                        </div>}
                       </div>
                     </div>
                   </div>
