@@ -9711,11 +9711,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{position:"relative",background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderLeft:`3px solid ${(isAlteracao||isAjustar)?"#ea580c":cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
+                  style={{background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderLeft:`3px solid ${(isAlteracao||isAjustar)?"#ea580c":cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
-                  {/* BADGE DE ORDEM POR COLABORADOR (1, 2, 3... no canto sup. esquerdo) */}
-                  {cardRank&&<div title={u?`#${cardRank} pra ${u.name}`:`#${cardRank}`} style={{position:"absolute",top:8,left:8,zIndex:2,background:rankBg,color:"#fff",fontSize:15,fontWeight:700,width:30,height:30,borderRadius:7,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 1px 4px rgba(0,0,0,0.18)",pointerEvents:"none"}}>{cardRank}</div>}
                   {/* BARRAS COLORIDAS DE TAGS — estilo Trello label bars */}
                   {(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
@@ -9726,15 +9724,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5,pointerEvents:"none"}}/>
                   )}
                   <div style={{padding:"7px 9px"}}>
-                    {/* Cliente — logo + nome (substitui a sigla no rodapé) */}
-                    {cl&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
-                      {CLIENT_LOGOS&&CLIENT_LOGOS[cl.id]
+                    {/* Linha do topo: NÚMERO de ordem + logo cliente + nome cliente */}
+                    {(cl||cardRank)&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                      {cardRank&&<div title={u?`#${cardRank} pra ${u.name}`:`#${cardRank}`} style={{background:rankBg,color:"#fff",fontSize:11,fontWeight:700,minWidth:20,height:20,padding:"0 5px",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{cardRank}</div>}
+                      {cl&&(CLIENT_LOGOS&&CLIENT_LOGOS[cl.id]
                         ?<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:4,padding:"2px 6px",height:18,display:"inline-flex",alignItems:"center",flexShrink:0}}>
                           <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} loading="lazy" style={{maxHeight:13,maxWidth:60,objectFit:"contain",display:"block"}}/>
                         </div>
-                        :<span style={{background:"#f1f5f9",color:cl.color||"#64748b",borderRadius:3,padding:"2px 7px",fontSize:9,fontWeight:600,flexShrink:0}}>{cl.abbr}</span>
-                      }
-                      <span style={{fontSize:9,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span>
+                        :<span style={{background:"#f1f5f9",color:cl.color||"#64748b",borderRadius:3,padding:"2px 7px",fontSize:9,fontWeight:600,flexShrink:0}}>{cl.abbr}</span>)}
+                      {cl&&<span style={{fontSize:9,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span>}
                     </div>}
                     {/* Badge de status pequeno (em vez do banner laranja) */}
                     {(isAlteracao||isAjustar)&&<div style={{display:"flex",alignItems:"center",marginBottom:5}}>
