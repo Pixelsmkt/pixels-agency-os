@@ -276,8 +276,7 @@ const TEAM = [
   { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
-  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, supervises:["ramon"], pagamentoPorDemanda:true },
-  { id:"ramon",     name:"Ramon",     role:"Editor de Vídeo",      av:"R", color:C.yw,  level:3, status:"online",  dash:"editor",      canDelete:false, canPixelsIA:false, supervisor:"guilherme", pagamentoPorDemanda:true },
+  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
@@ -367,7 +366,6 @@ const ACCESS_STORE={
   erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
   andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
   guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
-  ramon:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
 };
 
 /* ─── SAFE STORAGE — wrapper localStorage com quota check ─── */
@@ -14796,7 +14794,7 @@ function BarChartV({items,colorKey="valor"}){
 
 /* ── ROI constants — fora do componente ── */
 const VALOR_POR_TAREFA=150;
-const SALARIOS={vinicius:5000,gustavo:5000,ellen:3200,erick:3500,andre:3000,guilherme:2800,ramon:2600};
+const SALARIOS={vinicius:5000,gustavo:5000,ellen:3200,erick:3500,andre:3000,guilherme:2800};
 
 /* ── MAPEAMENTO DE VENDAS ─────────────────── */
 function PageMapeamento(){
@@ -17341,6 +17339,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const otherAttachments=attachments.filter(a=>!isImg(a)&&!isVid(a)&&!isAud(a)&&!a.isAnnotation&&!a.uploading&&a.url);
   const filesCount=attachments.filter(a=>!a.isAnnotation).length; // don't count annotated corrections in badge
 
+  // ═══ CHECKLIST DE AJUSTES — persistido em localStorage por task.id ═══
+  const adjustChecklistKey=`pixels-adjust-checklist-${task.id}`;
+  const [adjustChecked,setAdjustChecked]=useState(()=>{
+    try{const saved=localStorage.getItem(adjustChecklistKey);return saved?JSON.parse(saved):{};}catch(e){return{};}
+  });
+  useEffect(()=>{
+    try{localStorage.setItem(adjustChecklistKey,JSON.stringify(adjustChecked));}catch(e){}
+  },[adjustChecked,adjustChecklistKey]);
+  const toggleAdjustCheck=(id)=>setAdjustChecked(p=>({...p,[id]:!p[id]}));
+
   // Show "move to execution" prompt to assignees OR to editors/designers who can pick up the work
   const [showMovePrompt,setShowMovePrompt]=useState(
     task.status==="recebida"&&canEdit&&(isAssigned||(user.level>=3))  // assignees or level-3 crew (designers, editors)
@@ -17623,70 +17631,119 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>}
 
             {/* ══ AJUSTES SOLICITADOS — aparece sempre que há anotações ou flag isAlteracao ══ */}
-            {(task.isAlteracao||task.status==="alteracao"||(task.files||[]).some(f=>f.isAnnotation))&&(()=>{
+            {(task.isAlteracao||task.status==="alteracao"||task.status==="ajustes"||(task.files||[]).some(f=>f.isAnnotation))&&(()=>{
               const annotations=(task.files||[]).filter(f=>f.isAnnotation);
               const feedbackComments=(task.comments||[]).filter(c=>c.type==="feedback"||c.type==="audio");
-              if(annotations.length===0&&feedbackComments.length===0&&!task.isAlteracao)return null;
+              const audioComment=feedbackComments.find(c=>c.type==="audio");
+              const textComments=feedbackComments.filter(c=>c.type!=="audio");
+              if(annotations.length===0&&feedbackComments.length===0&&!task.isAlteracao&&task.status!=="ajustes")return null;
+
+              // Quem solicitou + quando (último evento de "ajustes" no timeline)
+              const lastAdjust=(task.timeline||[]).slice().reverse().find(t=>t.to==="ajustes"||t.to==="execucao"||(t.label||"").toLowerCase().includes("ajuste"));
+              const reqUserName=lastAdjust?.user||"Revisor";
+              const reqUser=TEAM.find(u=>u.name===reqUserName);
+              const reqDate=lastAdjust?.atFmt||"";
+
+              // Tempo estimado: 8min por imagem + 5min por comentário + 10min se tiver áudio
+              const estimatedMin=Math.max(15,annotations.length*8+textComments.length*5+(audioComment?10:0));
+
+              // Checklist gerado das anotações + comentários
+              const checklistItems=[
+                ...annotations.map((a,i)=>({id:`ann-${a.id}`,label:`Corrigir ${a.name||`arte ${i+1}`}`,icon:"🖊"})),
+                ...textComments.map(c=>({id:`cmt-${c.id}`,label:c.text.replace("AJUSTE NECESSARIO: ","").slice(0,100)+(c.text.length>100?"…":""),icon:"💬"})),
+                ...(audioComment?[{id:`aud-${audioComment.id}`,label:"Ouvir feedback em áudio e ajustar",icon:"🔊"}]:[]),
+              ];
+              const totalChecklist=checklistItems.length;
+              const doneChecklist=checklistItems.filter(i=>adjustChecked[i.id]).length;
+              const allDone=totalChecklist>0&&doneChecklist===totalChecklist;
+
               return(
-                <div style={{background:"linear-gradient(135deg,#fff7ed,#fffbf5)",border:"2px solid #f97316",borderRadius:14,overflow:"hidden"}}>
-                  {/* Header */}
-                  <div style={{background:"#ea580c",padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:16}}>⚠</span>
-                    <div>
-                      <div style={{color:"#fff",fontWeight:800,fontSize:13}}>Ajustes Solicitados</div>
-                      <div style={{color:"rgba(255,255,255,0.75)",fontSize:10,marginTop:1}}>Marcações e instruções do revisor — corrija antes de reenviar</div>
+                <div style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:12,overflow:"hidden"}}>
+
+                  {/* Header — solicitante + tempo estimado */}
+                  <div style={{padding:"12px 16px",borderBottom:"0.5px solid #e9d5ff",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+                    <div style={{display:"flex",gap:10,alignItems:"center",flex:1,minWidth:200}}>
+                      <div style={{width:32,height:32,borderRadius:"50%",background:reqUser?.color||"#7c3aed",color:"#fff",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        {reqUser?.av||"?"}
+                      </div>
+                      <div style={{minWidth:0}}>
+                        <div style={{fontSize:12,color:"#0f172a"}}><strong>{reqUserName}</strong> solicitou ajustes</div>
+                        <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{reqDate&&reqDate+" · "}~{estimatedMin} min de trabalho estimado</div>
+                      </div>
                     </div>
-                    <div style={{marginLeft:"auto",background:"rgba(0,0,0,0.2)",borderRadius:99,padding:"2px 10px",color:"#fff",fontSize:10,fontWeight:700}}>
-                      {annotations.length} imagem{annotations.length!==1?"ns":""} anotada{annotations.length!==1?"s":""}
-                    </div>
+                    <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,padding:"3px 9px",borderRadius:4,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>✎ Ajuste pendente</span>
                   </div>
 
-                  <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:12}}>
-                    {/* Annotated images — large, prominent */}
-                    {annotations.length>0&&(
-                      <div>
-                        <div style={{color:"#9a3412",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>🖊 Imagens com marcações</div>
-                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                          {annotations.map((f,i)=>(
-                            <div key={f.id} style={{borderRadius:10,overflow:"hidden",border:"2px solid #f97316",background:"#fff",cursor:"pointer"}}
-                              onClick={()=>{
-                                const w=window.open("","_blank","width=900,height=700");
-                                if(w){try{const u=new URL(f.url);w.document.title=f.name||"Imagem";Object.assign(w.document.body.style,{margin:"0",background:"#000",display:"flex",alignItems:"center",justifyContent:"center",minHeight:"100vh"});const img=w.document.createElement("img");img.src=u.toString();Object.assign(img.style,{maxWidth:"100%",maxHeight:"100vh",objectFit:"contain"});w.document.body.appendChild(img);}catch(e){w.close();}}
-                              }}>
-                              <img src={f.url} alt={"Anotação "+(i+1)} style={{width:"100%",maxHeight:320,objectFit:"contain",display:"block",background:"#f8f8f8"}}/>
-                              <div style={{padding:"6px 10px",background:"#fff7ed",display:"flex",alignItems:"center",gap:6}}>
-                                <span style={{fontSize:11}}>🖊</span>
-                                <span style={{color:"#9a3412",fontSize:10,fontWeight:600}}>Arte {i+1} — marcada por {f.addedBy||"revisor"} em {f.addedAt}</span>
-                                <span style={{marginLeft:"auto",color:"#ea580c",fontSize:10,fontWeight:700}}>Clique para ampliar →</span>
-                              </div>
-                            </div>
-                          ))}
+                  {/* Áudio inline */}
+                  {audioComment&&audioComment.audioUrl&&(
+                    <div style={{padding:"10px 16px",borderBottom:"0.5px solid #e9d5ff",background:"#fff"}}>
+                      <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>🔊 Feedback em áudio</div>
+                      <audio src={audioComment.audioUrl} controls style={{width:"100%",height:30}}/>
+                    </div>
+                  )}
+
+                  {/* Checklist */}
+                  {checklistItems.length>0&&(
+                    <div style={{padding:"12px 16px",borderBottom:"0.5px solid #e9d5ff",background:"#fff"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                        <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Checklist de ajustes</div>
+                        <div style={{fontSize:10,color:allDone?"#15803d":"#94a3b8",fontWeight:600}}>
+                          {doneChecklist} de {totalChecklist}{allDone?" ✓":""}
                         </div>
                       </div>
-                    )}
-
-                    {/* Feedback text + audio */}
-                    {feedbackComments.length>0&&(
-                      <div>
-                        <div style={{color:"#9a3412",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>💬 Instruções do revisor</div>
-                        <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                          {feedbackComments.map(c=>(
-                            <div key={c.id} style={{background:"rgba(255,255,255,0.8)",border:"1px solid #fed7aa",borderRadius:9,padding:"10px 12px"}}>
-                              <div style={{color:"#7c2d12",fontSize:10,fontWeight:700,marginBottom:5}}>{c.user} · {c.time}</div>
-                              {c.type==="audio"&&c.audioUrl
-                                ?<audio src={c.audioUrl} controls style={{width:"100%",height:28}}/>
-                                :<div style={{color:"#9a3412",fontSize:12,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{c.text.replace("AJUSTE NECESSARIO: ","")}</div>
-                              }
-                            </div>
-                          ))}
-                        </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                        {checklistItems.map(item=>{
+                          const isDone=!!adjustChecked[item.id];
+                          return <label key={item.id} style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:isDone?"#94a3b8":"#0f172a",lineHeight:1.4,padding:"5px 8px",borderRadius:5,background:isDone?"#f8fafc":"#fff",border:`0.5px solid ${isDone?"#f1f5f9":"#e9d5ff"}`}}>
+                            <input type="checkbox" checked={isDone} onChange={()=>toggleAdjustCheck(item.id)} style={{margin:"2px 0 0 0",accentColor:"#7c3aed"}}/>
+                            <span style={{flex:1,textDecoration:isDone?"line-through":"none"}}>{item.icon} {item.label}</span>
+                          </label>;
+                        })}
                       </div>
-                    )}
+                      {allDone&&(
+                        <div style={{marginTop:10,background:"#f0fdf4",border:"0.5px solid #bbf7d0",borderRadius:6,padding:"8px 10px",fontSize:11,color:"#15803d",fontWeight:500,textAlign:"center"}}>
+                          ✓ Todos os ajustes marcados! Clique em "Reenviar pra avaliação" no topo.
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                    {annotations.length===0&&feedbackComments.length===0&&(
-                      <div style={{color:"#c2410c",fontSize:12,textAlign:"center",padding:"8px 0"}}>Ajuste solicitado — verifique os comentários abaixo para mais detalhes.</div>
-                    )}
-                  </div>
+                  {/* Grid de thumbnails de anotações */}
+                  {annotations.length>0&&(
+                    <div style={{padding:"12px 16px",borderBottom:textComments.length>0?"0.5px solid #e9d5ff":"none",background:"#fff"}}>
+                      <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>🖊 Imagens com marcações ({annotations.length})</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(100px, 1fr))",gap:8}}>
+                        {annotations.map((f,i)=>(
+                          <div key={f.id} onClick={()=>setLightbox({url:f.url,name:f.name||`Arte ${i+1}`})}
+                            style={{position:"relative",cursor:"zoom-in",borderRadius:6,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
+                            <img src={f.url} alt={`Arte ${i+1}`} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                            <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(to top, rgba(0,0,0,0.7), transparent)",padding:"14px 6px 4px",color:"#fff",fontSize:9,fontWeight:500}}>Arte {i+1}</div>
+                            <div style={{position:"absolute",top:4,right:4,background:"#7c3aed",color:"#fff",fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>✎</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{textAlign:"center",fontSize:10,color:"#94a3b8",marginTop:6,fontStyle:"italic"}}>Click em cada imagem para abrir em tela cheia</div>
+                    </div>
+                  )}
+
+                  {/* Comentários texto */}
+                  {textComments.length>0&&(
+                    <div style={{padding:"12px 16px",background:"#fff"}}>
+                      <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>💬 Instruções do revisor</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {textComments.map(c=>(
+                          <div key={c.id} style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:8,padding:"9px 12px"}}>
+                            <div style={{fontSize:9,color:"#94a3b8",marginBottom:4,fontWeight:500}}>{c.user} · {c.time}</div>
+                            <div style={{color:"#0f172a",fontSize:12,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{c.text.replace("AJUSTE NECESSARIO: ","")}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {annotations.length===0&&feedbackComments.length===0&&(
+                    <div style={{padding:"14px 16px",color:"#7c3aed",fontSize:12,textAlign:"center"}}>Ajuste solicitado — verifique os comentários e arquivos para mais detalhes.</div>
+                  )}
                 </div>
               );
             })()}
