@@ -9707,6 +9707,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5,pointerEvents:"none"}}/>
                   )}
                   <div style={{padding:"7px 9px"}}>
+                    {/* Cliente — logo + nome (substitui a sigla no rodapé) */}
+                    {cl&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                      {CLIENT_LOGOS&&CLIENT_LOGOS[cl.id]
+                        ?<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:4,padding:"2px 6px",height:18,display:"inline-flex",alignItems:"center",flexShrink:0}}>
+                          <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} loading="lazy" style={{maxHeight:13,maxWidth:60,objectFit:"contain",display:"block"}}/>
+                        </div>
+                        :<span style={{background:"#f1f5f9",color:cl.color||"#64748b",borderRadius:3,padding:"2px 7px",fontSize:9,fontWeight:600,flexShrink:0}}>{cl.abbr}</span>
+                      }
+                      <span style={{fontSize:9,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span>
+                    </div>}
                     {/* Badge de status pequeno (em vez do banner laranja) */}
                     {(isAlteracao||isAjustar)&&<div style={{display:"flex",alignItems:"center",marginBottom:5}}>
                       <span style={{background:"#fff7ed",color:"#ea580c",fontSize:8,padding:"2px 7px",borderRadius:3,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
@@ -9723,10 +9733,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     <div style={{color:"#0f172a",fontSize:12,fontWeight:500,lineHeight:1.35,marginBottom:6,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{t.title}</div>
                     {/* Stale indicator sutil */}
                     {isStale&&!isAlteracao&&!isAjustar&&<div style={{color:"#94a3b8",fontSize:9,marginBottom:5,fontStyle:"italic"}}>parado há {stoppedDays}d</div>}
-                    {/* RODAPÉ COM ÍCONES (estilo Trello) */}
+                    {/* RODAPÉ COM ÍCONES (estilo Trello) — sigla removida (logo já tá no topo) */}
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div style={{display:"flex",alignItems:"center",gap:7,fontSize:10,color:"#94a3b8"}}>
-                        {cl&&<span style={{background:"#f1f5f9",color:"#64748b",borderRadius:3,padding:"1px 5px",fontSize:8,fontWeight:600}}>{cl.abbr}</span>}
                         {days!==null&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days<=2?"#ea580c":"#94a3b8",fontWeight:days<=2?600:400,display:"flex",alignItems:"center",gap:2}}>
                           🕒 {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
                         </span>}
