@@ -8040,6 +8040,68 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   cl=getLiveClient(cl.id)||cl;
   let [tab,setTab]=useState("analises");
   let [concorrenciaTab,setConcorrenciaTab]=useState("social_insta");
+  // ═══ AI RESUMO ═══
+  let [iaModal,setIaModal]=useState(false);
+  let [iaLoading,setIaLoading]=useState(false);
+  let [iaResumo,setIaResumo]=useState(null);
+  let [iaError,setIaError]=useState(null);
+
+  let gerarResumoIA=async function(){
+    setIaLoading(true);setIaError(null);setIaResumo(null);
+    try{
+      let clientTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
+      let ativas=clientTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado";});
+      let porStatus={};
+      ativas.forEach(function(t){porStatus[t.status]=(porStatus[t.status]||0)+1;});
+      let atrasadas=ativas.filter(function(t){if(!t.deadline)return false;let d=new Date(t.deadline);return d<new Date();});
+      let aguardandoAprov=ativas.filter(function(t){return t.status==="demanda"||t.status==="avaliacao";});
+      let proximasPubs=clientTasks.filter(function(t){return t.publishDate&&t.status!=="publicado";})
+        .sort(function(a,b){return a.publishDate.localeCompare(b.publishDate);}).slice(0,5);
+
+      let context={
+        cliente:cl.name,
+        sector:cl.sector,
+        saude:cl.health,
+        nps:cl.nps,
+        contrato_mrr:cl.contract,
+        pagamento_status:cl.payment&&cl.payment.status,
+        ultima_reuniao:cl.lastMeeting,
+        demandas_ativas_total:ativas.length,
+        demandas_por_status:porStatus,
+        atrasadas:atrasadas.map(function(t){let d=Math.floor((Date.now()-new Date(t.deadline).getTime())/86400000);return{titulo:t.title,dias_atraso:d,responsavel:(TEAM.find(function(u){return u.id===t.assignee;})||{}).name,status:t.status};}),
+        aguardando_aprovacao:aguardandoAprov.map(function(t){return{titulo:t.title,tipo:t.status==="demanda"?"copy":"conteudo",dias_aguardando:t.colEnteredAt?Math.floor((Date.now()-new Date(t.colEnteredAt).getTime())/86400000):null};}),
+        proximas_publicacoes:proximasPubs.map(function(t){return{titulo:t.title,data:t.publishDate,hora:t.publishTime};}),
+      };
+
+      let resp=await askClaude({
+        model:"claude-sonnet-4-20250514",
+        max_tokens:900,
+        system:"Você é um analista da Pixels Marketing, agência de marketing digital. Gere um resumo executivo de um cliente em pt-BR. Seja direto, conciso e estratégico. Saída deve ser JSON válido sem markdown com as chaves: visao_geral (string), atrasos_criticos (string), pendente_de_voce (string), proximas_publicacoes (string), saude_relacionamento (string). Cada chave tem 1-3 frases curtas. Inclua números e nomes específicos quando relevante.",
+        messages:[{role:"user",content:"Gere o resumo executivo deste cliente. Dados:\n\n"+JSON.stringify(context,null,2)}]
+      });
+      let text=(resp.content||[]).map(function(b){return b.text||"";}).join("");
+      let parsed;
+      try{parsed=JSON.parse(text.replace(/```json|```/g,"").trim());}
+      catch(e){parsed={visao_geral:text.slice(0,300),atrasos_criticos:"",pendente_de_voce:"",proximas_publicacoes:"",saude_relacionamento:""};}
+      setIaResumo(parsed);
+    }catch(e){
+      setIaError(e&&e.message||"Erro ao gerar resumo IA.");
+    }
+    setIaLoading(false);
+  };
+
+  let abrirIA=function(){setIaModal(true);if(!iaResumo&&!iaLoading)gerarResumoIA();};
+  let copiarResumo=async function(){
+    if(!iaResumo)return;
+    let txt="RESUMO IA — "+cl.name+"\n\n"
+      +"📊 VISÃO GERAL\n"+iaResumo.visao_geral+"\n\n"
+      +"⚠ ATRASOS CRÍTICOS\n"+iaResumo.atrasos_criticos+"\n\n"
+      +"📌 PENDENTE DE VOCÊ\n"+iaResumo.pendente_de_voce+"\n\n"
+      +"📅 PRÓXIMAS PUBLICAÇÕES\n"+iaResumo.proximas_publicacoes+"\n\n"
+      +"🩹 SAÚDE DO RELACIONAMENTO\n"+iaResumo.saude_relacionamento;
+    try{await navigator.clipboard.writeText(txt);pixelsToast.success("Resumo copiado!",2500);}
+    catch(e){pixelsToast.warning("Não foi possível copiar — selecione o texto manualmente.",4000);}
+  };
   let isSocio=CURRENT_USER.level===1;
   let myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
   let canSeeConcorrencia=isSocio||(myPerms.verConcorrencia&&myPerms["verCliente_"+cl.id+"_concorrencia"]!==false);
@@ -8071,6 +8133,55 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
 
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
 
+    {/* ═══ MODAL AI RESUMO ═══ */}
+    {iaModal&&<div onClick={function(){setIaModal(false);}} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,paddingBottom:30,overflowY:"auto"}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,width:"min(620px,92%)",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
+        <div style={{background:"linear-gradient(135deg, #faf5ff, #f0f9ff)",padding:"14px 18px",borderBottom:"0.5px solid #e9d5ff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>✨ Resumo IA · {cl.name}</div>
+            <div style={{fontSize:11,color:"#94a3b8",marginTop:3}}>{iaLoading?"Gerando análise...":iaResumo?"Gerado agora · baseado em "+TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;}).length+" demandas":""}</div>
+          </div>
+          <button onClick={function(){setIaModal(false);}} style={{background:"none",border:"none",fontSize:18,color:"#94a3b8",cursor:"pointer",padding:0,width:24,height:24}}>×</button>
+        </div>
+        {iaLoading&&<div style={{padding:"40px 18px",textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:10}}>✨</div>
+          <div style={{fontSize:13,color:"#0f172a",fontWeight:500,marginBottom:4}}>Analisando demandas...</div>
+          <div style={{fontSize:11,color:"#94a3b8"}}>Pixels IA está revisando atrasos, próximas publicações e saúde do cliente</div>
+        </div>}
+        {iaError&&<div style={{padding:"24px 18px"}}>
+          <div style={{background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:8,padding:"12px 14px",color:"#991b1b",fontSize:12,lineHeight:1.5}}>
+            ⚠ {iaError}
+          </div>
+          <button onClick={gerarResumoIA} style={{marginTop:10,background:"#a140ff",color:"#fff",border:"none",borderRadius:6,padding:"7px 14px",fontSize:11,fontWeight:500,cursor:"pointer"}}>Tentar novamente</button>
+        </div>}
+        {iaResumo&&!iaLoading&&<>
+          <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:14}}>
+            {[{icon:"📊",label:"Visão geral",color:"#0f172a",text:iaResumo.visao_geral},
+              {icon:"⚠",label:"Atrasos críticos",color:"#dc2626",text:iaResumo.atrasos_criticos},
+              {icon:"📌",label:"Pendente de você",color:"#ea580c",text:iaResumo.pendente_de_voce},
+              {icon:"📅",label:"Próximas publicações",color:"#15803d",text:iaResumo.proximas_publicacoes},
+              {icon:"🩹",label:"Saúde do relacionamento",color:"#b45309",text:iaResumo.saude_relacionamento}
+            ].filter(function(s){return s.text&&s.text.trim().length>0;}).map(function(sec){
+              return <div key={sec.label}>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                  <span style={{fontSize:13}}>{sec.icon}</span>
+                  <span style={{fontSize:10,fontWeight:600,color:sec.color,textTransform:"uppercase",letterSpacing:.4}}>{sec.label}</span>
+                </div>
+                <div style={{fontSize:12,color:"#475569",lineHeight:1.6,paddingLeft:22,whiteSpace:"pre-wrap"}}>{sec.text}</div>
+              </div>;
+            })}
+          </div>
+          <div style={{background:"#faf5ff",padding:"10px 18px",borderTop:"0.5px solid #e9d5ff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:10,color:"#94a3b8"}}>Powered by Pixels IA</span>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={gerarResumoIA} style={{background:"#fff",color:"#7c3aed",border:"0.5px solid #e9d5ff",borderRadius:6,padding:"6px 12px",fontSize:11,fontWeight:500,cursor:"pointer"}}>↻ Regenerar</button>
+              <button onClick={copiarResumo} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:6,padding:"6px 14px",fontSize:11,fontWeight:500,cursor:"pointer"}}>📋 Copiar</button>
+            </div>
+          </div>
+        </>}
+      </div>
+    </div>}
+
     {/* HEADER */}
     <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:16,flexWrap:"wrap"}}>
       <button onClick={onBack}
@@ -8088,7 +8199,14 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
           :<span style={{color:cl.color,fontWeight:900,fontSize:11}}>{cl.abbr}</span>}
       </div>
       <div style={{flex:1,minWidth:100}}>
-        <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.3}}>{cl.name}</div>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.3}}>{cl.name}</div>
+          <button onClick={abrirIA}
+            style={{background:"linear-gradient(135deg,#a140ff,#7c3aed)",color:"#fff",border:"none",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,boxShadow:"0 1px 4px rgba(124,58,237,0.25)"}}
+            title="Gera um resumo executivo do cliente usando IA">
+            ✨ IA Resumir
+          </button>
+        </div>
         <div style={{color:C.td,fontSize:11}}>{cl.sector}</div>
       </div>
       <div style={{display:"flex",gap:14,alignItems:"center",flexShrink:0}}>
