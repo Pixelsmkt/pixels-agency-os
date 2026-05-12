@@ -9607,16 +9607,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",paddingBottom:8,justifyContent:"center"}}>
           {visibleCols.map(col=>{
           const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>(a.position??999999)-(b.position??999999));
-          // ═══ RANK POR ASSIGNEE — cada colaborador tem sua própria fila numerada (1, 2, 3...) ═══
-          // Sem filtro: aparecem vários #1 (um pra cada pessoa). Filtrado: sequência só de 1.
-          const cardRanks=new Map();
-          const _rankCounters={};
-          colTasks.forEach(t=>{
-            const aid=t.assignee||(t.assignees||[])[0];
-            if(!aid)return;
-            _rankCounters[aid]=(_rankCounters[aid]||0)+1;
-            cardRanks.set(t.id,_rankCounters[aid]);
-          });
           const isDraggingOver=over===col.id;
           return <div key={col.id}
             onDragOver={e=>{e.preventDefault();setOver(col.id);}}
@@ -9670,10 +9660,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const thumbUrl=hasCover?hasCover:imgAttachment?imgAttachment.url:null;
                 const isAlteracao=t.status==="alteracao"||t.isAlteracao;
                 const isAjustar=t.ajustar===true&&t.status==="demanda";
-                // Número de ordem por colaborador (1, 2, 3...) — calculado em cardRanks
-                const cardRank=cardRanks.get(t.id);
-                // Badge sempre roxo Pixels (cor da marca)
-                const rankBg="#a140ff";
                 const cardBg=isAlteracao?"#ea580c":isAjustar?"#f97316":"#fff";
                 const cardBorder=isAlteracao?"#c2500a":isAjustar?"#ea6c00":urgColor;
                 const isOver=dragOverId&&dragOverId.id===t.id;
@@ -9724,15 +9710,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5,pointerEvents:"none"}}/>
                   )}
                   <div style={{padding:"7px 9px"}}>
-                    {/* Linha do topo: NÚMERO de ordem + logo cliente + nome cliente */}
-                    {(cl||cardRank)&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
-                      {cardRank&&<div title={u?`#${cardRank} pra ${u.name}`:`#${cardRank}`} style={{background:rankBg,color:"#fff",fontSize:11,fontWeight:700,minWidth:20,height:20,padding:"0 5px",borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{cardRank}</div>}
-                      {cl&&(CLIENT_LOGOS&&CLIENT_LOGOS[cl.id]
+                    {/* Cliente — logo + nome */}
+                    {cl&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                      {CLIENT_LOGOS&&CLIENT_LOGOS[cl.id]
                         ?<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:4,padding:"2px 6px",height:18,display:"inline-flex",alignItems:"center",flexShrink:0}}>
                           <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} loading="lazy" style={{maxHeight:13,maxWidth:60,objectFit:"contain",display:"block"}}/>
                         </div>
-                        :<span style={{background:"#f1f5f9",color:cl.color||"#64748b",borderRadius:3,padding:"2px 7px",fontSize:9,fontWeight:600,flexShrink:0}}>{cl.abbr}</span>)}
-                      {cl&&<span style={{fontSize:9,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span>}
+                        :<span style={{background:"#f1f5f9",color:cl.color||"#64748b",borderRadius:3,padding:"2px 7px",fontSize:9,fontWeight:600,flexShrink:0}}>{cl.abbr}</span>
+                      }
+                      <span style={{fontSize:9,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span>
                     </div>}
                     {/* Badge de status pequeno (em vez do banner laranja) */}
                     {(isAlteracao||isAjustar)&&<div style={{display:"flex",alignItems:"center",marginBottom:5}}>
