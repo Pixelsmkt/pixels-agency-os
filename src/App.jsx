@@ -8124,6 +8124,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
 
   let TABS=[
     {id:"analises",    label:"📊 Análises"},
+    {id:"evolucao",    label:"📈 Evolução"},
+    {id:"briefing",    label:"📋 Briefing"},
     {id:"ferramentas", label:"Ferramentas"},
     {id:"info",        label:"Informações"},
     ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
@@ -8287,11 +8289,334 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
 
     {/* CONTEÚDO */}
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob}/>}
+    {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={isSocio}/>}
+    {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={isSocio}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
     {tab==="concorrencia"&&canSeeConcorrencia&&(
       <ClienteConcorrencia cl={cl} tab={concorrenciaTab} setTab={setConcorrenciaTab}/>
     )}
+  </div>);
+}
+
+/* ─── CEvolucao — Aba com timeline de marcos + métricas mensais ─── */
+const MILESTONE_TYPES={
+  kickoff:    {icon:"🚀",label:"Kickoff",      color:"#7c3aed"},
+  campanha:   {icon:"📣",label:"Campanha",     color:"#ea580c"},
+  meta:       {icon:"🎯",label:"Meta atingida",color:"#16a34a"},
+  venda:      {icon:"💰",label:"Venda/Lead",   color:"#15803d"},
+  conquista:  {icon:"🏆",label:"Conquista",    color:"#b45309"},
+  reuniao:    {icon:"📝",label:"Reunião",      color:"#0f172a"},
+  estrategia: {icon:"🔁",label:"Estratégia",   color:"#3b82f6"},
+};
+
+function CEvolucao({cl,isSocio}){
+  const sb=window._sb;
+  const [milestones,setMilestones]=useState([]);
+  const [metrics,setMetrics]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [showMilestoneForm,setShowMilestoneForm]=useState(false);
+  const [showMetricsForm,setShowMetricsForm]=useState(false);
+
+  const reload=async function(){
+    if(!sb){setLoading(false);return;}
+    try{
+      const r1=await sb.from("client_milestones").select("*").eq("client_id",cl.id).order("date",{ascending:false});
+      const r2=await sb.from("client_metrics_monthly").select("*").eq("client_id",cl.id).order("period",{ascending:false});
+      setMilestones(r1.data||[]);
+      setMetrics(r2.data||[]);
+    }catch(e){console.warn("[evolucao] load:",e?.message||e);}
+    setLoading(false);
+  };
+  useEffect(function(){reload();},[cl.id]);
+
+  // Métrica do mês atual (e anterior pra delta)
+  const atual=metrics[0]||{};
+  const anterior=metrics[1]||{};
+  const delta=function(a,b){if(a==null||b==null||b===0)return null;return Math.round(((a-b)/b)*100);};
+  const periodFmt=function(p){if(!p)return"—";const[y,m]=p.split("-");return["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][parseInt(m,10)-1]+" "+y;};
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+    {/* Métricas do mês */}
+    <div style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:10,padding:"14px 16px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <div style={{fontSize:10,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
+          Métricas — {atual.period?periodFmt(atual.period):"sem dados"}
+        </div>
+        {isSocio&&<button onClick={function(){setShowMetricsForm(true);}}
+          style={{background:"#fff",border:"0.5px solid #e9d5ff",color:"#7c3aed",padding:"5px 12px",borderRadius:5,fontSize:11,fontWeight:500,cursor:"pointer"}}>+ Registrar mês</button>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+        {[
+          {label:"Instagram",value:atual.instagram_followers,delta:delta(atual.instagram_followers,anterior.instagram_followers),suffix:""},
+          {label:"Leads digital",value:atual.leads_digital,delta:delta(atual.leads_digital,anterior.leads_digital),suffix:""},
+          {label:"Vendas",value:atual.sales_digital,delta:delta(atual.sales_digital,anterior.sales_digital),suffix:""},
+          {label:"ROI",value:atual.roi,delta:delta(atual.roi,anterior.roi),suffix:"x"},
+        ].map(function(m){return(<div key={m.label} style={{background:"#fff",borderRadius:6,padding:"8px 10px"}}>
+          <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase",marginBottom:3,fontWeight:500}}>{m.label}</div>
+          <div style={{fontSize:16,fontWeight:600,color:"#0f172a"}}>{m.value!=null?m.value+(m.suffix||""):"—"}</div>
+          {m.delta!=null&&<div style={{fontSize:9,color:m.delta>=0?"#15803d":"#dc2626"}}>{m.delta>=0?"↑":"↓"} {Math.abs(m.delta)}%</div>}
+        </div>);})}
+      </div>
+      {metrics.length>1&&<div style={{marginTop:10,paddingTop:10,borderTop:"0.5px solid #e9d5ff",height:36,display:"flex",alignItems:"end",gap:3}}>
+        {metrics.slice(0,6).reverse().map(function(m,i){
+          const maxV=Math.max(...metrics.slice(0,6).map(function(x){return x.instagram_followers||0;}));
+          const h=maxV>0?Math.max(8,((m.instagram_followers||0)/maxV)*100):8;
+          return <div key={m.period} title={periodFmt(m.period)+": "+(m.instagram_followers||0)+" followers"}
+            style={{width:6,background:i===metrics.length-1?"#7c3aed":"#c4b5fd",height:h+"%",borderRadius:1}}/>;
+        })}
+        <span style={{fontSize:9,color:"#94a3b8",marginLeft:8,alignSelf:"end"}}>Crescimento Instagram últimos {Math.min(6,metrics.length)} meses</span>
+      </div>}
+    </div>
+
+    {/* Timeline de marcos */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Linha do tempo do projeto</div>
+      {isSocio&&<button onClick={function(){setShowMilestoneForm(true);}}
+        style={{background:"#a140ff",color:"#fff",border:"none",padding:"6px 14px",borderRadius:6,fontSize:11,fontWeight:500,cursor:"pointer"}}>+ Adicionar marco</button>}
+    </div>
+
+    {loading?(
+      <div style={{textAlign:"center",padding:30,color:"#94a3b8",fontSize:12}}>Carregando histórico...</div>
+    ):milestones.length===0?(
+      <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"30px 20px",textAlign:"center"}}>
+        <div style={{fontSize:28,marginBottom:8,opacity:.5}}>📅</div>
+        <div style={{color:"#0f172a",fontWeight:500,fontSize:13,marginBottom:4}}>Nenhum marco registrado</div>
+        <div style={{color:"#94a3b8",fontSize:11}}>{isSocio?"Clica em \"+ Adicionar marco\" pra começar o histórico":"O sócio ainda não registrou marcos."}</div>
+      </div>
+    ):(
+      <div style={{position:"relative"}}>
+        <div style={{position:"absolute",left:14,top:8,bottom:0,width:1.5,background:"linear-gradient(to bottom, #c4b5fd, #e9d5ff)"}}/>
+        {milestones.map(function(m){
+          const t=MILESTONE_TYPES[m.type]||MILESTONE_TYPES.reuniao;
+          const dateFmt=m.date?new Date(m.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"}):"—";
+          const metricsArr=m.metrics?Object.entries(m.metrics):[];
+          return(<div key={m.id} style={{position:"relative",paddingLeft:36,marginBottom:14}}>
+            <div style={{position:"absolute",left:8,top:6,width:14,height:14,borderRadius:"50%",background:"#fff",border:"2px solid "+t.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7}}>{t.icon}</div>
+            <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderLeft:"3px solid "+t.color,borderRadius:8,padding:"10px 12px",position:"relative"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8,flexWrap:"wrap"}}>
+                <span style={{fontSize:9,color:t.color,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{t.label}</span>
+                <span style={{fontSize:9,color:"#94a3b8"}}>{dateFmt}{m.created_by?" · por "+m.created_by:""}</span>
+              </div>
+              <div style={{fontSize:13,fontWeight:500,color:"#0f172a",marginBottom:4}}>{m.title}</div>
+              {m.description&&<div style={{fontSize:11,color:"#64748b",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{m.description}</div>}
+              {metricsArr.length>0&&<div style={{display:"flex",gap:5,marginTop:6,flexWrap:"wrap"}}>
+                {metricsArr.map(function(p){return <span key={p[0]} style={{background:t.color+"15",color:t.color,fontSize:9,padding:"2px 7px",borderRadius:3,fontWeight:600}}>{p[0]}: {p[1]}</span>;})}
+              </div>}
+              {isSocio&&<button onClick={async function(){
+                if(!confirm("Excluir este marco?"))return;
+                await sb.from("client_milestones").delete().eq("id",m.id);
+                reload();
+              }} title="Excluir" style={{position:"absolute",top:8,right:8,background:"none",border:"none",color:"#cbd5e1",fontSize:14,cursor:"pointer",padding:0,width:18,height:18}}>×</button>}
+            </div>
+          </div>);
+        })}
+      </div>
+    )}
+
+    {/* Form de marco */}
+    {showMilestoneForm&&<MilestoneForm cl={cl} onClose={function(){setShowMilestoneForm(false);}} onSaved={function(){setShowMilestoneForm(false);reload();}}/>}
+    {/* Form de métricas mensais */}
+    {showMetricsForm&&<MetricsForm cl={cl} existing={atual} onClose={function(){setShowMetricsForm(false);}} onSaved={function(){setShowMetricsForm(false);reload();}}/>}
+  </div>);
+}
+
+function MilestoneForm({cl,onClose,onSaved}){
+  const sb=window._sb;
+  const [type,setType]=useState("kickoff");
+  const [date,setDate]=useState(function(){return new Date().toISOString().split("T")[0];});
+  const [title,setTitle]=useState("");
+  const [description,setDescription]=useState("");
+  const [metricsText,setMetricsText]=useState("");
+  const [saving,setSaving]=useState(false);
+
+  const save=async function(){
+    if(!title.trim()){pixelsToast.warning("Título obrigatório");return;}
+    setSaving(true);
+    try{
+      const metricsObj={};
+      metricsText.split("\n").forEach(function(line){
+        const m=line.match(/^([^:]+):\s*(.+)$/);
+        if(m)metricsObj[m[1].trim()]=m[2].trim();
+      });
+      await sb.from("client_milestones").insert({
+        client_id:cl.id,date,type,title:title.trim(),description:description.trim()||null,
+        metrics:metricsObj,created_by:CURRENT_USER.name
+      });
+      pixelsToast.success("Marco registrado!");
+      onSaved();
+    }catch(e){pixelsToast.error("Erro: "+(e?.message||e));}
+    setSaving(false);
+  };
+
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(500px,92%)",padding:"18px 20px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
+      <div style={{fontSize:14,fontWeight:600,color:"#0f172a",marginBottom:14}}>Novo marco — {cl.name}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div>
+          <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Tipo</div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+            {Object.entries(MILESTONE_TYPES).map(function(e){const[id,t]=e;return(
+              <button key={id} onClick={function(){setType(id);}} style={{
+                background:type===id?t.color:"#f8fafc",color:type===id?"#fff":"#64748b",
+                border:"0.5px solid "+(type===id?t.color:"#e5e7eb"),padding:"5px 10px",borderRadius:5,fontSize:10,fontWeight:500,cursor:"pointer"
+              }}>{t.icon} {t.label}</button>
+            );})}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Data</div>
+            <input type="date" value={date} onChange={function(e){setDate(e.target.value);}} style={{width:"100%",padding:"6px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Título</div>
+            <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="Ex: Atingimos 5k seguidores" style={{width:"100%",padding:"6px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box"}}/>
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Descrição</div>
+          <textarea value={description} onChange={function(e){setDescription(e.target.value);}} placeholder="Contexto do marco..." rows={3} style={{width:"100%",padding:"7px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Métricas (chave: valor por linha — opcional)</div>
+          <textarea value={metricsText} onChange={function(e){setMetricsText(e.target.value);}} placeholder={"Ex:\nfollowers: 5000\nengajamento: 28%"} rows={3} style={{width:"100%",padding:"7px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
+        </div>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16}}>
+        <button onClick={onClose} style={{background:"#f8fafc",color:"#64748b",border:"0.5px solid #e5e7eb",borderRadius:6,padding:"7px 14px",fontSize:11,cursor:"pointer"}}>Cancelar</button>
+        <button onClick={save} disabled={saving} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:6,padding:"7px 16px",fontSize:11,fontWeight:500,cursor:saving?"not-allowed":"pointer",opacity:saving?.5:1}}>{saving?"Salvando...":"Salvar marco"}</button>
+      </div>
+    </div>
+  </div>);
+}
+
+function MetricsForm({cl,existing,onClose,onSaved}){
+  const sb=window._sb;
+  const today=new Date();
+  const defaultPeriod=today.getFullYear()+"-"+String(today.getMonth()+1).padStart(2,"0");
+  const [period,setPeriod]=useState(existing.period||defaultPeriod);
+  const [ig,setIg]=useState(existing.instagram_followers||"");
+  const [fb,setFb]=useState(existing.facebook_followers||"");
+  const [tt,setTt]=useState(existing.tiktok_followers||"");
+  const [leads,setLeads]=useState(existing.leads_digital||"");
+  const [sales,setSales]=useState(existing.sales_digital||"");
+  const [roi,setRoi]=useState(existing.roi||"");
+  const [notes,setNotes]=useState(existing.notes||"");
+  const [saving,setSaving]=useState(false);
+
+  const save=async function(){
+    setSaving(true);
+    try{
+      const num=function(v){const n=parseFloat(String(v).replace(",","."));return isNaN(n)?null:n;};
+      await sb.from("client_metrics_monthly").upsert({
+        client_id:cl.id,period,
+        instagram_followers:num(ig)?parseInt(num(ig)):null,
+        facebook_followers:num(fb)?parseInt(num(fb)):null,
+        tiktok_followers:num(tt)?parseInt(num(tt)):null,
+        leads_digital:num(leads)?parseInt(num(leads)):null,
+        sales_digital:num(sales)?parseInt(num(sales)):null,
+        roi:num(roi),notes:notes||null,created_by:CURRENT_USER.name
+      },{onConflict:"client_id,period"});
+      pixelsToast.success("Métricas salvas!");
+      onSaved();
+    }catch(e){pixelsToast.error("Erro: "+(e?.message||e));}
+    setSaving(false);
+  };
+
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(500px,92%)",padding:"18px 20px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
+      <div style={{fontSize:14,fontWeight:600,color:"#0f172a",marginBottom:14}}>Registrar métricas — {cl.name}</div>
+      <div style={{marginBottom:12}}>
+        <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Período</div>
+        <input type="month" value={period} onChange={function(e){setPeriod(e.target.value);}} style={{padding:"6px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12}}/>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+        {[
+          {label:"Instagram",v:ig,set:setIg,ph:"5000"},
+          {label:"Facebook",v:fb,set:setFb,ph:"3200"},
+          {label:"TikTok",v:tt,set:setTt,ph:"800"},
+          {label:"Leads digital",v:leads,set:setLeads,ph:"42"},
+          {label:"Vendas digital",v:sales,set:setSales,ph:"8"},
+          {label:"ROI",v:roi,set:setRoi,ph:"3.5"},
+        ].map(function(f){return(<div key={f.label}>
+          <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
+          <input value={f.v} onChange={function(e){f.set(e.target.value);}} placeholder={f.ph} style={{width:"100%",padding:"6px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box"}}/>
+        </div>);})}
+      </div>
+      <div>
+        <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:4}}>Observações</div>
+        <textarea value={notes} onChange={function(e){setNotes(e.target.value);}} placeholder="Notas do mês..." rows={2} style={{width:"100%",padding:"7px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit"}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:16}}>
+        <button onClick={onClose} style={{background:"#f8fafc",color:"#64748b",border:"0.5px solid #e5e7eb",borderRadius:6,padding:"7px 14px",fontSize:11,cursor:"pointer"}}>Cancelar</button>
+        <button onClick={save} disabled={saving} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:6,padding:"7px 16px",fontSize:11,fontWeight:500,cursor:saving?"not-allowed":"pointer",opacity:saving?.5:1}}>{saving?"Salvando...":"Salvar métricas"}</button>
+      </div>
+    </div>
+  </div>);
+}
+
+/* ─── CBriefingTab — Aba consolidada com visão estratégica do cliente ─── */
+function CBriefingTab({cl,isSocio}){
+  const sb=window._sb;
+  const [briefing,setBriefing]=useState({visao:"",publico:"",estrategia:"",naoFazer:""});
+  const [edit,setEdit]=useState(null);
+  const [tmpValue,setTmpValue]=useState("");
+
+  useEffect(function(){
+    if(!sb)return;
+    sb.from("clients").select("briefing_visao,briefing_publico,briefing_estrategia,briefing_nao_fazer").eq("client_id",cl.id).single()
+      .then(function(r){
+        const d=r.data||{};
+        setBriefing({visao:d.briefing_visao||"",publico:d.briefing_publico||"",estrategia:d.briefing_estrategia||"",naoFazer:d.briefing_nao_fazer||""});
+      }).catch(function(e){console.warn("[briefing] load:",e?.message||e);});
+  },[cl.id]);
+
+  const saveField=async function(field,value){
+    const dbField={visao:"briefing_visao",publico:"briefing_publico",estrategia:"briefing_estrategia",naoFazer:"briefing_nao_fazer"}[field];
+    try{
+      await sb.from("clients").upsert({client_id:cl.id,[dbField]:value},{onConflict:"client_id"});
+      setBriefing(function(p){return{...p,[field]:value};});
+      pixelsToast.success("Salvo!");
+    }catch(e){pixelsToast.error("Erro: "+(e?.message||e));}
+    setEdit(null);
+  };
+  const startEdit=function(field){setEdit(field);setTmpValue(briefing[field]||"");};
+
+  const Section=function({id,icon,label,color,value,placeholder,bg}){
+    const isEditing=edit===id;
+    return(<div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+        <div style={{fontSize:9,color:color||"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{icon} {label}</div>
+        {isSocio&&!isEditing&&<button onClick={function(){startEdit(id);}} style={{background:"none",border:"none",color:"#94a3b8",fontSize:10,cursor:"pointer"}}>✎ editar</button>}
+      </div>
+      {isEditing?(<div>
+        <textarea autoFocus value={tmpValue} onChange={function(e){setTmpValue(e.target.value);}} placeholder={placeholder} rows={4}
+          style={{width:"100%",padding:"8px 10px",border:"0.5px solid #c4b5fd",borderRadius:6,fontSize:12,lineHeight:1.5,resize:"vertical",fontFamily:"inherit",boxSizing:"border-box",outline:"none"}}/>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:6,marginTop:6}}>
+          <button onClick={function(){setEdit(null);}} style={{background:"#f8fafc",color:"#64748b",border:"0.5px solid #e5e7eb",padding:"4px 12px",borderRadius:5,fontSize:11,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={function(){saveField(id,tmpValue);}} style={{background:"#a140ff",color:"#fff",border:"none",padding:"4px 14px",borderRadius:5,fontSize:11,fontWeight:500,cursor:"pointer"}}>Salvar</button>
+        </div>
+      </div>):(
+        <div style={{background:bg||"#f8fafc",border:"0.5px solid "+(bg==="#fef2f2"?"#fecaca":"#e5e7eb"),borderRadius:8,padding:"10px 12px",fontSize:11,lineHeight:1.5,color:value?(bg==="#fef2f2"?"#991b1b":"#475569"):"#cbd5e1",fontStyle:value?"normal":"italic",whiteSpace:"pre-wrap",minHeight:30}}>{value||(isSocio?"Clica em ✎ editar pra preencher":"Não preenchido ainda")}</div>
+      )}
+    </div>);
+  };
+
+  return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Section id="visao" icon="📌" label="Visão geral" value={briefing.visao} placeholder="O que a empresa é, o que vende, onde atua..."/>
+      <Section id="publico" icon="🎯" label="Público-alvo" value={briefing.publico} placeholder="Quem compra, quem decide, perfil sociodemográfico..."/>
+      <Section id="estrategia" icon="📈" label="Estratégia atual" value={briefing.estrategia} placeholder="Direcionamento Q2/2026, OKRs, campanhas em andamento..."/>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Section id="naoFazer" icon="⛔" label="Não fazer" value={briefing.naoFazer} placeholder="Limites, restrições, coisas a evitar..." color="#991b1b" bg="#fef2f2"/>
+      <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"10px 12px"}}>
+        <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>🎨 Identidade visual + Tom de voz + Contatos</div>
+        <div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>Acesse na aba <strong>Ferramentas → Orientações para a equipe</strong> pra editar logos, paleta, fontes, tom de voz, hashtags e contatos do cliente.</div>
+      </div>
+    </div>
   </div>);
 }
 
