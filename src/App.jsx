@@ -9800,6 +9800,26 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     ?cols
     :cols.filter(col=>COL_PERM[col.id]===true||COL_PERM[col.id]===undefined);
 
+  // ─── DRILL-DOWN: contagens de cada tag DENTRO do contexto atual (visible) ──
+  // Pra cada tag (adminTag ou item de tags[]), conta quantos cards visíveis a contêm.
+  // Selecionar "Pacote maio" filtra → contagens se atualizam mostrando quantos cards
+  // dentro de Pacote maio também têm cada outra tag (Carrossel, Vídeo, etc).
+  const tagContextCounts = useMemo(function(){
+    const counts={};
+    visible.forEach(function(t){
+      const vals=[];
+      const at=(t.adminTag||"").trim();
+      if(at)vals.push(at);
+      if(Array.isArray(t.tags)){
+        t.tags.forEach(function(x){const v=(x||"").trim();if(v)vals.push(v);});
+      }
+      // Cada tag conta 1 vez por card (mesmo que apareça duplicada)
+      const uniqInCard=Array.from(new Set(vals));
+      uniqInCard.forEach(function(v){counts[v]=(counts[v]||0)+1;});
+    });
+    return counts;
+  },[visible]);
+
   // ─── REORDENAR DENTRO DA MESMA COLUNA ─────────────────────────
   // Calcula nova position usando "fractional indexing": fica entre o card de cima e o de baixo.
   // Permite reordenar infinitamente sem reescalar todas as positions.
@@ -10153,8 +10173,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             const selectedCount=filterAdminTags.length;
             const labelTxt=selectedCount===0?"Etiqueta":isSem?"Sem etiqueta":selectedCount===1?filterAdminTags[0]:selectedCount+" etiquetas";
             // Renderiza uma linha clicável estilo checkbox — não fecha o dropdown
+            // count: número de cards dentro do contexto atual que têm essa tag (drill-down)
             const renderCheckRow=function(opts){
-              const {keyId,label,checked,onClick,chipBg,chipFg,chipBorder,italic,extraStyle}=opts;
+              const {keyId,label,checked,onClick,chipBg,chipFg,chipBorder,italic,extraStyle,count}=opts;
               return <button key={keyId} onClick={onClick}
                 style={Object.assign({display:"flex",alignItems:"center",gap:9,width:"100%",padding:"8px 12px",background:checked?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"},extraStyle||{})}
                 onMouseEnter={function(e){if(!checked)e.currentTarget.style.background="#f8fafc";}}
@@ -10166,6 +10187,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   ?<span style={{background:chipBg,color:chipFg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:chipBorder?"1px solid "+chipBorder:"none"}}>{label}</span>
                   :<span style={italic?{color:"#94a3b8",fontStyle:"italic"}:undefined}>{label}</span>
                 }
+                {typeof count==="number"&&<span style={{marginLeft:"auto",color:checked?C.a:"#94a3b8",fontSize:10,fontWeight:checked?700:500,flexShrink:0}}>{count}</span>}
               </button>;
             };
             return <KanbanDropdown label={labelTxt} icon="🏷" active={selectedCount>0}>
@@ -10187,17 +10209,28 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   extraStyle:{borderTop:"1px solid "+C.b1}
                 })}
 
-                {/* Tags organizadas por GRUPO. Cada grupo cadastrado vira uma seção
-                    com header colorido. Tags fora de qualquer grupo (e o adminTag bruto)
-                    aparecem na seção "Sem grupo" no fim. */}
+                {/* Tags organizadas por GRUPO + DRILL-DOWN.
+                    Cada tag mostra a contagem dentro do contexto filtrado atual.
+                    Tags com count=0 não selecionadas ficam ocultas (não poluem). */}
                 {(function(){
                   const allUsed=Array.from(new Set(adminTagValues.concat(tagsArrValues)));
+                  // Filtra tag pra mostrar se: está selecionada (sempre) OU tem >0 cards no contexto atual
+                  const shouldShow=function(tag){
+                    if(filterAdminTags.indexOf(tag)!==-1)return true;
+                    return(tagContextCounts[tag]||0)>0;
+                  };
                   const sectionsByGroup=tagGroups.map(function(g){
-                    const tagsHere=g.tags.filter(function(t){return allUsed.indexOf(t)!==-1;});
+                    const tagsHere=g.tags.filter(function(t){return allUsed.indexOf(t)!==-1&&shouldShow(t);});
                     return Object.assign({},g,{tagsHere:tagsHere});
                   }).filter(function(g){return g.tagsHere.length>0;});
-                  const ungrouped=allUsed.filter(function(t){return!groupOfTag(t);});
+                  const ungrouped=allUsed.filter(function(t){return!groupOfTag(t)&&shouldShow(t);});
+                  // Aviso de drill-down ativo
+                  const hasContext=filterAdminTags.length>0&&!filterAdminTags.includes("__sem__");
                   return (<>
+                    {hasContext&&<div style={{borderTop:"1px solid "+C.b1,padding:"6px 14px",background:"#fef3c7",color:"#92400e",fontSize:10,lineHeight:1.4}}>
+                      <b>Refinar dentro de:</b> {filterAdminTags.join(" + ")}<br/>
+                      <span style={{opacity:.8}}>Os números mostram quantos cards têm cada tag dentro desse filtro.</span>
+                    </div>}
                     {sectionsByGroup.map(function(g){
                       return <div key={g.id} style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
                         <div style={{padding:"5px 14px",display:"flex",alignItems:"center",gap:6}}>
@@ -10212,7 +10245,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                             label:isInTags?"#"+tag:tag,
                             checked:filterAdminTags.indexOf(tag)!==-1,
                             onClick:function(){toggleAdminTag(tag);},
-                            chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33"
+                            chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33",
+                            count:tagContextCounts[tag]||0
                           });
                         })}
                       </div>;
@@ -10227,7 +10261,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           label:isInTags?"#"+tag:tag,
                           checked:filterAdminTags.indexOf(tag)!==-1,
                           onClick:function(){toggleAdminTag(tag);},
-                          chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33"
+                          chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33",
+                          count:tagContextCounts[tag]||0
                         });
                       })}
                     </div>}
