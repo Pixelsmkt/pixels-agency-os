@@ -10115,34 +10115,34 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDrop={()=>drag&&moveTask(drag,col.id)}
             onDragLeave={()=>setOver(null)}
             style={{
-              background:isDraggingOver?"#f0f4ff":"#f8fafc",
-              border:`1px solid ${isDraggingOver?col.color+"66":"#e2e8f0"}`,
-              borderTop:`3px solid ${col.color}`,
+              background:isDraggingOver?"#eef2f7":"#f8fafc",
+              border:`1px solid ${isDraggingOver?col.color+"55":"#e2e8f0"}`,
               borderRadius:12,padding:"8px 8px 8px",
               height:"78vh",maxHeight:680,
               transition:"all .15s",display:"flex",flexDirection:"column",gap:0
             }}>
 
-            {/* Column header — colored bg */}
-            <div style={{padding:"8px 10px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"8px 8px 0 0",margin:"-8px -8px 10px -8px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:7}}>
+            {/* Column header — neutro com bolinha de cor */}
+            <div style={{padding:"4px 4px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0",marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:col.color,flexShrink:0}}/>
                 {editingColId===col.id&&canNewCol
                   ? <input value={editingColLabel} onChange={e=>setEditingColLabel(e.target.value)}
                       onKeyDown={e=>{if(e.key==="Enter")saveColName(col.id);if(e.key==="Escape")setEditingColId(null);}}
                       onBlur={()=>saveColName(col.id)} autoFocus
-                      style={{background:"rgba(255,255,255,0.25)",border:"1px solid rgba(255,255,255,0.5)",borderRadius:6,padding:"3px 8px",color:"#fff",fontSize:11,fontWeight:700,outline:"none",width:120}}/>
+                      style={{background:"#fff",border:"1px solid "+col.color+"66",borderRadius:6,padding:"3px 8px",color:"#0f172a",fontSize:11,fontWeight:500,outline:"none",width:120}}/>
                   : <span
                       onDoubleClick={()=>{if(canNewCol){setEditingColId(col.id);setEditingColLabel(col.label);}}}
                       title={canNewCol?"Duplo clique para renomear":""}
-                      style={{color:"#fff",fontWeight:700,fontSize:12,cursor:canNewCol?"text":"default",textShadow:"0 1px 2px rgba(0,0,0,0.2)"}}>
+                      style={{color:"#334155",fontWeight:500,fontSize:12,cursor:canNewCol?"text":"default",letterSpacing:.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                       {col.label}
                     </span>
                 }
-                <span style={{background:"rgba(0,0,0,0.18)",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
-                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:800}}>⏳ {colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length} pend.</span>}
+                <span style={{color:"#94a3b8",fontSize:11,fontWeight:500,flexShrink:0}}>{colTasks.length}</span>
+                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff7ed",color:"#c2410c",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:500,border:"1px solid #fed7aa"}}>⏳ {colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
               </div>
               <div style={{display:"flex",gap:3,alignItems:"center"}}>
-                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.15)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.7)",cursor:"pointer",fontSize:10,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
+                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"transparent",border:"none",borderRadius:5,width:18,height:18,color:"#94a3b8",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
               </div>
             </div>
 
@@ -10199,8 +10199,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid rgba(0,0,0,0.08)",borderLeft:`3px solid ${(isAlteracao||isAjustar)?"#ea580c":cardBorder}`,borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
-                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)"}
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:(isAlteracao||isAjustar)?"3px solid #ea580c":"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
+                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 6px rgba(0,0,0,0.06)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
                   {/* BARRAS COLORIDAS DE TAGS — estilo Trello label bars */}
                   {(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
