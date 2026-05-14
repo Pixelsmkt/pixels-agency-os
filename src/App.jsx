@@ -9522,6 +9522,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [filterSector,setFilterSector]=useState("todos_setores");
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
+  // Filtro de etiqueta interna (só sócios). Persiste em localStorage por sessão.
+  const [filterAdminTag,setFilterAdminTag]=useState(function(){try{return localStorage.getItem("pixels-kanban-admintag-filter")||"todos";}catch(e){return"todos";}});
+  useEffect(function(){try{localStorage.setItem("pixels-kanban-admintag-filter",filterAdminTag);}catch(e){}},[filterAdminTag]);
+  const isAdminUser = (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
   // Ordenação dos cards no kanban (persistida em localStorage)
   const [sortMode,setSortMode]=useState(function(){
     try{return localStorage.getItem("pixels-kanban-sort")||"smart";}catch(e){return"smart";}
@@ -9709,6 +9713,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
     if(filterClient!=="todos"&&t.client!==filterClient)return false;
     if(filterClient==="bioter"&&filterBioterUnit!=="todos"&&t.bioterUnit!==filterBioterUnit)return false;
+    // Etiqueta interna (admin-only). "todos" passa, "__sem__" filtra sem etiqueta, demais comparam string.
+    if(isAdminUser&&filterAdminTag&&filterAdminTag!=="todos"){
+      const tagVal=(t.adminTag||"").trim();
+      if(filterAdminTag==="__sem__"){if(tagVal)return false;}
+      else if(tagVal!==filterAdminTag)return false;
+    }
     // Oculta tasks de colunas bloqueadas (false = bloqueado; undefined = coluna custom = deixa ver)
     if(!isAdmin&&COL_PERM[t.status]===false)return false;
     return true;
@@ -9984,6 +9994,41 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             })}
           </KanbanDropdown>}
 
+          {/* ── ETIQUETA INTERNA ── só sócios. Mostra dropdown só se admin. */}
+          {isAdminUser&&(function(){
+            // Coleta todas as etiquetas em uso (únicas, ordenadas)
+            const usedTags=Array.from(new Set((tasks||[]).map(x=>(x&&x.adminTag||"").trim()).filter(Boolean))).sort();
+            const labelTxt=filterAdminTag==="todos"?"Etiqueta":(filterAdminTag==="__sem__"?"Sem etiqueta":filterAdminTag);
+            return <KanbanDropdown label={labelTxt} icon="🏷" active={filterAdminTag!=="todos"}>
+              {function(close){return(<>
+                <button onClick={function(){setFilterAdminTag("todos");close();}}
+                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterAdminTag==="todos"?C.ag:"transparent",border:"none",color:filterAdminTag==="todos"?C.a:C.tx,fontSize:12,fontWeight:filterAdminTag==="todos"?700:500,cursor:"pointer",textAlign:"left"}}>
+                  Todas as etiquetas
+                  {filterAdminTag==="todos"&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
+                </button>
+                <button onClick={function(){setFilterAdminTag("__sem__");close();}}
+                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterAdminTag==="__sem__"?C.ag:"transparent",border:"none",color:filterAdminTag==="__sem__"?C.a:C.tx,fontSize:12,fontWeight:filterAdminTag==="__sem__"?700:500,cursor:"pointer",textAlign:"left",borderTop:"1px solid "+C.b1}}>
+                  <span style={{color:"#94a3b8",fontStyle:"italic"}}>Sem etiqueta</span>
+                  {filterAdminTag==="__sem__"&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
+                </button>
+                {usedTags.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                  <div style={{padding:"4px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Etiquetas em uso</div>
+                  {usedTags.map(function(tag){
+                    const active=filterAdminTag===tag;
+                    return <button key={tag} onClick={function(){setFilterAdminTag(tag);close();}}
+                      style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left"}}>
+                      <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600}}>{tag}</span>
+                      {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
+                    </button>;
+                  })}
+                </div>}
+                {usedTags.length===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1}}>
+                  Nenhuma etiqueta cadastrada ainda. Abra um cartão e use o campo "Etiqueta interna".
+                </div>}
+              </>);}}
+            </KanbanDropdown>;
+          })()}
+
           {/* Bioter unit sub-filter */}
           {filterClient==="bioter"&&myPerms.filtroCliente&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
             <span style={{color:C.td,fontSize:10,fontWeight:700}}>📍</span>
@@ -10001,8 +10046,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>}
 
           {/* Limpar filtros */}
-          {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos")&&
-            <button onClick={()=>{setFilterUser("todos");setFilterSector("todos_setores");setFilterClient("todos");setFilterBioterUnit("todos");}}
+          {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos"||(isAdminUser&&filterAdminTag!=="todos"))&&
+            <button onClick={()=>{setFilterUser("todos");setFilterSector("todos_setores");setFilterClient("todos");setFilterBioterUnit("todos");setFilterAdminTag("todos");}}
               style={{background:"none",border:"none",color:C.rd,fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8}}>
               × Limpar filtros
             </button>
@@ -17182,6 +17227,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     return 2026;
   });
   const [bioterUnit,setBioterUnit]=useState(task.bioterUnit||"chapeco");
+  // Etiqueta interna admin (ex: "Pacote 10/06"). Só visível/editável p/ sócios.
+  const [adminTag,setAdminTag]=useState(task.adminTag||"");
+  const isAdmin = CURRENT_USER && CURRENT_USER.level === 1;
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
   const [recSeconds,setRecSeconds]=useState(0);
@@ -17222,6 +17270,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setAttachments(task.files||[]);
       setCover(task.cover||null);
       setBioterUnit(task.bioterUnit||"chapeco");
+      setAdminTag(task.adminTag||"");
       setChecklist(task.checklist||[]);
       setPublishDate(task.publishDate||"");
       setPublishTime(task.publishTime||"09:00");
@@ -17309,12 +17358,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(publishTime!==(task.publishTime||"09:00"))return true;
     if(caption!==(task.caption||""))return true;
     if(cover!==(task.cover||null))return true;
+    if((adminTag||"")!==(task.adminTag||""))return true;
     // Compara só anexos finalizados (ignora placeholders de upload em ambos os lados)
     const taskFiles=(task.files||[]).filter(f=>!f.uploading&&f.url).map(f=>f.id||f.url);
     const curFiles=attachments.filter(a=>!a.uploading&&a.url).map(f=>f.id||f.url);
     if(JSON.stringify(taskFiles.sort())!==JSON.stringify(curFiles.sort()))return true;
     return false;
-  },[title,desc,assignees,watchers,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,cover,attachments,task]);
+  },[title,desc,assignees,watchers,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,cover,attachments,adminTag,task]);
 
   // Conta uploads em andamento (placeholders com uploading:true sem url ainda)
   const uploadingCount=attachments.filter(a=>a.uploading).length;
@@ -17399,7 +17449,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const tlIds=new Set(prevTimeline.map(x=>x.atFmt+"-"+(x.label||x.type||"")));
       const newTl=tl.filter(x=>!tlIds.has(x.atFmt+"-"+(x.label||x.type||"")));
       const mergedTimeline=[...prevTimeline,...newTl];
-      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+      // adminTag só é salvo se o usuário atual for admin (level 1). Caso contrário,
+      // preserva o valor antigo do task pra evitar que não-admin sobrescreva.
+      const nextAdminTag = isAdmin ? (adminTag||"").trim() : (t.adminTag||"");
+      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     }));
     onClose();
   };
@@ -18951,6 +19004,33 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {SECTORS.map(s=><option key={s} value={s}>{SECTOR_LABELS[s]}</option>)}
             </select>
           </div>}
+
+          {/* Etiqueta interna — só sócios veem/editam. Usado pra organizar internamente
+              (ex: Pacote 10/06, Campanha verão, Cliente VIP, etc). Autocompleta de
+              etiquetas já em uso em outros cartões. */}
+          {isAdmin&&!isAgendado&&(function(){
+            const usedTags=Array.from(new Set((tasks||[]).map(x=>(x&&x.adminTag||"").trim()).filter(Boolean))).sort();
+            const dlId="admin-tag-options-"+task.id;
+            return <div>
+              <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
+                <span>🏷 Etiqueta interna</span>
+                <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios</span>
+              </label>
+              <input
+                list={dlId}
+                value={adminTag}
+                onChange={e=>setAdminTag(e.target.value)}
+                placeholder="Ex: Pacote 10/06, Campanha verão..."
+                style={{...SI,fontFamily:"inherit"}}
+              />
+              <datalist id={dlId}>
+                {usedTags.filter(x=>x!==adminTag).map(x=><option key={x} value={x}/>)}
+              </datalist>
+              <div style={{color:"#94a3b8",fontSize:10,marginTop:4,lineHeight:1.4}}>
+                Visível só pra Vinicius e Gustavo. Use pra agrupar cartões em pacotes contratados, campanhas, etc.
+              </div>
+            </div>;
+          })()}
 
           {!isAgendado&&<div style={{position:"relative"}}>
             <label style={LB}>👤 Responsáveis</label>
@@ -21397,6 +21477,7 @@ const rowToTask = (r) => ({
   ajustar:      !!r.ajustar,
   isAlteracao:  !!r.is_alteracao,
   ajusteOrigin: r.ajuste_origin || null,
+  adminTag:     r.admin_tag    || "",
   assignees:    Array.isArray(r.assignees) ? r.assignees : [],
   watchers:     Array.isArray(r.watchers)  ? r.watchers  : [],
   tags:         Array.isArray(r.tags)      ? r.tags      : [],
@@ -21432,6 +21513,7 @@ const taskToRow = (t) => ({
   ajustar:        !!t.ajustar,
   is_alteracao:   !!t.isAlteracao,
   ajuste_origin:  t.ajusteOrigin || null,
+  admin_tag:      t.adminTag || null,
   assignees:      t.assignees    || [],
   watchers:       t.watchers     || [],
   tags:           t.tags         || [],
