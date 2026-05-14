@@ -11231,10 +11231,10 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     {label:"Status",key:"status",filterKey:"status"},
     {label:"Prior.",key:"prior",filterKey:"prior"},
     {label:"Responsavel",key:"responsavel",filterKey:"responsavel"},
-    {label:"Prazo",key:"prazo",filterKey:null},
-    {label:"Parado",key:"parado",filterKey:null},
-    {label:"Data Publicação",key:"dataPub",filterKey:null},
-    {label:"Data Conclusão",key:"dataConc",filterKey:null},
+    {label:"Prazo",key:"prazo",filterKey:"prazo"},
+    {label:"Parado",key:"parado",filterKey:"parado"},
+    {label:"Data Publicação",key:"dataPub",filterKey:"dataPub"},
+    {label:"Data Conclusão",key:"dataConc",filterKey:"dataConc"},
   ];
   if(isAdminViewer)HEADERS_BASE.push({label:"Tag",key:"tag",filterKey:"tag"});
   HEADERS_BASE.push({label:"",key:null,filterKey:null});
@@ -11306,6 +11306,113 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     if(col==="tag"){return"#"+val;}
     return String(val);
   };
+
+  // ─── FILTROS DE RANGE (data/dias) ──
+  // Predicates trabalham em "now" — cada render usa data atual fresca.
+  const daysUntil=function(dateStr){
+    if(!dateStr)return null;
+    try{
+      const d=new Date(typeof dateStr==="string"&&dateStr.length===10?dateStr+"T00:00:00":dateStr);
+      if(isNaN(d.getTime()))return null;
+      const today=new Date();today.setHours(0,0,0,0);
+      return Math.ceil((d-today)/(1000*60*60*24));
+    }catch(e){return null;}
+  };
+  const isThisMonth=function(dateStr){
+    if(!dateStr)return false;
+    try{
+      const d=new Date(typeof dateStr==="string"&&dateStr.length===10?dateStr+"T00:00:00":dateStr);
+      if(isNaN(d.getTime()))return false;
+      const now=new Date();
+      return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+    }catch(e){return false;}
+  };
+  const isNextMonth=function(dateStr){
+    if(!dateStr)return false;
+    try{
+      const d=new Date(typeof dateStr==="string"&&dateStr.length===10?dateStr+"T00:00:00":dateStr);
+      if(isNaN(d.getTime()))return false;
+      const now=new Date();
+      const next=new Date(now.getFullYear(),now.getMonth()+1,1);
+      return d.getMonth()===next.getMonth()&&d.getFullYear()===next.getFullYear();
+    }catch(e){return false;}
+  };
+  // Opções de filtro pra cada coluna de range — predicate `t` recebe o valor
+  // (data string pras de data, número de dias pra parado).
+  const RANGE_OPTS={
+    prazo:[
+      {v:"atrasado",l:"🔴 Atrasado",t:function(d){const x=daysUntil(d);return x!==null&&x<0;}},
+      {v:"hoje",l:"🟠 Hoje",t:function(d){return daysUntil(d)===0;}},
+      {v:"7d",l:"🟡 Próximos 7 dias",t:function(d){const x=daysUntil(d);return x!==null&&x>0&&x<=7;}},
+      {v:"30d",l:"🟢 Próximos 30 dias",t:function(d){const x=daysUntil(d);return x!==null&&x>7&&x<=30;}},
+      {v:"futuro",l:"🔵 Mais de 30 dias",t:function(d){const x=daysUntil(d);return x!==null&&x>30;}},
+      {v:"vazio",l:"⚪ Sem prazo",t:function(d){return!d;}},
+    ],
+    parado:[
+      {v:"recente",l:"🟢 0–2 dias",t:function(n){return n>=0&&n<=2;}},
+      {v:"medio",l:"🟡 3–5 dias",t:function(n){return n>=3&&n<=5;}},
+      {v:"alto",l:"🟠 6–10 dias",t:function(n){return n>=6&&n<=10;}},
+      {v:"critico",l:"🔴 11+ dias",t:function(n){return n>=11;}},
+    ],
+    dataPub:[
+      {v:"hoje",l:"Hoje",t:function(d){return daysUntil(d)===0;}},
+      {v:"semana",l:"Esta semana",t:function(d){const x=daysUntil(d);return x!==null&&x>=0&&x<=7;}},
+      {v:"mes",l:"Este mês",t:function(d){return isThisMonth(d);}},
+      {v:"prox",l:"Próximo mês",t:function(d){return isNextMonth(d);}},
+      {v:"passado",l:"Já publicado (passado)",t:function(d){const x=daysUntil(d);return x!==null&&x<0;}},
+      {v:"vazio",l:"Sem data",t:function(d){return!d;}},
+    ],
+    dataConc:[
+      {v:"atrasado",l:"🔴 Atrasado",t:function(d){const x=daysUntil(d);return x!==null&&x<0;}},
+      {v:"hoje",l:"🟠 Hoje",t:function(d){return daysUntil(d)===0;}},
+      {v:"semana",l:"🟡 Esta semana",t:function(d){const x=daysUntil(d);return x!==null&&x>0&&x<=7;}},
+      {v:"mes",l:"🟢 Este mês",t:function(d){return isThisMonth(d);}},
+      {v:"prox",l:"🔵 Próximo mês",t:function(d){return isNextMonth(d);}},
+      {v:"vazio",l:"⚪ Sem prazo",t:function(d){return!d;}},
+    ],
+  };
+  // Retorna as opções pra um filterKey — range ou enum
+  const getFilterOptions=function(fk){
+    if(RANGE_OPTS[fk])return RANGE_OPTS[fk].map(function(o){return{v:o.v,l:o.l};});
+    return(uniqueValues[fk]||[]).map(function(v){return{v:v,l:labelFor(fk,v)};});
+  };
+
+  // ─── ORDENAÇÃO POR COLUNA (asc/desc) — só pras colunas de data ──
+  const [colSort,setColSort]=useState(function(){
+    try{const raw=localStorage.getItem("pixels-lista-col-sort-v1");if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return p;}}catch(e){}
+    return{key:null,dir:null};
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-lista-col-sort-v1",JSON.stringify(colSort));}catch(e){}},[colSort]);
+  const applySort=function(fk,dir){
+    setColSort(function(prev){
+      // Click novamente na mesma opção = limpar
+      if(prev.key===fk&&prev.dir===dir)return{key:null,dir:null};
+      return{key:fk,dir:dir};
+    });
+  };
+  const isSortableCol=function(fk){return fk==="prazo"||fk==="dataPub"||fk==="dataConc";};
+  const sortTasks=function(arr){
+    if(!colSort.key||!colSort.dir)return arr;
+    const k=colSort.key;
+    const getVal=function(t){
+      if(k==="prazo"||k==="dataConc")return t.deadline;
+      if(k==="dataPub")return t.publishDate;
+      return null;
+    };
+    const dir=colSort.dir==="asc"?1:-1;
+    return[...arr].sort(function(a,b){
+      const va=getVal(a),vb=getVal(b);
+      // Vazios sempre no fim, independente da direção
+      if(!va&&!vb)return 0;
+      if(!va)return 1;
+      if(!vb)return -1;
+      const da=new Date(va.length===10?va+"T00:00:00":va);
+      const db=new Date(vb.length===10?vb+"T00:00:00":vb);
+      if(isNaN(da.getTime()))return 1;
+      if(isNaN(db.getTime()))return -1;
+      return(da-db)*dir;
+    });
+  };
   // Aplica filtros por coluna ao visible
   const filteredVisible=useMemo(function(){
     const keys=Object.keys(colFilters);
@@ -11314,6 +11421,18 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
       for(let i=0;i<keys.length;i++){
         const k=keys[i];const sel=colFilters[k];
         if(!Array.isArray(sel)||sel.length===0)continue;
+        // Range filters (data/dias)
+        if(RANGE_OPTS[k]){
+          // Determina o valor a testar segundo a coluna
+          let testVal;
+          if(k==="prazo"||k==="dataConc")testVal=t.deadline;
+          else if(k==="dataPub")testVal=t.publishDate;
+          else if(k==="parado")testVal=t.colEnteredAt?Math.floor((Date.now()-new Date(t.colEnteredAt).getTime())/86400000):0;
+          const matched=sel.some(function(v){const opt=RANGE_OPTS[k].find(function(o){return o.v===v;});return opt&&opt.t(testVal);});
+          if(!matched)return false;
+          continue;
+        }
+        // Enum filters (string-match)
         if(k==="status"){if(sel.indexOf(t.status)===-1)return false;}
         else if(k==="prior"){if(sel.indexOf(t.priority||"")===-1)return false;}
         else if(k==="responsavel"){
@@ -11354,9 +11473,11 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
         return <div key={i} style={{position:"relative",padding:"9px 12px",color:hasActiveFilter?C.a:C.td,fontSize:10,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",borderRight:i<HEADERS.length-1?`1px solid ${C.b1}`:"none",background:hasActiveFilter?C.a+"10":"transparent"}}>
           <div style={{display:"flex",alignItems:"center",gap:6,overflow:"hidden"}}>
             <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{h.label}</span>
+            {/* Indicador de ordenação ativa */}
+            {fk&&colSort.key===fk&&colSort.dir&&<span title={colSort.dir==="asc"?"Ordenado: crescente":"Ordenado: decrescente"} style={{color:C.a,fontSize:10,fontWeight:700,flexShrink:0}}>{colSort.dir==="asc"?"↑":"↓"}</span>}
             {fk&&<button
               onClick={function(e){e.stopPropagation();setOpenFilter(isOpen?null:fk);}}
-              title="Filtrar"
+              title="Filtrar / Ordenar"
               style={{background:hasActiveFilter?C.a+"22":"transparent",border:"none",color:hasActiveFilter?C.a:C.td,cursor:"pointer",fontSize:9,padding:"2px 4px",borderRadius:3,lineHeight:1,flexShrink:0}}
               onMouseEnter={function(e){e.currentTarget.style.background=hasActiveFilter?C.a+"33":C.b1;}}
               onMouseLeave={function(e){e.currentTarget.style.background=hasActiveFilter?C.a+"22":"transparent";}}>
@@ -11371,10 +11492,38 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
                 <span style={{color:C.tx,fontSize:11,fontWeight:600}}>Filtrar por {h.label}</span>
                 {hasActiveFilter&&<button onClick={function(){clearColFilter(fk);}} style={{background:"none",border:"none",color:C.rd,fontSize:10,fontWeight:600,cursor:"pointer",padding:"2px 6px"}}>limpar</button>}
               </div>
+              {/* Seção de ordenação — só pras colunas de data */}
+              {isSortableCol(fk)&&(function(){
+                const ascActive=colSort.key===fk&&colSort.dir==="asc";
+                const descActive=colSort.key===fk&&colSort.dir==="desc";
+                const labelAsc=fk==="prazo"?"Prazo mais curto":fk==="dataPub"?"Data de publicação mais perto":"Conclusão mais perto";
+                const labelDesc=fk==="prazo"?"Prazo mais longo":fk==="dataPub"?"Data de publicação mais longe":"Conclusão mais longe";
+                return <div style={{borderBottom:"1px solid "+C.b1,padding:"4px 0"}}>
+                  <div style={{padding:"3px 12px",color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Ordenar</div>
+                  <button onClick={function(){applySort(fk,"asc");}}
+                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"6px 12px",background:ascActive?C.ag:"transparent",border:"none",color:ascActive?C.a:C.tx,fontSize:12,fontWeight:ascActive?600:400,cursor:"pointer",textAlign:"left"}}
+                    onMouseEnter={function(e){if(!ascActive)e.currentTarget.style.background="#f8fafc";}}
+                    onMouseLeave={function(e){if(!ascActive)e.currentTarget.style.background="transparent";}}>
+                    <span style={{fontSize:11,width:14,textAlign:"center"}}>↑</span>
+                    <span style={{flex:1}}>{labelAsc}</span>
+                    {ascActive&&<span style={{color:C.a,fontSize:10}}>✓</span>}
+                  </button>
+                  <button onClick={function(){applySort(fk,"desc");}}
+                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"6px 12px",background:descActive?C.ag:"transparent",border:"none",color:descActive?C.a:C.tx,fontSize:12,fontWeight:descActive?600:400,cursor:"pointer",textAlign:"left"}}
+                    onMouseEnter={function(e){if(!descActive)e.currentTarget.style.background="#f8fafc";}}
+                    onMouseLeave={function(e){if(!descActive)e.currentTarget.style.background="transparent";}}>
+                    <span style={{fontSize:11,width:14,textAlign:"center"}}>↓</span>
+                    <span style={{flex:1}}>{labelDesc}</span>
+                    {descActive&&<span style={{color:C.a,fontSize:10}}>✓</span>}
+                  </button>
+                </div>;
+              })()}
               <div style={{maxHeight:240,overflowY:"auto"}}>
-                {uniqueValues[fk].length===0
-                  ?<div style={{padding:"12px",color:C.td,fontSize:11,fontStyle:"italic",textAlign:"center"}}>Sem valores pra filtrar</div>
-                  :uniqueValues[fk].map(function(val){
+                {(function(){
+                  const opts=getFilterOptions(fk);
+                  if(opts.length===0)return<div style={{padding:"12px",color:C.td,fontSize:11,fontStyle:"italic",textAlign:"center"}}>Sem valores pra filtrar</div>;
+                  return opts.map(function(opt){
+                    const val=opt.v;
                     const checked=Array.isArray(colFilters[fk])&&colFilters[fk].indexOf(val)!==-1;
                     return <button key={String(val)} onClick={function(){toggleColFilter(fk,val);}}
                       style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 12px",background:checked?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:checked?600:400,cursor:"pointer",textAlign:"left"}}
@@ -11383,10 +11532,10 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
                       <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(checked?C.a:"#cbd5e1"),background:checked?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         {checked&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
                       </span>
-                      <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{labelFor(fk,val)}</span>
+                      <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{opt.l}</span>
                     </button>;
-                  })
-                }
+                  });
+                })()}
               </div>
             </div>
           </>}
@@ -11403,7 +11552,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     </div>
 
     {orderedCols.map(col=>{
-      const colTasks=filteredVisible.filter(t=>t.status===col.id);
+      const colTasks=sortTasks(filteredVisible.filter(t=>t.status===col.id));
       // Mantém grupo visível mesmo sem cards SE há drag em andamento (vira drop zone)
       if(colTasks.length===0&&!dragId)return null;
       const isDropTarget=dragId&&dragOverCol===col.id;
