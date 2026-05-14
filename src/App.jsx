@@ -22641,7 +22641,12 @@ export default function AgencyOS(){
   // ── Auth useEffect ────────────────────────────────────────
   useEffect(()=>{
     let active=true;
-    const safety=setTimeout(()=>{if(active)setLoaded(true);},10000);
+    // Safety: se nada acontecer em 10s, força ir pra tela de login (não trava em "loading")
+    const safety=setTimeout(()=>{
+      if(!active)return;
+      setLoaded(true);
+      setAuthState(function(prev){return prev==="loading"?"login":prev;});
+    },10000);
 
     // onAuthStateChange — SEM async (evita deadlock)
     const {data:{subscription}}=_sb.auth.onAuthStateChange((event,session)=>{
@@ -22658,17 +22663,23 @@ export default function AgencyOS(){
       // Operações async fora do lock (setTimeout 0)
       setTimeout(async()=>{
         if(!active) return;
+        let profileLoaded=false;
         try{
           const r=await fetch(`${SB_URL}/rest/v1/profiles?id=eq.${session.user.id}&select=*`,
             {headers:authHeaders(session.access_token)});
           const arr=await r.json();
           const profile=Array.isArray(arr)?arr[0]:null;
           if(profile){
+            profileLoaded=true;
             ls.set(PROFILE_KEY,profile);
             if(profile.user_type==="client"){setClientPortal(profile);setAuthState("portal");}
             else{setCurrentProfile(profile);setAuthState("app");}
           }
         }catch(e){console.warn("auth profile load failed:",e?.message||e);}
+        // Fallback: se não carregou profile, manda pra login pra não travar em loading
+        if(!profileLoaded){
+          setAuthState(function(prev){return prev==="loading"?"login":prev;});
+        }
         fetchTasks(session.access_token);
       },0);
     });
@@ -22681,6 +22692,9 @@ export default function AgencyOS(){
     } else if(!tok&&initAuthRef.current==="loading"){
       clearTimeout(safety);
       setLoaded(true);
+      // CRITICAL FIX: sem token + sem cached profile → vai pra tela de login.
+      // Antes só chamava setLoaded(true) deixando authState travado em "loading".
+      setAuthState("login");
     }
 
     return()=>{active=false;clearTimeout(safety);subscription.unsubscribe();};
