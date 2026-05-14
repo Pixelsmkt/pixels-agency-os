@@ -11181,11 +11181,27 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
 // Posição no bundle: após 02_clientes, antes de 04_demandas
 
 function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask,canDrag}){
-  // Rascunhos primeiro pra Hellen ver os drafts no topo
-  const LISTA_ORDER_LOCAL=["rascunhos","publicado","agendado","aprovado","avaliacao","ajustes","execucao","recebida","demanda","pausado"];
+  // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
+  const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
   const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#7c1d1d",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
+
+  // ─── COLAPSAR seções (persistido em localStorage por usuário) ──
+  const [collapsed,setCollapsed]=useState(function(){
+    try{
+      const raw=localStorage.getItem("pixels-lista-collapsed-v1");
+      if(!raw)return{};
+      const p=JSON.parse(raw);
+      return p&&typeof p==="object"?p:{};
+    }catch(e){return{};}
+  });
+  useEffect(function(){
+    try{localStorage.setItem("pixels-lista-collapsed-v1",JSON.stringify(collapsed));}catch(e){}
+  },[collapsed]);
+  const toggleCollapse=function(colId){
+    setCollapsed(function(prev){return Object.assign({},prev,{[colId]:!prev[colId]});});
+  };
 
   // ─── DRAG & DROP — arrastar linha → soltar no header de outro status ──
   const [dragId,setDragId]=useState(null);
@@ -11196,6 +11212,8 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     if(!dragId||!moveTask){setDragId(null);setDragOverCol(null);return;}
     moveTask(dragId,colId);
     setDragId(null);setDragOverCol(null);
+    // Se a coluna destino tava colapsada, abre ela pra usuário ver o card recém-movido
+    if(collapsed[colId])setCollapsed(function(prev){return Object.assign({},prev,{[colId]:false});});
   };
 
   return(<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,overflow:"hidden"}}>
@@ -11211,21 +11229,28 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
       // Mantém grupo visível mesmo sem cards SE há drag em andamento (vira drop zone)
       if(colTasks.length===0&&!dragId)return null;
       const isDropTarget=dragId&&dragOverCol===col.id;
+      const isCollapsed=!!collapsed[col.id];
       return(<div key={col.id}>
-        {/* Group header — também é drop target pro D&D */}
+        {/* Group header — clicável pra colapsar; também é drop target pro D&D */}
         <div
+          onClick={()=>toggleCollapse(col.id)}
           onDragOver={e=>{if(canDrag&&dragId){e.preventDefault();setDragOverCol(col.id);}}}
           onDragLeave={()=>{if(dragOverCol===col.id)setDragOverCol(null);}}
           onDrop={e=>{e.preventDefault();handleDropOnCol(col.id);}}
-          style={{padding:"6px 14px",background:isDropTarget?col.color+"33":col.color+"12",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8,transition:"background .12s",borderTop:isDropTarget?`2px dashed ${col.color}`:"none"}}>
+          title={isCollapsed?"Clique pra expandir":"Clique pra minimizar"}
+          style={{padding:"6px 14px",background:isDropTarget?col.color+"33":col.color+"12",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8,cursor:"pointer",transition:"background .12s",borderTop:isDropTarget?`2px dashed ${col.color}`:"none",userSelect:"none"}}
+          onMouseEnter={e=>{if(!isDropTarget)e.currentTarget.style.background=col.color+"1f";}}
+          onMouseLeave={e=>{if(!isDropTarget)e.currentTarget.style.background=col.color+"12";}}>
+          <span style={{color:col.color,fontSize:11,fontWeight:700,width:12,display:"inline-flex",justifyContent:"center",transition:"transform .15s",transform:isCollapsed?"rotate(-90deg)":"none"}}>▾</span>
           <div style={{width:8,height:8,borderRadius:"50%",background:col.color,flexShrink:0}}/>
           <span style={{color:col.color,fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:.6}}>{col.label}</span>
           <span style={{background:col.color+"22",color:col.color,borderRadius:99,padding:"0 7px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
           {isDropTarget&&<span style={{color:col.color,fontSize:10,fontWeight:600,marginLeft:"auto"}}>↓ Soltar aqui</span>}
+          {!isDropTarget&&isCollapsed&&<span style={{color:col.color,fontSize:9,fontWeight:600,marginLeft:"auto",opacity:.7}}>minimizado</span>}
         </div>
 
         {/* Drop zone vazio quando coluna sem cards mas com drag ativo */}
-        {colTasks.length===0&&dragId&&<div
+        {!isCollapsed&&colTasks.length===0&&dragId&&<div
           onDragOver={e=>{e.preventDefault();setDragOverCol(col.id);}}
           onDragLeave={()=>{if(dragOverCol===col.id)setDragOverCol(null);}}
           onDrop={e=>{e.preventDefault();handleDropOnCol(col.id);}}
@@ -11233,7 +11258,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
           Solte aqui pra mover pra {col.label}
         </div>}
 
-        {colTasks.map((t,i)=>{
+        {!isCollapsed&&colTasks.map((t,i)=>{
           const cl=CLIENTS.find(c=>c.id===t.client);
           const u=TEAM.find(u=>u.id===t.assignee);
           const days=t.deadline?Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24)):null;
