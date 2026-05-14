@@ -9522,6 +9522,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [filterSector,setFilterSector]=useState("todos_setores");
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
+  // Ordenação dos cards no kanban (persistida em localStorage)
+  const [sortMode,setSortMode]=useState(function(){
+    try{return localStorage.getItem("pixels-kanban-sort")||"smart";}catch(e){return"smart";}
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-kanban-sort",sortMode);}catch(e){}},[sortMode]);
   const [showTrashConfirm,setShowTrashConfirm]=useState(null);
   const [calMonth,setCalMonth]=useState(new Date());
   const [calFilterClient,setCalFilterClient]=useState("todos");
@@ -10002,6 +10007,31 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               × Limpar filtros
             </button>
           }
+
+          {/* Separador + Ordenação */}
+          <div style={{width:1,height:24,background:C.b1,marginLeft:"auto"}}/>
+          <KanbanDropdown
+            label={sortMode==="smart"?"Inteligente":sortMode==="deadline"?"Prazo":sortMode==="recent"?"Recentes":"Manual"}
+            icon="⇅"
+            active={sortMode!=="smart"}>
+            {function(close){return(<>
+              {[
+                {id:"smart",label:"Inteligente",desc:"Urgência → prazo → ordem"},
+                {id:"deadline",label:"Prazo",desc:"Mais próximo primeiro"},
+                {id:"recent",label:"Mais recentes",desc:"Criados por último"},
+                {id:"manual",label:"Manual",desc:"Você arrasta a ordem"},
+              ].map(function(o){
+                const isActive=sortMode===o.id;
+                return(<button key={o.id} onClick={function(){setSortMode(o.id);close();}}
+                  style={{display:"flex",flexDirection:"column",gap:1,padding:"7px 12px",borderRadius:6,border:"none",background:isActive?"#faf5ff":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}
+                  onMouseEnter={function(e){if(!isActive)e.currentTarget.style.background="#f8fafc";}}
+                  onMouseLeave={function(e){if(!isActive)e.currentTarget.style.background="transparent";}}>
+                  <span style={{color:isActive?C.a:C.tx,fontSize:12,fontWeight:isActive?600:500,display:"flex",alignItems:"center",gap:6}}>{o.label}{isActive&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}</span>
+                  <span style={{color:C.td,fontSize:10}}>{o.desc}</span>
+                </button>);
+              })}
+            </>);}}
+          </KanbanDropdown>
         </div>;
       })()}
 
@@ -10049,7 +10079,36 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
         <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",paddingBottom:8,justifyContent:"center"}}>
           {visibleCols.map(col=>{
-          const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>(a.position??999999)-(b.position??999999));
+          // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
+          const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>{
+            // Manual: respeita position; quem não tem position vai pro final (cinza)
+            if(sortMode==="manual"){
+              const pa=a.position??999999,pb=b.position??999999;
+              if(pa!==pb)return pa-pb;
+              return String(a.id).localeCompare(String(b.id));
+            }
+            // Prazo: deadline ASC (mais próximo primeiro); sem deadline no final
+            if(sortMode==="deadline"){
+              const da=a.deadline?new Date(a.deadline).getTime():Infinity;
+              const db=b.deadline?new Date(b.deadline).getTime():Infinity;
+              if(da!==db)return da-db;
+              return String(a.id).localeCompare(String(b.id));
+            }
+            // Recentes: createdAt DESC (mais novos primeiro)
+            if(sortMode==="recent"){
+              const ca=a.createdAt?new Date(a.createdAt).getTime():0;
+              const cb=b.createdAt?new Date(b.createdAt).getTime():0;
+              if(ca!==cb)return cb-ca;
+              return String(b.id).localeCompare(String(a.id));
+            }
+            // Inteligente (default): ajuste > atrasada > urgente > atenção > prazo, depois deadline ASC, depois id
+            const ua=taskUrgencyLevel(a),ub=taskUrgencyLevel(b);
+            if(ua!==ub)return ua-ub; // menor número = mais urgente
+            const da=a.deadline?new Date(a.deadline).getTime():Infinity;
+            const db=b.deadline?new Date(b.deadline).getTime():Infinity;
+            if(da!==db)return da-db;
+            return String(a.id).localeCompare(String(b.id));
+          });
           const isDraggingOver=over===col.id;
           return <div key={col.id}
             onDragOver={e=>{e.preventDefault();setOver(col.id);}}
