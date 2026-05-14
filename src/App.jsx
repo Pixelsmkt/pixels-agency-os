@@ -11231,15 +11231,23 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
       if(colTasks.length===0&&!dragId)return null;
       const isDropTarget=dragId&&dragOverCol===col.id;
       const isCollapsed=!!collapsed[col.id];
-      return(<div key={col.id}>
+      // Grupo INTEIRO (header + linhas) é drop target — drop em qualquer linha vai pra essa coluna.
+      // Sempre chama preventDefault no dragOver (sem condicionar a dragId) pra o browser não marcar
+      // a área como "não permite drop" — isso era o bug que travava o D&D.
+      return(<div key={col.id}
+        onDragOver={canDrag?e=>{e.preventDefault();if(dragId)setDragOverCol(col.id);}:undefined}
+        onDragLeave={canDrag?e=>{
+          // Só limpa se realmente saiu da área do grupo (não só transitou entre filhos)
+          const rt=e.relatedTarget;
+          if(!rt||!e.currentTarget.contains(rt))setDragOverCol(prev=>prev===col.id?null:prev);
+        }:undefined}
+        onDrop={canDrag?e=>{e.preventDefault();handleDropOnCol(col.id);}:undefined}
+        style={{outline:isDropTarget?`2px solid ${col.color}`:"none",outlineOffset:-2,borderRadius:isDropTarget?4:0,transition:"outline .1s"}}>
         {/* Group header — fundo sólido na cor da coluna pra bater o olho */}
         <div
           onClick={()=>toggleCollapse(col.id)}
-          onDragOver={e=>{if(canDrag&&dragId){e.preventDefault();setDragOverCol(col.id);}}}
-          onDragLeave={()=>{if(dragOverCol===col.id)setDragOverCol(null);}}
-          onDrop={e=>{e.preventDefault();handleDropOnCol(col.id);}}
           title={isCollapsed?"Clique pra expandir":"Clique pra minimizar"}
-          style={{padding:"8px 14px",background:col.color,borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8,cursor:"pointer",transition:"filter .12s",userSelect:"none",boxShadow:isDropTarget?`inset 0 0 0 2px #fff`:"none"}}
+          style={{padding:"8px 14px",background:col.color,borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8,cursor:"pointer",transition:"filter .12s",userSelect:"none"}}
           onMouseEnter={e=>{e.currentTarget.style.filter="brightness(1.08)";}}
           onMouseLeave={e=>{e.currentTarget.style.filter="brightness(1)";}}>
           <span style={{color:"#fff",fontSize:11,fontWeight:700,width:12,display:"inline-flex",justifyContent:"center",transition:"transform .15s",transform:isCollapsed?"rotate(-90deg)":"none"}}>▾</span>
@@ -11251,10 +11259,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
 
         {/* Drop zone vazio quando coluna sem cards mas com drag ativo */}
         {!isCollapsed&&colTasks.length===0&&dragId&&<div
-          onDragOver={e=>{e.preventDefault();setDragOverCol(col.id);}}
-          onDragLeave={()=>{if(dragOverCol===col.id)setDragOverCol(null);}}
-          onDrop={e=>{e.preventDefault();handleDropOnCol(col.id);}}
-          style={{padding:"20px 14px",textAlign:"center",color:C.td,fontSize:11,fontStyle:"italic",background:isDropTarget?col.color+"08":"transparent",border:isDropTarget?`1px dashed ${col.color}`:"1px dashed transparent",margin:"0 8px 8px"}}>
+          style={{padding:"20px 14px",textAlign:"center",color:C.td,fontSize:11,fontStyle:"italic",background:isDropTarget?col.color+"10":"transparent"}}>
           Solte aqui pra mover pra {col.label}
         </div>}
 
