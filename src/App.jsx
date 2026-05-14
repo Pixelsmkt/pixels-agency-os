@@ -112,7 +112,7 @@ function saveLiveClient(id,partial){
 // ======= 00_globals.jsx =======
 // Módulo de framework: temas, perms, componentes base, navegação
 // Não contém dados de negócio — ver 00_clientes_data.jsx e 00_mindmap_data.jsx
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
 import * as recharts from "recharts";
 
 // Global mobile styles
@@ -10168,10 +10168,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",color:"#475569"}}>
                         <span style={{background:"#7c3aed",color:"#fff",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:600}}>{motherTag}</span>
-                        {refinements.map(function(r,i){return <React.Fragment key={r}>
+                        {refinements.map(function(r){return <span key={r} style={{display:"inline-flex",alignItems:"center",gap:4}}>
                           <span style={{color:"#94a3b8",fontSize:11}}>→</span>
                           <span style={{background:"#fff",border:"1px solid "+C.b1,color:"#475569",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:600}}>{r}</span>
-                        </React.Fragment>;})}
+                        </span>;})}
                       </div>
                     </div>}
 
@@ -25531,7 +25531,7 @@ function PageCapacidade({tasks}){
             </div>
           ))}
           {teamAllocation.map((u,ui)=>(
-            <React.Fragment key={u.id}>
+            <Fragment key={u.id}>
               <div style={{padding:"12px 14px",borderBottom:"1px solid "+C.b1+"44",display:"flex",alignItems:"center",gap:8}}>
                 <div style={{width:28,height:28,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:12,flexShrink:0}}>{u.av}</div>
                 <div style={{minWidth:0}}>
@@ -25549,7 +25549,7 @@ function PageCapacidade({tasks}){
                   <div style={{color:C.td,fontSize:9}}>{w.estimatedHrs}h est.</div>
                 </div>
               ))}
-            </React.Fragment>
+            </Fragment>
           ))}
         </div>
         <div style={{padding:"10px 18px",borderTop:"1px solid "+C.b1,display:"flex",gap:12,flexWrap:"wrap"}}>
