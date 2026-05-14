@@ -10246,15 +10246,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:(isAlteracao||isAjustar)?"3px solid #ea580c":"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 6px rgba(0,0,0,0.06)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
-                  {/* BARRAS COLORIDAS DE TAGS — estilo Trello label bars */}
-                  {(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
+                  {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
+                  {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
                   </div>}
-                  {/* THUMBNAIL CAPADO 90px */}
-                  {thumbUrl&&(thumbUrl.startsWith("#")
-                    ?<div style={{height:80,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5}}/>
-                    :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5,pointerEvents:"none"}}/>
-                  )}
+                  {/* THUMBNAIL CAPADO 90px — margin top depende de ter faixa de tag visível acima */}
+                  {thumbUrl&&(function(){
+                    const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
+                    const m=hasVisibleTagStripe?"5px 9px 0":"6px 9px 0";
+                    return thumbUrl.startsWith("#")
+                      ?<div style={{height:80,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,margin:m,borderRadius:5}}/>
+                      :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:m,borderRadius:5,pointerEvents:"none"}}/>;
+                  })()}
                   <div style={{padding:"9px 11px 8px"}}>
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
@@ -17216,6 +17219,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   // Etiqueta interna admin (ex: "Pacote 10/06"). Só visível/editável p/ sócios.
   const [adminTag,setAdminTag]=useState(task.adminTag||"");
   const isAdmin = CURRENT_USER && CURRENT_USER.level === 1;
+  // Tags (faixas coloridas no card). Visíveis pra todos, editáveis só p/ sócios.
+  const [tags,setTags]=useState(Array.isArray(task.tags)?task.tags:[]);
+  const [newTagInput,setNewTagInput]=useState("");
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
   const [recSeconds,setRecSeconds]=useState(0);
@@ -17257,6 +17263,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setCover(task.cover||null);
       setBioterUnit(task.bioterUnit||"chapeco");
       setAdminTag(task.adminTag||"");
+      setTags(Array.isArray(task.tags)?task.tags:[]);
       setChecklist(task.checklist||[]);
       setPublishDate(task.publishDate||"");
       setPublishTime(task.publishTime||"09:00");
@@ -17345,12 +17352,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(caption!==(task.caption||""))return true;
     if(cover!==(task.cover||null))return true;
     if((adminTag||"")!==(task.adminTag||""))return true;
+    if(JSON.stringify(tags||[])!==JSON.stringify(task.tags||[]))return true;
     // Compara só anexos finalizados (ignora placeholders de upload em ambos os lados)
     const taskFiles=(task.files||[]).filter(f=>!f.uploading&&f.url).map(f=>f.id||f.url);
     const curFiles=attachments.filter(a=>!a.uploading&&a.url).map(f=>f.id||f.url);
     if(JSON.stringify(taskFiles.sort())!==JSON.stringify(curFiles.sort()))return true;
     return false;
-  },[title,desc,assignees,watchers,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,cover,attachments,adminTag,task]);
+  },[title,desc,assignees,watchers,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,cover,attachments,adminTag,tags,task]);
 
   // Conta uploads em andamento (placeholders com uploading:true sem url ainda)
   const uploadingCount=attachments.filter(a=>a.uploading).length;
@@ -17435,10 +17443,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const tlIds=new Set(prevTimeline.map(x=>x.atFmt+"-"+(x.label||x.type||"")));
       const newTl=tl.filter(x=>!tlIds.has(x.atFmt+"-"+(x.label||x.type||"")));
       const mergedTimeline=[...prevTimeline,...newTl];
-      // adminTag só é salvo se o usuário atual for admin (level 1). Caso contrário,
-      // preserva o valor antigo do task pra evitar que não-admin sobrescreva.
+      // adminTag e tags só são salvos se o usuário atual for admin (level 1).
+      // Caso contrário, preserva os valores antigos pra evitar que não-admin sobrescreva.
       const nextAdminTag = isAdmin ? (adminTag||"").trim() : (t.adminTag||"");
-      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+      const nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
+      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     }));
     onClose();
   };
@@ -19014,6 +19023,50 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </datalist>
               <div style={{color:"#94a3b8",fontSize:10,marginTop:4,lineHeight:1.4}}>
                 Visível só pra Vinicius e Gustavo. Use pra agrupar cartões em pacotes contratados, campanhas, etc.
+              </div>
+            </div>;
+          })()}
+
+          {/* Tags (faixas coloridas) — admin-only, free text. Cada tag vira chip
+              com cor estável (hash do nome) e × pra remover. Enter adiciona. */}
+          {isAdmin&&!isAgendado&&(function(){
+            const addTag=function(){
+              const v=(newTagInput||"").trim().toLowerCase().replace(/^#+/,"");
+              if(!v)return;
+              if(tags.includes(v))return;
+              if(v.length>30){pixelsToast.warning("Tag muito longa (máx 30 caracteres).");return;}
+              setTags([...tags,v]);
+              setNewTagInput("");
+            };
+            const removeTag=function(t){setTags(tags.filter(x=>x!==t));};
+            return <div>
+              <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
+                <span>🎨 Tags do cartão</span>
+                <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios</span>
+              </label>
+              {/* Chips das tags existentes */}
+              {tags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>
+                {tags.map(function(tag){
+                  const tc=(typeof tagColor==="function")?tagColor(tag):{fg:"#64748b",bg:"#f1f5f9"};
+                  return <span key={tag} style={{display:"inline-flex",alignItems:"center",gap:4,background:tc.fg+"18",color:tc.fg,borderRadius:99,padding:"3px 4px 3px 9px",fontSize:10,fontWeight:600,border:"1px solid "+tc.fg+"33"}}>
+                    #{tag}
+                    <button onClick={function(){removeTag(tag);}} title="Remover tag" style={{background:"none",border:"none",color:tc.fg,cursor:"pointer",fontSize:13,padding:"0 4px",lineHeight:1,opacity:.7}}>×</button>
+                  </span>;
+                })}
+              </div>}
+              {/* Input pra adicionar */}
+              <div style={{display:"flex",gap:6}}>
+                <input
+                  value={newTagInput}
+                  onChange={function(e){setNewTagInput(e.target.value);}}
+                  onKeyDown={function(e){if(e.key==="Enter"){e.preventDefault();addTag();}}}
+                  placeholder="Digite a tag e tecle Enter"
+                  style={{...SI,flex:1,fontFamily:"inherit"}}
+                />
+                <button onClick={addTag} disabled={!newTagInput.trim()} style={{background:newTagInput.trim()?"#7c3aed":"#e2e8f0",color:"#fff",border:"none",borderRadius:8,padding:"0 14px",fontSize:13,fontWeight:600,cursor:newTagInput.trim()?"pointer":"not-allowed",flexShrink:0}}>+</button>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:10,marginTop:4,lineHeight:1.4}}>
+                As tags aparecem como faixas coloridas no topo do cartão. Só Vinicius e Gustavo veem essas faixas.
               </div>
             </div>;
           })()}
