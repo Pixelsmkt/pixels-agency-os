@@ -11227,17 +11227,17 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     :`2fr ${cw.status}px ${cw.prior}px ${cw.responsavel}px ${cw.prazo}px ${cw.parado}px ${cw.dataPub}px ${cw.dataConc}px ${cw.actions}px`;
   // Cada header: { label, key } — key=null pra colunas não-redimensionáveis (Demanda flex e a última, Actions)
   const HEADERS_BASE=[
-    {label:"Demanda",key:null},
-    {label:"Status",key:"status"},
-    {label:"Prior.",key:"prior"},
-    {label:"Responsavel",key:"responsavel"},
-    {label:"Prazo",key:"prazo"},
-    {label:"Parado",key:"parado"},
-    {label:"Data Publicação",key:"dataPub"},
-    {label:"Data Conclusão",key:"dataConc"},
+    {label:"Demanda",key:null,filterKey:null},
+    {label:"Status",key:"status",filterKey:"status"},
+    {label:"Prior.",key:"prior",filterKey:"prior"},
+    {label:"Responsavel",key:"responsavel",filterKey:"responsavel"},
+    {label:"Prazo",key:"prazo",filterKey:null},
+    {label:"Parado",key:"parado",filterKey:null},
+    {label:"Data Publicação",key:"dataPub",filterKey:null},
+    {label:"Data Conclusão",key:"dataConc",filterKey:null},
   ];
-  if(isAdminViewer)HEADERS_BASE.push({label:"Tag",key:"tag"});
-  HEADERS_BASE.push({label:"",key:null});
+  if(isAdminViewer)HEADERS_BASE.push({label:"Tag",key:"tag",filterKey:"tag"});
+  HEADERS_BASE.push({label:"",key:null,filterKey:null});
   const HEADERS=HEADERS_BASE;
   // Helper de formatação de data curta — "15/05" ou "—"
   const fmtShort=function(v){
@@ -11265,6 +11265,72 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     setCollapsed(function(prev){return Object.assign({},prev,{[colId]:!prev[colId]});});
   };
 
+  // ─── FILTROS POR COLUNA (Excel-style) ──
+  // Popover aberto pra qual coluna; null = nenhum. colFilters = { prior:["alta"], responsavel:["andre"], ... }
+  const [openFilter,setOpenFilter]=useState(null);
+  const [colFilters,setColFilters]=useState(function(){
+    try{const raw=localStorage.getItem("pixels-lista-col-filters-v1");if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return p;}}catch(e){}
+    return{};
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-lista-col-filters-v1",JSON.stringify(colFilters));}catch(e){}},[colFilters]);
+  const toggleColFilter=function(col,val){
+    setColFilters(function(prev){
+      const cur=Array.isArray(prev[col])?prev[col]:[];
+      const next=cur.indexOf(val)===-1?cur.concat([val]):cur.filter(function(x){return x!==val;});
+      const out=Object.assign({},prev);
+      if(next.length===0)delete out[col]; else out[col]=next;
+      return out;
+    });
+  };
+  const clearColFilter=function(col){
+    setColFilters(function(prev){const o=Object.assign({},prev);delete o[col];return o;});
+  };
+  // Extrai valores únicos de cada coluna a partir do visible (pre-filtro)
+  const uniqueValues=useMemo(function(){
+    const out={status:new Set(),prior:new Set(),responsavel:new Set(),tag:new Set()};
+    (visible||[]).forEach(function(t){
+      if(t.status)out.status.add(t.status);
+      out.prior.add(t.priority||"");
+      const ass=Array.isArray(t.assignees)&&t.assignees.length>0?t.assignees:(t.assignee?[t.assignee]:[]);
+      ass.forEach(function(a){if(a)out.responsavel.add(a);});
+      if(t.adminTag&&t.adminTag.trim())out.tag.add(t.adminTag.trim());
+      (Array.isArray(t.tags)?t.tags:[]).forEach(function(x){const v=(x||"").trim();if(v)out.tag.add(v);});
+    });
+    return{status:Array.from(out.status),prior:Array.from(out.prior),responsavel:Array.from(out.responsavel),tag:Array.from(out.tag).sort()};
+  },[visible]);
+  // Label humanizado de cada valor
+  const labelFor=function(col,val){
+    if(col==="status"){const c=KANBAN_COLS.find(x=>x.id===val);return c?c.label:val;}
+    if(col==="prior"){return val==="alta"?"🔴 Alta":val==="media"?"🟡 Média":val==="baixa"?"🟢 Baixa":"— Sem prioridade";}
+    if(col==="responsavel"){const u=TEAM.find(x=>x.id===val);return u?u.name:val;}
+    if(col==="tag"){return"#"+val;}
+    return String(val);
+  };
+  // Aplica filtros por coluna ao visible
+  const filteredVisible=useMemo(function(){
+    const keys=Object.keys(colFilters);
+    if(keys.length===0)return visible;
+    return(visible||[]).filter(function(t){
+      for(let i=0;i<keys.length;i++){
+        const k=keys[i];const sel=colFilters[k];
+        if(!Array.isArray(sel)||sel.length===0)continue;
+        if(k==="status"){if(sel.indexOf(t.status)===-1)return false;}
+        else if(k==="prior"){if(sel.indexOf(t.priority||"")===-1)return false;}
+        else if(k==="responsavel"){
+          const ass=Array.isArray(t.assignees)&&t.assignees.length>0?t.assignees:(t.assignee?[t.assignee]:[]);
+          if(!sel.some(function(u){return ass.indexOf(u)!==-1;}))return false;
+        }
+        else if(k==="tag"){
+          const at=(t.adminTag||"").trim();
+          const arr=Array.isArray(t.tags)?t.tags.map(x=>(x||"").trim()).filter(Boolean):[];
+          const all=at?[at].concat(arr):arr;
+          if(!sel.some(function(v){return all.indexOf(v)!==-1;}))return false;
+        }
+      }
+      return true;
+    });
+  },[visible,colFilters]);
+
   // ─── DRAG & DROP — arrastar linha → soltar em outra coluna OU reordenar dentro da mesma ──
   const [dragId,setDragId]=useState(null);
   const [dragOverCol,setDragOverCol]=useState(null);
@@ -11279,12 +11345,52 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   };
 
   return(<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,overflow:"hidden"}}>
-    {/* Header com handles de resize */}
-    <div style={{display:"grid",gridTemplateColumns:GRID,background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
+    {/* Header com handles de resize + filtros estilo Excel */}
+    <div style={{display:"grid",gridTemplateColumns:GRID,background:C.s1,borderBottom:`1px solid ${C.b1}`,position:"relative",zIndex:10}}>
       {HEADERS.map(function(h,i){
-        return <div key={i} style={{position:"relative",padding:"9px 12px",color:C.td,fontSize:10,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",borderRight:i<HEADERS.length-1?`1px solid ${C.b1}`:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-          {h.label}
-          {/* Handle de redimensionamento — só colunas com key */}
+        const fk=h.filterKey;
+        const hasActiveFilter=fk&&Array.isArray(colFilters[fk])&&colFilters[fk].length>0;
+        const isOpen=openFilter===fk;
+        return <div key={i} style={{position:"relative",padding:"9px 12px",color:hasActiveFilter?C.a:C.td,fontSize:10,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",borderRight:i<HEADERS.length-1?`1px solid ${C.b1}`:"none",background:hasActiveFilter?C.a+"10":"transparent"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,overflow:"hidden"}}>
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{h.label}</span>
+            {fk&&<button
+              onClick={function(e){e.stopPropagation();setOpenFilter(isOpen?null:fk);}}
+              title="Filtrar"
+              style={{background:hasActiveFilter?C.a+"22":"transparent",border:"none",color:hasActiveFilter?C.a:C.td,cursor:"pointer",fontSize:9,padding:"2px 4px",borderRadius:3,lineHeight:1,flexShrink:0}}
+              onMouseEnter={function(e){e.currentTarget.style.background=hasActiveFilter?C.a+"33":C.b1;}}
+              onMouseLeave={function(e){e.currentTarget.style.background=hasActiveFilter?C.a+"22":"transparent";}}>
+              {hasActiveFilter?"▼ "+colFilters[fk].length:"▾"}
+            </button>}
+          </div>
+          {/* Popover do filtro */}
+          {isOpen&&fk&&<>
+            <div style={{position:"fixed",inset:0,zIndex:99}} onClick={function(){setOpenFilter(null);}}/>
+            <div style={{position:"absolute",top:"100%",left:0,marginTop:2,background:C.card,border:"1px solid "+C.b1,borderRadius:8,zIndex:100,minWidth:220,maxWidth:280,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",overflow:"hidden",textTransform:"none",letterSpacing:0,fontWeight:400}}>
+              <div style={{padding:"8px 12px",borderBottom:"1px solid "+C.b1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{color:C.tx,fontSize:11,fontWeight:600}}>Filtrar por {h.label}</span>
+                {hasActiveFilter&&<button onClick={function(){clearColFilter(fk);}} style={{background:"none",border:"none",color:C.rd,fontSize:10,fontWeight:600,cursor:"pointer",padding:"2px 6px"}}>limpar</button>}
+              </div>
+              <div style={{maxHeight:240,overflowY:"auto"}}>
+                {uniqueValues[fk].length===0
+                  ?<div style={{padding:"12px",color:C.td,fontSize:11,fontStyle:"italic",textAlign:"center"}}>Sem valores pra filtrar</div>
+                  :uniqueValues[fk].map(function(val){
+                    const checked=Array.isArray(colFilters[fk])&&colFilters[fk].indexOf(val)!==-1;
+                    return <button key={String(val)} onClick={function(){toggleColFilter(fk,val);}}
+                      style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 12px",background:checked?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:checked?600:400,cursor:"pointer",textAlign:"left"}}
+                      onMouseEnter={function(e){if(!checked)e.currentTarget.style.background="#f8fafc";}}
+                      onMouseLeave={function(e){if(!checked)e.currentTarget.style.background="transparent";}}>
+                      <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(checked?C.a:"#cbd5e1"),background:checked?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        {checked&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
+                      </span>
+                      <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{labelFor(fk,val)}</span>
+                    </button>;
+                  })
+                }
+              </div>
+            </div>
+          </>}
+          {/* Handle de redimensionamento */}
           {h.key&&<div
             onMouseDown={function(e){startResize(e,h.key);}}
             title="Arraste pra redimensionar"
@@ -11297,7 +11403,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     </div>
 
     {orderedCols.map(col=>{
-      const colTasks=visible.filter(t=>t.status===col.id);
+      const colTasks=filteredVisible.filter(t=>t.status===col.id);
       // Mantém grupo visível mesmo sem cards SE há drag em andamento (vira drop zone)
       if(colTasks.length===0&&!dragId)return null;
       const isDropTarget=dragId&&dragOverCol===col.id;
