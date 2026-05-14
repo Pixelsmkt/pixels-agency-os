@@ -11080,7 +11080,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   const STAT_COLORS={demanda:C.a,recebida:C.pk,execucao:C.yw,avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
 
-  return(<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,overflow:"hidden"}}>
+  return(<div style={{maxWidth:1280,margin:"0 auto",width:"100%",background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,overflow:"hidden"}}>
     {/* Header */}
     <div style={{display:"grid",gridTemplateColumns:"2fr 120px 90px 140px 100px 80px 50px",background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
       {["Demanda","Status","Prior.","Responsavel","Prazo","Parado",""].map((h,i)=>(
