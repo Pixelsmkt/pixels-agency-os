@@ -9522,9 +9522,27 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [filterSector,setFilterSector]=useState("todos_setores");
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
-  // Filtro de etiqueta interna (só sócios). Persiste em localStorage por sessão.
-  const [filterAdminTag,setFilterAdminTag]=useState(function(){try{return localStorage.getItem("pixels-kanban-admintag-filter")||"todos";}catch(e){return"todos";}});
-  useEffect(function(){try{localStorage.setItem("pixels-kanban-admintag-filter",filterAdminTag);}catch(e){}},[filterAdminTag]);
+  // Filtro de etiqueta interna (só sócios). Array de strings — multi-select.
+  // Array vazio = "Todas". Contém "__sem__" (exclusivo) = só cards sem etiqueta/tag.
+  // Demais valores = cards onde adminTag ou tags incluem qualquer um deles.
+  const [filterAdminTags,setFilterAdminTags]=useState(function(){
+    try{
+      const raw=localStorage.getItem("pixels-kanban-admintag-filter")||"";
+      // Migração: versões antigas salvavam string única ("todos"|"__sem__"|valor)
+      if(!raw||raw==="todos")return[];
+      if(raw.startsWith("[")){const a=JSON.parse(raw);return Array.isArray(a)?a:[];}
+      return[raw];
+    }catch(e){return[];}
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-kanban-admintag-filter",JSON.stringify(filterAdminTags));}catch(e){}},[filterAdminTags]);
+  const toggleAdminTag = function(val){
+    setFilterAdminTags(function(prev){
+      // "__sem__" é exclusivo — selecionar limpa os outros; selecionar outro limpa o "__sem__"
+      if(val==="__sem__")return prev.includes("__sem__")?[]:["__sem__"];
+      const cleaned=prev.filter(function(x){return x!=="__sem__";});
+      return cleaned.includes(val)?cleaned.filter(function(x){return x!==val;}):cleaned.concat([val]);
+    });
+  };
   const isAdminUser = (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
   // Ordenação dos cards no kanban (persistida em localStorage)
   const [sortMode,setSortMode]=useState(function(){
@@ -9713,17 +9731,19 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
     if(filterClient!=="todos"&&t.client!==filterClient)return false;
     if(filterClient==="bioter"&&filterBioterUnit!=="todos"&&t.bioterUnit!==filterBioterUnit)return false;
-    // Filtro de etiqueta (admin-only). Inclui tanto a Etiqueta Interna (singular,
-     // ex: "Pacote 10/06") quanto as Tags do cartão (array, ex: "lançamento").
-     // "todos" passa, "__sem__" filtra sem nenhuma etiqueta, demais comparam string.
-    if(isAdminUser&&filterAdminTag&&filterAdminTag!=="todos"){
+    // Filtro de etiqueta (admin-only, multi-select com AND).
+     // Card só aparece se TODOS os valores selecionados estiverem nele (no adminTag ou nas tags).
+     // Ex: ["Pacote maio", "vídeos"] = só cards que tenham ambos → "vídeos do pacote de maio".
+     // Array vazio = sem filtro; ["__sem__"] = apenas cards sem etiqueta nem tag.
+    if(isAdminUser&&Array.isArray(filterAdminTags)&&filterAdminTags.length>0){
       const adminTagVal=(t.adminTag||"").trim();
       const tagsArr=Array.isArray(t.tags)?t.tags.map(x=>(x||"").trim()).filter(Boolean):[];
-      if(filterAdminTag==="__sem__"){
+      if(filterAdminTags.includes("__sem__")){
         if(adminTagVal||tagsArr.length>0)return false;
       } else {
-        const matches = adminTagVal===filterAdminTag || tagsArr.includes(filterAdminTag);
-        if(!matches)return false;
+        const cardValues=adminTagVal?[adminTagVal].concat(tagsArr):tagsArr;
+        const hasAll=filterAdminTags.every(function(f){return cardValues.indexOf(f)!==-1;});
+        if(!hasAll)return false;
       }
     }
     // Oculta tasks de colunas bloqueadas (false = bloqueado; undefined = coluna custom = deixa ver)
@@ -10001,56 +10021,86 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             })}
           </KanbanDropdown>}
 
-          {/* ── ETIQUETAS (Internas + Tags) ── só sócios. Mostra valores dos 2 campos. */}
+          {/* ── ETIQUETAS (Internas + Tags) ── só sócios. Multi-select com checkbox. */}
           {isAdminUser&&(function(){
-            // Coleta de adminTag (singular) e tags (array) — separadas pra visualização
             const adminTagValues=Array.from(new Set((tasks||[]).map(function(x){return((x&&x.adminTag)||"").trim();}).filter(Boolean))).sort();
             const tagsArrValues=Array.from(new Set(
               (tasks||[]).flatMap(function(x){return Array.isArray(x&&x.tags)?x.tags:[];}).map(function(t){return(t||"").trim();}).filter(Boolean)
             )).sort();
             const totalCount=adminTagValues.length+tagsArrValues.length;
-            const labelTxt=filterAdminTag==="todos"?"Etiqueta":(filterAdminTag==="__sem__"?"Sem etiqueta":filterAdminTag);
-            return <KanbanDropdown label={labelTxt} icon="🏷" active={filterAdminTag!=="todos"}>
+            const isSem=filterAdminTags.includes("__sem__");
+            const selectedCount=filterAdminTags.length;
+            const labelTxt=selectedCount===0?"Etiqueta":isSem?"Sem etiqueta":selectedCount===1?filterAdminTags[0]:selectedCount+" etiquetas";
+            // Renderiza uma linha clicável estilo checkbox — não fecha o dropdown
+            const renderCheckRow=function(opts){
+              const {keyId,label,checked,onClick,chipBg,chipFg,chipBorder,italic,extraStyle}=opts;
+              return <button key={keyId} onClick={onClick}
+                style={Object.assign({display:"flex",alignItems:"center",gap:9,width:"100%",padding:"8px 12px",background:checked?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"},extraStyle||{})}
+                onMouseEnter={function(e){if(!checked)e.currentTarget.style.background="#f8fafc";}}
+                onMouseLeave={function(e){if(!checked)e.currentTarget.style.background="transparent";}}>
+                <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(checked?C.a:"#cbd5e1"),background:checked?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {checked&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
+                </span>
+                {chipBg
+                  ?<span style={{background:chipBg,color:chipFg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:chipBorder?"1px solid "+chipBorder:"none"}}>{label}</span>
+                  :<span style={italic?{color:"#94a3b8",fontStyle:"italic"}:undefined}>{label}</span>
+                }
+              </button>;
+            };
+            return <KanbanDropdown label={labelTxt} icon="🏷" active={selectedCount>0}>
               {function(close){return(<>
-                <button onClick={function(){setFilterAdminTag("todos");close();}}
-                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterAdminTag==="todos"?C.ag:"transparent",border:"none",color:filterAdminTag==="todos"?C.a:C.tx,fontSize:12,fontWeight:filterAdminTag==="todos"?700:500,cursor:"pointer",textAlign:"left"}}>
-                  Todas
-                  {filterAdminTag==="todos"&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
+                {/* Header: Todas + Limpar (quando há seleção) */}
+                <button onClick={function(){setFilterAdminTags([]);}}
+                  style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,width:"100%",padding:"9px 12px",background:selectedCount===0?C.ag:"transparent",border:"none",color:selectedCount===0?C.a:C.tx,fontSize:12,fontWeight:selectedCount===0?700:500,cursor:"pointer",textAlign:"left"}}>
+                  <span>Todas</span>
+                  {selectedCount>0&&<span style={{color:C.rd,fontSize:10,fontWeight:600}}>limpar</span>}
+                  {selectedCount===0&&<span style={{color:C.a}}>✓</span>}
                 </button>
-                <button onClick={function(){setFilterAdminTag("__sem__");close();}}
-                  style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterAdminTag==="__sem__"?C.ag:"transparent",border:"none",color:filterAdminTag==="__sem__"?C.a:C.tx,fontSize:12,fontWeight:filterAdminTag==="__sem__"?700:500,cursor:"pointer",textAlign:"left",borderTop:"1px solid "+C.b1}}>
-                  <span style={{color:"#94a3b8",fontStyle:"italic"}}>Sem etiqueta nem tag</span>
-                  {filterAdminTag==="__sem__"&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
-                </button>
+
+                {renderCheckRow({
+                  keyId:"__sem__",
+                  label:"Sem etiqueta nem tag",
+                  checked:isSem,
+                  onClick:function(){toggleAdminTag("__sem__");},
+                  italic:true,
+                  extraStyle:{borderTop:"1px solid "+C.b1}
+                })}
 
                 {adminTagValues.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
                   <div style={{padding:"4px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Etiqueta interna</div>
                   {adminTagValues.map(function(tag){
-                    const active=filterAdminTag===tag;
-                    return <button key={"at-"+tag} onClick={function(){setFilterAdminTag(tag);close();}}
-                      style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left"}}>
-                      <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600}}>{tag}</span>
-                      {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
-                    </button>;
+                    return renderCheckRow({
+                      keyId:"at-"+tag,
+                      label:tag,
+                      checked:filterAdminTags.indexOf(tag)!==-1,
+                      onClick:function(){toggleAdminTag(tag);},
+                      chipBg:"#f1f5f9",chipFg:"#475569"
+                    });
                   })}
                 </div>}
 
                 {tagsArrValues.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
                   <div style={{padding:"4px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Tags do cartão</div>
                   {tagsArrValues.map(function(tag){
-                    const active=filterAdminTag===tag;
                     const tc=(typeof tagColor==="function")?tagColor(tag):{fg:"#64748b"};
-                    return <button key={"t-"+tag} onClick={function(){setFilterAdminTag(tag);close();}}
-                      style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left"}}>
-                      <span style={{background:tc.fg+"18",color:tc.fg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:"1px solid "+tc.fg+"33"}}>#{tag}</span>
-                      {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
-                    </button>;
+                    return renderCheckRow({
+                      keyId:"t-"+tag,
+                      label:"#"+tag,
+                      checked:filterAdminTags.indexOf(tag)!==-1,
+                      onClick:function(){toggleAdminTag(tag);},
+                      chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33"
+                    });
                   })}
                 </div>}
 
                 {totalCount===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1,lineHeight:1.5}}>
                   Nenhuma etiqueta ainda. Abra um cartão e use os campos<br/>
                   <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
+                </div>}
+
+                {/* Botão fechar — atalho visual depois de selecionar várias */}
+                {totalCount>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"6px 12px",display:"flex",justifyContent:"flex-end"}}>
+                  <button onClick={close} style={{background:C.a,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Fechar</button>
                 </div>}
               </>);}}
             </KanbanDropdown>;
@@ -10073,8 +10123,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>}
 
           {/* Limpar filtros */}
-          {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos"||(isAdminUser&&filterAdminTag!=="todos"))&&
-            <button onClick={()=>{setFilterUser("todos");setFilterSector("todos_setores");setFilterClient("todos");setFilterBioterUnit("todos");setFilterAdminTag("todos");}}
+          {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos"||(isAdminUser&&filterAdminTags.length>0))&&
+            <button onClick={()=>{setFilterUser("todos");setFilterSector("todos_setores");setFilterClient("todos");setFilterBioterUnit("todos");setFilterAdminTags([]);}}
               style={{background:"none",border:"none",color:C.rd,fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8}}>
               × Limpar filtros
             </button>
