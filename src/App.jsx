@@ -10160,8 +10160,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDrop={()=>drag&&moveTask(drag,col.id)}
             onDragLeave={()=>setOver(null)}
             style={{
-              background:isDraggingOver?"#eef2f7":"#f8fafc",
-              border:`1px solid ${isDraggingOver?col.color+"55":"#e2e8f0"}`,
+              background:isDraggingOver?"#e2e8f0":"#eef2f7",
+              border:`1px solid ${isDraggingOver?col.color+"55":"#dbe3ec"}`,
               borderRadius:12,padding:"8px 8px 8px",
               height:"78vh",maxHeight:680,
               transition:"all .15s",display:"flex",flexDirection:"column",gap:0
@@ -10255,52 +10255,39 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     ?<div style={{height:80,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5}}/>
                     :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:(t.tags||[]).length>0?"5px 9px 0":"6px 9px 0",borderRadius:5,pointerEvents:"none"}}/>
                   )}
-                  <div style={{padding:"7px 9px"}}>
-                    {/* Cliente — logo + nome */}
-                    {cl&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
-                      {CLIENT_LOGOS&&CLIENT_LOGOS[cl.id]
-                        ?<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:4,padding:"2px 6px",height:18,display:"inline-flex",alignItems:"center",flexShrink:0}}>
-                          <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} loading="lazy" style={{maxHeight:13,maxWidth:60,objectFit:"contain",display:"block"}}/>
-                        </div>
-                        :<span style={{background:"#f1f5f9",color:cl.color||"#64748b",borderRadius:3,padding:"2px 7px",fontSize:9,fontWeight:600,flexShrink:0}}>{cl.abbr}</span>
-                      }
-                      <span style={{fontSize:9,color:"#94a3b8",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span>
-                    </div>}
-                    {/* Badge de status pequeno (em vez do banner laranja) */}
-                    {(isAlteracao||isAjustar)&&<div style={{display:"flex",alignItems:"center",marginBottom:5}}>
-                      <span style={{background:"#fff7ed",color:"#ea580c",fontSize:8,padding:"2px 7px",borderRadius:3,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
-                        {isAlteracao?"⚠ ajuste necessário":"✎ ajustar copy"}
-                      </span>
-                    </div>}
-                    {/* Badge de urgência minimalista */}
-                    {urgLevel<2&&!isAlteracao&&!isAjustar&&<div style={{display:"flex",alignItems:"center",marginBottom:5}}>
-                      <span style={{background:urgColor+"15",color:urgColor,borderRadius:3,padding:"2px 7px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
-                        {urgLevel===0?"🔥 urgente":"❌ atrasado"}
-                      </span>
-                    </div>}
-                    {/* Título */}
-                    <div style={{color:"#0f172a",fontSize:12,fontWeight:500,lineHeight:1.35,marginBottom:6,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{t.title}</div>
-                    {/* Stale indicator sutil */}
-                    {isStale&&!isAlteracao&&!isAjustar&&<div style={{color:"#94a3b8",fontSize:9,marginBottom:5,fontStyle:"italic"}}>parado há {stoppedDays}d</div>}
-                    {/* RODAPÉ COM ÍCONES (estilo Trello) — sigla removida (logo já tá no topo) */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:7,fontSize:10,color:"#94a3b8"}}>
-                        {days!==null&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days<=2?"#ea580c":"#94a3b8",fontWeight:days<=2?600:400,display:"flex",alignItems:"center",gap:2}}>
-                          🕒 {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
+                  <div style={{padding:"9px 11px 8px"}}>
+                    {/* Título — herói visual do card. Sempre presente, weight 600,
+                        max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,marginBottom:9,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word"}}>
+                      {t.title}
+                    </div>
+
+                    {/* FOOTER único — sempre na mesma posição com a mesma anatomia.
+                        Esquerda: logo cliente (pequena) + prazo (cor segue urgência).
+                        Direita: contagens (📎 💬) + stack de avatares. */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
+                        {cl&&(CLIENT_LOGOS&&CLIENT_LOGOS[cl.id]
+                          ?<div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:4,padding:"1px 5px",height:18,display:"inline-flex",alignItems:"center",flexShrink:0}}>
+                            <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} loading="lazy" style={{maxHeight:12,maxWidth:50,objectFit:"contain",display:"block"}}/>
+                          </div>
+                          :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
+                        )}
+                        {days!==null&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
+                          {days<0?Math.abs(days)+"d atraso":days===0?"hoje":days+"d"}
                         </span>}
-                        {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:2}}>📎 {(t.files||[]).length}</span>}
-                        {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:2}}>💬 {(t.comments||[]).length}</span>}
-                        {(t.watchers||[]).length>0&&<span title={`${(t.watchers||[]).length} observador(es)`} style={{display:"flex",alignItems:"center",gap:2}}>👁 {(t.watchers||[]).length}</span>}
                       </div>
-                      <div style={{display:"flex",alignItems:"center",gap:3}}>
-                        {canDelete&&<button onClick={e=>{e.stopPropagation();handleDelete(t.id);}} title="Excluir" style={{background:"none",border:"none",color:"transparent",cursor:"pointer",fontSize:11,padding:"0 2px"}} onMouseEnter={e=>e.currentTarget.style.color="#cbd5e1"} onMouseLeave={e=>e.currentTarget.style.color="transparent"}>×</button>}
+                      <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
+                        {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>📎{(t.files||[]).length}</span>}
+                        {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>💬{(t.comments||[]).length}</span>}
                         {/* Stack de avatares — todos os responsáveis */}
-                        {allAssignees.length>0&&<div style={{display:"flex",alignItems:"center"}}>
+                        {allAssignees.length>0&&<div style={{display:"flex",alignItems:"center",marginLeft:2}}>
                           {allAssignees.slice(0,3).map((au,idx)=>(
-                            <div key={au.id} title={au.name} style={{width:18,height:18,borderRadius:"50%",background:au.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:8,border:"1.5px solid #fff",marginLeft:idx===0?0:-5,zIndex:allAssignees.length-idx,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>{au.av}</div>
+                            <div key={au.id} title={au.name} style={{width:19,height:19,borderRadius:"50%",background:au.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:9,border:"1.5px solid #fff",marginLeft:idx===0?0:-6,zIndex:allAssignees.length-idx,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>{au.av}</div>
                           ))}
-                          {allAssignees.length>3&&<div title={allAssignees.slice(3).map(au=>au.name).join(", ")} style={{width:18,height:18,borderRadius:"50%",background:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:7,border:"1.5px solid #fff",marginLeft:-5,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>+{allAssignees.length-3}</div>}
+                          {allAssignees.length>3&&<div title={allAssignees.slice(3).map(au=>au.name).join(", ")} style={{width:19,height:19,borderRadius:"50%",background:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:8,border:"1.5px solid #fff",marginLeft:-6,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>+{allAssignees.length-3}</div>}
                         </div>}
+                        {canDelete&&<button onClick={e=>{e.stopPropagation();handleDelete(t.id);}} title="Excluir" style={{background:"none",border:"none",color:"transparent",cursor:"pointer",fontSize:13,padding:"0 2px",marginLeft:2}} onMouseEnter={e=>e.currentTarget.style.color="#cbd5e1"} onMouseLeave={e=>e.currentTarget.style.color="transparent"}>×</button>}
                       </div>
                     </div>
                   </div>
