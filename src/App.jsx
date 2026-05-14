@@ -11188,13 +11188,57 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#7c1d1d",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
   const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
-  // Grid: title flex + colunas fixas. Tag column só existe pra admin.
+
+  // ── COLUNAS REDIMENSIONÁVEIS (Excel-like) ──
+  // Demanda fica flex (2fr) — o resto são px e o usuário ajusta arrastando o handle do header.
+  // Larguras persistidas em localStorage. Mínimo 50px pra não sumir.
+  const DEFAULT_COL_WIDTHS={status:110,prior:80,responsavel:130,prazo:90,parado:70,dataPub:90,dataConc:90,tag:130,actions:70};
+  const [colWidths,setColWidths]=useState(function(){
+    try{
+      const raw=localStorage.getItem("pixels-lista-col-widths-v1");
+      if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return Object.assign({},DEFAULT_COL_WIDTHS,p);}
+    }catch(e){}
+    return DEFAULT_COL_WIDTHS;
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-lista-col-widths-v1",JSON.stringify(colWidths));}catch(e){}},[colWidths]);
+  const startResize=function(e,colKey){
+    e.preventDefault();e.stopPropagation();
+    const startX=e.clientX;
+    const startWidth=colWidths[colKey]||DEFAULT_COL_WIDTHS[colKey];
+    const onMove=function(ev){
+      const delta=ev.clientX-startX;
+      const newW=Math.max(50,Math.min(600,startWidth+delta));
+      setColWidths(function(prev){return Object.assign({},prev,{[colKey]:newW});});
+    };
+    const onUp=function(){
+      window.removeEventListener("mousemove",onMove);
+      window.removeEventListener("mouseup",onUp);
+      document.body.style.cursor="";document.body.style.userSelect="";
+    };
+    document.body.style.cursor="col-resize";document.body.style.userSelect="none";
+    window.addEventListener("mousemove",onMove);
+    window.addEventListener("mouseup",onUp);
+  };
+
+  // GRID e HEADERS dinâmicos com base em colWidths
+  const cw=colWidths;
   const GRID=isAdminViewer
-    ?"2fr 110px 80px 130px 90px 70px 90px 90px 130px 70px"
-    :"2fr 110px 80px 130px 90px 70px 90px 90px 70px";
-  const HEADERS=isAdminViewer
-    ?["Demanda","Status","Prior.","Responsavel","Prazo","Parado","Data Pub.","Data Conc.","Tag",""]
-    :["Demanda","Status","Prior.","Responsavel","Prazo","Parado","Data Pub.","Data Conc.",""];
+    ?`2fr ${cw.status}px ${cw.prior}px ${cw.responsavel}px ${cw.prazo}px ${cw.parado}px ${cw.dataPub}px ${cw.dataConc}px ${cw.tag}px ${cw.actions}px`
+    :`2fr ${cw.status}px ${cw.prior}px ${cw.responsavel}px ${cw.prazo}px ${cw.parado}px ${cw.dataPub}px ${cw.dataConc}px ${cw.actions}px`;
+  // Cada header: { label, key } — key=null pra colunas não-redimensionáveis (Demanda flex e a última, Actions)
+  const HEADERS_BASE=[
+    {label:"Demanda",key:null},
+    {label:"Status",key:"status"},
+    {label:"Prior.",key:"prior"},
+    {label:"Responsavel",key:"responsavel"},
+    {label:"Prazo",key:"prazo"},
+    {label:"Parado",key:"parado"},
+    {label:"Data Pub.",key:"dataPub"},
+    {label:"Data Conc.",key:"dataConc"},
+  ];
+  if(isAdminViewer)HEADERS_BASE.push({label:"Tag",key:"tag"});
+  HEADERS_BASE.push({label:"",key:null});
+  const HEADERS=HEADERS_BASE;
   // Helper de formatação de data curta — "15/05" ou "—"
   const fmtShort=function(v){
     if(!v)return"—";
@@ -11235,11 +11279,21 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   };
 
   return(<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,overflow:"hidden"}}>
-    {/* Header */}
+    {/* Header com handles de resize */}
     <div style={{display:"grid",gridTemplateColumns:GRID,background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
-      {HEADERS.map((h,i)=>(
-        <div key={i} style={{padding:"9px 12px",color:C.td,fontSize:10,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",borderRight:i<HEADERS.length-1?`1px solid ${C.b1}`:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h}</div>
-      ))}
+      {HEADERS.map(function(h,i){
+        return <div key={i} style={{position:"relative",padding:"9px 12px",color:C.td,fontSize:10,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",borderRight:i<HEADERS.length-1?`1px solid ${C.b1}`:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {h.label}
+          {/* Handle de redimensionamento — só colunas com key */}
+          {h.key&&<div
+            onMouseDown={function(e){startResize(e,h.key);}}
+            title="Arraste pra redimensionar"
+            style={{position:"absolute",top:0,bottom:0,right:-3,width:7,cursor:"col-resize",zIndex:5,background:"transparent"}}
+            onMouseEnter={function(e){e.currentTarget.style.background=C.a+"55";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}
+          />}
+        </div>;
+      })}
     </div>
 
     {orderedCols.map(col=>{
