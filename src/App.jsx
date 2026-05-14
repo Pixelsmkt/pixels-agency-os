@@ -10497,7 +10497,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </>}
 
       {/* ── LISTA (Monday.com style) ── */}
-      {viewMode==="lista"&&<ListaView visible={visible} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} setTasks={setTasks} moveTask={moveTask} canDrag={canDrag}/>}
+      {viewMode==="lista"&&<ListaView visible={visible} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} setTasks={setTasks} moveTask={moveTask} reorderTask={reorderTask} canDrag={canDrag}/>}
 
       {/* ── CLIENTES BOARD ── */}
       {viewMode==="clientes"&&<ClientesBoard tasks={tasks} setTasks={setTasks} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} canDrag={canDrag} canCreate={canCreate}/>}
@@ -11181,12 +11181,29 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
 // Depende de: 00_globals (C, KANBAN_COLS, CLIENTS, TEAM)
 // Posição no bundle: após 02_clientes, antes de 04_demandas
 
-function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask,canDrag}){
+function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask,reorderTask,canDrag}){
   // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
   const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
   const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#7c1d1d",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
+  const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
+  // Grid: title flex + colunas fixas. Tag column só existe pra admin.
+  const GRID=isAdminViewer
+    ?"2fr 110px 80px 130px 90px 70px 90px 90px 130px 70px"
+    :"2fr 110px 80px 130px 90px 70px 90px 90px 70px";
+  const HEADERS=isAdminViewer
+    ?["Demanda","Status","Prior.","Responsavel","Prazo","Parado","Data Pub.","Data Conc.","Tag",""]
+    :["Demanda","Status","Prior.","Responsavel","Prazo","Parado","Data Pub.","Data Conc.",""];
+  // Helper de formatação de data curta — "15/05" ou "—"
+  const fmtShort=function(v){
+    if(!v)return"—";
+    try{
+      const d=new Date(typeof v==="string"&&v.length===10?v+"T00:00:00":v);
+      if(isNaN(d.getTime()))return"—";
+      return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    }catch(e){return"—";}
+  };
 
   // ─── COLAPSAR seções (persistido em localStorage por usuário) ──
   const [collapsed,setCollapsed]=useState(function(){
@@ -11204,24 +11221,24 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     setCollapsed(function(prev){return Object.assign({},prev,{[colId]:!prev[colId]});});
   };
 
-  // ─── DRAG & DROP — arrastar linha → soltar no header de outro status ──
+  // ─── DRAG & DROP — arrastar linha → soltar em outra coluna OU reordenar dentro da mesma ──
   const [dragId,setDragId]=useState(null);
   const [dragOverCol,setDragOverCol]=useState(null);
+  const [dragOverRow,setDragOverRow]=useState(null); // {id, before}
   const handleDragStart=(id)=>{if(canDrag)setDragId(id);};
-  const handleDragEnd=()=>{setDragId(null);setDragOverCol(null);};
+  const handleDragEnd=()=>{setDragId(null);setDragOverCol(null);setDragOverRow(null);};
   const handleDropOnCol=(colId)=>{
-    if(!dragId||!moveTask){setDragId(null);setDragOverCol(null);return;}
+    if(!dragId||!moveTask){setDragId(null);setDragOverCol(null);setDragOverRow(null);return;}
     moveTask(dragId,colId);
-    setDragId(null);setDragOverCol(null);
-    // Se a coluna destino tava colapsada, abre ela pra usuário ver o card recém-movido
+    setDragId(null);setDragOverCol(null);setDragOverRow(null);
     if(collapsed[colId])setCollapsed(function(prev){return Object.assign({},prev,{[colId]:false});});
   };
 
   return(<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,overflow:"hidden"}}>
     {/* Header */}
-    <div style={{display:"grid",gridTemplateColumns:"2fr 120px 90px 140px 100px 80px 50px",background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
-      {["Demanda","Status","Prior.","Responsavel","Prazo","Parado",""].map((h,i)=>(
-        <div key={i} style={{padding:"9px 14px",color:C.td,fontSize:10,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",borderRight:i<6?`1px solid ${C.b1}`:"none"}}>{h}</div>
+    <div style={{display:"grid",gridTemplateColumns:GRID,background:C.s1,borderBottom:`1px solid ${C.b1}`}}>
+      {HEADERS.map((h,i)=>(
+        <div key={i} style={{padding:"9px 12px",color:C.td,fontSize:10,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",borderRight:i<HEADERS.length-1?`1px solid ${C.b1}`:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{h}</div>
       ))}
     </div>
 
@@ -11270,16 +11287,43 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
           const late=days!==null&&days<0&&t.status!=="aprovado";
           const stopped=t.colEnteredAt?Math.floor((new Date()-new Date(t.colEnteredAt))/86400000):0;
           const isBeingDragged=dragId===t.id;
+          const isRowDragOver=dragOverRow&&dragOverRow.id===t.id;
           return(<div key={t.id}
             draggable={!!canDrag}
             onDragStart={()=>handleDragStart(t.id)}
             onDragEnd={handleDragEnd}
+            onDragOver={canDrag?function(e){
+              e.preventDefault();
+              e.stopPropagation();
+              if(!dragId||String(dragId)===String(t.id))return;
+              // Detecta se cursor está na metade superior ou inferior
+              const r=e.currentTarget.getBoundingClientRect();
+              const before=(e.clientY-r.top)<r.height/2;
+              setDragOverRow({id:t.id,before:before});
+            }:undefined}
+            onDrop={canDrag?function(e){
+              e.preventDefault();
+              e.stopPropagation();
+              if(!dragId){setDragOverRow(null);return;}
+              const draggedTask=visible.find(x=>String(x.id)===String(dragId));
+              if(!draggedTask){setDragId(null);setDragOverRow(null);return;}
+              if(String(draggedTask.id)===String(t.id)){setDragId(null);setDragOverRow(null);return;}
+              // Mesma coluna: reorder; outra coluna: moveTask
+              if(draggedTask.status===t.status&&reorderTask){
+                reorderTask(dragId,t.id,dragOverRow?.before??true);
+              }else if(moveTask){
+                moveTask(dragId,t.status);
+              }
+              setDragId(null);setDragOverRow(null);setDragOverCol(null);
+            }:undefined}
             onClick={()=>{if(!isBeingDragged)setOpenCard(t);}}
-            style={{display:"grid",gridTemplateColumns:"2fr 120px 90px 140px 100px 80px 50px",
+            style={{display:"grid",gridTemplateColumns:GRID,
               borderBottom:i<colTasks.length-1?`1px solid ${C.b1}22`:"none",
+              borderTop:isRowDragOver&&dragOverRow.before?`2px solid ${col.color}`:"none",
               cursor:canDrag?"grab":"pointer",transition:"background .1s, opacity .15s",
               opacity:isBeingDragged?.4:1,
-              background:isBeingDragged?C.s1:"transparent"}}
+              background:isBeingDragged?C.s1:"transparent",
+              boxShadow:isRowDragOver&&!dragOverRow.before?`inset 0 -2px 0 ${col.color}`:"none"}}
             onMouseEnter={e=>{if(!isBeingDragged)e.currentTarget.style.background=C.s1;}}
             onMouseLeave={e=>{if(!isBeingDragged)e.currentTarget.style.background="transparent";}}>
 
@@ -11321,10 +11365,47 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
               <span style={{color:stopped>5?C.rd:stopped>2?C.yw:C.td,fontSize:11}}>{stopped}d</span>
             </div>
 
-            {/* Actions */}
-            <div style={{padding:"10px 8px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            {/* Data de publicação */}
+            <div style={{padding:"10px 12px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
+              <span style={{color:t.publishDate?C.tx:C.td,fontSize:11}}>{fmtShort(t.publishDate)}</span>
+            </div>
+
+            {/* Data de conclusão */}
+            <div style={{padding:"10px 12px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
+              <span style={{color:t.completedAt?C.gr:C.td,fontSize:11,fontWeight:t.completedAt?600:400}}>{fmtShort(t.completedAt)}</span>
+            </div>
+
+            {/* Tag (etiqueta interna + tags) — só admin vê esta coluna */}
+            {isAdminViewer&&<div style={{padding:"8px 10px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",minWidth:0}}>
+              {(function(){
+                const at=(t.adminTag||"").trim();
+                const arr=Array.isArray(t.tags)?t.tags.map(x=>(x||"").trim()).filter(Boolean):[];
+                if(!at&&arr.length===0)return <span style={{color:C.td,fontSize:11}}>—</span>;
+                const chips=[];
+                if(at)chips.push(<span key="at" title={"Etiqueta: "+at} style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:600,whiteSpace:"nowrap",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",display:"inline-block",lineHeight:"14px"}}>{at}</span>);
+                arr.slice(0,2).forEach(function(tag){
+                  const tc=(typeof tagColor==="function")?tagColor(tag):{fg:"#64748b"};
+                  chips.push(<span key={"t-"+tag} title={"#"+tag} style={{background:tc.fg+"18",color:tc.fg,border:"1px solid "+tc.fg+"33",borderRadius:4,padding:"1px 5px",fontSize:9,fontWeight:600,whiteSpace:"nowrap",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",display:"inline-block",lineHeight:"14px"}}>#{tag}</span>);
+                });
+                if(arr.length>2)chips.push(<span key="more" title={arr.slice(2).map(x=>"#"+x).join(", ")} style={{color:C.td,fontSize:9,fontWeight:600}}>+{arr.length-2}</span>);
+                return chips;
+              })()}
+            </div>}
+
+            {/* Actions — Chat + Excluir */}
+            <div style={{padding:"10px 4px",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+              <button onClick={e=>{
+                e.stopPropagation();
+                // Abre o canal do cliente desse cartão; sem cliente, vai pro #geral
+                const channelId=t.client?("cliente_"+t.client):"geral";
+                window.dispatchEvent(new CustomEvent("pixels:goto-chat",{detail:{channelId:channelId}}));
+              }}
+                title={t.client?("Conversar no canal do cliente"):"Abrir chat geral"}
+                style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"2px 4px",lineHeight:1,borderRadius:4,transition:"all .12s"}}
+                onMouseEnter={e=>{e.currentTarget.style.color=C.a;e.currentTarget.style.background=C.ag;}}
+                onMouseLeave={e=>{e.currentTarget.style.color=C.td;e.currentTarget.style.background="transparent";}}>💬</button>
               {canDelete&&<button onClick={e=>{e.stopPropagation();handleDelete(t.id);}}
-                style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:2,lineHeight:1}}
+                style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"2px 4px",lineHeight:1}}
                 onMouseEnter={e=>e.currentTarget.style.color=C.rd}
                 onMouseLeave={e=>e.currentTarget.style.color=C.td}>×</button>}
             </div>
@@ -11658,7 +11739,34 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
   const [showPixelsRoom,setShowPixelsRoom]=useState(false);
   const [muted,setMuted]=useState(()=>localStorage.getItem("chat_muted")==="1");
   const toggleMute=()=>setMuted(v=>{const n=!v;localStorage.setItem("chat_muted",n?"1":"0");return n;});
-  const [ch,setCh]=useState(()=>ALL_VISIBLE[0]?.id||"geral");
+  const [ch,setCh]=useState(()=>{
+    // Verifica se há um canal pendente vindo de outra página (ex: botão Chat da Lista)
+    try{
+      const pending=localStorage.getItem("pixels-pending-chat-channel");
+      if(pending){
+        localStorage.removeItem("pixels-pending-chat-channel");
+        // Garante que o canal existe e o user tem permissão de ver antes de ativar
+        const ok=ALL_VISIBLE.find(c=>c.id===pending);
+        if(ok)return pending;
+      }
+    }catch(e){}
+    return ALL_VISIBLE[0]?.id||"geral";
+  });
+  // Também reage a navegação posterior pra trocar o canal sem reload da página
+  useEffect(function(){
+    const handler=function(){
+      try{
+        const pending=localStorage.getItem("pixels-pending-chat-channel");
+        if(pending){
+          localStorage.removeItem("pixels-pending-chat-channel");
+          const ok=ALL_VISIBLE.find(c=>c.id===pending);
+          if(ok)setCh(pending);
+        }
+      }catch(e){}
+    };
+    window.addEventListener("pixels:goto-chat",handler);
+    return function(){window.removeEventListener("pixels:goto-chat",handler);};
+  },[]);
   const activeCh=ALL_VISIBLE.find(c=>c.id===ch)?ch:(ALL_VISIBLE[0]?.id||"geral");
 
   const [msgs,setMsgs]=useState({});           // { channelId: msg[] }
@@ -22429,6 +22537,19 @@ export default function AgencyOS(){
   const unreadNotifs   = notifs.filter(n=>!n.read).length;
   const nav=useCallback((id)=>{setPage(id);setActiveCl(null);setMindmapActiveCl(false);setSideOpen(false);},[]);
   const goClient=useCallback((id)=>{setActiveCl(id);setMindmapActiveCl(false);setPage("clientes");setSideOpen(false);},[]);
+
+  // Listener global pra navegação cross-module (ListaView/Kanban → Chat).
+  // Quem dispara: window.dispatchEvent(new CustomEvent("pixels:goto-chat",{detail:{channelId:"cliente_xxx"}}))
+  // Salva o channelId em localStorage pro PageChat ler como initial state e troca a página.
+  useEffect(function(){
+    const handler=function(e){
+      const cid=e.detail&&e.detail.channelId;
+      if(cid){try{localStorage.setItem("pixels-pending-chat-channel",cid);}catch(_){}; }
+      nav("chat");
+    };
+    window.addEventListener("pixels:goto-chat",handler);
+    return function(){window.removeEventListener("pixels:goto-chat",handler);};
+  },[nav]);
   const cur=NAV.find(n=>n.id===page)||NAV.flatMap(n=>n.children||[]).find(c=>c.id===page);
 
   // ═══ TRELLO-LIKE: Card global por URL + Busca global Ctrl+K ═══
