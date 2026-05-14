@@ -10167,27 +10167,26 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               transition:"all .15s",display:"flex",flexDirection:"column",gap:0
             }}>
 
-            {/* Column header — neutro com bolinha de cor */}
-            <div style={{padding:"4px 4px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:"1px solid #e2e8f0",marginBottom:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-                <span style={{width:8,height:8,borderRadius:"50%",background:col.color,flexShrink:0}}/>
+            {/* Column header — barra colorida no topo, integrada à coluna */}
+            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"10px 10px 0 0",margin:"-8px -8px 8px -8px"}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
                 {editingColId===col.id&&canNewCol
                   ? <input value={editingColLabel} onChange={e=>setEditingColLabel(e.target.value)}
                       onKeyDown={e=>{if(e.key==="Enter")saveColName(col.id);if(e.key==="Escape")setEditingColId(null);}}
                       onBlur={()=>saveColName(col.id)} autoFocus
-                      style={{background:"#fff",border:"1px solid "+col.color+"66",borderRadius:6,padding:"3px 8px",color:"#0f172a",fontSize:11,fontWeight:500,outline:"none",width:120}}/>
+                      style={{background:"rgba(255,255,255,0.22)",border:"1px solid rgba(255,255,255,0.45)",borderRadius:6,padding:"3px 8px",color:"#fff",fontSize:11,fontWeight:600,outline:"none",width:120}}/>
                   : <span
                       onDoubleClick={()=>{if(canNewCol){setEditingColId(col.id);setEditingColLabel(col.label);}}}
                       title={canNewCol?"Duplo clique para renomear":""}
-                      style={{color:"#334155",fontWeight:500,fontSize:12,cursor:canNewCol?"text":"default",letterSpacing:.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                      style={{color:"#fff",fontWeight:600,fontSize:12,cursor:canNewCol?"text":"default",letterSpacing:.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                       {col.label}
                     </span>
                 }
-                <span style={{color:"#94a3b8",fontSize:11,fontWeight:500,flexShrink:0}}>{colTasks.length}</span>
-                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff7ed",color:"#c2410c",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:500,border:"1px solid #fed7aa"}}>⏳ {colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
+                <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600,flexShrink:0}}>{colTasks.length}</span>
+                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700}}>⏳ {colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
               </div>
               <div style={{display:"flex",gap:3,alignItems:"center"}}>
-                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"transparent",border:"none",borderRadius:5,width:18,height:18,color:"#94a3b8",cursor:"pointer",fontSize:12,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
+                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
               </div>
             </div>
 
