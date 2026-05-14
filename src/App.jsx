@@ -9972,82 +9972,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>
     </div>}
 
-    {/* ═══ MODAL GERENCIAR GRUPOS DE TAGS ═══ */}
-    {showTagManager&&isAdminUser&&(function(){
-      const allUsed=Array.from(new Set(
-        (tasks||[]).map(function(x){return((x&&x.adminTag)||"").trim();}).filter(Boolean).concat(
-          (tasks||[]).flatMap(function(x){return Array.isArray(x&&x.tags)?x.tags:[];}).map(function(t){return(t||"").trim();}).filter(Boolean)
-        )
-      ));
-      const ungroupedTags=allUsed.filter(function(t){return!groupOfTag(t);});
-      const PALETTE=["#7c3aed","#0ea5e9","#10b981","#f59e0b","#ef4444","#ec4899","#06b6d4","#84cc16"];
-      return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={function(){setShowTagManager(false);}}>
-        <div onClick={function(e){e.stopPropagation();}} style={{background:C.card,border:"1px solid "+C.b1,borderRadius:16,width:"100%",maxWidth:560,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          {/* Header */}
-          <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.b1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{color:C.tx,fontWeight:700,fontSize:15}}>⚙ Gerenciar grupos de etiquetas</div>
-              <div style={{color:C.td,fontSize:11,marginTop:2}}>Crie grupos pra correlacionar tags (ex: Pacote → maio, junho; Tipo → card, vídeo).</div>
-            </div>
-            <button onClick={function(){setShowTagManager(false);}} style={{background:"none",border:"none",fontSize:22,color:C.td,cursor:"pointer",lineHeight:1}}>×</button>
-          </div>
-          {/* Corpo scroll */}
-          <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
-            {/* Botão novo grupo */}
-            <div style={{marginBottom:14,display:"flex",gap:8}}>
-              <input id="new-group-name" placeholder="Nome do novo grupo (ex: Pacote, Tipo, Cliente...)" style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 12px",color:C.tx,fontSize:12,outline:"none"}}
-                onKeyDown={function(e){if(e.key==="Enter"){const v=e.currentTarget.value;if(v.trim()){addTagGroup(v.trim(),PALETTE[tagGroups.length%PALETTE.length]);e.currentTarget.value="";}}}}/>
-              <button onClick={function(){const el=document.getElementById("new-group-name");if(el&&el.value.trim()){addTagGroup(el.value.trim(),PALETTE[tagGroups.length%PALETTE.length]);el.value="";}}} style={{background:C.a,color:"#fff",border:"none",borderRadius:8,padding:"0 16px",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Grupo</button>
-            </div>
-            {/* Lista de grupos */}
-            {tagGroups.length===0&&<div style={{padding:"30px 20px",textAlign:"center",color:C.td,fontSize:12,background:C.s1,borderRadius:10,marginBottom:14}}>
-              Nenhum grupo criado ainda.<br/>Digite acima e tecle Enter pra criar.
-            </div>}
-            {tagGroups.map(function(g){
-              const groupTags=g.tags.filter(function(t){return allUsed.indexOf(t)!==-1;});
-              return <div key={g.id} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"12px 14px",marginBottom:10}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                  <input type="color" value={g.color||"#7c3aed"} onChange={function(e){recolorTagGroup(g.id,e.target.value);}} title="Cor do grupo" style={{width:24,height:24,padding:0,border:"none",cursor:"pointer",background:"none",borderRadius:6}}/>
-                  <input value={g.name} onChange={function(e){renameTagGroup(g.id,e.target.value);}} style={{flex:1,background:"transparent",border:"none",fontSize:13,fontWeight:700,color:g.color||C.tx,outline:"none",padding:"2px 4px"}}/>
-                  <span style={{color:C.td,fontSize:10}}>{groupTags.length} tag(s)</span>
-                  <button onClick={function(){if(confirm("Excluir o grupo \""+g.name+"\"? As tags voltam pra \"Sem grupo\"."))deleteTagGroup(g.id);}} title="Excluir grupo" style={{background:"none",border:"none",color:C.rd,cursor:"pointer",fontSize:14,padding:"0 4px"}}>×</button>
-                </div>
-                {/* Tags do grupo */}
-                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                  {groupTags.length===0&&<div style={{color:C.td,fontSize:11,fontStyle:"italic"}}>Sem tags ainda. Use os chips de "Sem grupo" abaixo pra mover pra cá.</div>}
-                  {groupTags.map(function(t){
-                    return <span key={t} style={{background:(g.color||"#7c3aed")+"18",color:g.color||"#7c3aed",border:"1px solid "+(g.color||"#7c3aed")+"33",borderRadius:99,padding:"3px 4px 3px 9px",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
-                      {t}
-                      <button onClick={function(){moveTagToGroup(t,null);}} title="Tirar do grupo" style={{background:"none",border:"none",color:g.color||"#7c3aed",cursor:"pointer",fontSize:13,padding:"0 4px",lineHeight:1,opacity:.7}}>×</button>
-                    </span>;
-                  })}
-                </div>
-              </div>;
-            })}
-            {/* Sem grupo */}
-            {ungroupedTags.length>0&&<div style={{background:C.s1,border:"1px dashed "+C.b1,borderRadius:10,padding:"12px 14px"}}>
-              <div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>Sem grupo ({ungroupedTags.length})</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                {ungroupedTags.map(function(t){
-                  return <span key={t} style={{background:"#fff",color:C.tx,border:"1px solid "+C.b1,borderRadius:99,padding:"3px 9px",fontSize:11,fontWeight:500,display:"inline-flex",alignItems:"center",gap:5,position:"relative"}}>
-                    {t}
-                    {tagGroups.length>0&&<select onChange={function(e){if(e.target.value)moveTagToGroup(t,e.target.value);}} value="" style={{background:"transparent",border:"none",color:C.a,fontSize:10,fontWeight:700,cursor:"pointer",outline:"none",padding:"0 2px"}}>
-                      <option value="">→ mover</option>
-                      {tagGroups.map(function(g){return <option key={g.id} value={g.id}>{g.name}</option>;})}
-                    </select>}
-                  </span>;
-                })}
-              </div>
-              {tagGroups.length===0&&<div style={{color:C.td,fontSize:10,marginTop:6,fontStyle:"italic"}}>Crie um grupo primeiro pra mover essas tags pra dentro dele.</div>}
-            </div>}
-          </div>
-          {/* Footer */}
-          <div style={{padding:"12px 20px",borderTop:"1px solid "+C.b1,display:"flex",justifyContent:"flex-end"}}>
-            <button onClick={function(){setShowTagManager(false);}} style={{background:C.a,color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Concluir</button>
-          </div>
-        </div>
-      </div>;
-    })()}
+    {/* (Modal de gerenciar grupos foi removido — agora o filtro usa primeira tag = MÃE) */}
 
     {showTrashConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
@@ -10209,62 +10134,64 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   extraStyle:{borderTop:"1px solid "+C.b1}
                 })}
 
-                {/* Tags organizadas por GRUPO + DRILL-DOWN.
-                    Cada tag mostra a contagem dentro do contexto filtrado atual.
-                    Tags com count=0 não selecionadas ficam ocultas (não poluem). */}
+                {/* DRILL-DOWN simples: lista plana ordenada por count desc.
+                    Primeira selecionada = "MÃE" (contexto). Seguintes refinam dentro dela. */}
                 {(function(){
                   const allUsed=Array.from(new Set(adminTagValues.concat(tagsArrValues)));
-                  // Filtra tag pra mostrar se: está selecionada (sempre) OU tem >0 cards no contexto atual
-                  const shouldShow=function(tag){
-                    if(filterAdminTags.indexOf(tag)!==-1)return true;
-                    return(tagContextCounts[tag]||0)>0;
+                  // Mostra: tags selecionadas (sempre, na ordem) + tags com count > 0
+                  const selectedOrdered=filterAdminTags.filter(function(t){return t!=="__sem__";});
+                  const others=allUsed
+                    .filter(function(t){return selectedOrdered.indexOf(t)===-1&&(tagContextCounts[t]||0)>0;})
+                    .sort(function(a,b){return(tagContextCounts[b]||0)-(tagContextCounts[a]||0);}); // mais usadas primeiro
+                  const motherTag=selectedOrdered[0]||null;
+                  const refinements=selectedOrdered.slice(1);
+                  const renderTagRow=function(tag,isMother){
+                    const isInTags=tagsArrValues.indexOf(tag)!==-1;
+                    const tc=isInTags&&typeof tagColor==="function"?tagColor(tag):{fg:"#64748b"};
+                    return <button key={"t-"+tag} onClick={function(){toggleAdminTag(tag);}}
+                      style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"8px 12px",background:filterAdminTags.indexOf(tag)!==-1?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
+                      onMouseEnter={function(e){if(filterAdminTags.indexOf(tag)===-1)e.currentTarget.style.background="#f8fafc";}}
+                      onMouseLeave={function(e){if(filterAdminTags.indexOf(tag)===-1)e.currentTarget.style.background="transparent";}}>
+                      <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(filterAdminTags.indexOf(tag)!==-1?C.a:"#cbd5e1"),background:filterAdminTags.indexOf(tag)!==-1?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        {filterAdminTags.indexOf(tag)!==-1&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
+                      </span>
+                      <span style={{background:tc.fg+"18",color:tc.fg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:"1px solid "+tc.fg+"33"}}>{isInTags?"#"+tag:tag}</span>
+                      {isMother&&<span style={{background:C.a,color:"#fff",fontSize:8,fontWeight:700,padding:"1px 6px",borderRadius:99,letterSpacing:.3}}>MÃE</span>}
+                      <span style={{marginLeft:"auto",color:filterAdminTags.indexOf(tag)!==-1?C.a:"#94a3b8",fontSize:10,fontWeight:filterAdminTags.indexOf(tag)!==-1?700:500,flexShrink:0}}>{tagContextCounts[tag]||0}</span>
+                    </button>;
                   };
-                  const sectionsByGroup=tagGroups.map(function(g){
-                    const tagsHere=g.tags.filter(function(t){return allUsed.indexOf(t)!==-1&&shouldShow(t);});
-                    return Object.assign({},g,{tagsHere:tagsHere});
-                  }).filter(function(g){return g.tagsHere.length>0;});
-                  const ungrouped=allUsed.filter(function(t){return!groupOfTag(t)&&shouldShow(t);});
-                  // Aviso de drill-down ativo
-                  const hasContext=filterAdminTags.length>0&&!filterAdminTags.includes("__sem__");
                   return (<>
-                    {hasContext&&<div style={{borderTop:"1px solid "+C.b1,padding:"6px 14px",background:"#fef3c7",color:"#92400e",fontSize:10,lineHeight:1.4}}>
-                      <b>Refinar dentro de:</b> {filterAdminTags.join(" + ")}<br/>
-                      <span style={{opacity:.8}}>Os números mostram quantos cards têm cada tag dentro desse filtro.</span>
+                    {/* Breadcrumb: ordem de seleção */}
+                    {motherTag&&<div style={{borderTop:"1px solid "+C.b1,padding:"7px 12px",background:"#faf5ff",fontSize:10,lineHeight:1.5}}>
+                      <div style={{color:"#7c3aed",fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
+                        <span>🎯 Refinando dentro de:</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",color:"#475569"}}>
+                        <span style={{background:"#7c3aed",color:"#fff",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:600}}>{motherTag}</span>
+                        {refinements.map(function(r,i){return <React.Fragment key={r}>
+                          <span style={{color:"#94a3b8",fontSize:11}}>→</span>
+                          <span style={{background:"#fff",border:"1px solid "+C.b1,color:"#475569",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:600}}>{r}</span>
+                        </React.Fragment>;})}
+                      </div>
                     </div>}
-                    {sectionsByGroup.map(function(g){
-                      return <div key={g.id} style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
-                        <div style={{padding:"5px 14px",display:"flex",alignItems:"center",gap:6}}>
-                          <span style={{width:8,height:8,borderRadius:"50%",background:g.color||"#7c3aed",flexShrink:0}}/>
-                          <span style={{color:g.color||"#7c3aed",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{g.name}</span>
-                        </div>
-                        {g.tagsHere.map(function(tag){
-                          const isInTags=tagsArrValues.indexOf(tag)!==-1;
-                          const tc=isInTags&&typeof tagColor==="function"?tagColor(tag):{fg:g.color||"#475569"};
-                          return renderCheckRow({
-                            keyId:"gr-"+g.id+"-"+tag,
-                            label:isInTags?"#"+tag:tag,
-                            checked:filterAdminTags.indexOf(tag)!==-1,
-                            onClick:function(){toggleAdminTag(tag);},
-                            chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33",
-                            count:tagContextCounts[tag]||0
-                          });
-                        })}
-                      </div>;
-                    })}
-                    {ungrouped.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
-                      <div style={{padding:"5px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{sectionsByGroup.length>0?"Sem grupo":"Tags"}</div>
-                      {ungrouped.map(function(tag){
-                        const isInTags=tagsArrValues.indexOf(tag)!==-1;
-                        const tc=isInTags&&typeof tagColor==="function"?tagColor(tag):{fg:"#64748b"};
-                        return renderCheckRow({
-                          keyId:"ung-"+tag,
-                          label:isInTags?"#"+tag:tag,
-                          checked:filterAdminTags.indexOf(tag)!==-1,
-                          onClick:function(){toggleAdminTag(tag);},
-                          chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33",
-                          count:tagContextCounts[tag]||0
-                        });
-                      })}
+
+                    {/* Tags já selecionadas — sempre visíveis */}
+                    {selectedOrdered.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                      <div style={{padding:"5px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Selecionadas ({selectedOrdered.length})</div>
+                      {selectedOrdered.map(function(tag,idx){return renderTagRow(tag,idx===0);})}
+                    </div>}
+
+                    {/* Demais tags — ordenadas por contagem desc, count > 0 */}
+                    {others.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                      <div style={{padding:"5px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
+                        {motherTag?"Refinar por":"Etiquetas em uso"}
+                      </div>
+                      {others.map(function(tag){return renderTagRow(tag,false);})}
+                    </div>}
+
+                    {selectedOrdered.length===0&&others.length===0&&totalCount===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1,lineHeight:1.5}}>
+                      Nenhuma etiqueta ainda. Abra um cartão e use<br/>
+                      <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
                     </div>}
                   </>);
                 })()}
@@ -10274,13 +10201,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
                 </div>}
 
-                {/* Rodapé — Gerenciar grupos + Fechar */}
-                <div style={{borderTop:"1px solid "+C.b1,padding:"6px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
-                  <button onClick={function(){setShowTagManager(true);close();}} style={{background:"none",border:"1px solid "+C.b1,borderRadius:6,padding:"5px 10px",fontSize:10,color:C.ts,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
-                    ⚙ Gerenciar grupos
-                  </button>
-                  {totalCount>0&&<button onClick={close} style={{background:C.a,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Fechar</button>}
-                </div>
+                {/* Rodapé — só Fechar */}
+                {totalCount>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"6px 12px",display:"flex",justifyContent:"flex-end"}}>
+                  <button onClick={close} style={{background:C.a,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Fechar</button>
+                </div>}
               </>);}}
             </KanbanDropdown>;
           })()}
@@ -19283,11 +19207,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>;
           })()}
 
-          {/* Tags (faixas coloridas) — admin-only, free text. Cada tag vira chip
-              com cor estável (hash do nome) e × pra remover. Enter adiciona. */}
+          {/* Tags (faixas coloridas) — admin-only, free text + autocomplete das tags já em uso. */}
           {isAdmin&&!isAgendado&&(function(){
-            const addTag=function(){
-              const v=(newTagInput||"").trim().toLowerCase().replace(/^#+/,"");
+            const dlId="card-tags-suggest-"+task.id;
+            const allKnown=Array.from(new Set(
+              (tasks||[]).flatMap(function(x){return Array.isArray(x&&x.tags)?x.tags:[];})
+              .map(function(s){return(s||"").trim();}).filter(Boolean)
+            )).sort();
+            const addTag=function(rawVal){
+              const v=((typeof rawVal==="string"?rawVal:newTagInput)||"").trim().toLowerCase().replace(/^#+/,"");
               if(!v)return;
               if(tags.includes(v))return;
               if(v.length>30){pixelsToast.warning("Tag muito longa (máx 30 caracteres).");return;}
@@ -19300,7 +19228,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <span>🎨 Tags do cartão</span>
                 <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios</span>
               </label>
-              {/* Chips das tags existentes */}
               {tags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>
                 {tags.map(function(tag){
                   const tc=(typeof tagColor==="function")?tagColor(tag):{fg:"#64748b",bg:"#f1f5f9"};
@@ -19310,19 +19237,22 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   </span>;
                 })}
               </div>}
-              {/* Input pra adicionar */}
               <div style={{display:"flex",gap:6}}>
                 <input
+                  list={dlId}
                   value={newTagInput}
                   onChange={function(e){setNewTagInput(e.target.value);}}
                   onKeyDown={function(e){if(e.key==="Enter"){e.preventDefault();addTag();}}}
                   placeholder="Digite a tag e tecle Enter"
                   style={{...SI,flex:1,fontFamily:"inherit"}}
                 />
-                <button onClick={addTag} disabled={!newTagInput.trim()} style={{background:newTagInput.trim()?"#7c3aed":"#e2e8f0",color:"#fff",border:"none",borderRadius:8,padding:"0 14px",fontSize:13,fontWeight:600,cursor:newTagInput.trim()?"pointer":"not-allowed",flexShrink:0}}>+</button>
+                <button onClick={function(){addTag();}} disabled={!newTagInput.trim()} style={{background:newTagInput.trim()?"#7c3aed":"#e2e8f0",color:"#fff",border:"none",borderRadius:8,padding:"0 14px",fontSize:13,fontWeight:600,cursor:newTagInput.trim()?"pointer":"not-allowed",flexShrink:0}}>+</button>
               </div>
+              <datalist id={dlId}>
+                {allKnown.filter(function(x){return tags.indexOf(x)===-1;}).map(function(x){return <option key={x} value={x}/>;})}
+              </datalist>
               <div style={{color:"#94a3b8",fontSize:10,marginTop:4,lineHeight:1.4}}>
-                As tags aparecem como faixas coloridas no topo do cartão. Só Vinicius e Gustavo veem essas faixas.
+                Comece digitando — o autocomplete sugere as tags já criadas em outros cartões.
               </div>
             </div>;
           })()}
