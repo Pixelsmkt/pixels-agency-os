@@ -9544,6 +9544,50 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     });
   };
   const isAdminUser = (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
+
+  // ═══ GRUPOS DE TAGS (admin) ═══
+  // Cada grupo: { id, name, color, tags: [tagName...] }. Tags fora de qualquer grupo aparecem como "Sem grupo".
+  // Storage: localStorage (per-browser). Pra sincronizar entre Vinicius e Gustavo, deixei pra próxima iteração.
+  const [tagGroups,setTagGroups]=useState(function(){
+    try{
+      const raw=localStorage.getItem("pixels-tag-groups-v1");
+      if(!raw)return[];
+      const parsed=JSON.parse(raw);
+      return Array.isArray(parsed)?parsed:[];
+    }catch(e){return[];}
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-tag-groups-v1",JSON.stringify(tagGroups));}catch(e){}},[tagGroups]);
+  const [showTagManager,setShowTagManager]=useState(false);
+  // Helpers
+  const groupOfTag = function(tagName){
+    for(let i=0;i<tagGroups.length;i++){if(tagGroups[i].tags.indexOf(tagName)!==-1)return tagGroups[i];}
+    return null;
+  };
+  const addTagGroup = function(name,color){
+    if(!name||!name.trim())return;
+    const id="g-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+    setTagGroups(function(prev){return prev.concat([{id:id,name:name.trim(),color:color||"#7c3aed",tags:[]}]);});
+  };
+  const renameTagGroup = function(id,name){
+    setTagGroups(function(prev){return prev.map(function(g){return g.id===id?Object.assign({},g,{name:name}):g;});});
+  };
+  const recolorTagGroup = function(id,color){
+    setTagGroups(function(prev){return prev.map(function(g){return g.id===id?Object.assign({},g,{color:color}):g;});});
+  };
+  const deleteTagGroup = function(id){
+    setTagGroups(function(prev){return prev.filter(function(g){return g.id!==id;});});
+  };
+  const moveTagToGroup = function(tagName,toGroupId){
+    setTagGroups(function(prev){
+      // Remove a tag de todos os grupos atuais
+      let next=prev.map(function(g){return Object.assign({},g,{tags:g.tags.filter(function(t){return t!==tagName;})});});
+      // Se toGroupId é null, fica desagrupada. Se é um id, adiciona lá.
+      if(toGroupId){
+        next=next.map(function(g){return g.id===toGroupId?Object.assign({},g,{tags:g.tags.concat([tagName])}):g;});
+      }
+      return next;
+    });
+  };
   // Ordenação dos cards no kanban (persistida em localStorage)
   const [sortMode,setSortMode]=useState(function(){
     try{return localStorage.getItem("pixels-kanban-sort")||"smart";}catch(e){return"smart";}
@@ -9908,6 +9952,83 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>
     </div>}
 
+    {/* ═══ MODAL GERENCIAR GRUPOS DE TAGS ═══ */}
+    {showTagManager&&isAdminUser&&(function(){
+      const allUsed=Array.from(new Set(
+        (tasks||[]).map(function(x){return((x&&x.adminTag)||"").trim();}).filter(Boolean).concat(
+          (tasks||[]).flatMap(function(x){return Array.isArray(x&&x.tags)?x.tags:[];}).map(function(t){return(t||"").trim();}).filter(Boolean)
+        )
+      ));
+      const ungroupedTags=allUsed.filter(function(t){return!groupOfTag(t);});
+      const PALETTE=["#7c3aed","#0ea5e9","#10b981","#f59e0b","#ef4444","#ec4899","#06b6d4","#84cc16"];
+      return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={function(){setShowTagManager(false);}}>
+        <div onClick={function(e){e.stopPropagation();}} style={{background:C.card,border:"1px solid "+C.b1,borderRadius:16,width:"100%",maxWidth:560,maxHeight:"85vh",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          {/* Header */}
+          <div style={{padding:"16px 20px",borderBottom:"1px solid "+C.b1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div>
+              <div style={{color:C.tx,fontWeight:700,fontSize:15}}>⚙ Gerenciar grupos de etiquetas</div>
+              <div style={{color:C.td,fontSize:11,marginTop:2}}>Crie grupos pra correlacionar tags (ex: Pacote → maio, junho; Tipo → card, vídeo).</div>
+            </div>
+            <button onClick={function(){setShowTagManager(false);}} style={{background:"none",border:"none",fontSize:22,color:C.td,cursor:"pointer",lineHeight:1}}>×</button>
+          </div>
+          {/* Corpo scroll */}
+          <div style={{flex:1,overflowY:"auto",padding:"16px 20px"}}>
+            {/* Botão novo grupo */}
+            <div style={{marginBottom:14,display:"flex",gap:8}}>
+              <input id="new-group-name" placeholder="Nome do novo grupo (ex: Pacote, Tipo, Cliente...)" style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 12px",color:C.tx,fontSize:12,outline:"none"}}
+                onKeyDown={function(e){if(e.key==="Enter"){const v=e.currentTarget.value;if(v.trim()){addTagGroup(v.trim(),PALETTE[tagGroups.length%PALETTE.length]);e.currentTarget.value="";}}}}/>
+              <button onClick={function(){const el=document.getElementById("new-group-name");if(el&&el.value.trim()){addTagGroup(el.value.trim(),PALETTE[tagGroups.length%PALETTE.length]);el.value="";}}} style={{background:C.a,color:"#fff",border:"none",borderRadius:8,padding:"0 16px",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Grupo</button>
+            </div>
+            {/* Lista de grupos */}
+            {tagGroups.length===0&&<div style={{padding:"30px 20px",textAlign:"center",color:C.td,fontSize:12,background:C.s1,borderRadius:10,marginBottom:14}}>
+              Nenhum grupo criado ainda.<br/>Digite acima e tecle Enter pra criar.
+            </div>}
+            {tagGroups.map(function(g){
+              const groupTags=g.tags.filter(function(t){return allUsed.indexOf(t)!==-1;});
+              return <div key={g.id} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"12px 14px",marginBottom:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                  <input type="color" value={g.color||"#7c3aed"} onChange={function(e){recolorTagGroup(g.id,e.target.value);}} title="Cor do grupo" style={{width:24,height:24,padding:0,border:"none",cursor:"pointer",background:"none",borderRadius:6}}/>
+                  <input value={g.name} onChange={function(e){renameTagGroup(g.id,e.target.value);}} style={{flex:1,background:"transparent",border:"none",fontSize:13,fontWeight:700,color:g.color||C.tx,outline:"none",padding:"2px 4px"}}/>
+                  <span style={{color:C.td,fontSize:10}}>{groupTags.length} tag(s)</span>
+                  <button onClick={function(){if(confirm("Excluir o grupo \""+g.name+"\"? As tags voltam pra \"Sem grupo\"."))deleteTagGroup(g.id);}} title="Excluir grupo" style={{background:"none",border:"none",color:C.rd,cursor:"pointer",fontSize:14,padding:"0 4px"}}>×</button>
+                </div>
+                {/* Tags do grupo */}
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {groupTags.length===0&&<div style={{color:C.td,fontSize:11,fontStyle:"italic"}}>Sem tags ainda. Use os chips de "Sem grupo" abaixo pra mover pra cá.</div>}
+                  {groupTags.map(function(t){
+                    return <span key={t} style={{background:(g.color||"#7c3aed")+"18",color:g.color||"#7c3aed",border:"1px solid "+(g.color||"#7c3aed")+"33",borderRadius:99,padding:"3px 4px 3px 9px",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:4}}>
+                      {t}
+                      <button onClick={function(){moveTagToGroup(t,null);}} title="Tirar do grupo" style={{background:"none",border:"none",color:g.color||"#7c3aed",cursor:"pointer",fontSize:13,padding:"0 4px",lineHeight:1,opacity:.7}}>×</button>
+                    </span>;
+                  })}
+                </div>
+              </div>;
+            })}
+            {/* Sem grupo */}
+            {ungroupedTags.length>0&&<div style={{background:C.s1,border:"1px dashed "+C.b1,borderRadius:10,padding:"12px 14px"}}>
+              <div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>Sem grupo ({ungroupedTags.length})</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                {ungroupedTags.map(function(t){
+                  return <span key={t} style={{background:"#fff",color:C.tx,border:"1px solid "+C.b1,borderRadius:99,padding:"3px 9px",fontSize:11,fontWeight:500,display:"inline-flex",alignItems:"center",gap:5,position:"relative"}}>
+                    {t}
+                    {tagGroups.length>0&&<select onChange={function(e){if(e.target.value)moveTagToGroup(t,e.target.value);}} value="" style={{background:"transparent",border:"none",color:C.a,fontSize:10,fontWeight:700,cursor:"pointer",outline:"none",padding:"0 2px"}}>
+                      <option value="">→ mover</option>
+                      {tagGroups.map(function(g){return <option key={g.id} value={g.id}>{g.name}</option>;})}
+                    </select>}
+                  </span>;
+                })}
+              </div>
+              {tagGroups.length===0&&<div style={{color:C.td,fontSize:10,marginTop:6,fontStyle:"italic"}}>Crie um grupo primeiro pra mover essas tags pra dentro dele.</div>}
+            </div>}
+          </div>
+          {/* Footer */}
+          <div style={{padding:"12px 20px",borderTop:"1px solid "+C.b1,display:"flex",justifyContent:"flex-end"}}>
+            <button onClick={function(){setShowTagManager(false);}} style={{background:C.a,color:"#fff",border:"none",borderRadius:8,padding:"8px 20px",fontSize:12,fontWeight:700,cursor:"pointer"}}>Concluir</button>
+          </div>
+        </div>
+      </div>;
+    })()}
+
     {showTrashConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <div style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
         <div style={{fontSize:40,marginBottom:12}}>🗑</div>
@@ -10066,42 +10187,65 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   extraStyle:{borderTop:"1px solid "+C.b1}
                 })}
 
-                {adminTagValues.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
-                  <div style={{padding:"4px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Etiqueta interna</div>
-                  {adminTagValues.map(function(tag){
-                    return renderCheckRow({
-                      keyId:"at-"+tag,
-                      label:tag,
-                      checked:filterAdminTags.indexOf(tag)!==-1,
-                      onClick:function(){toggleAdminTag(tag);},
-                      chipBg:"#f1f5f9",chipFg:"#475569"
-                    });
-                  })}
-                </div>}
-
-                {tagsArrValues.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
-                  <div style={{padding:"4px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Tags do cartão</div>
-                  {tagsArrValues.map(function(tag){
-                    const tc=(typeof tagColor==="function")?tagColor(tag):{fg:"#64748b"};
-                    return renderCheckRow({
-                      keyId:"t-"+tag,
-                      label:"#"+tag,
-                      checked:filterAdminTags.indexOf(tag)!==-1,
-                      onClick:function(){toggleAdminTag(tag);},
-                      chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33"
-                    });
-                  })}
-                </div>}
+                {/* Tags organizadas por GRUPO. Cada grupo cadastrado vira uma seção
+                    com header colorido. Tags fora de qualquer grupo (e o adminTag bruto)
+                    aparecem na seção "Sem grupo" no fim. */}
+                {(function(){
+                  const allUsed=Array.from(new Set(adminTagValues.concat(tagsArrValues)));
+                  const sectionsByGroup=tagGroups.map(function(g){
+                    const tagsHere=g.tags.filter(function(t){return allUsed.indexOf(t)!==-1;});
+                    return Object.assign({},g,{tagsHere:tagsHere});
+                  }).filter(function(g){return g.tagsHere.length>0;});
+                  const ungrouped=allUsed.filter(function(t){return!groupOfTag(t);});
+                  return (<>
+                    {sectionsByGroup.map(function(g){
+                      return <div key={g.id} style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                        <div style={{padding:"5px 14px",display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:g.color||"#7c3aed",flexShrink:0}}/>
+                          <span style={{color:g.color||"#7c3aed",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{g.name}</span>
+                        </div>
+                        {g.tagsHere.map(function(tag){
+                          const isInTags=tagsArrValues.indexOf(tag)!==-1;
+                          const tc=isInTags&&typeof tagColor==="function"?tagColor(tag):{fg:g.color||"#475569"};
+                          return renderCheckRow({
+                            keyId:"gr-"+g.id+"-"+tag,
+                            label:isInTags?"#"+tag:tag,
+                            checked:filterAdminTags.indexOf(tag)!==-1,
+                            onClick:function(){toggleAdminTag(tag);},
+                            chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33"
+                          });
+                        })}
+                      </div>;
+                    })}
+                    {ungrouped.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                      <div style={{padding:"5px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{sectionsByGroup.length>0?"Sem grupo":"Tags"}</div>
+                      {ungrouped.map(function(tag){
+                        const isInTags=tagsArrValues.indexOf(tag)!==-1;
+                        const tc=isInTags&&typeof tagColor==="function"?tagColor(tag):{fg:"#64748b"};
+                        return renderCheckRow({
+                          keyId:"ung-"+tag,
+                          label:isInTags?"#"+tag:tag,
+                          checked:filterAdminTags.indexOf(tag)!==-1,
+                          onClick:function(){toggleAdminTag(tag);},
+                          chipBg:tc.fg+"18",chipFg:tc.fg,chipBorder:tc.fg+"33"
+                        });
+                      })}
+                    </div>}
+                  </>);
+                })()}
 
                 {totalCount===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1,lineHeight:1.5}}>
                   Nenhuma etiqueta ainda. Abra um cartão e use os campos<br/>
                   <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
                 </div>}
 
-                {/* Botão fechar — atalho visual depois de selecionar várias */}
-                {totalCount>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"6px 12px",display:"flex",justifyContent:"flex-end"}}>
-                  <button onClick={close} style={{background:C.a,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Fechar</button>
-                </div>}
+                {/* Rodapé — Gerenciar grupos + Fechar */}
+                <div style={{borderTop:"1px solid "+C.b1,padding:"6px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                  <button onClick={function(){setShowTagManager(true);close();}} style={{background:"none",border:"1px solid "+C.b1,borderRadius:6,padding:"5px 10px",fontSize:10,color:C.ts,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:4}}>
+                    ⚙ Gerenciar grupos
+                  </button>
+                  {totalCount>0&&<button onClick={close} style={{background:C.a,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Fechar</button>}
+                </div>
               </>);}}
             </KanbanDropdown>;
           })()}
