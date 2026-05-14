@@ -9702,8 +9702,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
   // Sócios: abre seletor de responsável. Colaboradores: cria direto para si
   const addNewTask=(colId,extraProps={})=>{
-    // Regra: todo cartão novo entra obrigatoriamente em Copys ("demanda")
-    const targetCol="demanda";
+    // Quando criado direto numa coluna específica (Rascunhos ou Copys), respeita;
+    // caso contrário, default = "demanda" (Copys).
+    const targetCol=(colId==="rascunhos"||colId==="demanda")?colId:"demanda";
     if(activeUser.level===1){
       setQuickCreate({colId:targetCol,extraProps});
     }else{
@@ -10480,8 +10481,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 </div>;
               })}
 
-              {/* Add card dentro da coluna */}
-              {canCreate&&col.id==="demanda"&&<button
+              {/* Add card dentro da coluna — disponível em Rascunhos e Copys */}
+              {canCreate&&(col.id==="demanda"||col.id==="rascunhos")&&<button
                 onClick={()=>addNewTask(col.id)}
                 style={{background:"none",border:"1px dashed transparent",borderRadius:8,padding:"7px 0",color:"transparent",cursor:"pointer",fontSize:11,marginTop:2,textAlign:"left",paddingLeft:8,transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.borderColor=C.b2;e.currentTarget.style.color=C.td;}}
@@ -11231,22 +11232,21 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
       const isDropTarget=dragId&&dragOverCol===col.id;
       const isCollapsed=!!collapsed[col.id];
       return(<div key={col.id}>
-        {/* Group header — clicável pra colapsar; também é drop target pro D&D */}
+        {/* Group header — fundo sólido na cor da coluna pra bater o olho */}
         <div
           onClick={()=>toggleCollapse(col.id)}
           onDragOver={e=>{if(canDrag&&dragId){e.preventDefault();setDragOverCol(col.id);}}}
           onDragLeave={()=>{if(dragOverCol===col.id)setDragOverCol(null);}}
           onDrop={e=>{e.preventDefault();handleDropOnCol(col.id);}}
           title={isCollapsed?"Clique pra expandir":"Clique pra minimizar"}
-          style={{padding:"6px 14px",background:isDropTarget?col.color+"33":col.color+"12",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8,cursor:"pointer",transition:"background .12s",borderTop:isDropTarget?`2px dashed ${col.color}`:"none",userSelect:"none"}}
-          onMouseEnter={e=>{if(!isDropTarget)e.currentTarget.style.background=col.color+"1f";}}
-          onMouseLeave={e=>{if(!isDropTarget)e.currentTarget.style.background=col.color+"12";}}>
-          <span style={{color:col.color,fontSize:11,fontWeight:700,width:12,display:"inline-flex",justifyContent:"center",transition:"transform .15s",transform:isCollapsed?"rotate(-90deg)":"none"}}>▾</span>
-          <div style={{width:8,height:8,borderRadius:"50%",background:col.color,flexShrink:0}}/>
-          <span style={{color:col.color,fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:.6}}>{col.label}</span>
-          <span style={{background:col.color+"22",color:col.color,borderRadius:99,padding:"0 7px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
-          {isDropTarget&&<span style={{color:col.color,fontSize:10,fontWeight:600,marginLeft:"auto"}}>↓ Soltar aqui</span>}
-          {!isDropTarget&&isCollapsed&&<span style={{color:col.color,fontSize:9,fontWeight:600,marginLeft:"auto",opacity:.7}}>minimizado</span>}
+          style={{padding:"8px 14px",background:col.color,borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8,cursor:"pointer",transition:"filter .12s",userSelect:"none",boxShadow:isDropTarget?`inset 0 0 0 2px #fff`:"none"}}
+          onMouseEnter={e=>{e.currentTarget.style.filter="brightness(1.08)";}}
+          onMouseLeave={e=>{e.currentTarget.style.filter="brightness(1)";}}>
+          <span style={{color:"#fff",fontSize:11,fontWeight:700,width:12,display:"inline-flex",justifyContent:"center",transition:"transform .15s",transform:isCollapsed?"rotate(-90deg)":"none"}}>▾</span>
+          <span style={{color:"#fff",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:.6}}>{col.label}</span>
+          <span style={{background:"rgba(255,255,255,0.28)",color:"#fff",borderRadius:99,padding:"0 8px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
+          {isDropTarget&&<span style={{color:"#fff",fontSize:10,fontWeight:700,marginLeft:"auto"}}>↓ Soltar aqui</span>}
+          {!isDropTarget&&isCollapsed&&<span style={{color:"rgba(255,255,255,0.85)",fontSize:9,fontWeight:600,marginLeft:"auto"}}>minimizado</span>}
         </div>
 
         {/* Drop zone vazio quando coluna sem cards mas com drag ativo */}
