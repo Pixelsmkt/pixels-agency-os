@@ -22813,7 +22813,9 @@ export default function AgencyOS(){
       }
     };
     poll();
-    const iv=setInterval(poll,15000);
+    // Polling de perms reduzido pra 60s (era 15s) — perms quase nunca mudam
+    // e poll de 15s estava queimando egress sem necessidade.
+    const iv=setInterval(poll,60000);
     return()=>clearInterval(iv);
   },[authState]); // ← removido livePerms (causava recriação do interval a cada update)
 
