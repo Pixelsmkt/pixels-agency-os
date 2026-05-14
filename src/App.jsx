@@ -213,7 +213,7 @@ const THEMES={
     gr:"#00e5a0", rd:"#ff3d6b", yw:"#ffd000", or:"#ff7200",
     bl:"#4db8ff", pk:"#ff6eb4",
     tx:"#f2e8ff", ts:"#9966cc", td:"#3d1a6e",
-    kDemanda:"#a140ff", kRecebida:"#ff6eb4", kExecucao:"#ffd000",
+    kRascunhos:"#64748b", kDemanda:"#a140ff", kRecebida:"#ff6eb4", kExecucao:"#ffd000",
     kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#4db8ff", kPublicado:"#a78bfa", kPausado:"#1a0030", kAlteracao:"#7c1d1d",
   },
   light:{
@@ -224,7 +224,7 @@ const THEMES={
     gr:"#059669", rd:"#dc2626", yw:"#d97706", or:"#ea580c",
     bl:"#2563eb", pk:"#db2777",
     tx:"#0f172a", ts:"#64748b", td:"#94a3b8",
-    kDemanda:"#7c3aed", kRecebida:"#db2777", kExecucao:"#d97706",
+    kRascunhos:"#64748b", kDemanda:"#7c3aed", kRecebida:"#db2777", kExecucao:"#d97706",
     kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#2563eb", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#7c1d1d",
   },
   agro:{
@@ -235,7 +235,7 @@ const THEMES={
     gr:"#86efac", rd:"#f87171", yw:"#fde047", or:"#fb923c",
     bl:"#60a5fa", pk:"#f472b6",
     tx:"#e8fdf0", ts:"#4ade80", td:"#166534",
-    kDemanda:"#22c55e", kRecebida:"#4ade80", kExecucao:"#fde047",
+    kRascunhos:"#64748b", kDemanda:"#22c55e", kRecebida:"#4ade80", kExecucao:"#fde047",
     kAvaliacao:"#fb923c", kAprovado:"#86efac", kAgendado:"#60a5fa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#7c1d1d",
   },
 };
@@ -258,6 +258,7 @@ try{
 }catch(e){}
 
 const KANBAN_COLS = [
+  { id:"rascunhos", label:"Rascunhos",              color:C.kRascunhos, dark:false },
   { id:"demanda",   label:"Copys",                  color:C.kDemanda,   dark:false },
   { id:"recebida",  label:"Demanda",                color:C.kRecebida,  dark:false },
   { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
@@ -9603,7 +9604,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [cols,setCols]=useState(()=>{
     // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
     // Versão atual: v4 (cor vinho na coluna Ajustes)
-    const COLS_VERSION="v4-ajustes-vinho";
+    const COLS_VERSION="v5-rascunhos";
     try{
       const savedVersion=localStorage.getItem("pixels-cols-version");
       if(savedVersion!==COLS_VERSION){
@@ -9748,6 +9749,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   // Cada coluna visível só se a permissão correspondente estiver ligada
   // COL_PERM: true = pode ver, false = bloqueado, undefined = coluna custom (deixa ver)
   const COL_PERM={
+    // Rascunhos: só sócios + social media (Hellen). Designers/editores não veem.
+    rascunhos: myPerms.colRascunhos===true||activeUser.level===1||activeUser.id==="ellen",
     demanda:   !!myPerms.colCopys,
     recebida:  !!myPerms.colDemanda,
     execucao:  !!myPerms.colExecucao,
@@ -11178,10 +11181,22 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
 // Posição no bundle: após 02_clientes, antes de 04_demandas
 
 function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask,canDrag}){
-  const LISTA_ORDER_LOCAL=["publicado","agendado","aprovado","avaliacao","execucao","recebida","demanda","pausado"];
+  // Rascunhos primeiro pra Hellen ver os drafts no topo
+  const LISTA_ORDER_LOCAL=["rascunhos","publicado","agendado","aprovado","avaliacao","ajustes","execucao","recebida","demanda","pausado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
-  const STAT_COLORS={demanda:C.a,recebida:C.pk,execucao:C.yw,avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
+  const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#7c1d1d",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
+
+  // ─── DRAG & DROP — arrastar linha → soltar no header de outro status ──
+  const [dragId,setDragId]=useState(null);
+  const [dragOverCol,setDragOverCol]=useState(null);
+  const handleDragStart=(id)=>{if(canDrag)setDragId(id);};
+  const handleDragEnd=()=>{setDragId(null);setDragOverCol(null);};
+  const handleDropOnCol=(colId)=>{
+    if(!dragId||!moveTask){setDragId(null);setDragOverCol(null);return;}
+    moveTask(dragId,colId);
+    setDragId(null);setDragOverCol(null);
+  };
 
   return(<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,overflow:"hidden"}}>
     {/* Header */}
@@ -11193,30 +11208,54 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
 
     {orderedCols.map(col=>{
       const colTasks=visible.filter(t=>t.status===col.id);
-      if(colTasks.length===0)return null;
+      // Mantém grupo visível mesmo sem cards SE há drag em andamento (vira drop zone)
+      if(colTasks.length===0&&!dragId)return null;
+      const isDropTarget=dragId&&dragOverCol===col.id;
       return(<div key={col.id}>
-        {/* Group header */}
-        <div style={{padding:"6px 14px",background:col.color+"12",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
+        {/* Group header — também é drop target pro D&D */}
+        <div
+          onDragOver={e=>{if(canDrag&&dragId){e.preventDefault();setDragOverCol(col.id);}}}
+          onDragLeave={()=>{if(dragOverCol===col.id)setDragOverCol(null);}}
+          onDrop={e=>{e.preventDefault();handleDropOnCol(col.id);}}
+          style={{padding:"6px 14px",background:isDropTarget?col.color+"33":col.color+"12",borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8,transition:"background .12s",borderTop:isDropTarget?`2px dashed ${col.color}`:"none"}}>
           <div style={{width:8,height:8,borderRadius:"50%",background:col.color,flexShrink:0}}/>
           <span style={{color:col.color,fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:.6}}>{col.label}</span>
           <span style={{background:col.color+"22",color:col.color,borderRadius:99,padding:"0 7px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
+          {isDropTarget&&<span style={{color:col.color,fontSize:10,fontWeight:600,marginLeft:"auto"}}>↓ Soltar aqui</span>}
         </div>
+
+        {/* Drop zone vazio quando coluna sem cards mas com drag ativo */}
+        {colTasks.length===0&&dragId&&<div
+          onDragOver={e=>{e.preventDefault();setDragOverCol(col.id);}}
+          onDragLeave={()=>{if(dragOverCol===col.id)setDragOverCol(null);}}
+          onDrop={e=>{e.preventDefault();handleDropOnCol(col.id);}}
+          style={{padding:"20px 14px",textAlign:"center",color:C.td,fontSize:11,fontStyle:"italic",background:isDropTarget?col.color+"08":"transparent",border:isDropTarget?`1px dashed ${col.color}`:"1px dashed transparent",margin:"0 8px 8px"}}>
+          Solte aqui pra mover pra {col.label}
+        </div>}
+
         {colTasks.map((t,i)=>{
           const cl=CLIENTS.find(c=>c.id===t.client);
           const u=TEAM.find(u=>u.id===t.assignee);
           const days=t.deadline?Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24)):null;
           const late=days!==null&&days<0&&t.status!=="aprovado";
           const stopped=t.colEnteredAt?Math.floor((new Date()-new Date(t.colEnteredAt))/86400000):0;
+          const isBeingDragged=dragId===t.id;
           return(<div key={t.id}
-            onClick={()=>setOpenCard(t)}
+            draggable={!!canDrag}
+            onDragStart={()=>handleDragStart(t.id)}
+            onDragEnd={handleDragEnd}
+            onClick={()=>{if(!isBeingDragged)setOpenCard(t);}}
             style={{display:"grid",gridTemplateColumns:"2fr 120px 90px 140px 100px 80px 50px",
               borderBottom:i<colTasks.length-1?`1px solid ${C.b1}22`:"none",
-              cursor:"pointer",transition:"background .1s"}}
-            onMouseEnter={e=>e.currentTarget.style.background=C.s1}
-            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+              cursor:canDrag?"grab":"pointer",transition:"background .1s, opacity .15s",
+              opacity:isBeingDragged?.4:1,
+              background:isBeingDragged?C.s1:"transparent"}}
+            onMouseEnter={e=>{if(!isBeingDragged)e.currentTarget.style.background=C.s1;}}
+            onMouseLeave={e=>{if(!isBeingDragged)e.currentTarget.style.background="transparent";}}>
 
-            {/* Title */}
+            {/* Title — com handle de drag visual à esquerda */}
             <div style={{padding:"10px 14px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+              {canDrag&&<span title="Arraste pra mover" style={{color:C.td,fontSize:10,letterSpacing:-1,cursor:"grab",userSelect:"none",flexShrink:0,opacity:.5}}>⋮⋮</span>}
               {cl&&<div style={{width:3,height:28,borderRadius:99,background:cl.color,flexShrink:0}}/>}
               <div style={{minWidth:0}}>
                 <div style={{color:late?C.rd:C.tx,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
