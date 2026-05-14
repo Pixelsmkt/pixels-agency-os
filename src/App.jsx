@@ -25507,6 +25507,118 @@ function PageIAPixels({isMob, tasks}){
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [savedMsg, setSavedMsg] = useState(null);
 
+  // ── TRANSCRIÇÃO DE ÁUDIO (Whisper local via transformers.js) ──
+  const [transcAudio, setTranscAudio] = useState(null);
+  const [transcAudioUrl, setTranscAudioUrl] = useState(null);
+  const [transcLoading, setTranscLoading] = useState(false);
+  const [transcProgress, setTranscProgress] = useState("");
+  const [transcText, setTranscText] = useState("");
+  const [transcModel, setTranscModel] = useState(function(){try{return localStorage.getItem("pixels-transc-model")||"base";}catch(e){return"base";}});
+  const [transcDrag, setTranscDrag] = useState(false);
+  const [transcCopied, setTranscCopied] = useState(false);
+  const [transcSaved, setTranscSaved] = useState(false);
+  const transcInputRef = useRef(null);
+  const transcPipelineRef = useRef(null);
+
+  const loadWhisper = async function(){
+    if(transcPipelineRef.current && transcPipelineRef.current._modelKey === transcModel) return transcPipelineRef.current;
+    setTranscProgress("Carregando modelo Whisper... (1ª vez baixa "+(transcModel==="small"?"~250MB":"~75MB")+")");
+    const tx = await import(/* @vite-ignore */ "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2");
+    tx.env.allowLocalModels = false;
+    tx.env.useBrowserCache = true;
+    const modelName = transcModel==="small" ? "Xenova/whisper-small" : "Xenova/whisper-base";
+    const pipe = await tx.pipeline("automatic-speech-recognition", modelName, {
+      quantized: true,
+      progress_callback: function(data){
+        if(data && data.status==="progress" && data.file && typeof data.progress==="number"){
+          setTranscProgress("Baixando "+data.file+": "+Math.round(data.progress)+"%");
+        }
+      }
+    });
+    pipe._modelKey = transcModel;
+    transcPipelineRef.current = pipe;
+    return pipe;
+  };
+
+  const decodeAudioToFloat32 = async function(file){
+    const arrayBuffer = await file.arrayBuffer();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ac = new AC();
+    const audioBuffer = await ac.decodeAudioData(arrayBuffer);
+    let audio = audioBuffer.getChannelData(0);
+    // mixdown stereo → mono se tiver mais canais
+    if(audioBuffer.numberOfChannels > 1){
+      const ch1 = audioBuffer.getChannelData(0);
+      const ch2 = audioBuffer.getChannelData(1);
+      const mono = new Float32Array(ch1.length);
+      for(let i=0;i<ch1.length;i++) mono[i] = (ch1[i]+ch2[i])/2;
+      audio = mono;
+    }
+    // resample pra 16kHz (Whisper precisa)
+    if(audioBuffer.sampleRate !== 16000){
+      const ratio = audioBuffer.sampleRate / 16000;
+      const newLen = Math.floor(audio.length / ratio);
+      const resampled = new Float32Array(newLen);
+      for(let i=0;i<newLen;i++) resampled[i] = audio[Math.floor(i*ratio)];
+      audio = resampled;
+    }
+    try{ac.close();}catch(_){}
+    return audio;
+  };
+
+  const runTranscription = async function(file){
+    if(!file) return;
+    setTranscLoading(true);
+    setTranscText("");
+    setTranscProgress("Preparando áudio...");
+    try{
+      const pipe = await loadWhisper();
+      setTranscProgress("Decodificando áudio...");
+      const audio = await decodeAudioToFloat32(file);
+      const durSec = audio.length / 16000;
+      setTranscProgress("Transcrevendo "+durSec.toFixed(0)+"s de áudio... (pode levar até "+Math.ceil(durSec*0.6)+"s)");
+      const result = await pipe(audio, {
+        chunk_length_s: 30,
+        stride_length_s: 5,
+        language: "portuguese",
+        task: "transcribe"
+      });
+      const text = (result && result.text) ? result.text.trim() : "";
+      setTranscText(text);
+      setTranscProgress(text ? "" : "Não foi possível extrair texto do áudio.");
+    }catch(e){
+      console.error("Whisper error:", e);
+      setTranscProgress("Erro: " + (e && e.message ? e.message : "Falha ao transcrever. Tente outro arquivo."));
+    }
+    setTranscLoading(false);
+  };
+
+  const handleTranscFile = function(f){
+    if(!f) return;
+    if(!f.type || !f.type.startsWith("audio/")){
+      // alguns navegadores não setam type pra .opus/.m4a — checa extensão
+      const ext = (f.name||"").toLowerCase().split(".").pop();
+      if(!["mp3","wav","m4a","ogg","opus","webm","aac","flac"].includes(ext)){
+        setTranscProgress("Arquivo não parece ser áudio. Tente MP3/WAV/M4A/OGG/OPUS.");
+        return;
+      }
+    }
+    if(transcAudioUrl){try{URL.revokeObjectURL(transcAudioUrl);}catch(_){}}
+    setTranscAudio(f);
+    setTranscAudioUrl(URL.createObjectURL(f));
+    setTranscText("");
+    runTranscription(f);
+  };
+
+  const saveTranscToBiblioteca = function(){
+    if(!transcText.trim()) return;
+    const nome = transcAudio && transcAudio.name ? transcAudio.name.replace(/\.[^.]+$/,"") : "Áudio transcrito";
+    const novo = {id:Date.now(),tipo:"processo",clientId:"",titulo:"Transcrição: "+nome,contexto:"Áudio transcrito automaticamente via Pixels IA ("+(new Date().toLocaleString("pt-BR"))+")",aprendizado:transcText,criadoEm:new Date().toISOString(),criadoPor:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)?CURRENT_USER.name:""};
+    saveBiblioteca([...biblioteca, novo]);
+    setTranscSaved(true);
+    setTimeout(function(){setTranscSaved(false);}, 1800);
+  };
+
   const inp = {background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
   const now = new Date();
 
@@ -25756,7 +25868,7 @@ PROMPT DE IMAGEM:
   const addPlaybook=()=>{if(!pbForm.titulo.trim())return;savePlaybooks([...playbooks,{...pbForm,id:Date.now(),criadoEm:new Date().toISOString(),criadoPor:CURRENT_USER?.name||""}]);setPbForm({setor:"agro",titulo:"",etapas:"",kpis:"",obs:""});setShowAddPb(false);};
   const addBib=()=>{if(!bibForm.titulo.trim())return;saveBiblioteca([...biblioteca,{...bibForm,id:Date.now(),criadoEm:new Date().toISOString(),criadoPor:CURRENT_USER?.name||""}]);setBibForm({titulo:"",contexto:"",aprendizado:"",clientId:"",tipo:"campanha"});setShowAddBib(false);};
 
-  const TABS=[{id:"conteudo",icon:"✨",label:"Gerador de Conteúdo"},{id:"diagnostico",icon:"🔬",label:"Diagnóstico"},{id:"churn",icon:"⚠",label:"Alerta de Churn"},{id:"playbooks",icon:"📖",label:"Playbooks"},{id:"biblioteca",icon:"💡",label:"Biblioteca"}];
+  const TABS=[{id:"conteudo",icon:"✨",label:"Gerador de Conteúdo"},{id:"transcrever",icon:"🎙",label:"Transcrição de Áudio"},{id:"diagnostico",icon:"🔬",label:"Diagnóstico"},{id:"churn",icon:"⚠",label:"Alerta de Churn"},{id:"playbooks",icon:"📖",label:"Playbooks"},{id:"biblioteca",icon:"💡",label:"Biblioteca"}];
   const TIPO_BIB={campanha:"Campanha",criativo:"Criativo",publico:"Publico",oferta:"Oferta",processo:"Processo",cliente:"Cliente",geracao_ia:"IA Gerada"};
   const TIPO_BIB_C={campanha:C.a,criativo:"#8b5cf6",publico:"#f59e0b",oferta:C.gr,processo:"#3b82f6",cliente:C.pk,geracao_ia:"#6366f1"};
   const CAT_COLORS={"📝 Texto & Legenda":"#7c3aed","📱 WhatsApp":"#22c55e","🎬 Roteiros de Vídeo":"#ef4444","📣 Anúncios — Vídeo":"#f59e0b","✍️ Anúncios — Texto":"#3b82f6","🚨 Gestão de Crise":C.rd,"✨ Outros":C.a};
@@ -26118,6 +26230,90 @@ PROMPT DE IMAGEM:
           <div><div style={{color:C.td,fontSize:10,fontWeight:700,marginBottom:4,textTransform:"uppercase"}}>KPIs</div><div style={{background:C.gr+"10",border:"1px solid "+C.gr+"33",borderRadius:8,padding:"8px 10px",color:C.gr,fontSize:11,fontWeight:600}}>{pb.kpis}</div></div>
         </div>
       </div>))}
+    </div>)}
+
+    {/* ══ TRANSCRIÇÃO DE ÁUDIO ══ */}
+    {tab==="transcrever"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"20px"}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
+          <div>
+            <div style={{color:C.tx,fontWeight:700,fontSize:14}}>🎙 Transcrição de Áudio</div>
+            <div style={{color:C.td,fontSize:11,marginTop:3,lineHeight:1.5,maxWidth:520}}>Arraste um áudio e veja o texto. Roda 100% no seu navegador — o arquivo não é enviado pra nuvem.</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:200}}>
+            <div style={{color:C.td,fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>Qualidade do modelo</div>
+            <select value={transcModel} disabled={transcLoading} onChange={e=>{setTranscModel(e.target.value);try{localStorage.setItem("pixels-transc-model",e.target.value);}catch(_){};transcPipelineRef.current=null;}} style={inp}>
+              <option value="base">Whisper base — rápido (~75MB)</option>
+              <option value="small">Whisper small — preciso (~250MB)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Drop zone */}
+        <div
+          onDragOver={e=>{e.preventDefault();if(!transcLoading)setTranscDrag(true);}}
+          onDragLeave={()=>setTranscDrag(false)}
+          onDrop={e=>{e.preventDefault();setTranscDrag(false);if(transcLoading)return;const f=e.dataTransfer.files&&e.dataTransfer.files[0];handleTranscFile(f);}}
+          onClick={()=>{if(!transcLoading&&transcInputRef.current)transcInputRef.current.click();}}
+          style={{
+            border:"2px dashed "+(transcDrag?C.a:C.b1),
+            background:transcDrag?C.a+"10":C.s1,
+            borderRadius:12,padding:"32px 20px",textAlign:"center",
+            cursor:transcLoading?"wait":"pointer",transition:"all .15s"
+          }}>
+          <input ref={transcInputRef} type="file" accept="audio/*" style={{display:"none"}} onChange={e=>handleTranscFile(e.target.files&&e.target.files[0])}/>
+          <div style={{fontSize:38,marginBottom:6}}>🎙</div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{transcDrag?"Solte o áudio aqui":"Arraste um áudio ou clique pra enviar"}</div>
+          <div style={{color:C.td,fontSize:10,marginTop:4}}>MP3 · WAV · M4A · OGG · OPUS · WEBM — recomendado até ~25min</div>
+        </div>
+
+        {/* Player + remover */}
+        {transcAudio&&(<div style={{marginTop:12,background:C.s1,borderRadius:10,padding:"10px 12px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:transcAudioUrl?8:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
+              <span style={{fontSize:18}}>🎵</span>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:C.tx,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{transcAudio.name}</div>
+                <div style={{color:C.td,fontSize:10}}>{(transcAudio.size/1024/1024).toFixed(2)} MB</div>
+              </div>
+            </div>
+            <button onClick={()=>{if(transcAudioUrl){try{URL.revokeObjectURL(transcAudioUrl);}catch(_){}};setTranscAudio(null);setTranscAudioUrl(null);setTranscText("");setTranscProgress("");}} disabled={transcLoading} style={{background:"none",border:"none",color:C.td,cursor:transcLoading?"not-allowed":"pointer",fontSize:20,opacity:transcLoading?0.4:1}}>×</button>
+          </div>
+          {transcAudioUrl&&<audio src={transcAudioUrl} controls style={{width:"100%",height:36}}/>}
+        </div>)}
+
+        {/* Status */}
+        {transcLoading&&(<div style={{marginTop:12,background:C.a+"10",border:"1px solid "+C.a+"33",borderRadius:10,padding:"11px 14px",display:"flex",alignItems:"center",gap:10}}>
+          <span style={{display:"inline-block",width:16,height:16,border:"2px solid "+C.a,borderTopColor:"transparent",borderRadius:"50%",animation:"pixSpin .8s linear infinite",flexShrink:0}}/>
+          <div style={{color:C.a,fontSize:12,fontWeight:600}}>{transcProgress||"Processando..."}</div>
+        </div>)}
+        {!transcLoading&&transcProgress&&!transcText&&(<div style={{marginTop:12,background:C.rd+"10",border:"1px solid "+C.rd+"33",borderRadius:10,padding:"11px 14px",color:C.rd,fontSize:12,fontWeight:500}}>{transcProgress}</div>)}
+
+        {/* Resultado */}
+        {transcText&&!transcLoading&&(<div style={{marginTop:14}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,flexWrap:"wrap",gap:6}}>
+            <div style={{color:C.tx,fontSize:12,fontWeight:700}}>Transcrição</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <button onClick={()=>{if(navigator.clipboard)navigator.clipboard.writeText(transcText);setTranscCopied(true);setTimeout(()=>setTranscCopied(false),1500);}} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"6px 11px",color:C.tx,fontSize:11,fontWeight:600,cursor:"pointer"}}>{transcCopied?"✓ Copiado":"📋 Copiar"}</button>
+              <button onClick={()=>{const blob=new Blob([transcText],{type:"text/plain;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="transcricao-"+Date.now()+".txt";document.body.appendChild(a);a.click();setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},100);}} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"6px 11px",color:C.tx,fontSize:11,fontWeight:600,cursor:"pointer"}}>⬇ Baixar .txt</button>
+              <button onClick={saveTranscToBiblioteca} style={{background:transcSaved?C.gr:C.a,color:"#fff",border:"none",borderRadius:8,padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer"}}>{transcSaved?"✓ Salvo na Biblioteca":"💡 Salvar na Biblioteca"}</button>
+            </div>
+          </div>
+          <textarea value={transcText} onChange={e=>setTranscText(e.target.value)} style={{...inp,minHeight:180,resize:"vertical",lineHeight:1.6,fontSize:13}}/>
+          <div style={{color:C.td,fontSize:10,marginTop:6}}>Você pode editar o texto antes de copiar/salvar. O áudio fica só no seu navegador.</div>
+        </div>)}
+      </div>
+
+      {/* Card informativo */}
+      <div style={{background:C.a+"06",borderRadius:12,border:"1px solid "+C.a+"22",padding:"13px 16px"}}>
+        <div style={{color:C.a,fontSize:11,fontWeight:700,marginBottom:6}}>ℹ Como funciona</div>
+        <div style={{color:C.ts,fontSize:11,lineHeight:1.7}}>
+          • <b>100% privado</b>: o modelo Whisper é baixado uma vez e roda no seu navegador. Nenhum áudio sai daqui.<br/>
+          • <b>Primeira vez é mais lenta</b>: precisa baixar o modelo ({transcModel==="small"?"~250MB":"~75MB"}). Depois fica em cache do navegador.<br/>
+          • <b>Velocidade</b>: ~10-30s por minuto de áudio (varia com o PC). Use a Pixels IA enquanto roda.<br/>
+          • <b>Idioma</b>: configurado pra português brasileiro.
+        </div>
+      </div>
     </div>)}
 
     {/* ══ BIBLIOTECA ══ */}
