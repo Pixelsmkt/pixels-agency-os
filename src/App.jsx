@@ -11192,7 +11192,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   // ── COLUNAS REDIMENSIONÁVEIS (Excel-like) ──
   // Demanda fica flex (2fr) — o resto são px e o usuário ajusta arrastando o handle do header.
   // Larguras persistidas em localStorage. Mínimo 50px pra não sumir.
-  const DEFAULT_COL_WIDTHS={status:110,prior:80,responsavel:130,prazo:90,parado:70,dataPub:90,dataConc:90,tag:130,actions:70};
+  const DEFAULT_COL_WIDTHS={status:110,prior:80,responsavel:130,prazo:90,parado:70,dataPub:130,dataConc:130,tag:130,actions:70};
   const [colWidths,setColWidths]=useState(function(){
     try{
       const raw=localStorage.getItem("pixels-lista-col-widths-v1");
@@ -11233,8 +11233,8 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     {label:"Responsavel",key:"responsavel"},
     {label:"Prazo",key:"prazo"},
     {label:"Parado",key:"parado"},
-    {label:"Data Pub.",key:"dataPub"},
-    {label:"Data Conc.",key:"dataConc"},
+    {label:"Data Publicação",key:"dataPub"},
+    {label:"Data Conclusão",key:"dataConc"},
   ];
   if(isAdminViewer)HEADERS_BASE.push({label:"Tag",key:"tag"});
   HEADERS_BASE.push({label:"",key:null});
@@ -11424,9 +11424,9 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
               <span style={{color:t.publishDate?C.tx:C.td,fontSize:11}}>{fmtShort(t.publishDate)}</span>
             </div>
 
-            {/* Data de conclusão */}
+            {/* Data de conclusão — atrelada ao prazo (deadline) */}
             <div style={{padding:"10px 12px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
-              <span style={{color:t.completedAt?C.gr:C.td,fontSize:11,fontWeight:t.completedAt?600:400}}>{fmtShort(t.completedAt)}</span>
+              <span style={{color:!t.deadline?C.td:late?C.rd:days===0?"#f97316":t.completedAt?C.gr:C.tx,fontSize:11,fontWeight:late||t.completedAt?600:400}}>{fmtShort(t.deadline)}</span>
             </div>
 
             {/* Tag (etiqueta interna + tags) — só admin vê esta coluna */}
