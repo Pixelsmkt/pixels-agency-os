@@ -9713,11 +9713,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
     if(filterClient!=="todos"&&t.client!==filterClient)return false;
     if(filterClient==="bioter"&&filterBioterUnit!=="todos"&&t.bioterUnit!==filterBioterUnit)return false;
-    // Etiqueta interna (admin-only). "todos" passa, "__sem__" filtra sem etiqueta, demais comparam string.
+    // Filtro de etiqueta (admin-only). Inclui tanto a Etiqueta Interna (singular,
+     // ex: "Pacote 10/06") quanto as Tags do cartão (array, ex: "lançamento").
+     // "todos" passa, "__sem__" filtra sem nenhuma etiqueta, demais comparam string.
     if(isAdminUser&&filterAdminTag&&filterAdminTag!=="todos"){
-      const tagVal=(t.adminTag||"").trim();
-      if(filterAdminTag==="__sem__"){if(tagVal)return false;}
-      else if(tagVal!==filterAdminTag)return false;
+      const adminTagVal=(t.adminTag||"").trim();
+      const tagsArr=Array.isArray(t.tags)?t.tags.map(x=>(x||"").trim()).filter(Boolean):[];
+      if(filterAdminTag==="__sem__"){
+        if(adminTagVal||tagsArr.length>0)return false;
+      } else {
+        const matches = adminTagVal===filterAdminTag || tagsArr.includes(filterAdminTag);
+        if(!matches)return false;
+      }
     }
     // Oculta tasks de colunas bloqueadas (false = bloqueado; undefined = coluna custom = deixa ver)
     if(!isAdmin&&COL_PERM[t.status]===false)return false;
@@ -9994,36 +10001,56 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             })}
           </KanbanDropdown>}
 
-          {/* ── ETIQUETA INTERNA ── só sócios. Mostra dropdown só se admin. */}
+          {/* ── ETIQUETAS (Internas + Tags) ── só sócios. Mostra valores dos 2 campos. */}
           {isAdminUser&&(function(){
-            // Coleta todas as etiquetas em uso (únicas, ordenadas)
-            const usedTags=Array.from(new Set((tasks||[]).map(x=>(x&&x.adminTag||"").trim()).filter(Boolean))).sort();
+            // Coleta de adminTag (singular) e tags (array) — separadas pra visualização
+            const adminTagValues=Array.from(new Set((tasks||[]).map(function(x){return((x&&x.adminTag)||"").trim();}).filter(Boolean))).sort();
+            const tagsArrValues=Array.from(new Set(
+              (tasks||[]).flatMap(function(x){return Array.isArray(x&&x.tags)?x.tags:[];}).map(function(t){return(t||"").trim();}).filter(Boolean)
+            )).sort();
+            const totalCount=adminTagValues.length+tagsArrValues.length;
             const labelTxt=filterAdminTag==="todos"?"Etiqueta":(filterAdminTag==="__sem__"?"Sem etiqueta":filterAdminTag);
             return <KanbanDropdown label={labelTxt} icon="🏷" active={filterAdminTag!=="todos"}>
               {function(close){return(<>
                 <button onClick={function(){setFilterAdminTag("todos");close();}}
                   style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterAdminTag==="todos"?C.ag:"transparent",border:"none",color:filterAdminTag==="todos"?C.a:C.tx,fontSize:12,fontWeight:filterAdminTag==="todos"?700:500,cursor:"pointer",textAlign:"left"}}>
-                  Todas as etiquetas
+                  Todas
                   {filterAdminTag==="todos"&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
                 </button>
                 <button onClick={function(){setFilterAdminTag("__sem__");close();}}
                   style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterAdminTag==="__sem__"?C.ag:"transparent",border:"none",color:filterAdminTag==="__sem__"?C.a:C.tx,fontSize:12,fontWeight:filterAdminTag==="__sem__"?700:500,cursor:"pointer",textAlign:"left",borderTop:"1px solid "+C.b1}}>
-                  <span style={{color:"#94a3b8",fontStyle:"italic"}}>Sem etiqueta</span>
+                  <span style={{color:"#94a3b8",fontStyle:"italic"}}>Sem etiqueta nem tag</span>
                   {filterAdminTag==="__sem__"&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
                 </button>
-                {usedTags.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
-                  <div style={{padding:"4px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Etiquetas em uso</div>
-                  {usedTags.map(function(tag){
+
+                {adminTagValues.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                  <div style={{padding:"4px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Etiqueta interna</div>
+                  {adminTagValues.map(function(tag){
                     const active=filterAdminTag===tag;
-                    return <button key={tag} onClick={function(){setFilterAdminTag(tag);close();}}
+                    return <button key={"at-"+tag} onClick={function(){setFilterAdminTag(tag);close();}}
                       style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left"}}>
                       <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600}}>{tag}</span>
                       {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
                     </button>;
                   })}
                 </div>}
-                {usedTags.length===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1}}>
-                  Nenhuma etiqueta cadastrada ainda. Abra um cartão e use o campo "Etiqueta interna".
+
+                {tagsArrValues.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                  <div style={{padding:"4px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Tags do cartão</div>
+                  {tagsArrValues.map(function(tag){
+                    const active=filterAdminTag===tag;
+                    const tc=(typeof tagColor==="function")?tagColor(tag):{fg:"#64748b"};
+                    return <button key={"t-"+tag} onClick={function(){setFilterAdminTag(tag);close();}}
+                      style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left"}}>
+                      <span style={{background:tc.fg+"18",color:tc.fg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:"1px solid "+tc.fg+"33"}}>#{tag}</span>
+                      {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
+                    </button>;
+                  })}
+                </div>}
+
+                {totalCount===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1,lineHeight:1.5}}>
+                  Nenhuma etiqueta ainda. Abra um cartão e use os campos<br/>
+                  <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
                 </div>}
               </>);}}
             </KanbanDropdown>;
