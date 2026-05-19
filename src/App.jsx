@@ -23326,8 +23326,11 @@ export default function AgencyOS(){
       </button>}
       <div style={{padding:"14px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}>
-          <div style={{width:32,height:32,borderRadius:10,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>⬡</div>
-          {(!sideCollapsed||isMob)&&<div style={{flex:1,minWidth:0}}><div style={{color:C.tx,fontWeight:900,fontSize:13,letterSpacing:-.5,overflow:"hidden",whiteSpace:"nowrap"}}>Pixels</div><div style={{color:C.td,fontSize:9,letterSpacing:1}}>Agency OS · PRO</div></div>}
+          {sideCollapsed&&!isMob
+            ? <div style={{width:32,height:32,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"flex-start",flexShrink:0}}>
+                <img src="/logo-pixels.png" alt="Pixels" style={{height:32,width:"auto",objectFit:"contain",objectPosition:"left center"}}/>
+              </div>
+            : <img src="/logo-pixels.png" alt="Pixels Agency OS" style={{height:28,width:"auto",maxWidth:"100%",objectFit:"contain",display:"block",flexShrink:0}}/>}
           {isMob&&<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>}
         </div>
       </div>
