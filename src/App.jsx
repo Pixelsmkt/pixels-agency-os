@@ -320,17 +320,22 @@ const CURRENT_USER=new Proxy({},{
 // Definidas aqui — antes de qualquer módulo que as use (04_demandas, etc.)
 const DEFAULT_PERMS={
   // Dashboard
-  verDashboard:true, verDashOutros:false,
+  verDashboard:true, verDashOutros:false, verContagemDemandas:false,
   // Demandas — todos veem o kanban e as colunas principais
   verDemandas:true, criarDemanda:false, editarDemanda:false, excluirDemanda:false,
   arrastarCards:false, verTodosKanban:false, verKanbanSocios:false, verLixeira:false, novaColuna:false,
   filtroSetor:false, filtroCliente:false, filtroPerfil:false,
   // Colunas — abertas para todos por padrão (permissões finas definidas por sócio)
-  colCopys:false, colDemanda:true, colExecucao:true, colAvaliacao:false,
-  colAjustes:true, colAprovado:false, colAgendado:false, colPublicado:false, colPausado:false, colAjuste:false,
+  colRascunhos:false, colCopys:false, colDemanda:true, colExecucao:true, colAvaliacao:false,
+  colAjustes:true, colAprovado:false, colAgendado:false, colPublicado:false, colPausado:false,
+  // Fluxo especial — só certos níveis podem desfazer aprovação de copy
+  desfazerCopy:false,
+  // Etiquetas/Tags (admin features no card)
+  gerenciarEtiquetas:false,
   // Clientes
   verClientes:false, verDadosCliente:false, verMetricas:false,
   verConcorrencia:false, verMindmap:false, verLinksCliente:false,
+  verResumoIA:false, editarEvolucao:false, editarBriefing:false, editarFerramentasCliente:false,
   // Aprovações
   verAprovacoes:false, verAprCopys:false, verAprPublicacao:false, verAprAjuste:false, aprovar:false,
   // Chat
@@ -339,6 +344,7 @@ const DEFAULT_PERMS={
   verCanalSocial:false, verCanalAlertas:false, verCanalTodosClientes:false,
   verCanalCliente_construschorr:false, verCanalCliente_bioter:false,
   verCanalCliente_arabuta:false, verCanalCliente_climaves:false, verCanalCliente_vetservice:false,
+  verCanalCliente_pixels:false,
   // Financeiro / Admin
   verFinanceiro:false, verContratos:false, verDRECompleto:false,
   // Análises / Portal
@@ -347,10 +353,12 @@ const DEFAULT_PERMS={
   verAcessos:false, editarAcessos:false,
   // Ferramentas
   pixelsIA:false, escanear:false, verCalendario:true, verBriefingCard:false,
+  editarSLA:false,
   // Notificações
-  verNotificacoes:true, verInterno:false,
+  verNotificacoes:true, criarAlerta:false, verInterno:false,
   // Interno — sub-páginas
   verMapeamento:false, verConexoes:false, verPontuacao:false, verCarreira:false, verAvaliacao360:false,
+  verContagemEquipe:false, criarNovidade:false,
   // Análises — sub-páginas
   verAnaliseProd:false, verAnaliseGarg:false, verRelatorio:false,
   // Clientes por ID
@@ -363,7 +371,7 @@ const PARTNER_PERMS=Object.keys(DEFAULT_PERMS).reduce((a,k)=>({...a,[k]:true}),{
 const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
-  ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,colAjuste:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true},
+  ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true},
   erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
   andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
   guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
@@ -8105,6 +8113,10 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   };
   let isSocio=CURRENT_USER.level===1;
   let myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
+  // Permissões finas pras features novas — sócios sempre podem; outros via Acessos
+  let canVerResumoIA   = isSocio||myPerms.verResumoIA===true;
+  let canEditarEvolucao= isSocio||myPerms.editarEvolucao===true;
+  let canEditarBriefing= isSocio||myPerms.editarBriefing===true;
   let canSeeConcorrencia=isSocio||(myPerms.verConcorrencia&&myPerms["verCliente_"+cl.id+"_concorrencia"]!==false);
 
   let score=calcScore(cl,TASKS);
@@ -9544,7 +9556,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       return cleaned.includes(val)?cleaned.filter(function(x){return x!==val;}):cleaned.concat([val]);
     });
   };
-  const isAdminUser = (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
+  // isAdminUser = quem pode ver/editar etiquetas e tags. Gerenciado via perm "gerenciarEtiquetas".
+  // Sócios sempre podem (level===1 mantido como fallback de segurança).
+  const isAdminUser = (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
 
   // ═══ GRUPOS DE TAGS (admin) ═══
   // Cada grupo: { id, name, color, tags: [tagName...] }. Tags fora de qualquer grupo aparecem como "Sem grupo".
@@ -9750,8 +9764,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   // Cada coluna visível só se a permissão correspondente estiver ligada
   // COL_PERM: true = pode ver, false = bloqueado, undefined = coluna custom (deixa ver)
   const COL_PERM={
-    // Rascunhos: só sócios + social media (Hellen). Designers/editores não veem.
-    rascunhos: myPerms.colRascunhos===true||activeUser.level===1||activeUser.id==="ellen",
+    // Rascunhos: gerenciado via permissão colRascunhos. Sócios sempre veem.
+    rascunhos: myPerms.colRascunhos===true||activeUser.level===1,
     demanda:   !!myPerms.colCopys,
     recebida:  !!myPerms.colDemanda,
     execucao:  !!myPerms.colExecucao,
@@ -9859,10 +9873,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     // Mesma coluna primeiro — evita toast ruidoso em drag-drop sem movimento real
     if(t.status===toColId){setDrag(null);setOver(null);return;}
     if(t.status==="demanda"){
-      // Copys nunca podem ser arrastadas — saem APENAS pelo fluxo de aprovação
-      pixelsToast.warning("Este cartão precisa ser aprovado pelos gestores antes de prosseguir.",5000);
-      setDrag(null);setOver(null);
-      return;
+      // Copys normalmente NÃO podem ser arrastadas — saem APENAS pelo fluxo de aprovação.
+      // Exceção: quem tem perm "desfazerCopy" pode arrastar de volta pra "rascunhos" (cancela aprovação).
+      if(toColId==="rascunhos"&&(myPerms.desfazerCopy===true||activeUser.level===1)){
+        // permitido: cancelar envio à aprovação e voltar pra rascunhos
+        pixelsToast.info("Cartão voltou pra Rascunhos. Aprovação foi cancelada.",4000);
+      } else {
+        pixelsToast.warning("Este cartão precisa ser aprovado pelos gestores antes de prosseguir.",5000);
+        setDrag(null);setOver(null);
+        return;
+      }
     }
     if(t.status==="avaliacao"){
       // Avaliação só sai via fluxo de Aprovação (Aprovar / Solicitar Ajuste)
@@ -11187,7 +11207,8 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
   const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#7c1d1d",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
-  const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1);
+  // isAdminViewer = pode ver coluna Tag na lista + faixas de tag. Permissão: gerenciarEtiquetas.
+  const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
 
   // ── COLUNAS REDIMENSIONÁVEIS (Excel-like) ──
   // Demanda fica flex (2fr) — o resto são px e o usuário ajusta arrastando o handle do header.
@@ -13909,8 +13930,9 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
   const markRead=(id)=>{if(setNotifs)setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));};
   const markAllCat=(cat)=>{if(setNotifs)setNotifs(p=>p.map(n=>n.category===cat?{...n,read:true}:n));};
 
-  // ═══ Alertas: quem pode criar? Sócios + Social Media (coordinator) ═══
-  const canCreateAlerts=CURRENT_USER.level===1||CURRENT_USER.dash==="coordinator";
+  // ═══ Alertas: gerenciado via perm "criarAlerta". Sócios e coordenadores sempre podem (fallback). ═══
+  const _alertPerms=(typeof ACCESS_STORE!=="undefined"?(ACCESS_STORE[CURRENT_USER.id]||{}):{});
+  const canCreateAlerts=CURRENT_USER.level===1||CURRENT_USER.dash==="coordinator"||_alertPerms.criarAlerta===true;
   const [allAlerts,setAllAlerts]=useState(()=>loadAllAlerts());
   const [alertMsg,setAlertMsg]=useState("");
   const [alertTarget,setAlertTarget]=useState("all");
@@ -14331,12 +14353,14 @@ const PERM_TABS=[
   {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
   {id:"acessos",      navIcon:"acessos",    label:"Acessos",            color:"#475569"},
   {id:"interno",      navIcon:"interno",    label:"Interno",            color:"#7c3aed"},
+  {id:"notificacoes", navIcon:"notif",      label:"Notificações",       color:"#0ea5e9"},
 ];
 
 const PERM_GROUPS={
   dashboard:[
     {key:"verDashboard",      label:"Ver Dashboard",              desc:"Acesso à página inicial do dashboard"},
     {key:"verDashOutros",     label:"Ver Dashboard de Outros",    desc:"Pode ver o dashboard de outros colaboradores"},
+    {key:"verContagemDemandas",label:"Tab Contagem de Demandas",  desc:"Vê a aba 'Contagem' no dashboard"},
   ],
   demandas:[
     {section:"Acesso Geral"},
@@ -14353,14 +14377,21 @@ const PERM_GROUPS={
     {key:"filtroCliente",     label:"Filtro por Cliente",         desc:"Pode filtrar por cliente"},
     {key:"filtroPerfil",      label:"Filtro por Colaborador",     desc:"Pode filtrar por perfil"},
     {section:"Colunas Visíveis"},
+    {key:"colRascunhos",      label:"Rascunhos",                  desc:"Coluna onde Social Media trabalha o copy ANTES de ir pra aprovação"},
     {key:"colCopys",          label:"Copys",                      desc:"Coluna onde entram novas demandas de copy"},
     {key:"colDemanda",        label:"Demanda",                    desc:"Coluna de demandas recebidas"},
     {key:"colExecucao",       label:"Em Execução",                desc:"Coluna de trabalho em andamento"},
+    {key:"colAjustes",        label:"Ajustes",                    desc:"Coluna de ajustes solicitados pelo cliente"},
     {key:"colAvaliacao",      label:"Concluído p/ Avaliação",     desc:"Coluna aguardando aprovação"},
     {key:"colAprovado",       label:"Aprovado",                   desc:"Coluna de entregas aprovadas"},
     {key:"colAgendado",       label:"Agendado",                   desc:"Coluna de publicações programadas"},
     {key:"colPublicado",      label:"Publicado",                  desc:"Coluna de conteúdos publicados"},
     {key:"colPausado",        label:"Pausado",                    desc:"Coluna de demandas pausadas"},
+    {section:"Fluxo Especial"},
+    {key:"desfazerCopy",      label:"Mover Copy → Rascunhos",     desc:"Pode arrastar copys de volta pra rascunho (cancela envio à aprovação)"},
+    {key:"verKanbanSocios",   label:"Ver Cards de Sócios",        desc:"Inclui cards atribuídos aos sócios na visão do kanban"},
+    {section:"Etiquetas e Tags"},
+    {key:"gerenciarEtiquetas",label:"Gerenciar Etiquetas/Tags",   desc:"Edita e visualiza Etiqueta Interna e Tags do cartão (faixas coloridas)"},
     {section:"Calendário de Publicações"},
     {key:"verCalPub",         label:"Calendário de Publicações",  desc:"Acesso ao calendário de publicações"},
     {section:"Calendário Interno/Clientes"},
@@ -14393,11 +14424,16 @@ const PERM_GROUPS={
     {key:"verCanalCliente_climaves",        label:"Canal Climaves",           desc:"Canal exclusivo do cliente Climaves"},
     {key:"verCanalCliente_construschorr",   label:"Canal Construschorr",      desc:"Canal exclusivo do cliente Construschorr"},
     {key:"verCanalCliente_vetservice",      label:"Canal Vet Service",        desc:"Canal exclusivo do cliente Vet Service"},
+    {key:"verCanalCliente_pixels",          label:"Canal Pixels (interno)",   desc:"Canal interno da agência Pixels"},
   ],
   clientes:[
     {key:"verClientes",       label:"Acessar Clientes",           desc:"Acesso à lista de clientes"},
     {section:"Informações Gerais"},
     {key:"verDadosCliente",   label:"Dados do Cliente",           desc:"Ver informações e detalhes do cliente"},
+    {key:"verResumoIA",       label:"Botão Resumo IA",            desc:"Pode gerar e ver o resumo de cliente pela IA"},
+    {key:"editarEvolucao",    label:"Editar Aba Evolução",        desc:"Pode adicionar/editar marcos e métricas mensais"},
+    {key:"editarBriefing",    label:"Editar Aba Briefing",        desc:"Pode editar visão, público, estratégia e 'não fazer'"},
+    {key:"editarFerramentasCliente",label:"Editar Ferramentas",   desc:"Pode editar campos personalizados nas ferramentas do cliente"},
     {section:"Por Cliente"},
     {key:"verCliente_construschorr", label:"Construschorr", desc:"Acesso ao cliente Construschorr"},
     {key:"verCliente_construschorr_metricas", label:"Construschorr — Métricas", desc:"Ver métricas de performance do Construschorr"},
@@ -14441,6 +14477,7 @@ const PERM_GROUPS={
     {key:"pixelsIA",          label:"Acessar Pixels IA",          desc:"Acesso à inteligência artificial"},
     {key:"escanear",          label:"Escanear Storage",           desc:"Pode escanear o Storage de arquivos"},
     {key:"verBriefingCard",   label:"Ver Briefing no Card",       desc:"Vê o briefing dentro dos cartões"},
+    {key:"editarSLA",         label:"Editar SLA & Publicação",    desc:"Pode editar SLA do card e data/hora de publicação"},
   ],
   portal:[
     {key:"verPortal",         label:"Acessar Portal do Cliente",  desc:"Acesso ao portal do cliente"},
@@ -14453,6 +14490,10 @@ const PERM_GROUPS={
   acessos:[
     {key:"verAcessos",        label:"Ver Acessos",                desc:"Acesso ao módulo de gerenciamento"},
     {key:"editarAcessos",     label:"Editar Permissões",          desc:"Pode alterar permissões de outros"},
+  ],
+  notificacoes:[
+    {key:"verNotificacoes",   label:"Ver Notificações",           desc:"Acesso ao menu de notificações"},
+    {key:"criarAlerta",       label:"Criar Alertas",              desc:"Pode criar alertas/notificações manualmente"},
   ],
   dem_internas:[
     {section:"Acesso"},
@@ -14469,6 +14510,9 @@ const PERM_GROUPS={
     {key:"verPontuacao",      label:"Pontuação de Equipe",        desc:"Ver ranking e pontuação"},
     {key:"verCarreira",       label:"Histórico de Carreira",      desc:"Ver histórico de carreira"},
     {key:"verAvaliacao360",   label:"Avaliação 360",              desc:"Ver avaliações da equipe"},
+    {key:"verContagemEquipe", label:"Contagem da Equipe",         desc:"Ver menu admin de contagem (sócios + RH)"},
+    {section:"Ações"},
+    {key:"criarNovidade",     label:"Criar Novidade",             desc:"Pode adicionar novidades/aniversários no quadro"},
   ],
 };
 
@@ -17884,7 +17928,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [bioterUnit,setBioterUnit]=useState(task.bioterUnit||"chapeco");
   // Etiqueta interna admin (ex: "Pacote 10/06"). Só visível/editável p/ sócios.
   const [adminTag,setAdminTag]=useState(task.adminTag||"");
-  const isAdmin = CURRENT_USER && CURRENT_USER.level === 1;
+  // isAdmin = pode editar etiquetas/tags. Permissão: gerenciarEtiquetas. Sócios sempre podem.
+  const isAdmin = !!(CURRENT_USER && (CURRENT_USER.level === 1 || (cardPerms&&cardPerms.gerenciarEtiquetas===true)));
   // Tags (faixas coloridas no card). Visíveis pra todos, editáveis só p/ sócios.
   const [tags,setTags]=useState(Array.isArray(task.tags)?task.tags:[]);
   const [newTagInput,setNewTagInput]=useState("");
@@ -17907,7 +17952,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [slaPausedAt,setSlaPausedAt]=useState(task.slaPausedAt||null); // ISO se pausado
   const [slaPausedDuration,setSlaPausedDuration]=useState(task.slaPausedDuration||0); // segundos pausados
   // Quem pode definir SLA e data de publicação: só admin + coordinator
-  const canEditSLAandPub=(CURRENT_USER.level===1)||(CURRENT_USER.dash==="coordinator");
+  // canEditSLAandPub: gerenciado via perm "editarSLA". Sócios e coordenadores sempre podem.
+  const canEditSLAandPub=(CURRENT_USER.level===1)||(CURRENT_USER.dash==="coordinator")||(cardPerms&&cardPerms.editarSLA===true);
 
   // Re-sincroniza estados quando outra sessão edita este cartão via realtime
   // Só atualiza campos que o usuário NÃO modificou (evita sobrescrever edições em andamento)
@@ -20437,7 +20483,9 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
     try{return localStorage.getItem("pixels-colab-dash-tab-"+user.id)||"geral";}catch(e){return"geral";}
   });
   useEffect(()=>{try{localStorage.setItem("pixels-colab-dash-tab-"+user.id,dashTab);}catch(e){}},[dashTab,user.id]);
-  const showContagemTab=!!user.pagamentoPorDemanda;
+  // Tab Contagem aparece pra quem é pago por demanda OU tem perm verContagemDemandas
+  const _userPerms=(typeof ACCESS_STORE!=="undefined"?(ACCESS_STORE[user.id]||{}):{});
+  const showContagemTab=!!user.pagamentoPorDemanda||_userPerms.verContagemDemandas===true;
   const effectiveDashTab=showContagemTab?dashTab:"geral";
   const [widgets,setWidgets]=useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-dash-widgets-"+user.id)||'{"notifs":true,"clients":true,"stale":true}');}catch(e){return{notifs:true,clients:true,stale:true};}
@@ -22969,7 +23017,7 @@ export default function AgencyOS(){
       case "interno_calendario":
       case "interno_radar":        return p.verInterno||isSocio;
       case "interno_pontuacao":    return (p.verInterno&&p.verPontuacao)||isSocio;
-      case "interno_contagem":     return isSocio; // Só sócio vê
+      case "interno_contagem":     return p.verContagemEquipe||isSocio; // Sócio sempre; outros via permissão
       case "interno_mapeamento":   return (p.verInterno&&p.verMapeamento)||isSocio;
       case "interno_conexoes":     return (p.verInterno&&p.verConexoes)||isSocio;
       case "interno_360":          return (p.verInterno&&p.verAvaliacao360)||isSocio;
@@ -24738,7 +24786,7 @@ function PageCarreira(){
           style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:12,outline:"none"}}>
           {TEAM.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
-        {CURRENT_USER.level===1&&<button onClick={()=>setShowAdd(true)}
+        {(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).criarNovidade===true)&&<button onClick={()=>setShowAdd(true)}
           style={{background:C.a,color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
           + Adicionar
         </button>}
