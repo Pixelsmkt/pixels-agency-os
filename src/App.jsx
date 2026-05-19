@@ -8216,11 +8216,11 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
       <div style={{flex:1,minWidth:100}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.3}}>{cl.name}</div>
-          <button onClick={abrirIA}
+          {canVerResumoIA&&<button onClick={abrirIA}
             style={{background:"linear-gradient(135deg,#a140ff,#7c3aed)",color:"#fff",border:"none",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,boxShadow:"0 1px 4px rgba(124,58,237,0.25)"}}
             title="Gera um resumo executivo do cliente usando IA">
             ✨ IA Resumir
-          </button>
+          </button>}
         </div>
         <div style={{color:C.td,fontSize:11}}>{cl.sector}</div>
       </div>
@@ -8302,8 +8302,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
 
     {/* CONTEÚDO */}
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob}/>}
-    {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={isSocio}/>}
-    {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={isSocio}/>}
+    {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
+    {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
     {tab==="concorrencia"&&canSeeConcorrencia&&(
@@ -14353,7 +14353,7 @@ const PERM_TABS=[
   {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
   {id:"acessos",      navIcon:"acessos",    label:"Acessos",            color:"#475569"},
   {id:"interno",      navIcon:"interno",    label:"Interno",            color:"#7c3aed"},
-  {id:"notificacoes", navIcon:"notif",      label:"Notificações",       color:"#0ea5e9"},
+  {id:"notificacoes", navIcon:"notificacoes",label:"Notificações",      color:"#0ea5e9"},
 ];
 
 const PERM_GROUPS={
