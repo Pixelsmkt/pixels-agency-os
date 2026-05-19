@@ -690,11 +690,20 @@ const mkTimelineEntry=(fromId,toId,cols)=>{
 
 /* ─── COMPONENTES GLOBAIS ────────────────── */
 const Av=({l,color,size=32,status,uid})=>{
-  const photo=uid?getProfilePhoto(uid):null;
+  // Photo agora reage a updates instantâneos via evento "pixels:photo-updated"
+  const [photo,setPhoto]=useState(uid?getProfilePhoto(uid):null);
+  useEffect(function(){
+    if(!uid)return;
+    const update=function(e){
+      if(!e||!e.detail||!e.detail.userId||e.detail.userId===uid)setPhoto(getProfilePhoto(uid));
+    };
+    window.addEventListener("pixels:photo-updated",update);
+    return function(){window.removeEventListener("pixels:photo-updated",update);};
+  },[uid]);
   return(
     <div style={{position:"relative",flexShrink:0,width:size,height:size}}>
       {photo
-        ?<img src={photo} alt={l} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",display:"block"}}/>
+        ?<img src={photo} alt={l} style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",display:"block"}} onError={function(e){e.currentTarget.style.display="none";}}/>
         :<div style={{width:size,height:size,borderRadius:"50%",background:color||C.a,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:Math.round(size*0.38),userSelect:"none"}}>{l}</div>
       }
       {status&&<div style={{position:"absolute",bottom:0,right:0,width:Math.round(size*0.28),height:Math.round(size*0.28),borderRadius:"50%",background:status==="online"?C.gr:status==="ausente"?C.yw:"#94a3b8",border:`${Math.max(1,Math.round(size*0.06))}px solid ${C.bg}`}}/>}
@@ -854,6 +863,45 @@ const NAV=[
     {id:"interno_carreira",   icon:"▲", label:"Histórico Carreira"},
   ]},
 ];
+
+/* ─── USER AVATAR GLOBAL ──────────────────────
+ * Componente que mostra a FOTO real do usuário se existir, com fallback pra letra colorida.
+ * Usa getProfilePhoto (já existente — lê pixels-selfprofile-{id} do localStorage).
+ * Re-renderiza instantâneo quando dispara event "pixels:photo-updated".
+ */
+function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title}){
+  // user pode ser objeto TEAM completo OU só id string
+  const u=typeof user==="string"?(TEAM.find(t=>t.id===user)||{id:user,name:user,av:"?",color:"#94a3b8"}):user;
+  const [photo,setPhoto]=useState(()=>getProfilePhoto(u.id));
+  useEffect(function(){
+    const handler=function(e){
+      // Re-checa só se o evento é pro usuário relevante (ou broadcast geral)
+      if(!e||!e.detail||!e.detail.userId||e.detail.userId===u.id){
+        setPhoto(getProfilePhoto(u.id));
+      }
+    };
+    window.addEventListener("pixels:photo-updated",handler);
+    return function(){window.removeEventListener("pixels:photo-updated",handler);};
+  },[u.id]);
+  const base={
+    width:size,height:size,borderRadius:"50%",
+    border:border?"1.5px solid #fff":"none",
+    boxShadow:"0 1px 2px rgba(0,0,0,0.1)",
+    flexShrink:0,overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center"
+  };
+  const merged=Object.assign({},base,extraStyle||{});
+  if(photo){
+    return <img src={photo} alt={u.name||""} title={title||u.name||""} loading="lazy"
+      style={Object.assign({},merged,{objectFit:"cover"})}
+      onError={function(e){e.currentTarget.style.display="none";}}/>;
+  }
+  // Fallback: letra colorida
+  return <div title={title||u.name||""} style={Object.assign({},merged,{
+    background:u.color||"#94a3b8",
+    color:"#fff",fontWeight:fontWeight,
+    fontSize:Math.max(8,Math.round(size*0.45))
+  })}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
+}
 
 /* ─── HOOK: useOpenCardSync ─────────────────── */
 // Mantém o card aberto sincronizado com a versão mais recente de tasks.
@@ -10487,10 +10535,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
                         {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>📎{(t.files||[]).length}</span>}
                         {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>💬{(t.comments||[]).length}</span>}
-                        {/* Stack de avatares — todos os responsáveis */}
+                        {/* Stack de avatares — usa UserAvatar (foto real ou fallback letra) */}
                         {allAssignees.length>0&&<div style={{display:"flex",alignItems:"center",marginLeft:2}}>
                           {allAssignees.slice(0,3).map((au,idx)=>(
-                            <div key={au.id} title={au.name} style={{width:19,height:19,borderRadius:"50%",background:au.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:9,border:"1.5px solid #fff",marginLeft:idx===0?0:-6,zIndex:allAssignees.length-idx,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>{au.av}</div>
+                            <UserAvatar key={au.id} user={au} size={19} style={{marginLeft:idx===0?0:-6,zIndex:allAssignees.length-idx}}/>
                           ))}
                           {allAssignees.length>3&&<div title={allAssignees.slice(3).map(au=>au.name).join(", ")} style={{width:19,height:19,borderRadius:"50%",background:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:600,fontSize:8,border:"1.5px solid #fff",marginLeft:-6,boxShadow:"0 1px 2px rgba(0,0,0,0.1)"}}>+{allAssignees.length-3}</div>}
                         </div>}
@@ -11679,7 +11727,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
 
             {/* Assignee */}
             <div style={{padding:"10px 14px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center",gap:7}}>
-              {u&&<div style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:9,fontWeight:900,flexShrink:0}}>{u.av}</div>}
+              {u&&<UserAvatar user={u} size={22} border={false}/>}
               <span style={{color:C.tx,fontSize:11}}>{u?.name||"—"}</span>
             </div>
 
@@ -14723,6 +14771,13 @@ function CollabProfilePage({user,profile,onSave,onClose}){
       if(error)throw error;
       const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
       setPhoto(data.publicUrl);
+      // Atualiza localStorage imediatamente pra todos os UserAvatar refletirem antes do save final
+      try{
+        const k="pixels-selfprofile-"+user.id;
+        const prev=JSON.parse(localStorage.getItem(k)||"{}");
+        localStorage.setItem(k,JSON.stringify(Object.assign({},prev,{photo:data.publicUrl})));
+        window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:user.id}}));
+      }catch(_){}
     }catch(err){
       console.error("Erro upload foto:",err);
       // Fallback: usar base64 comprimido via canvas
@@ -14734,7 +14789,14 @@ function CollabProfilePage({user,profile,onSave,onClose}){
         canvas.width=Math.round(img.width*ratio);
         canvas.height=Math.round(img.height*ratio);
         canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
-        setPhoto(canvas.toDataURL("image/jpeg",0.75));
+        const dataUrl=canvas.toDataURL("image/jpeg",0.75);
+        setPhoto(dataUrl);
+        try{
+          const k="pixels-selfprofile-"+user.id;
+          const prev=JSON.parse(localStorage.getItem(k)||"{}");
+          localStorage.setItem(k,JSON.stringify(Object.assign({},prev,{photo:dataUrl})));
+          window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:user.id}}));
+        }catch(_){}
       };
       img.src=URL.createObjectURL(file);
     }finally{
@@ -18751,7 +18813,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
               {col&&<span style={{background:col.color+"18",color:col.color,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:.5}}>{col.label}</span>}
               {assignees.length>0&&<div style={{display:"flex",gap:-4}}>
-                {assignees.map((aid,i)=>{const au=TEAM.find(u=>u.id===aid);return au?<div key={aid} title={au.name} style={{width:22,height:22,borderRadius:"50%",background:au.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:8,marginLeft:i===0?0:-6,border:"2px solid #fff",zIndex:assignees.length-i}}>{au.av}</div>:null;})}
+                {assignees.map((aid,i)=>{const au=TEAM.find(u=>u.id===aid);return au?<UserAvatar key={aid} user={au} size={22} style={{marginLeft:i===0?0:-6,border:"2px solid #fff",zIndex:assignees.length-i}}/>:null;})}
                 <span style={{color:"#94a3b8",fontSize:11,marginLeft:8,alignSelf:"center"}}>{assignees.map(aid=>TEAM.find(u=>u.id===aid)?.name).filter(Boolean).join(", ")}</span>
               </div>}
             </div>
@@ -19817,7 +19879,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 };
                 return <button key={u.id} onClick={toggle}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",border:"none",borderTop:i>0?"1px solid #f8fafc":"none",background:sel?"#eef2ff":"#fff",cursor:"pointer",textAlign:"left",transition:"background .1s"}}>
-                  <div style={{width:24,height:24,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:9,flexShrink:0}}>{u.av}</div>
+                  <UserAvatar user={u} size={24} border={false}/>
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{color:"#1e293b",fontSize:12,fontWeight:sel?700:400}}>
                       {u.name}
@@ -22448,6 +22510,8 @@ export default function AgencyOS(){
   useEffect(()=>{try{localStorage.setItem("pixels-current-page",page);}catch(e){}},[page]);
   const [expanded,setExpanded]     = useState({});
   const [notifDrawer,setNotifDrawer] = useState(false);
+  // Auto-perfil: qualquer colaborador pode abrir seu próprio perfil pelo avatar do topbar
+  const [showMyProfile,setShowMyProfile] = useState(false);
   const [isMob,setIsMob]           = useState(()=>window.innerWidth<768);
   const [sideOpen,setSideOpen]     = useState(false);
   const [sideCollapsed,setSideCollapsed] = useState(()=>{
@@ -23122,6 +23186,29 @@ export default function AgencyOS(){
     {/* Widget de videochamada — persiste ao trocar de página */}
     <PixelsCallWidget/>
 
+    {/* ═══ MEU PERFIL — qualquer colaborador clica no avatar do topbar pra abrir ═══ */}
+    {showMyProfile&&(function(){
+      // Carrega o profile_data do localStorage (mesma chave que PageAcessos usa)
+      let myProfile={};
+      try{const raw=localStorage.getItem("pixels-selfprofile-"+CURRENT_USER.id);if(raw)myProfile=JSON.parse(raw)||{};}catch(_){}
+      return <CollabProfilePage
+        user={CURRENT_USER}
+        profile={myProfile}
+        onClose={()=>setShowMyProfile(false)}
+        onSave={async function(uid,data){
+          // 1) localStorage instantâneo + dispara evento pra todos os UserAvatar/Av re-renderem
+          try{localStorage.setItem("pixels-selfprofile-"+uid,JSON.stringify(data));}catch(_){}
+          try{window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:uid}}));}catch(_){}
+          // 2) Supabase pra persistir entre sessões/dispositivos
+          try{
+            const sb=window._sb;
+            const{data:profileRow}=await sb.from("profiles").select("id").eq("team_id",uid).single();
+            if(profileRow)await sb.from("profiles").update({profile_data:data}).eq("id",profileRow.id);
+          }catch(e){console.warn("save self profile:",e?.message||e);}
+        }}
+      />;
+    })()}
+
     {/* ═══ CARD MODAL GLOBAL — abre via URL ?card=ID ou Ctrl+K ═══ */}
     {globalCard&&<CardModal task={globalCard} tasks={tasks} setTasks={setTasks}
       onClose={()=>{
@@ -23355,7 +23442,9 @@ export default function AgencyOS(){
             </svg>
             {unreadNotifs>0&&<div style={{position:"absolute",top:4,right:4,background:C.rd,color:"#fff",borderRadius:99,padding:"0 4px",fontSize:9,fontWeight:800,minWidth:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff"}}>{unreadNotifs>9?"9+":unreadNotifs}</div>}
           </button>
-          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={36} status="online" uid={CURRENT_USER.id}/>
+          <button onClick={()=>setShowMyProfile(true)} title="Meu perfil — foto, dados, senha" style={{background:"none",border:"none",cursor:"pointer",padding:0,borderRadius:"50%",lineHeight:0}}>
+            <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={36} status="online" uid={CURRENT_USER.id}/>
+          </button>
         </div>
       </div>}
       <main style={{flex:1,overflowY:"auto",padding:isMob?"16px 14px 90px":"24px",WebkitOverflowScrolling:"touch",scrollBehavior:"smooth"}}>
