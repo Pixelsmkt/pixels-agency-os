@@ -1032,6 +1032,8 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="download")  return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
   if(n==="upload")    return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
   if(n==="rotate")    return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>;
+  if(n==="bomb")      return <svg {...p}><circle cx="11" cy="13" r="9"/><path d="M14.35 4.65L16.3 2.7a2.41 2.41 0 013.4 0l1.6 1.6a2.4 2.4 0 010 3.4l-1.95 1.95"/><path d="m22 2-1.5 1.5"/></svg>;
+  if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
   return null;
 }
 
@@ -10591,8 +10593,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                             return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
                           });
                         })()}
-                        {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
-                          {days<0?Math.abs(days)+"d atraso":days===0?"hoje":days+"d"}
+                        {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?700:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
+                          {days<0&&<Ico n="bomb" size={11}/>}
+                          {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
                         </span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
