@@ -10583,18 +10583,21 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           </div>
                           :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
-                        {/* Siglas das unidades Bioter — múltiplas se for o caso */}
+                        {/* Siglas das unidades Bioter — múltiplas se for o caso, ou GRUPO se for todas */}
                         {cl&&cl.id==="bioter"&&t.bioterUnit&&(function(){
                           const ids=String(t.bioterUnit).split(",").filter(Boolean);
                           if(!ids.length)return null;
                           return ids.map(uid=>{
+                            if(uid==="grupo"){
+                              return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
+                            }
                             const u=BIOTER_UNITS.find(x=>x.id===uid);
                             if(!u)return null;
                             return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
                           });
                         })()}
                         {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?700:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
-                          {days<0&&<Ico n="bomb" size={11}/>}
+                          {days<0&&<Ico n="alarmClock" size={11}/>}
                           {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
                         </span>}
                       </div>
@@ -18254,7 +18257,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(!client){pixelsToast.warning("Selecione um cliente antes de salvar.");return;}
     if(!sector){pixelsToast.warning("Selecione um setor antes de salvar.");return;}
     if(!assignees||assignees.length===0){pixelsToast.warning("Selecione pelo menos um responsável antes de salvar.");return;}
-    if(!priority){pixelsToast.warning("Selecione a prioridade antes de salvar.");return;}
+    // Prioridade não é mais obrigatória — pode salvar sem definir.
     // Pega timeline atual da lista (não da prop task que pode estar stale)
     const currentTask=tasks.find(t=>t.id===task.id)||task;
     const tl=[...(currentTask.timeline||[])];
@@ -19939,9 +19942,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             const selectedUnits=String(bioterUnit||"").split(",").filter(Boolean);
             const toggleUnit=(uid)=>{
               if(!canEdit)return;
-              const next=selectedUnits.includes(uid)
-                ?selectedUnits.filter(x=>x!==uid)
-                :[...selectedUnits,uid];
+              let next;
+              if(uid==="grupo"){
+                // Grupo Bioter é exclusivo: se marcar, limpa as unidades individuais
+                next=selectedUnits.includes("grupo")?[]:["grupo"];
+              }else{
+                // Ao marcar uma unidade individual, "grupo" é removido se estava marcado
+                const semGrupo=selectedUnits.filter(x=>x!=="grupo");
+                next=semGrupo.includes(uid)
+                  ?semGrupo.filter(x=>x!==uid)
+                  :[...semGrupo,uid];
+              }
               setBioterUnit(next.join(","));
             };
             return <div>
@@ -19960,10 +19971,24 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>marque uma ou mais</span>
                 </label>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                  {/* Grupo Bioter — opção especial que cobre todas as unidades */}
+                  {(function(){
+                    const isSel=selectedUnits.includes("grupo");
+                    return <button key="grupo" type="button" onClick={()=>toggleUnit("grupo")} disabled={!canEdit}
+                      style={{gridColumn:"span 2",display:"flex",alignItems:"center",gap:7,padding:"7px 10px",background:isSel?"#16653426":"#f8fafc",border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:700,textAlign:"left",transition:"all .12s"}}>
+                      <div style={{width:14,height:14,borderRadius:4,border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,background:isSel?"#166534":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                        {isSel&&<Ico n="check" size={10}/>}
+                      </div>
+                      <span style={{flex:1}}>Grupo Bioter</span>
+                      <span style={{background:isSel?"#166534":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:8,fontWeight:700,letterSpacing:.3}}>TODAS</span>
+                    </button>;
+                  })()}
+                  {/* Unidades individuais */}
                   {BIOTER_UNITS.map(u=>{
                     const isSel=selectedUnits.includes(u.id);
-                    return <button key={u.id} type="button" onClick={()=>toggleUnit(u.id)} disabled={!canEdit}
-                      style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",background:isSel?"#16653418":"#fff",border:`1px solid ${isSel?"#166534":"#e2e8f0"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:isSel?700:500,textAlign:"left",transition:"all .12s"}}>
+                    const disabled=!canEdit||selectedUnits.includes("grupo");
+                    return <button key={u.id} type="button" onClick={()=>toggleUnit(u.id)} disabled={disabled}
+                      style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",background:isSel?"#16653418":"#fff",border:`1px solid ${isSel?"#166534":"#e2e8f0"}`,borderRadius:8,cursor:disabled?"not-allowed":"pointer",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:isSel?700:500,textAlign:"left",transition:"all .12s",opacity:selectedUnits.includes("grupo")?.5:1}}>
                       <div style={{width:14,height:14,borderRadius:4,border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,background:isSel?"#166534":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
                         {isSel&&<Ico n="check" size={10}/>}
                       </div>
@@ -19980,7 +20005,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <div>
               <label style={LB}>Prioridade</label>
               <select value={priority} onChange={e=>setPriority(e.target.value)} disabled={!canEdit}
-                style={{...SI,borderColor:!priority?"#fca5a5":priority==="alta"?"#fecaca":priority==="media"?"#fef08a":"#bbf7d0",background:!priority?"#fff7f7":priority==="alta"?"#fff1f2":priority==="media"?"#fefce8":"#f0fdf4",color:!priority?"#94a3b8":priority==="alta"?"#be123c":priority==="media"?"#854d0e":"#15803d",fontWeight:700}}>
+                style={{...SI,borderColor:priority==="alta"?"#fecaca":priority==="media"?"#fef08a":priority==="baixa"?"#bbf7d0":undefined,background:priority==="alta"?"#fff1f2":priority==="media"?"#fefce8":priority==="baixa"?"#f0fdf4":undefined,color:!priority?"#94a3b8":priority==="alta"?"#be123c":priority==="media"?"#854d0e":"#15803d",fontWeight:700}}>
                 <option value="">Selecione a prioridade</option>
                 <option value="baixa">🟢 Baixa</option>
                 <option value="media">🟡 Média</option>
