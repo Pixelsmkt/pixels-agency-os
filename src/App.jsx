@@ -275,10 +275,10 @@ const KANBAN_COLS = [
 const TEAM = [
   { id:"vinicius",  name:"Vinicius",  role:"CEO / Gestor",          av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
   { id:"gustavo",   name:"Gustavo",   role:"CEO / Gestor",          av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
+  { id:"ellen",     name:"Hellen",     role:"Estrategista",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
-  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
+  { id:"guilherme", name:"Guilherme", role:"Editor de vídeo",       av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
