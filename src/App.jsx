@@ -10592,7 +10592,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                               return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
                             }
                             if(uid==="brasil"){
-                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>BR</span>;
+                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>BRASIL</span>;
                             }
                             const u=BIOTER_UNITS.find(x=>x.id===uid);
                             if(!u)return null;
@@ -19996,7 +19996,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         {isSel&&<Ico n="check" size={10}/>}
                       </div>
                       <span style={{flex:1}}>Bioter Brasil</span>
-                      <span style={{background:isSel?"#166534":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:8,fontWeight:700,letterSpacing:.3}}>BR</span>
+                      <span style={{background:isSel?"#166534":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:8,fontWeight:700,letterSpacing:.3}}>BRASIL</span>
                     </button>;
                   })()}
                   {/* Unidades individuais */}
