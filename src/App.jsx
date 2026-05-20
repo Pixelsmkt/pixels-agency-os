@@ -10421,7 +10421,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             }}>
 
             {/* Column header — barra colorida no topo, integrada à coluna */}
-            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"7px 7px 0 0",margin:"-5px -5px 6px -5px"}}>
+            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"12px 12px 0 0",margin:"-5px -5px 6px -5px"}}>
               <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
                 {editingColId===col.id&&canNewCol
                   ? <input value={editingColLabel} onChange={e=>setEditingColLabel(e.target.value)}
