@@ -10412,8 +10412,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDrop={()=>drag&&moveTask(drag,col.id)}
             onDragLeave={()=>setOver(null)}
             style={{
-              background:isDraggingOver?"#e2e8f0":"#eef2f7",
-              border:`1px solid ${isDraggingOver?col.color+"55":"#dbe3ec"}`,
+              background:isDraggingOver?"#94a3b8":"#cbd5e1",
+              border:`1px solid ${isDraggingOver?col.color+"55":"transparent"}`,
               borderRadius:12,padding:"8px 8px 8px",
               height:"78vh",maxHeight:680,
               transition:"all .15s",display:"flex",flexDirection:"column",gap:0
