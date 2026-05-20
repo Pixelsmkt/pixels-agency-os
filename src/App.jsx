@@ -273,8 +273,8 @@ const KANBAN_COLS = [
 
 /* ─── TEAM ───────────────────────────────── */
 const TEAM = [
-  { id:"vinicius",  name:"Vinicius",  role:"CEO / Gestor",          av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"gustavo",   name:"Gustavo",   role:"CEO / Gestor",          av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"vinicius",  name:"Vinicius",  role:"Gestor de projetos",    av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"gustavo",   name:"Gustavo",   role:"Gestor",                av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
   { id:"ellen",     name:"Hellen",     role:"Estrategista",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
