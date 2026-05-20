@@ -10374,7 +10374,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
         </div>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",justifyContent:"center",background:"#1e293b",padding:"16px",borderRadius:14}}>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:18,overflowX:"auto",justifyContent:"center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>{
@@ -10414,13 +10414,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             style={{
               background:isDraggingOver?"#d4d8e0":"#f1f2f4",
               border:`1px solid ${isDraggingOver?col.color+"55":"transparent"}`,
-              borderRadius:12,padding:"8px 8px 8px",
-              height:"78vh",maxHeight:680,
+              borderRadius:12,padding:"5px 5px 6px",
+              maxHeight:"calc(100vh - 240px)",
+              overflow:"hidden",
               transition:"all .15s",display:"flex",flexDirection:"column",gap:0
             }}>
 
             {/* Column header — barra colorida no topo, integrada à coluna */}
-            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"10px 10px 0 0",margin:"-8px -8px 8px -8px"}}>
+            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"7px 7px 0 0",margin:"-5px -5px 6px -5px"}}>
               <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
                 {editingColId===col.id&&canNewCol
                   ? <input value={editingColLabel} onChange={e=>setEditingColLabel(e.target.value)}
@@ -10499,8 +10500,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
                   style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:130}:{})}}
-                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 6px rgba(0,0,0,0.06)"}
-                  onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
+                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 2px 8px rgba(124,58,237,0.18)";e.currentTarget.style.borderColor="#7c3aed";}}
+                  onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)";e.currentTarget.style.borderColor="#e2e8f0";}}>
                   {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
                   {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
