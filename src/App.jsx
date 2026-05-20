@@ -6944,6 +6944,19 @@ function CTimeline({cl}){
   </div>);
 }
 
+/* ─── Section — componente reutilizável (FORA do COrientacoes pra não recriar a cada render
+       e quebrar foco de inputs). Quando estava dentro, cada keystroke recriava o componente e
+       desmontava/remontava os filhos, fazendo o input perder foco a cada letra digitada. */
+const COrientacoesSection=({title,subtitle,children})=>(
+  <div style={{background:C.card,borderRadius:12,border:"0.5px solid "+C.b1,padding:"16px 18px",marginBottom:12}}>
+    <div style={{marginBottom:12}}>
+      <div style={{color:C.tx,fontWeight:500,fontSize:13}}>{title}</div>
+      {subtitle&&<div style={{color:C.td,fontSize:11,marginTop:2}}>{subtitle}</div>}
+    </div>
+    {children}
+  </div>
+);
+
 /* ─── COrientacoes — orientações para a equipe (logos, paleta, fontes, voz) ─── */
 function COrientacoes({cl}){
   const sb=window._sb;
@@ -7000,24 +7013,43 @@ function COrientacoes({cl}){
   };
 
   const onSelectLogoFile=async(e)=>{
-    const file=e.target.files?.[0];
+    const files=Array.from(e.target.files||[]);
     e.target.value="";
-    if(!file||!pendingLogo)return;
-    const up=await uploadFile(file,"logo");
-    if(!up)return;
-    const novo={nome:pendingLogo.nome||file.name,url:up.url,formato:up.formato,path:up.path};
-    persist({...data,logos:[...(data.logos||[]),novo]});
+    if(files.length===0||!pendingLogo)return;
+    // Upload de múltiplos logos de uma vez
+    const novosLogos=[];
+    for(const file of files){
+      const up=await uploadFile(file,"logo");
+      if(!up)continue;
+      novosLogos.push({
+        nome:files.length===1?(pendingLogo.nome||file.name):file.name,
+        url:up.url,formato:up.formato,path:up.path
+      });
+    }
+    if(novosLogos.length>0){
+      persist({...data,logos:[...(data.logos||[]),...novosLogos]});
+    }
     setPendingLogo(null);
   };
 
   const onSelectFonteFile=async(e)=>{
-    const file=e.target.files?.[0];
+    const files=Array.from(e.target.files||[]);
     e.target.value="";
-    if(!file||!pendingFonte)return;
-    const up=await uploadFile(file,"fonte");
-    if(!up)return;
-    const novo={nome:pendingFonte.nome||file.name,uso:pendingFonte.uso||"",url:up.url,formato:up.formato,path:up.path};
-    persist({...data,fontes:[...(data.fontes||[]),novo]});
+    if(files.length===0||!pendingFonte)return;
+    // Upload em paralelo — todos os arquivos selecionados de uma vez
+    const novosFontes=[];
+    for(const file of files){
+      const up=await uploadFile(file,"fonte");
+      if(!up)continue;
+      novosFontes.push({
+        nome:files.length===1?(pendingFonte.nome||file.name):file.name,
+        uso:pendingFonte.uso||"",
+        url:up.url,formato:up.formato,path:up.path
+      });
+    }
+    if(novosFontes.length>0){
+      persist({...data,fontes:[...(data.fontes||[]),...novosFontes]});
+    }
     setPendingFonte(null);
   };
 
@@ -7064,19 +7096,12 @@ function COrientacoes({cl}){
   const removeHashtag=(t)=>persist({...data,hashtags:(data.hashtags||[]).filter(x=>x!==t)});
 
   const inp={background:C.s1,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
-  const Section=({title,subtitle,children})=>(
-    <div style={{background:C.card,borderRadius:12,border:"0.5px solid "+C.b1,padding:"16px 18px",marginBottom:12}}>
-      <div style={{marginBottom:12}}>
-        <div style={{color:C.tx,fontWeight:500,fontSize:13}}>{title}</div>
-        {subtitle&&<div style={{color:C.td,fontSize:11,marginTop:2}}>{subtitle}</div>}
-      </div>
-      {children}
-    </div>
-  );
+  // Section agora é referência ao componente externo (COrientacoesSection) pra evitar remount.
+  const Section=COrientacoesSection;
 
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
-    <input ref={fileInputLogo} type="file" accept="image/*,.svg,.pdf" style={{display:"none"}} onChange={onSelectLogoFile}/>
-    <input ref={fileInputFonte} type="file" accept=".ttf,.otf,.woff,.woff2,.zip" style={{display:"none"}} onChange={onSelectFonteFile}/>
+    <input ref={fileInputLogo} type="file" accept="image/*,.svg,.pdf" multiple style={{display:"none"}} onChange={onSelectLogoFile}/>
+    <input ref={fileInputFonte} type="file" accept=".ttf,.otf,.woff,.woff2,.zip" multiple style={{display:"none"}} onChange={onSelectFonteFile}/>
 
     {savedOk&&<div style={{background:"#dcfce7",border:"0.5px solid #86efac",color:"#166534",padding:"6px 12px",borderRadius:8,fontSize:11,marginBottom:12,textAlign:"center"}}>Salvo automaticamente</div>}
 
