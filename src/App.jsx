@@ -645,7 +645,7 @@ function SlaHourglass({task,compact}){
     soon:{bg:"#eab308",label:"Atenção",icon:"⚠"},
     urgent:{bg:"#ea580c",label:"Urgente",icon:"🔥"},
     overdue:{bg:"#dc2626",label:"Atrasado",icon:"🚨"},
-    paused:{bg:"#64748b",label:"Pausado",icon:"⏸"},
+    paused:{bg:"#64748b",label:"Pausadas",icon:"⏸"},
   };
   const c=colors[s.status]||colors.ok;
   if(s.status==="paused"){
@@ -8873,7 +8873,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 
   // Retorna cor do card baseado no status (laranja/verde/roxo)
   const getPubColor=(status)=>{
-    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"}; // 🟣 roxo
+    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicadas"}; // 🟣 roxo
     if(status==="aprovado"||status==="agendado")return{bg:"#16a34a",border:"#bbf7d0",label:"Pronto"}; // 🟢 verde
     return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"}; // 🟠 laranja (demanda, recebida, execucao, avaliacao)
   };
@@ -9093,7 +9093,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           <div style={{color:C.ts,fontSize:12}}>
             {filterClient!=="todos"
               ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
-              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para a coluna "Agendado" e defina a data de publicação.`
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para a coluna "Agendadas" e defina a data de publicação.`
             }
           </div>
         </div>
@@ -18382,16 +18382,35 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     else{onClose();}
   },[hasChanges,onClose,uploadingCount]);
 
-  // ── Tecla ESC fecha o modal (lightbox tem prioridade se estiver aberto) ──
+  // ── Atalhos de teclado: ESC fecha, ENTER salva+fecha (exceto em textarea/multiline) ──
   useEffect(()=>{
-    const onEsc=(e)=>{
-      if(e.key!=="Escape")return;
-      if(lightbox){setLightbox(null);return;}
-      handleClose();
+    const onKey=(e)=>{
+      if(e.key==="Escape"){
+        if(lightbox){setLightbox(null);return;}
+        handleClose();
+        return;
+      }
+      if(e.key==="Enter"){
+        // Skip se Enter foi pressionado em um campo multiline
+        const tag=(e.target&&e.target.tagName)||"";
+        if(tag==="TEXTAREA")return;             // textarea: Enter = nova linha
+        if(e.target&&e.target.isContentEditable)return; // editor rich text
+        if(e.shiftKey)return;                   // Shift+Enter = nova linha intencional
+        // Não dispara se algum diálogo de confirmação tá aberto
+        if(lightbox)return;
+        if(showUnsavedDialog)return;
+        if(conclusionStep)return;
+        if(showMovePrompt)return;
+        // Só salva se pode editar (senão é só visualização)
+        if(canEdit){
+          e.preventDefault();
+          save();
+        }
+      }
     };
-    window.addEventListener("keydown",onEsc);
-    return()=>window.removeEventListener("keydown",onEsc);
-  },[handleClose,lightbox]);
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[handleClose,lightbox,canEdit,save,showUnsavedDialog,conclusionStep,showMovePrompt]);
 
   const save=()=>{
     // ── Bloqueia save com uploads em andamento ──
@@ -25341,7 +25360,7 @@ const INTERNAS_COLS_RADAR_P=[
   {id:"interno_demanda"},{id:"interno_execucao"},{id:"interno_avaliacao"},
   {id:"interno_aprovado"},{id:"interno_executado"},
 ];
-const PORTAL_STATUS_LABELS={demanda:"Copys em aprovação",recebida:"Em fila",execucao:"Em produção",avaliacao:"Em avaliação",aprovado:"Aprovado",agendado:"Agendado para publicação"};
+const PORTAL_STATUS_LABELS={demanda:"Copys em aprovação",recebida:"Em fila",execucao:"Em produção",avaliacao:"Em avaliação",aprovado:"Aprovadas",agendado:"Agendadas para publicação"};
 // STATUS_COLORS usa variáveis de tema (C.*) — lidas em tempo de uso
 const getPortalStatusColor=(status)=>({demanda:C.a,recebida:C.pk,execucao:C.yw,avaliacao:C.or,aprovado:C.gr,agendado:"#0284c7"}[status]||C.a);
 
@@ -25666,8 +25685,8 @@ function PortalSolicitar({tasks, selCl, cl}) {
     {id:"urgente",label:"Urgente",color:"#dc2626"},
   ];
   const STATUS_INT={
-    interno_demanda:"Recebida",interno_execucao:"Em Execução",
-    interno_avaliacao:"Em Avaliação",interno_aprovado:"Aprovada",interno_executado:"Concluída",
+    interno_demanda:"Recebida",interno_execucao:"Em execução",
+    interno_avaliacao:"Em avaliação",interno_aprovado:"Aprovada",interno_executado:"Concluída",
   };
 
   const enviar = async () => {
