@@ -18052,8 +18052,8 @@ const COVER_COLORS=[
 ];
 const SECTORS=["design","video","texto","social","trafego","seo","agenda","outro"];
 const SECTOR_LABELS={design:"Design",video:"Edição de Vídeo",texto:"Texto & Copy",social:"Social Media",trafego:"Tráfego Pago",seo:"SEO",agenda:"Agendamentos",outro:"Outro"};
-const SI={width:"100%",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"8px 12px",color:"#1e293b",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"};
-const LB={color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:5,display:"block"};
+const SI={width:"100%",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 12px",color:"#0f172a",fontSize:12,fontWeight:500,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s, background .15s"};
+const LB={color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block",fontFamily:"inherit"};
 const FILES_TABS=[["lista","☰ Lista"],["ordem","⠿ Ordenar carrossel"]];
 const TIMELINE_ICONS={
   created:<Ico n="sparkles" size={13}/>,
@@ -18763,21 +18763,36 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
   };
 
-  // ═══ DOWNLOAD HELPER — baixa arquivo via blob (cross-origin safe) ═══
+  // ═══ DOWNLOAD HELPER — baixa arquivo de forma robusta
+  // Estratégia: tenta fetch+blob (força download mesmo cross-origin)
+  // se falhar (CORS), usa <a download> direto que pelo menos abre em nova aba.
   const downloadFile=async(url,name)=>{
+    if(!url)return;
+    const filename=name||url.split("/").pop().split("?")[0]||"arquivo";
     try{
-      const r=await fetch(url);
-      if(!r.ok)throw new Error("fetch failed");
+      const r=await fetch(url,{mode:"cors"});
+      if(!r.ok)throw new Error("HTTP "+r.status);
       const b=await r.blob();
       const u=URL.createObjectURL(b);
       const a=document.createElement("a");
-      a.href=u;a.download=name||"arquivo";a.style.display="none";
-      document.body.appendChild(a);a.click();
-      setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
-    }catch(e){
-      console.warn("[downloadFile] fallback:",e?.message||e);
-      // Fallback: abre em nova aba (browser pode forçar download se header tiver)
-      window.open(url,"_blank","noopener");
+      a.href=u; a.download=filename; a.style.display="none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(u);}catch(_){}},200);
+      pixelsToast.success("Imagem baixada: "+filename,3000);
+    }catch(err){
+      console.warn("[downloadFile] blob falhou, tentando link direto:",err?.message||err);
+      // Fallback: <a download> direto. Pode ignorar 'download' em cross-origin
+      // sem CORS, mas pelo menos abre o arquivo no navegador pra salvar com Ctrl+S.
+      try{
+        const a=document.createElement("a");
+        a.href=url; a.download=filename; a.target="_blank"; a.rel="noopener";
+        document.body.appendChild(a); a.click();
+        setTimeout(()=>{try{document.body.removeChild(a);}catch(_){}},200);
+        pixelsToast.info("Abrindo imagem em nova aba — use Ctrl+S pra salvar",5000);
+      }catch(e2){
+        pixelsToast.error("Não consegui baixar a imagem. Clique direito → Salvar imagem como.",6000);
+      }
     }
   };
 
@@ -18969,10 +18984,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         <img src={lightbox.url} alt={lightbox.name} style={{maxWidth:"100%",maxHeight:"80vh",objectFit:"contain",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.6)"}}/>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{lightbox.name}</div>
-          <button onClick={()=>downloadFile(lightbox.url,lightbox.name)} title="Baixar imagem"
-            style={{background:"rgba(255,255,255,0.12)",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+          <button onClick={(e)=>{e.stopPropagation();e.preventDefault();downloadFile(lightbox.url,lightbox.name);}} title="Baixar imagem"
+            style={{background:"rgba(255,255,255,0.12)",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.5)"}
-            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.12)"}>⬇ Baixar</button>
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.12)"}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Baixar
+          </button>
         </div>
         <button onClick={()=>setLightbox(null)} style={{position:"absolute",top:-12,right:-12,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       </div>
@@ -19034,7 +19052,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>}
 
-    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto"}}>
+    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
 
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
@@ -19061,7 +19079,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>}
             </div>
             <input value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit}
-              style={{width:"100%",border:"none",outline:"none",fontSize:20,fontWeight:800,color:"#0f172a",background:"transparent",padding:0,lineHeight:1.3}}
+              style={{width:"100%",border:"none",outline:"none",fontSize:22,fontWeight:700,color:"#0f172a",background:"transparent",padding:0,lineHeight:1.25,letterSpacing:-.4,fontFamily:"'Inter',system-ui,sans-serif"}}
               placeholder="Título da demanda"
               onFocus={()=>setIsEditingText(true)}
               onBlur={()=>setIsEditingText(false)}/>
@@ -19098,6 +19116,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     <span style={{width:18,display:"flex",justifyContent:"center",color:"#64748b"}}><Ico n="copy" size={14}/></span>
                     <span style={{flex:1}}>Duplicar cartão</span>
                   </button>}
+                  {canDelete&&onTrash&&<button onClick={()=>{setShowActionsMenu(false);onTrash(task.id);}}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#dc2626",textAlign:"left",borderTop:"1px solid #f1f5f9",marginTop:2}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#fef2f2"}
+                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                    <span style={{width:18,display:"flex",justifyContent:"center"}}><Ico n="trash" size={14}/></span>
+                    <span style={{flex:1}}>Mover para lixeira</span>
+                  </button>}
                 </div>
               </>}
             </div>
@@ -19130,21 +19155,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 ))}
               </div>}
             </div>}
-            {/* Salvar + Demanda Concluída + Enviar p/ Aprovação + Drive empilhados */}
+            {/* Salvar + Enviar p/ Aprovação + Drive empilhados (Demanda Concluída e Lixeira removidos — usar drag-and-drop e × do card no kanban) */}
             <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"stretch"}}>
               {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>Salvar</button>}
-              {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
-                style={{background:"#fff0f0",color:"#e53e3e",border:"1px solid #fecaca",borderRadius:10,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#fff0f0";}}>
-                <Ico n="trash" size={14}/> Lixeira
-              </button>}
-              {/* Demanda Concluida — execucao OU ajustes */}
-              {canEdit&&(task.status==="execucao"||task.status==="ajustes")&&<button
-                onClick={()=>setConclusionStep(1)}
-                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontWeight:700,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(22,163,74,0.28)"}}>
-                {task.status==="ajustes"?"Reenviar pra avaliação":"Demanda Concluida"}
-              </button>}
               {/* Enviar para Aprovação — only for copy cards marked ajustar */}
               {canEdit&&task.ajustar===true&&task.status==="demanda"&&<button
                 onClick={()=>{setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:false,timeline:[...(t.timeline||[]),{type:"edit",label:"Reenviada para aprovação por "+user.name,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name}]}:t));onClose();}}
@@ -19851,24 +19864,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
           {/* ══ SLA + PUBLICAÇÃO (admin/coordinator) ══ */}
           {canEditSLAandPub&&!isAgendado&&(
-            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:11,textTransform:"uppercase",letterSpacing:.6,display:"flex",alignItems:"center",gap:6}}>
-                <Ico n="calendar" size={13}/> Publicação
+            <div>
+              <label style={{...LB,display:"flex",alignItems:"center",gap:5}}><Ico n="calendar" size={11}/> Data/hora de publicação</label>
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
+                <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
+                  style={{...SI,fontSize:12}}/>
+                <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
+                  style={{...SI,fontSize:12}}/>
               </div>
-
-              {/* Data/Hora de Publicação */}
-              <div>
-                <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:5,display:"flex",alignItems:"center",gap:5}}><Ico n="calendar" size={11}/> Data/Hora de Publicação</div>
-                <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
-                  <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
-                    style={{...SI,fontSize:12,padding:"7px 10px"}}/>
-                  <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
-                    style={{...SI,fontSize:12,padding:"7px 10px"}}/>
-                </div>
-                <div style={{color:"#64748b",fontSize:9,marginTop:4,fontStyle:"italic"}}>
-                  {publishDate?"Aparece no Calendário de Publicação":"Preencha pra aparecer no calendário"}
-                </div>
-              </div>
+              {publishDate&&<div style={{color:"#94a3b8",fontSize:9,marginTop:4,fontStyle:"italic"}}>
+                Aparece no Calendário de Publicação
+              </div>}
             </div>
           )}
 
