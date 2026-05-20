@@ -113,6 +113,7 @@ function saveLiveClient(id,partial){
 // Módulo de framework: temas, perms, componentes base, navegação
 // Não contém dados de negócio — ver 00_clientes_data.jsx e 00_mindmap_data.jsx
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
+import { createPortal } from "react-dom";
 import * as recharts from "recharts";
 
 // Global mobile styles
@@ -869,10 +870,11 @@ const NAV=[
  * Usa getProfilePhoto (já existente — lê pixels-selfprofile-{id} do localStorage).
  * Re-renderiza instantâneo quando dispara event "pixels:photo-updated".
  */
-function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title}){
+function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title, noHover}){
   // user pode ser objeto TEAM completo OU só id string
   const u=typeof user==="string"?(TEAM.find(t=>t.id===user)||{id:user,name:user,av:"?",color:"#94a3b8"}):user;
   const [photo,setPhoto]=useState(()=>getProfilePhoto(u.id));
+  const [hoverPos,setHoverPos]=useState(null); // {x, y} ou null
   useEffect(function(){
     const handler=function(e){
       // Re-checa só se o evento é pro usuário relevante (ou broadcast geral)
@@ -890,17 +892,53 @@ function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyl
     flexShrink:0,overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center"
   };
   const merged=Object.assign({},base,extraStyle||{});
+  const showHover=!noHover&&size<=34;
+  const onEnter=(e)=>{
+    if(!showHover)return;
+    const r=e.currentTarget.getBoundingClientRect();
+    setHoverPos({x:r.left+r.width/2,y:r.top});
+  };
+  const onLeave=()=>setHoverPos(null);
+  let avatarEl;
   if(photo){
-    return <img src={photo} alt={u.name||""} title={title||u.name||""} loading="lazy"
+    avatarEl=<img src={photo} alt={u.name||""} title={showHover?undefined:(title||u.name||"")} loading="lazy"
       style={Object.assign({},merged,{objectFit:"cover"})}
-      onError={function(e){e.currentTarget.style.display="none";}}/>;
+      onError={function(e){e.currentTarget.style.display="none";}}
+      onMouseEnter={onEnter} onMouseLeave={onLeave}/>;
+  }else{
+    avatarEl=<div title={showHover?undefined:(title||u.name||"")}
+      style={Object.assign({},merged,{
+        background:u.color||"#94a3b8",
+        color:"#fff",fontWeight:fontWeight,
+        fontSize:Math.max(8,Math.round(size*0.45))
+      })}
+      onMouseEnter={onEnter} onMouseLeave={onLeave}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
   }
-  // Fallback: letra colorida
-  return <div title={title||u.name||""} style={Object.assign({},merged,{
-    background:u.color||"#94a3b8",
-    color:"#fff",fontWeight:fontWeight,
-    fontSize:Math.max(8,Math.round(size*0.45))
-  })}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
+  if(!showHover)return avatarEl;
+  const popup=hoverPos&&createPortal(
+    <div style={{
+      position:"fixed",
+      left:hoverPos.x,top:hoverPos.y-10,
+      transform:"translate(-50%,-100%)",
+      background:"#0f172a",borderRadius:10,padding:"10px 14px",
+      display:"flex",alignItems:"center",gap:12,
+      pointerEvents:"none",zIndex:99999,
+      boxShadow:"0 12px 32px rgba(0,0,0,0.25)",
+      whiteSpace:"nowrap",
+      fontFamily:"'Inter',system-ui,sans-serif",
+    }}>
+      {photo
+        ? <img src={photo} alt="" style={{width:52,height:52,borderRadius:"50%",objectFit:"cover",flexShrink:0,border:"1.5px solid rgba(255,255,255,0.12)"}}/>
+        : <div style={{width:52,height:52,borderRadius:"50%",background:u.color||"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:20,flexShrink:0,border:"1.5px solid rgba(255,255,255,0.12)"}}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>
+      }
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        <span style={{fontSize:13,fontWeight:600,color:"#fff",lineHeight:1.2}}>{u.name}</span>
+        {u.role&&<span style={{fontSize:10,color:"rgba(255,255,255,0.6)",fontWeight:500,letterSpacing:.3}}>{u.role}</span>}
+      </div>
+    </div>,
+    document.body
+  );
+  return <Fragment>{avatarEl}{popup}</Fragment>;
 }
 
 /* ─── HOOK: useOpenCardSync ─────────────────── */
