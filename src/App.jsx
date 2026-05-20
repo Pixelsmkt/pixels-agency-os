@@ -10444,7 +10444,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             </div>
 
             {/* Cards — scroll inside column, Trello style */}
-            <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,paddingLeft:4,paddingRight:4,scrollbarGutter:"stable"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,paddingLeft:4,paddingRight:4,scrollbarGutter:"stable both-edges"}}>
               {colTasks.map(t=>{
                 const u=TEAM.find(x=>x.id===t.assignee);
                 // Todos os responsáveis (stack de avatares — múltiplas iniciais)
@@ -10499,20 +10499,20 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:130}:{})}}
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
                   onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 2px 8px rgba(124,58,237,0.18)";e.currentTarget.style.borderColor="#7c3aed";}}
                   onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)";e.currentTarget.style.borderColor="#e2e8f0";}}>
                   {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
                   {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
                   </div>}
-                  {/* THUMBNAIL CAPADO 90px — margin top depende de ter faixa de tag visível acima */}
+                  {/* THUMBNAIL ESTILO TRELLO — edge-to-edge, 200px de altura, recortado pelo overflow:hidden do card */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
-                    const m=hasVisibleTagStripe?"5px 9px 0":"6px 9px 0";
+                    const mt=hasVisibleTagStripe?5:0;
                     return thumbUrl.startsWith("#")
-                      ?<div style={{height:80,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,margin:m,borderRadius:5}}/>
-                      :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:m,borderRadius:5,pointerEvents:"none"}}/>;
+                      ?<div style={{height:200,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,marginTop:mt}}/>
+                      :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"100%",height:200,objectFit:"cover",marginTop:mt,pointerEvents:"none"}}/>;
                   })()}
                   <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"9px 11px 8px"}}>
                     {/* Título — herói visual do card. Sempre presente, weight 600,
