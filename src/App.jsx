@@ -1050,12 +1050,12 @@ function Ico({n,size=14,color,strokeWidth=2}){
  *   - Arte única (contentType="arte"):                                R$ 30
  *   - Arte carrossel (contentType="carrossel"):                       R$ 45
  *   - Vídeo / não classificado: não entra no cálculo. */
-const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45 };
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, video: 100 };
 // Status que CONTAM pro pagamento — só entrega aprovada/agendada/publicada.
 // Em execução, Ajustes, Avaliação NÃO contam (ainda não foi entregue).
 const PAID_STATUSES = ["aprovado","agendado","publicado"];
 function calcDesignerPayments(tasks, designerId, refMonth){
-  const out = { fotoObra: 0, arte: 0, carrossel: 0, naoClassificado: 0, tasksFotoObra: [], tasksArte: [], tasksCarrossel: [], tasksOutros: [] };
+  const out = { fotoObra: 0, arte: 0, carrossel: 0, video: 0, naoClassificado: 0, tasksFotoObra: [], tasksArte: [], tasksCarrossel: [], tasksVideo: [], tasksOutros: [] };
   (tasks || []).forEach(t => {
     if(!t) return;
     const assigned = t.assignee === designerId || (Array.isArray(t.assignees) && t.assignees.includes(designerId));
@@ -1065,11 +1065,13 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     if(t.contentType === "foto"){ out.fotoObra++; out.tasksFotoObra.push(t); }
     else if(t.contentType === "carrossel"){ out.carrossel++; out.tasksCarrossel.push(t); }
     else if(t.contentType === "arte"){ out.arte++; out.tasksArte.push(t); }
+    else if(t.contentType === "video"){ out.video++; out.tasksVideo.push(t); }
     else { out.naoClassificado++; out.tasksOutros.push(t); }
   });
   out.total = out.fotoObra * DESIGNER_PRICES.fotoObra
             + out.arte     * DESIGNER_PRICES.arte
-            + out.carrossel* DESIGNER_PRICES.carrossel;
+            + out.carrossel* DESIGNER_PRICES.carrossel
+            + out.video    * DESIGNER_PRICES.video;
   return out;
 }
 function formatRefMonth(refMonth){
@@ -1554,12 +1556,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
 
-    {/* ═══ PAGAMENTO POR DEMANDA — DESIGNER ANDRÉ ═══ */}
+    {/* ═══ PAGAMENTO POR DEMANDA — Card pra cada freelancer (André designer + Guilherme editor) ═══ */}
     {(function(){
-      const andre=TEAM.find(u=>u.id==="andre");
-      const calc=calcDesignerPayments(allTasks,"andre",payMonth);
       const fmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
-      const Card=({label,count,price,color})=><div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e5e7eb",display:"flex",flexDirection:"column",gap:3}}>
+      const CardCat=({label,count,price,color})=><div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e5e7eb",display:"flex",flexDirection:"column",gap:3}}>
         <div style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{label}</div>
         <div style={{display:"flex",alignItems:"baseline",gap:6}}>
           <span style={{color:"#0f172a",fontWeight:800,fontSize:22}}>{count}</span>
@@ -1567,32 +1567,43 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
         </div>
         <div style={{color:color,fontWeight:700,fontSize:13}}>{fmtBRL(count*price)}</div>
       </div>;
-      return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            {andre&&<UserAvatar user={andre} size={36}/>}
-            <div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pagamento por demanda · {andre?.name||"André"}</div>
-              <div style={{color:"#64748b",fontSize:11,marginTop:2}}>Demandas designadas a ele no mês de referência</div>
+      const freelancers=TEAM.filter(u=>u.pagamentoPorDemanda);
+      return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {freelancers.map(fr=>{
+          const calc=calcDesignerPayments(allTasks,fr.id,payMonth);
+          const isEditor=fr.dash==="editor";
+          return <div key={fr.id} style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <UserAvatar user={fr} size={36}/>
+                <div>
+                  <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pagamento por demanda · {fr.name}</div>
+                  <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{isEditor?"Vídeos entregues":"Demandas designadas"} no mês de referência</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <input type="month" value={payMonth} onChange={e=>setPayMonth(e.target.value)}
+                  style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer"}}/>
+                <div style={{textAlign:"right"}}>
+                  <div style={{color:"#64748b",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
+                  <div style={{color:"#7c3aed",fontWeight:900,fontSize:22,letterSpacing:-.5}}>{fmtBRL(calc.total)}</div>
+                </div>
+              </div>
             </div>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <input type="month" value={payMonth} onChange={e=>setPayMonth(e.target.value)}
-              style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer"}}/>
-            <div style={{textAlign:"right"}}>
-              <div style={{color:"#64748b",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
-              <div style={{color:"#7c3aed",fontWeight:900,fontSize:22,letterSpacing:-.5}}>{fmtBRL(calc.total)}</div>
-            </div>
-          </div>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
-          <Card label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
-          <Card label="Arte única" count={calc.arte} price={DESIGNER_PRICES.arte} color="#16a34a"/>
-          <Card label="Carrossel" count={calc.carrossel} price={DESIGNER_PRICES.carrossel} color="#16a34a"/>
-        </div>
-        {calc.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:10,marginTop:8,fontStyle:"italic"}}>
-          {calc.naoClassificado} demanda(s) sem tipo de conteúdo definido — não entram no cálculo. Abra os cartões e defina "Arte única", "Carrossel" ou marque "Foto de obra" no título pra incluir.
-        </div>}
+            {isEditor
+              ?<div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+                <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
+              </div>
+              :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
+                <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
+                <CardCat label="Arte única" count={calc.arte} price={DESIGNER_PRICES.arte} color="#16a34a"/>
+                <CardCat label="Carrossel" count={calc.carrossel} price={DESIGNER_PRICES.carrossel} color="#16a34a"/>
+              </div>}
+            {calc.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:10,marginTop:8,fontStyle:"italic"}}>
+              {calc.naoClassificado} demanda(s) sem tipo de conteúdo definido — não entram no cálculo.
+            </div>}
+          </div>;
+        })}
       </div>;
     })()}
 
@@ -10647,19 +10658,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
                   onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 0 0 1px #7c3aed, 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
                   onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
-                  {/* Tipo de Conteúdo + Mês de referência — badges roxos no TOPO do card */}
-                  {(t.contentType||t.referenceMonth)&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
-                    {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
-                    {t.contentType&&(function(){
-                      const types={
-                        arte:{label:"Arte única",icon:"image"},
-                        carrossel:{label:"Carrossel",icon:"layers"},
-                        video:{label:"Vídeo",icon:"play"},
-                        foto:{label:"Foto de obra",icon:"camera"},
-                      };
-                      const ct=types[t.contentType];
-                      if(!ct)return null;
-                      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                  {/* Tipo de Conteúdo — badge roxo no TOPO do card. Mês de pagamento fica só no modal/dashboard. */}
+                  {t.contentType&&(function(){
+                    const types={
+                      arte:{label:"Arte única",icon:"image"},
+                      carrossel:{label:"Carrossel",icon:"layers"},
+                      video:{label:"Vídeo",icon:"play"},
+                      foto:{label:"Foto de obra",icon:"camera"},
+                    };
+                    const ct=types[t.contentType];
+                    if(!ct)return null;
+                    return <div style={{padding:"7px 11px 0",display:"flex"}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           {ct.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
                           {ct.icon==="layers"&&<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}
@@ -10667,22 +10677,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           {ct.icon==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
                         </svg>
                         {ct.label}
-                      </span>;
-                    })()}
-                    {/* Mês de referência (formato YYYY-MM → "Mai/26") */}
-                    {t.referenceMonth&&(function(){
-                      const parts=String(t.referenceMonth).split("-");
-                      if(parts.length<2)return null;
-                      const monthNames=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-                      const mn=monthNames[parseInt(parts[1],10)-1];
-                      const yy=parts[0].slice(-2);
-                      if(!mn)return null;
-                      return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-                        {mn}/{yy}
-                      </span>;
-                    })()}
-                  </div>}
+                      </span>
+                    </div>;
+                  })()}
                   {/* (barras de tags antigas — feature removida) */}
                   {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
                   {thumbUrl&&(function(){
@@ -20743,18 +20740,104 @@ function RecentActivityWidget({tasks,user,setOpenCard,isMob}){
   </div>;
 }
 
+/* ─── PagamentosView ───────────────────────────
+ * Aba que freelancer (atualmente só André) vê dentro do próprio dashboard.
+ * Mostra breakdown read-only de pagamento por mês.
+ * Filtra só tasks dele (assignee/assignees inclui user.id). */
+function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
+  const calc=calcDesignerPayments(tasks||[],user.id,payMonth);
+  const fmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const CardCat=({label,count,price,color})=><div style={{background:"#fff",borderRadius:10,padding:"14px 16px",border:"1px solid #e5e7eb",display:"flex",flexDirection:"column",gap:4}}>
+    <div style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{label}</div>
+    <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+      <span style={{color:"#0f172a",fontWeight:800,fontSize:24}}>{count}</span>
+      <span style={{color:"#94a3b8",fontSize:11}}>× {fmtBRL(price).replace(",00","")}</span>
+    </div>
+    <div style={{color:color,fontWeight:700,fontSize:14}}>{fmtBRL(count*price)}</div>
+  </div>;
+  // Editor vê só Vídeo. Designer e outros veem Foto/Arte/Carrossel.
+  const isEditor=user.dash==="editor";
+  const entregas=isEditor
+    ?[...(calc.tasksVideo||[]).map(t=>({...t,_cat:"Vídeo",_price:DESIGNER_PRICES.video}))]
+    :[...(calc.tasksFotoObra||[]).map(t=>({...t,_cat:"Foto de obra",_price:DESIGNER_PRICES.fotoObra})),
+      ...(calc.tasksArte||[]).map(t=>({...t,_cat:"Arte única",_price:DESIGNER_PRICES.arte})),
+      ...(calc.tasksCarrossel||[]).map(t=>({...t,_cat:"Carrossel",_price:DESIGNER_PRICES.carrossel}))];
+  return <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
+    {/* Header com mês picker + total */}
+    <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Meus pagamentos</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:2}}>Só entregas em <strong>Aprovadas</strong>, <strong>Agendadas</strong> e <strong>Publicadas</strong> entram no cálculo</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <input type="month" value={payMonth} onChange={e=>setPayMonth(e.target.value)}
+          style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer"}}/>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:"#64748b",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Total a receber</div>
+          <div style={{color:"#7c3aed",fontWeight:900,fontSize:24,letterSpacing:-.5}}>{fmtBRL(calc.total)}</div>
+        </div>
+      </div>
+    </div>
+    {/* Breakdown — categorias dependem do role (editor=vídeo, designer=foto/arte/carrossel) */}
+    {isEditor
+      ?<div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+        <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
+      </div>
+      :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
+        <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
+        <CardCat label="Arte única" count={calc.arte} price={DESIGNER_PRICES.arte} color="#16a34a"/>
+        <CardCat label="Carrossel" count={calc.carrossel} price={DESIGNER_PRICES.carrossel} color="#16a34a"/>
+      </div>}
+    {calc.naoClassificado>0&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:11,borderRadius:8,padding:"10px 14px",lineHeight:1.5}}>
+      <strong>{calc.naoClassificado} demanda(s) sem tipo de conteúdo definido</strong> — ainda não entram no cálculo. Os sócios precisam abrir e classificar.
+    </div>}
+    {/* Lista de demandas contadas */}
+    <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+      <div style={{padding:"12px 16px",borderBottom:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:8}}>
+        <span style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Demandas que entram no pagamento</span>
+        <span style={{color:"#94a3b8",fontSize:11}}>({entregas.length} entrega{entregas.length!==1?"s":""})</span>
+      </div>
+      {entregas.length===0
+        ?<div style={{padding:"20px 16px",textAlign:"center",color:"#94a3b8",fontSize:12}}>Nenhuma entrega contabilizada nesse mês ainda.</div>
+        :entregas.map((t,i)=><div key={t.id+"-"+i} style={{padding:"10px 16px",borderBottom:i<entregas.length-1?"1px solid #f1f5f9":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:2,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700}}>{t._cat}</span>
+              <span>{(CLIENTS.find(c=>c.id===t.client)||{}).name||""}</span>
+            </div>
+          </div>
+          <span style={{color:"#16a34a",fontWeight:700,fontSize:13,flexShrink:0}}>{fmtBRL(t._price)}</span>
+        </div>)
+      }
+    </div>
+  </div>;
+}
+
 function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,setTasks,isViewing,icon,currentUser,notifs,isMob}){
   const [openCard,setOpenCard]=useState(null);
   const [showCustomize,setShowCustomize]=useState(false);
-  // Tab interna: "geral" (padrão) ou "contagem" (só visível pra quem recebe por demanda)
+  // Tab interna: "geral" (padrão), "contagem" (pago por demanda), "pagamentos" (André)
   const [dashTab,setDashTab]=useState(()=>{
     try{return localStorage.getItem("pixels-colab-dash-tab-"+user.id)||"geral";}catch(e){return"geral";}
   });
   useEffect(()=>{try{localStorage.setItem("pixels-colab-dash-tab-"+user.id,dashTab);}catch(e){}},[dashTab,user.id]);
+  // Mês selecionado pra aba Pagamentos
+  const [payMonth,setPayMonth]=useState(()=>{
+    try{const s=localStorage.getItem("pixels-pay-month-"+user.id);if(s)return s;}catch(e){}
+    const now=new Date();
+    return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  });
+  useEffect(()=>{try{localStorage.setItem("pixels-pay-month-"+user.id,payMonth);}catch(e){}},[payMonth,user.id]);
   // Tab Contagem aparece pra quem é pago por demanda OU tem perm verContagemDemandas
   const _userPerms=(typeof ACCESS_STORE!=="undefined"?(ACCESS_STORE[user.id]||{}):{});
   const showContagemTab=!!user.pagamentoPorDemanda||_userPerms.verContagemDemandas===true;
-  const effectiveDashTab=showContagemTab?dashTab:"geral";
+  // Tab Pagamentos: aparece pra todos os freelancers (pagamentoPorDemanda) com preço configurado.
+  const showPagamentosTab=user.id==="andre"||user.id==="guilherme";
+  const allowedTabs=new Set(["geral"]);
+  if(showContagemTab)allowedTabs.add("contagem");
+  if(showPagamentosTab)allowedTabs.add("pagamentos");
+  const effectiveDashTab=allowedTabs.has(dashTab)?dashTab:"geral";
   const [widgets,setWidgets]=useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-dash-widgets-"+user.id)||'{"notifs":true,"clients":true,"stale":true}');}catch(e){return{notifs:true,clients:true,stale:true};}
   });
@@ -21010,12 +21093,13 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
 
-    {/* ═══ TAB BAR (só pra quem recebe por demanda) ═══ */}
-    {showContagemTab&&<div style={{display:"flex",gap:isMob?4:6,padding:isMob?4:6,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
+    {/* ═══ TAB BAR (pago por demanda / André tem pagamentos) ═══ */}
+    {(showContagemTab||showPagamentosTab)&&<div style={{display:"flex",gap:isMob?4:6,padding:isMob?4:6,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
       {[
-        {id:"geral",label:"Geral"},
-        {id:"contagem",label:"Contagem de demandas"},
-      ].map(t=>(
+        {id:"geral",label:"Geral",show:true},
+        {id:"contagem",label:"Contagem de demandas",show:showContagemTab},
+        {id:"pagamentos",label:"Pagamentos",show:showPagamentosTab},
+      ].filter(t=>t.show).map(t=>(
         <button key={t.id} onClick={()=>setDashTab(t.id)} style={{
           flex:1,
           background:effectiveDashTab===t.id?"#a140ff":"transparent",
@@ -21029,6 +21113,8 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {effectiveDashTab==="contagem"?(
       <ContagemDemandasView user={user} isMob={isMob}/>
+    ):effectiveDashTab==="pagamentos"?(
+      <PagamentosView user={user} tasks={allTasks} isMob={isMob} payMonth={payMonth} setPayMonth={setPayMonth}/>
     ):(<>
 
     {/* ═══ KPIs ESTRATÉGICOS — minimalista + mini-charts + trend badges ═══ */}
