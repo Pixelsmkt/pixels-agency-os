@@ -214,7 +214,7 @@ const THEMES={
     bl:"#4db8ff", pk:"#ff6eb4",
     tx:"#f2e8ff", ts:"#9966cc", td:"#3d1a6e",
     kRascunhos:"#64748b", kDemanda:"#a140ff", kRecebida:"#ff6eb4", kExecucao:"#ffd000",
-    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#4db8ff", kPublicado:"#a78bfa", kPausado:"#1a0030", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#4db8ff", kPublicado:"#a78bfa", kPausado:"#1a0030", kAlteracao:"#fb7185",
   },
   light:{
     name:"Light", icon:"○",
@@ -225,7 +225,7 @@ const THEMES={
     bl:"#2563eb", pk:"#db2777",
     tx:"#0f172a", ts:"#64748b", td:"#94a3b8",
     kRascunhos:"#64748b", kDemanda:"#7c3aed", kRecebida:"#db2777", kExecucao:"#d97706",
-    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#2563eb", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#2563eb", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#fb7185",
   },
   agro:{
     name:"Agro", icon:"◉",
@@ -236,7 +236,7 @@ const THEMES={
     bl:"#60a5fa", pk:"#f472b6",
     tx:"#e8fdf0", ts:"#4ade80", td:"#166534",
     kRascunhos:"#64748b", kDemanda:"#22c55e", kRecebida:"#4ade80", kExecucao:"#fde047",
-    kAvaliacao:"#fb923c", kAprovado:"#86efac", kAgendado:"#60a5fa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#fb923c", kAprovado:"#86efac", kAgendado:"#60a5fa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#fb7185",
   },
 };
 
@@ -11333,7 +11333,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
   const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
-  const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#7c1d1d",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
+  const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
   // isAdminViewer = pode ver coluna Tag na lista + faixas de tag. Permissão: gerenciarEtiquetas.
   const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
