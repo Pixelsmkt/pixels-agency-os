@@ -10464,7 +10464,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDrop={()=>drag&&moveTask(drag,col.id)}
             onDragLeave={()=>setOver(null)}
             style={{
-              background:isDraggingOver?"#cbd5e1":"#e5e7eb",
+              background:isDraggingOver?"#9ca3af":"#d1d5db",
               borderRadius:12,padding:"5px 5px 6px",
               maxHeight:"calc(100vh - 240px)",
               overflow:"hidden",
