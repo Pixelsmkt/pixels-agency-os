@@ -1123,13 +1123,15 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
 // Depende de: 00_globals.jsx (C para cores)
 
 /* ─── BIOTER UNITS ─────────────────────── */
+// pickerLabel = como aparece no select de Cliente (já com "Bioter " na frente)
+// abbr = sigla de 2 letras exibida no card ao lado da logo
 const BIOTER_UNITS = [
-  { id:"chapeco",   label:"Chapecó/SC",        color:"#00b4d8" },
-  { id:"toledo",    label:"Toledo/PR",          color:"#0090b8" },
-  { id:"castro",    label:"Castro/PR",          color:"#006e99" },
-  { id:"uberlandia",label:"Uberlândia/MG",      color:"#004d7a" },
-  { id:"gloria",    label:"Glória de Dourados/MS", color:"#00335c" },
-  { id:"paraguay",  label:"Bioter Paraguay 🇵🇾",  color:"#001f3f" },
+  { id:"chapeco",   label:"Chapecó/SC",            color:"#00b4d8", abbr:"CH", pickerLabel:"Bioter Chapecó" },
+  { id:"toledo",    label:"Toledo/PR",             color:"#0090b8", abbr:"TO", pickerLabel:"Bioter Toledo" },
+  { id:"castro",    label:"Castro/PR",             color:"#006e99", abbr:"CA", pickerLabel:"Bioter Castro" },
+  { id:"uberlandia",label:"Uberlândia/MG",         color:"#004d7a", abbr:"UB", pickerLabel:"Bioter Uberlândia" },
+  { id:"gloria",    label:"Glória de Dourados/MS", color:"#00335c", abbr:"GD", pickerLabel:"Bioter Glória de Dourados" },
+  { id:"paraguay",  label:"Bioter Paraguay 🇵🇾",  color:"#001f3f", abbr:"PY", pickerLabel:"Bioter Paraguay" },
 ];
 
 /* ─── MIND MAP COMPONENT (MindMeister-style) ── */
@@ -10579,6 +10581,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           </div>
                           :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
+                        {/* Sigla da unidade Bioter ao lado da logo */}
+                        {cl&&cl.id==="bioter"&&t.bioterUnit&&(function(){
+                          const u=BIOTER_UNITS.find(x=>x.id===t.bioterUnit);
+                          if(!u) return null;
+                          return <span title={u.pickerLabel||u.label} style={{background:u.color+"22",color:u.color,borderRadius:4,padding:"2px 5px",fontSize:9,fontWeight:800,letterSpacing:.3,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
+                        })()}
                         {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
                           {days<0?Math.abs(days)+"d atraso":days===0?"hoje":days+"d"}
                         </span>}
@@ -19916,20 +19924,35 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
 
 
-          {/* Cliente */}
-          {!isAgendado&&<div>
-            <label style={LB}>Cliente</label>
-            <select value={client} onChange={e=>setClient(e.target.value)} disabled={!canEdit}
-              style={{...SI,borderColor:!client?"#fca5a5":undefined,background:!client?"#fff7f7":undefined}}>
-              <option value="">Selecione o cliente</option>
-              {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            {client==="bioter"&&<><label style={{...LB,marginTop:8}}>Unidade Bioter</label>
-              <select value={bioterUnit} onChange={e=>setBioterUnit(e.target.value)} disabled={!canEdit} style={SI}>
-                {BIOTER_UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
+          {/* Cliente — combinado com unidades Bioter, ordem alfabética */}
+          {!isAgendado&&(function(){
+            // Monta lista flat com Grupo Bioter + cada unidade, depois sort alfabético
+            const opts=[];
+            CLIENTS.forEach(c=>{
+              if(c.id==="bioter"){
+                opts.push({key:"bioter|",label:"Grupo Bioter"});
+                BIOTER_UNITS.forEach(u=>{
+                  opts.push({key:"bioter|"+u.id,label:u.pickerLabel||("Bioter "+u.label.split("/")[0])});
+                });
+              }else{
+                opts.push({key:c.id+"|",label:c.name});
+              }
+            });
+            opts.sort((a,b)=>a.label.localeCompare(b.label,"pt-BR"));
+            const currentValue=(client||"")+"|"+(client==="bioter"?(bioterUnit||""):"");
+            return <div>
+              <label style={LB}>Cliente</label>
+              <select value={currentValue} onChange={e=>{
+                const [cid,uid]=e.target.value.split("|");
+                setClient(cid);
+                setBioterUnit(cid==="bioter"?uid:"");
+              }} disabled={!canEdit}
+                style={{...SI,borderColor:!client?"#fca5a5":undefined,background:!client?"#fff7f7":undefined}}>
+                <option value="|">Selecione o cliente</option>
+                {opts.map(o=><option key={o.key} value={o.key}>{o.label}</option>)}
               </select>
-            </>}
-          </div>}
+            </div>;
+          })()}
 
           {/* Prioridade+Prazo */}
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
