@@ -10374,7 +10374,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
         </div>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",paddingBottom:8,justifyContent:"center"}}>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",justifyContent:"center",background:"#1e293b",padding:"16px",borderRadius:14}}>
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>{
@@ -10412,7 +10412,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDrop={()=>drag&&moveTask(drag,col.id)}
             onDragLeave={()=>setOver(null)}
             style={{
-              background:isDraggingOver?"#1e293b":"#334155",
+              background:isDraggingOver?"#d4d8e0":"#f1f2f4",
               border:`1px solid ${isDraggingOver?col.color+"55":"transparent"}`,
               borderRadius:12,padding:"8px 8px 8px",
               height:"78vh",maxHeight:680,
