@@ -10444,7 +10444,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             </div>
 
             {/* Cards — scroll inside column, Trello style */}
-            <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,paddingLeft:4,paddingRight:4,scrollbarGutter:"stable both-edges"}}>
+            <div className="pixels-kanban-scroll" style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,paddingLeft:4,paddingRight:4}}>
               {colTasks.map(t=>{
                 const u=TEAM.find(x=>x.id===t.assignee);
                 // Todos os responsáveis (stack de avatares — múltiplas iniciais)
@@ -10499,9 +10499,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
-                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 2px 8px rgba(124,58,237,0.18)";e.currentTarget.style.borderColor="#7c3aed";}}
-                  onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 2px 6px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
+                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 10px 28px rgba(124,58,237,0.28), 0 2px 6px rgba(124,58,237,0.18)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 2px 6px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
                   {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
                   {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
@@ -22445,19 +22445,31 @@ export default function AgencyOS(){
   // Injeta no <head> e define a fonte base do body pra elementos
   // sem fontFamily explícito herdarem Inter também.
   useEffect(()=>{
-    if(document.getElementById("pixels-font-inter")) return;
-    const pc1=document.createElement("link");
-    pc1.rel="preconnect"; pc1.href="https://fonts.googleapis.com";
-    document.head.appendChild(pc1);
-    const pc2=document.createElement("link");
-    pc2.rel="preconnect"; pc2.href="https://fonts.gstatic.com"; pc2.crossOrigin="anonymous";
-    document.head.appendChild(pc2);
-    const link=document.createElement("link");
-    link.id="pixels-font-inter";
-    link.rel="stylesheet";
-    link.href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap";
-    document.head.appendChild(link);
-    document.body.style.fontFamily="'Inter',system-ui,sans-serif";
+    if(!document.getElementById("pixels-font-inter")){
+      const pc1=document.createElement("link");
+      pc1.rel="preconnect"; pc1.href="https://fonts.googleapis.com";
+      document.head.appendChild(pc1);
+      const pc2=document.createElement("link");
+      pc2.rel="preconnect"; pc2.href="https://fonts.gstatic.com"; pc2.crossOrigin="anonymous";
+      document.head.appendChild(pc2);
+      const link=document.createElement("link");
+      link.id="pixels-font-inter";
+      link.rel="stylesheet";
+      link.href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap";
+      document.head.appendChild(link);
+      document.body.style.fontFamily="'Inter',system-ui,sans-serif";
+    }
+    // ── Scrollbar invisível pro kanban (simetria perfeita) ──
+    // Scroll continua funcionando via mouse wheel / touch / teclado.
+    if(!document.getElementById("pixels-kanban-scroll-style")){
+      const se=document.createElement("style");
+      se.id="pixels-kanban-scroll-style";
+      se.textContent=`
+        .pixels-kanban-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .pixels-kanban-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+      `;
+      document.head.appendChild(se);
+    }
   },[]);
 
   // Carregar selfProfile do Supabase ao iniciar
