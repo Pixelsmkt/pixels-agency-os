@@ -452,7 +452,7 @@ function _showToast(type,msg,duration=3500){
     background:c.bg,color:"#fff",padding:"12px 16px",borderRadius:"10px",
     boxShadow:"0 8px 32px rgba(0,0,0,0.18)",fontSize:"13px",fontWeight:"600",
     display:"flex",alignItems:"center",gap:"10px",pointerEvents:"auto",
-    cursor:"pointer",fontFamily:"'Outfit',system-ui,sans-serif",
+    cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",
     transform:"translateX(100%)",opacity:"0",
     transition:"all .25s cubic-bezier(.22,1,.36,1)",
   });
@@ -488,7 +488,7 @@ function pixelsPrompt(message,opts={}){
     const box=document.createElement("div");
     Object.assign(box.style,{
       background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"440px",width:"100%",
-      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Inter',system-ui,sans-serif",
       animation:"slideInUp .2s ease",
     });
     const title=document.createElement("div");
@@ -535,7 +535,7 @@ function pixelsConfirm(message,opts={}){
     const box=document.createElement("div");
     Object.assign(box.style,{
       background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"420px",width:"100%",
-      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Inter',system-ui,sans-serif",
       animation:"slideInUp .2s ease",
     });
     const title=document.createElement("div");
@@ -2266,7 +2266,7 @@ function MindMap({clientId,centerColor}){
   });
 
   return <div style={{overflowX:"auto",overflowY:"hidden",background:C.bg,borderRadius:14,border:`1px solid ${C.b1}`,padding:8}}>
-    <svg width={W} height={H} style={{fontFamily:"'Outfit',system-ui,sans-serif",display:"block",minWidth:W}}>
+    <svg width={W} height={H} style={{fontFamily:"'Inter',system-ui,sans-serif",display:"block",minWidth:W}}>
       <defs>
         <filter id="glow-mm">
           <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -5793,10 +5793,10 @@ function CFerramentas({cl,onMindmap}){
             const html=`<!DOCTYPE html><html lang="pt-BR"><head>
               <meta charset="UTF-8"/>
               <title>Análise ${esc(cl.name)} — Pixels Agência</title>
-              <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
               <style>
                 *{margin:0;padding:0;box-sizing:border-box;}
-                body{font-family:'Outfit',system-ui,sans-serif;background:#fff;padding:24px;}
+                body{font-family:'Inter',system-ui,sans-serif;background:#fff;padding:24px;}
                 @media print{
                   body{padding:0;}
                   @page{margin:10mm;size:A4;}
@@ -22384,7 +22384,7 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
   };
 
   return(
-    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Outfit','DM Sans',system-ui,sans-serif"}}>
+    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter','DM Sans',system-ui,sans-serif"}}>
       <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:400,height:400,borderRadius:"50%",background:C.a,opacity:.04,filter:"blur(80px)",pointerEvents:"none"}}/>
       <div style={{width:"100%",maxWidth:380,padding:"0 20px"}}>
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:36}}>
@@ -22481,6 +22481,25 @@ export default function AgencyOS(){
   useEffect(()=>{
     window._openMyProfile=()=>setShowSelfProfile(true);
     return()=>{delete window._openMyProfile;};
+  },[]);
+
+  // ── Carregar fonte Inter do Google Fonts uma vez por sessão ──
+  // Injeta no <head> e define a fonte base do body pra elementos
+  // sem fontFamily explícito herdarem Inter também.
+  useEffect(()=>{
+    if(document.getElementById("pixels-font-inter")) return;
+    const pc1=document.createElement("link");
+    pc1.rel="preconnect"; pc1.href="https://fonts.googleapis.com";
+    document.head.appendChild(pc1);
+    const pc2=document.createElement("link");
+    pc2.rel="preconnect"; pc2.href="https://fonts.gstatic.com"; pc2.crossOrigin="anonymous";
+    document.head.appendChild(pc2);
+    const link=document.createElement("link");
+    link.id="pixels-font-inter";
+    link.rel="stylesheet";
+    link.href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap";
+    document.head.appendChild(link);
+    document.body.style.fontFamily="'Inter',system-ui,sans-serif";
   },[]);
 
   // Carregar selfProfile do Supabase ao iniciar
@@ -23182,7 +23201,7 @@ export default function AgencyOS(){
   // ── UI principal ──────────────────────────────────────────
   const markRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));
 
-  return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",position:"relative"}}>
+  return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Inter','DM Sans',system-ui,sans-serif",position:"relative"}}>
     {/* Widget de videochamada — persiste ao trocar de página */}
     <PixelsCallWidget/>
 
