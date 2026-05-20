@@ -21,7 +21,7 @@ const CLIENTS = [
     social:{followers:6240,growth:5.8,reach:28400,eng:4.2,posts:28,stories:56,reels:8,saved:612,likes:1840},
     history:[{m:"Jan",mr:3.8,gr:4.0,leads:89},{m:"Fev",mr:4.0,gr:4.2,leads:102},{m:"Mar",mr:4.1,gr:4.4,leads:124}],
     since:"Jan 2024", manager:"vinicius", connected:true, metaId:"act_1112223334", googleId:"111-222-3334", upsell:["Google Display","Remarketing"], driveUrl:"" },
-  { id:"bioter", name:"Grupo Bioter", abbr:"GB", color:"#4a8c1c", sector:"Biotecnologia / Agro", contract:9400, health:72, nps:68, status:"ativo",
+  { id:"bioter", name:"Bioter", abbr:"GB", color:"#4a8c1c", sector:"Biotecnologia / Agro", contract:9400, health:72, nps:68, status:"ativo",
     payment:{status:"pendente",date:"01/03/2026"}, lastMeeting:"18/03/2026", nextMeeting:"04/04/2026", contractType:"mensal", contacts:[{name:"Ricardo Bioter",role:"Diretor",phone:"(49) 99902-1111",email:"ricardo@grupobioter.com.br"},{name:"Marcia Bioter",role:"Marketing",phone:"(49) 99902-2222",email:"marketing@grupobioter.com.br"}], goals:[{title:"Leads Meta",target:220,current:198,unit:"leads"},{title:"ROAS Meta",target:4.0,current:3.3,unit:"x"}], meetingNotes:[],
     meta:{spend:7600,budget:8500,roas:3.3,leads:198,cpc:2.1,ctr:2.4,cpm:24.8,impressions:306452,clicks:7355,reach:241000,frequency:1.27,conversions:198,costPerConv:38.4,videoViews:61000,vtr:19.9,campaigns:6,adsets:18,ads:41,topAd:"Solução Bioter Pro · ROAS 4.1x"},
     google:{spend:4800,budget:5000,roas:3.6,leads:115,cpc:1.7,ctr:2.9,cpm:16.4,impressions:292683,clicks:8488,conversions:115,costPerConv:41.7,searchImpr:92000,displayImpr:200683,qualityScore:6.8,campaigns:4,adgroups:14,topKw:"bioterminador solo"},
@@ -52,7 +52,7 @@ const CLIENTS = [
     history:[{m:"Jan",mr:4.2,gr:4.6,leads:64},{m:"Fev",mr:4.5,gr:4.8,leads:74},{m:"Mar",mr:4.8,gr:5.1,leads:88}],
     since:"Nov 2024", manager:"gustavo", connected:true, metaId:"act_7778889990", googleId:"777-888-9990", upsell:["Email Marketing"], driveUrl:"",
     },
-  { id:"pixels", name:"Pixels Agencia", abbr:"PX", color:"#a140ff", sector:"Agencia Digital", contract:0, health:98, nps:100, status:"interno", since:"Jan 2021", manager:"vinicius",
+  { id:"pixels", name:"Pixels", abbr:"PX", color:"#a140ff", sector:"Agencia Digital", contract:0, health:98, nps:100, status:"interno", since:"Jan 2021", manager:"vinicius",
     payment:{status:"interno",date:""}, lastMeeting:"25/03/2026", nextMeeting:"01/04/2026", contractType:"interno", contacts:[], goals:[], meetingNotes:[],
     meta:{spend:1200,budget:2000,roas:6.2,leads:48,cpc:0.9,ctr:4.8,cpm:14.0,impressions:85714,clicks:4114,reach:62000,frequency:1.38,conversions:48,costPerConv:25.0,videoViews:18000,vtr:21.0,campaigns:2,adsets:5,ads:12,topAd:"Recrutamento Designer · ROAS 7.1x"},
     google:{spend:600,budget:1000,roas:5.8,leads:22,cpc:0.7,ctr:5.1,cpm:9.2,impressions:65217,clicks:3326,conversions:22,costPerConv:27.3,searchImpr:40000,displayImpr:25217,qualityScore:9.1,campaigns:1,adgroups:3,topKw:"agência de marketing digital chapecó"},
@@ -1126,12 +1126,12 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
 // pickerLabel = como aparece no select de Cliente (já com "Bioter " na frente)
 // abbr = sigla de 2 letras exibida no card ao lado da logo
 const BIOTER_UNITS = [
-  { id:"chapeco",   label:"Chapecó/SC",            color:"#00b4d8", abbr:"CH", pickerLabel:"Bioter Chapecó" },
-  { id:"toledo",    label:"Toledo/PR",             color:"#0090b8", abbr:"TO", pickerLabel:"Bioter Toledo" },
-  { id:"castro",    label:"Castro/PR",             color:"#006e99", abbr:"CA", pickerLabel:"Bioter Castro" },
-  { id:"uberlandia",label:"Uberlândia/MG",         color:"#004d7a", abbr:"UB", pickerLabel:"Bioter Uberlândia" },
-  { id:"gloria",    label:"Glória de Dourados/MS", color:"#00335c", abbr:"GD", pickerLabel:"Bioter Glória de Dourados" },
-  { id:"paraguay",  label:"Bioter Paraguay 🇵🇾",  color:"#001f3f", abbr:"PY", pickerLabel:"Bioter Paraguay" },
+  { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Bioter Chapecó" },          // verde forest escuro
+  { id:"toledo",    label:"Toledo/PR",             color:"#15803d", abbr:"TO", pickerLabel:"Bioter Toledo" },           // verde escuro
+  { id:"castro",    label:"Castro/PR",             color:"#16a34a", abbr:"CA", pickerLabel:"Bioter Castro" },           // verde médio
+  { id:"uberlandia",label:"Uberlândia/MG",         color:"#22c55e", abbr:"UB", pickerLabel:"Bioter Uberlândia" },       // verde claro
+  { id:"gloria",    label:"Glória de Dourados/MS", color:"#4a8c1c", abbr:"GD", pickerLabel:"Bioter Glória de Dourados" }, // verde brand Bioter (olive)
+  { id:"paraguay",  label:"Bioter Paraguay 🇵🇾",  color:"#65a30d", abbr:"PY", pickerLabel:"Bioter Paraguay" },         // verde lime
 ];
 
 /* ─── MIND MAP COMPONENT (MindMeister-style) ── */
@@ -19930,7 +19930,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             const opts=[];
             CLIENTS.forEach(c=>{
               if(c.id==="bioter"){
-                opts.push({key:"bioter|",label:"Grupo Bioter"});
+                opts.push({key:"bioter|",label:c.name});
                 BIOTER_UNITS.forEach(u=>{
                   opts.push({key:"bioter|"+u.id,label:u.pickerLabel||("Bioter "+u.label.split("/")[0])});
                 });
