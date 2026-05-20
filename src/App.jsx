@@ -10581,25 +10581,31 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           </div>
                           :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
-                        {/* Sigla da unidade Bioter ao lado da logo — fundo verde escuro padronizado */}
+                        {/* Siglas das unidades Bioter — múltiplas se for o caso */}
                         {cl&&cl.id==="bioter"&&t.bioterUnit&&(function(){
-                          const u=BIOTER_UNITS.find(x=>x.id===t.bioterUnit);
-                          if(!u) return null;
-                          return <span title={u.pickerLabel||u.label} style={{background:"#166534",color:"#fff",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
+                          const ids=String(t.bioterUnit).split(",").filter(Boolean);
+                          if(!ids.length)return null;
+                          return ids.map(uid=>{
+                            const u=BIOTER_UNITS.find(x=>x.id===uid);
+                            if(!u)return null;
+                            return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
+                          });
                         })()}
                         {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
                           {days<0?Math.abs(days)+"d atraso":days===0?"hoje":days+"d"}
                         </span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                        {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:3,color:"#64748b",fontSize:10,fontWeight:600}}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
-                          {(t.files||[]).length}
-                        </span>}
-                        {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:3,color:"#64748b",fontSize:10,fontWeight:600}}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-                          {(t.comments||[]).length}
-                        </span>}
+                        {/* Data de publicação — badge moderno com calendário */}
+                        {t.publishDate&&(function(){
+                          const d=new Date(t.publishDate+"T12:00:00");
+                          const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+                          const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
+                          return <span title={"Publicação: "+titleFmt} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            {fmt}
+                          </span>;
+                        })()}
                         {/* Stack de avatares — usa UserAvatar (foto real ou fallback letra) */}
                         {allAssignees.length>0&&<div style={{display:"flex",alignItems:"center",marginLeft:2}}>
                           {allAssignees.slice(0,3).map((au,idx)=>(
@@ -19924,33 +19930,45 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
 
 
-          {/* Cliente — combinado com unidades Bioter, ordem alfabética */}
+          {/* Cliente — single-select alfabético + checkboxes pras unidades Bioter (multi) */}
           {!isAgendado&&(function(){
-            // Monta lista flat com Grupo Bioter + cada unidade, depois sort alfabético
-            const opts=[];
-            CLIENTS.forEach(c=>{
-              if(c.id==="bioter"){
-                opts.push({key:"bioter|",label:c.name});
-                BIOTER_UNITS.forEach(u=>{
-                  opts.push({key:"bioter|"+u.id,label:u.pickerLabel||("Bioter "+u.label.split("/")[0])});
-                });
-              }else{
-                opts.push({key:c.id+"|",label:c.name});
-              }
-            });
-            opts.sort((a,b)=>a.label.localeCompare(b.label,"pt-BR"));
-            const currentValue=(client||"")+"|"+(client==="bioter"?(bioterUnit||""):"");
+            const sortedClients=CLIENTS.slice().sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+            const selectedUnits=String(bioterUnit||"").split(",").filter(Boolean);
+            const toggleUnit=(uid)=>{
+              if(!canEdit)return;
+              const next=selectedUnits.includes(uid)
+                ?selectedUnits.filter(x=>x!==uid)
+                :[...selectedUnits,uid];
+              setBioterUnit(next.join(","));
+            };
             return <div>
               <label style={LB}>Cliente</label>
-              <select value={currentValue} onChange={e=>{
-                const [cid,uid]=e.target.value.split("|");
-                setClient(cid);
-                setBioterUnit(cid==="bioter"?uid:"");
+              <select value={client} onChange={e=>{
+                setClient(e.target.value);
+                if(e.target.value!=="bioter")setBioterUnit("");
               }} disabled={!canEdit}
                 style={{...SI,borderColor:!client?"#fca5a5":undefined,background:!client?"#fff7f7":undefined}}>
-                <option value="|">Selecione o cliente</option>
-                {opts.map(o=><option key={o.key} value={o.key}>{o.label}</option>)}
+                <option value="">Selecione o cliente</option>
+                {sortedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              {client==="bioter"&&<div style={{marginTop:10}}>
+                <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
+                  <span>Unidades Bioter</span>
+                  <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>marque uma ou mais</span>
+                </label>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                  {BIOTER_UNITS.map(u=>{
+                    const isSel=selectedUnits.includes(u.id);
+                    return <button key={u.id} type="button" onClick={()=>toggleUnit(u.id)} disabled={!canEdit}
+                      style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",background:isSel?"#16653418":"#fff",border:`1px solid ${isSel?"#166534":"#e2e8f0"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:isSel?700:500,textAlign:"left",transition:"all .12s"}}>
+                      <div style={{width:14,height:14,borderRadius:4,border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,background:isSel?"#166534":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                        {isSel&&<Ico n="check" size={10}/>}
+                      </div>
+                      <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.pickerLabel||u.label}</span>
+                    </button>;
+                  })}
+                </div>
+              </div>}
             </div>;
           })()}
 
