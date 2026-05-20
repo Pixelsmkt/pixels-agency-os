@@ -10581,11 +10581,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           </div>
                           :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
-                        {/* Sigla da unidade Bioter ao lado da logo */}
+                        {/* Sigla da unidade Bioter ao lado da logo — fundo verde escuro padronizado */}
                         {cl&&cl.id==="bioter"&&t.bioterUnit&&(function(){
                           const u=BIOTER_UNITS.find(x=>x.id===t.bioterUnit);
                           if(!u) return null;
-                          return <span title={u.pickerLabel||u.label} style={{background:u.color+"22",color:u.color,borderRadius:4,padding:"2px 5px",fontSize:9,fontWeight:800,letterSpacing:.3,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
+                          return <span title={u.pickerLabel||u.label} style={{background:"#166534",color:"#fff",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
                         })()}
                         {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
                           {days<0?Math.abs(days)+"d atraso":days===0?"hoje":days+"d"}
