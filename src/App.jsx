@@ -18382,35 +18382,18 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     else{onClose();}
   },[hasChanges,onClose,uploadingCount]);
 
-  // ── Atalhos de teclado: ESC fecha, ENTER salva+fecha (exceto em textarea/multiline) ──
+  // ── Tecla ESC fecha o modal (lightbox tem prioridade se estiver aberto) ──
+  // Enter handler (salva+fecha) está mais abaixo no arquivo pra evitar TDZ
+  // com `save` e `showMovePrompt` que são declarados depois.
   useEffect(()=>{
-    const onKey=(e)=>{
-      if(e.key==="Escape"){
-        if(lightbox){setLightbox(null);return;}
-        handleClose();
-        return;
-      }
-      if(e.key==="Enter"){
-        // Skip se Enter foi pressionado em um campo multiline
-        const tag=(e.target&&e.target.tagName)||"";
-        if(tag==="TEXTAREA")return;             // textarea: Enter = nova linha
-        if(e.target&&e.target.isContentEditable)return; // editor rich text
-        if(e.shiftKey)return;                   // Shift+Enter = nova linha intencional
-        // Não dispara se algum diálogo de confirmação tá aberto
-        if(lightbox)return;
-        if(showUnsavedDialog)return;
-        if(conclusionStep)return;
-        if(showMovePrompt)return;
-        // Só salva se pode editar (senão é só visualização)
-        if(canEdit){
-          e.preventDefault();
-          save();
-        }
-      }
+    const onEsc=(e)=>{
+      if(e.key!=="Escape")return;
+      if(lightbox){setLightbox(null);return;}
+      handleClose();
     };
-    window.addEventListener("keydown",onKey);
-    return()=>window.removeEventListener("keydown",onKey);
-  },[handleClose,lightbox,canEdit,save,showUnsavedDialog,conclusionStep,showMovePrompt]);
+    window.addEventListener("keydown",onEsc);
+    return()=>window.removeEventListener("keydown",onEsc);
+  },[handleClose,lightbox]);
 
   const save=()=>{
     // ── Bloqueia save com uploads em andamento ──
@@ -18969,6 +18952,25 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     setTasks(prev=>prev.map(t=>t.id===task.id?{...t,status:"execucao",colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newEntry]}:t));
     setShowMovePrompt(false);
   };
+
+  // ── Atalho: Enter salva e fecha (exceto em textarea/multiline/dialogos) ──
+  // Esse useEffect tem que vir DEPOIS das declarações de save/showMovePrompt
+  // pra evitar TDZ. ESC fica no useEffect lá em cima (sem deps complexas).
+  useEffect(()=>{
+    const onEnter=(e)=>{
+      if(e.key!=="Enter")return;
+      const tag=(e.target&&e.target.tagName)||"";
+      if(tag==="TEXTAREA")return;
+      if(e.target&&e.target.isContentEditable)return;
+      if(e.shiftKey)return;
+      if(lightbox||showUnsavedDialog||conclusionStep||showMovePrompt)return;
+      if(!canEdit)return;
+      e.preventDefault();
+      save();
+    };
+    window.addEventListener("keydown",onEnter);
+    return()=>window.removeEventListener("keydown",onEnter);
+  },[lightbox,canEdit,save,showUnsavedDialog,conclusionStep,showMovePrompt]);
 
   return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto",backdropFilter:"blur(6px)"}} onMouseDown={handleClose}>
 
