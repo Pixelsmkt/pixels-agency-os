@@ -10413,11 +10413,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDragLeave={()=>setOver(null)}
             style={{
               background:isDraggingOver?"#d4d8e0":"#f1f2f4",
-              border:`1px solid ${isDraggingOver?col.color+"55":"transparent"}`,
               borderRadius:12,padding:"5px 5px 6px",
               maxHeight:"calc(100vh - 240px)",
               overflow:"hidden",
-              transition:"all .15s",display:"flex",flexDirection:"column",gap:0
+              transition:"background .15s",display:"flex",flexDirection:"column",gap:0
             }}>
 
             {/* Column header — barra colorida no topo, integrada à coluna */}
@@ -10500,7 +10499,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
                   style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
-                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 8px 14px -3px rgba(124,58,237,0.30), 0 2px 4px rgba(124,58,237,0.16)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
+                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 0 0 1.5px #7c3aed, 0 0 0 5px rgba(124,58,237,0.22), 0 10px 28px rgba(124,58,237,0.32)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
                   onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
                   {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
                   {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
