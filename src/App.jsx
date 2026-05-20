@@ -258,16 +258,16 @@ try{
 }catch(e){}
 
 const KANBAN_COLS = [
-  { id:"rascunhos", label:"Rascunhos",              color:C.kRascunhos, dark:false },
-  { id:"demanda",   label:"Copys",                  color:C.kDemanda,   dark:false },
-  { id:"recebida",  label:"Demanda",                color:C.kRecebida,  dark:false },
-  { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
-  { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
-  { id:"avaliacao", label:"Concluído para avaliação", color:C.kAvaliacao, dark:false },
-  { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
-  { id:"agendado",  label:"Agendado",               color:C.kAgendado,  dark:true  },
-  { id:"publicado", label:"Publicado",              color:C.kPublicado, dark:true  },
-  { id:"pausado",   label:"Pausado",                color:C.kPausado,   dark:false },
+  { id:"rascunhos", label:"Rascunhos",                  color:C.kRascunhos, dark:false },
+  { id:"demanda",   label:"Copys",                      color:C.kDemanda,   dark:false },
+  { id:"recebida",  label:"Demandas",                   color:C.kRecebida,  dark:false },
+  { id:"execucao",  label:"Em execução",                color:C.kExecucao,  dark:true  },
+  { id:"ajustes",   label:"Ajustes",                    color:C.kAlteracao, dark:true  },
+  { id:"avaliacao", label:"Concluídas para avaliação",  color:C.kAvaliacao, dark:false },
+  { id:"aprovado",  label:"Aprovadas",                  color:C.kAprovado,  dark:true  },
+  { id:"agendado",  label:"Agendadas",                  color:C.kAgendado,  dark:true  },
+  { id:"publicado", label:"Publicadas",                 color:C.kPublicado, dark:true  },
+  { id:"pausado",   label:"Pausadas",                   color:C.kPausado,   dark:false },
 ];
 
 /* ─── TEAM ───────────────────────────────── */
@@ -1085,7 +1085,7 @@ const Chip=({color,children,sm})=>(
 /* ─── STATUS DE CARD ─────────────────────────
    Labels e cores usados em vários módulos (chat, portal, card preview).
    Movido para cá para remover dependência oculta entre 05_chat e 14_portal. */
-const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
+const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demandas",execucao:"Em execução",avaliacao:"Avaliação",aprovado:"Aprovadas",agendado:"Agendadas",publicado:"Publicadas",alteracao:"Alteração",pausado:"Pausadas"};
 const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
 
 /* ─── ASK CLAUDE HELPER ─────────────────────────────
@@ -1303,8 +1303,8 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {label:"Recebidas",status:"recebida",color:"#ec4899",icon:"📥"},
     {label:"Execução",status:"execucao",color:"#eab308",icon:"⚙"},
     {label:"Avaliação",status:"avaliacao",color:"#f97316",icon:"👀"},
-    {label:"Aprovado",status:"aprovado",color:"#16a34a",icon:"✅"},
-    {label:"Agendado",status:"agendado",color:"#2563eb",icon:"📅"},
+    {label:"Aprovadas",status:"aprovado",color:"#16a34a",icon:"✅"},
+    {label:"Agendadas",status:"agendado",color:"#2563eb",icon:"📅"},
   ].map(s=>({...s,count:active.filter(t=>t.status===s.status).length}));
   const pipelineMax=Math.max(...pipeline.map(p=>p.count),1);
 
@@ -10761,10 +10761,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
 const INTERNO_COLS = [
   { id:"interno_demanda",   label:"Demandas",                color:"#6366f1" },
-  { id:"interno_execucao",  label:"Em Execução",             color:"#f97316" },
-  { id:"interno_avaliacao", label:"Concluído para avaliação",  color:"#eab308" },
-  { id:"interno_aprovado",  label:"Aprovado",                color:"#22c55e" },
-  { id:"interno_executado", label:"Executado",               color:"#8b5cf6" },
+  { id:"interno_execucao",  label:"Em execução",                color:"#f97316" },
+  { id:"interno_avaliacao", label:"Concluídas para avaliação",  color:"#eab308" },
+  { id:"interno_aprovado",  label:"Aprovadas",                  color:"#22c55e" },
+  { id:"interno_executado", label:"Executadas",                 color:"#8b5cf6" },
 ];
 
 const PRIO_CFG = {
@@ -11376,7 +11376,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     :`2fr ${cw.status}px ${cw.prior}px ${cw.responsavel}px ${cw.prazo}px ${cw.parado}px ${cw.dataPub}px ${cw.dataConc}px ${cw.actions}px`;
   // Cada header: { label, key } — key=null pra colunas não-redimensionáveis (Demanda flex e a última, Actions)
   const HEADERS_BASE=[
-    {label:"Demanda",key:null,filterKey:null},
+    {label:"Demandas",key:null,filterKey:null},
     {label:"Status",key:"status",filterKey:"status"},
     {label:"Prior.",key:"prior",filterKey:"prior"},
     {label:"Responsavel",key:"responsavel",filterKey:"responsavel"},
@@ -13418,7 +13418,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const approveCopy=(task)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demanda",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demandas",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
     pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",body:'"'+task.title+'" foi aprovada e está em Demandas',user:actor,at:"Agora"});
     setCardIdx(0);setImgIdx(0);
   };
@@ -13439,7 +13439,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     const isInterna=task.status==="interno_avaliacao";
     const toStatus=isInterna?"interno_aprovado":"aprovado";
     const fromLabel=isInterna?"Concluído para avaliação (Interna)":"Avaliação";
-    const toLabel=isInterna?"Aprovado (Interna)":"Aprovado";
+    const toLabel=isInterna?"Aprovadas (Interna)":"Aprovadas";
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
     // FIX 8: usa apenas setTasks (wrapper sincroniza com Supabase via syncTasks).
@@ -13505,7 +13505,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     const isInterna=task.status==="interno_avaliacao";
     // FIX: Conteúdo (não-interna) vai pra coluna "ajustes" — mais organizado.
     const toStatus=isInterna?"interno_execucao":"ajustes";
-    const fromLabel=isInterna?"Concluído para avaliação (Interna)":"Concluído para avaliação";
+    const fromLabel=isInterna?"Concluídas para avaliação (Interna)":"Concluídas para avaliação";
     const toLabel=isInterna?"Em Execução (Ajuste Interno)":"Ajustes";
     const newFiles=[...(task.files||[]),...(drawingFiles||[]),...(audioFiles||[])];
     const newComments=[...(task.comments||[]),...(comments||[])];
@@ -14507,14 +14507,14 @@ const PERM_GROUPS={
     {section:"Colunas Visíveis"},
     {key:"colRascunhos",      label:"Rascunhos",                  desc:"Coluna onde Social Media trabalha o copy ANTES de ir pra aprovação"},
     {key:"colCopys",          label:"Copys",                      desc:"Coluna onde entram novas demandas de copy"},
-    {key:"colDemanda",        label:"Demanda",                    desc:"Coluna de demandas recebidas"},
-    {key:"colExecucao",       label:"Em Execução",                desc:"Coluna de trabalho em andamento"},
+    {key:"colDemanda",        label:"Demandas",                   desc:"Coluna de demandas recebidas"},
+    {key:"colExecucao",       label:"Em execução",                desc:"Coluna de trabalho em andamento"},
     {key:"colAjustes",        label:"Ajustes",                    desc:"Coluna de ajustes solicitados pelo cliente"},
-    {key:"colAvaliacao",      label:"Concluído para avaliação",     desc:"Coluna aguardando aprovação"},
-    {key:"colAprovado",       label:"Aprovado",                   desc:"Coluna de entregas aprovadas"},
-    {key:"colAgendado",       label:"Agendado",                   desc:"Coluna de publicações programadas"},
-    {key:"colPublicado",      label:"Publicado",                  desc:"Coluna de conteúdos publicados"},
-    {key:"colPausado",        label:"Pausado",                    desc:"Coluna de demandas pausadas"},
+    {key:"colAvaliacao",      label:"Concluídas para avaliação",  desc:"Coluna aguardando aprovação"},
+    {key:"colAprovado",       label:"Aprovadas",                  desc:"Coluna de entregas aprovadas"},
+    {key:"colAgendado",       label:"Agendadas",                  desc:"Coluna de publicações programadas"},
+    {key:"colPublicado",      label:"Publicadas",                 desc:"Coluna de conteúdos publicados"},
+    {key:"colPausado",        label:"Pausadas",                   desc:"Coluna de demandas pausadas"},
     {section:"Fluxo Especial"},
     {key:"desfazerCopy",      label:"Mover Copy → Rascunhos",     desc:"Pode arrastar copys de volta pra rascunho (cancela envio à aprovação)"},
     {key:"verKanbanSocios",   label:"Ver Cards de Sócios",        desc:"Inclui cards atribuídos aos sócios na visão do kanban"},
@@ -17528,21 +17528,21 @@ const RADAR_ORIGENS = {
 function getMonthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`; }
 
 const FLUXO_COLS = [
-  {id:"demanda",   label:"Demanda",                color:"#a140ff"},
-  {id:"recebida",  label:"Recebida",               color:"#ff6eb4"},
-  {id:"execucao",  label:"Em Execução",            color:"#ffd000"},
-  {id:"avaliacao", label:"Concluído para avaliação", color:"#ff7200"},
-  {id:"aprovado",  label:"Aprovado",               color:"#00e5a0"},
-  {id:"agendado",  label:"Agendado",               color:"#4db8ff"},
-  {id:"publicado", label:"Publicado",              color:"#a78bfa"},
+  {id:"demanda",   label:"Demandas",                  color:"#a140ff"},
+  {id:"recebida",  label:"Recebidas",                 color:"#ff6eb4"},
+  {id:"execucao",  label:"Em execução",               color:"#ffd000"},
+  {id:"avaliacao", label:"Concluídas para avaliação", color:"#ff7200"},
+  {id:"aprovado",  label:"Aprovadas",                 color:"#00e5a0"},
+  {id:"agendado",  label:"Agendadas",                 color:"#4db8ff"},
+  {id:"publicado", label:"Publicadas",                color:"#a78bfa"},
 ];
 
 const INTERNAS_COLS_RADAR = [
   {id:"interno_demanda",   label:"Demandas",               color:"#6366f1"},
-  {id:"interno_execucao",  label:"Em Execução",            color:"#f97316"},
-  {id:"interno_avaliacao", label:"Aguardando Aprovação",   color:"#eab308"},
-  {id:"interno_aprovado",  label:"Aprovado",               color:"#22c55e"},
-  {id:"interno_executado", label:"Executado",              color:"#8b5cf6"},
+  {id:"interno_execucao",  label:"Em execução",            color:"#f97316"},
+  {id:"interno_avaliacao", label:"Aguardando aprovação",   color:"#eab308"},
+  {id:"interno_aprovado",  label:"Aprovadas",              color:"#22c55e"},
+  {id:"interno_executado", label:"Executadas",             color:"#8b5cf6"},
 ];
 
 const PERIODO_OPTS = [
@@ -18332,8 +18332,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const cleanedFiles=cleanAttachments(attachments);
     // Conteúdo: tanto "execucao" quanto "ajustes" vão pra "avaliacao"
     const fromStatus=task.status;
-    const fromLabel=fromStatus==="ajustes"?"Ajustes":"Em Execução";
-    const newTlEntry={type:"status",fromLabel,toLabel:"Concluído para avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    const fromLabel=fromStatus==="ajustes"?"Ajustes":"Em execução";
+    const newTlEntry={type:"status",fromLabel,toLabel:"Concluídas para avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
     // Updater functional + merge — preserva alterações concorrentes de outros usuários
     setTasks(prev=>prev.map(t=>{
       if(t.id!==task.id)return t;
@@ -18794,7 +18794,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   );
 
   const moveToExecucao=()=>{
-    const newEntry={type:"status",fromLabel:"Demanda",toLabel:"Em Execução",from:"recebida",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    const newEntry={type:"status",fromLabel:"Demandas",toLabel:"Em execução",from:"recebida",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
     // Updater functional — pega timeline mais recente do `prev` e só anexa a entrada nova
     setTasks(prev=>prev.map(t=>t.id===task.id?{...t,status:"execucao",colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newEntry]}:t));
     setShowMovePrompt(false);
@@ -18884,7 +18884,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       <div style={{background:"#fff",borderRadius:18,padding:"28px 32px",maxWidth:380,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.25)",textAlign:"center"}}>
         <div style={{fontSize:36,marginBottom:12}}>📤</div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:8}}>Posso encaminhar o cartão para avaliação?</div>
-        <div style={{color:"#64748b",fontSize:13,marginBottom:24}}>O cartão irá para a coluna <strong>"Concluído para avaliação"</strong>.</div>
+        <div style={{color:"#64748b",fontSize:13,marginBottom:24}}>O cartão irá para a coluna <strong>"Concluídas para avaliação"</strong>.</div>
         <div style={{display:"flex",gap:10,justifyContent:"center"}}>
           <button onClick={()=>setConclusionStep(null)}
             style={{background:"#f1f5f9",border:"none",borderRadius:10,padding:"10px 28px",fontWeight:700,fontSize:13,color:"#64748b",cursor:"pointer"}}>
@@ -20790,9 +20790,9 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
   const _statusDistrib=(()=>{
     const map={
       atrasada:{label:"Atrasadas",count:0,color:"#dc2626"},
-      execucao:{label:"Em Execução",count:0,color:"#eab308"},
-      avaliacao:{label:"Em Avaliação",count:0,color:"#ea580c"},
-      demanda:{label:"Em Fila",color:"#7c3aed",count:0},
+      execucao:{label:"Em execução",count:0,color:"#eab308"},
+      avaliacao:{label:"Em avaliação",count:0,color:"#ea580c"},
+      demanda:{label:"Em fila",color:"#7c3aed",count:0},
       agendado:{label:"Agendadas",count:0,color:"#2563eb"},
     };
     _teamTasks.forEach(t=>{
@@ -20828,7 +20828,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
     const status=[
       {key:"execucao",label:"Execução",color:"#eab308"},
       {key:"avaliacao",label:"Avaliação",color:"#ea580c"},
-      {key:"agendado",label:"Agendado",color:"#2563eb"},
+      {key:"agendado",label:"Agendadas",color:"#2563eb"},
     ];
     return status.map(s=>{
       const tasks=_teamTasks.filter(t=>t.status===s.key&&t.colEnteredAt);
@@ -23116,7 +23116,7 @@ export default function AgencyOS(){
           if(t.deletedAt||t.status!=="agendado"||!t.publishDate) return t;
           if(new Date(t.publishDate+"T"+(t.publishTime||"00:00")+":00")<=now){
             changed=true;
-            const entry={type:"status",fromLabel:"Agendado",toLabel:"Publicado",from:"agendado",to:"publicado",at:now.toISOString(),atFmt:now.toLocaleDateString("pt-BR"),user:"Sistema"};
+            const entry={type:"status",fromLabel:"Agendadas",toLabel:"Publicadas",from:"agendado",to:"publicado",at:now.toISOString(),atFmt:now.toLocaleDateString("pt-BR"),user:"Sistema"};
             return {...t,status:"publicado",completedAt:now.toISOString().split("T")[0],colEnteredAt:now.toISOString(),timeline:[...(t.timeline||[]),entry]};
           }
           return t;
@@ -24611,10 +24611,10 @@ function PageAnalitico({isMob, tasks, initTab}){
         {id:"recebida",  label:"Recebida",   color:C.pk},
         {id:"execucao",  label:"Execução",   color:C.yw},
         {id:"avaliacao", label:"Avaliação",  color:C.or},
-        {id:"aprovado",  label:"Aprovado",   color:C.gr},
-        {id:"agendado",  label:"Agendado",   color:C.bl},
-        {id:"publicado", label:"Publicado",  color:"#a78bfa"},
-        {id:"pausado",   label:"Pausado",    color:C.td},
+        {id:"aprovado",  label:"Aprovadas",  color:C.gr},
+        {id:"agendado",  label:"Agendadas",  color:C.bl},
+        {id:"publicado", label:"Publicadas", color:"#a78bfa"},
+        {id:"pausado",   label:"Pausadas",   color:C.td},
       ];
       const colCounts=COLS.map(col=>({
         ...col,
