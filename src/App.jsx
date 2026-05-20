@@ -987,6 +987,32 @@ function fmtLastSeen(lastSeenAt){
   return`Última atividade às ${time} do dia ${d.toLocaleDateString("pt-BR")}`;
 }
 
+/* ─── COMPONENTE: Ico ────────────────────────
+ * Helper de ícones inline (estilo Lucide/Feather line-art).
+ * Uso: <Ico n="clock" size={14}/> ou <Ico n="zap" size={16} color="#fff"/>
+ * Stroke baseado em currentColor por padrão — herda cor do contexto. */
+function Ico({n,size=14,color,strokeWidth=2}){
+  const cl=color||"currentColor";
+  const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:cl,strokeWidth,strokeLinecap:"round",strokeLinejoin:"round"};
+  if(n==="clock")     return <svg {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+  if(n==="scan")      return <svg {...p}><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>;
+  if(n==="zap")       return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+  if(n==="kanban")    return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
+  if(n==="list")      return <svg {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+  if(n==="calendar")  return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+  if(n==="trash")     return <svg {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>;
+  if(n==="paperclip") return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>;
+  if(n==="message")   return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+  if(n==="x")         return <svg {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+  if(n==="refresh")   return <svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>;
+  if(n==="folder")    return <svg {...p}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>;
+  if(n==="filter")    return <svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
+  if(n==="check")     return <svg {...p}><polyline points="20 6 9 17 4 12"/></svg>;
+  if(n==="alert")     return <svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+  if(n==="flame")     return <svg {...p}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
+  return null;
+}
+
 /* ─── HELPER: getProfilePhoto ───────────────── */
 // Busca foto do localStorage para qualquer userId
 function getProfilePhoto(uid){
@@ -10069,21 +10095,21 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           {/* ESCANEAR button — só quem tem permissão */}
           {canEscanear&&<button onClick={()=>setShowScan(true)}
             style={{background:`linear-gradient(135deg,${C.or},#ff3300)`,color:"#fff",border:"none",borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.or}60`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3}}>
-            🔥 Escanear
+            <Ico n="scan" size={14}/> Escanear
           </button>}
           {/* PIXELS IA button — só quem tem permissão */}
           {canPixelsIA&&<button onClick={()=>setShowPixelsIA(true)}
             style={{background:"#ffffff",color:C.a,border:`2px solid ${C.a}`,borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.a}30`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3,position:"relative"}}>
-            ⚡ Pixels IA
+            <Ico n="zap" size={14}/> Pixels IA
             <span style={{position:"absolute",top:-6,right:-6,background:C.a,color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:8,fontWeight:900}}>IA</span>
           </button>}
           {/* view mode group */}
           <div style={{display:"flex",background:C.b1,borderRadius:10,padding:3,gap:2}}>
-            {[["cartao","⊞ Cartão"],["lista","☰ Lista"],["calendar","📅 Calendário"]].map(([m,l])=>(
-              <button key={m} onClick={()=>setViewMode(m)} style={{background:viewMode===m?C.a:"transparent",color:viewMode===m?"#fff":C.ts,border:"none",borderRadius:8,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>{l}</button>
+            {[["cartao","kanban","Cartão"],["lista","list","Lista"],["calendar","calendar","Calendário"]].map(([m,ico,l])=>(
+              <button key={m} onClick={()=>setViewMode(m)} style={{background:viewMode===m?C.a:"transparent",color:viewMode===m?"#fff":C.ts,border:"none",borderRadius:8,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s",display:"flex",alignItems:"center",gap:5}}><Ico n={ico} size={13}/>{l}</button>
             ))}
           </div>
-          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Lixeira</button>}
+          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><Ico n="trash" size={13}/> Lixeira</button>}
           {/* Botão de refresh manual */}
           <button onClick={()=>window.location.reload()} title="Recarregar dados"
             style={{background:C.b1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:"pointer",color:C.ts,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
@@ -10435,10 +10461,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     </span>
                 }
                 <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600,flexShrink:0}}>{colTasks.length}</span>
-                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700}}>⏳ {colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
+                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"2px 7px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="clock" size={10}/>{colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
               </div>
               <div style={{display:"flex",gap:3,alignItems:"center"}}>
-                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
+                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><Ico n="x" size={11}/></button>}
               </div>
             </div>
 
@@ -10536,8 +10562,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         </span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                        {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>📎{(t.files||[]).length}</span>}
-                        {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>💬{(t.comments||[]).length}</span>}
+                        {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:3,color:"#64748b",fontSize:10,fontWeight:600}}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                          {(t.files||[]).length}
+                        </span>}
+                        {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:3,color:"#64748b",fontSize:10,fontWeight:600}}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                          {(t.comments||[]).length}
+                        </span>}
                         {/* Stack de avatares — usa UserAvatar (foto real ou fallback letra) */}
                         {allAssignees.length>0&&<div style={{display:"flex",alignItems:"center",marginLeft:2}}>
                           {allAssignees.slice(0,3).map((au,idx)=>(
