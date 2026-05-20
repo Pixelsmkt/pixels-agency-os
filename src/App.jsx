@@ -869,7 +869,7 @@ const NAV=[
  * Usa getProfilePhoto (já existente — lê pixels-selfprofile-{id} do localStorage).
  * Re-renderiza instantâneo quando dispara event "pixels:photo-updated".
  */
-function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title, noHover}){
+function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title}){
   // user pode ser objeto TEAM completo OU só id string
   const u=typeof user==="string"?(TEAM.find(t=>t.id===user)||{id:user,name:user,av:"?",color:"#94a3b8"}):user;
   const [photo,setPhoto]=useState(()=>getProfilePhoto(u.id));
@@ -889,32 +889,18 @@ function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyl
     boxShadow:"0 1px 2px rgba(0,0,0,0.1)",
     flexShrink:0,overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center"
   };
-  // Hover-card só pra avatares pequenos. Em avatares grandes (perfil, modais) não faz sentido.
-  const showHover = !noHover && size <= 34;
-  // Em modo hover-card, o extraStyle vai no wrapper (pra preservar marginLeft/zIndex do stack).
-  // Senão (modo legado/grande), extraStyle vai direto no avatar.
-  const avatarStyle = showHover ? base : Object.assign({},base,extraStyle||{});
-  const avatarEl = photo
-    ? <img src={photo} alt={u.name||""} title={showHover?undefined:(title||u.name||"")} loading="lazy"
-        style={Object.assign({},avatarStyle,{objectFit:"cover"})}
-        onError={function(e){e.currentTarget.style.display="none";}}/>
-    : <div title={showHover?undefined:(title||u.name||"")} style={Object.assign({},avatarStyle,{
-        background:u.color||"#94a3b8",
-        color:"#fff",fontWeight:fontWeight,
-        fontSize:Math.max(8,Math.round(size*0.45))
-      })}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
-  if(!showHover) return avatarEl;
-  return <span className="pixels-av-wrap" style={Object.assign({position:"relative",display:"inline-flex",flexShrink:0},extraStyle||{})}>
-    {avatarEl}
-    <span className="pixels-av-card" aria-hidden="true">
-      {photo
-        ? <img src={photo} alt="" className="pixels-av-card-photo"/>
-        : <span className="pixels-av-card-letter" style={{background:u.color||"#94a3b8"}}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</span>
-      }
-      <span className="pixels-av-card-name">{u.name}</span>
-      {u.role && <span className="pixels-av-card-role">{u.role}</span>}
-    </span>
-  </span>;
+  const merged=Object.assign({},base,extraStyle||{});
+  if(photo){
+    return <img src={photo} alt={u.name||""} title={title||u.name||""} loading="lazy"
+      style={Object.assign({},merged,{objectFit:"cover"})}
+      onError={function(e){e.currentTarget.style.display="none";}}/>;
+  }
+  // Fallback: letra colorida
+  return <div title={title||u.name||""} style={Object.assign({},merged,{
+    background:u.color||"#94a3b8",
+    color:"#fff",fontWeight:fontWeight,
+    fontSize:Math.max(8,Math.round(size*0.45))
+  })}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
 }
 
 /* ─── HOOK: useOpenCardSync ─────────────────── */
@@ -22790,77 +22776,6 @@ export default function AgencyOS(){
         .pixels-kanban-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
       `;
       document.head.appendChild(se);
-    }
-    // ── Hover-card dos avatares pequenos (UserAvatar) ──
-    if(!document.getElementById("pixels-avatar-hover-style")){
-      const se2=document.createElement("style");
-      se2.id="pixels-avatar-hover-style";
-      se2.textContent=`
-        .pixels-av-wrap { position: relative; display: inline-flex; }
-        .pixels-av-card {
-          position: absolute;
-          bottom: calc(100% + 8px);
-          left: 50%;
-          transform: translateX(-50%) translateY(4px) scale(.95);
-          background: #0f172a;
-          color: #fff;
-          border-radius: 12px;
-          padding: 12px 14px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          pointer-events: none;
-          opacity: 0;
-          transition: opacity .15s ease, transform .15s ease;
-          z-index: 9999;
-          box-shadow: 0 14px 36px rgba(0,0,0,0.28);
-          white-space: nowrap;
-          min-width: 130px;
-          font-family: 'Inter', system-ui, sans-serif;
-        }
-        .pixels-av-wrap:hover .pixels-av-card,
-        .pixels-av-wrap:focus-within .pixels-av-card {
-          opacity: 1;
-          transform: translateX(-50%) translateY(0) scale(1);
-        }
-        .pixels-av-card-photo {
-          width: 72px;
-          height: 72px;
-          border-radius: 50%;
-          object-fit: cover;
-          border: 2px solid rgba(255,255,255,0.15);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-        .pixels-av-card-letter {
-          width: 72px;
-          height: 72px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 28px;
-          font-weight: 700;
-          color: #fff;
-          border: 2px solid rgba(255,255,255,0.15);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        }
-        .pixels-av-card-name {
-          font-size: 13px;
-          font-weight: 600;
-          color: #fff;
-          text-align: center;
-          letter-spacing: -.2px;
-        }
-        .pixels-av-card-role {
-          font-size: 10px;
-          color: rgba(255,255,255,0.6);
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: .5px;
-        }
-      `;
-      document.head.appendChild(se2);
     }
   },[]);
 
