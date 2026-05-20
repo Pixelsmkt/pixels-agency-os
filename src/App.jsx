@@ -18050,8 +18050,21 @@ const COVER_COLORS=[
   {c:"#ff6eb4",l:"Pink"},{c:"#e040fb",l:"Lilás"},{c:"#00c853",l:"Verde Escuro"},
   {c:"#c0001a",l:"Vermelho"},{c:"#1877f2",l:"Azul Facebook"},{c:"#34a853",l:"Google"},
 ];
-const SECTORS=["design","video","texto","social","trafego","seo","agenda","outro"];
-const SECTOR_LABELS={design:"Design",video:"Edição de Vídeo",texto:"Texto & Copy",social:"Social Media",trafego:"Tráfego Pago",seo:"SEO",agenda:"Agendamentos",outro:"Outro"};
+// Apenas 5 setores ativos no dropdown, em ordem alfabética (ABNT: 2ª palavra minúscula).
+// IDs antigos (seo, agenda, outro) ficam no SECTOR_LABELS pra cards legados continuarem
+// exibindo o label correto, mas não aparecem como opção pra novos cards.
+const SECTORS=["texto","design","video","trafego","social"];
+const SECTOR_LABELS={
+  texto:"Copywriting",
+  design:"Design",
+  video:"Edição de vídeo",
+  trafego:"Gestão de mídia",
+  social:"Social media",
+  // Legacy:
+  seo:"SEO",
+  agenda:"Agendamentos",
+  outro:"Outro",
+};
 const SI={width:"100%",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 12px",color:"#0f172a",fontSize:12,fontWeight:500,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s, background .15s"};
 const LB={color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block",fontFamily:"inherit"};
 const FILES_TABS=[["lista","☰ Lista"],["ordem","⠿ Ordenar carrossel"]];
