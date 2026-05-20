@@ -22485,6 +22485,35 @@ export default function AgencyOS(){
     };
     if(authState==="app")loadSelfProfile();
   },[authState]);
+
+  // ── Carregar TODAS as fotos dos colaboradores ──
+  // Antes só carregava em "Gerenciar Permissões" — agora baixa logo no startup
+  // pra qualquer avatar (kanban, chat, aprovações) ter foto correta.
+  // Recarrega a cada 5min pra pegar mudanças de outros usuários sem F5.
+  useEffect(()=>{
+    if(authState!=="app")return;
+    const loadAllTeamPhotos=async()=>{
+      try{
+        const sb=window._sb;
+        const{data:rows}=await sb.from("profiles").select("team_id,profile_data").not("profile_data","is",null);
+        if(!rows)return;
+        rows.forEach(row=>{
+          if(!row.team_id||!row.profile_data)return;
+          try{
+            const prev=localStorage.getItem("pixels-selfprofile-"+row.team_id);
+            const next=JSON.stringify(row.profile_data);
+            if(prev!==next){
+              localStorage.setItem("pixels-selfprofile-"+row.team_id,next);
+              window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:row.team_id}}));
+            }
+          }catch(e){}
+        });
+      }catch(e){console.warn("Erro carregando perfis dos colaboradores:",e);}
+    };
+    loadAllTeamPhotos();
+    const interval=setInterval(loadAllTeamPhotos,5*60*1000);
+    return()=>clearInterval(interval);
+  },[authState]);
   useEffect(()=>{
     const u=resolveUser(currentProfile);
     if(u&&u.id!==loggedUser){window._pixelsUser=u.id;setLoggedUser(u.id);}
