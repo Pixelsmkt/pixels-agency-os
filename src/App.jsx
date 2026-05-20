@@ -18067,7 +18067,7 @@ const SECTOR_LABELS={
 };
 const SI={width:"100%",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 12px",color:"#0f172a",fontSize:12,fontWeight:500,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s, background .15s"};
 const LB={color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block",fontFamily:"inherit"};
-const FILES_TABS=[["lista","☰ Lista"],["ordem","⠿ Ordenar carrossel"]];
+// FILES_TABS removido — tinha só Lista + Ordenar carrossel, ficou inline só Lista
 const TIMELINE_ICONS={
   created:<Ico n="sparkles" size={13}/>,
   status:<Ico n="rotate" size={13}/>,
@@ -19314,32 +19314,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     </div>
                   )}
 
-                  {/* Checklist */}
-                  {checklistItems.length>0&&(
-                    <div style={{padding:"12px 16px",borderBottom:"0.5px solid #e9d5ff",background:"#fff"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                        <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Checklist de ajustes</div>
-                        <div style={{fontSize:10,color:allDone?"#15803d":"#94a3b8",fontWeight:600}}>
-                          {doneChecklist} de {totalChecklist}{allDone?" ✓":""}
-                        </div>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                        {checklistItems.map(item=>{
-                          const isDone=!!adjustChecked[item.id];
-                          return <label key={item.id} style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:isDone?"#94a3b8":"#0f172a",lineHeight:1.4,padding:"5px 8px",borderRadius:5,background:isDone?"#f8fafc":"#fff",border:`0.5px solid ${isDone?"#f1f5f9":"#e9d5ff"}`}}>
-                            <input type="checkbox" checked={isDone} onChange={()=>toggleAdjustCheck(item.id)} style={{margin:"2px 0 0 0",accentColor:"#7c3aed"}}/>
-                            <span style={{flex:1,textDecoration:isDone?"line-through":"none"}}>{item.icon} {item.label}</span>
-                          </label>;
-                        })}
-                      </div>
-                      {allDone&&(
-                        <div style={{marginTop:10,background:"#f0fdf4",border:"0.5px solid #bbf7d0",borderRadius:6,padding:"8px 10px",fontSize:11,color:"#15803d",fontWeight:500,textAlign:"center"}}>
-                          ✓ Todos os ajustes marcados! Clique em "Reenviar pra avaliação" no topo.
-                        </div>
-                      )}
-                    </div>
-                  )}
-
                   {/* Grid de thumbnails de anotações */}
                   {annotations.length>0&&(
                     <div style={{padding:"12px 16px",borderBottom:textComments.length>0?"0.5px solid #e9d5ff":"none",background:"#fff"}}>
@@ -19598,16 +19572,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           </div>}
 
           {activeTab==="files"&&<div>
-            <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:10,padding:3,marginBottom:16}}>
-              {FILES_TABS.map(([id,lbl])=>(
-                <button key={id} onClick={()=>setFilesTab(id)}
-                  style={{flex:1,background:filesTab===id?"#fff":"transparent",border:"none",borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:filesTab===id?700:500,color:filesTab===id?"#1e293b":"#94a3b8",cursor:"pointer",boxShadow:filesTab===id?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-
-            {filesTab==="lista"&&<div
+            <div
               onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEdit||canEditRef)setDragOverFiles(true);}}
               onDragLeave={e=>{e.preventDefault();e.stopPropagation();setDragOverFiles(false);}}
               onDrop={handleFilesDrop}
@@ -19794,43 +19759,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   </div>
                 ))}
               </>}
-            </div>}
-
-            {filesTab==="ordem"&&<div>
-              {imgFin.length===0
-                ? <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"24px 0"}}><div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="image" size={28}/></div>Adicione arquivos prontos na aba Lista primeiro</div>
-                : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <div style={{color:"#94a3b8",fontSize:10,marginBottom:4}}>Arraste para reordenar o carrossel de publicação (só arquivos finais entram)</div>
-                    {imgFin.map((a,i)=>(
-                      <div key={a.id}
-                        draggable
-                        onDragStart={e=>e.dataTransfer.setData("text/plain",a.id)}
-                        onDragOver={e=>e.preventDefault()}
-                        onDrop={e=>{
-                          e.preventDefault();
-                          const fromId=e.dataTransfer.getData("text/plain");
-                          if(fromId===a.id)return;
-                          setAttachments(prev=>{
-                            const arr=[...prev];
-                            const fromIdx=arr.findIndex(x=>x.id===fromId);
-                            const toIdx=arr.findIndex(x=>x.id===a.id);
-                            // Guarda contra ids inexistentes (ex: item removido durante o drag) — evita splice(-1,1) que removeria o último item
-                            if(fromIdx<0||toIdx<0)return prev;
-                            const [moved]=arr.splice(fromIdx,1);
-                            arr.splice(toIdx,0,moved);
-                            return arr;
-                          });
-                        }}
-                        style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 10px",cursor:"grab"}}>
-                        <span style={{color:"#cbd5e1",fontSize:16}}>⠿</span>
-                        <span style={{background:"#6366f1",color:"#fff",borderRadius:5,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0}}>#{i+1}</span>
-                        <img src={thumbUrl(a.url)} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}} style={{width:44,height:44,objectFit:"cover",borderRadius:6,flexShrink:0,background:"#f1f5f9"}}/>
-                        <div style={{flex:1,minWidth:0,color:"#334155",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
-                      </div>
-                    ))}
-                  </div>
-              }
-            </div>}
+            </div>
 
             {/* Inputs file ocultos — disparados pelos botões "+ adicionar" de cada seção */}
             <input type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
