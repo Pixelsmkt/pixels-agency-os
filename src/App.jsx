@@ -1034,6 +1034,8 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="rotate")    return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>;
   if(n==="bomb")      return <svg {...p}><circle cx="11" cy="13" r="9"/><path d="M14.35 4.65L16.3 2.7a2.41 2.41 0 013.4 0l1.6 1.6a2.4 2.4 0 010 3.4l-1.95 1.95"/><path d="m22 2-1.5 1.5"/></svg>;
   if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
+  if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+  if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
   return null;
 }
 
@@ -10553,6 +10555,26 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
                   onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 0 0 1px #7c3aed, 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
                   onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
+                  {/* Tipo de Conteúdo — badge no TOPO do card (Arte única/Carrossel/Vídeo) */}
+                  {t.contentType&&(function(){
+                    const types={
+                      arte:{label:"Arte única",icon:"image",color:"#7c3aed"},
+                      carrossel:{label:"Carrossel",icon:"layers",color:"#2563eb"},
+                      video:{label:"Vídeo",icon:"play",color:"#ea580c"},
+                    };
+                    const ct=types[t.contentType];
+                    if(!ct)return null;
+                    return <div style={{padding:"7px 11px 0",display:"flex"}}>
+                      <span style={{display:"inline-flex",alignItems:"center",gap:4,background:ct.color+"18",color:ct.color,borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          {ct.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
+                          {ct.icon==="layers"&&<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}
+                          {ct.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
+                        </svg>
+                        {ct.label}
+                      </span>
+                    </div>;
+                  })()}
                   {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
                   {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
@@ -18049,6 +18071,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [sector,setSector]=useState(task.sector||"");
   const [client,setClient]=useState(task.client||"");
   const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
+  const [contentType,setContentType]=useState(task.contentType||"");
   const [deadline,setDeadline]=useState(task.deadline||"");
   const [comments,setComments]=useState(task.comments||[]);
   const [comment,setComment]=useState("");
@@ -18117,6 +18140,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setSector(task.sector||"");
       setClient(task.client||"");
       setPriority((task.priority&&task.priority!=="media")?task.priority:"");
+      setContentType(task.contentType||"");
       setDeadline(task.deadline||"");
       setComments(task.comments||[]);
       setAttachments(task.files||[]);
@@ -18203,6 +18227,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(JSON.stringify(assignees)!==JSON.stringify(task.assignees||[task.assignee]))return true;
     if(JSON.stringify(watchers)!==JSON.stringify(task.watchers||[]))return true;
     if(priority!==taskPriorityNorm)return true;
+    if(contentType!==(task.contentType||""))return true;
     if(deadline!==(task.deadline||""))return true;
     if(sector!==(task.sector||""))return true;
     if(client!==(task.client||""))return true;
@@ -18281,6 +18306,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(JSON.stringify(assignees)!==JSON.stringify(task.assignees||[task.assignee]))changed.push("responsável");
     if(client!==task.client)changed.push("cliente");
     if(priority!==task.priority)changed.push("prioridade");
+    if(contentType!==(task.contentType||""))changed.push("tipo de conteúdo");
     if(deadline!==task.deadline)changed.push("prazo");
     if(publishDate!==task.publishDate)changed.push("data de publicação");
     if(publishTime!==task.publishTime)changed.push("horário de publicação");
@@ -18318,7 +18344,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       // Caso contrário, preserva os valores antigos pra evitar que não-admin sobrescreva.
       const nextAdminTag = isAdmin ? (adminTag||"").trim() : (t.adminTag||"");
       const nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
-      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:contentType||null,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     }));
     onClose();
   };
@@ -20027,6 +20053,25 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>}
             </div>;
           })()}
+
+          {/* Tipo de Conteúdo — pílulas selecionáveis (Arte/Carrossel/Vídeo) */}
+          {!isAgendado&&<div>
+            <label style={LB}>Tipo de conteúdo</label>
+            <div style={{display:"flex",gap:5}}>
+              {[
+                {id:"arte",label:"Arte única",icon:"image",color:"#7c3aed"},
+                {id:"carrossel",label:"Carrossel",icon:"layers",color:"#2563eb"},
+                {id:"video",label:"Vídeo",icon:"play",color:"#ea580c"},
+              ].map(opt=>{
+                const isSel=contentType===opt.id;
+                return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
+                  style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"7px 8px",background:isSel?opt.color+"18":"#fff",border:`1px solid ${isSel?opt.color:"#e2e8f0"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?opt.color:"#475569",fontWeight:isSel?700:500,transition:"all .12s"}}>
+                  <Ico n={opt.icon} size={12}/>
+                  <span>{opt.label}</span>
+                </button>;
+              })}
+            </div>
+          </div>}
 
           {/* Prioridade+Prazo */}
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -22408,6 +22453,7 @@ const rowToTask = (r) => ({
   publishDate:  r.publish_date || "",
   publishTime:  r.publish_time || "09:00",
   bioterUnit:   r.bioter_unit  || "",
+  contentType:  r.content_type || "",
   score:        r.score        ?? null,
   ajustar:      !!r.ajustar,
   isAlteracao:  !!r.is_alteracao,
@@ -22444,6 +22490,7 @@ const taskToRow = (t) => ({
   publish_date:   t.publishDate  || null,
   publish_time:   t.publishTime  || "09:00",
   bioter_unit:    t.bioterUnit   || "",
+  content_type:   t.contentType  || null,
   score:          t.score        ?? null,
   ajustar:        !!t.ajustar,
   is_alteracao:   !!t.isAlteracao,
