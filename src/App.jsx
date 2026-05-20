@@ -10443,7 +10443,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             </div>
 
             {/* Cards — scroll inside column, Trello style */}
-            <div style={{display:"flex",flexDirection:"column",gap:10,overflowY:"auto",flex:1}}>
+            <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1}}>
               {colTasks.map(t=>{
                 const u=TEAM.find(x=>x.id===t.assignee);
                 // Todos os responsáveis (stack de avatares — múltiplas iniciais)
@@ -10498,7 +10498,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined,display:"flex",flexDirection:"column",minHeight:130}}
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:130}:{})}}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 6px rgba(0,0,0,0.06)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
                   {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
@@ -10513,10 +10513,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       ?<div style={{height:80,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,margin:m,borderRadius:5}}/>
                       :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:m,borderRadius:5,pointerEvents:"none"}}/>;
                   })()}
-                  <div style={{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}}>
+                  <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"9px 11px 8px"}}>
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
-                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word"}}>
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:9})}}>
                       {t.title}
                     </div>
 
@@ -18809,6 +18809,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
 
+      {/* ── COVER: última imagem anexada (estilo Trello) ── */}
+      {(()=>{
+        const last=[...attachments].reverse().find(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url);
+        if(!last)return null;
+        return <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",maxHeight:280,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+          <img src={last.url} alt={last.name||""} loading="lazy" style={{maxWidth:"100%",maxHeight:280,objectFit:"contain",display:"block"}}/>
+        </div>;
+      })()}
+
       {/* ── HEADER ── */}
       <div style={{padding:"18px 22px 0"}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
@@ -19613,62 +19622,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {canEditSLAandPub&&!isAgendado&&(
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:11,textTransform:"uppercase",letterSpacing:.6,display:"flex",alignItems:"center",gap:6}}>
-                🎯 Prazo & Publicação
-              </div>
-
-              {/* Seletor SLA (prazo de entrega) */}
-              <div>
-                <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:5}}>⏳ Prazo de Entrega (SLA)</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4}}>
-                  {SLA_OPTIONS.map(opt=>(
-                    <button key={opt.hours} onClick={()=>{
-                      if(!canEdit)return;
-                      setSlaHours(opt.hours);
-                      if(!slaStartAt)setSlaStartAt(new Date().toISOString());
-                    }}
-                      disabled={!canEdit}
-                      style={{background:slaHours===opt.hours?"#dc2626":"#f8fafc",
-                        color:slaHours===opt.hours?"#fff":"#475569",
-                        border:`1px solid ${slaHours===opt.hours?"#dc2626":"#e2e8f0"}`,
-                        borderRadius:7,padding:"6px 4px",fontSize:10,fontWeight:700,
-                        cursor:canEdit?"pointer":"not-allowed"}}>
-                      {opt.emoji} {opt.hours>=24?opt.hours/24+"d":opt.hours+"h"}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={async()=>{
-                  if(!canEdit)return;
-                  const v=await pixelsPrompt("Prazo personalizado (em horas, ex: 168 = 7 dias):",{inputType:"number",placeholder:"168"});
-                  if(v){
-                    const h=parseInt(v);
-                    if(h>0&&h<=720){
-                      setSlaHours(h);
-                      if(!slaStartAt)setSlaStartAt(new Date().toISOString());
-                    }else{pixelsToast.warning("Valor inválido (1-720 horas).");}
-                  }
-                }} disabled={!canEdit}
-                  style={{width:"100%",background:"transparent",border:"1px dashed #cbd5e1",color:"#64748b",borderRadius:7,padding:"5px 0",fontSize:10,fontWeight:600,marginTop:4,cursor:canEdit?"pointer":"not-allowed"}}>
-                  ⚙ Personalizado
-                </button>
-                {slaHours&&<div style={{marginTop:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                  <SlaHourglass task={{slaHours,slaStartAt:slaStartAt||new Date().toISOString(),slaPausedAt,slaPausedDuration}}/>
-                  <button onClick={()=>{
-                    if(!canEdit)return;
-                    if(slaPausedAt){
-                      // Despausa: adiciona tempo pausado à duração total
-                      const pausedFor=Math.floor((Date.now()-new Date(slaPausedAt).getTime())/1000);
-                      setSlaPausedDuration((slaPausedDuration||0)+pausedFor);
-                      setSlaPausedAt(null);
-                    }else{
-                      setSlaPausedAt(new Date().toISOString());
-                    }
-                  }} disabled={!canEdit}
-                    style={{background:"#f1f5f9",border:"1px solid #cbd5e1",color:"#475569",borderRadius:6,padding:"3px 8px",fontSize:9,fontWeight:700,cursor:canEdit?"pointer":"not-allowed"}}>
-                    {slaPausedAt?"▶ Retomar":"⏸ Pausar"}
-                  </button>
-                  <button onClick={()=>{if(!canEdit)return;setSlaHours(null);setSlaStartAt(null);setSlaPausedAt(null);setSlaPausedDuration(0);}} disabled={!canEdit}
-                    style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:9,cursor:canEdit?"pointer":"not-allowed"}}>✕ remover</button>
-                </div>}
+                📅 Publicação
               </div>
 
               {/* Data/Hora de Publicação */}
