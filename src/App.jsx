@@ -1051,12 +1051,16 @@ function Ico({n,size=14,color,strokeWidth=2}){
  *   - Arte carrossel (contentType="carrossel"):                       R$ 45
  *   - Vídeo / não classificado: não entra no cálculo. */
 const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45 };
+// Status que CONTAM pro pagamento — só entrega aprovada/agendada/publicada.
+// Em execução, Ajustes, Avaliação NÃO contam (ainda não foi entregue).
+const PAID_STATUSES = ["aprovado","agendado","publicado"];
 function calcDesignerPayments(tasks, designerId, refMonth){
   const out = { fotoObra: 0, arte: 0, carrossel: 0, naoClassificado: 0, tasksFotoObra: [], tasksArte: [], tasksCarrossel: [], tasksOutros: [] };
   (tasks || []).forEach(t => {
     if(!t) return;
     const assigned = t.assignee === designerId || (Array.isArray(t.assignees) && t.assignees.includes(designerId));
     if(!assigned) return;
+    if(!PAID_STATUSES.includes(t.status)) return; // só entregas aprovadas/agendadas/publicadas
     if(refMonth && t.referenceMonth !== refMonth) return;
     if(t.contentType === "foto"){ out.fotoObra++; out.tasksFotoObra.push(t); }
     else if(t.contentType === "carrossel"){ out.carrossel++; out.tasksCarrossel.push(t); }
@@ -10683,13 +10687,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
                   </div>}
-                  {/* THUMBNAIL ESTILO TRELLO — edge-to-edge, 200px de altura, recortado pelo overflow:hidden do card */}
+                  {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
                     const mt=hasVisibleTagStripe?5:0;
                     return thumbUrl.startsWith("#")
                       ?<div style={{height:200,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,marginTop:mt}}/>
-                      :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"100%",height:200,objectFit:"cover",marginTop:mt,pointerEvents:"none"}}/>;
+                      :<div style={{height:200,background:"#f1f5f9",marginTop:mt,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                        <img src={thumbUrl} alt="" loading="lazy" style={{display:"block",maxWidth:"100%",maxHeight:"100%",objectFit:"contain",pointerEvents:"none"}}/>
+                      </div>;
                   })()}
                   <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"9px 11px 8px"}}>
                     {/* Título — herói visual do card. Sempre presente, weight 600,
