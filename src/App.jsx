@@ -10443,7 +10443,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             </div>
 
             {/* Cards — scroll inside column, Trello style */}
-            <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1}}>
+            <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,paddingLeft:4,paddingRight:4,scrollbarGutter:"stable"}}>
               {colTasks.map(t=>{
                 const u=TEAM.find(x=>x.id===t.assignee);
                 // Todos os responsáveis (stack de avatares — múltiplas iniciais)
