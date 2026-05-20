@@ -21,7 +21,7 @@ const CLIENTS = [
     social:{followers:6240,growth:5.8,reach:28400,eng:4.2,posts:28,stories:56,reels:8,saved:612,likes:1840},
     history:[{m:"Jan",mr:3.8,gr:4.0,leads:89},{m:"Fev",mr:4.0,gr:4.2,leads:102},{m:"Mar",mr:4.1,gr:4.4,leads:124}],
     since:"Jan 2024", manager:"vinicius", connected:true, metaId:"act_1112223334", googleId:"111-222-3334", upsell:["Google Display","Remarketing"], driveUrl:"" },
-  { id:"bioter", name:"Grupo Bioter", abbr:"GB", color:"#4a8c1c", sector:"Biotecnologia / Agro", contract:9400, health:72, nps:68, status:"ativo",
+  { id:"bioter", name:"Bioter", abbr:"GB", color:"#4a8c1c", sector:"Biotecnologia / Agro", contract:9400, health:72, nps:68, status:"ativo",
     payment:{status:"pendente",date:"01/03/2026"}, lastMeeting:"18/03/2026", nextMeeting:"04/04/2026", contractType:"mensal", contacts:[{name:"Ricardo Bioter",role:"Diretor",phone:"(49) 99902-1111",email:"ricardo@grupobioter.com.br"},{name:"Marcia Bioter",role:"Marketing",phone:"(49) 99902-2222",email:"marketing@grupobioter.com.br"}], goals:[{title:"Leads Meta",target:220,current:198,unit:"leads"},{title:"ROAS Meta",target:4.0,current:3.3,unit:"x"}], meetingNotes:[],
     meta:{spend:7600,budget:8500,roas:3.3,leads:198,cpc:2.1,ctr:2.4,cpm:24.8,impressions:306452,clicks:7355,reach:241000,frequency:1.27,conversions:198,costPerConv:38.4,videoViews:61000,vtr:19.9,campaigns:6,adsets:18,ads:41,topAd:"Solução Bioter Pro · ROAS 4.1x"},
     google:{spend:4800,budget:5000,roas:3.6,leads:115,cpc:1.7,ctr:2.9,cpm:16.4,impressions:292683,clicks:8488,conversions:115,costPerConv:41.7,searchImpr:92000,displayImpr:200683,qualityScore:6.8,campaigns:4,adgroups:14,topKw:"bioterminador solo"},
@@ -52,7 +52,7 @@ const CLIENTS = [
     history:[{m:"Jan",mr:4.2,gr:4.6,leads:64},{m:"Fev",mr:4.5,gr:4.8,leads:74},{m:"Mar",mr:4.8,gr:5.1,leads:88}],
     since:"Nov 2024", manager:"gustavo", connected:true, metaId:"act_7778889990", googleId:"777-888-9990", upsell:["Email Marketing"], driveUrl:"",
     },
-  { id:"pixels", name:"Pixels Agencia", abbr:"PX", color:"#a140ff", sector:"Agencia Digital", contract:0, health:98, nps:100, status:"interno", since:"Jan 2021", manager:"vinicius",
+  { id:"pixels", name:"Pixels", abbr:"PX", color:"#a140ff", sector:"Agencia Digital", contract:0, health:98, nps:100, status:"interno", since:"Jan 2021", manager:"vinicius",
     payment:{status:"interno",date:""}, lastMeeting:"25/03/2026", nextMeeting:"01/04/2026", contractType:"interno", contacts:[], goals:[], meetingNotes:[],
     meta:{spend:1200,budget:2000,roas:6.2,leads:48,cpc:0.9,ctr:4.8,cpm:14.0,impressions:85714,clicks:4114,reach:62000,frequency:1.38,conversions:48,costPerConv:25.0,videoViews:18000,vtr:21.0,campaigns:2,adsets:5,ads:12,topAd:"Recrutamento Designer · ROAS 7.1x"},
     google:{spend:600,budget:1000,roas:5.8,leads:22,cpc:0.7,ctr:5.1,cpm:9.2,impressions:65217,clicks:3326,conversions:22,costPerConv:27.3,searchImpr:40000,displayImpr:25217,qualityScore:9.1,campaigns:1,adgroups:3,topKw:"agência de marketing digital chapecó"},
@@ -113,6 +113,7 @@ function saveLiveClient(id,partial){
 // Módulo de framework: temas, perms, componentes base, navegação
 // Não contém dados de negócio — ver 00_clientes_data.jsx e 00_mindmap_data.jsx
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
+import { createPortal } from "react-dom";
 import * as recharts from "recharts";
 
 // Global mobile styles
@@ -214,7 +215,7 @@ const THEMES={
     bl:"#4db8ff", pk:"#ff6eb4",
     tx:"#f2e8ff", ts:"#9966cc", td:"#3d1a6e",
     kRascunhos:"#64748b", kDemanda:"#a140ff", kRecebida:"#ff6eb4", kExecucao:"#ffd000",
-    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#4db8ff", kPublicado:"#a78bfa", kPausado:"#1a0030", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#4db8ff", kPublicado:"#a78bfa", kPausado:"#1a0030", kAlteracao:"#fb7185",
   },
   light:{
     name:"Light", icon:"○",
@@ -225,7 +226,7 @@ const THEMES={
     bl:"#2563eb", pk:"#db2777",
     tx:"#0f172a", ts:"#64748b", td:"#94a3b8",
     kRascunhos:"#64748b", kDemanda:"#7c3aed", kRecebida:"#db2777", kExecucao:"#d97706",
-    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#2563eb", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#2563eb", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#fb7185",
   },
   agro:{
     name:"Agro", icon:"◉",
@@ -236,7 +237,7 @@ const THEMES={
     bl:"#60a5fa", pk:"#f472b6",
     tx:"#e8fdf0", ts:"#4ade80", td:"#166534",
     kRascunhos:"#64748b", kDemanda:"#22c55e", kRecebida:"#4ade80", kExecucao:"#fde047",
-    kAvaliacao:"#fb923c", kAprovado:"#86efac", kAgendado:"#60a5fa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#fb923c", kAprovado:"#86efac", kAgendado:"#60a5fa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#fb7185",
   },
 };
 
@@ -258,26 +259,26 @@ try{
 }catch(e){}
 
 const KANBAN_COLS = [
-  { id:"rascunhos", label:"Rascunhos",              color:C.kRascunhos, dark:false },
-  { id:"demanda",   label:"Copys",                  color:C.kDemanda,   dark:false },
-  { id:"recebida",  label:"Demanda",                color:C.kRecebida,  dark:false },
-  { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
-  { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
-  { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
-  { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
-  { id:"agendado",  label:"Agendado",               color:C.kAgendado,  dark:true  },
-  { id:"publicado", label:"Publicado",              color:C.kPublicado, dark:true  },
-  { id:"pausado",   label:"Pausado",                color:C.kPausado,   dark:false },
+  { id:"rascunhos", label:"Rascunhos",                  color:C.kRascunhos, dark:false },
+  { id:"demanda",   label:"Copys",                      color:C.kDemanda,   dark:false },
+  { id:"recebida",  label:"Demandas",                   color:C.kRecebida,  dark:false },
+  { id:"execucao",  label:"Em execução",                color:C.kExecucao,  dark:true  },
+  { id:"ajustes",   label:"Ajustes",                    color:C.kAlteracao, dark:true  },
+  { id:"avaliacao", label:"Concluídas para avaliação",  color:C.kAvaliacao, dark:false },
+  { id:"aprovado",  label:"Aprovadas",                  color:C.kAprovado,  dark:true  },
+  { id:"agendado",  label:"Agendadas",                  color:C.kAgendado,  dark:true  },
+  { id:"publicado", label:"Publicadas",                 color:C.kPublicado, dark:true  },
+  { id:"pausado",   label:"Pausadas",                   color:C.kPausado,   dark:false },
 ];
 
 /* ─── TEAM ───────────────────────────────── */
 const TEAM = [
-  { id:"vinicius",  name:"Vinicius",  role:"CEO / Gestor",          av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"gustavo",   name:"Gustavo",   role:"CEO / Gestor",          av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
+  { id:"vinicius",  name:"Vinicius",  role:"Gestor de projetos",    av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"gustavo",   name:"Gustavo",   role:"Gestor",                av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"ellen",     name:"Hellen",     role:"Estrategista",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
-  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
+  { id:"guilherme", name:"Guilherme", role:"Editor de vídeo",       av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
@@ -452,7 +453,7 @@ function _showToast(type,msg,duration=3500){
     background:c.bg,color:"#fff",padding:"12px 16px",borderRadius:"10px",
     boxShadow:"0 8px 32px rgba(0,0,0,0.18)",fontSize:"13px",fontWeight:"600",
     display:"flex",alignItems:"center",gap:"10px",pointerEvents:"auto",
-    cursor:"pointer",fontFamily:"'Outfit',system-ui,sans-serif",
+    cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",
     transform:"translateX(100%)",opacity:"0",
     transition:"all .25s cubic-bezier(.22,1,.36,1)",
   });
@@ -488,7 +489,7 @@ function pixelsPrompt(message,opts={}){
     const box=document.createElement("div");
     Object.assign(box.style,{
       background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"440px",width:"100%",
-      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Inter',system-ui,sans-serif",
       animation:"slideInUp .2s ease",
     });
     const title=document.createElement("div");
@@ -535,7 +536,7 @@ function pixelsConfirm(message,opts={}){
     const box=document.createElement("div");
     Object.assign(box.style,{
       background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"420px",width:"100%",
-      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Inter',system-ui,sans-serif",
       animation:"slideInUp .2s ease",
     });
     const title=document.createElement("div");
@@ -645,7 +646,7 @@ function SlaHourglass({task,compact}){
     soon:{bg:"#eab308",label:"Atenção",icon:"⚠"},
     urgent:{bg:"#ea580c",label:"Urgente",icon:"🔥"},
     overdue:{bg:"#dc2626",label:"Atrasado",icon:"🚨"},
-    paused:{bg:"#64748b",label:"Pausado",icon:"⏸"},
+    paused:{bg:"#64748b",label:"Pausadas",icon:"⏸"},
   };
   const c=colors[s.status]||colors.ok;
   if(s.status==="paused"){
@@ -869,10 +870,11 @@ const NAV=[
  * Usa getProfilePhoto (já existente — lê pixels-selfprofile-{id} do localStorage).
  * Re-renderiza instantâneo quando dispara event "pixels:photo-updated".
  */
-function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title}){
+function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title, noHover}){
   // user pode ser objeto TEAM completo OU só id string
   const u=typeof user==="string"?(TEAM.find(t=>t.id===user)||{id:user,name:user,av:"?",color:"#94a3b8"}):user;
   const [photo,setPhoto]=useState(()=>getProfilePhoto(u.id));
+  const [hoverPos,setHoverPos]=useState(null); // {x, y} ou null
   useEffect(function(){
     const handler=function(e){
       // Re-checa só se o evento é pro usuário relevante (ou broadcast geral)
@@ -890,17 +892,53 @@ function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyl
     flexShrink:0,overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center"
   };
   const merged=Object.assign({},base,extraStyle||{});
+  const showHover=!noHover&&size<=34;
+  const onEnter=(e)=>{
+    if(!showHover)return;
+    const r=e.currentTarget.getBoundingClientRect();
+    setHoverPos({x:r.left+r.width/2,y:r.top});
+  };
+  const onLeave=()=>setHoverPos(null);
+  let avatarEl;
   if(photo){
-    return <img src={photo} alt={u.name||""} title={title||u.name||""} loading="lazy"
+    avatarEl=<img src={photo} alt={u.name||""} title={showHover?undefined:(title||u.name||"")} loading="lazy"
       style={Object.assign({},merged,{objectFit:"cover"})}
-      onError={function(e){e.currentTarget.style.display="none";}}/>;
+      onError={function(e){e.currentTarget.style.display="none";}}
+      onMouseEnter={onEnter} onMouseLeave={onLeave}/>;
+  }else{
+    avatarEl=<div title={showHover?undefined:(title||u.name||"")}
+      style={Object.assign({},merged,{
+        background:u.color||"#94a3b8",
+        color:"#fff",fontWeight:fontWeight,
+        fontSize:Math.max(8,Math.round(size*0.45))
+      })}
+      onMouseEnter={onEnter} onMouseLeave={onLeave}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
   }
-  // Fallback: letra colorida
-  return <div title={title||u.name||""} style={Object.assign({},merged,{
-    background:u.color||"#94a3b8",
-    color:"#fff",fontWeight:fontWeight,
-    fontSize:Math.max(8,Math.round(size*0.45))
-  })}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
+  if(!showHover)return avatarEl;
+  const popup=hoverPos&&createPortal(
+    <div style={{
+      position:"fixed",
+      left:hoverPos.x,top:hoverPos.y-10,
+      transform:"translate(-50%,-100%)",
+      background:"#0f172a",borderRadius:10,padding:"10px 14px",
+      display:"flex",alignItems:"center",gap:12,
+      pointerEvents:"none",zIndex:99999,
+      boxShadow:"0 12px 32px rgba(0,0,0,0.25)",
+      whiteSpace:"nowrap",
+      fontFamily:"'Inter',system-ui,sans-serif",
+    }}>
+      {photo
+        ? <img src={photo} alt="" style={{width:52,height:52,borderRadius:"50%",objectFit:"cover",flexShrink:0,border:"1.5px solid rgba(255,255,255,0.12)"}}/>
+        : <div style={{width:52,height:52,borderRadius:"50%",background:u.color||"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:20,flexShrink:0,border:"1.5px solid rgba(255,255,255,0.12)"}}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>
+      }
+      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+        <span style={{fontSize:13,fontWeight:600,color:"#fff",lineHeight:1.2}}>{u.name}</span>
+        {u.role&&<span style={{fontSize:10,color:"rgba(255,255,255,0.6)",fontWeight:500,letterSpacing:.3}}>{u.role}</span>}
+      </div>
+    </div>,
+    document.body
+  );
+  return <Fragment>{avatarEl}{popup}</Fragment>;
 }
 
 /* ─── HOOK: useOpenCardSync ─────────────────── */
@@ -987,6 +1025,100 @@ function fmtLastSeen(lastSeenAt){
   return`Última atividade às ${time} do dia ${d.toLocaleDateString("pt-BR")}`;
 }
 
+/* ─── COMPONENTE: Ico ────────────────────────
+ * Helper de ícones inline (estilo Lucide/Feather line-art).
+ * Uso: <Ico n="clock" size={14}/> ou <Ico n="zap" size={16} color="#fff"/>
+ * Stroke baseado em currentColor por padrão — herda cor do contexto. */
+function Ico({n,size=14,color,strokeWidth=2}){
+  const cl=color||"currentColor";
+  const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:cl,strokeWidth,strokeLinecap:"round",strokeLinejoin:"round"};
+  if(n==="clock")     return <svg {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+  if(n==="scan")      return <svg {...p}><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>;
+  if(n==="zap")       return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+  if(n==="kanban")    return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
+  if(n==="list")      return <svg {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+  if(n==="calendar")  return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+  if(n==="trash")     return <svg {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>;
+  if(n==="paperclip") return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>;
+  if(n==="message")   return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+  if(n==="x")         return <svg {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+  if(n==="refresh")   return <svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>;
+  if(n==="folder")    return <svg {...p}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>;
+  if(n==="filter")    return <svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
+  if(n==="check")     return <svg {...p}><polyline points="20 6 9 17 4 12"/></svg>;
+  if(n==="alert")     return <svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+  if(n==="flame")     return <svg {...p}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
+  if(n==="link")      return <svg {...p}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
+  if(n==="eye")       return <svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+  if(n==="eyeOff")    return <svg {...p}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+  if(n==="copy")      return <svg {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
+  if(n==="file")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
+  if(n==="fileText")  return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+  if(n==="image")     return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+  if(n==="video")     return <svg {...p}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
+  if(n==="mic")       return <svg {...p}><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
+  if(n==="tag")       return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
+  if(n==="send")      return <svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
+  if(n==="bell")      return <svg {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
+  if(n==="sparkles")  return <svg {...p}><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>;
+  if(n==="edit")      return <svg {...p}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+  if(n==="pin")       return <svg {...p}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 002-2V3H6v1a2 2 0 002 2h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>;
+  if(n==="checkCircle")return <svg {...p}><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+  if(n==="xCircle")   return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+  if(n==="dot")       return <svg {...p}><circle cx="12" cy="12" r="5" fill={cl} stroke="none"/></svg>;
+  if(n==="moreHor")   return <svg {...p}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>;
+  if(n==="download")  return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+  if(n==="upload")    return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+  if(n==="rotate")    return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>;
+  if(n==="bomb")      return <svg {...p}><circle cx="11" cy="13" r="9"/><path d="M14.35 4.65L16.3 2.7a2.41 2.41 0 013.4 0l1.6 1.6a2.4 2.4 0 010 3.4l-1.95 1.95"/><path d="m22 2-1.5 1.5"/></svg>;
+  if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
+  if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+  if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+  if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
+  return null;
+}
+
+/* ─── HELPER: calcDesignerPayments ──────────────
+ * Calcula contagem + total a pagar pro designer André baseado em:
+ *   - assignee/assignees inclui o designerId
+ *   - referenceMonth bate (formato "YYYY-MM"). Passar null = todos os meses.
+ * Categorias e preços (hardcoded por enquanto, pra Guilherme/vídeo virá depois):
+ *   - Foto de obra (título contém "foto de obra", case insensitive): R$ 20
+ *   - Arte única (contentType="arte"):                                R$ 30
+ *   - Arte carrossel (contentType="carrossel"):                       R$ 45
+ *   - Vídeo / não classificado: não entra no cálculo. */
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, video: 100 };
+// Status que CONTAM pro pagamento — só entrega aprovada/agendada/publicada.
+// Em execução, Ajustes, Avaliação NÃO contam (ainda não foi entregue).
+const PAID_STATUSES = ["aprovado","agendado","publicado"];
+function calcDesignerPayments(tasks, designerId, refMonth){
+  const out = { fotoObra: 0, arte: 0, carrossel: 0, video: 0, naoClassificado: 0, tasksFotoObra: [], tasksArte: [], tasksCarrossel: [], tasksVideo: [], tasksOutros: [] };
+  (tasks || []).forEach(t => {
+    if(!t) return;
+    const assigned = t.assignee === designerId || (Array.isArray(t.assignees) && t.assignees.includes(designerId));
+    if(!assigned) return;
+    if(!PAID_STATUSES.includes(t.status)) return; // só entregas aprovadas/agendadas/publicadas
+    if(refMonth && t.referenceMonth !== refMonth) return;
+    if(t.contentType === "foto"){ out.fotoObra++; out.tasksFotoObra.push(t); }
+    else if(t.contentType === "carrossel"){ out.carrossel++; out.tasksCarrossel.push(t); }
+    else if(t.contentType === "arte"){ out.arte++; out.tasksArte.push(t); }
+    else if(t.contentType === "video"){ out.video++; out.tasksVideo.push(t); }
+    else { out.naoClassificado++; out.tasksOutros.push(t); }
+  });
+  out.total = out.fotoObra * DESIGNER_PRICES.fotoObra
+            + out.arte     * DESIGNER_PRICES.arte
+            + out.carrossel* DESIGNER_PRICES.carrossel
+            + out.video    * DESIGNER_PRICES.video;
+  return out;
+}
+function formatRefMonth(refMonth){
+  if(!refMonth) return "Todos os meses";
+  const [y,m] = refMonth.split("-");
+  const names = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  return (names[parseInt(m,10)-1] || m) + "/" + y;
+}
+
 /* ─── HELPER: getProfilePhoto ───────────────── */
 // Busca foto do localStorage para qualquer userId
 function getProfilePhoto(uid){
@@ -1035,7 +1167,7 @@ const Chip=({color,children,sm})=>(
 /* ─── STATUS DE CARD ─────────────────────────
    Labels e cores usados em vários módulos (chat, portal, card preview).
    Movido para cá para remover dependência oculta entre 05_chat e 14_portal. */
-const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
+const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demandas",execucao:"Em execução",avaliacao:"Avaliação",aprovado:"Aprovadas",agendado:"Agendadas",publicado:"Publicadas",alteracao:"Alteração",pausado:"Pausadas"};
 const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
 
 /* ─── ASK CLAUDE HELPER ─────────────────────────────
@@ -1075,13 +1207,15 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
 // Depende de: 00_globals.jsx (C para cores)
 
 /* ─── BIOTER UNITS ─────────────────────── */
+// pickerLabel = como aparece no select de Cliente (já com "Bioter " na frente)
+// abbr = sigla de 2 letras exibida no card ao lado da logo
 const BIOTER_UNITS = [
-  { id:"chapeco",   label:"Chapecó/SC",        color:"#00b4d8" },
-  { id:"toledo",    label:"Toledo/PR",          color:"#0090b8" },
-  { id:"castro",    label:"Castro/PR",          color:"#006e99" },
-  { id:"uberlandia",label:"Uberlândia/MG",      color:"#004d7a" },
-  { id:"gloria",    label:"Glória de Dourados/MS", color:"#00335c" },
-  { id:"paraguay",  label:"Bioter Paraguay 🇵🇾",  color:"#001f3f" },
+  { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Bioter Chapecó" },          // verde forest escuro
+  { id:"toledo",    label:"Toledo/PR",             color:"#15803d", abbr:"TO", pickerLabel:"Bioter Toledo" },           // verde escuro
+  { id:"castro",    label:"Castro/PR",             color:"#16a34a", abbr:"CA", pickerLabel:"Bioter Castro" },           // verde médio
+  { id:"uberlandia",label:"Uberlândia/MG",         color:"#22c55e", abbr:"UB", pickerLabel:"Bioter Uberlândia" },       // verde claro
+  { id:"gloria",    label:"Glória de Dourados/MS", color:"#4a8c1c", abbr:"GD", pickerLabel:"Bioter Glória de Dourados" }, // verde brand Bioter (olive)
+  { id:"paraguay",  label:"Bioter Paraguay 🇵🇾",  color:"#65a30d", abbr:"PY", pickerLabel:"Bioter Paraguay" },         // verde lime
 ];
 
 /* ─── MIND MAP COMPONENT (MindMeister-style) ── */
@@ -1190,6 +1324,16 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   const [activeTab,setActiveTab]=useState(()=>{
     try{return localStorage.getItem("pixels-dash-tab")||"alerta";}catch{return "alerta";}
   });
+  // ═══ Mês selecionado pro card de Pagamento por Demanda (default: mês corrente) ═══
+  const [payMonth,setPayMonth]=useState(()=>{
+    try{
+      const saved=localStorage.getItem("pixels-pay-month");
+      if(saved)return saved;
+    }catch(e){}
+    const now=new Date();
+    return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  });
+  useEffect(()=>{try{localStorage.setItem("pixels-pay-month",payMonth);}catch(e){}},[payMonth]);
   useEffect(()=>{try{localStorage.setItem("pixels-dash-tab",activeTab);}catch(e){}},[activeTab]);
   const setTasks=propSetTasks||(()=>{});
   const adminCardPerms=(()=>{try{const s=localStorage.getItem("pixels-perms-"+(CURRENT_USER).id);return s?{...DEFAULT_PERMS,...JSON.parse(s)}:DEFAULT_PERMS;}catch{return DEFAULT_PERMS;}})();
@@ -1251,8 +1395,8 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {label:"Recebidas",status:"recebida",color:"#ec4899",icon:"📥"},
     {label:"Execução",status:"execucao",color:"#eab308",icon:"⚙"},
     {label:"Avaliação",status:"avaliacao",color:"#f97316",icon:"👀"},
-    {label:"Aprovado",status:"aprovado",color:"#16a34a",icon:"✅"},
-    {label:"Agendado",status:"agendado",color:"#2563eb",icon:"📅"},
+    {label:"Aprovadas",status:"aprovado",color:"#16a34a",icon:"✅"},
+    {label:"Agendadas",status:"agendado",color:"#2563eb",icon:"📅"},
   ].map(s=>({...s,count:active.filter(t=>t.status===s.status).length}));
   const pipelineMax=Math.max(...pipeline.map(p=>p.count),1);
 
@@ -1449,6 +1593,57 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {isViewing&&<div style={{background:"#a140ff",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
+
+    {/* ═══ PAGAMENTO POR DEMANDA — Card pra cada freelancer (André designer + Guilherme editor) ═══ */}
+    {(function(){
+      const fmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+      const CardCat=({label,count,price,color})=><div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e5e7eb",display:"flex",flexDirection:"column",gap:3}}>
+        <div style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{label}</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:22}}>{count}</span>
+          <span style={{color:"#94a3b8",fontSize:11}}>× {fmtBRL(price).replace(",00","")}</span>
+        </div>
+        <div style={{color:color,fontWeight:700,fontSize:13}}>{fmtBRL(count*price)}</div>
+      </div>;
+      const freelancers=TEAM.filter(u=>u.pagamentoPorDemanda);
+      return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {freelancers.map(fr=>{
+          const calc=calcDesignerPayments(allTasks,fr.id,payMonth);
+          const isEditor=fr.dash==="editor";
+          return <div key={fr.id} style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:14}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <UserAvatar user={fr} size={36}/>
+                <div>
+                  <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pagamento por demanda · {fr.name}</div>
+                  <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{isEditor?"Vídeos entregues":"Demandas designadas"} no mês de referência</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <input type="month" value={payMonth} onChange={e=>setPayMonth(e.target.value)}
+                  style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer"}}/>
+                <div style={{textAlign:"right"}}>
+                  <div style={{color:"#64748b",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
+                  <div style={{color:"#7c3aed",fontWeight:900,fontSize:22,letterSpacing:-.5}}>{fmtBRL(calc.total)}</div>
+                </div>
+              </div>
+            </div>
+            {isEditor
+              ?<div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+                <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
+              </div>
+              :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
+                <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
+                <CardCat label="Arte única" count={calc.arte} price={DESIGNER_PRICES.arte} color="#16a34a"/>
+                <CardCat label="Carrossel" count={calc.carrossel} price={DESIGNER_PRICES.carrossel} color="#16a34a"/>
+              </div>}
+            {calc.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:10,marginTop:8,fontStyle:"italic"}}>
+              {calc.naoClassificado} demanda(s) sem tipo de conteúdo definido — não entram no cálculo.
+            </div>}
+          </div>;
+        })}
+      </div>;
+    })()}
 
     {/* ═══ HEADER FIXO — MINHAS DEMANDAS ═══ */}
     {myTasks.length>0&&(
@@ -2266,7 +2461,7 @@ function MindMap({clientId,centerColor}){
   });
 
   return <div style={{overflowX:"auto",overflowY:"hidden",background:C.bg,borderRadius:14,border:`1px solid ${C.b1}`,padding:8}}>
-    <svg width={W} height={H} style={{fontFamily:"'Outfit',system-ui,sans-serif",display:"block",minWidth:W}}>
+    <svg width={W} height={H} style={{fontFamily:"'Inter',system-ui,sans-serif",display:"block",minWidth:W}}>
       <defs>
         <filter id="glow-mm">
           <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
@@ -5793,10 +5988,10 @@ function CFerramentas({cl,onMindmap}){
             const html=`<!DOCTYPE html><html lang="pt-BR"><head>
               <meta charset="UTF-8"/>
               <title>Análise ${esc(cl.name)} — Pixels Agência</title>
-              <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+              <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
               <style>
                 *{margin:0;padding:0;box-sizing:border-box;}
-                body{font-family:'Outfit',system-ui,sans-serif;background:#fff;padding:24px;}
+                body{font-family:'Inter',system-ui,sans-serif;background:#fff;padding:24px;}
                 @media print{
                   body{padding:0;}
                   @page{margin:10mm;size:A4;}
@@ -8741,7 +8936,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 
   // Retorna cor do card baseado no status (laranja/verde/roxo)
   const getPubColor=(status)=>{
-    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"}; // 🟣 roxo
+    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicadas"}; // 🟣 roxo
     if(status==="aprovado"||status==="agendado")return{bg:"#16a34a",border:"#bbf7d0",label:"Pronto"}; // 🟢 verde
     return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"}; // 🟠 laranja (demanda, recebida, execucao, avaliacao)
   };
@@ -8961,7 +9156,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           <div style={{color:C.ts,fontSize:12}}>
             {filterClient!=="todos"
               ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
-              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para a coluna "Agendado" e defina a data de publicação.`
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para a coluna "Agendadas" e defina a data de publicação.`
             }
           </div>
         </div>
@@ -9606,6 +9801,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [viewMode,setViewMode]=useState("cartao");
   const [filterUser,setFilterUser]=useState("todos");
   const [filterSector,setFilterSector]=useState("todos_setores");
+  const [searchTerm,setSearchTerm]=useState("");
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   // Filtro de etiqueta interna (só sócios). Array de strings — multi-select.
@@ -9858,10 +10054,37 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     return false;
   };
 
+  const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
     // Admin/sócio vê tudo; colaborador só vê os seus
     if(!isAdmin&&!isMyTask(t))return false;
+    // Busca: case-insensitive substring em título, nome do cliente, e label de unidade Bioter (CSV)
+    if(_searchTermNorm){
+      const haystack=[];
+      haystack.push(String(t.title||"").toLowerCase());
+      const cl=CLIENTS.find(c=>c.id===t.client);
+      if(cl){
+        haystack.push(String(cl.name||"").toLowerCase());
+        if(cl.abbr)haystack.push(String(cl.abbr).toLowerCase());
+      }
+      // Unidades Bioter (CSV: "castro,chapeco" / "grupo" / "brasil")
+      const unitIds=String(t.bioterUnit||"").split(",").filter(Boolean);
+      unitIds.forEach(uid=>{
+        if(uid==="grupo")haystack.push("grupo bioter");
+        else if(uid==="brasil")haystack.push("bioter brasil");
+        else{
+          const u=BIOTER_UNITS.find(x=>x.id===uid);
+          if(u){
+            haystack.push(String(u.pickerLabel||"").toLowerCase());
+            haystack.push(String(u.label||"").toLowerCase());
+            haystack.push(String(u.abbr||"").toLowerCase());
+          }
+        }
+      });
+      const match=haystack.some(h=>h.includes(_searchTermNorm));
+      if(!match)return false;
+    }
     if(filterUser!=="todos"&&t.assignee!==filterUser&&!(Array.isArray(t.assignees)&&t.assignees.includes(filterUser)))return false;
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
     if(filterClient!=="todos"&&t.client!==filterClient)return false;
@@ -10090,25 +10313,39 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>Demandas</div>
           <div style={{color:C.ts,fontSize:12,marginTop:3}}>{visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length} abertas · {trash.length} na lixeira</div>
         </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+          {/* SEARCH input — pesquisar cards por título */}
+          <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+            <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#7c3aed":"#94a3b8",pointerEvents:"none",display:"flex"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Buscar demanda..."
+              style={{background:"#fff",border:`1px solid ${searchTerm?"#7c3aed":"#e2e8f0"}`,borderRadius:10,padding:"6px 28px 6px 28px",fontSize:12,fontWeight:500,color:"#0f172a",outline:"none",width:180,transition:"border-color .15s",fontFamily:"inherit"}}/>
+            {searchTerm&&<button onClick={()=>setSearchTerm("")} title="Limpar busca"
+              style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
+              onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
+              onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>}
+          </div>
           {/* ESCANEAR button — só quem tem permissão */}
           {canEscanear&&<button onClick={()=>setShowScan(true)}
             style={{background:`linear-gradient(135deg,${C.or},#ff3300)`,color:"#fff",border:"none",borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.or}60`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3}}>
-            🔥 Escanear
+            <Ico n="scan" size={14}/> Escanear
           </button>}
           {/* PIXELS IA button — só quem tem permissão */}
           {canPixelsIA&&<button onClick={()=>setShowPixelsIA(true)}
             style={{background:"#ffffff",color:C.a,border:`2px solid ${C.a}`,borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.a}30`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3,position:"relative"}}>
-            ⚡ Pixels IA
+            <Ico n="zap" size={14}/> Pixels IA
             <span style={{position:"absolute",top:-6,right:-6,background:C.a,color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:8,fontWeight:900}}>IA</span>
           </button>}
           {/* view mode group */}
           <div style={{display:"flex",background:C.b1,borderRadius:10,padding:3,gap:2}}>
-            {[["cartao","⊞ Cartão"],["lista","☰ Lista"],["calendar","📅 Calendário"]].map(([m,l])=>(
-              <button key={m} onClick={()=>setViewMode(m)} style={{background:viewMode===m?C.a:"transparent",color:viewMode===m?"#fff":C.ts,border:"none",borderRadius:8,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>{l}</button>
+            {[["cartao","kanban","Cartão"],["lista","list","Lista"],["calendar","calendar","Calendário"]].map(([m,ico,l])=>(
+              <button key={m} onClick={()=>setViewMode(m)} style={{background:viewMode===m?C.a:"transparent",color:viewMode===m?"#fff":C.ts,border:"none",borderRadius:8,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s",display:"flex",alignItems:"center",gap:5}}><Ico n={ico} size={13}/>{l}</button>
             ))}
           </div>
-          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Lixeira</button>}
+          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><Ico n="trash" size={13}/> Lixeira</button>}
           {/* Botão de refresh manual */}
           <button onClick={()=>window.location.reload()} title="Recarregar dados"
             style={{background:C.b1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:"pointer",color:C.ts,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
@@ -10399,7 +10636,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
         </div>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",paddingBottom:8,justifyContent:"center"}}>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>{
@@ -10437,15 +10674,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDrop={()=>drag&&moveTask(drag,col.id)}
             onDragLeave={()=>setOver(null)}
             style={{
-              background:isDraggingOver?"#e2e8f0":"#eef2f7",
-              border:`1px solid ${isDraggingOver?col.color+"55":"#dbe3ec"}`,
-              borderRadius:12,padding:"8px 8px 8px",
-              height:"78vh",maxHeight:680,
-              transition:"all .15s",display:"flex",flexDirection:"column",gap:0
+              background:isDraggingOver?"#9ca3af":"#d1d5db",
+              borderRadius:12,padding:"5px 5px 6px",
+              maxHeight:"calc(100vh - 240px)",
+              overflow:"hidden",
+              transition:"background .15s",display:"flex",flexDirection:"column",gap:0
             }}>
 
             {/* Column header — barra colorida no topo, integrada à coluna */}
-            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"10px 10px 0 0",margin:"-8px -8px 8px -8px"}}>
+            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"12px 12px 0 0",margin:"-5px -5px 6px -5px"}}>
               <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
                 {editingColId===col.id&&canNewCol
                   ? <input value={editingColLabel} onChange={e=>setEditingColLabel(e.target.value)}
@@ -10460,15 +10697,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     </span>
                 }
                 <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600,flexShrink:0}}>{colTasks.length}</span>
-                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700}}>⏳ {colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
+                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"2px 7px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="clock" size={10}/>{colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
               </div>
               <div style={{display:"flex",gap:3,alignItems:"center"}}>
-                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
+                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><Ico n="x" size={11}/></button>}
               </div>
             </div>
 
             {/* Cards — scroll inside column, Trello style */}
-            <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1}}>
+            <div className="pixels-kanban-scroll" style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,paddingLeft:4,paddingRight:4}}>
               {colTasks.map(t=>{
                 const u=TEAM.find(x=>x.id===t.assignee);
                 // Todos os responsáveis (stack de avatares — múltiplas iniciais)
@@ -10479,7 +10716,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const urgLevel=taskUrgencyLevel(t);
                 const hasCover=t.cover;
                 const urgColor=getUrgencyColor(urgLevel);
-                const imgAttachment=(t.files||[]).find(f=>f.type&&f.type.startsWith("image/"));
+                // Pega a ÚLTIMA imagem anexada (mais recente). slice() copia o array
+                // antes de reverter pra não mutar t.files. findLast seria ideal mas
+                // depende de runtime ES2023 — slice+reverse+find é universal.
+                const imgAttachment=(t.files||[]).slice().reverse().find(f=>f.type&&f.type.startsWith("image/"));
                 const thumbUrl=hasCover?hasCover:imgAttachment?imgAttachment.url:null;
                 const isAlteracao=t.status==="alteracao"||t.isAlteracao;
                 const isAjustar=t.ajustar===true&&t.status==="demanda";
@@ -10520,25 +10760,60 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:(isAlteracao||isAjustar)?"3px solid #ea580c":"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
-                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 6px rgba(0,0,0,0.06)"}
-                  onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
-                  {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
-                  {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
-                    {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
+                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 0 0 1px #7c3aed, 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
+                  onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
+                  {/* Tipo de Conteúdo + Mês de pagamento — badges roxos no TOPO do card */}
+                  {(t.contentType||t.referenceMonth)&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
+                    {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
+                    {t.contentType&&(function(){
+                      const types={
+                        arte:{label:"Arte única",icon:"image"},
+                        carrossel:{label:"Carrossel",icon:"layers"},
+                        video:{label:"Vídeo",icon:"play"},
+                        foto:{label:"Foto de obra",icon:"camera"},
+                      };
+                      const ct=types[t.contentType];
+                      if(!ct)return null;
+                      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          {ct.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
+                          {ct.icon==="layers"&&<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}
+                          {ct.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
+                          {ct.icon==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
+                        </svg>
+                        {ct.label}
+                      </span>;
+                    })()}
+                    {/* Mês de pagamento (formato YYYY-MM → "Mai/26") */}
+                    {t.referenceMonth&&(function(){
+                      const parts=String(t.referenceMonth).split("-");
+                      if(parts.length<2)return null;
+                      const monthNames=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+                      const mn=monthNames[parseInt(parts[1],10)-1];
+                      const yy=parts[0].slice(-2);
+                      if(!mn)return null;
+                      return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/></svg>
+                        {mn}/{yy}
+                      </span>;
+                    })()}
                   </div>}
-                  {/* THUMBNAIL CAPADO 90px — margin top depende de ter faixa de tag visível acima */}
+                  {/* (barras de tags antigas — feature removida) */}
+                  {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
-                    const m=hasVisibleTagStripe?"5px 9px 0":"6px 9px 0";
+                    const mt=hasVisibleTagStripe?5:0;
                     return thumbUrl.startsWith("#")
-                      ?<div style={{height:80,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,margin:m,borderRadius:5}}/>
-                      :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:m,borderRadius:5,pointerEvents:"none"}}/>;
+                      ?<div style={{height:200,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,marginTop:mt}}/>
+                      :<div style={{height:200,background:"#f1f5f9",marginTop:mt,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                        <img src={thumbUrl} alt="" loading="lazy" style={{display:"block",maxWidth:"100%",maxHeight:"100%",objectFit:"contain",pointerEvents:"none"}}/>
+                      </div>;
                   })()}
-                  <div style={{padding:"9px 11px 8px"}}>
+                  <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"9px 11px 8px"}}>
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
-                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,marginBottom:9,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word"}}>
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:9})}}>
                       {t.title}
                     </div>
 
@@ -10553,13 +10828,38 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           </div>
                           :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
-                        {days!==null&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
-                          {days<0?Math.abs(days)+"d atraso":days===0?"hoje":days+"d"}
+                        {/* Siglas das unidades Bioter — GRUPO/BR pra agrupamentos, ou siglas individuais */}
+                        {cl&&cl.id==="bioter"&&t.bioterUnit&&(function(){
+                          const ids=String(t.bioterUnit).split(",").filter(Boolean);
+                          if(!ids.length)return null;
+                          return ids.map(uid=>{
+                            if(uid==="grupo"){
+                              return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
+                            }
+                            if(uid==="brasil"){
+                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>BRASIL</span>;
+                            }
+                            const u=BIOTER_UNITS.find(x=>x.id===uid);
+                            if(!u)return null;
+                            return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
+                          });
+                        })()}
+                        {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
+                          <Ico n="alarmClock" size={11}/>
+                          {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
                         </span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                        {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>📎{(t.files||[]).length}</span>}
-                        {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>💬{(t.comments||[]).length}</span>}
+                        {/* Data de publicação — badge moderno com calendário */}
+                        {t.publishDate&&(function(){
+                          const d=new Date(t.publishDate+"T12:00:00");
+                          const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+                          const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
+                          return <span title={"Publicação: "+titleFmt} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            {fmt}
+                          </span>;
+                        })()}
                         {/* Stack de avatares — usa UserAvatar (foto real ou fallback letra) */}
                         {allAssignees.length>0&&<div style={{display:"flex",alignItems:"center",marginLeft:2}}>
                           {allAssignees.slice(0,3).map((au,idx)=>(
@@ -10706,10 +11006,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
 const INTERNO_COLS = [
   { id:"interno_demanda",   label:"Demandas",                color:"#6366f1" },
-  { id:"interno_execucao",  label:"Em Execução",             color:"#f97316" },
-  { id:"interno_avaliacao", label:"Concluído p/ Avaliação",  color:"#eab308" },
-  { id:"interno_aprovado",  label:"Aprovado",                color:"#22c55e" },
-  { id:"interno_executado", label:"Executado",               color:"#8b5cf6" },
+  { id:"interno_execucao",  label:"Em execução",                color:"#f97316" },
+  { id:"interno_avaliacao", label:"Concluídas para avaliação",  color:"#eab308" },
+  { id:"interno_aprovado",  label:"Aprovadas",                  color:"#22c55e" },
+  { id:"interno_executado", label:"Executadas",                 color:"#8b5cf6" },
 ];
 
 const PRIO_CFG = {
@@ -11278,7 +11578,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
   const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
-  const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#7c1d1d",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
+  const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
   // isAdminViewer = pode ver coluna Tag na lista + faixas de tag. Permissão: gerenciarEtiquetas.
   const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
@@ -11321,7 +11621,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     :`2fr ${cw.status}px ${cw.prior}px ${cw.responsavel}px ${cw.prazo}px ${cw.parado}px ${cw.dataPub}px ${cw.dataConc}px ${cw.actions}px`;
   // Cada header: { label, key } — key=null pra colunas não-redimensionáveis (Demanda flex e a última, Actions)
   const HEADERS_BASE=[
-    {label:"Demanda",key:null,filterKey:null},
+    {label:"Demandas",key:null,filterKey:null},
     {label:"Status",key:"status",filterKey:"status"},
     {label:"Prior.",key:"prior",filterKey:"prior"},
     {label:"Responsavel",key:"responsavel",filterKey:"responsavel"},
@@ -13363,7 +13663,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const approveCopy=(task)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demanda",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demandas",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
     pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",body:'"'+task.title+'" foi aprovada e está em Demandas',user:actor,at:"Agora"});
     setCardIdx(0);setImgIdx(0);
   };
@@ -13383,8 +13683,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     if(!isApprover)return;
     const isInterna=task.status==="interno_avaliacao";
     const toStatus=isInterna?"interno_aprovado":"aprovado";
-    const fromLabel=isInterna?"Concluído p/ Avaliação (Interna)":"Avaliação";
-    const toLabel=isInterna?"Aprovado (Interna)":"Aprovado";
+    const fromLabel=isInterna?"Concluído para avaliação (Interna)":"Avaliação";
+    const toLabel=isInterna?"Aprovadas (Interna)":"Aprovadas";
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
     // FIX 8: usa apenas setTasks (wrapper sincroniza com Supabase via syncTasks).
@@ -13450,7 +13750,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     const isInterna=task.status==="interno_avaliacao";
     // FIX: Conteúdo (não-interna) vai pra coluna "ajustes" — mais organizado.
     const toStatus=isInterna?"interno_execucao":"ajustes";
-    const fromLabel=isInterna?"Concluído p/ Avaliação (Interna)":"Concluído p/ Avaliação";
+    const fromLabel=isInterna?"Concluídas para avaliação (Interna)":"Concluídas para avaliação";
     const toLabel=isInterna?"Em Execução (Ajuste Interno)":"Ajustes";
     const newFiles=[...(task.files||[]),...(drawingFiles||[]),...(audioFiles||[])];
     const newComments=[...(task.comments||[]),...(comments||[])];
@@ -14452,14 +14752,14 @@ const PERM_GROUPS={
     {section:"Colunas Visíveis"},
     {key:"colRascunhos",      label:"Rascunhos",                  desc:"Coluna onde Social Media trabalha o copy ANTES de ir pra aprovação"},
     {key:"colCopys",          label:"Copys",                      desc:"Coluna onde entram novas demandas de copy"},
-    {key:"colDemanda",        label:"Demanda",                    desc:"Coluna de demandas recebidas"},
-    {key:"colExecucao",       label:"Em Execução",                desc:"Coluna de trabalho em andamento"},
+    {key:"colDemanda",        label:"Demandas",                   desc:"Coluna de demandas recebidas"},
+    {key:"colExecucao",       label:"Em execução",                desc:"Coluna de trabalho em andamento"},
     {key:"colAjustes",        label:"Ajustes",                    desc:"Coluna de ajustes solicitados pelo cliente"},
-    {key:"colAvaliacao",      label:"Concluído p/ Avaliação",     desc:"Coluna aguardando aprovação"},
-    {key:"colAprovado",       label:"Aprovado",                   desc:"Coluna de entregas aprovadas"},
-    {key:"colAgendado",       label:"Agendado",                   desc:"Coluna de publicações programadas"},
-    {key:"colPublicado",      label:"Publicado",                  desc:"Coluna de conteúdos publicados"},
-    {key:"colPausado",        label:"Pausado",                    desc:"Coluna de demandas pausadas"},
+    {key:"colAvaliacao",      label:"Concluídas para avaliação",  desc:"Coluna aguardando aprovação"},
+    {key:"colAprovado",       label:"Aprovadas",                  desc:"Coluna de entregas aprovadas"},
+    {key:"colAgendado",       label:"Agendadas",                  desc:"Coluna de publicações programadas"},
+    {key:"colPublicado",      label:"Publicadas",                 desc:"Coluna de conteúdos publicados"},
+    {key:"colPausado",        label:"Pausadas",                   desc:"Coluna de demandas pausadas"},
     {section:"Fluxo Especial"},
     {key:"desfazerCopy",      label:"Mover Copy → Rascunhos",     desc:"Pode arrastar copys de volta pra rascunho (cancela envio à aprovação)"},
     {key:"verKanbanSocios",   label:"Ver Cards de Sócios",        desc:"Inclui cards atribuídos aos sócios na visão do kanban"},
@@ -17473,21 +17773,21 @@ const RADAR_ORIGENS = {
 function getMonthKey(date){ return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`; }
 
 const FLUXO_COLS = [
-  {id:"demanda",   label:"Demanda",                color:"#a140ff"},
-  {id:"recebida",  label:"Recebida",               color:"#ff6eb4"},
-  {id:"execucao",  label:"Em Execução",            color:"#ffd000"},
-  {id:"avaliacao", label:"Concluído p/ Avaliação", color:"#ff7200"},
-  {id:"aprovado",  label:"Aprovado",               color:"#00e5a0"},
-  {id:"agendado",  label:"Agendado",               color:"#4db8ff"},
-  {id:"publicado", label:"Publicado",              color:"#a78bfa"},
+  {id:"demanda",   label:"Demandas",                  color:"#a140ff"},
+  {id:"recebida",  label:"Recebidas",                 color:"#ff6eb4"},
+  {id:"execucao",  label:"Em execução",               color:"#ffd000"},
+  {id:"avaliacao", label:"Concluídas para avaliação", color:"#ff7200"},
+  {id:"aprovado",  label:"Aprovadas",                 color:"#00e5a0"},
+  {id:"agendado",  label:"Agendadas",                 color:"#4db8ff"},
+  {id:"publicado", label:"Publicadas",                color:"#a78bfa"},
 ];
 
 const INTERNAS_COLS_RADAR = [
   {id:"interno_demanda",   label:"Demandas",               color:"#6366f1"},
-  {id:"interno_execucao",  label:"Em Execução",            color:"#f97316"},
-  {id:"interno_avaliacao", label:"Aguardando Aprovação",   color:"#eab308"},
-  {id:"interno_aprovado",  label:"Aprovado",               color:"#22c55e"},
-  {id:"interno_executado", label:"Executado",              color:"#8b5cf6"},
+  {id:"interno_execucao",  label:"Em execução",            color:"#f97316"},
+  {id:"interno_avaliacao", label:"Aguardando aprovação",   color:"#eab308"},
+  {id:"interno_aprovado",  label:"Aprovadas",              color:"#22c55e"},
+  {id:"interno_executado", label:"Executadas",             color:"#8b5cf6"},
 ];
 
 const PERIODO_OPTS = [
@@ -17869,12 +18169,31 @@ const COVER_COLORS=[
   {c:"#ff6eb4",l:"Pink"},{c:"#e040fb",l:"Lilás"},{c:"#00c853",l:"Verde Escuro"},
   {c:"#c0001a",l:"Vermelho"},{c:"#1877f2",l:"Azul Facebook"},{c:"#34a853",l:"Google"},
 ];
-const SECTORS=["design","video","texto","social","trafego","seo","agenda","outro"];
-const SECTOR_LABELS={design:"Design",video:"Edição de Vídeo",texto:"Texto & Copy",social:"Social Media",trafego:"Tráfego Pago",seo:"SEO",agenda:"Agendamentos",outro:"Outro"};
-const SI={width:"100%",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"8px 12px",color:"#1e293b",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"};
-const LB={color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:5,display:"block"};
-const FILES_TABS=[["lista","☰ Lista"],["ordem","⠿ Ordenar carrossel"]];
-const TIMELINE_ICONS={created:"✨",status:"🔄",edit:"✏",approved:"✅",rejected:"❌"};
+// Apenas 5 setores ativos no dropdown, em ordem alfabética (ABNT: 2ª palavra minúscula).
+// IDs antigos (seo, agenda, outro) ficam no SECTOR_LABELS pra cards legados continuarem
+// exibindo o label correto, mas não aparecem como opção pra novos cards.
+const SECTORS=["texto","design","video","trafego","social"];
+const SECTOR_LABELS={
+  texto:"Copywriting",
+  design:"Design",
+  video:"Edição de vídeo",
+  trafego:"Gestão de mídia",
+  social:"Social media",
+  // Legacy:
+  seo:"SEO",
+  agenda:"Agendamentos",
+  outro:"Outro",
+};
+const SI={width:"100%",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 12px",color:"#0f172a",fontSize:12,fontWeight:500,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s, background .15s"};
+const LB={color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block",fontFamily:"inherit"};
+// FILES_TABS removido — tinha só Lista + Ordenar carrossel, ficou inline só Lista
+const TIMELINE_ICONS={
+  created:<Ico n="sparkles" size={13}/>,
+  status:<Ico n="rotate" size={13}/>,
+  edit:<Ico n="edit" size={13}/>,
+  approved:<Ico n="checkCircle" size={13}/>,
+  rejected:<Ico n="xCircle" size={13}/>,
+};
 const BRIEFING_CAMPOS=[
   {k:"tom",label:"Tom de voz"},
   {k:"publico",label:"Público-alvo"},
@@ -17988,6 +18307,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [sector,setSector]=useState(task.sector||"");
   const [client,setClient]=useState(task.client||"");
   const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
+  const [contentType,setContentType]=useState(task.contentType||"");
+  const [referenceMonth,setReferenceMonth]=useState(task.referenceMonth||"");
   const [deadline,setDeadline]=useState(task.deadline||"");
   const [comments,setComments]=useState(task.comments||[]);
   const [comment,setComment]=useState("");
@@ -18031,7 +18352,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [conclusionStep,setConclusionStep]=useState(null);
   const [showAssigneesPicker,setShowAssigneesPicker]=useState(false);
   const [publishDate,setPublishDate]=useState(task.publishDate||"");
-  const [publishTime,setPublishTime]=useState(task.publishTime||"09:00");
+  const [publishTime,setPublishTime]=useState(task.publishTime||"11:00");
   const [caption,setCaption]=useState(task.caption||"");
   // ═══ SLA (prazo de entrega / ampulheta de cobrança) ═══
   const [slaHours,setSlaHours]=useState(task.slaHours||null); // null | 12 | 24 | 48 | 72 | 96 | 120 | custom
@@ -18056,6 +18377,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setSector(task.sector||"");
       setClient(task.client||"");
       setPriority((task.priority&&task.priority!=="media")?task.priority:"");
+      setContentType(task.contentType||"");
+      setReferenceMonth(task.referenceMonth||"");
       setDeadline(task.deadline||"");
       setComments(task.comments||[]);
       setAttachments(task.files||[]);
@@ -18065,7 +18388,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setTags(Array.isArray(task.tags)?task.tags:[]);
       setChecklist(task.checklist||[]);
       setPublishDate(task.publishDate||"");
-      setPublishTime(task.publishTime||"09:00");
+      setPublishTime(task.publishTime||"11:00");
       setSlaHours(task.slaHours||null);
       setSlaStartAt(task.slaStartAt||null);
       setSlaPausedAt(task.slaPausedAt||null);
@@ -18142,12 +18465,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(JSON.stringify(assignees)!==JSON.stringify(task.assignees||[task.assignee]))return true;
     if(JSON.stringify(watchers)!==JSON.stringify(task.watchers||[]))return true;
     if(priority!==taskPriorityNorm)return true;
+    if(contentType!==(task.contentType||""))return true;
+    if(referenceMonth!==(task.referenceMonth||""))return true;
     if(deadline!==(task.deadline||""))return true;
     if(sector!==(task.sector||""))return true;
     if(client!==(task.client||""))return true;
     if(JSON.stringify(checklist)!==JSON.stringify(task.checklist||[]))return true;
     if(publishDate!==(task.publishDate||""))return true;
-    if(publishTime!==(task.publishTime||"09:00"))return true;
+    if(publishTime!==(task.publishTime||"11:00"))return true;
     if(caption!==(task.caption||""))return true;
     if(cover!==(task.cover||null))return true;
     if((adminTag||"")!==(task.adminTag||""))return true;
@@ -18189,6 +18514,19 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     else{onClose();}
   },[hasChanges,onClose,uploadingCount]);
 
+  // ── Tecla ESC fecha o modal (lightbox tem prioridade se estiver aberto) ──
+  // Enter handler (salva+fecha) está mais abaixo no arquivo pra evitar TDZ
+  // com `save` e `showMovePrompt` que são declarados depois.
+  useEffect(()=>{
+    const onEsc=(e)=>{
+      if(e.key!=="Escape")return;
+      if(lightbox){setLightbox(null);return;}
+      handleClose();
+    };
+    window.addEventListener("keydown",onEsc);
+    return()=>window.removeEventListener("keydown",onEsc);
+  },[handleClose,lightbox]);
+
   const save=()=>{
     // ── Bloqueia save com uploads em andamento ──
     if(uploadingCount>0){
@@ -18199,7 +18537,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(!client){pixelsToast.warning("Selecione um cliente antes de salvar.");return;}
     if(!sector){pixelsToast.warning("Selecione um setor antes de salvar.");return;}
     if(!assignees||assignees.length===0){pixelsToast.warning("Selecione pelo menos um responsável antes de salvar.");return;}
-    if(!priority){pixelsToast.warning("Selecione a prioridade antes de salvar.");return;}
+    // Prioridade não é mais obrigatória — pode salvar sem definir.
     // Pega timeline atual da lista (não da prop task que pode estar stale)
     const currentTask=tasks.find(t=>t.id===task.id)||task;
     const tl=[...(currentTask.timeline||[])];
@@ -18209,6 +18547,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(JSON.stringify(assignees)!==JSON.stringify(task.assignees||[task.assignee]))changed.push("responsável");
     if(client!==task.client)changed.push("cliente");
     if(priority!==task.priority)changed.push("prioridade");
+    if(contentType!==(task.contentType||""))changed.push("tipo de conteúdo");
+    if(referenceMonth!==(task.referenceMonth||""))changed.push("mês de referência");
     if(deadline!==task.deadline)changed.push("prazo");
     if(publishDate!==task.publishDate)changed.push("data de publicação");
     if(publishTime!==task.publishTime)changed.push("horário de publicação");
@@ -18218,7 +18558,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     // ── Validação: deadline < publishDate+Time (se ambos preenchidos) ──
     if(deadline&&publishDate){
       const dd=new Date(deadline+"T23:59:59"); // deadline considera o dia todo
-      const pd=new Date(publishDate+"T"+(publishTime||"09:00"));
+      const pd=new Date(publishDate+"T"+(publishTime||"11:00"));
       if(dd>=pd){
         pixelsToast.warning("O prazo de entrega precisa ser ANTES da data/hora de publicação.",6000);
         return;
@@ -18246,7 +18586,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       // Caso contrário, preserva os valores antigos pra evitar que não-admin sobrescreva.
       const nextAdminTag = isAdmin ? (adminTag||"").trim() : (t.adminTag||"");
       const nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
-      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+      // referenceMonth só pode ser alterado por admin (sócio). Se não-admin salvar, preserva valor antigo.
+      const nextReferenceMonth = isAdmin ? (referenceMonth||null) : (t.referenceMonth||null);
+      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:contentType||null,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     }));
     onClose();
   };
@@ -18260,8 +18602,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const cleanedFiles=cleanAttachments(attachments);
     // Conteúdo: tanto "execucao" quanto "ajustes" vão pra "avaliacao"
     const fromStatus=task.status;
-    const fromLabel=fromStatus==="ajustes"?"Ajustes":"Em Execução";
-    const newTlEntry={type:"status",fromLabel,toLabel:"Concluído p/ Avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    const fromLabel=fromStatus==="ajustes"?"Ajustes":"Em execução";
+    const newTlEntry={type:"status",fromLabel,toLabel:"Concluídas para avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
     // Updater functional + merge — preserva alterações concorrentes de outros usuários
     setTasks(prev=>prev.map(t=>{
       if(t.id!==task.id)return t;
@@ -18555,21 +18897,36 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
   };
 
-  // ═══ DOWNLOAD HELPER — baixa arquivo via blob (cross-origin safe) ═══
+  // ═══ DOWNLOAD HELPER — baixa arquivo de forma robusta
+  // Estratégia: tenta fetch+blob (força download mesmo cross-origin)
+  // se falhar (CORS), usa <a download> direto que pelo menos abre em nova aba.
   const downloadFile=async(url,name)=>{
+    if(!url)return;
+    const filename=name||url.split("/").pop().split("?")[0]||"arquivo";
     try{
-      const r=await fetch(url);
-      if(!r.ok)throw new Error("fetch failed");
+      const r=await fetch(url,{mode:"cors"});
+      if(!r.ok)throw new Error("HTTP "+r.status);
       const b=await r.blob();
       const u=URL.createObjectURL(b);
       const a=document.createElement("a");
-      a.href=u;a.download=name||"arquivo";a.style.display="none";
-      document.body.appendChild(a);a.click();
-      setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(u);},100);
-    }catch(e){
-      console.warn("[downloadFile] fallback:",e?.message||e);
-      // Fallback: abre em nova aba (browser pode forçar download se header tiver)
-      window.open(url,"_blank","noopener");
+      a.href=u; a.download=filename; a.style.display="none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(u);}catch(_){}},200);
+      pixelsToast.success("Imagem baixada: "+filename,3000);
+    }catch(err){
+      console.warn("[downloadFile] blob falhou, tentando link direto:",err?.message||err);
+      // Fallback: <a download> direto. Pode ignorar 'download' em cross-origin
+      // sem CORS, mas pelo menos abre o arquivo no navegador pra salvar com Ctrl+S.
+      try{
+        const a=document.createElement("a");
+        a.href=url; a.download=filename; a.target="_blank"; a.rel="noopener";
+        document.body.appendChild(a); a.click();
+        setTimeout(()=>{try{document.body.removeChild(a);}catch(_){}},200);
+        pixelsToast.info("Abrindo imagem em nova aba — use Ctrl+S pra salvar",5000);
+      }catch(e2){
+        pixelsToast.error("Não consegui baixar a imagem. Clique direito → Salvar imagem como.",6000);
+      }
     }
   };
 
@@ -18611,7 +18968,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       timeline:[{type:"created",label:`Demanda duplicada de "${task.title}" por ${user.name}`,at:now.toISOString(),atFmt:nowFmtStr,user:user.name}],
       // Datas resetadas
       startDate:now.toISOString().split("T")[0],
-      deadline:"",publishDate:"",publishTime:"09:00",
+      deadline:"",publishDate:"",publishTime:"11:00",
       colEnteredAt:now.toISOString(),
       createdAt:nowFmtStr,
       createdBy:user.name,
@@ -18722,11 +19079,30 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   );
 
   const moveToExecucao=()=>{
-    const newEntry={type:"status",fromLabel:"Demanda",toLabel:"Em Execução",from:"recebida",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    const newEntry={type:"status",fromLabel:"Demandas",toLabel:"Em execução",from:"recebida",to:"execucao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
     // Updater functional — pega timeline mais recente do `prev` e só anexa a entrada nova
     setTasks(prev=>prev.map(t=>t.id===task.id?{...t,status:"execucao",colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newEntry]}:t));
     setShowMovePrompt(false);
   };
+
+  // ── Atalho: Enter salva e fecha (exceto em textarea/multiline/dialogos) ──
+  // Esse useEffect tem que vir DEPOIS das declarações de save/showMovePrompt
+  // pra evitar TDZ. ESC fica no useEffect lá em cima (sem deps complexas).
+  useEffect(()=>{
+    const onEnter=(e)=>{
+      if(e.key!=="Enter")return;
+      const tag=(e.target&&e.target.tagName)||"";
+      if(tag==="TEXTAREA")return;
+      if(e.target&&e.target.isContentEditable)return;
+      if(e.shiftKey)return;
+      if(lightbox||showUnsavedDialog||conclusionStep||showMovePrompt)return;
+      if(!canEdit)return;
+      e.preventDefault();
+      save();
+    };
+    window.addEventListener("keydown",onEnter);
+    return()=>window.removeEventListener("keydown",onEnter);
+  },[lightbox,canEdit,save,showUnsavedDialog,conclusionStep,showMovePrompt]);
 
   return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto",backdropFilter:"blur(6px)"}} onMouseDown={handleClose}>
 
@@ -18761,10 +19137,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         <img src={lightbox.url} alt={lightbox.name} style={{maxWidth:"100%",maxHeight:"80vh",objectFit:"contain",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.6)"}}/>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{lightbox.name}</div>
-          <button onClick={()=>downloadFile(lightbox.url,lightbox.name)} title="Baixar imagem"
-            style={{background:"rgba(255,255,255,0.12)",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}
+          <button onClick={(e)=>{e.stopPropagation();e.preventDefault();downloadFile(lightbox.url,lightbox.name);}} title="Baixar imagem"
+            style={{background:"rgba(255,255,255,0.12)",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.5)"}
-            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.12)"}>⬇ Baixar</button>
+            onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.12)"}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Baixar
+          </button>
         </div>
         <button onClick={()=>setLightbox(null)} style={{position:"absolute",top:-12,right:-12,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       </div>
@@ -18812,7 +19191,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       <div style={{background:"#fff",borderRadius:18,padding:"28px 32px",maxWidth:380,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.25)",textAlign:"center"}}>
         <div style={{fontSize:36,marginBottom:12}}>📤</div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:8}}>Posso encaminhar o cartão para avaliação?</div>
-        <div style={{color:"#64748b",fontSize:13,marginBottom:24}}>O cartão irá para a coluna <strong>"Concluído p/ Avaliação"</strong>.</div>
+        <div style={{color:"#64748b",fontSize:13,marginBottom:24}}>O cartão irá para a coluna <strong>"Concluídas para avaliação"</strong>.</div>
         <div style={{display:"flex",gap:10,justifyContent:"center"}}>
           <button onClick={()=>setConclusionStep(null)}
             style={{background:"#f1f5f9",border:"none",borderRadius:10,padding:"10px 28px",fontWeight:700,fontSize:13,color:"#64748b",cursor:"pointer"}}>
@@ -18826,10 +19205,20 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>}
 
-    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto"}}>
+    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
 
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
+
+      {/* ── COVER: última imagem anexada (estilo Trello) — clicável pra expandir/baixar ── */}
+      {(()=>{
+        const last=[...attachments].reverse().find(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url);
+        if(!last)return null;
+        return <div onClick={()=>setLightbox({url:last.url,name:last.name||"capa"})} title="Clique pra expandir e baixar"
+          style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",maxHeight:280,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"zoom-in"}}>
+          <img src={last.url} alt={last.name||""} loading="lazy" style={{maxWidth:"100%",maxHeight:280,objectFit:"contain",display:"block"}}/>
+        </div>;
+      })()}
 
       {/* ── HEADER ── */}
       <div style={{padding:"18px 22px 0"}}>
@@ -18843,90 +19232,35 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>}
             </div>
             <input value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit}
-              style={{width:"100%",border:"none",outline:"none",fontSize:20,fontWeight:800,color:"#0f172a",background:"transparent",padding:0,lineHeight:1.3}}
+              style={{width:"100%",border:"none",outline:"none",fontSize:22,fontWeight:700,color:"#0f172a",background:"transparent",padding:0,lineHeight:1.25,letterSpacing:-.4,fontFamily:"'Inter',system-ui,sans-serif"}}
               placeholder="Título da demanda"
               onFocus={()=>setIsEditingText(true)}
               onBlur={()=>setIsEditingText(false)}/>
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"flex-start",position:"relative"}}>
-            {/* Botão "..." — menu de ações (Trello-like) */}
-            <div style={{position:"relative"}}>
-              <button onClick={()=>setShowActionsMenu(v=>!v)} title="Mais ações"
-                style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:showActionsMenu?"#f5f3ff":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#64748b",transition:"all .15s"}}
-                onMouseEnter={e=>{if(!showActionsMenu)e.currentTarget.style.background="#f8fafc";}}
-                onMouseLeave={e=>{if(!showActionsMenu)e.currentTarget.style.background="#fff";}}>⋯</button>
-              {showActionsMenu&&<>
-                <div onClick={()=>setShowActionsMenu(false)} style={{position:"fixed",inset:0,zIndex:299}}/>
-                <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:6,boxShadow:"0 8px 28px rgba(0,0,0,0.14)",display:"flex",flexDirection:"column",minWidth:200}}>
-                  <button onClick={copyCardLink}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{fontSize:14,width:18,textAlign:"center"}}>🔗</span>
-                    <span style={{flex:1}}>Copiar link</span>
-                  </button>
-                  <button onClick={toggleWatch}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{fontSize:14,width:18,textAlign:"center"}}>{isWatching?"👁":"👁‍🗨"}</span>
-                    <span style={{flex:1}}>{isWatching?"Parar de observar":"Observar"}</span>
-                    {isWatching&&<span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>ON</span>}
-                  </button>
-                  {canEdit&&<button onClick={duplicateCard}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{fontSize:14,width:18,textAlign:"center"}}>📋</span>
-                    <span style={{flex:1}}>Duplicar cartão</span>
-                  </button>}
-                </div>
-              </>}
-            </div>
-            {/* Cor de Capa — compact swatch button */}
-            {canEdit&&<div style={{position:"relative"}}>
-              <button onClick={()=>setShowCoverPicker(v=>!v)} title="Cor de capa"
-                style={{width:36,height:36,borderRadius:10,border:`2px solid ${cover||"#e2e8f0"}`,background:cover||"#f8fafc",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
-                {cover
-                  ? <div style={{width:18,height:18,borderRadius:5,background:cover}}/>
-                  : <span style={{fontSize:14}}>🎨</span>
-                }
-              </button>
-              {showCoverPicker&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"8px",boxShadow:"0 8px 28px rgba(0,0,0,0.14)",display:"flex",flexDirection:"column",gap:2,minWidth:180}}>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,padding:"2px 6px 6px"}}>Cor de Capa</div>
-                <button onClick={()=>{setCover(null);setShowCoverPicker(false);}}
-                  style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,border:"none",background:!cover?"#f5f3ff":"transparent",cursor:"pointer",fontSize:11,color:"#94a3b8",textAlign:"left"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                  onMouseLeave={e=>e.currentTarget.style.background=!cover?"#f5f3ff":"transparent"}>
-                  <div style={{width:16,height:16,borderRadius:4,background:"#e2e8f0",flexShrink:0,border:"1px solid #cbd5e1"}}/>
-                  Sem capa{!cover&&<span style={{marginLeft:"auto",color:"#6366f1",fontSize:11}}>✓</span>}
-                </button>
-                {COVER_COLORS.map(({c,l})=>(
-                  <button key={c} onClick={()=>{setCover(c);setShowCoverPicker(false);}}
-                    style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,border:"none",background:cover===c?"#f5f3ff":"transparent",cursor:"pointer",fontSize:11,color:"#1e293b",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background=cover===c?"#f5f3ff":"transparent"}>
-                    <div style={{width:16,height:16,borderRadius:4,background:c,flexShrink:0}}/>
-                    {l}{cover===c&&<span style={{marginLeft:"auto",color:"#6366f1",fontSize:11}}>✓</span>}
-                  </button>
-                ))}
-              </div>}
-            </div>}
-            {/* Salvar + Demanda Concluída + Enviar p/ Aprovação + Drive empilhados */}
+            {/* Botões soltos no header: Copiar link, Duplicar cartão, Mover para lixeira */}
+            <button onClick={copyCardLink} title="Copiar link"
+              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+              <Ico n="link" size={16}/>
+            </button>
+            {canEdit&&<button onClick={duplicateCard} title="Duplicar cartão"
+              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+              <Ico n="copy" size={16}/>
+            </button>}
+            {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
+              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #fecaca",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#dc2626",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+              <Ico n="trash" size={16}/>
+            </button>}
+            {/* Cor de Capa removida — botão de paleta sumiu do header */}
+            {/* Salvar + Enviar p/ Aprovação + Drive empilhados (Demanda Concluída e Lixeira removidos — usar drag-and-drop e × do card no kanban) */}
             <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"stretch"}}>
               {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>Salvar</button>}
-              {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
-                style={{background:"#fff0f0",color:"#e53e3e",border:"1px solid #fecaca",borderRadius:10,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#fff0f0";}}>
-                🗑 Lixeira
-              </button>}
-              {/* Demanda Concluida — execucao OU ajustes */}
-              {canEdit&&(task.status==="execucao"||task.status==="ajustes")&&<button
-                onClick={()=>setConclusionStep(1)}
-                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontWeight:700,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(22,163,74,0.28)"}}>
-                {task.status==="ajustes"?"Reenviar pra avaliação":"Demanda Concluida"}
-              </button>}
               {/* Enviar para Aprovação — only for copy cards marked ajustar */}
               {canEdit&&task.ajustar===true&&task.status==="demanda"&&<button
                 onClick={()=>{setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:false,timeline:[...(t.timeline||[]),{type:"edit",label:"Reenviada para aprovação por "+user.name,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name}]}:t));onClose();}}
@@ -18956,13 +19290,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </a>);
               })()}
             </div>
-            <button onClick={handleClose} style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",fontSize:18,flexShrink:0}}>✕</button>
+            <button onClick={handleClose} title="Fechar" style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",flexShrink:0}}><Ico n="x" size={18}/></button>
           </div>
         </div>
 
         {/* TABS */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9"}}>
-          {([["desc","Descrição"],["legenda","📝 Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
+          {([["desc","Descrição"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#94a3b8",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1}}>
               {lbl}
@@ -18983,14 +19317,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             {/* ══ AGENDADO: corpo simplificado ══ */}
             {isAgendado&&caption&&<div style={{background:"linear-gradient(135deg,#f0f9ff,#e0f2fe)",border:"1px solid #4db8ff44",borderRadius:14,padding:"16px 18px"}}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-                <span style={{fontSize:14}}>📝</span>
+                <span style={{color:"#0284c7",display:"flex"}}><Ico n="fileText" size={14}/></span>
                 <span style={{color:"#0284c7",fontWeight:700,fontSize:12,textTransform:"uppercase",letterSpacing:.5}}>Texto da Legenda</span>
                 <span style={{marginLeft:"auto",background:"#4db8ff18",color:"#0284c7",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700}}>Pronto para publicação</span>
               </div>
               <div style={{color:"#0f172a",fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap",wordBreak:"break-word"}}><LinkifiedText text={caption}/></div>
             </div>}
             {isAgendado&&!caption&&<div style={{background:"#fff7ed",border:"1px dashed #f97316",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:16}}>⚠</span>
+              <span style={{color:"#ea580c",display:"flex",flexShrink:0}}><Ico n="alert" size={16}/></span>
               <div>
                 <div style={{color:"#9a3412",fontWeight:700,fontSize:12}}>Legenda não preenchida</div>
                 <div style={{color:"#c2410c",fontSize:11,marginTop:2}}>Acesse a aba 📝 Legenda para inserir o texto final da publicação</div>
@@ -19046,32 +19380,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     <div style={{padding:"10px 16px",borderBottom:"0.5px solid #e9d5ff",background:"#fff"}}>
                       <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>🔊 Feedback em áudio</div>
                       <audio src={audioComment.audioUrl} controls style={{width:"100%",height:30}}/>
-                    </div>
-                  )}
-
-                  {/* Checklist */}
-                  {checklistItems.length>0&&(
-                    <div style={{padding:"12px 16px",borderBottom:"0.5px solid #e9d5ff",background:"#fff"}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                        <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Checklist de ajustes</div>
-                        <div style={{fontSize:10,color:allDone?"#15803d":"#94a3b8",fontWeight:600}}>
-                          {doneChecklist} de {totalChecklist}{allDone?" ✓":""}
-                        </div>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                        {checklistItems.map(item=>{
-                          const isDone=!!adjustChecked[item.id];
-                          return <label key={item.id} style={{display:"flex",gap:8,alignItems:"flex-start",cursor:"pointer",fontSize:11,color:isDone?"#94a3b8":"#0f172a",lineHeight:1.4,padding:"5px 8px",borderRadius:5,background:isDone?"#f8fafc":"#fff",border:`0.5px solid ${isDone?"#f1f5f9":"#e9d5ff"}`}}>
-                            <input type="checkbox" checked={isDone} onChange={()=>toggleAdjustCheck(item.id)} style={{margin:"2px 0 0 0",accentColor:"#7c3aed"}}/>
-                            <span style={{flex:1,textDecoration:isDone?"line-through":"none"}}>{item.icon} {item.label}</span>
-                          </label>;
-                        })}
-                      </div>
-                      {allDone&&(
-                        <div style={{marginTop:10,background:"#f0fdf4",border:"0.5px solid #bbf7d0",borderRadius:6,padding:"8px 10px",fontSize:11,color:"#15803d",fontWeight:500,textAlign:"center"}}>
-                          ✓ Todos os ajustes marcados! Clique em "Reenviar pra avaliação" no topo.
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -19294,11 +19602,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* ── LEGENDA / CAPTION TAB ── */}
           {activeTab==="legenda"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
             <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:12,padding:"10px 14px",fontSize:11,color:"#0369a1",lineHeight:1.6}}>
-              <strong>📝 Texto da Legenda</strong> — escreva aqui a legenda final da publicação. Esse texto acompanha o cartão até o agendamento e é exibido no Portal do Cliente.
+              <strong>Texto da Legenda</strong> — escreva aqui a legenda final da publicação. Esse texto acompanha o cartão até o agendamento e é exibido no Portal do Cliente.
             </div>
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
               <div style={{padding:"8px 12px",borderBottom:"1px solid #f1f5f9",background:"#f8fafc",display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:13}}>📝</span>
+                <span style={{color:"#7c3aed",display:"flex"}}><Ico n="fileText" size={13}/></span>
                 <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>Legenda da publicação</span>
                 {caption&&<span style={{marginLeft:"auto",background:"#dcfce7",color:"#16a34a",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700}}>✓ Preenchida</span>}
               </div>
@@ -19333,25 +19641,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           </div>}
 
           {activeTab==="files"&&<div>
-            <div style={{display:"flex",gap:2,background:"#f1f5f9",borderRadius:10,padding:3,marginBottom:16}}>
-              {FILES_TABS.map(([id,lbl])=>(
-                <button key={id} onClick={()=>setFilesTab(id)}
-                  style={{flex:1,background:filesTab===id?"#fff":"transparent",border:"none",borderRadius:8,padding:"7px 0",fontSize:11,fontWeight:filesTab===id?700:500,color:filesTab===id?"#1e293b":"#94a3b8",cursor:"pointer",boxShadow:filesTab===id?"0 1px 4px rgba(0,0,0,0.08)":"none"}}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-
-            {filesTab==="lista"&&<div
+            <div
               onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEdit||canEditRef)setDragOverFiles(true);}}
               onDragLeave={e=>{e.preventDefault();e.stopPropagation();setDragOverFiles(false);}}
               onDrop={handleFilesDrop}
               style={{position:"relative",borderRadius:10,border:dragOverFiles?"2px dashed #a140ff":"2px dashed transparent",background:dragOverFiles?"#faf5ff":"transparent",padding:dragOverFiles?12:0,transition:"all .15s",minHeight:dragOverFiles?100:0}}>
               {dragOverFiles&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)"}}>📥 Solte os arquivos aqui</div>
+                <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="download" size={15}/> Solte os arquivos aqui</div>
               </div>}
               {attachments.length===0&&!dragOverFiles&&<div style={{textAlign:"center",padding:"32px 0",color:"#cbd5e1"}}>
-                <div style={{fontSize:32,marginBottom:8}}>📎</div>
+                <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="paperclip" size={32}/></div>
                 <div style={{fontSize:12}}>Nenhum arquivo ainda</div>
                 {(canEdit||canEditRef)&&<div style={{fontSize:10,marginTop:4,color:"#94a3b8"}}>Arraste arquivos aqui ou use o botão "+ adicionar"</div>}
               </div>}
@@ -19377,7 +19676,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:6}}>
                           <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
                             <span style={{fontSize:11}}>
-                              {a.type?.startsWith("image/")?"🖼":a.type?.startsWith("video/")?"🎬":a.type?.startsWith("audio/")?"🎙":"📄"}
+                              {a.type?.startsWith("image/")?<Ico n="image" size={16}/>:a.type?.startsWith("video/")?<Ico n="video" size={16}/>:a.type?.startsWith("audio/")?<Ico n="mic" size={16}/>:<Ico n="file" size={16}/>}
                             </span>
                             <span style={{color:"#1e293b",fontSize:10,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span>
                           </div>
@@ -19401,7 +19700,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 return(<div style={{marginTop:4,marginBottom:18}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid #e9d5ff"}}>
                     <div>
-                      <div style={{color:"#a140ff",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>📌 Imagens de referência {totalRef>0?`(${totalRef})`:""}</div>
+                      <div style={{color:"#a140ff",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8,display:"flex",alignItems:"center",gap:5}}><Ico n="pin" size={12}/> Imagens de referência {totalRef>0?`(${totalRef})`:""}</div>
                       <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>exemplos, sugestões e direcionamento pra equipe executar</div>
                     </div>
                     {canEditRef&&<button onClick={()=>fileInputRefRef.current?.click()} style={{background:"#a140ff15",color:"#a140ff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap"}}>+ adicionar</button>}
@@ -19505,7 +19804,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               })()}
 
               {audAttachments.length>0&&<>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>🎙 Áudios ({audAttachments.length})</div>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,display:"flex",alignItems:"center",gap:5}}><Ico n="mic" size={12}/> Áudios ({audAttachments.length})</div>
                 {audAttachments.map(a=>(
                   <div key={a.id} style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"center"}}>
                     <span style={{fontSize:18}}>🎙</span>
@@ -19516,7 +19815,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </>}
 
               {otherAttachments.length>0&&<>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>📎 Outros ({otherAttachments.length})</div>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,display:"flex",alignItems:"center",gap:5}}><Ico n="paperclip" size={12}/> Outros ({otherAttachments.length})</div>
                 {otherAttachments.map(a=>(
                   <div key={a.id} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",gap:10,alignItems:"center"}}>
                     <span style={{fontSize:20}}>📄</span>
@@ -19529,43 +19828,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   </div>
                 ))}
               </>}
-            </div>}
-
-            {filesTab==="ordem"&&<div>
-              {imgFin.length===0
-                ? <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"24px 0"}}><div style={{fontSize:28,marginBottom:8}}>🖼</div>Adicione arquivos prontos na aba Lista primeiro</div>
-                : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    <div style={{color:"#94a3b8",fontSize:10,marginBottom:4}}>Arraste para reordenar o carrossel de publicação (só arquivos finais entram)</div>
-                    {imgFin.map((a,i)=>(
-                      <div key={a.id}
-                        draggable
-                        onDragStart={e=>e.dataTransfer.setData("text/plain",a.id)}
-                        onDragOver={e=>e.preventDefault()}
-                        onDrop={e=>{
-                          e.preventDefault();
-                          const fromId=e.dataTransfer.getData("text/plain");
-                          if(fromId===a.id)return;
-                          setAttachments(prev=>{
-                            const arr=[...prev];
-                            const fromIdx=arr.findIndex(x=>x.id===fromId);
-                            const toIdx=arr.findIndex(x=>x.id===a.id);
-                            // Guarda contra ids inexistentes (ex: item removido durante o drag) — evita splice(-1,1) que removeria o último item
-                            if(fromIdx<0||toIdx<0)return prev;
-                            const [moved]=arr.splice(fromIdx,1);
-                            arr.splice(toIdx,0,moved);
-                            return arr;
-                          });
-                        }}
-                        style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 10px",cursor:"grab"}}>
-                        <span style={{color:"#cbd5e1",fontSize:16}}>⠿</span>
-                        <span style={{background:"#6366f1",color:"#fff",borderRadius:5,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0}}>#{i+1}</span>
-                        <img src={thumbUrl(a.url)} alt="" loading="lazy" onError={e=>{e.currentTarget.style.display="none";}} style={{width:44,height:44,objectFit:"cover",borderRadius:6,flexShrink:0,background:"#f1f5f9"}}/>
-                        <div style={{flex:1,minWidth:0,color:"#334155",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
-                      </div>
-                    ))}
-                  </div>
-              }
-            </div>}
+            </div>
 
             {/* Inputs file ocultos — disparados pelos botões "+ adicionar" de cada seção */}
             <input type="file" ref={fileInputRef} onChange={e=>handleFileUpload(e,"final")} multiple style={{display:"none"}} accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"/>
@@ -19609,13 +19872,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {activeTab==="activity"&&<div>
             <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:16}}>Histórico de Atividade</div>
             {timeline_all.length===0&&<div style={{textAlign:"center",padding:"24px",color:"#cbd5e1",fontSize:12}}>
-              <div style={{fontSize:28,marginBottom:8}}>📋</div>Nenhuma atividade ainda
+              <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={28}/></div>Nenhuma atividade ainda
             </div>}
             <div style={{display:"flex",flexDirection:"column",gap:0}}>
               {timeline_all.map((ev,i)=>{
                 return <div key={i} style={{display:"flex",gap:12}}>
                   <div style={{display:"flex",flexDirection:"column",alignItems:"center",width:28,flexShrink:0}}>
-                    <div style={{width:28,height:28,borderRadius:"50%",background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{TIMELINE_ICONS[ev.type]||"📌"}</div>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}>{TIMELINE_ICONS[ev.type]||<Ico n="pin" size={13}/>}</div>
                     {i<timeline_all.length-1&&<div style={{width:1,flex:1,background:"#e2e8f0",margin:"3px 0",minHeight:16}}/>}
                   </div>
                   <div style={{flex:1,paddingBottom:16}}>
@@ -19633,94 +19896,32 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
           {/* ══ SLA + PUBLICAÇÃO (admin/coordinator) ══ */}
           {canEditSLAandPub&&!isAgendado&&(
-            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:11,textTransform:"uppercase",letterSpacing:.6,display:"flex",alignItems:"center",gap:6}}>
-                🎯 Prazo & Publicação
+            <div>
+              <label style={{...LB,display:"flex",alignItems:"center",gap:5}}><Ico n="calendar" size={11}/> Data/hora de publicação</label>
+              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
+                <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
+                  style={{...SI,fontSize:12}}/>
+                <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
+                  style={{...SI,fontSize:12}}/>
               </div>
-
-              {/* Seletor SLA (prazo de entrega) */}
-              <div>
-                <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:5}}>⏳ Prazo de Entrega (SLA)</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4}}>
-                  {SLA_OPTIONS.map(opt=>(
-                    <button key={opt.hours} onClick={()=>{
-                      if(!canEdit)return;
-                      setSlaHours(opt.hours);
-                      if(!slaStartAt)setSlaStartAt(new Date().toISOString());
-                    }}
-                      disabled={!canEdit}
-                      style={{background:slaHours===opt.hours?"#dc2626":"#f8fafc",
-                        color:slaHours===opt.hours?"#fff":"#475569",
-                        border:`1px solid ${slaHours===opt.hours?"#dc2626":"#e2e8f0"}`,
-                        borderRadius:7,padding:"6px 4px",fontSize:10,fontWeight:700,
-                        cursor:canEdit?"pointer":"not-allowed"}}>
-                      {opt.emoji} {opt.hours>=24?opt.hours/24+"d":opt.hours+"h"}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={async()=>{
-                  if(!canEdit)return;
-                  const v=await pixelsPrompt("Prazo personalizado (em horas, ex: 168 = 7 dias):",{inputType:"number",placeholder:"168"});
-                  if(v){
-                    const h=parseInt(v);
-                    if(h>0&&h<=720){
-                      setSlaHours(h);
-                      if(!slaStartAt)setSlaStartAt(new Date().toISOString());
-                    }else{pixelsToast.warning("Valor inválido (1-720 horas).");}
-                  }
-                }} disabled={!canEdit}
-                  style={{width:"100%",background:"transparent",border:"1px dashed #cbd5e1",color:"#64748b",borderRadius:7,padding:"5px 0",fontSize:10,fontWeight:600,marginTop:4,cursor:canEdit?"pointer":"not-allowed"}}>
-                  ⚙ Personalizado
-                </button>
-                {slaHours&&<div style={{marginTop:8,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                  <SlaHourglass task={{slaHours,slaStartAt:slaStartAt||new Date().toISOString(),slaPausedAt,slaPausedDuration}}/>
-                  <button onClick={()=>{
-                    if(!canEdit)return;
-                    if(slaPausedAt){
-                      // Despausa: adiciona tempo pausado à duração total
-                      const pausedFor=Math.floor((Date.now()-new Date(slaPausedAt).getTime())/1000);
-                      setSlaPausedDuration((slaPausedDuration||0)+pausedFor);
-                      setSlaPausedAt(null);
-                    }else{
-                      setSlaPausedAt(new Date().toISOString());
-                    }
-                  }} disabled={!canEdit}
-                    style={{background:"#f1f5f9",border:"1px solid #cbd5e1",color:"#475569",borderRadius:6,padding:"3px 8px",fontSize:9,fontWeight:700,cursor:canEdit?"pointer":"not-allowed"}}>
-                    {slaPausedAt?"▶ Retomar":"⏸ Pausar"}
-                  </button>
-                  <button onClick={()=>{if(!canEdit)return;setSlaHours(null);setSlaStartAt(null);setSlaPausedAt(null);setSlaPausedDuration(0);}} disabled={!canEdit}
-                    style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:9,cursor:canEdit?"pointer":"not-allowed"}}>✕ remover</button>
-                </div>}
-              </div>
-
-              {/* Data/Hora de Publicação */}
-              <div>
-                <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:5}}>📅 Data/Hora de Publicação</div>
-                <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
-                  <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
-                    style={{...SI,fontSize:12,padding:"7px 10px"}}/>
-                  <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
-                    style={{...SI,fontSize:12,padding:"7px 10px"}}/>
-                </div>
-                <div style={{color:"#64748b",fontSize:9,marginTop:4,fontStyle:"italic"}}>
-                  {publishDate?"Aparece no Calendário de Publicação":"Preencha pra aparecer no calendário"}
-                </div>
-              </div>
+              {publishDate&&<div style={{color:"#94a3b8",fontSize:9,marginTop:4,fontStyle:"italic"}}>
+                Aparece no Calendário de Publicação
+              </div>}
             </div>
           )}
 
           {/* ══ AGENDADO: sidebar especial ══ */}
           {isAgendado&&(<>
             <div style={{background:"linear-gradient(135deg,#4db8ff18,#4db8ff08)",border:"1px solid #4db8ff44",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:16}}>📅</span>
+              <span style={{color:"#4db8ff",display:"flex"}}><Ico n="calendar" size={18}/></span>
               <div>
                 <div style={{color:"#4db8ff",fontWeight:800,fontSize:12}}>Agendado para publicação</div>
                 <div style={{color:"#64748b",fontSize:10,marginTop:1}}>Defina a data e o responsável</div>
               </div>
             </div>
             <div>
-              <label style={{...LB,color:publishDate?"#0284c7":"#ef4444",fontWeight:700}}>
-                📅 Data de publicação {!publishDate&&<span style={{fontSize:9,color:"#ef4444"}}>* obrigatório</span>}
+              <label style={{...LB,color:publishDate?"#0284c7":"#ef4444",fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+                <Ico n="calendar" size={12}/> Data de publicação {!publishDate&&<span style={{fontSize:9,color:"#ef4444"}}>* obrigatório</span>}
               </label>
               <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
                 style={{...SI,borderColor:publishDate?"#4db8ff66":"#ef444466",background:publishDate?"#eff8ff":"#fff5f5",fontWeight:publishDate?700:400,color:publishDate?"#0284c7":"#ef4444",fontSize:13}}/>
@@ -19729,21 +19930,21 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>}
             </div>
             <div>
-              <label style={{...LB,fontWeight:700}}>🕐 Horário de publicação</label>
+              <label style={{...LB,fontWeight:700,display:"flex",alignItems:"center",gap:5}}><Ico n="clock" size={12}/> Horário de publicação</label>
               <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
                 style={{...SI,background:"#f0f9ff",borderColor:"#4db8ff44",fontWeight:700,color:"#0284c7",fontSize:14}}/>
               {publishDate&&publishTime&&<div style={{color:"#64748b",fontSize:10,marginTop:3}}>
                 Publicação programada: {new Date(publishDate+"T"+publishTime).toLocaleString("pt-BR",{weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
               </div>}
             </div>
-            {!publishDate&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#9a3412",lineHeight:1.5}}>
-              ⚠ Informe a data de publicação para aparecer no Calendário de Publicações
+            {!publishDate&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#9a3412",lineHeight:1.5,display:"flex",alignItems:"flex-start",gap:6}}>
+              <span style={{flexShrink:0,marginTop:1}}><Ico n="alert" size={13}/></span> Informe a data de publicação para aparecer no Calendário de Publicações
             </div>}
 
             {/* ══ AÇÕES RÁPIDAS — placeholders em desenvolvimento ══ */}
             <div style={{marginTop:4}}>
-              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>
-                ⚡ Ações Rápidas
+              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:5}}>
+                <Ico n="zap" size={12}/> Ações Rápidas
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 <button
@@ -19799,83 +20000,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </select>
           </div>}
 
-          {/* Etiqueta interna — só sócios veem/editam. Usado pra organizar internamente
-              (ex: Pacote 10/06, Campanha verão, Cliente VIP, etc). Autocompleta de
-              etiquetas já em uso em outros cartões. */}
-          {isAdmin&&!isAgendado&&(function(){
-            const usedTags=Array.from(new Set((tasks||[]).map(x=>(x&&x.adminTag||"").trim()).filter(Boolean))).sort();
-            const dlId="admin-tag-options-"+task.id;
-            return <div>
-              <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
-                <span>🏷 Etiqueta interna</span>
-                <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios</span>
-              </label>
-              <input
-                list={dlId}
-                value={adminTag}
-                onChange={e=>setAdminTag(e.target.value)}
-                placeholder="Ex: Pacote 10/06, Campanha verão..."
-                style={{...SI,fontFamily:"inherit"}}
-              />
-              <datalist id={dlId}>
-                {usedTags.filter(x=>x!==adminTag).map(x=><option key={x} value={x}/>)}
-              </datalist>
-              <div style={{color:"#94a3b8",fontSize:10,marginTop:4,lineHeight:1.4}}>
-                Visível só pra Vinicius e Gustavo. Use pra agrupar cartões em pacotes contratados, campanhas, etc.
-              </div>
-            </div>;
-          })()}
-
-          {/* Tags (faixas coloridas) — admin-only, free text + autocomplete das tags já em uso. */}
-          {isAdmin&&!isAgendado&&(function(){
-            const dlId="card-tags-suggest-"+task.id;
-            const allKnown=Array.from(new Set(
-              (tasks||[]).flatMap(function(x){return Array.isArray(x&&x.tags)?x.tags:[];})
-              .map(function(s){return(s||"").trim();}).filter(Boolean)
-            )).sort();
-            const addTag=function(rawVal){
-              const v=((typeof rawVal==="string"?rawVal:newTagInput)||"").trim().toLowerCase().replace(/^#+/,"");
-              if(!v)return;
-              if(tags.includes(v))return;
-              if(v.length>30){pixelsToast.warning("Tag muito longa (máx 30 caracteres).");return;}
-              setTags([...tags,v]);
-              setNewTagInput("");
-            };
-            const removeTag=function(t){setTags(tags.filter(x=>x!==t));};
-            return <div>
-              <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
-                <span>🎨 Tags do cartão</span>
-                <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios</span>
-              </label>
-              {tags.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:6}}>
-                {tags.map(function(tag){
-                  const tc=(typeof tagColor==="function")?tagColor(tag):{fg:"#64748b",bg:"#f1f5f9"};
-                  return <span key={tag} style={{display:"inline-flex",alignItems:"center",gap:4,background:tc.fg+"18",color:tc.fg,borderRadius:99,padding:"3px 4px 3px 9px",fontSize:10,fontWeight:600,border:"1px solid "+tc.fg+"33"}}>
-                    #{tag}
-                    <button onClick={function(){removeTag(tag);}} title="Remover tag" style={{background:"none",border:"none",color:tc.fg,cursor:"pointer",fontSize:13,padding:"0 4px",lineHeight:1,opacity:.7}}>×</button>
-                  </span>;
-                })}
-              </div>}
-              <div style={{display:"flex",gap:6}}>
-                <input
-                  list={dlId}
-                  value={newTagInput}
-                  onChange={function(e){setNewTagInput(e.target.value);}}
-                  onKeyDown={function(e){if(e.key==="Enter"){e.preventDefault();addTag();}}}
-                  placeholder="Digite a tag e tecle Enter"
-                  style={{...SI,flex:1,fontFamily:"inherit"}}
-                />
-                <button onClick={function(){addTag();}} disabled={!newTagInput.trim()} style={{background:newTagInput.trim()?"#7c3aed":"#e2e8f0",color:"#fff",border:"none",borderRadius:8,padding:"0 14px",fontSize:13,fontWeight:600,cursor:newTagInput.trim()?"pointer":"not-allowed",flexShrink:0}}>+</button>
-              </div>
-              <datalist id={dlId}>
-                {allKnown.filter(function(x){return tags.indexOf(x)===-1;}).map(function(x){return <option key={x} value={x}/>;})}
-              </datalist>
-              <div style={{color:"#94a3b8",fontSize:10,marginTop:4,lineHeight:1.4}}>
-                Comece digitando — o autocomplete sugere as tags já criadas em outros cartões.
-              </div>
-            </div>;
-          })()}
-
           {!isAgendado&&<div style={{position:"relative"}}>
             <label style={LB}>👤 Responsáveis</label>
             <button onClick={()=>{if(canEdit){setShowAssigneesPicker(v=>!v);}}}
@@ -19924,19 +20048,111 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
 
 
-          {/* Cliente */}
-          {!isAgendado&&<div>
-            <label style={LB}>Cliente</label>
-            <select value={client} onChange={e=>setClient(e.target.value)} disabled={!canEdit}
-              style={{...SI,borderColor:!client?"#fca5a5":undefined,background:!client?"#fff7f7":undefined}}>
-              <option value="">Selecione o cliente</option>
-              {CLIENTS.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-            {client==="bioter"&&<><label style={{...LB,marginTop:8}}>Unidade Bioter</label>
-              <select value={bioterUnit} onChange={e=>setBioterUnit(e.target.value)} disabled={!canEdit} style={SI}>
-                {BIOTER_UNITS.map(u=><option key={u.id} value={u.id}>{u.label}</option>)}
+          {/* Cliente — single-select alfabético + checkboxes pras unidades Bioter (multi) */}
+          {!isAgendado&&(function(){
+            const sortedClients=CLIENTS.slice().sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+            const selectedUnits=String(bioterUnit||"").split(",").filter(Boolean);
+            const hasGroup=selectedUnits.includes("grupo")||selectedUnits.includes("brasil");
+            const toggleUnit=(uid)=>{
+              if(!canEdit)return;
+              let next;
+              if(uid==="grupo"||uid==="brasil"){
+                // Grupo Bioter / Bioter Brasil são exclusivos entre si e com as unidades individuais
+                next=selectedUnits.includes(uid)?[]:[uid];
+              }else{
+                // Ao marcar uma unidade individual, remove qualquer agrupamento
+                const semGrupo=selectedUnits.filter(x=>x!=="grupo"&&x!=="brasil");
+                next=semGrupo.includes(uid)
+                  ?semGrupo.filter(x=>x!==uid)
+                  :[...semGrupo,uid];
+              }
+              setBioterUnit(next.join(","));
+            };
+            return <div>
+              <label style={LB}>Cliente</label>
+              <select value={client} onChange={e=>{
+                setClient(e.target.value);
+                if(e.target.value!=="bioter")setBioterUnit("");
+              }} disabled={!canEdit}
+                style={{...SI,borderColor:!client?"#fca5a5":undefined,background:!client?"#fff7f7":undefined}}>
+                <option value="">Selecione o cliente</option>
+                {sortedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-            </>}
+              {client==="bioter"&&<div style={{marginTop:10}}>
+                <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
+                  <span>Unidades Bioter</span>
+                  <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>marque uma ou mais</span>
+                </label>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+                  {/* Grupo Bioter — todas as unidades incluindo Paraguay */}
+                  {(function(){
+                    const isSel=selectedUnits.includes("grupo");
+                    return <button key="grupo" type="button" onClick={()=>toggleUnit("grupo")} disabled={!canEdit}
+                      style={{gridColumn:"span 2",display:"flex",alignItems:"center",gap:7,padding:"7px 10px",background:isSel?"#16653426":"#f8fafc",border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:700,textAlign:"left",transition:"all .12s"}}>
+                      <div style={{width:14,height:14,borderRadius:4,border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,background:isSel?"#166534":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                        {isSel&&<Ico n="check" size={10}/>}
+                      </div>
+                      <span style={{flex:1}}>Grupo Bioter</span>
+                      <span style={{background:isSel?"#166534":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:8,fontWeight:700,letterSpacing:.3}}>TODAS</span>
+                    </button>;
+                  })()}
+                  {/* Bioter Brasil — todas as unidades exceto Paraguay */}
+                  {(function(){
+                    const isSel=selectedUnits.includes("brasil");
+                    return <button key="brasil" type="button" onClick={()=>toggleUnit("brasil")} disabled={!canEdit}
+                      style={{gridColumn:"span 2",display:"flex",alignItems:"center",gap:7,padding:"7px 10px",background:isSel?"#16653426":"#f8fafc",border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:700,textAlign:"left",transition:"all .12s"}}>
+                      <div style={{width:14,height:14,borderRadius:4,border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,background:isSel?"#166534":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                        {isSel&&<Ico n="check" size={10}/>}
+                      </div>
+                      <span style={{flex:1}}>Bioter Brasil</span>
+                      <span style={{background:isSel?"#166534":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:8,fontWeight:700,letterSpacing:.3}}>BRASIL</span>
+                    </button>;
+                  })()}
+                  {/* Unidades individuais */}
+                  {BIOTER_UNITS.map(u=>{
+                    const isSel=selectedUnits.includes(u.id);
+                    const disabled=!canEdit||hasGroup;
+                    return <button key={u.id} type="button" onClick={()=>toggleUnit(u.id)} disabled={disabled}
+                      style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",background:isSel?"#16653418":"#fff",border:`1px solid ${isSel?"#166534":"#e2e8f0"}`,borderRadius:8,cursor:disabled?"not-allowed":"pointer",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:isSel?700:500,textAlign:"left",transition:"all .12s",opacity:hasGroup?.5:1}}>
+                      <div style={{width:14,height:14,borderRadius:4,border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,background:isSel?"#166534":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                        {isSel&&<Ico n="check" size={10}/>}
+                      </div>
+                      <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u.pickerLabel||u.label}</span>
+                    </button>;
+                  })}
+                </div>
+              </div>}
+            </div>;
+          })()}
+
+          {/* Tipo de Conteúdo — pílulas selecionáveis (4 opções) — tudo em roxo */}
+          {!isAgendado&&<div>
+            <label style={LB}>Tipo de conteúdo</label>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+              {[
+                {id:"arte",label:"Arte única",icon:"image"},
+                {id:"carrossel",label:"Carrossel",icon:"layers"},
+                {id:"foto",label:"Foto de obra",icon:"camera"},
+                {id:"video",label:"Vídeo",icon:"play"},
+              ].map(opt=>{
+                const isSel=contentType===opt.id;
+                return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
+                  style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"7px 8px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?700:500,transition:"all .12s"}}>
+                  <Ico n={opt.icon} size={12}/>
+                  <span>{opt.label}</span>
+                </button>;
+              })}
+            </div>
+          </div>}
+
+          {/* Mês de referência — visível pra todos, mas só sócios editam (contabilização de pagamento) */}
+          {!isAgendado&&<div>
+            <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
+              <span>Mês de pagamento</span>
+              {!isAdmin&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios editam</span>}
+            </label>
+            <input type="month" value={referenceMonth} onChange={e=>setReferenceMonth(e.target.value)} disabled={!canEdit||!isAdmin}
+              style={{...SI,fontSize:13,borderColor:referenceMonth?"#7c3aed44":undefined,background:referenceMonth?"#7c3aed08":undefined,color:referenceMonth?"#7c3aed":"#94a3b8",fontWeight:referenceMonth?700:500,cursor:isAdmin?"pointer":"not-allowed"}}/>
           </div>}
 
           {/* Prioridade+Prazo */}
@@ -19944,7 +20160,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <div>
               <label style={LB}>Prioridade</label>
               <select value={priority} onChange={e=>setPriority(e.target.value)} disabled={!canEdit}
-                style={{...SI,borderColor:!priority?"#fca5a5":priority==="alta"?"#fecaca":priority==="media"?"#fef08a":"#bbf7d0",background:!priority?"#fff7f7":priority==="alta"?"#fff1f2":priority==="media"?"#fefce8":"#f0fdf4",color:!priority?"#94a3b8":priority==="alta"?"#be123c":priority==="media"?"#854d0e":"#15803d",fontWeight:700}}>
+                style={{...SI,borderColor:priority==="alta"?"#fecaca":priority==="media"?"#fef08a":priority==="baixa"?"#bbf7d0":undefined,background:priority==="alta"?"#fff1f2":priority==="media"?"#fefce8":priority==="baixa"?"#f0fdf4":undefined,color:!priority?"#94a3b8":priority==="alta"?"#be123c":priority==="media"?"#854d0e":"#15803d",fontWeight:700}}>
                 <option value="">Selecione a prioridade</option>
                 <option value="baixa">🟢 Baixa</option>
                 <option value="media">🟡 Média</option>
@@ -20069,7 +20285,7 @@ function OrientacoesView({clientId}){
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
-      <div style={{fontSize:32,marginBottom:8}}>📋</div>
+      <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={32}/></div>
       <div style={{color:"#0f172a",fontWeight:500,fontSize:13,marginBottom:4}}>Sem orientações cadastradas</div>
       <div style={{color:"#64748b",fontSize:11,lineHeight:1.6,maxWidth:340,margin:"0 auto"}}>Vá em <strong>Clientes → {cl?.name||"esse cliente"} → Informações → Orientações para a equipe</strong> para cadastrar logos, paleta, fontes, tom de voz e mais.</div>
     </div>
@@ -20562,18 +20778,104 @@ function RecentActivityWidget({tasks,user,setOpenCard,isMob}){
   </div>;
 }
 
+/* ─── PagamentosView ───────────────────────────
+ * Aba que freelancer (atualmente só André) vê dentro do próprio dashboard.
+ * Mostra breakdown read-only de pagamento por mês.
+ * Filtra só tasks dele (assignee/assignees inclui user.id). */
+function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
+  const calc=calcDesignerPayments(tasks||[],user.id,payMonth);
+  const fmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const CardCat=({label,count,price,color})=><div style={{background:"#fff",borderRadius:10,padding:"14px 16px",border:"1px solid #e5e7eb",display:"flex",flexDirection:"column",gap:4}}>
+    <div style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{label}</div>
+    <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+      <span style={{color:"#0f172a",fontWeight:800,fontSize:24}}>{count}</span>
+      <span style={{color:"#94a3b8",fontSize:11}}>× {fmtBRL(price).replace(",00","")}</span>
+    </div>
+    <div style={{color:color,fontWeight:700,fontSize:14}}>{fmtBRL(count*price)}</div>
+  </div>;
+  // Editor vê só Vídeo. Designer e outros veem Foto/Arte/Carrossel.
+  const isEditor=user.dash==="editor";
+  const entregas=isEditor
+    ?[...(calc.tasksVideo||[]).map(t=>({...t,_cat:"Vídeo",_price:DESIGNER_PRICES.video}))]
+    :[...(calc.tasksFotoObra||[]).map(t=>({...t,_cat:"Foto de obra",_price:DESIGNER_PRICES.fotoObra})),
+      ...(calc.tasksArte||[]).map(t=>({...t,_cat:"Arte única",_price:DESIGNER_PRICES.arte})),
+      ...(calc.tasksCarrossel||[]).map(t=>({...t,_cat:"Carrossel",_price:DESIGNER_PRICES.carrossel}))];
+  return <div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
+    {/* Header com mês picker + total */}
+    <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Meus pagamentos</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:2}}>Só entregas em <strong>Aprovadas</strong>, <strong>Agendadas</strong> e <strong>Publicadas</strong> entram no cálculo</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <input type="month" value={payMonth} onChange={e=>setPayMonth(e.target.value)}
+          style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer"}}/>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:"#64748b",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Total a receber</div>
+          <div style={{color:"#7c3aed",fontWeight:900,fontSize:24,letterSpacing:-.5}}>{fmtBRL(calc.total)}</div>
+        </div>
+      </div>
+    </div>
+    {/* Breakdown — categorias dependem do role (editor=vídeo, designer=foto/arte/carrossel) */}
+    {isEditor
+      ?<div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+        <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
+      </div>
+      :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
+        <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
+        <CardCat label="Arte única" count={calc.arte} price={DESIGNER_PRICES.arte} color="#16a34a"/>
+        <CardCat label="Carrossel" count={calc.carrossel} price={DESIGNER_PRICES.carrossel} color="#16a34a"/>
+      </div>}
+    {calc.naoClassificado>0&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:11,borderRadius:8,padding:"10px 14px",lineHeight:1.5}}>
+      <strong>{calc.naoClassificado} demanda(s) sem tipo de conteúdo definido</strong> — ainda não entram no cálculo. Os sócios precisam abrir e classificar.
+    </div>}
+    {/* Lista de demandas contadas */}
+    <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden"}}>
+      <div style={{padding:"12px 16px",borderBottom:"1px solid #e5e7eb",display:"flex",alignItems:"center",gap:8}}>
+        <span style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Demandas que entram no pagamento</span>
+        <span style={{color:"#94a3b8",fontSize:11}}>({entregas.length} entrega{entregas.length!==1?"s":""})</span>
+      </div>
+      {entregas.length===0
+        ?<div style={{padding:"20px 16px",textAlign:"center",color:"#94a3b8",fontSize:12}}>Nenhuma entrega contabilizada nesse mês ainda.</div>
+        :entregas.map((t,i)=><div key={t.id+"-"+i} style={{padding:"10px 16px",borderBottom:i<entregas.length-1?"1px solid #f1f5f9":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:2,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700}}>{t._cat}</span>
+              <span>{(CLIENTS.find(c=>c.id===t.client)||{}).name||""}</span>
+            </div>
+          </div>
+          <span style={{color:"#16a34a",fontWeight:700,fontSize:13,flexShrink:0}}>{fmtBRL(t._price)}</span>
+        </div>)
+      }
+    </div>
+  </div>;
+}
+
 function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,setTasks,isViewing,icon,currentUser,notifs,isMob}){
   const [openCard,setOpenCard]=useState(null);
   const [showCustomize,setShowCustomize]=useState(false);
-  // Tab interna: "geral" (padrão) ou "contagem" (só visível pra quem recebe por demanda)
+  // Tab interna: "geral" (padrão), "contagem" (pago por demanda), "pagamentos" (André)
   const [dashTab,setDashTab]=useState(()=>{
     try{return localStorage.getItem("pixels-colab-dash-tab-"+user.id)||"geral";}catch(e){return"geral";}
   });
   useEffect(()=>{try{localStorage.setItem("pixels-colab-dash-tab-"+user.id,dashTab);}catch(e){}},[dashTab,user.id]);
+  // Mês selecionado pra aba Pagamentos
+  const [payMonth,setPayMonth]=useState(()=>{
+    try{const s=localStorage.getItem("pixels-pay-month-"+user.id);if(s)return s;}catch(e){}
+    const now=new Date();
+    return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  });
+  useEffect(()=>{try{localStorage.setItem("pixels-pay-month-"+user.id,payMonth);}catch(e){}},[payMonth,user.id]);
   // Tab Contagem aparece pra quem é pago por demanda OU tem perm verContagemDemandas
   const _userPerms=(typeof ACCESS_STORE!=="undefined"?(ACCESS_STORE[user.id]||{}):{});
   const showContagemTab=!!user.pagamentoPorDemanda||_userPerms.verContagemDemandas===true;
-  const effectiveDashTab=showContagemTab?dashTab:"geral";
+  // Tab Pagamentos: aparece pra todos os freelancers (pagamentoPorDemanda) com preço configurado.
+  const showPagamentosTab=user.id==="andre"||user.id==="guilherme";
+  const allowedTabs=new Set(["geral"]);
+  if(showContagemTab)allowedTabs.add("contagem");
+  if(showPagamentosTab)allowedTabs.add("pagamentos");
+  const effectiveDashTab=allowedTabs.has(dashTab)?dashTab:"geral";
   const [widgets,setWidgets]=useState(()=>{
     try{return JSON.parse(localStorage.getItem("pixels-dash-widgets-"+user.id)||'{"notifs":true,"clients":true,"stale":true}');}catch(e){return{notifs:true,clients:true,stale:true};}
   });
@@ -20701,9 +21003,9 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
   const _statusDistrib=(()=>{
     const map={
       atrasada:{label:"Atrasadas",count:0,color:"#dc2626"},
-      execucao:{label:"Em Execução",count:0,color:"#eab308"},
-      avaliacao:{label:"Em Avaliação",count:0,color:"#ea580c"},
-      demanda:{label:"Em Fila",color:"#7c3aed",count:0},
+      execucao:{label:"Em execução",count:0,color:"#eab308"},
+      avaliacao:{label:"Em avaliação",count:0,color:"#ea580c"},
+      demanda:{label:"Em fila",color:"#7c3aed",count:0},
       agendado:{label:"Agendadas",count:0,color:"#2563eb"},
     };
     _teamTasks.forEach(t=>{
@@ -20739,7 +21041,7 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
     const status=[
       {key:"execucao",label:"Execução",color:"#eab308"},
       {key:"avaliacao",label:"Avaliação",color:"#ea580c"},
-      {key:"agendado",label:"Agendado",color:"#2563eb"},
+      {key:"agendado",label:"Agendadas",color:"#2563eb"},
     ];
     return status.map(s=>{
       const tasks=_teamTasks.filter(t=>t.status===s.key&&t.colEnteredAt);
@@ -20829,12 +21131,13 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
 
-    {/* ═══ TAB BAR (só pra quem recebe por demanda) ═══ */}
-    {showContagemTab&&<div style={{display:"flex",gap:isMob?4:6,padding:isMob?4:6,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
+    {/* ═══ TAB BAR (pago por demanda / André tem pagamentos) ═══ */}
+    {(showContagemTab||showPagamentosTab)&&<div style={{display:"flex",gap:isMob?4:6,padding:isMob?4:6,background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:12,maxWidth:860,margin:"0 auto",width:"100%"}}>
       {[
-        {id:"geral",label:"Geral"},
-        {id:"contagem",label:"Contagem de demandas"},
-      ].map(t=>(
+        {id:"geral",label:"Geral",show:true},
+        {id:"contagem",label:"Contagem de demandas",show:showContagemTab},
+        {id:"pagamentos",label:"Pagamentos",show:showPagamentosTab},
+      ].filter(t=>t.show).map(t=>(
         <button key={t.id} onClick={()=>setDashTab(t.id)} style={{
           flex:1,
           background:effectiveDashTab===t.id?"#a140ff":"transparent",
@@ -20848,6 +21151,8 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
 
     {effectiveDashTab==="contagem"?(
       <ContagemDemandasView user={user} isMob={isMob}/>
+    ):effectiveDashTab==="pagamentos"?(
+      <PagamentosView user={user} tasks={allTasks} isMob={isMob} payMonth={payMonth} setPayMonth={setPayMonth}/>
     ):(<>
 
     {/* ═══ KPIs ESTRATÉGICOS — minimalista + mini-charts + trend badges ═══ */}
@@ -22319,6 +22624,8 @@ const rowToTask = (r) => ({
   publishDate:  r.publish_date || "",
   publishTime:  r.publish_time || "09:00",
   bioterUnit:   r.bioter_unit  || "",
+  contentType:  r.content_type || "",
+  referenceMonth: r.reference_month || "",
   score:        r.score        ?? null,
   ajustar:      !!r.ajustar,
   isAlteracao:  !!r.is_alteracao,
@@ -22355,6 +22662,8 @@ const taskToRow = (t) => ({
   publish_date:   t.publishDate  || null,
   publish_time:   t.publishTime  || "09:00",
   bioter_unit:    t.bioterUnit   || "",
+  content_type:   t.contentType  || null,
+  reference_month: t.referenceMonth || null,
   score:          t.score        ?? null,
   ajustar:        !!t.ajustar,
   is_alteracao:   !!t.isAlteracao,
@@ -22409,7 +22718,7 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
   };
 
   return(
-    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Outfit','DM Sans',system-ui,sans-serif"}}>
+    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter','DM Sans',system-ui,sans-serif"}}>
       <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:400,height:400,borderRadius:"50%",background:C.a,opacity:.04,filter:"blur(80px)",pointerEvents:"none"}}/>
       <div style={{width:"100%",maxWidth:380,padding:"0 20px"}}>
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:36}}>
@@ -22508,6 +22817,37 @@ export default function AgencyOS(){
     return()=>{delete window._openMyProfile;};
   },[]);
 
+  // ── Carregar fonte Inter do Google Fonts uma vez por sessão ──
+  // Injeta no <head> e define a fonte base do body pra elementos
+  // sem fontFamily explícito herdarem Inter também.
+  useEffect(()=>{
+    if(!document.getElementById("pixels-font-inter")){
+      const pc1=document.createElement("link");
+      pc1.rel="preconnect"; pc1.href="https://fonts.googleapis.com";
+      document.head.appendChild(pc1);
+      const pc2=document.createElement("link");
+      pc2.rel="preconnect"; pc2.href="https://fonts.gstatic.com"; pc2.crossOrigin="anonymous";
+      document.head.appendChild(pc2);
+      const link=document.createElement("link");
+      link.id="pixels-font-inter";
+      link.rel="stylesheet";
+      link.href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap";
+      document.head.appendChild(link);
+      document.body.style.fontFamily="'Inter',system-ui,sans-serif";
+    }
+    // ── Scrollbar invisível pro kanban (simetria perfeita) ──
+    // Scroll continua funcionando via mouse wheel / touch / teclado.
+    if(!document.getElementById("pixels-kanban-scroll-style")){
+      const se=document.createElement("style");
+      se.id="pixels-kanban-scroll-style";
+      se.textContent=`
+        .pixels-kanban-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .pixels-kanban-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
+      `;
+      document.head.appendChild(se);
+    }
+  },[]);
+
   // Carregar selfProfile do Supabase ao iniciar
   useEffect(()=>{
     const loadSelfProfile=async()=>{
@@ -22521,6 +22861,35 @@ export default function AgencyOS(){
       }catch(e){}
     };
     if(authState==="app")loadSelfProfile();
+  },[authState]);
+
+  // ── Carregar TODAS as fotos dos colaboradores ──
+  // Antes só carregava em "Gerenciar Permissões" — agora baixa logo no startup
+  // pra qualquer avatar (kanban, chat, aprovações) ter foto correta.
+  // Recarrega a cada 5min pra pegar mudanças de outros usuários sem F5.
+  useEffect(()=>{
+    if(authState!=="app")return;
+    const loadAllTeamPhotos=async()=>{
+      try{
+        const sb=window._sb;
+        const{data:rows}=await sb.from("profiles").select("team_id,profile_data").not("profile_data","is",null);
+        if(!rows)return;
+        rows.forEach(row=>{
+          if(!row.team_id||!row.profile_data)return;
+          try{
+            const prev=localStorage.getItem("pixels-selfprofile-"+row.team_id);
+            const next=JSON.stringify(row.profile_data);
+            if(prev!==next){
+              localStorage.setItem("pixels-selfprofile-"+row.team_id,next);
+              window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:row.team_id}}));
+            }
+          }catch(e){}
+        });
+      }catch(e){console.warn("Erro carregando perfis dos colaboradores:",e);}
+    };
+    loadAllTeamPhotos();
+    const interval=setInterval(loadAllTeamPhotos,5*60*1000);
+    return()=>clearInterval(interval);
   },[authState]);
   useEffect(()=>{
     const u=resolveUser(currentProfile);
@@ -22967,7 +23336,7 @@ export default function AgencyOS(){
           if(t.deletedAt||t.status!=="agendado"||!t.publishDate) return t;
           if(new Date(t.publishDate+"T"+(t.publishTime||"00:00")+":00")<=now){
             changed=true;
-            const entry={type:"status",fromLabel:"Agendado",toLabel:"Publicado",from:"agendado",to:"publicado",at:now.toISOString(),atFmt:now.toLocaleDateString("pt-BR"),user:"Sistema"};
+            const entry={type:"status",fromLabel:"Agendadas",toLabel:"Publicadas",from:"agendado",to:"publicado",at:now.toISOString(),atFmt:now.toLocaleDateString("pt-BR"),user:"Sistema"};
             return {...t,status:"publicado",completedAt:now.toISOString().split("T")[0],colEnteredAt:now.toISOString(),timeline:[...(t.timeline||[]),entry]};
           }
           return t;
@@ -23207,7 +23576,7 @@ export default function AgencyOS(){
   // ── UI principal ──────────────────────────────────────────
   const markRead=()=>setNotifs(p=>p.map(n=>({...n,read:true})));
 
-  return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Outfit','DM Sans',system-ui,sans-serif",position:"relative"}}>
+  return <div style={{display:"flex",height:"100vh",overflow:"hidden",background:C.bg,fontFamily:"'Inter','DM Sans',system-ui,sans-serif",position:"relative"}}>
     {/* Widget de videochamada — persiste ao trocar de página */}
     <PixelsCallWidget/>
 
@@ -23351,8 +23720,11 @@ export default function AgencyOS(){
       </button>}
       <div style={{padding:"14px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}>
-          <div style={{width:32,height:32,borderRadius:10,background:`linear-gradient(135deg,${C.a},${C.aD})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>⬡</div>
-          {(!sideCollapsed||isMob)&&<div style={{flex:1,minWidth:0}}><div style={{color:C.tx,fontWeight:900,fontSize:13,letterSpacing:-.5,overflow:"hidden",whiteSpace:"nowrap"}}>Pixels</div><div style={{color:C.td,fontSize:9,letterSpacing:1}}>Agency OS · PRO</div></div>}
+          {sideCollapsed&&!isMob
+            ? <div style={{width:32,height:32,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"flex-start",flexShrink:0}}>
+                <img src="/logo-pixels.png" alt="Pixels" style={{height:32,width:"auto",objectFit:"contain",objectPosition:"left center"}}/>
+              </div>
+            : <img src="/logo-pixels.png" alt="Pixels Agency OS" style={{height:28,width:"auto",maxWidth:"100%",objectFit:"contain",display:"block",flexShrink:0}}/>}
           {isMob&&<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>}
         </div>
       </div>
@@ -24459,10 +24831,10 @@ function PageAnalitico({isMob, tasks, initTab}){
         {id:"recebida",  label:"Recebida",   color:C.pk},
         {id:"execucao",  label:"Execução",   color:C.yw},
         {id:"avaliacao", label:"Avaliação",  color:C.or},
-        {id:"aprovado",  label:"Aprovado",   color:C.gr},
-        {id:"agendado",  label:"Agendado",   color:C.bl},
-        {id:"publicado", label:"Publicado",  color:"#a78bfa"},
-        {id:"pausado",   label:"Pausado",    color:C.td},
+        {id:"aprovado",  label:"Aprovadas",  color:C.gr},
+        {id:"agendado",  label:"Agendadas",  color:C.bl},
+        {id:"publicado", label:"Publicadas", color:"#a78bfa"},
+        {id:"pausado",   label:"Pausadas",   color:C.td},
       ];
       const colCounts=COLS.map(col=>({
         ...col,
@@ -25001,7 +25373,7 @@ const INTERNAS_COLS_RADAR_P=[
   {id:"interno_demanda"},{id:"interno_execucao"},{id:"interno_avaliacao"},
   {id:"interno_aprovado"},{id:"interno_executado"},
 ];
-const PORTAL_STATUS_LABELS={demanda:"Copys em aprovação",recebida:"Em fila",execucao:"Em produção",avaliacao:"Em avaliação",aprovado:"Aprovado",agendado:"Agendado para publicação"};
+const PORTAL_STATUS_LABELS={demanda:"Copys em aprovação",recebida:"Em fila",execucao:"Em produção",avaliacao:"Em avaliação",aprovado:"Aprovadas",agendado:"Agendadas para publicação"};
 // STATUS_COLORS usa variáveis de tema (C.*) — lidas em tempo de uso
 const getPortalStatusColor=(status)=>({demanda:C.a,recebida:C.pk,execucao:C.yw,avaliacao:C.or,aprovado:C.gr,agendado:"#0284c7"}[status]||C.a);
 
@@ -25326,8 +25698,8 @@ function PortalSolicitar({tasks, selCl, cl}) {
     {id:"urgente",label:"Urgente",color:"#dc2626"},
   ];
   const STATUS_INT={
-    interno_demanda:"Recebida",interno_execucao:"Em Execução",
-    interno_avaliacao:"Em Avaliação",interno_aprovado:"Aprovada",interno_executado:"Concluída",
+    interno_demanda:"Recebida",interno_execucao:"Em execução",
+    interno_avaliacao:"Em avaliação",interno_aprovado:"Aprovada",interno_executado:"Concluída",
   };
 
   const enviar = async () => {
