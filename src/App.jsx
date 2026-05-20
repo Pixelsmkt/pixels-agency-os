@@ -9776,6 +9776,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [viewMode,setViewMode]=useState("cartao");
   const [filterUser,setFilterUser]=useState("todos");
   const [filterSector,setFilterSector]=useState("todos_setores");
+  const [searchTerm,setSearchTerm]=useState("");
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   // Filtro de etiqueta interna (só sócios). Array de strings — multi-select.
@@ -10028,10 +10029,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     return false;
   };
 
+  const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
     // Admin/sócio vê tudo; colaborador só vê os seus
     if(!isAdmin&&!isMyTask(t))return false;
+    // Busca por título — case-insensitive, substring match
+    if(_searchTermNorm){
+      const title=String(t.title||"").toLowerCase();
+      if(!title.includes(_searchTermNorm))return false;
+    }
     if(filterUser!=="todos"&&t.assignee!==filterUser&&!(Array.isArray(t.assignees)&&t.assignees.includes(filterUser)))return false;
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
     if(filterClient!=="todos"&&t.client!==filterClient)return false;
@@ -10260,7 +10267,21 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>Demandas</div>
           <div style={{color:C.ts,fontSize:12,marginTop:3}}>{visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length} abertas · {trash.length} na lixeira</div>
         </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+          {/* SEARCH input — pesquisar cards por título */}
+          <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+            <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#7c3aed":"#94a3b8",pointerEvents:"none",display:"flex"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </span>
+            <input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Buscar demanda..."
+              style={{background:"#fff",border:`1px solid ${searchTerm?"#7c3aed":"#e2e8f0"}`,borderRadius:10,padding:"6px 28px 6px 28px",fontSize:12,fontWeight:500,color:"#0f172a",outline:"none",width:180,transition:"border-color .15s",fontFamily:"inherit"}}/>
+            {searchTerm&&<button onClick={()=>setSearchTerm("")} title="Limpar busca"
+              style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
+              onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
+              onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>}
+          </div>
           {/* ESCANEAR button — só quem tem permissão */}
           {canEscanear&&<button onClick={()=>setShowScan(true)}
             style={{background:`linear-gradient(135deg,${C.or},#ff3300)`,color:"#fff",border:"none",borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.or}60`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3}}>
