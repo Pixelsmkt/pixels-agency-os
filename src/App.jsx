@@ -1036,6 +1036,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
   if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
   if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+  if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
   return null;
 }
 
@@ -10583,8 +10584,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       const mn=monthNames[parseInt(parts[1],10)-1];
                       const yy=parts[0].slice(-2);
                       if(!mn)return null;
-                      return <span title={"Mês de referência: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
                         {mn}/{yy}
                       </span>;
                     })()}
@@ -20093,14 +20094,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>
           </div>}
 
-          {/* Mês de referência — só sócios podem editar (contabilização) */}
-          {!isAgendado&&isAdmin&&<div>
+          {/* Mês de referência — visível pra todos, mas só sócios editam (contabilização de pagamento) */}
+          {!isAgendado&&<div>
             <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
-              <span>Mês de referência</span>
-              <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios</span>
+              <span>Mês de pagamento</span>
+              {!isAdmin&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios editam</span>}
             </label>
-            <input type="month" value={referenceMonth} onChange={e=>setReferenceMonth(e.target.value)} disabled={!canEdit}
-              style={{...SI,fontSize:13,borderColor:referenceMonth?"#7c3aed44":undefined,background:referenceMonth?"#7c3aed08":undefined,color:referenceMonth?"#7c3aed":"#94a3b8",fontWeight:referenceMonth?700:500}}/>
+            <input type="month" value={referenceMonth} onChange={e=>setReferenceMonth(e.target.value)} disabled={!canEdit||!isAdmin}
+              style={{...SI,fontSize:13,borderColor:referenceMonth?"#7c3aed44":undefined,background:referenceMonth?"#7c3aed08":undefined,color:referenceMonth?"#7c3aed":"#94a3b8",fontWeight:referenceMonth?700:500,cursor:isAdmin?"pointer":"not-allowed"}}/>
           </div>}
 
           {/* Prioridade+Prazo */}
