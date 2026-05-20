@@ -19171,76 +19171,26 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               onBlur={()=>setIsEditingText(false)}/>
           </div>
           <div style={{display:"flex",gap:8,flexShrink:0,alignItems:"flex-start",position:"relative"}}>
-            {/* Botão "..." — menu de ações (Trello-like) */}
-            <div style={{position:"relative"}}>
-              <button onClick={()=>setShowActionsMenu(v=>!v)} title="Mais ações"
-                style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:showActionsMenu?"#f5f3ff":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
-                onMouseEnter={e=>{if(!showActionsMenu)e.currentTarget.style.background="#f8fafc";}}
-                onMouseLeave={e=>{if(!showActionsMenu)e.currentTarget.style.background="#fff";}}><Ico n="moreHor" size={18}/></button>
-              {showActionsMenu&&<>
-                <div onClick={()=>setShowActionsMenu(false)} style={{position:"fixed",inset:0,zIndex:299}}/>
-                <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:6,boxShadow:"0 8px 28px rgba(0,0,0,0.14)",display:"flex",flexDirection:"column",minWidth:200}}>
-                  <button onClick={copyCardLink}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{width:18,display:"flex",justifyContent:"center",color:"#64748b"}}><Ico n="link" size={14}/></span>
-                    <span style={{flex:1}}>Copiar link</span>
-                  </button>
-                  <button onClick={toggleWatch}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{width:18,display:"flex",justifyContent:"center",color:"#64748b"}}>{isWatching?<Ico n="eye" size={14}/>:<Ico n="eyeOff" size={14}/>}</span>
-                    <span style={{flex:1}}>{isWatching?"Parar de observar":"Observar"}</span>
-                    {isWatching&&<span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>ON</span>}
-                  </button>
-                  {canEdit&&<button onClick={duplicateCard}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{width:18,display:"flex",justifyContent:"center",color:"#64748b"}}><Ico n="copy" size={14}/></span>
-                    <span style={{flex:1}}>Duplicar cartão</span>
-                  </button>}
-                  {canDelete&&onTrash&&<button onClick={()=>{setShowActionsMenu(false);onTrash(task.id);}}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#dc2626",textAlign:"left",borderTop:"1px solid #f1f5f9",marginTop:2}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#fef2f2"}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{width:18,display:"flex",justifyContent:"center"}}><Ico n="trash" size={14}/></span>
-                    <span style={{flex:1}}>Mover para lixeira</span>
-                  </button>}
-                </div>
-              </>}
-            </div>
-            {/* Cor de Capa — compact swatch button */}
-            {canEdit&&<div style={{position:"relative"}}>
-              <button onClick={()=>setShowCoverPicker(v=>!v)} title="Cor de capa"
-                style={{width:36,height:36,borderRadius:10,border:`2px solid ${cover||"#e2e8f0"}`,background:cover||"#f8fafc",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
-                {cover
-                  ? <div style={{width:18,height:18,borderRadius:5,background:cover}}/>
-                  : <span style={{fontSize:14}}>🎨</span>
-                }
-              </button>
-              {showCoverPicker&&<div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"8px",boxShadow:"0 8px 28px rgba(0,0,0,0.14)",display:"flex",flexDirection:"column",gap:2,minWidth:180}}>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,padding:"2px 6px 6px"}}>Cor de Capa</div>
-                <button onClick={()=>{setCover(null);setShowCoverPicker(false);}}
-                  style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,border:"none",background:!cover?"#f5f3ff":"transparent",cursor:"pointer",fontSize:11,color:"#94a3b8",textAlign:"left"}}
-                  onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                  onMouseLeave={e=>e.currentTarget.style.background=!cover?"#f5f3ff":"transparent"}>
-                  <div style={{width:16,height:16,borderRadius:4,background:"#e2e8f0",flexShrink:0,border:"1px solid #cbd5e1"}}/>
-                  Sem capa{!cover&&<span style={{marginLeft:"auto",color:"#6366f1",fontSize:11}}>✓</span>}
-                </button>
-                {COVER_COLORS.map(({c,l})=>(
-                  <button key={c} onClick={()=>{setCover(c);setShowCoverPicker(false);}}
-                    style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,border:"none",background:cover===c?"#f5f3ff":"transparent",cursor:"pointer",fontSize:11,color:"#1e293b",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
-                    onMouseLeave={e=>e.currentTarget.style.background=cover===c?"#f5f3ff":"transparent"}>
-                    <div style={{width:16,height:16,borderRadius:4,background:c,flexShrink:0}}/>
-                    {l}{cover===c&&<span style={{marginLeft:"auto",color:"#6366f1",fontSize:11}}>✓</span>}
-                  </button>
-                ))}
-              </div>}
-            </div>}
+            {/* Botões soltos no header: Copiar link, Duplicar cartão, Mover para lixeira */}
+            <button onClick={copyCardLink} title="Copiar link"
+              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+              <Ico n="link" size={16}/>
+            </button>
+            {canEdit&&<button onClick={duplicateCard} title="Duplicar cartão"
+              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+              <Ico n="copy" size={16}/>
+            </button>}
+            {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
+              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #fecaca",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#dc2626",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+              <Ico n="trash" size={16}/>
+            </button>}
+            {/* Cor de Capa removida — botão de paleta sumiu do header */}
             {/* Salvar + Enviar p/ Aprovação + Drive empilhados (Demanda Concluída e Lixeira removidos — usar drag-and-drop e × do card no kanban) */}
             <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"stretch"}}>
               {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>Salvar</button>}
