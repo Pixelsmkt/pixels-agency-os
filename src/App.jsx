@@ -1037,7 +1037,42 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
   if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
   if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
   return null;
+}
+
+/* ─── HELPER: calcDesignerPayments ──────────────
+ * Calcula contagem + total a pagar pro designer André baseado em:
+ *   - assignee/assignees inclui o designerId
+ *   - referenceMonth bate (formato "YYYY-MM"). Passar null = todos os meses.
+ * Categorias e preços (hardcoded por enquanto, pra Guilherme/vídeo virá depois):
+ *   - Foto de obra (título contém "foto de obra", case insensitive): R$ 20
+ *   - Arte única (contentType="arte"):                                R$ 30
+ *   - Arte carrossel (contentType="carrossel"):                       R$ 45
+ *   - Vídeo / não classificado: não entra no cálculo. */
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45 };
+function calcDesignerPayments(tasks, designerId, refMonth){
+  const out = { fotoObra: 0, arte: 0, carrossel: 0, naoClassificado: 0, tasksFotoObra: [], tasksArte: [], tasksCarrossel: [], tasksOutros: [] };
+  (tasks || []).forEach(t => {
+    if(!t) return;
+    const assigned = t.assignee === designerId || (Array.isArray(t.assignees) && t.assignees.includes(designerId));
+    if(!assigned) return;
+    if(refMonth && t.referenceMonth !== refMonth) return;
+    if(t.contentType === "foto"){ out.fotoObra++; out.tasksFotoObra.push(t); }
+    else if(t.contentType === "carrossel"){ out.carrossel++; out.tasksCarrossel.push(t); }
+    else if(t.contentType === "arte"){ out.arte++; out.tasksArte.push(t); }
+    else { out.naoClassificado++; out.tasksOutros.push(t); }
+  });
+  out.total = out.fotoObra * DESIGNER_PRICES.fotoObra
+            + out.arte     * DESIGNER_PRICES.arte
+            + out.carrossel* DESIGNER_PRICES.carrossel;
+  return out;
+}
+function formatRefMonth(refMonth){
+  if(!refMonth) return "Todos os meses";
+  const [y,m] = refMonth.split("-");
+  const names = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  return (names[parseInt(m,10)-1] || m) + "/" + y;
 }
 
 /* ─── HELPER: getProfilePhoto ───────────────── */
@@ -1245,6 +1280,16 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   const [activeTab,setActiveTab]=useState(()=>{
     try{return localStorage.getItem("pixels-dash-tab")||"alerta";}catch{return "alerta";}
   });
+  // ═══ Mês selecionado pro card de Pagamento por Demanda (default: mês corrente) ═══
+  const [payMonth,setPayMonth]=useState(()=>{
+    try{
+      const saved=localStorage.getItem("pixels-pay-month");
+      if(saved)return saved;
+    }catch(e){}
+    const now=new Date();
+    return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+  });
+  useEffect(()=>{try{localStorage.setItem("pixels-pay-month",payMonth);}catch(e){}},[payMonth]);
   useEffect(()=>{try{localStorage.setItem("pixels-dash-tab",activeTab);}catch(e){}},[activeTab]);
   const setTasks=propSetTasks||(()=>{});
   const adminCardPerms=(()=>{try{const s=localStorage.getItem("pixels-perms-"+(CURRENT_USER).id);return s?{...DEFAULT_PERMS,...JSON.parse(s)}:DEFAULT_PERMS;}catch{return DEFAULT_PERMS;}})();
@@ -1504,6 +1549,48 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     {isViewing&&<div style={{background:"#a140ff",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
+
+    {/* ═══ PAGAMENTO POR DEMANDA — DESIGNER ANDRÉ ═══ */}
+    {(function(){
+      const andre=TEAM.find(u=>u.id==="andre");
+      const calc=calcDesignerPayments(allTasks,"andre",payMonth);
+      const fmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+      const Card=({label,count,price,color})=><div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e5e7eb",display:"flex",flexDirection:"column",gap:3}}>
+        <div style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{label}</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+          <span style={{color:"#0f172a",fontWeight:800,fontSize:22}}>{count}</span>
+          <span style={{color:"#94a3b8",fontSize:11}}>× {fmtBRL(price).replace(",00","")}</span>
+        </div>
+        <div style={{color:color,fontWeight:700,fontSize:13}}>{fmtBRL(count*price)}</div>
+      </div>;
+      return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            {andre&&<UserAvatar user={andre} size={36}/>}
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pagamento por demanda · {andre?.name||"André"}</div>
+              <div style={{color:"#64748b",fontSize:11,marginTop:2}}>Demandas designadas a ele no mês de referência</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <input type="month" value={payMonth} onChange={e=>setPayMonth(e.target.value)}
+              style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer"}}/>
+            <div style={{textAlign:"right"}}>
+              <div style={{color:"#64748b",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
+              <div style={{color:"#7c3aed",fontWeight:900,fontSize:22,letterSpacing:-.5}}>{fmtBRL(calc.total)}</div>
+            </div>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
+          <Card label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
+          <Card label="Arte única" count={calc.arte} price={DESIGNER_PRICES.arte} color="#16a34a"/>
+          <Card label="Carrossel" count={calc.carrossel} price={DESIGNER_PRICES.carrossel} color="#16a34a"/>
+        </div>
+        {calc.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:10,marginTop:8,fontStyle:"italic"}}>
+          {calc.naoClassificado} demanda(s) sem tipo de conteúdo definido — não entram no cálculo. Abra os cartões e defina "Arte única", "Carrossel" ou marque "Foto de obra" no título pra incluir.
+        </div>}
+      </div>;
+    })()}
 
     {/* ═══ HEADER FIXO — MINHAS DEMANDAS ═══ */}
     {myTasks.length>0&&(
@@ -10558,12 +10645,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
                   {/* Tipo de Conteúdo + Mês de referência — badges roxos no TOPO do card */}
                   {(t.contentType||t.referenceMonth)&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
-                    {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo) */}
+                    {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
                     {t.contentType&&(function(){
                       const types={
                         arte:{label:"Arte única",icon:"image"},
                         carrossel:{label:"Carrossel",icon:"layers"},
                         video:{label:"Vídeo",icon:"play"},
+                        foto:{label:"Foto de obra",icon:"camera"},
                       };
                       const ct=types[t.contentType];
                       if(!ct)return null;
@@ -10572,6 +10660,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           {ct.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
                           {ct.icon==="layers"&&<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}
                           {ct.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
+                          {ct.icon==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
                         </svg>
                         {ct.label}
                       </span>;
@@ -19998,18 +20087,19 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>;
           })()}
 
-          {/* Tipo de Conteúdo — pílulas selecionáveis (Arte/Carrossel/Vídeo) — tudo em roxo */}
+          {/* Tipo de Conteúdo — pílulas selecionáveis (4 opções) — tudo em roxo */}
           {!isAgendado&&<div>
             <label style={LB}>Tipo de conteúdo</label>
-            <div style={{display:"flex",gap:5}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
               {[
                 {id:"arte",label:"Arte única",icon:"image"},
                 {id:"carrossel",label:"Carrossel",icon:"layers"},
+                {id:"foto",label:"Foto de obra",icon:"camera"},
                 {id:"video",label:"Vídeo",icon:"play"},
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
-                  style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"7px 8px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?700:500,transition:"all .12s"}}>
+                  style={{display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"7px 8px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?700:500,transition:"all .12s"}}>
                   <Ico n={opt.icon} size={12}/>
                   <span>{opt.label}</span>
                 </button>;
