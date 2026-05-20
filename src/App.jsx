@@ -263,7 +263,7 @@ const KANBAN_COLS = [
   { id:"recebida",  label:"Demanda",                color:C.kRecebida,  dark:false },
   { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
   { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
-  { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
+  { id:"avaliacao", label:"Concluído para avaliação", color:C.kAvaliacao, dark:false },
   { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
   { id:"agendado",  label:"Agendado",               color:C.kAgendado,  dark:true  },
   { id:"publicado", label:"Publicado",              color:C.kPublicado, dark:true  },
@@ -10412,7 +10412,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDrop={()=>drag&&moveTask(drag,col.id)}
             onDragLeave={()=>setOver(null)}
             style={{
-              background:isDraggingOver?"#64748b":"#94a3b8",
+              background:isDraggingOver?"#1e293b":"#334155",
               border:`1px solid ${isDraggingOver?col.color+"55":"transparent"}`,
               borderRadius:12,padding:"8px 8px 8px",
               height:"78vh",maxHeight:680,
@@ -10454,7 +10454,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const urgLevel=taskUrgencyLevel(t);
                 const hasCover=t.cover;
                 const urgColor=getUrgencyColor(urgLevel);
-                const imgAttachment=(t.files||[]).find(f=>f.type&&f.type.startsWith("image/"));
+                // Pega a ÚLTIMA imagem anexada (mais recente). slice() copia o array
+                // antes de reverter pra não mutar t.files. findLast seria ideal mas
+                // depende de runtime ES2023 — slice+reverse+find é universal.
+                const imgAttachment=(t.files||[]).slice().reverse().find(f=>f.type&&f.type.startsWith("image/"));
                 const thumbUrl=hasCover?hasCover:imgAttachment?imgAttachment.url:null;
                 const isAlteracao=t.status==="alteracao"||t.isAlteracao;
                 const isAjustar=t.ajustar===true&&t.status==="demanda";
@@ -10495,7 +10498,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:(isAlteracao||isAjustar)?"3px solid #ea580c":"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 6px rgba(0,0,0,0.06)"}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
                   {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
@@ -10528,7 +10531,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           </div>
                           :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
-                        {days!==null&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
+                        {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
                           {days<0?Math.abs(days)+"d atraso":days===0?"hoje":days+"d"}
                         </span>}
                       </div>
@@ -10682,7 +10685,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 const INTERNO_COLS = [
   { id:"interno_demanda",   label:"Demandas",                color:"#6366f1" },
   { id:"interno_execucao",  label:"Em Execução",             color:"#f97316" },
-  { id:"interno_avaliacao", label:"Concluído p/ Avaliação",  color:"#eab308" },
+  { id:"interno_avaliacao", label:"Concluído para avaliação",  color:"#eab308" },
   { id:"interno_aprovado",  label:"Aprovado",                color:"#22c55e" },
   { id:"interno_executado", label:"Executado",               color:"#8b5cf6" },
 ];
@@ -13358,7 +13361,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     if(!isApprover)return;
     const isInterna=task.status==="interno_avaliacao";
     const toStatus=isInterna?"interno_aprovado":"aprovado";
-    const fromLabel=isInterna?"Concluído p/ Avaliação (Interna)":"Avaliação";
+    const fromLabel=isInterna?"Concluído para avaliação (Interna)":"Avaliação";
     const toLabel=isInterna?"Aprovado (Interna)":"Aprovado";
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel,from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
@@ -13425,7 +13428,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     const isInterna=task.status==="interno_avaliacao";
     // FIX: Conteúdo (não-interna) vai pra coluna "ajustes" — mais organizado.
     const toStatus=isInterna?"interno_execucao":"ajustes";
-    const fromLabel=isInterna?"Concluído p/ Avaliação (Interna)":"Concluído p/ Avaliação";
+    const fromLabel=isInterna?"Concluído para avaliação (Interna)":"Concluído para avaliação";
     const toLabel=isInterna?"Em Execução (Ajuste Interno)":"Ajustes";
     const newFiles=[...(task.files||[]),...(drawingFiles||[]),...(audioFiles||[])];
     const newComments=[...(task.comments||[]),...(comments||[])];
@@ -14430,7 +14433,7 @@ const PERM_GROUPS={
     {key:"colDemanda",        label:"Demanda",                    desc:"Coluna de demandas recebidas"},
     {key:"colExecucao",       label:"Em Execução",                desc:"Coluna de trabalho em andamento"},
     {key:"colAjustes",        label:"Ajustes",                    desc:"Coluna de ajustes solicitados pelo cliente"},
-    {key:"colAvaliacao",      label:"Concluído p/ Avaliação",     desc:"Coluna aguardando aprovação"},
+    {key:"colAvaliacao",      label:"Concluído para avaliação",     desc:"Coluna aguardando aprovação"},
     {key:"colAprovado",       label:"Aprovado",                   desc:"Coluna de entregas aprovadas"},
     {key:"colAgendado",       label:"Agendado",                   desc:"Coluna de publicações programadas"},
     {key:"colPublicado",      label:"Publicado",                  desc:"Coluna de conteúdos publicados"},
@@ -17451,7 +17454,7 @@ const FLUXO_COLS = [
   {id:"demanda",   label:"Demanda",                color:"#a140ff"},
   {id:"recebida",  label:"Recebida",               color:"#ff6eb4"},
   {id:"execucao",  label:"Em Execução",            color:"#ffd000"},
-  {id:"avaliacao", label:"Concluído p/ Avaliação", color:"#ff7200"},
+  {id:"avaliacao", label:"Concluído para avaliação", color:"#ff7200"},
   {id:"aprovado",  label:"Aprovado",               color:"#00e5a0"},
   {id:"agendado",  label:"Agendado",               color:"#4db8ff"},
   {id:"publicado", label:"Publicado",              color:"#a78bfa"},
@@ -18236,7 +18239,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     // Conteúdo: tanto "execucao" quanto "ajustes" vão pra "avaliacao"
     const fromStatus=task.status;
     const fromLabel=fromStatus==="ajustes"?"Ajustes":"Em Execução";
-    const newTlEntry={type:"status",fromLabel,toLabel:"Concluído p/ Avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+    const newTlEntry={type:"status",fromLabel,toLabel:"Concluído para avaliação",from:fromStatus,to:"avaliacao",at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
     // Updater functional + merge — preserva alterações concorrentes de outros usuários
     setTasks(prev=>prev.map(t=>{
       if(t.id!==task.id)return t;
@@ -18787,7 +18790,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       <div style={{background:"#fff",borderRadius:18,padding:"28px 32px",maxWidth:380,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.25)",textAlign:"center"}}>
         <div style={{fontSize:36,marginBottom:12}}>📤</div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:8}}>Posso encaminhar o cartão para avaliação?</div>
-        <div style={{color:"#64748b",fontSize:13,marginBottom:24}}>O cartão irá para a coluna <strong>"Concluído p/ Avaliação"</strong>.</div>
+        <div style={{color:"#64748b",fontSize:13,marginBottom:24}}>O cartão irá para a coluna <strong>"Concluído para avaliação"</strong>.</div>
         <div style={{display:"flex",gap:10,justifyContent:"center"}}>
           <button onClick={()=>setConclusionStep(null)}
             style={{background:"#f1f5f9",border:"none",borderRadius:10,padding:"10px 28px",fontWeight:700,fontSize:13,color:"#64748b",cursor:"pointer"}}>
