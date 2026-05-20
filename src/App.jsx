@@ -10034,10 +10034,31 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.deletedAt)return false;
     // Admin/sócio vê tudo; colaborador só vê os seus
     if(!isAdmin&&!isMyTask(t))return false;
-    // Busca por título — case-insensitive, substring match
+    // Busca: case-insensitive substring em título, nome do cliente, e label de unidade Bioter (CSV)
     if(_searchTermNorm){
-      const title=String(t.title||"").toLowerCase();
-      if(!title.includes(_searchTermNorm))return false;
+      const haystack=[];
+      haystack.push(String(t.title||"").toLowerCase());
+      const cl=CLIENTS.find(c=>c.id===t.client);
+      if(cl){
+        haystack.push(String(cl.name||"").toLowerCase());
+        if(cl.abbr)haystack.push(String(cl.abbr).toLowerCase());
+      }
+      // Unidades Bioter (CSV: "castro,chapeco" / "grupo" / "brasil")
+      const unitIds=String(t.bioterUnit||"").split(",").filter(Boolean);
+      unitIds.forEach(uid=>{
+        if(uid==="grupo")haystack.push("grupo bioter");
+        else if(uid==="brasil")haystack.push("bioter brasil");
+        else{
+          const u=BIOTER_UNITS.find(x=>x.id===uid);
+          if(u){
+            haystack.push(String(u.pickerLabel||"").toLowerCase());
+            haystack.push(String(u.label||"").toLowerCase());
+            haystack.push(String(u.abbr||"").toLowerCase());
+          }
+        }
+      });
+      const match=haystack.some(h=>h.includes(_searchTermNorm));
+      if(!match)return false;
     }
     if(filterUser!=="todos"&&t.assignee!==filterUser&&!(Array.isArray(t.assignees)&&t.assignees.includes(filterUser)))return false;
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
