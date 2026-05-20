@@ -10583,13 +10583,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           </div>
                           :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
-                        {/* Siglas das unidades Bioter — múltiplas se for o caso, ou GRUPO se for todas */}
+                        {/* Siglas das unidades Bioter — GRUPO/BR pra agrupamentos, ou siglas individuais */}
                         {cl&&cl.id==="bioter"&&t.bioterUnit&&(function(){
                           const ids=String(t.bioterUnit).split(",").filter(Boolean);
                           if(!ids.length)return null;
                           return ids.map(uid=>{
                             if(uid==="grupo"){
                               return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
+                            }
+                            if(uid==="brasil"){
+                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>BR</span>;
                             }
                             const u=BIOTER_UNITS.find(x=>x.id===uid);
                             if(!u)return null;
@@ -19940,15 +19943,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {!isAgendado&&(function(){
             const sortedClients=CLIENTS.slice().sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
             const selectedUnits=String(bioterUnit||"").split(",").filter(Boolean);
+            const hasGroup=selectedUnits.includes("grupo")||selectedUnits.includes("brasil");
             const toggleUnit=(uid)=>{
               if(!canEdit)return;
               let next;
-              if(uid==="grupo"){
-                // Grupo Bioter é exclusivo: se marcar, limpa as unidades individuais
-                next=selectedUnits.includes("grupo")?[]:["grupo"];
+              if(uid==="grupo"||uid==="brasil"){
+                // Grupo Bioter / Bioter Brasil são exclusivos entre si e com as unidades individuais
+                next=selectedUnits.includes(uid)?[]:[uid];
               }else{
-                // Ao marcar uma unidade individual, "grupo" é removido se estava marcado
-                const semGrupo=selectedUnits.filter(x=>x!=="grupo");
+                // Ao marcar uma unidade individual, remove qualquer agrupamento
+                const semGrupo=selectedUnits.filter(x=>x!=="grupo"&&x!=="brasil");
                 next=semGrupo.includes(uid)
                   ?semGrupo.filter(x=>x!==uid)
                   :[...semGrupo,uid];
@@ -19971,7 +19975,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>marque uma ou mais</span>
                 </label>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
-                  {/* Grupo Bioter — opção especial que cobre todas as unidades */}
+                  {/* Grupo Bioter — todas as unidades incluindo Paraguay */}
                   {(function(){
                     const isSel=selectedUnits.includes("grupo");
                     return <button key="grupo" type="button" onClick={()=>toggleUnit("grupo")} disabled={!canEdit}
@@ -19983,12 +19987,24 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       <span style={{background:isSel?"#166534":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:8,fontWeight:700,letterSpacing:.3}}>TODAS</span>
                     </button>;
                   })()}
+                  {/* Bioter Brasil — todas as unidades exceto Paraguay */}
+                  {(function(){
+                    const isSel=selectedUnits.includes("brasil");
+                    return <button key="brasil" type="button" onClick={()=>toggleUnit("brasil")} disabled={!canEdit}
+                      style={{gridColumn:"span 2",display:"flex",alignItems:"center",gap:7,padding:"7px 10px",background:isSel?"#16653426":"#f8fafc",border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:700,textAlign:"left",transition:"all .12s"}}>
+                      <div style={{width:14,height:14,borderRadius:4,border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,background:isSel?"#166534":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                        {isSel&&<Ico n="check" size={10}/>}
+                      </div>
+                      <span style={{flex:1}}>Bioter Brasil</span>
+                      <span style={{background:isSel?"#166534":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:8,fontWeight:700,letterSpacing:.3}}>BR</span>
+                    </button>;
+                  })()}
                   {/* Unidades individuais */}
                   {BIOTER_UNITS.map(u=>{
                     const isSel=selectedUnits.includes(u.id);
-                    const disabled=!canEdit||selectedUnits.includes("grupo");
+                    const disabled=!canEdit||hasGroup;
                     return <button key={u.id} type="button" onClick={()=>toggleUnit(u.id)} disabled={disabled}
-                      style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",background:isSel?"#16653418":"#fff",border:`1px solid ${isSel?"#166534":"#e2e8f0"}`,borderRadius:8,cursor:disabled?"not-allowed":"pointer",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:isSel?700:500,textAlign:"left",transition:"all .12s",opacity:selectedUnits.includes("grupo")?.5:1}}>
+                      style={{display:"flex",alignItems:"center",gap:7,padding:"6px 9px",background:isSel?"#16653418":"#fff",border:`1px solid ${isSel?"#166534":"#e2e8f0"}`,borderRadius:8,cursor:disabled?"not-allowed":"pointer",fontSize:11,color:isSel?"#166534":"#475569",fontWeight:isSel?700:500,textAlign:"left",transition:"all .12s",opacity:hasGroup?.5:1}}>
                       <div style={{width:14,height:14,borderRadius:4,border:`1.5px solid ${isSel?"#166534":"#cbd5e1"}`,background:isSel?"#166534":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
                         {isSel&&<Ico n="check" size={10}/>}
                       </div>
