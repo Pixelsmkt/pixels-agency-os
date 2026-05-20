@@ -1010,6 +1010,28 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="check")     return <svg {...p}><polyline points="20 6 9 17 4 12"/></svg>;
   if(n==="alert")     return <svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
   if(n==="flame")     return <svg {...p}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
+  if(n==="link")      return <svg {...p}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
+  if(n==="eye")       return <svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+  if(n==="eyeOff")    return <svg {...p}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+  if(n==="copy")      return <svg {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
+  if(n==="file")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
+  if(n==="fileText")  return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+  if(n==="image")     return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+  if(n==="video")     return <svg {...p}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
+  if(n==="mic")       return <svg {...p}><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
+  if(n==="tag")       return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
+  if(n==="send")      return <svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
+  if(n==="bell")      return <svg {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
+  if(n==="sparkles")  return <svg {...p}><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>;
+  if(n==="edit")      return <svg {...p}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+  if(n==="pin")       return <svg {...p}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 002-2V3H6v1a2 2 0 002 2h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>;
+  if(n==="checkCircle")return <svg {...p}><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+  if(n==="xCircle")   return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+  if(n==="dot")       return <svg {...p}><circle cx="12" cy="12" r="5" fill={cl} stroke="none"/></svg>;
+  if(n==="moreHor")   return <svg {...p}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>;
+  if(n==="download")  return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+  if(n==="upload")    return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+  if(n==="rotate")    return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>;
   return null;
 }
 
@@ -17884,7 +17906,13 @@ const SECTOR_LABELS={design:"Design",video:"Edição de Vídeo",texto:"Texto & C
 const SI={width:"100%",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"8px 12px",color:"#1e293b",fontSize:12,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"};
 const LB={color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:5,display:"block"};
 const FILES_TABS=[["lista","☰ Lista"],["ordem","⠿ Ordenar carrossel"]];
-const TIMELINE_ICONS={created:"✨",status:"🔄",edit:"✏",approved:"✅",rejected:"❌"};
+const TIMELINE_ICONS={
+  created:<Ico n="sparkles" size={13}/>,
+  status:<Ico n="rotate" size={13}/>,
+  edit:<Ico n="edit" size={13}/>,
+  approved:<Ico n="checkCircle" size={13}/>,
+  rejected:<Ico n="xCircle" size={13}/>,
+};
 const BRIEFING_CAMPOS=[
   {k:"tom",label:"Tom de voz"},
   {k:"publico",label:"Público-alvo"},
@@ -18871,9 +18899,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             {/* Botão "..." — menu de ações (Trello-like) */}
             <div style={{position:"relative"}}>
               <button onClick={()=>setShowActionsMenu(v=>!v)} title="Mais ações"
-                style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:showActionsMenu?"#f5f3ff":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"#64748b",transition:"all .15s"}}
+                style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:showActionsMenu?"#f5f3ff":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
                 onMouseEnter={e=>{if(!showActionsMenu)e.currentTarget.style.background="#f8fafc";}}
-                onMouseLeave={e=>{if(!showActionsMenu)e.currentTarget.style.background="#fff";}}>⋯</button>
+                onMouseLeave={e=>{if(!showActionsMenu)e.currentTarget.style.background="#fff";}}><Ico n="moreHor" size={18}/></button>
               {showActionsMenu&&<>
                 <div onClick={()=>setShowActionsMenu(false)} style={{position:"fixed",inset:0,zIndex:299}}/>
                 <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,zIndex:300,background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:6,boxShadow:"0 8px 28px rgba(0,0,0,0.14)",display:"flex",flexDirection:"column",minWidth:200}}>
@@ -18881,14 +18909,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
                     onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
                     onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{fontSize:14,width:18,textAlign:"center"}}>🔗</span>
+                    <span style={{width:18,display:"flex",justifyContent:"center",color:"#64748b"}}><Ico n="link" size={14}/></span>
                     <span style={{flex:1}}>Copiar link</span>
                   </button>
                   <button onClick={toggleWatch}
                     style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
                     onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
                     onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{fontSize:14,width:18,textAlign:"center"}}>{isWatching?"👁":"👁‍🗨"}</span>
+                    <span style={{width:18,display:"flex",justifyContent:"center",color:"#64748b"}}>{isWatching?<Ico n="eye" size={14}/>:<Ico n="eyeOff" size={14}/>}</span>
                     <span style={{flex:1}}>{isWatching?"Parar de observar":"Observar"}</span>
                     {isWatching&&<span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>ON</span>}
                   </button>
@@ -18896,7 +18924,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",background:"transparent",cursor:"pointer",fontSize:12,color:"#0f172a",textAlign:"left"}}
                     onMouseEnter={e=>e.currentTarget.style.background="#f8fafc"}
                     onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{fontSize:14,width:18,textAlign:"center"}}>📋</span>
+                    <span style={{width:18,display:"flex",justifyContent:"center",color:"#64748b"}}><Ico n="copy" size={14}/></span>
                     <span style={{flex:1}}>Duplicar cartão</span>
                   </button>}
                 </div>
@@ -18935,10 +18963,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"stretch"}}>
               {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>Salvar</button>}
               {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
-                style={{background:"#fff0f0",color:"#e53e3e",border:"1px solid #fecaca",borderRadius:10,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}
+                style={{background:"#fff0f0",color:"#e53e3e",border:"1px solid #fecaca",borderRadius:10,padding:"8px 14px",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}
                 onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="#fff0f0";}}>
-                🗑 Lixeira
+                <Ico n="trash" size={14}/> Lixeira
               </button>}
               {/* Demanda Concluida — execucao OU ajustes */}
               {canEdit&&(task.status==="execucao"||task.status==="ajustes")&&<button
@@ -18975,13 +19003,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </a>);
               })()}
             </div>
-            <button onClick={handleClose} style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",fontSize:18,flexShrink:0}}>✕</button>
+            <button onClick={handleClose} title="Fechar" style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",flexShrink:0}}><Ico n="x" size={18}/></button>
           </div>
         </div>
 
         {/* TABS */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9"}}>
-          {([["desc","Descrição"],["legenda","📝 Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
+          {([["desc","Descrição"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#94a3b8",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1}}>
               {lbl}
@@ -19002,14 +19030,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             {/* ══ AGENDADO: corpo simplificado ══ */}
             {isAgendado&&caption&&<div style={{background:"linear-gradient(135deg,#f0f9ff,#e0f2fe)",border:"1px solid #4db8ff44",borderRadius:14,padding:"16px 18px"}}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-                <span style={{fontSize:14}}>📝</span>
+                <span style={{color:"#0284c7",display:"flex"}}><Ico n="fileText" size={14}/></span>
                 <span style={{color:"#0284c7",fontWeight:700,fontSize:12,textTransform:"uppercase",letterSpacing:.5}}>Texto da Legenda</span>
                 <span style={{marginLeft:"auto",background:"#4db8ff18",color:"#0284c7",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700}}>Pronto para publicação</span>
               </div>
               <div style={{color:"#0f172a",fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap",wordBreak:"break-word"}}><LinkifiedText text={caption}/></div>
             </div>}
             {isAgendado&&!caption&&<div style={{background:"#fff7ed",border:"1px dashed #f97316",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:16}}>⚠</span>
+              <span style={{color:"#ea580c",display:"flex",flexShrink:0}}><Ico n="alert" size={16}/></span>
               <div>
                 <div style={{color:"#9a3412",fontWeight:700,fontSize:12}}>Legenda não preenchida</div>
                 <div style={{color:"#c2410c",fontSize:11,marginTop:2}}>Acesse a aba 📝 Legenda para inserir o texto final da publicação</div>
@@ -19313,11 +19341,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* ── LEGENDA / CAPTION TAB ── */}
           {activeTab==="legenda"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
             <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:12,padding:"10px 14px",fontSize:11,color:"#0369a1",lineHeight:1.6}}>
-              <strong>📝 Texto da Legenda</strong> — escreva aqui a legenda final da publicação. Esse texto acompanha o cartão até o agendamento e é exibido no Portal do Cliente.
+              <strong>Texto da Legenda</strong> — escreva aqui a legenda final da publicação. Esse texto acompanha o cartão até o agendamento e é exibido no Portal do Cliente.
             </div>
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
               <div style={{padding:"8px 12px",borderBottom:"1px solid #f1f5f9",background:"#f8fafc",display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:13}}>📝</span>
+                <span style={{color:"#7c3aed",display:"flex"}}><Ico n="fileText" size={13}/></span>
                 <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>Legenda da publicação</span>
                 {caption&&<span style={{marginLeft:"auto",background:"#dcfce7",color:"#16a34a",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700}}>✓ Preenchida</span>}
               </div>
@@ -19367,10 +19395,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               onDrop={handleFilesDrop}
               style={{position:"relative",borderRadius:10,border:dragOverFiles?"2px dashed #a140ff":"2px dashed transparent",background:dragOverFiles?"#faf5ff":"transparent",padding:dragOverFiles?12:0,transition:"all .15s",minHeight:dragOverFiles?100:0}}>
               {dragOverFiles&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)"}}>📥 Solte os arquivos aqui</div>
+                <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="download" size={15}/> Solte os arquivos aqui</div>
               </div>}
               {attachments.length===0&&!dragOverFiles&&<div style={{textAlign:"center",padding:"32px 0",color:"#cbd5e1"}}>
-                <div style={{fontSize:32,marginBottom:8}}>📎</div>
+                <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="paperclip" size={32}/></div>
                 <div style={{fontSize:12}}>Nenhum arquivo ainda</div>
                 {(canEdit||canEditRef)&&<div style={{fontSize:10,marginTop:4,color:"#94a3b8"}}>Arraste arquivos aqui ou use o botão "+ adicionar"</div>}
               </div>}
@@ -19396,7 +19424,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:6}}>
                           <div style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0}}>
                             <span style={{fontSize:11}}>
-                              {a.type?.startsWith("image/")?"🖼":a.type?.startsWith("video/")?"🎬":a.type?.startsWith("audio/")?"🎙":"📄"}
+                              {a.type?.startsWith("image/")?<Ico n="image" size={16}/>:a.type?.startsWith("video/")?<Ico n="video" size={16}/>:a.type?.startsWith("audio/")?<Ico n="mic" size={16}/>:<Ico n="file" size={16}/>}
                             </span>
                             <span style={{color:"#1e293b",fontSize:10,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span>
                           </div>
@@ -19420,7 +19448,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 return(<div style={{marginTop:4,marginBottom:18}}>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid #e9d5ff"}}>
                     <div>
-                      <div style={{color:"#a140ff",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>📌 Imagens de referência {totalRef>0?`(${totalRef})`:""}</div>
+                      <div style={{color:"#a140ff",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8,display:"flex",alignItems:"center",gap:5}}><Ico n="pin" size={12}/> Imagens de referência {totalRef>0?`(${totalRef})`:""}</div>
                       <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>exemplos, sugestões e direcionamento pra equipe executar</div>
                     </div>
                     {canEditRef&&<button onClick={()=>fileInputRefRef.current?.click()} style={{background:"#a140ff15",color:"#a140ff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap"}}>+ adicionar</button>}
@@ -19524,7 +19552,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               })()}
 
               {audAttachments.length>0&&<>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>🎙 Áudios ({audAttachments.length})</div>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,display:"flex",alignItems:"center",gap:5}}><Ico n="mic" size={12}/> Áudios ({audAttachments.length})</div>
                 {audAttachments.map(a=>(
                   <div key={a.id} style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",gap:10,alignItems:"center"}}>
                     <span style={{fontSize:18}}>🎙</span>
@@ -19535,7 +19563,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </>}
 
               {otherAttachments.length>0&&<>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>📎 Outros ({otherAttachments.length})</div>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,display:"flex",alignItems:"center",gap:5}}><Ico n="paperclip" size={12}/> Outros ({otherAttachments.length})</div>
                 {otherAttachments.map(a=>(
                   <div key={a.id} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 14px",marginBottom:6,display:"flex",gap:10,alignItems:"center"}}>
                     <span style={{fontSize:20}}>📄</span>
@@ -19552,7 +19580,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
             {filesTab==="ordem"&&<div>
               {imgFin.length===0
-                ? <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"24px 0"}}><div style={{fontSize:28,marginBottom:8}}>🖼</div>Adicione arquivos prontos na aba Lista primeiro</div>
+                ? <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"24px 0"}}><div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="image" size={28}/></div>Adicione arquivos prontos na aba Lista primeiro</div>
                 : <div style={{display:"flex",flexDirection:"column",gap:8}}>
                     <div style={{color:"#94a3b8",fontSize:10,marginBottom:4}}>Arraste para reordenar o carrossel de publicação (só arquivos finais entram)</div>
                     {imgFin.map((a,i)=>(
@@ -19628,13 +19656,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {activeTab==="activity"&&<div>
             <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:16}}>Histórico de Atividade</div>
             {timeline_all.length===0&&<div style={{textAlign:"center",padding:"24px",color:"#cbd5e1",fontSize:12}}>
-              <div style={{fontSize:28,marginBottom:8}}>📋</div>Nenhuma atividade ainda
+              <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={28}/></div>Nenhuma atividade ainda
             </div>}
             <div style={{display:"flex",flexDirection:"column",gap:0}}>
               {timeline_all.map((ev,i)=>{
                 return <div key={i} style={{display:"flex",gap:12}}>
                   <div style={{display:"flex",flexDirection:"column",alignItems:"center",width:28,flexShrink:0}}>
-                    <div style={{width:28,height:28,borderRadius:"50%",background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{TIMELINE_ICONS[ev.type]||"📌"}</div>
+                    <div style={{width:28,height:28,borderRadius:"50%",background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}>{TIMELINE_ICONS[ev.type]||<Ico n="pin" size={13}/>}</div>
                     {i<timeline_all.length-1&&<div style={{width:1,flex:1,background:"#e2e8f0",margin:"3px 0",minHeight:16}}/>}
                   </div>
                   <div style={{flex:1,paddingBottom:16}}>
@@ -19654,12 +19682,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {canEditSLAandPub&&!isAgendado&&(
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:11,textTransform:"uppercase",letterSpacing:.6,display:"flex",alignItems:"center",gap:6}}>
-                📅 Publicação
+                <Ico n="calendar" size={13}/> Publicação
               </div>
 
               {/* Data/Hora de Publicação */}
               <div>
-                <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:5}}>📅 Data/Hora de Publicação</div>
+                <div style={{color:"#64748b",fontSize:10,fontWeight:700,marginBottom:5,display:"flex",alignItems:"center",gap:5}}><Ico n="calendar" size={11}/> Data/Hora de Publicação</div>
                 <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
                   <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
                     style={{...SI,fontSize:12,padding:"7px 10px"}}/>
@@ -19676,15 +19704,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* ══ AGENDADO: sidebar especial ══ */}
           {isAgendado&&(<>
             <div style={{background:"linear-gradient(135deg,#4db8ff18,#4db8ff08)",border:"1px solid #4db8ff44",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:16}}>📅</span>
+              <span style={{color:"#4db8ff",display:"flex"}}><Ico n="calendar" size={18}/></span>
               <div>
                 <div style={{color:"#4db8ff",fontWeight:800,fontSize:12}}>Agendado para publicação</div>
                 <div style={{color:"#64748b",fontSize:10,marginTop:1}}>Defina a data e o responsável</div>
               </div>
             </div>
             <div>
-              <label style={{...LB,color:publishDate?"#0284c7":"#ef4444",fontWeight:700}}>
-                📅 Data de publicação {!publishDate&&<span style={{fontSize:9,color:"#ef4444"}}>* obrigatório</span>}
+              <label style={{...LB,color:publishDate?"#0284c7":"#ef4444",fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
+                <Ico n="calendar" size={12}/> Data de publicação {!publishDate&&<span style={{fontSize:9,color:"#ef4444"}}>* obrigatório</span>}
               </label>
               <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
                 style={{...SI,borderColor:publishDate?"#4db8ff66":"#ef444466",background:publishDate?"#eff8ff":"#fff5f5",fontWeight:publishDate?700:400,color:publishDate?"#0284c7":"#ef4444",fontSize:13}}/>
@@ -19693,21 +19721,21 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>}
             </div>
             <div>
-              <label style={{...LB,fontWeight:700}}>🕐 Horário de publicação</label>
+              <label style={{...LB,fontWeight:700,display:"flex",alignItems:"center",gap:5}}><Ico n="clock" size={12}/> Horário de publicação</label>
               <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
                 style={{...SI,background:"#f0f9ff",borderColor:"#4db8ff44",fontWeight:700,color:"#0284c7",fontSize:14}}/>
               {publishDate&&publishTime&&<div style={{color:"#64748b",fontSize:10,marginTop:3}}>
                 Publicação programada: {new Date(publishDate+"T"+publishTime).toLocaleString("pt-BR",{weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
               </div>}
             </div>
-            {!publishDate&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#9a3412",lineHeight:1.5}}>
-              ⚠ Informe a data de publicação para aparecer no Calendário de Publicações
+            {!publishDate&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#9a3412",lineHeight:1.5,display:"flex",alignItems:"flex-start",gap:6}}>
+              <span style={{flexShrink:0,marginTop:1}}><Ico n="alert" size={13}/></span> Informe a data de publicação para aparecer no Calendário de Publicações
             </div>}
 
             {/* ══ AÇÕES RÁPIDAS — placeholders em desenvolvimento ══ */}
             <div style={{marginTop:4}}>
-              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>
-                ⚡ Ações Rápidas
+              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:5}}>
+                <Ico n="zap" size={12}/> Ações Rápidas
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 <button
@@ -19771,7 +19799,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             const dlId="admin-tag-options-"+task.id;
             return <div>
               <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
-                <span>🏷 Etiqueta interna</span>
+                <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Ico n="tag" size={12}/> Etiqueta interna</span>
                 <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios</span>
               </label>
               <input
@@ -20033,7 +20061,7 @@ function OrientacoesView({clientId}){
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
-      <div style={{fontSize:32,marginBottom:8}}>📋</div>
+      <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="fileText" size={32}/></div>
       <div style={{color:"#0f172a",fontWeight:500,fontSize:13,marginBottom:4}}>Sem orientações cadastradas</div>
       <div style={{color:"#64748b",fontSize:11,lineHeight:1.6,maxWidth:340,margin:"0 auto"}}>Vá em <strong>Clientes → {cl?.name||"esse cliente"} → Informações → Orientações para a equipe</strong> para cadastrar logos, paleta, fontes, tom de voz e mais.</div>
     </div>
