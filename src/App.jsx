@@ -10555,26 +10555,40 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
                   onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 0 0 1px #7c3aed, 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
                   onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
-                  {/* Tipo de Conteúdo — badge no TOPO do card (Arte única/Carrossel/Vídeo) */}
-                  {t.contentType&&(function(){
-                    const types={
-                      arte:{label:"Arte única",icon:"image",color:"#7c3aed"},
-                      carrossel:{label:"Carrossel",icon:"layers",color:"#2563eb"},
-                      video:{label:"Vídeo",icon:"play",color:"#ea580c"},
-                    };
-                    const ct=types[t.contentType];
-                    if(!ct)return null;
-                    return <div style={{padding:"7px 11px 0",display:"flex"}}>
-                      <span style={{display:"inline-flex",alignItems:"center",gap:4,background:ct.color+"18",color:ct.color,borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                  {/* Tipo de Conteúdo + Mês de referência — badges roxos no TOPO do card */}
+                  {(t.contentType||t.referenceMonth)&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
+                    {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo) */}
+                    {t.contentType&&(function(){
+                      const types={
+                        arte:{label:"Arte única",icon:"image"},
+                        carrossel:{label:"Carrossel",icon:"layers"},
+                        video:{label:"Vídeo",icon:"play"},
+                      };
+                      const ct=types[t.contentType];
+                      if(!ct)return null;
+                      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           {ct.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
                           {ct.icon==="layers"&&<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}
                           {ct.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
                         </svg>
                         {ct.label}
-                      </span>
-                    </div>;
-                  })()}
+                      </span>;
+                    })()}
+                    {/* Mês de referência (formato YYYY-MM → "Mai/26") */}
+                    {t.referenceMonth&&(function(){
+                      const parts=String(t.referenceMonth).split("-");
+                      if(parts.length<2)return null;
+                      const monthNames=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+                      const mn=monthNames[parseInt(parts[1],10)-1];
+                      const yy=parts[0].slice(-2);
+                      if(!mn)return null;
+                      return <span title={"Mês de referência: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        {mn}/{yy}
+                      </span>;
+                    })()}
+                  </div>}
                   {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
                   {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
                     {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
@@ -18072,6 +18086,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [client,setClient]=useState(task.client||"");
   const [priority,setPriority]=useState((task.priority&&task.priority!=="media")?task.priority:"");
   const [contentType,setContentType]=useState(task.contentType||"");
+  const [referenceMonth,setReferenceMonth]=useState(task.referenceMonth||"");
   const [deadline,setDeadline]=useState(task.deadline||"");
   const [comments,setComments]=useState(task.comments||[]);
   const [comment,setComment]=useState("");
@@ -18141,6 +18156,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setClient(task.client||"");
       setPriority((task.priority&&task.priority!=="media")?task.priority:"");
       setContentType(task.contentType||"");
+      setReferenceMonth(task.referenceMonth||"");
       setDeadline(task.deadline||"");
       setComments(task.comments||[]);
       setAttachments(task.files||[]);
@@ -18228,6 +18244,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(JSON.stringify(watchers)!==JSON.stringify(task.watchers||[]))return true;
     if(priority!==taskPriorityNorm)return true;
     if(contentType!==(task.contentType||""))return true;
+    if(referenceMonth!==(task.referenceMonth||""))return true;
     if(deadline!==(task.deadline||""))return true;
     if(sector!==(task.sector||""))return true;
     if(client!==(task.client||""))return true;
@@ -18307,6 +18324,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(client!==task.client)changed.push("cliente");
     if(priority!==task.priority)changed.push("prioridade");
     if(contentType!==(task.contentType||""))changed.push("tipo de conteúdo");
+    if(referenceMonth!==(task.referenceMonth||""))changed.push("mês de referência");
     if(deadline!==task.deadline)changed.push("prazo");
     if(publishDate!==task.publishDate)changed.push("data de publicação");
     if(publishTime!==task.publishTime)changed.push("horário de publicação");
@@ -18344,7 +18362,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       // Caso contrário, preserva os valores antigos pra evitar que não-admin sobrescreva.
       const nextAdminTag = isAdmin ? (adminTag||"").trim() : (t.adminTag||"");
       const nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
-      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:contentType||null,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+      // referenceMonth só pode ser alterado por admin (sócio). Se não-admin salvar, preserva valor antigo.
+      const nextReferenceMonth = isAdmin ? (referenceMonth||null) : (t.referenceMonth||null);
+      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:contentType||null,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     }));
     onClose();
   };
@@ -20054,23 +20074,33 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>;
           })()}
 
-          {/* Tipo de Conteúdo — pílulas selecionáveis (Arte/Carrossel/Vídeo) */}
+          {/* Tipo de Conteúdo — pílulas selecionáveis (Arte/Carrossel/Vídeo) — tudo em roxo */}
           {!isAgendado&&<div>
             <label style={LB}>Tipo de conteúdo</label>
             <div style={{display:"flex",gap:5}}>
               {[
-                {id:"arte",label:"Arte única",icon:"image",color:"#7c3aed"},
-                {id:"carrossel",label:"Carrossel",icon:"layers",color:"#2563eb"},
-                {id:"video",label:"Vídeo",icon:"play",color:"#ea580c"},
+                {id:"arte",label:"Arte única",icon:"image"},
+                {id:"carrossel",label:"Carrossel",icon:"layers"},
+                {id:"video",label:"Vídeo",icon:"play"},
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
-                  style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"7px 8px",background:isSel?opt.color+"18":"#fff",border:`1px solid ${isSel?opt.color:"#e2e8f0"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?opt.color:"#475569",fontWeight:isSel?700:500,transition:"all .12s"}}>
+                  style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,padding:"7px 8px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:8,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?700:500,transition:"all .12s"}}>
                   <Ico n={opt.icon} size={12}/>
                   <span>{opt.label}</span>
                 </button>;
               })}
             </div>
+          </div>}
+
+          {/* Mês de referência — só sócios podem editar (contabilização) */}
+          {!isAgendado&&isAdmin&&<div>
+            <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
+              <span>Mês de referência</span>
+              <span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios</span>
+            </label>
+            <input type="month" value={referenceMonth} onChange={e=>setReferenceMonth(e.target.value)} disabled={!canEdit}
+              style={{...SI,fontSize:13,borderColor:referenceMonth?"#7c3aed44":undefined,background:referenceMonth?"#7c3aed08":undefined,color:referenceMonth?"#7c3aed":"#94a3b8",fontWeight:referenceMonth?700:500}}/>
           </div>}
 
           {/* Prioridade+Prazo */}
@@ -22454,6 +22484,7 @@ const rowToTask = (r) => ({
   publishTime:  r.publish_time || "09:00",
   bioterUnit:   r.bioter_unit  || "",
   contentType:  r.content_type || "",
+  referenceMonth: r.reference_month || "",
   score:        r.score        ?? null,
   ajustar:      !!r.ajustar,
   isAlteracao:  !!r.is_alteracao,
@@ -22491,6 +22522,7 @@ const taskToRow = (t) => ({
   publish_time:   t.publishTime  || "09:00",
   bioter_unit:    t.bioterUnit   || "",
   content_type:   t.contentType  || null,
+  reference_month: t.referenceMonth || null,
   score:          t.score        ?? null,
   ajustar:        !!t.ajustar,
   is_alteracao:   !!t.isAlteracao,
