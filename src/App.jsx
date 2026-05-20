@@ -18092,7 +18092,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [conclusionStep,setConclusionStep]=useState(null);
   const [showAssigneesPicker,setShowAssigneesPicker]=useState(false);
   const [publishDate,setPublishDate]=useState(task.publishDate||"");
-  const [publishTime,setPublishTime]=useState(task.publishTime||"09:00");
+  const [publishTime,setPublishTime]=useState(task.publishTime||"11:00");
   const [caption,setCaption]=useState(task.caption||"");
   // ═══ SLA (prazo de entrega / ampulheta de cobrança) ═══
   const [slaHours,setSlaHours]=useState(task.slaHours||null); // null | 12 | 24 | 48 | 72 | 96 | 120 | custom
@@ -18126,7 +18126,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setTags(Array.isArray(task.tags)?task.tags:[]);
       setChecklist(task.checklist||[]);
       setPublishDate(task.publishDate||"");
-      setPublishTime(task.publishTime||"09:00");
+      setPublishTime(task.publishTime||"11:00");
       setSlaHours(task.slaHours||null);
       setSlaStartAt(task.slaStartAt||null);
       setSlaPausedAt(task.slaPausedAt||null);
@@ -18208,7 +18208,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(client!==(task.client||""))return true;
     if(JSON.stringify(checklist)!==JSON.stringify(task.checklist||[]))return true;
     if(publishDate!==(task.publishDate||""))return true;
-    if(publishTime!==(task.publishTime||"09:00"))return true;
+    if(publishTime!==(task.publishTime||"11:00"))return true;
     if(caption!==(task.caption||""))return true;
     if(cover!==(task.cover||null))return true;
     if((adminTag||"")!==(task.adminTag||""))return true;
@@ -18250,6 +18250,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     else{onClose();}
   },[hasChanges,onClose,uploadingCount]);
 
+  // ── Tecla ESC fecha o modal (lightbox tem prioridade se estiver aberto) ──
+  useEffect(()=>{
+    const onEsc=(e)=>{
+      if(e.key!=="Escape")return;
+      if(lightbox){setLightbox(null);return;}
+      handleClose();
+    };
+    window.addEventListener("keydown",onEsc);
+    return()=>window.removeEventListener("keydown",onEsc);
+  },[handleClose,lightbox]);
+
   const save=()=>{
     // ── Bloqueia save com uploads em andamento ──
     if(uploadingCount>0){
@@ -18279,7 +18290,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     // ── Validação: deadline < publishDate+Time (se ambos preenchidos) ──
     if(deadline&&publishDate){
       const dd=new Date(deadline+"T23:59:59"); // deadline considera o dia todo
-      const pd=new Date(publishDate+"T"+(publishTime||"09:00"));
+      const pd=new Date(publishDate+"T"+(publishTime||"11:00"));
       if(dd>=pd){
         pixelsToast.warning("O prazo de entrega precisa ser ANTES da data/hora de publicação.",6000);
         return;
@@ -18672,7 +18683,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       timeline:[{type:"created",label:`Demanda duplicada de "${task.title}" por ${user.name}`,at:now.toISOString(),atFmt:nowFmtStr,user:user.name}],
       // Datas resetadas
       startDate:now.toISOString().split("T")[0],
-      deadline:"",publishDate:"",publishTime:"09:00",
+      deadline:"",publishDate:"",publishTime:"11:00",
       colEnteredAt:now.toISOString(),
       createdAt:nowFmtStr,
       createdBy:user.name,
@@ -18892,11 +18903,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
 
-      {/* ── COVER: última imagem anexada (estilo Trello) ── */}
+      {/* ── COVER: última imagem anexada (estilo Trello) — clicável pra expandir/baixar ── */}
       {(()=>{
         const last=[...attachments].reverse().find(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url);
         if(!last)return null;
-        return <div style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",maxHeight:280,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+        return <div onClick={()=>setLightbox({url:last.url,name:last.name||"capa"})} title="Clique pra expandir e baixar"
+          style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",maxHeight:280,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"zoom-in"}}>
           <img src={last.url} alt={last.name||""} loading="lazy" style={{maxWidth:"100%",maxHeight:280,objectFit:"contain",display:"block"}}/>
         </div>;
       })()}
