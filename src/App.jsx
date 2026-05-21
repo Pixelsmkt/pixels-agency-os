@@ -276,7 +276,7 @@ const TEAM = [
   { id:"vinicius",  name:"Vinicius",  role:"Gestor de projetos",    av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
   { id:"gustavo",   name:"Gustavo",   role:"Gestor",                av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
   { id:"ellen",     name:"Hellen",     role:"Estrategista",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
-  { id:"erick",     name:"Erick",     role:"Gestor Meta & Google", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
+  { id:"erick",     name:"Erick",     role:"Gestor de mídia", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
   { id:"guilherme", name:"Guilherme", role:"Editor de vídeo",       av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
 ];
@@ -13623,61 +13623,86 @@ function PublicacaoEditModal({task, onClose, onReject}){
 
   const currentSrc=allImgs[activeIdx]||null;
 
-  return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px 12px",overflowY:"auto"}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,width:"100%",maxWidth:960,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+  return <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.78)",backdropFilter:"blur(4px)",zIndex:300,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px 12px",overflowY:"auto"}} onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,width:"100%",maxWidth:1100,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 20px 60px rgba(0,0,0,0.4)",fontFamily:"Inter, system-ui, -apple-system, sans-serif"}}>
 
-      {/* Header */}
-      <div style={{background:"#fff7ed",borderBottom:"1px solid #fed7aa",padding:"12px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div>
-          <div style={{color:"#9a3412",fontWeight:800,fontSize:14}}>✏ Anotar — {task.title}</div>
-          <div style={{color:"#c2410c",fontSize:11,marginTop:1}}>Navegue entre os materiais e risque o que precisa ser alterado em cada um</div>
+      {/* Header — neutro, padrão atual */}
+      <div style={{background:C.card,borderBottom:`1px solid ${C.b1}`,padding:"14px 22px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{background:C.or+"15",borderRadius:8,padding:"6px 8px",display:"flex",alignItems:"center"}}>
+            <Ico n="edit" size={14} color={C.or}/>
+          </div>
+          <div>
+            <div style={{color:C.tx,fontWeight:700,fontSize:14,letterSpacing:-.2}}>Anotar ajustes — {task.title}</div>
+            <div style={{color:C.td,fontSize:11,marginTop:1}}>Navegue entre os materiais e risque o que precisa ser alterado em cada um</div>
+          </div>
         </div>
-        <button onClick={onClose} style={{background:"none",border:"none",color:C.ts,cursor:"pointer",fontSize:20}}>✕</button>
+        <button onClick={onClose} style={{background:C.s1,border:"none",borderRadius:8,width:32,height:32,color:C.ts,cursor:"pointer",fontSize:14,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.background=C.b1;e.currentTarget.style.color=C.tx;}}
+          onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.ts;}}>
+          <Ico n="x" size={14}/>
+        </button>
       </div>
 
       <div style={{display:"flex",minHeight:0}}>
         {/* Left — thumbnails strip (vertical) */}
-        {allImgs.length>1&&<div style={{width:72,background:C.s1,borderRight:`1px solid ${C.b1}`,padding:"10px 6px",display:"flex",flexDirection:"column",gap:6,overflowY:"auto"}}>
+        {allImgs.length>1&&<div style={{width:74,background:C.s1,borderRight:`1px solid ${C.b1}`,padding:"12px 8px",display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
           {allImgs.map((src,i)=>{
             const hasDrawing=i===activeIdx?false:!!drawings[i];
             return <div key={i} onClick={()=>switchTo(i)}
-              style={{position:"relative",cursor:"pointer",borderRadius:8,overflow:"hidden",border:i===activeIdx?`2px solid ${C.a}`:"2px solid transparent",opacity:i===activeIdx?1:.7,transition:"all .15s"}}>
+              style={{position:"relative",cursor:"pointer",borderRadius:10,overflow:"hidden",border:i===activeIdx?`2px solid ${C.a}`:"2px solid transparent",opacity:i===activeIdx?1:.65,transition:"all .15s"}}>
               <img src={src} alt={`${i+1}`} style={{width:"100%",height:54,objectFit:"cover",display:"block"}}/>
-              {/* Badge: annotated */}
-              {hasDrawing&&<div style={{position:"absolute",top:2,right:2,width:14,height:14,borderRadius:"50%",background:C.or,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,color:"#fff",fontWeight:800}}>✎</div>}
+              {hasDrawing&&<div style={{position:"absolute",top:3,right:3,width:14,height:14,borderRadius:"50%",background:C.or,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>
+                <Ico n="edit" size={7} color="#fff"/>
+              </div>}
               <div style={{position:"absolute",bottom:2,left:0,right:0,textAlign:"center",color:"#fff",fontSize:9,fontWeight:700,textShadow:"0 1px 2px rgba(0,0,0,0.8)"}}>{i+1}</div>
             </div>;
           })}
         </div>}
 
         {/* Center — canvas */}
-        <div style={{flex:1,minWidth:0,padding:14,display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{flex:1,minWidth:0,padding:16,display:"flex",flexDirection:"column",gap:10}}>
 
-          {/* Toolbar */}
-          <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
-            <span style={{color:C.td,fontSize:9,fontWeight:700,textTransform:"uppercase"}}>Cor</span>
-            {PEN_COLORS.map(c=><button key={c} onClick={()=>{setPenColor(c);setIsEraser(false);}}
-              style={{width:20,height:20,borderRadius:"50%",background:c,border:penColor===c&&!isEraser?"3px solid "+C.a:"2px solid #e2e8f0",cursor:"pointer",padding:0}}/>)}
-            <span style={{color:C.td,fontSize:9,fontWeight:700,marginLeft:6,textTransform:"uppercase"}}>Tamanho</span>
-            {[2,4,8,14].map(s=><button key={s} onClick={()=>setPenSize(s)}
-              style={{width:26,height:20,background:penSize===s?C.a:C.b1,color:penSize===s?"#fff":C.ts,border:"none",borderRadius:5,cursor:"pointer",fontSize:10,fontWeight:700}}>{s}</button>)}
+          {/* Toolbar — moderno, em cápsulas separadas */}
+          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+            {/* Cores em uma cápsula */}
+            <div style={{display:"flex",alignItems:"center",gap:6,background:C.s1,borderRadius:99,padding:"5px 10px"}}>
+              <span style={{color:C.td,fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Cor</span>
+              {PEN_COLORS.map(c=><button key={c} onClick={()=>{setPenColor(c);setIsEraser(false);}}
+                style={{width:18,height:18,borderRadius:"50%",background:c,border:penColor===c&&!isEraser?"2px solid "+C.tx:"2px solid transparent",boxShadow:penColor===c&&!isEraser?"0 0 0 1.5px #fff inset":"none",cursor:"pointer",padding:0,transition:"all .12s"}}/>)}
+            </div>
+            {/* Tamanho em outra cápsula */}
+            <div style={{display:"flex",alignItems:"center",gap:5,background:C.s1,borderRadius:99,padding:"5px 10px"}}>
+              <span style={{color:C.td,fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Tamanho</span>
+              {[2,4,8,14].map(s=><button key={s} onClick={()=>setPenSize(s)}
+                style={{minWidth:24,height:22,background:penSize===s?C.a:"transparent",color:penSize===s?"#fff":C.ts,border:"none",borderRadius:6,cursor:"pointer",fontSize:10.5,fontWeight:700,padding:"0 6px",transition:"all .12s"}}>{s}</button>)}
+            </div>
+            {/* Ferramentas */}
             <button onClick={()=>setIsEraser(v=>!v)}
-              style={{background:isEraser?C.rd+"22":C.b1,color:isEraser?C.rd:C.ts,border:"none",borderRadius:5,padding:"2px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>⌫ Borracha</button>
+              style={{background:isEraser?C.rd+"15":C.s1,color:isEraser?C.rd:C.ts,border:isEraser?`1px solid ${C.rd}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <Ico n="trash" size={11}/>
+              <span>Borracha</span>
+            </button>
             <button onClick={clearCurrent}
-              style={{background:C.b1,color:C.ts,border:"none",borderRadius:5,padding:"2px 9px",cursor:"pointer",fontSize:10,fontWeight:700}}>🗑 Limpar</button>
-            {allImgs.length>1&&<div style={{marginLeft:"auto",display:"flex",gap:4,alignItems:"center"}}>
+              style={{background:C.s1,color:C.ts,border:"none",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+              onMouseEnter={e=>e.currentTarget.style.background=C.b1}
+              onMouseLeave={e=>e.currentTarget.style.background=C.s1}>
+              <Ico n="refresh" size={11}/>
+              <span>Limpar</span>
+            </button>
+            {allImgs.length>1&&<div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}>
               <button onClick={()=>switchTo(Math.max(0,activeIdx-1))} disabled={activeIdx===0}
-                style={{background:C.b1,border:"none",borderRadius:99,width:28,height:28,cursor:activeIdx===0?"not-allowed":"pointer",color:C.tx,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",opacity:activeIdx===0?.3:1}}>←</button>
-              <span style={{color:C.td,fontSize:11,fontWeight:600}}>{activeIdx+1}/{allImgs.length}</span>
+                style={{background:C.s1,border:"none",borderRadius:99,width:28,height:28,cursor:activeIdx===0?"not-allowed":"pointer",color:C.tx,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",opacity:activeIdx===0?.3:1,transition:"all .15s"}}>←</button>
+              <span style={{color:C.td,fontSize:11,fontWeight:600,letterSpacing:.2,minWidth:34,textAlign:"center"}}>{activeIdx+1}/{allImgs.length}</span>
               <button onClick={()=>switchTo(Math.min(allImgs.length-1,activeIdx+1))} disabled={activeIdx>=allImgs.length-1}
-                style={{background:C.b1,border:"none",borderRadius:99,width:28,height:28,cursor:activeIdx>=allImgs.length-1?"not-allowed":"pointer",color:C.tx,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",opacity:activeIdx>=allImgs.length-1?.3:1}}>→</button>
+                style={{background:C.s1,border:"none",borderRadius:99,width:28,height:28,cursor:activeIdx>=allImgs.length-1?"not-allowed":"pointer",color:C.tx,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",opacity:activeIdx>=allImgs.length-1?.3:1,transition:"all .15s"}}>→</button>
             </div>}
           </div>
 
           {/* Canvas over image */}
-          <div style={{position:"relative",userSelect:"none",borderRadius:10,overflow:"hidden",background:"#f1f5f9",lineHeight:0,flex:1}}>
+          <div style={{position:"relative",userSelect:"none",borderRadius:12,overflow:"hidden",background:"#f1f5f9",lineHeight:0,flex:1}}>
             {currentSrc
-              ?<img src={currentSrc} alt="material" style={{width:"100%",height:"auto",maxHeight:"52vh",objectFit:"contain",display:"block",pointerEvents:"none"}}/>
+              ?<img src={currentSrc} alt="material" style={{width:"100%",height:"auto",maxHeight:"58vh",objectFit:"contain",display:"block",pointerEvents:"none"}}/>
               :<div style={{minHeight:200,display:"flex",alignItems:"center",justifyContent:"center",color:C.td,fontSize:13}}>Sem imagem</div>
             }
             <canvas ref={canvasRef} width={800} height={600}
@@ -13688,47 +13713,65 @@ function PublicacaoEditModal({task, onClose, onReject}){
         </div>
 
         {/* Right — feedback panel */}
-        <div style={{width:250,flexShrink:0,background:C.s1,borderLeft:`1px solid ${C.b1}`,padding:14,display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{width:280,flexShrink:0,background:C.s1,borderLeft:`1px solid ${C.b1}`,padding:18,display:"flex",flexDirection:"column",gap:14}}>
 
           <div>
-            <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>📝 Instruções de Alteração</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,color:C.ts,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>
+              <Ico n="edit" size={11}/>
+              <span>Instruções de alteração</span>
+            </div>
             <textarea value={feedback} onChange={e=>setFeedback(e.target.value)}
               placeholder="Descreva o que precisa ser alterado em cada imagem..."
-              rows={5} style={{width:"100%",background:"#fff",border:`1px solid ${C.b1}`,borderRadius:8,padding:"7px 10px",color:C.tx,fontSize:12,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+              rows={6} style={{width:"100%",background:"#fff",border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 12px",color:C.tx,fontSize:12,lineHeight:1.5,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"}}
+              onFocus={e=>e.target.style.borderColor=C.a}
+              onBlur={e=>e.target.style.borderColor=C.b1}/>
           </div>
 
           <button onClick={transcribeWithAI} disabled={aiLoading||!feedback.trim()}
-            style={{width:"100%",background:!feedback.trim()||aiLoading?C.b1:`linear-gradient(135deg,${C.a},${C.aD})`,color:!feedback.trim()||aiLoading?C.td:"#fff",border:"none",borderRadius:8,padding:"7px 0",fontWeight:700,fontSize:11,cursor:!feedback.trim()||aiLoading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
-            {aiLoading?<>⟳ Processando...</>:<>⚡ Pixels IA — Refinar</>}
+            style={{width:"100%",background:!feedback.trim()||aiLoading?C.b1:`linear-gradient(135deg,${C.a},${C.aD})`,color:!feedback.trim()||aiLoading?C.td:"#fff",border:"none",borderRadius:10,padding:"10px 0",fontWeight:700,fontSize:12,letterSpacing:.2,cursor:!feedback.trim()||aiLoading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:!feedback.trim()||aiLoading?"none":"0 2px 8px "+C.a+"33"}}>
+            <Ico n="zap" size={12}/>
+            <span>{aiLoading?"Processando...":"Pixels IA — Refinar"}</span>
           </button>
-          {aiTranscript&&<div style={{background:C.a+"12",borderRadius:7,padding:"7px 10px",border:`1px solid ${C.a}33`,fontSize:11,color:C.tx,lineHeight:1.5}}>{aiTranscript}</div>}
+          {aiTranscript&&<div style={{background:C.a+"10",borderRadius:9,padding:"9px 12px",border:`1px solid ${C.a}33`,fontSize:11.5,color:C.tx,lineHeight:1.55}}>{aiTranscript}</div>}
 
           <div>
-            <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",marginBottom:5}}>🎙 Áudio</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,color:C.ts,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>
+              <Ico n="mic" size={11}/>
+              <span>Áudio</span>
+            </div>
             {!isRecording&&!audioURL&&<button onClick={startRec}
-              style={{width:"100%",background:"#fff5f5",color:C.rd,border:"none",borderRadius:8,padding:"7px 0",fontWeight:700,fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}>
-              <span style={{width:7,height:7,borderRadius:"50%",background:C.rd,display:"inline-block"}}/>Gravar
+              style={{width:"100%",background:"#fff",color:C.rd,border:`1px solid ${C.rd}55`,borderRadius:10,padding:"9px 0",fontWeight:600,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background=C.rd+"08";e.currentTarget.style.borderColor=C.rd;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=C.rd+"55";}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:C.rd,display:"inline-block"}}/>
+              <span>Gravar áudio</span>
             </button>}
-            {isRecording&&<div style={{display:"flex",gap:5}}>
-              <div style={{flex:1,background:"#fff5f5",borderRadius:8,padding:"6px 10px",display:"flex",alignItems:"center",gap:5}}>
-                <span style={{width:7,height:7,borderRadius:"50%",background:C.rd,display:"inline-block"}}/>
-                <span style={{color:C.rd,fontWeight:700,fontSize:11}}>{fmtSec(recSeconds)}</span>
+            {isRecording&&<div style={{display:"flex",gap:6}}>
+              <div style={{flex:1,background:C.rd+"10",borderRadius:10,padding:"8px 12px",display:"flex",alignItems:"center",gap:6}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:C.rd,display:"inline-block",animation:"pulse 1.2s ease-in-out infinite"}}/>
+                <span style={{color:C.rd,fontWeight:700,fontSize:12,fontVariantNumeric:"tabular-nums"}}>{fmtSec(recSeconds)}</span>
               </div>
-              <button onClick={stopRec} style={{background:C.rd,color:"#fff",border:"none",borderRadius:8,padding:"6px 10px",fontWeight:700,fontSize:11,cursor:"pointer"}}>⏹</button>
+              <button onClick={stopRec} style={{background:C.rd,color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:11,cursor:"pointer",display:"inline-flex",alignItems:"center"}}>
+                <span style={{width:10,height:10,background:"#fff",borderRadius:2,display:"inline-block"}}/>
+              </button>
             </div>}
             {audioURL&&!isRecording&&<>
-              <audio src={audioURL} controls style={{width:"100%",height:30,marginBottom:4}}/>
-              <button onClick={()=>setAudioURL(null)} style={{background:"none",border:"none",color:C.rd,fontSize:10,cursor:"pointer",padding:0}}>× Descartar</button>
+              <audio src={audioURL} controls style={{width:"100%",height:34,marginBottom:6}}/>
+              <button onClick={()=>setAudioURL(null)} style={{background:"none",border:"none",color:C.td,fontSize:11,cursor:"pointer",padding:0,textDecoration:"underline",textUnderlineOffset:2}}>Descartar áudio</button>
             </>}
           </div>
 
-          <div style={{marginTop:"auto",display:"flex",flexDirection:"column",gap:7}}>
+          <div style={{marginTop:"auto",display:"flex",flexDirection:"column",gap:8,paddingTop:10,borderTop:`1px solid ${C.b1}`}}>
             <button onClick={handleReject} disabled={isSubmitting}
-              style={{width:"100%",background:isSubmitting?C.ts:C.or,color:"#fff",border:"none",borderRadius:11,padding:"11px 0",fontWeight:800,fontSize:13,cursor:isSubmitting?"not-allowed":"pointer",boxShadow:isSubmitting?"none":"0 4px 12px rgba(234,88,12,0.35)",transition:"all .2s"}}>
-              {isSubmitting?"⏳ Enviando anotações...":"Solicitar Ajuste"}
+              style={{width:"100%",background:isSubmitting?C.td:C.or,color:"#fff",border:"none",borderRadius:10,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:isSubmitting?"not-allowed":"pointer",boxShadow:isSubmitting?"none":"0 2px 8px "+C.or+"40",transition:"all .15s"}}
+              onMouseEnter={e=>{if(!isSubmitting){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.or+"55";}}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=isSubmitting?"none":"0 2px 8px "+C.or+"40";}}>
+              {isSubmitting?"Enviando anotações...":"Solicitar ajuste"}
             </button>
             <button onClick={onClose}
-              style={{width:"100%",background:C.b1,color:C.ts,border:"none",borderRadius:11,padding:"9px 0",fontWeight:600,fontSize:12,cursor:"pointer"}}>
+              style={{width:"100%",background:"transparent",color:C.ts,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 0",fontWeight:600,fontSize:12.5,cursor:"pointer",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background=C.b1;e.currentTarget.style.color=C.tx;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=C.ts;}}>
               Cancelar
             </button>
           </div>
