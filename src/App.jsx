@@ -1718,7 +1718,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
             {isEditor
               ?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
                 <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
-                <CardCat label="Corte" count={calc.corte} price={DESIGNER_PRICES.corte} color="#16a34a"/>
+                <CardCat label="Corte de vídeo" count={calc.corte} price={DESIGNER_PRICES.corte} color="#16a34a"/>
               </div>
               :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
                 <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
@@ -2518,6 +2518,9 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
 
     <RenderDash user={effectiveUser} isViewing={isViewingOther} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs} isMob={isMob}/>
   </div>;
+}
+
+</div>;
 }
 
 // ======= 02_clientes.jsx =======
@@ -10398,15 +10401,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>}
           </div>
-          {/* view mode group — só Cartão e Calendário (Lista removida) */}
-          <div style={{display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,gap:2,fontFamily:"'Inter',system-ui,sans-serif"}}>
-            {[["cartao","kanban","Cartão"],["calendar","calendar","Calendário"]].map(([m,ico,l])=>(
-              <button key={m} onClick={()=>setViewMode(m)}
-                style={{background:viewMode===m?"#fff":"transparent",color:viewMode===m?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"6px 13px",fontSize:11,fontWeight:viewMode===m?700:500,cursor:"pointer",transition:"all .15s",display:"flex",alignItems:"center",gap:5,boxShadow:viewMode===m?"0 1px 3px rgba(15,23,42,0.08)":"none",fontFamily:"inherit"}}>
-                <Ico n={ico} size={13}/>{l}
-              </button>
-            ))}
-          </div>
           {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")}
             style={{background:viewMode==="trash"?"#fee2e2":"#f1f5f9",color:viewMode==="trash"?"#dc2626":"#64748b",border:"none",borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:viewMode==="trash"?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}>
             <Ico n="trash" size={13}/> Lixeira
@@ -10938,75 +10932,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
       {/* ── CLIENTES BOARD ── */}
       {viewMode==="clientes"&&<ClientesBoard tasks={tasks} setTasks={setTasks} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} canDrag={canDrag} canCreate={canCreate}/>}
-      {viewMode==="calendar"&&<div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
-        {/* Cabeçalho do calendário interno (mesmo padrão visual do Calendário de publicações) */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-          <div>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?16:20,letterSpacing:-.4}}>Calendário interno</div>
-            <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>Demandas com prazo em {MONTHS[calMonth.getMonth()].toLowerCase()}</div>
-          </div>
-          <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
-        </div>
-
-        {/* Filtro cliente + legenda urgência inline */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            <button onClick={()=>setCalFilterClient("todos")}
-              style={{background:calFilterClient==="todos"?"#0f172a":"#fff",color:calFilterClient==="todos"?"#fff":"#0f172a",border:`1px solid ${calFilterClient==="todos"?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:calFilterClient==="todos"?700:500,cursor:"pointer",fontFamily:"inherit"}}>
-              Todos os clientes
-            </button>
-            {CLIENTS.map(cl=>(
-              <button key={cl.id} onClick={()=>setCalFilterClient(cl.id)}
-                style={{display:"inline-flex",alignItems:"center",gap:6,background:calFilterClient===cl.id?"#0f172a":"#fff",color:calFilterClient===cl.id?"#fff":"#0f172a",border:`1px solid ${calFilterClient===cl.id?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:calFilterClient===cl.id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
-                <ClientLogo clientId={cl.id} size="xs"/>
-                <span>{cl.abbr}</span>
-              </button>
-            ))}
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-            <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Urgência</span>
-            <CalendarStatusDot color="#dc2626" label="Urgente"/>
-            <CalendarStatusDot color="#ea580c" label="Atrasada"/>
-            <CalendarStatusDot color="#eab308" label="Atenção"/>
-            <CalendarStatusDot color="#16a34a" label="No prazo"/>
-          </div>
-        </div>
-
-        {/* Grade idêntica ao Calendário de publicações */}
-        <CalendarGrid
-          WEEKDAYS={WEEKDAYS}
-          days={calDays()}
-          renderDay={(day,i)=>{
-            const dayTasks=day?tasksByDay(day):[];
-            const isToday=day&&day.toDateString()===new Date().toDateString();
-            const maxShow=isMob?2:3;
-            return <>
-              {day&&<>
-                <CalendarDayNumber day={day} isToday={isToday}/>
-                <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:6}}>
-                  {dayTasks.slice(0,maxShow).map(t=>{
-                    const u=TEAM.find(x=>x.id===t.assignee);
-                    const cl=CLIENTS.find(c=>c.id===t.client);
-                    const urgColor=getUrgencyColor(taskUrgencyLevel(t));
-                    return <div key={t.id} onClick={()=>setOpenCard(t)}
-                      style={{background:"#fff",border:"1px solid #e8edf2",borderLeft:`3px solid ${urgColor}`,borderRadius:6,padding:"4px 7px",cursor:"pointer",transition:"all .12s"}}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.borderLeftColor=urgColor;}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#e8edf2";e.currentTarget.style.borderLeftColor=urgColor;}}>
-                      <div style={{color:"#0f172a",fontSize:isMob?9:10.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>{t.title}</div>
-                      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
-                        {cl&&<span style={{color:"#94a3b8",fontSize:9,fontWeight:500,whiteSpace:"nowrap"}}>{cl.abbr}</span>}
-                        {u&&<span style={{marginLeft:"auto",background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"0 5px",fontSize:8,fontWeight:700,whiteSpace:"nowrap"}}>{u.av}</span>}
-                      </div>
-                    </div>;
-                  })}
-                  {dayTasks.length>maxShow&&<div style={{color:"#94a3b8",fontSize:9.5,textAlign:"center",fontWeight:600,marginTop:1}}>+{dayTasks.length-maxShow} mais</div>}
-                </div>
-              </>}
-            </>;
-          }}
-        />
-      </div>}
-
       {/* ── TRASH ── */}
       {viewMode==="trash"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{background:C.rd+"12",border:`1px solid ${C.rd}33`,borderRadius:12,padding:"12px 16px",display:"flex",gap:10,alignItems:"center"}}>
@@ -11040,12 +10965,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     </div>
   </>;
 }
-
-/* ─── CALENDÁRIO DE PUBLICAÇÕES ───────────────
-   Visível apenas para: Vinicius, Gustavo, Hellen
-   Mostra cards com status "agendado" pelo publishDate
-   Filtro: todos os clientes + unidades Bioter
-──────────────────────────────────────────────── */
 
 // ======= 04_demandas_internas.jsx =======
 
@@ -20247,7 +20166,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 {id:"carrossel",label:"Carrossel",icon:"layers"},
                 {id:"foto",label:"Foto de obra",icon:"camera"},
                 {id:"video",label:"Vídeo",icon:"play"},
-                {id:"corte",label:"Corte",icon:"scan"},
+                {id:"corte",label:"Corte de vídeo",icon:"scan"},
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
@@ -20518,6 +20437,9 @@ function OrientacoesView({clientId}){
           })}
         </div>
       </div>}
+    </div>
+  );
+}
     </div>
   );
 }
@@ -20911,7 +20833,7 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
   const isEditor=user.dash==="editor";
   const entregas=isEditor
     ?[...(calc.tasksVideo||[]).map(t=>({...t,_cat:"Vídeo",_price:DESIGNER_PRICES.video})),
-      ...(calc.tasksCorte||[]).map(t=>({...t,_cat:"Corte",_price:DESIGNER_PRICES.corte}))]
+      ...(calc.tasksCorte||[]).map(t=>({...t,_cat:"Corte de vídeo",_price:DESIGNER_PRICES.corte}))]
     :[...(calc.tasksFotoObra||[]).map(t=>({...t,_cat:"Foto de obra",_price:DESIGNER_PRICES.fotoObra})),
       ...(calc.tasksArte||[]).map(t=>({...t,_cat:"Arte única",_price:DESIGNER_PRICES.arte})),
       ...(calc.tasksCarrossel||[]).map(t=>({...t,_cat:"Carrossel",_price:DESIGNER_PRICES.carrossel}))];
@@ -20935,7 +20857,7 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
     {isEditor
       ?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
         <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
-        <CardCat label="Corte" count={calc.corte} price={DESIGNER_PRICES.corte} color="#16a34a"/>
+        <CardCat label="Corte de vídeo" count={calc.corte} price={DESIGNER_PRICES.corte} color="#16a34a"/>
       </div>
       :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
         <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
@@ -22676,6 +22598,11 @@ function MindMapEditor({clientId,onBack}){
       <div style={{position:"absolute",top:8,right:10,color:C.td,fontSize:8,lineHeight:1.6,textAlign:"right"}}>
         Tab = filho · Del = deletar<br/>Enter = editar · Ctrl+Z = desfazer<br/>Scroll = zoom · Drag = mover
       </div>
+    </div>
+  </div>;
+}
+
+
     </div>
   </div>;
 }
