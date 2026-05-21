@@ -424,7 +424,7 @@ function smartFormatTitle(input){
   // - bagunçada (OBrA, FOTO, mAcA, etc) → normaliza
   // Pontuação ao redor (parens, brackets, aspas) é isolada e re-aplicada após processar o core.
   // Assim "[REFAÇÃO]" → "[Refação]" (não "[refação]"), e "(MG)" → preserva.
-  function processWord(word,idx,isTitleSegment){
+  function processWord(word,idx,isTitleSegment,hasSeparator){
     if(!word)return word;
     // Extrai pontuação ao redor: tudo que NÃO é letra/dígito no início e no fim
     const leadingMatch=word.match(/^[^A-Za-zÀ-ÿ0-9]+/);
@@ -436,32 +436,57 @@ function smartFormatTitle(input){
     const core=word.slice(prefix.length,word.length-suffix.length);
 
     let processed;
+    // CamelCase válido (iPhone, VetService) → SEMPRE preserva, em qualquer posição
     if(_isCamelCaseValid(core)){
-      processed=core; // VetService, iPhone → sempre preserva
-    } else {
+      processed=core;
+    }
+    // Sigla curta 2 letras (BR, MG, IA, TV) → SEMPRE preserva
+    else if(/^[A-ZÀ-Ý]{2}$/.test(core)){
+      processed=core;
+    }
+    else {
       const lower=core.toLocaleLowerCase("pt-BR");
+      // Stopword (de, da, do, e, para, etc) na posição não-inicial → minúscula
       if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)){
-        processed=lower; // stopword no meio → minúscula
-      } else if(_isWellFormed(core)){
-        // Core já está em formato aceitável — preserva, só ajusta 1ª se necessário
-        if(idx===0&&/^[a-zà-ÿ]/.test(core)){
-          processed=core.charAt(0).toLocaleUpperCase("pt-BR")+core.slice(1);
-        } else {
+        processed=lower;
+      }
+      // Primeira palavra do segmento → Capitalize sempre (se não estava já em formato OK)
+      else if(idx===0){
+        if(_isWellFormed(core)&&/^[A-ZÀ-Ý]/.test(core)){
           processed=core;
+        } else {
+          processed=_capitalizeFirst(core);
+        }
+      }
+      // Palavras não-iniciais:
+      else if(isTitleSegment){
+        // Title segment (nome próprio antes do " - ", OU título sem separador):
+        //   - Bem-formado (Capitalize/lowercase) → preserva (Monte Everest, San Diego, iPhone)
+        //   - Mal-formado (OBrA, FOTO, DIEGO) → assume palavra comum digitada mal → lowercase
+        //     (Se for nome próprio com caps lock, usuário deve corrigir manualmente)
+        if(_isWellFormed(core)){
+          processed=core;
+        } else {
+          processed=lower;
         }
       } else {
-        // Core mal-formado (CAPS, mistura aleatória) — normaliza
-        if(isTitleSegment||idx===0)processed=_capitalizeFirst(core);
-        else processed=lower;
+        // Sentence segment (descrição após " - ") → SEMPRE lowercase
+        // Ex: "Fazenda San Diego - Pecuária de Leite" → "...Pecuária de leite"
+        processed=lower;
       }
     }
     return prefix+processed+suffix;
   }
 
+  const hasSeparator=parts.length>1;
   const formatted=parts.map(function(part,partIdx){
-    // 1ª parte de "X - Y" → title segment (nome próprio). Sozinho → sentence.
-    const isTitleSegment=partIdx===0&&parts.length>1;
-    return part.split(" ").map(function(w,i){return processWord(w,i,isTitleSegment);}).join(" ");
+    // Se TEM separador " - ":
+    //   - 1ª parte = title segment (nome próprio) → tudo Capitalize
+    //   - 2ª+ partes = sentence segment (descrição) → só 1ª maiúscula, resto lowercase
+    // Se NÃO tem separador → assume nome próprio, preserva o que o usuário escreveu
+    //   (só corrige palavras mal-formadas tipo CAPS LOCK, OBrA, etc)
+    const isTitleSegment=!hasSeparator||partIdx===0;
+    return part.split(" ").map(function(w,i){return processWord(w,i,isTitleSegment,hasSeparator);}).join(" ");
   });
 
   let result=formatted.join(" - ");
@@ -1261,12 +1286,12 @@ function Ico({n,size=14,color,strokeWidth=2}){
  *   - Arte única (contentType="arte"):                                R$ 30
  *   - Arte carrossel (contentType="carrossel"):                       R$ 45
  *   - Vídeo / não classificado: não entra no cálculo. */
-const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, video: 100 };
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, video: 100, corte: 20 };
 // Status que CONTAM pro pagamento — só entrega aprovada/agendada/publicada.
 // Em execução, Ajustes, Avaliação NÃO contam (ainda não foi entregue).
 const PAID_STATUSES = ["aprovado","agendado","publicado"];
 function calcDesignerPayments(tasks, designerId, refMonth){
-  const out = { fotoObra: 0, arte: 0, carrossel: 0, video: 0, naoClassificado: 0, tasksFotoObra: [], tasksArte: [], tasksCarrossel: [], tasksVideo: [], tasksOutros: [] };
+  const out = { fotoObra: 0, arte: 0, carrossel: 0, video: 0, corte: 0, naoClassificado: 0, tasksFotoObra: [], tasksArte: [], tasksCarrossel: [], tasksVideo: [], tasksCorte: [], tasksOutros: [] };
   (tasks || []).forEach(t => {
     if(!t) return;
     const assigned = t.assignee === designerId || (Array.isArray(t.assignees) && t.assignees.includes(designerId));
@@ -1277,12 +1302,14 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     else if(t.contentType === "carrossel"){ out.carrossel++; out.tasksCarrossel.push(t); }
     else if(t.contentType === "arte"){ out.arte++; out.tasksArte.push(t); }
     else if(t.contentType === "video"){ out.video++; out.tasksVideo.push(t); }
+    else if(t.contentType === "corte"){ out.corte++; out.tasksCorte.push(t); }
     else { out.naoClassificado++; out.tasksOutros.push(t); }
   });
   out.total = out.fotoObra * DESIGNER_PRICES.fotoObra
             + out.arte     * DESIGNER_PRICES.arte
             + out.carrossel* DESIGNER_PRICES.carrossel
-            + out.video    * DESIGNER_PRICES.video;
+            + out.video    * DESIGNER_PRICES.video
+            + out.corte    * DESIGNER_PRICES.corte;
   return out;
 }
 function formatRefMonth(refMonth){
@@ -1770,7 +1797,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     if(_migratedRef.current)return;
     if(!user||user.level!==1)return;
     if(!allTasks||allTasks.length===0)return;
-    const FLAG_KEY="pixels-title-migration-v7";
+    const FLAG_KEY="pixels-title-migration-v8";
     try{if(localStorage.getItem(FLAG_KEY))return;}catch(e){}
     const candidates=allTasks.filter(t=>{
       if(!t||!t.title||t.deletedAt)return false;
@@ -1829,8 +1856,9 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
               </div>
             </div>
             {isEditor
-              ?<div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+              ?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
                 <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
+                <CardCat label="Corte" count={calc.corte} price={DESIGNER_PRICES.corte} color="#16a34a"/>
               </div>
               :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
                 <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
@@ -2628,7 +2656,6 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
     {/* ── ALERTAS URGENTES — criados por admins/social media ── */}
     <DashboardAlerts userId={effectiveUser.id} isMob={isMob}/>
 
-    {/* ── Conteúdo personalizado por perfil ── */}
     <RenderDash user={effectiveUser} isViewing={isViewingOther} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs} isMob={isMob}/>
   </div>;
 }
@@ -19461,7 +19488,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>}
 
-    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:900,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div data-cardmodal onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:isMobile?12:22,width:"100%",maxWidth:1080,boxShadow:"0 24px 64px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column",border:"1px solid #e2e8f0",marginTop:isMobile?0:8,minHeight:isMobile?"100vh":"auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
 
       {/* Color strip */}
       <div style={{height:4,background:cover?`linear-gradient(90deg,${cover},${cover}88)`:"linear-gradient(90deg,#6366f1,#818cf8)",borderRadius:"22px 22px 0 0",opacity:cover?1:0.35}}/>
@@ -19562,7 +19589,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
 
       {/* ── BODY: 2-col grid ── */}
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 280px",minHeight:0}}>
+      <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 340px",minHeight:0}}>
 
         {/* ── LEFT PANEL ── */}
         <div style={{padding:"18px 22px",borderRight:"1px solid #f1f5f9",overflowY:"auto",maxHeight:"65vh"}}>
@@ -20379,15 +20406,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>;
           })()}
 
-          {/* Tipo de Conteúdo — pílulas selecionáveis (4 opções) — tudo em roxo */}
+          {/* Tipo de Conteúdo — pílulas selecionáveis (5 opções) — tudo em roxo */}
           <div>
             <label style={LB}>Tipo de conteúdo</label>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5}}>
               {[
                 {id:"arte",label:"Arte única",icon:"image"},
                 {id:"carrossel",label:"Carrossel",icon:"layers"},
                 {id:"foto",label:"Foto de obra",icon:"camera"},
                 {id:"video",label:"Vídeo",icon:"play"},
+                {id:"corte",label:"Corte",icon:"scan"},
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
@@ -21050,7 +21078,8 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
   // Editor vê só Vídeo. Designer e outros veem Foto/Arte/Carrossel.
   const isEditor=user.dash==="editor";
   const entregas=isEditor
-    ?[...(calc.tasksVideo||[]).map(t=>({...t,_cat:"Vídeo",_price:DESIGNER_PRICES.video}))]
+    ?[...(calc.tasksVideo||[]).map(t=>({...t,_cat:"Vídeo",_price:DESIGNER_PRICES.video})),
+      ...(calc.tasksCorte||[]).map(t=>({...t,_cat:"Corte",_price:DESIGNER_PRICES.corte}))]
     :[...(calc.tasksFotoObra||[]).map(t=>({...t,_cat:"Foto de obra",_price:DESIGNER_PRICES.fotoObra})),
       ...(calc.tasksArte||[]).map(t=>({...t,_cat:"Arte única",_price:DESIGNER_PRICES.arte})),
       ...(calc.tasksCarrossel||[]).map(t=>({...t,_cat:"Carrossel",_price:DESIGNER_PRICES.carrossel}))];
@@ -21072,8 +21101,9 @@ function PagamentosView({user,tasks,isMob,payMonth,setPayMonth}){
     </div>
     {/* Breakdown — categorias dependem do role (editor=vídeo, designer=foto/arte/carrossel) */}
     {isEditor
-      ?<div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+      ?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
         <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
+        <CardCat label="Corte" count={calc.corte} price={DESIGNER_PRICES.corte} color="#16a34a"/>
       </div>
       :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
         <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
