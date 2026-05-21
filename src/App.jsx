@@ -1645,6 +1645,33 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   });
   const receita12mMax=Math.max(...receita12m);
 
+  // ── Auto-normalizar títulos antigos ─────────────────────────
+  // Roda silenciosamente uma vez por navegador (flag em localStorage).
+  // Só sócios disparam (level 1) — pra evitar problemas de RLS com colaboradores.
+  // smartFormatTitle é idempotente, então rodar de novo sem flag não causa nenhum efeito.
+  const _migratedRef=useRef(false);
+  useEffect(()=>{
+    if(_migratedRef.current)return;
+    if(!user||user.level!==1)return;
+    if(!allTasks||allTasks.length===0)return;
+    const FLAG_KEY="pixels-title-migration-v1";
+    try{if(localStorage.getItem(FLAG_KEY))return;}catch(e){}
+    const candidates=allTasks.filter(t=>{
+      if(!t||!t.title||t.deletedAt)return false;
+      return smartFormatTitle(t.title)!==t.title;
+    });
+    if(candidates.length>0){
+      setTasks(prev=>prev.map(t=>{
+        if(!t||!t.title)return t;
+        const newTitle=smartFormatTitle(t.title);
+        return newTitle===t.title?t:{...t,title:newTitle};
+      }));
+      pixelsToast.info(`${candidates.length} título(s) padronizado(s) automaticamente.`,5000);
+    }
+    try{localStorage.setItem(FLAG_KEY,"1");}catch(e){}
+    _migratedRef.current=true;
+  },[allTasks.length]);
+
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto",width:"100%",padding:isMob?"0 4px":0}}>
     {openCard&&<CardModal task={openCard} tasks={allTasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={CURRENT_USER} cardPerms={adminCardPerms}/>}
     {isViewing&&<div style={{background:"#a140ff",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
