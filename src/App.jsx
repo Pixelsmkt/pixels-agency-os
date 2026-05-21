@@ -348,6 +348,15 @@ function _capitalizeFirst(word){
   if(!word)return word;
   return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1).toLocaleLowerCase("pt-BR");
 }
+// Detecta se UMA palavra está em ALL CAPS acidental (3+ letras todas maiúsculas).
+// Siglas curtas (2 letras) e CamelCase são preservados.
+function _isAllCapsWord(word){
+  if(!word||word.length<3)return false;
+  if(_isCamelCase(word))return false;
+  const letters=word.replace(/[^A-Za-zÀ-ÿ]/g,"");
+  if(letters.length<3)return false;
+  return letters===letters.toLocaleUpperCase("pt-BR")&&letters!==letters.toLocaleLowerCase("pt-BR");
+}
 function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
   // 1. Colapsa espaços e trim
@@ -356,41 +365,47 @@ function smartFormatTitle(input){
   // 2. Normaliza espaçamento ao redor de separador " - " / " – " / " — "
   s=s.replace(/\s*[–—]\s*/g," - ").replace(/\s+-\s+/g," - ");
 
-  // 3. Detecta CAPS LOCK: mais letras maiúsculas que minúsculas no input
-  const upperCount=(s.match(/[A-ZÀ-Ý]/g)||[]).length;
-  const lowerCount=(s.match(/[a-zà-ÿ]/g)||[]).length;
-  const isCapsLock=upperCount > lowerCount && upperCount > 2;
+  // 3. Splitar por " - " — 1ª parte = "title segment" (nome próprio),
+  // demais = "sentence segment" (descrição).
+  const parts=s.split(" - ");
 
-  if(!isCapsLock){
-    // Input em formato normal/misto — preserva capitalização do user.
-    // Só garante que a 1ª letra do título não seja minúscula.
-    if(s[0]&&/[a-zà-ÿ]/.test(s[0])){
-      s=s[0].toLocaleUpperCase("pt-BR")+s.slice(1);
+  // 4. Processa CADA palavra individualmente.
+  // Palavras em ALL CAPS (3+ letras) são normalizadas; resto preserva.
+  function processWord(word,idx,isTitleSegment){
+    if(!word)return word;
+    if(_isCamelCase(word))return word; // VetService, iPhone → preserva
+    const lower=word.toLocaleLowerCase("pt-BR");
+    // Se é stopword conhecida (de, da, do, the, del, ...) e NÃO é a 1ª palavra → minúscula
+    // Cobre tanto "DE" (CAPS) quanto "De" (mid-sentence) — quaisquer 2 letras
+    if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)&&word!==lower){
+      return lower;
     }
-    return s;
+    if(_isAllCapsWord(word)){
+      // Palavra em CAPS LOCK acidental — normaliza
+      if(isTitleSegment)return _capitalizeFirst(word);
+      if(idx===0)return _capitalizeFirst(word);
+      return lower;
+    }
+    // Palavra normal — preserva, mas garante 1ª letra maiúscula se for a 1ª do segmento
+    if(idx===0&&/^[a-zà-ÿ]/.test(word)){
+      return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1);
+    }
+    return word;
   }
 
-  // 4. CAPS LOCK ativo — normaliza agressivamente
-  const parts=s.split(" - ");
-  const titleCase=function(text){
-    return text.split(" ").map(function(word,idx){
-      if(!word)return word;
-      if(_isCamelCase(word))return word;
-      const lower=word.toLocaleLowerCase("pt-BR");
-      if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower))return lower;
-      return _capitalizeFirst(word);
-    }).join(" ");
-  };
-  const sentenceCase=function(text){
-    return text.split(" ").map(function(word,idx){
-      if(!word)return word;
-      if(_isCamelCase(word))return word;
-      if(idx===0)return _capitalizeFirst(word);
-      return word.toLocaleLowerCase("pt-BR");
-    }).join(" ");
-  };
-  if(parts.length===1)return sentenceCase(parts[0]);
-  return [titleCase(parts[0])].concat(parts.slice(1).map(sentenceCase)).join(" - ");
+  const formatted=parts.map(function(part,partIdx){
+    // 1ª parte de "X - Y" → title segment (nome próprio). Sozinho → sentence.
+    const isTitleSegment=partIdx===0&&parts.length>1;
+    return part.split(" ").map(function(w,i){return processWord(w,i,isTitleSegment);}).join(" ");
+  });
+
+  let result=formatted.join(" - ");
+  // Garante 1ª letra do título maiúscula — exceto se a 1ª palavra for CamelCase (iPhone, eBay)
+  const firstWord=result.split(" ")[0]||"";
+  if(!_isCamelCase(firstWord)&&result[0]&&/[a-zà-ÿ]/.test(result[0])){
+    result=result[0].toLocaleUpperCase("pt-BR")+result.slice(1);
+  }
+  return result;
 }
 
 /* ─── CURRENT USER (proxy dinâmico) ─────── */
@@ -1683,7 +1698,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     if(_migratedRef.current)return;
     if(!user||user.level!==1)return;
     if(!allTasks||allTasks.length===0)return;
-    const FLAG_KEY="pixels-title-migration-v3";
+    const FLAG_KEY="pixels-title-migration-v4";
     try{if(localStorage.getItem(FLAG_KEY))return;}catch(e){}
     const candidates=allTasks.filter(t=>{
       if(!t||!t.title||t.deletedAt)return false;
