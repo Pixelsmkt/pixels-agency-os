@@ -113,7 +113,6 @@ function saveLiveClient(id,partial){
 // Módulo de framework: temas, perms, componentes base, navegação
 // Não contém dados de negócio — ver 00_clientes_data.jsx e 00_mindmap_data.jsx
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
-import { createPortal } from "react-dom";
 import * as recharts from "recharts";
 
 // Global mobile styles
@@ -215,7 +214,7 @@ const THEMES={
     bl:"#4db8ff", pk:"#ff6eb4",
     tx:"#f2e8ff", ts:"#9966cc", td:"#3d1a6e",
     kRascunhos:"#64748b", kDemanda:"#a140ff", kRecebida:"#ff6eb4", kExecucao:"#ffd000",
-    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#4db8ff", kPublicado:"#a78bfa", kPausado:"#1a0030", kAlteracao:"#fb7185",
+    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#4db8ff", kPublicado:"#a78bfa", kPausado:"#1a0030", kAlteracao:"#7c1d1d",
   },
   light:{
     name:"Light", icon:"○",
@@ -226,7 +225,7 @@ const THEMES={
     bl:"#2563eb", pk:"#db2777",
     tx:"#0f172a", ts:"#64748b", td:"#94a3b8",
     kRascunhos:"#64748b", kDemanda:"#7c3aed", kRecebida:"#db2777", kExecucao:"#d97706",
-    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#2563eb", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#fb7185",
+    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#2563eb", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#7c1d1d",
   },
   agro:{
     name:"Agro", icon:"◉",
@@ -237,7 +236,7 @@ const THEMES={
     bl:"#60a5fa", pk:"#f472b6",
     tx:"#e8fdf0", ts:"#4ade80", td:"#166534",
     kRascunhos:"#64748b", kDemanda:"#22c55e", kRecebida:"#4ade80", kExecucao:"#fde047",
-    kAvaliacao:"#fb923c", kAprovado:"#86efac", kAgendado:"#60a5fa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#fb7185",
+    kAvaliacao:"#fb923c", kAprovado:"#86efac", kAgendado:"#60a5fa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#7c1d1d",
   },
 };
 
@@ -259,26 +258,26 @@ try{
 }catch(e){}
 
 const KANBAN_COLS = [
-  { id:"rascunhos", label:"Rascunhos",                  color:C.kRascunhos, dark:false },
-  { id:"demanda",   label:"Copys",                      color:C.kDemanda,   dark:false },
-  { id:"recebida",  label:"Demandas",                   color:C.kRecebida,  dark:false },
-  { id:"execucao",  label:"Em execução",                color:C.kExecucao,  dark:true  },
-  { id:"ajustes",   label:"Ajustes",                    color:C.kAlteracao, dark:true  },
-  { id:"avaliacao", label:"Concluídas para avaliação",  color:C.kAvaliacao, dark:false },
-  { id:"aprovado",  label:"Aprovadas",                  color:C.kAprovado,  dark:true  },
-  { id:"agendado",  label:"Agendadas",                  color:C.kAgendado,  dark:true  },
-  { id:"publicado", label:"Publicadas",                 color:C.kPublicado, dark:true  },
-  { id:"pausado",   label:"Pausadas",                   color:C.kPausado,   dark:false },
+  { id:"rascunhos", label:"Rascunhos",              color:C.kRascunhos, dark:false },
+  { id:"demanda",   label:"Copys",                  color:C.kDemanda,   dark:false },
+  { id:"recebida",  label:"Demanda",                color:C.kRecebida,  dark:false },
+  { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
+  { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
+  { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
+  { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
+  { id:"agendado",  label:"Agendado",               color:C.kAgendado,  dark:true  },
+  { id:"publicado", label:"Publicado",              color:C.kPublicado, dark:true  },
+  { id:"pausado",   label:"Pausado",                color:C.kPausado,   dark:false },
 ];
 
 /* ─── TEAM ───────────────────────────────── */
 const TEAM = [
-  { id:"vinicius",  name:"Vinicius",  role:"Gestor de projetos",    av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"gustavo",   name:"Gustavo",   role:"Gestor",                av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"ellen",     name:"Hellen",     role:"Estrategista",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
-  { id:"erick",     name:"Erick",     role:"Gestor de mídia", av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
+  { id:"vinicius",  name:"Vinicius",  role:"CEO / Gestor",          av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"gustavo",   name:"Gustavo",   role:"CEO / Gestor",          av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
+  { id:"erick",     name:"Erick",     role:"Gestor de mídia"     , av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
-  { id:"guilherme", name:"Guilherme", role:"Editor de vídeo",       av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
+  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
@@ -305,204 +304,6 @@ function ensureSupervisors(assignees){
     if(sup)set.add(sup);
   });
   return Array.from(set);
-}
-
-/* ─── SMART FORMAT TITLE ───────────────────────────────────────────────
-   Normaliza o título do card. Filosofia: respeita o que o user digitou.
-   Só intervém agressivamente quando detecta CAPS LOCK acidental.
-
-   Regras:
-   - SEMPRE: trim + colapsa espaços múltiplos + 1ª letra do título maiúscula.
-   - SE o input está em CAPS LOCK (mais maiúsculas que minúsculas):
-       • Parte ANTES do " - ": Title Case (Nome Próprio, exceto stopwords "de/da/do/e")
-       • Parte DEPOIS do " - ": Sentence Case (só 1ª palavra capitalizada)
-       • Sem " - ": tudo Sentence Case (assume que não é nome próprio)
-   - SE input está normal/misto: preserva capitalização original (user manda).
-   - Sempre preserva CamelCase (VetService, iPhone).
-
-   Exemplos:
-     "Foto de obra"                              → "Foto de obra" (preserva)
-     "FOTO DE OBRA"                              → "Foto de obra" (caps→sentence)
-     "Monte Everest"                             → "Monte Everest" (preserva)
-     "AGROPECUÁRIA PARAÍSO - PECUÁRIA DE LEITE"  → "Agropecuária Paraíso - Pecuária de leite"
-     "Agropecuária Paraíso - Pecuária de leite"  → idêntico (preserva)
-     "case de sucesso"                           → "Case de sucesso" (só 1ª letra)
-*/
-const TITLE_STOPWORDS_PTBR = new Set([
-  // PT-BR — preposições, artigos, conjunções
-  "de","da","do","das","dos","e","ou","a","o","as","os",
-  "para","por","em","na","no","nas","nos","com","sem",
-  "ao","aos","à","às","um","uma","uns","umas",
-  // ES — comum em datas comemorativas e marcas
-  "del","la","el","los","las","y","en","al","con","sin","un","una","unos","unas",
-  // EN — comum em termos técnicos / nomes em inglês
-  "the","of","and","or","in","on","at","to","for","by","with","an"
-]);
-function _isCamelCase(word){
-  if(!word||word.length<2)return false;
-  const hasLower=/[a-zà-ÿ]/.test(word);
-  const hasUpperInside=/[a-zà-ÿ][A-ZÀ-Ý]/.test(word);
-  return hasLower && hasUpperInside;
-}
-function _capitalizeFirst(word){
-  if(!word)return word;
-  return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1).toLocaleLowerCase("pt-BR");
-}
-// CamelCase válido: primeiro componente (qualquer tamanho), depois 1+ (Maiúscula + 2+ minúsculas).
-// Aceita: VetService, iPhone, McDonald, eBay. REJEITA: MaCa, JoGo, OBrA (componentes curtos).
-function _isCamelCaseValid(word){
-  if(!word||word.length<4)return false;
-  return /^([a-zà-ÿ]+|[A-ZÀ-Ý][a-zà-ÿ]+)([A-ZÀ-Ý][a-zà-ÿ]{2,})+$/.test(word);
-}
-// Palavra "well-formed": uma das formas aceitas. Resto = bagunçado.
-function _isWellFormed(word){
-  if(!word)return true;
-  // (1) all lowercase com acento, dígitos, hífen, apóstrofo, pontuação básica
-  if(/^[a-zà-ÿ0-9\-'.,!?]+$/.test(word))return true;
-  // (2) Capitalize: 1ª maiúscula + resto minúsculo
-  if(/^[A-ZÀ-Ý][a-zà-ÿ0-9\-'.,!?]*$/.test(word))return true;
-  // (3) sigla curta (2 letras maiúsculas) — BR, SP, IA, TV
-  if(/^[A-ZÀ-Ý]{2}$/.test(word))return true;
-  // (4) CamelCase válido
-  if(_isCamelCaseValid(word))return true;
-  // (5) só números/pontuação
-  if(/^[0-9\-'.,!?:/]+$/.test(word))return true;
-  return false;
-}
-// Remove emojis (símbolos pictográficos, dingbats, bandeiras, etc.) — preserva letras, números, pontuação ASCII e acentos latinos
-function stripEmojis(input){
-  if(!input||typeof input!=="string")return input||"";
-  let s=input;
-  // Cobre maioria dos emojis: pictogramas, símbolos, transporte/mapas, dingbats, miscelâneos, bandeiras, setas decorativas, emoticons.
-  // Inclui modificadores de tom de pele, variation selectors (FE0F), zero-width joiner (200D) e keycap (20E3).
-  try{
-    s=s.replace(/[\u{1F1E6}-\u{1F1FF}]/gu,""); // bandeiras
-    s=s.replace(/[\u{1F300}-\u{1F5FF}]/gu,""); // pictogramas
-    s=s.replace(/[\u{1F600}-\u{1F64F}]/gu,""); // emoticons
-    s=s.replace(/[\u{1F680}-\u{1F6FF}]/gu,""); // transporte/mapas
-    s=s.replace(/[\u{1F700}-\u{1F77F}]/gu,""); // alquímicos
-    s=s.replace(/[\u{1F780}-\u{1F7FF}]/gu,""); // geometric extended
-    s=s.replace(/[\u{1F800}-\u{1F8FF}]/gu,""); // setas suplementares
-    s=s.replace(/[\u{1F900}-\u{1F9FF}]/gu,""); // pictogramas suplementares
-    s=s.replace(/[\u{1FA00}-\u{1FA6F}]/gu,""); // simbolos jogos/etc
-    s=s.replace(/[\u{1FA70}-\u{1FAFF}]/gu,""); // pictogramas extended-A
-    s=s.replace(/[\u{2600}-\u{26FF}]/gu,"");   // símbolos misc
-    s=s.replace(/[\u{2700}-\u{27BF}]/gu,"");   // dingbats
-    s=s.replace(/[\u{2300}-\u{23FF}]/gu,"");   // tech misc (relógio, etc)
-    s=s.replace(/[\u{2B00}-\u{2BFF}]/gu,"");   // setas misc
-    s=s.replace(/[\u{1F000}-\u{1F02F}]/gu,""); // mahjong
-    s=s.replace(/[\u{1F0A0}-\u{1F0FF}]/gu,""); // cartas
-    s=s.replace(/[\u{1F100}-\u{1F1FF}]/gu,""); // enclosed alphanum
-    s=s.replace(/[\u{1F200}-\u{1F2FF}]/gu,""); // enclosed CJK
-    s=s.replace(/[\u{1F3FB}-\u{1F3FF}]/gu,""); // modificadores tom de pele
-    s=s.replace(/[\u{200D}\u{FE0F}\u{20E3}]/gu,""); // ZWJ, variation selector, keycap
-  }catch(e){
-    // Fallback se o regex unicode não rolar (browsers antigos): regex limitado
-    s=s.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g,"");
-  }
-  // Colapsa espaços resultantes
-  return s.replace(/\s+/g," ").trim();
-}
-
-function smartFormatTitle(input){
-  if(!input||typeof input!=="string")return input||"";
-  // 0. Remove emojis primeiro
-  let s=stripEmojis(input);
-  if(!s)return "";
-  // 1. Colapsa espaços e trim
-  s=s.replace(/\s+/g," ").trim();
-  if(!s)return "";
-  // 2. Normaliza espaçamento ao redor de separador " - " / " – " / " — "
-  s=s.replace(/\s*[–—]\s*/g," - ").replace(/\s+-\s+/g," - ");
-
-  // 3. Splitar por " - " — 1ª parte = "title segment" (nome próprio),
-  // demais = "sentence segment" (descrição).
-  const parts=s.split(" - ");
-
-  // 4. Processa CADA palavra individualmente.
-  // - well-formed (lowercase puro, Capitalize, CamelCase, sigla 2 letras) → preserva
-  // - bagunçada (OBrA, FOTO, mAcA, etc) → normaliza
-  // Pontuação ao redor (parens, brackets, aspas) é isolada e re-aplicada após processar o core.
-  // Assim "[REFAÇÃO]" → "[Refação]" (não "[refação]"), e "(MG)" → preserva.
-  function processWord(word,idx,isTitleSegment,hasSeparator){
-    if(!word)return word;
-    // Extrai pontuação ao redor: tudo que NÃO é letra/dígito no início e no fim
-    const leadingMatch=word.match(/^[^A-Za-zÀ-ÿ0-9]+/);
-    const trailingMatch=word.match(/[^A-Za-zÀ-ÿ0-9]+$/);
-    const prefix=leadingMatch?leadingMatch[0]:"";
-    const suffix=trailingMatch?trailingMatch[0]:"";
-    // Se a palavra é só pontuação (não tem letras nem números) → preserva como tá
-    if(prefix.length+suffix.length>=word.length)return word;
-    const core=word.slice(prefix.length,word.length-suffix.length);
-
-    let processed;
-    // CamelCase válido (iPhone, VetService) → SEMPRE preserva, em qualquer posição
-    if(_isCamelCaseValid(core)){
-      processed=core;
-    }
-    // Sigla curta 2 letras (BR, MG, IA, TV) → SEMPRE preserva
-    else if(/^[A-ZÀ-Ý]{2}$/.test(core)){
-      processed=core;
-    }
-    else {
-      const lower=core.toLocaleLowerCase("pt-BR");
-      // Stopword (de, da, do, e, para, etc) na posição não-inicial → minúscula
-      if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)){
-        processed=lower;
-      }
-      // Primeira palavra do segmento → Capitalize sempre (se não estava já em formato OK)
-      else if(idx===0){
-        if(_isWellFormed(core)&&/^[A-ZÀ-Ý]/.test(core)){
-          processed=core;
-        } else {
-          processed=_capitalizeFirst(core);
-        }
-      }
-      // Palavras não-iniciais:
-      else if(isTitleSegment){
-        // Title segment (nome próprio antes do " - ", OU título sem separador):
-        //   - Bem-formado (Capitalize/lowercase) → preserva (Monte Everest, San Diego, iPhone)
-        //   - Mal-formado (OBrA, FOTO, DIEGO) → assume palavra comum digitada mal → lowercase
-        //     (Se for nome próprio com caps lock, usuário deve corrigir manualmente)
-        if(_isWellFormed(core)){
-          processed=core;
-        } else {
-          processed=lower;
-        }
-      } else {
-        // Sentence segment (descrição após " - ") → SEMPRE lowercase
-        // Ex: "Fazenda San Diego - Pecuária de Leite" → "...Pecuária de leite"
-        processed=lower;
-      }
-    }
-    return prefix+processed+suffix;
-  }
-
-  const hasSeparator=parts.length>1;
-  const formatted=parts.map(function(part,partIdx){
-    // Se TEM separador " - ":
-    //   - 1ª parte = title segment (nome próprio) → tudo Capitalize
-    //   - 2ª+ partes = sentence segment (descrição) → só 1ª maiúscula, resto lowercase
-    // Se NÃO tem separador → assume nome próprio, preserva o que o usuário escreveu
-    //   (só corrige palavras mal-formadas tipo CAPS LOCK, OBrA, etc)
-    const isTitleSegment=!hasSeparator||partIdx===0;
-    return part.split(" ").map(function(w,i){return processWord(w,i,isTitleSegment,hasSeparator);}).join(" ");
-  });
-
-  let result=formatted.join(" - ");
-  // Garante 1ª letra alfabética do título maiúscula — pula pontuação inicial ([, (, ", etc.)
-  // Exceto se for CamelCase (iPhone, eBay) ou já estiver capitalizada
-  const firstAlphaMatch=result.match(/[a-zA-ZÀ-ÿ]/);
-  if(firstAlphaMatch&&/[a-zà-ÿ]/.test(firstAlphaMatch[0])){
-    // Pega a 1ª palavra completa (sem pontuação inicial) pra checar CamelCase
-    const wordStart=result.indexOf(firstAlphaMatch[0]);
-    const wordEnd=(result.slice(wordStart).match(/^[A-Za-zÀ-ÿ0-9]+/)||[""])[0].length+wordStart;
-    const firstCoreWord=result.slice(wordStart,wordEnd);
-    if(!_isCamelCaseValid(firstCoreWord)){
-      result=result.slice(0,wordStart)+firstAlphaMatch[0].toLocaleUpperCase("pt-BR")+result.slice(wordStart+1);
-    }
-  }
-  return result;
 }
 
 /* ─── CURRENT USER (proxy dinâmico) ─────── */
@@ -572,9 +373,148 @@ const ACCESS_STORE={
   gustavo: {...PARTNER_PERMS},
   ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true},
   erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
-  andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colAjustes:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
-  guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colAjustes:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
+  andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
+  guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
 };
+
+/* ─── SMART FORMAT TITLE — auto-formata título do card ─── */
+const TITLE_STOPWORDS_PTBR = new Set([
+  "de","da","do","das","dos","e","ou","a","o","as","os",
+  "para","por","em","na","no","nas","nos","com","sem",
+  "ao","aos","à","às","um","uma","uns","umas",
+  "del","la","el","los","las","y","en","al","con","sin","un","una","unos","unas",
+  "the","of","and","or","in","on","at","to","for","by","with","an"
+]);
+function _capitalizeFirst(word){
+  if(!word)return word;
+  return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1).toLocaleLowerCase("pt-BR");
+}
+function _isCamelCaseValid(word){
+  if(!word||word.length<4)return false;
+  return /^([a-zà-ÿ]+|[A-ZÀ-Ý][a-zà-ÿ]+)([A-ZÀ-Ý][a-zà-ÿ]{2,})+$/.test(word);
+}
+function _isWellFormed(word){
+  if(!word)return true;
+  if(/^[a-zà-ÿ0-9\-'.,!?]+$/.test(word))return true;
+  if(/^[A-ZÀ-Ý][a-zà-ÿ0-9\-'.,!?]*$/.test(word))return true;
+  if(/^[A-ZÀ-Ý]{2}$/.test(word))return true;
+  if(_isCamelCaseValid(word))return true;
+  if(/^[0-9\-'.,!?:/]+$/.test(word))return true;
+  return false;
+}
+function stripEmojis(input){
+  if(!input||typeof input!=="string")return input||"";
+  let s=input;
+  try{
+    s=s.replace(/[\u{1F1E6}-\u{1F1FF}]/gu,"");
+    s=s.replace(/[\u{1F300}-\u{1F5FF}]/gu,"");
+    s=s.replace(/[\u{1F600}-\u{1F64F}]/gu,"");
+    s=s.replace(/[\u{1F680}-\u{1F6FF}]/gu,"");
+    s=s.replace(/[\u{1F700}-\u{1F77F}]/gu,"");
+    s=s.replace(/[\u{1F780}-\u{1F7FF}]/gu,"");
+    s=s.replace(/[\u{1F800}-\u{1F8FF}]/gu,"");
+    s=s.replace(/[\u{1F900}-\u{1F9FF}]/gu,"");
+    s=s.replace(/[\u{1FA00}-\u{1FA6F}]/gu,"");
+    s=s.replace(/[\u{1FA70}-\u{1FAFF}]/gu,"");
+    s=s.replace(/[\u{2600}-\u{26FF}]/gu,"");
+    s=s.replace(/[\u{2700}-\u{27BF}]/gu,"");
+    s=s.replace(/[\u{2300}-\u{23FF}]/gu,"");
+    s=s.replace(/[\u{2B00}-\u{2BFF}]/gu,"");
+    s=s.replace(/[\u{1F000}-\u{1F02F}]/gu,"");
+    s=s.replace(/[\u{1F0A0}-\u{1F0FF}]/gu,"");
+    s=s.replace(/[\u{1F100}-\u{1F1FF}]/gu,"");
+    s=s.replace(/[\u{1F200}-\u{1F2FF}]/gu,"");
+    s=s.replace(/[\u{1F3FB}-\u{1F3FF}]/gu,"");
+    s=s.replace(/[\u{200D}\u{FE0F}\u{20E3}]/gu,"");
+  }catch(e){
+    s=s.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g,"");
+  }
+  return s.replace(/\s+/g," ").trim();
+}
+function smartFormatTitle(input){
+  if(!input||typeof input!=="string")return input||"";
+  let s=stripEmojis(input);
+  if(!s)return "";
+  s=s.replace(/\s+/g," ").trim();
+  if(!s)return "";
+  s=s.replace(/\s*[–—]\s*/g," - ").replace(/\s+-\s+/g," - ");
+  const parts=s.split(" - ");
+  function processWord(word,idx,isTitleSegment,hasSeparator){
+    if(!word)return word;
+    const leadingMatch=word.match(/^[^A-Za-zÀ-ÿ0-9]+/);
+    const trailingMatch=word.match(/[^A-Za-zÀ-ÿ0-9]+$/);
+    const prefix=leadingMatch?leadingMatch[0]:"";
+    const suffix=trailingMatch?trailingMatch[0]:"";
+    if(prefix.length+suffix.length>=word.length)return word;
+    const core=word.slice(prefix.length,word.length-suffix.length);
+    let processed;
+    if(_isCamelCaseValid(core)){processed=core;}
+    else if(/^[A-ZÀ-Ý]{2}$/.test(core)){processed=core;}
+    else {
+      const lower=core.toLocaleLowerCase("pt-BR");
+      if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)){processed=lower;}
+      else if(idx===0){
+        if(_isWellFormed(core)&&/^[A-ZÀ-Ý]/.test(core)){processed=core;}
+        else {processed=_capitalizeFirst(core);}
+      }
+      else if(isTitleSegment){
+        if(_isWellFormed(core)){processed=core;}
+        else {processed=lower;}
+      }
+      else {processed=lower;}
+    }
+    return prefix+processed+suffix;
+  }
+  const hasSeparator=parts.length>1;
+  const formatted=parts.map(function(part,partIdx){
+    const isTitleSegment=!hasSeparator||partIdx===0;
+    return part.split(" ").map(function(w,i){return processWord(w,i,isTitleSegment,hasSeparator);}).join(" ");
+  });
+  let result=formatted.join(" - ");
+  const firstAlphaMatch=result.match(/[a-zA-ZÀ-ÿ]/);
+  if(firstAlphaMatch&&/[a-zà-ÿ]/.test(firstAlphaMatch[0])){
+    const wordStart=result.indexOf(firstAlphaMatch[0]);
+    const wordEnd=(result.slice(wordStart).match(/^[A-Za-zÀ-ÿ0-9]+/)||[""])[0].length+wordStart;
+    const firstCoreWord=result.slice(wordStart,wordEnd);
+    if(!_isCamelCaseValid(firstCoreWord)){
+      result=result.slice(0,wordStart)+firstAlphaMatch[0].toLocaleUpperCase("pt-BR")+result.slice(wordStart+1);
+    }
+  }
+  return result;
+}
+
+/* ─── DESIGNER PAYMENTS ─── */
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, video: 100, corte: 20 };
+const PAID_STATUSES = ["aprovado","agendado","publicado"];
+function calcDesignerPayments(tasks, designerId, refMonth){
+  const out = { fotoObra:0, arte:0, carrossel:0, video:0, corte:0, naoClassificado:0,
+                tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksVideo:[], tasksCorte:[], tasksOutros:[] };
+  (tasks||[]).forEach(t=>{
+    if(!t)return;
+    const assigned=t.assignee===designerId||(Array.isArray(t.assignees)&&t.assignees.includes(designerId));
+    if(!assigned)return;
+    if(!PAID_STATUSES.includes(t.status))return;
+    if(refMonth&&t.referenceMonth!==refMonth)return;
+    if(t.contentType==="foto"){out.fotoObra++;out.tasksFotoObra.push(t);}
+    else if(t.contentType==="carrossel"){out.carrossel++;out.tasksCarrossel.push(t);}
+    else if(t.contentType==="arte"){out.arte++;out.tasksArte.push(t);}
+    else if(t.contentType==="video"){out.video++;out.tasksVideo.push(t);}
+    else if(t.contentType==="corte"){out.corte++;out.tasksCorte.push(t);}
+    else {out.naoClassificado++;out.tasksOutros.push(t);}
+  });
+  out.total = out.fotoObra*DESIGNER_PRICES.fotoObra
+            + out.arte*DESIGNER_PRICES.arte
+            + out.carrossel*DESIGNER_PRICES.carrossel
+            + out.video*DESIGNER_PRICES.video
+            + out.corte*DESIGNER_PRICES.corte;
+  return out;
+}
+function formatRefMonth(refMonth){
+  if(!refMonth) return "Todos os meses";
+  const [y,m]=refMonth.split("-").map(Number);
+  const meses=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  return meses[m-1]+"/"+String(y).slice(-2);
+}
 
 /* ─── SAFE STORAGE — wrapper localStorage com quota check ─── */
 // Captura QuotaExceededError automaticamente. Tenta limpar caches antigos.
@@ -651,7 +591,7 @@ function _showToast(type,msg,duration=3500){
     background:c.bg,color:"#fff",padding:"12px 16px",borderRadius:"10px",
     boxShadow:"0 8px 32px rgba(0,0,0,0.18)",fontSize:"13px",fontWeight:"600",
     display:"flex",alignItems:"center",gap:"10px",pointerEvents:"auto",
-    cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",
+    cursor:"pointer",fontFamily:"'Outfit',system-ui,sans-serif",
     transform:"translateX(100%)",opacity:"0",
     transition:"all .25s cubic-bezier(.22,1,.36,1)",
   });
@@ -687,7 +627,7 @@ function pixelsPrompt(message,opts={}){
     const box=document.createElement("div");
     Object.assign(box.style,{
       background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"440px",width:"100%",
-      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Inter',system-ui,sans-serif",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
       animation:"slideInUp .2s ease",
     });
     const title=document.createElement("div");
@@ -734,7 +674,7 @@ function pixelsConfirm(message,opts={}){
     const box=document.createElement("div");
     Object.assign(box.style,{
       background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"420px",width:"100%",
-      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Inter',system-ui,sans-serif",
+      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
       animation:"slideInUp .2s ease",
     });
     const title=document.createElement("div");
@@ -844,7 +784,7 @@ function SlaHourglass({task,compact}){
     soon:{bg:"#eab308",label:"Atenção",icon:"⚠"},
     urgent:{bg:"#ea580c",label:"Urgente",icon:"🔥"},
     overdue:{bg:"#dc2626",label:"Atrasado",icon:"🚨"},
-    paused:{bg:"#64748b",label:"Pausadas",icon:"⏸"},
+    paused:{bg:"#64748b",label:"Pausado",icon:"⏸"},
   };
   const c=colors[s.status]||colors.ok;
   if(s.status==="paused"){
@@ -1006,17 +946,17 @@ function NavIcon({id,size=18,color}){
 
 /* ─── NAV ────────────────────────────────── */
 const NAV=[
-  {id:"meudash",    icon:"⊡", label:"Meu dashboard"},
+  {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
-    {id:"demandas_kanban",     icon:"◈", label:"Fluxo de demandas"},
-    {id:"demandas_internas",   icon:"◫", label:"Demandas internas"},
-    {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de publicações"},
-    {id:"demandas_cal_interno",icon:"▦", label:"Calendário interno/clientes"},
+    {id:"demandas_kanban",     icon:"◈", label:"Fluxo de Demandas"},
+    {id:"demandas_internas",   icon:"◫", label:"Demandas Internas"},
+    {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de Publicações"},
+    {id:"demandas_cal_interno",icon:"▦", label:"Calendário Interno/Clientes"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
-    {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de copys"},
-    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de conteúdo"},
-    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação demanda interna"},
+    {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de Copys"},
+    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Conteúdo"},
+    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação Demanda Interna"},
   ]},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
@@ -1028,12 +968,12 @@ const NAV=[
   ]},
   {id:"ia",         icon:"◎", label:"Pixels IA",children:[
     {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
-    {id:"ia_churn",      icon:"◬", label:"Alerta churn"},
+    {id:"ia_churn",      icon:"◬", label:"Alerta Churn"},
     {id:"ia_playbooks",  icon:"▦", label:"Playbooks"},
     {id:"ia_biblioteca", icon:"◇", label:"Biblioteca"},
   ]},
   {type:"divider",label:"PORTAL"},
-  {id:"portal",     icon:"◯", label:"Portal cliente",children:[
+  {id:"portal",     icon:"◯", label:"Portal Cliente",children:[
     {id:"portal_dashboard",  icon:"⊡", label:"Dashboard"},
     {id:"portal_demandas",   icon:"◈", label:"Demandas"},
     {id:"portal_calendario", icon:"▦", label:"Calendário"},
@@ -1053,13 +993,13 @@ const NAV=[
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
     {id:"interno_calendario", icon:"▦", label:"Calendário"},
-    {id:"interno_radar",      icon:"◎", label:"Radar de entrega"},
+    {id:"interno_radar",      icon:"◎", label:"Radar de Entrega"},
     {id:"interno_pontuacao",  icon:"◈", label:"Pontuação"},
     {id:"interno_contagem",   icon:"▤", label:"Contagem da equipe"},
     {id:"interno_mapeamento", icon:"◉", label:"Mapeamento"},
-    {id:"interno_conexoes",   icon:"◬", label:"Conexão e contas"},
+    {id:"interno_conexoes",   icon:"◬", label:"Conexão e Contas"},
     {id:"interno_360",        icon:"◎", label:"Avaliação 360"},
-    {id:"interno_carreira",   icon:"▲", label:"Histórico carreira"},
+    {id:"interno_carreira",   icon:"▲", label:"Histórico Carreira"},
   ]},
 ];
 
@@ -1068,11 +1008,10 @@ const NAV=[
  * Usa getProfilePhoto (já existente — lê pixels-selfprofile-{id} do localStorage).
  * Re-renderiza instantâneo quando dispara event "pixels:photo-updated".
  */
-function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title, noHover}){
+function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title}){
   // user pode ser objeto TEAM completo OU só id string
   const u=typeof user==="string"?(TEAM.find(t=>t.id===user)||{id:user,name:user,av:"?",color:"#94a3b8"}):user;
   const [photo,setPhoto]=useState(()=>getProfilePhoto(u.id));
-  const [hoverPos,setHoverPos]=useState(null); // {x, y} ou null
   useEffect(function(){
     const handler=function(e){
       // Re-checa só se o evento é pro usuário relevante (ou broadcast geral)
@@ -1090,53 +1029,17 @@ function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyl
     flexShrink:0,overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center"
   };
   const merged=Object.assign({},base,extraStyle||{});
-  const showHover=!noHover&&size<=34;
-  const onEnter=(e)=>{
-    if(!showHover)return;
-    const r=e.currentTarget.getBoundingClientRect();
-    setHoverPos({x:r.left+r.width/2,y:r.top});
-  };
-  const onLeave=()=>setHoverPos(null);
-  let avatarEl;
   if(photo){
-    avatarEl=<img src={photo} alt={u.name||""} title={showHover?undefined:(title||u.name||"")} loading="lazy"
+    return <img src={photo} alt={u.name||""} title={title||u.name||""} loading="lazy"
       style={Object.assign({},merged,{objectFit:"cover"})}
-      onError={function(e){e.currentTarget.style.display="none";}}
-      onMouseEnter={onEnter} onMouseLeave={onLeave}/>;
-  }else{
-    avatarEl=<div title={showHover?undefined:(title||u.name||"")}
-      style={Object.assign({},merged,{
-        background:u.color||"#94a3b8",
-        color:"#fff",fontWeight:fontWeight,
-        fontSize:Math.max(8,Math.round(size*0.45))
-      })}
-      onMouseEnter={onEnter} onMouseLeave={onLeave}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
+      onError={function(e){e.currentTarget.style.display="none";}}/>;
   }
-  if(!showHover)return avatarEl;
-  const popup=hoverPos&&createPortal(
-    <div style={{
-      position:"fixed",
-      left:hoverPos.x,top:hoverPos.y-10,
-      transform:"translate(-50%,-100%)",
-      background:"#0f172a",borderRadius:10,padding:"10px 14px",
-      display:"flex",alignItems:"center",gap:12,
-      pointerEvents:"none",zIndex:99999,
-      boxShadow:"0 12px 32px rgba(0,0,0,0.25)",
-      whiteSpace:"nowrap",
-      fontFamily:"'Inter',system-ui,sans-serif",
-    }}>
-      {photo
-        ? <img src={photo} alt="" style={{width:52,height:52,borderRadius:"50%",objectFit:"cover",flexShrink:0,border:"1.5px solid rgba(255,255,255,0.12)"}}/>
-        : <div style={{width:52,height:52,borderRadius:"50%",background:u.color||"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:20,flexShrink:0,border:"1.5px solid rgba(255,255,255,0.12)"}}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>
-      }
-      <div style={{display:"flex",flexDirection:"column",gap:2}}>
-        <span style={{fontSize:13,fontWeight:600,color:"#fff",lineHeight:1.2}}>{u.name}</span>
-        {u.role&&<span style={{fontSize:10,color:"rgba(255,255,255,0.6)",fontWeight:500,letterSpacing:.3}}>{u.role}</span>}
-      </div>
-    </div>,
-    document.body
-  );
-  return <Fragment>{avatarEl}{popup}</Fragment>;
+  // Fallback: letra colorida
+  return <div title={title||u.name||""} style={Object.assign({},merged,{
+    background:u.color||"#94a3b8",
+    color:"#fff",fontWeight:fontWeight,
+    fontSize:Math.max(8,Math.round(size*0.45))
+  })}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
 }
 
 /* ─── HOOK: useOpenCardSync ─────────────────── */
@@ -1223,102 +1126,6 @@ function fmtLastSeen(lastSeenAt){
   return`Última atividade às ${time} do dia ${d.toLocaleDateString("pt-BR")}`;
 }
 
-/* ─── COMPONENTE: Ico ────────────────────────
- * Helper de ícones inline (estilo Lucide/Feather line-art).
- * Uso: <Ico n="clock" size={14}/> ou <Ico n="zap" size={16} color="#fff"/>
- * Stroke baseado em currentColor por padrão — herda cor do contexto. */
-function Ico({n,size=14,color,strokeWidth=2}){
-  const cl=color||"currentColor";
-  const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:cl,strokeWidth,strokeLinecap:"round",strokeLinejoin:"round"};
-  if(n==="clock")     return <svg {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-  if(n==="scan")      return <svg {...p}><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>;
-  if(n==="zap")       return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
-  if(n==="kanban")    return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
-  if(n==="list")      return <svg {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
-  if(n==="calendar")  return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
-  if(n==="trash")     return <svg {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>;
-  if(n==="paperclip") return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>;
-  if(n==="message")   return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
-  if(n==="x")         return <svg {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
-  if(n==="refresh")   return <svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>;
-  if(n==="folder")    return <svg {...p}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>;
-  if(n==="filter")    return <svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
-  if(n==="check")     return <svg {...p}><polyline points="20 6 9 17 4 12"/></svg>;
-  if(n==="alert")     return <svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
-  if(n==="flame")     return <svg {...p}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
-  if(n==="link")      return <svg {...p}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
-  if(n==="eye")       return <svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
-  if(n==="eyeOff")    return <svg {...p}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
-  if(n==="copy")      return <svg {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
-  if(n==="file")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
-  if(n==="fileText")  return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
-  if(n==="image")     return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
-  if(n==="video")     return <svg {...p}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
-  if(n==="mic")       return <svg {...p}><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
-  if(n==="tag")       return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
-  if(n==="send")      return <svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
-  if(n==="bell")      return <svg {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
-  if(n==="sparkles")  return <svg {...p}><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>;
-  if(n==="edit")      return <svg {...p}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-  if(n==="pin")       return <svg {...p}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 002-2V3H6v1a2 2 0 002 2h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>;
-  if(n==="checkCircle")return <svg {...p}><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
-  if(n==="xCircle")   return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
-  if(n==="dot")       return <svg {...p}><circle cx="12" cy="12" r="5" fill={cl} stroke="none"/></svg>;
-  if(n==="moreHor")   return <svg {...p}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>;
-  if(n==="download")  return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
-  if(n==="upload")    return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
-  if(n==="rotate")    return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>;
-  if(n==="bomb")      return <svg {...p}><circle cx="11" cy="13" r="9"/><path d="M14.35 4.65L16.3 2.7a2.41 2.41 0 013.4 0l1.6 1.6a2.4 2.4 0 010 3.4l-1.95 1.95"/><path d="m22 2-1.5 1.5"/></svg>;
-  if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
-  if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
-  if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
-  if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
-  if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
-  return null;
-}
-
-/* ─── HELPER: calcDesignerPayments ──────────────
- * Calcula contagem + total a pagar pro designer André baseado em:
- *   - assignee/assignees inclui o designerId
- *   - referenceMonth bate (formato "YYYY-MM"). Passar null = todos os meses.
- * Categorias e preços (hardcoded por enquanto, pra Guilherme/vídeo virá depois):
- *   - Foto de obra (título contém "foto de obra", case insensitive): R$ 20
- *   - Arte única (contentType="arte"):                                R$ 30
- *   - Arte carrossel (contentType="carrossel"):                       R$ 45
- *   - Vídeo / não classificado: não entra no cálculo. */
-const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, video: 100, corte: 20 };
-// Status que CONTAM pro pagamento — só entrega aprovada/agendada/publicada.
-// Em execução, Ajustes, Avaliação NÃO contam (ainda não foi entregue).
-const PAID_STATUSES = ["aprovado","agendado","publicado"];
-function calcDesignerPayments(tasks, designerId, refMonth){
-  const out = { fotoObra: 0, arte: 0, carrossel: 0, video: 0, corte: 0, naoClassificado: 0, tasksFotoObra: [], tasksArte: [], tasksCarrossel: [], tasksVideo: [], tasksCorte: [], tasksOutros: [] };
-  (tasks || []).forEach(t => {
-    if(!t) return;
-    const assigned = t.assignee === designerId || (Array.isArray(t.assignees) && t.assignees.includes(designerId));
-    if(!assigned) return;
-    if(!PAID_STATUSES.includes(t.status)) return; // só entregas aprovadas/agendadas/publicadas
-    if(refMonth && t.referenceMonth !== refMonth) return;
-    if(t.contentType === "foto"){ out.fotoObra++; out.tasksFotoObra.push(t); }
-    else if(t.contentType === "carrossel"){ out.carrossel++; out.tasksCarrossel.push(t); }
-    else if(t.contentType === "arte"){ out.arte++; out.tasksArte.push(t); }
-    else if(t.contentType === "video"){ out.video++; out.tasksVideo.push(t); }
-    else if(t.contentType === "corte"){ out.corte++; out.tasksCorte.push(t); }
-    else { out.naoClassificado++; out.tasksOutros.push(t); }
-  });
-  out.total = out.fotoObra * DESIGNER_PRICES.fotoObra
-            + out.arte     * DESIGNER_PRICES.arte
-            + out.carrossel* DESIGNER_PRICES.carrossel
-            + out.video    * DESIGNER_PRICES.video
-            + out.corte    * DESIGNER_PRICES.corte;
-  return out;
-}
-function formatRefMonth(refMonth){
-  if(!refMonth) return "Todos os meses";
-  const [y,m] = refMonth.split("-");
-  const names = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  return (names[parseInt(m,10)-1] || m) + "/" + y;
-}
-
 /* ─── HELPER: getProfilePhoto ───────────────── */
 // Busca foto do localStorage para qualquer userId
 function getProfilePhoto(uid){
@@ -1367,7 +1174,7 @@ const Chip=({color,children,sm})=>(
 /* ─── STATUS DE CARD ─────────────────────────
    Labels e cores usados em vários módulos (chat, portal, card preview).
    Movido para cá para remover dependência oculta entre 05_chat e 14_portal. */
-const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demandas",execucao:"Em execução",avaliacao:"Avaliação",aprovado:"Aprovadas",agendado:"Agendadas",publicado:"Publicadas",alteracao:"Alteração",pausado:"Pausadas"};
+const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
 const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
 
 /* ─── ASK CLAUDE HELPER ─────────────────────────────
@@ -1400,6 +1207,59 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
   }
   if(data?.error)throw new Error(data.error);
   return data;
+}
+
+function Ico({n,size=14,color,strokeWidth=2}){
+  const cl=color||"currentColor";
+  const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:cl,strokeWidth,strokeLinecap:"round",strokeLinejoin:"round"};
+  if(n==="clock")     return <svg {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+  if(n==="scan")      return <svg {...p}><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>;
+  if(n==="zap")       return <svg {...p}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+  if(n==="kanban")    return <svg {...p}><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>;
+  if(n==="list")      return <svg {...p}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+  if(n==="calendar")  return <svg {...p}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+  if(n==="trash")     return <svg {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6"/><path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>;
+  if(n==="paperclip") return <svg {...p}><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>;
+  if(n==="message")   return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+  if(n==="x")         return <svg {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+  if(n==="refresh")   return <svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>;
+  if(n==="folder")    return <svg {...p}><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>;
+  if(n==="filter")    return <svg {...p}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
+  if(n==="check")     return <svg {...p}><polyline points="20 6 9 17 4 12"/></svg>;
+  if(n==="alert")     return <svg {...p}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+  if(n==="flame")     return <svg {...p}><path d="M8.5 14.5A2.5 2.5 0 0011 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 11-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 002.5 2.5z"/></svg>;
+  if(n==="link")      return <svg {...p}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
+  if(n==="eye")       return <svg {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
+  if(n==="eyeOff")    return <svg {...p}><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>;
+  if(n==="copy")      return <svg {...p}><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>;
+  if(n==="file")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>;
+  if(n==="fileText")  return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+  if(n==="image")     return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+  if(n==="video")     return <svg {...p}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
+  if(n==="mic")       return <svg {...p}><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
+  if(n==="tag")       return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
+  if(n==="send")      return <svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
+  if(n==="bell")      return <svg {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
+  if(n==="sparkles")  return <svg {...p}><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>;
+  if(n==="edit")      return <svg {...p}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+  if(n==="pin")       return <svg {...p}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 002-2V3H6v1a2 2 0 002 2h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>;
+  if(n==="checkCircle")return <svg {...p}><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
+  if(n==="xCircle")   return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
+  if(n==="dot")       return <svg {...p}><circle cx="12" cy="12" r="5" fill={cl} stroke="none"/></svg>;
+  if(n==="moreHor")   return <svg {...p}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>;
+  if(n==="download")  return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+  if(n==="upload")    return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+  if(n==="rotate")    return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>;
+  if(n==="bomb")      return <svg {...p}><circle cx="11" cy="13" r="9"/><path d="M14.35 4.65L16.3 2.7a2.41 2.41 0 013.4 0l1.6 1.6a2.4 2.4 0 010 3.4l-1.95 1.95"/><path d="m22 2-1.5 1.5"/></svg>;
+  if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
+  if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+  if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+  if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
+  if(n==="plus")      return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+  if(n==="users")     return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
+  if(n==="building")  return <svg {...p}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>;
+  return null;
 }
 
 // ======= 00_mindmap_data.jsx =======
@@ -9399,14 +9259,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 // Dropdown de filtro — definido fora do render para manter estado entre renders
 function KanbanDropdown({label,icon,active,children}){
   const [open,setOpen]=useState(false);
-  return <div style={{position:"relative"}}>
+  return <div style={{position:"relative",fontFamily:"'Inter',system-ui,sans-serif"}}>
     <button onMouseDown={e=>{e.stopPropagation();setOpen(v=>!v);}}
-      style={{display:"flex",alignItems:"center",gap:6,background:active?C.a:C.card,color:active?"#fff":C.ts,border:`1px solid ${active?C.a:C.b1}`,borderRadius:20,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",boxShadow:active?"0 2px 8px rgba(161,64,255,0.3)":"none"}}>
-      {icon&&<span>{icon}</span>}{label}<span style={{fontSize:9,marginLeft:2}}>{open?"▲":"▼"}</span>
+      style={{display:"inline-flex",alignItems:"center",gap:7,background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:`1px solid ${active?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",fontFamily:"inherit"}}
+      onMouseEnter={e=>{if(!active){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#f8fafc";}}}
+      onMouseLeave={e=>{if(!active){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
+      {icon&&<span style={{display:"flex",alignItems:"center",color:active?"#fff":"#64748b"}}>{icon}</span>}
+      <span>{label}</span>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.6,transform:open?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
     </button>
     {open&&<>
       <div style={{position:"fixed",inset:0,zIndex:98}} onMouseDown={()=>setOpen(false)}/>
-      <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"6px 0",zIndex:99,minWidth:180,boxShadow:"0 8px 24px rgba(0,0,0,0.2)"}} onMouseDown={e=>e.stopPropagation()}>
+      <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"6px 0",zIndex:99,minWidth:200,boxShadow:"0 8px 24px rgba(15,23,42,0.12)",fontFamily:"inherit"}} onMouseDown={e=>e.stopPropagation()}>
         {children(()=>setOpen(false))}
       </div>
     </>}
@@ -10519,110 +10383,115 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>
     </div>}
 
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
       {/* header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
         <div>
-          <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>Demandas</div>
-          <div style={{color:C.ts,fontSize:12,marginTop:3}}>{visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length} abertas · {trash.length} na lixeira</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Demandas</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
+            {visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length} abertas
+            <span style={{color:"#cbd5e1",margin:"0 6px"}}>·</span>
+            {trash.length} na lixeira
+          </div>
         </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
           {/* SEARCH input — pesquisar cards por título */}
           <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-            <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#7c3aed":"#94a3b8",pointerEvents:"none",display:"flex"}}>
+            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </span>
             <input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Buscar demanda..."
-              style={{background:"#fff",border:`1px solid ${searchTerm?"#7c3aed":"#e2e8f0"}`,borderRadius:10,padding:"6px 28px 6px 28px",fontSize:12,fontWeight:500,color:"#0f172a",outline:"none",width:180,transition:"border-color .15s",fontFamily:"inherit"}}/>
+              style={{background:"#fff",border:`1px solid ${searchTerm?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"7px 30px 7px 30px",fontSize:12,fontWeight:500,color:"#0f172a",outline:"none",width:200,transition:"border-color .15s",fontFamily:"inherit"}}/>
             {searchTerm&&<button onClick={()=>setSearchTerm("")} title="Limpar busca"
-              style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
+              style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
               onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
               onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>}
           </div>
-          {/* ESCANEAR button — só quem tem permissão */}
-          {canEscanear&&<button onClick={()=>setShowScan(true)}
-            style={{background:`linear-gradient(135deg,${C.or},#ff3300)`,color:"#fff",border:"none",borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.or}60`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3}}>
-            <Ico n="scan" size={14}/> Escanear
-          </button>}
-          {/* PIXELS IA button — só quem tem permissão */}
-          {canPixelsIA&&<button onClick={()=>setShowPixelsIA(true)}
-            style={{background:"#ffffff",color:C.a,border:`2px solid ${C.a}`,borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.a}30`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3,position:"relative"}}>
-            <Ico n="zap" size={14}/> Pixels IA
-            <span style={{position:"absolute",top:-6,right:-6,background:C.a,color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:8,fontWeight:900}}>IA</span>
-          </button>}
-          {/* view mode group */}
-          <div style={{display:"flex",background:C.b1,borderRadius:10,padding:3,gap:2}}>
-            {[["cartao","kanban","Cartão"],["lista","list","Lista"],["calendar","calendar","Calendário"]].map(([m,ico,l])=>(
-              <button key={m} onClick={()=>setViewMode(m)} style={{background:viewMode===m?C.a:"transparent",color:viewMode===m?"#fff":C.ts,border:"none",borderRadius:8,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s",display:"flex",alignItems:"center",gap:5}}><Ico n={ico} size={13}/>{l}</button>
+          {/* view mode group — só Cartão e Calendário (Lista removida) */}
+          <div style={{display:"flex",background:"#f1f5f9",borderRadius:10,padding:3,gap:2,fontFamily:"'Inter',system-ui,sans-serif"}}>
+            {[["cartao","kanban","Cartão"],["calendar","calendar","Calendário"]].map(([m,ico,l])=>(
+              <button key={m} onClick={()=>setViewMode(m)}
+                style={{background:viewMode===m?"#fff":"transparent",color:viewMode===m?"#0f172a":"#64748b",border:"none",borderRadius:8,padding:"6px 13px",fontSize:11,fontWeight:viewMode===m?700:500,cursor:"pointer",transition:"all .15s",display:"flex",alignItems:"center",gap:5,boxShadow:viewMode===m?"0 1px 3px rgba(15,23,42,0.08)":"none",fontFamily:"inherit"}}>
+                <Ico n={ico} size={13}/>{l}
+              </button>
             ))}
           </div>
-          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><Ico n="trash" size={13}/> Lixeira</button>}
+          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")}
+            style={{background:viewMode==="trash"?"#fee2e2":"#f1f5f9",color:viewMode==="trash"?"#dc2626":"#64748b",border:"none",borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:viewMode==="trash"?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}>
+            <Ico n="trash" size={13}/> Lixeira
+          </button>}
           {/* Botão de refresh manual */}
           <button onClick={()=>window.location.reload()} title="Recarregar dados"
-            style={{background:C.b1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:"pointer",color:C.ts,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
-            onMouseEnter={e=>{e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a;}}
-            onMouseLeave={e=>{e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
-            ↻
+            style={{background:"#f1f5f9",border:"none",borderRadius:10,width:32,height:32,fontSize:14,cursor:"pointer",color:"#64748b",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="#e2e8f0";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
+            <Ico n="refresh" size={14}/>
           </button>
           {myPerms.criarDemanda&&<button onClick={()=>{
             if(myPerms.novaColuna&&viewMode==="cartao"){setShowNewCol(true);}
             else{addNewTask("demanda");}
           }}
-            style={{background:`linear-gradient(135deg,${C.a},${C.aD})`,color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:`0 4px 14px ${C.a}40`}}>
-            {myPerms.novaColuna&&viewMode==="cartao"?"＋ Nova Coluna":"+ Nova"}
+            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 2px 8px rgba(15,23,42,0.15)",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}
+            onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
+            onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
+            <Ico n="plus" size={13}/> {myPerms.novaColuna&&viewMode==="cartao"?"Nova coluna":"Nova"}
           </button>}
         </div>
       </div>
 
-      {/* ── FILTER BAR: Setor | Perfil | Cliente ── */}
+      {/* ── FILTER BAR: Setor | Colaborador | Cliente ── */}
       {viewMode!=="clientes"&&(()=>{
         const canSeeAll=myPerms.verTodosKanban;
         const canSeeSocios=myPerms.verKanbanSocios;
-        // Se não pode ver todos, só vê o próprio nome (sem dropdown de usuário)
+        // Colaboradores que aparecem no filtro — exclui Erick (gestor de mídia, não faz parte do fluxo de demandas)
+        const FLUXO_USERS=["vinicius","gustavo","ellen","andre","guilherme"];
         const allowedUsers=canSeeAll
           ?["todos",...TEAM.filter(u=>{
+              if(!FLUXO_USERS.includes(u.id))return false;
               if(!canSeeSocios&&u.level===1)return false;
               return true;
             }).map(u=>u.id)]
-          :[activeUserId]; // só as suas próprias
+          :[activeUserId];
 
+        // Setores do fluxo de demandas — só Design, Edição de vídeo, Copywriting
         const SETORES=[
           {id:"todos_setores", label:"Todos os setores"},
-          {id:"video",    label:"Edição de Vídeo", icon:"🎬"},
-          {id:"design",   label:"Design",          icon:"🎨"},
-          {id:"trafego",  label:"Estratégia",      icon:"📊"},
-          {id:"agenda",   label:"Agendamentos",    icon:"📅"},
-          {id:"texto",    label:"Copywriting",     icon:"✍"},
+          {id:"design",   label:"Design"},
+          {id:"video",    label:"Edição de vídeo"},
+          {id:"texto",    label:"Copywriting"},
         ];
 
-        return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
           {/* ── SETOR ── só quem tem filtroSetor */}
-          {myPerms.filtroSetor&&<KanbanDropdown label={filterSector==="todos_setores"?"Setor":SETORES.find(s=>s.id===filterSector)?.label||"Setor"} icon="🗂" active={filterSector!=="todos_setores"}>
+          {myPerms.filtroSetor&&<KanbanDropdown label={filterSector==="todos_setores"?"Setor":SETORES.find(s=>s.id===filterSector)?.label||"Setor"} icon={<Ico n="folder" size={13}/>} active={filterSector!=="todos_setores"}>
             {(close)=>SETORES.map(s=><button key={s.id} onClick={()=>{setFilterSector(s.id);close();}}
-              style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterSector===s.id?C.ag:"transparent",border:"none",color:filterSector===s.id?C.a:C.tx,fontSize:12,fontWeight:filterSector===s.id?700:500,cursor:"pointer",textAlign:"left"}}>
-              {s.icon&&<span>{s.icon}</span>}{s.label}
-              {filterSector===s.id&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
+              style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterSector===s.id?C.ag:"transparent",border:"none",color:filterSector===s.id?C.a:C.tx,fontSize:12,fontWeight:filterSector===s.id?700:500,cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
+              {s.label}
+              {filterSector===s.id&&<span style={{marginLeft:"auto",color:C.a}}><Ico n="check" size={12}/></span>}
             </button>)}
           </KanbanDropdown>}
 
-          {/* ── PERFIL ── só quem tem filtroPerfil e verTodosKanban */}
-          {myPerms.filtroPerfil&&canSeeAll&&<KanbanDropdown label={filterUser==="todos"?"Perfil":TEAM.find(u=>u.id===filterUser)?.name||"Perfil"} icon="👤" active={filterUser!=="todos"}>
+          {/* ── COLABORADOR (antes Perfil) ── com foto de perfil */}
+          {myPerms.filtroPerfil&&canSeeAll&&<KanbanDropdown label={filterUser==="todos"?"Colaborador":TEAM.find(u=>u.id===filterUser)?.name||"Colaborador"} icon={<Ico n="users" size={13}/>} active={filterUser!=="todos"}>
             {(close)=>allowedUsers.map(f=>{
               const u=TEAM.find(x=>x.id===f);
               const active=filterUser===f;
               return <button key={f} onClick={()=>{setFilterUser(f);close();}}
-                style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left"}}>
-                {u&&<div style={{width:20,height:20,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:8,fontWeight:800,flexShrink:0}}>{u.av}</div>}
+                style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
+                {f==="todos"
+                  ?<div style={{width:22,height:22,borderRadius:"50%",background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}><Ico n="users" size={11}/></div>
+                  :u&&<UserAvatar user={u} size={22}/>
+                }
                 {f==="todos"?"Todos":u?.name||f}
-                {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
+                {active&&<span style={{marginLeft:"auto",color:C.a}}><Ico n="check" size={12}/></span>}
               </button>;
             })}
           </KanbanDropdown>}
 
           {/* ── CLIENTE ── só quem tem filtroCliente */}
-          {myPerms.filtroCliente&&<KanbanDropdown label={filterClient==="todos"?"Cliente":CLIENTS.find(c=>c.id===filterClient)?.abbr||"Cliente"} icon="🏢" active={filterClient!=="todos"}>
+          {myPerms.filtroCliente&&<KanbanDropdown label={filterClient==="todos"?"Cliente":CLIENTS.find(c=>c.id===filterClient)?.abbr||"Cliente"} icon={<Ico n="building" size={13}/>} active={filterClient!=="todos"}>
             {(close)=>[{id:"todos",name:"Todos os clientes",color:C.a},...CLIENTS].map(cl=>{
               const active=filterClient===cl.id;
               return <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");close();}}
@@ -10662,7 +10531,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 {typeof count==="number"&&<span style={{marginLeft:"auto",color:checked?C.a:"#94a3b8",fontSize:10,fontWeight:checked?700:500,flexShrink:0}}>{count}</span>}
               </button>;
             };
-            return <KanbanDropdown label={labelTxt} icon="🏷" active={selectedCount>0}>
+            return <KanbanDropdown label={labelTxt} icon={<Ico n="tag" size={13}/>} active={selectedCount>0}>
               {function(close){return(<>
                 {/* Header: Todas + Limpar (quando há seleção) */}
                 <button onClick={function(){setFilterAdminTags([]);}}
@@ -10784,7 +10653,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           <div style={{width:1,height:24,background:C.b1,marginLeft:"auto"}}/>
           <KanbanDropdown
             label={sortMode==="smart"?"Inteligente":sortMode==="deadline"?"Prazo":sortMode==="recent"?"Recentes":"Manual"}
-            icon="⇅"
+            icon={<Ico n="filter" size={13}/>}
             active={sortMode!=="smart"}>
             {function(close){return(<>
               {[
@@ -11199,6 +11068,21 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
                   {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
+                </div>
+              </div>;
+            })}
+          </>;
+        })()}
+      </div>}
+    </div>
+  </>;
+}
+
+/* ─── CALENDÁRIO DE PUBLICAÇÕES ───────────────
+   Visível apenas para: Vinicius, Gustavo, Hellen
+   Mostra cards com status "agendado" pelo publishDate
+   Filtro: todos os clientes + unidades Bioter
+──────────────────────────────────────────────── */                  {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
                 </div>
               </div>;
             })}
