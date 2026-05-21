@@ -921,17 +921,17 @@ function NavIcon({id,size=18,color}){
 
 /* ─── NAV ────────────────────────────────── */
 const NAV=[
-  {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
+  {id:"meudash",    icon:"⊡", label:"Meu dashboard"},
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
-    {id:"demandas_kanban",     icon:"◈", label:"Fluxo de Demandas"},
-    {id:"demandas_internas",   icon:"◫", label:"Demandas Internas"},
-    {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de Publicações"},
-    {id:"demandas_cal_interno",icon:"▦", label:"Calendário Interno/Clientes"},
+    {id:"demandas_kanban",     icon:"◈", label:"Fluxo de demandas"},
+    {id:"demandas_internas",   icon:"◫", label:"Demandas internas"},
+    {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de publicações"},
+    {id:"demandas_cal_interno",icon:"▦", label:"Calendário interno/clientes"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
-    {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de Copys"},
-    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Conteúdo"},
-    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação Demanda Interna"},
+    {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de copys"},
+    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de conteúdo"},
+    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação demanda interna"},
   ]},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
@@ -943,12 +943,12 @@ const NAV=[
   ]},
   {id:"ia",         icon:"◎", label:"Pixels IA",children:[
     {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
-    {id:"ia_churn",      icon:"◬", label:"Alerta Churn"},
+    {id:"ia_churn",      icon:"◬", label:"Alerta churn"},
     {id:"ia_playbooks",  icon:"▦", label:"Playbooks"},
     {id:"ia_biblioteca", icon:"◇", label:"Biblioteca"},
   ]},
   {type:"divider",label:"PORTAL"},
-  {id:"portal",     icon:"◯", label:"Portal Cliente",children:[
+  {id:"portal",     icon:"◯", label:"Portal cliente",children:[
     {id:"portal_dashboard",  icon:"⊡", label:"Dashboard"},
     {id:"portal_demandas",   icon:"◈", label:"Demandas"},
     {id:"portal_calendario", icon:"▦", label:"Calendário"},
@@ -968,13 +968,13 @@ const NAV=[
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
     {id:"interno_calendario", icon:"▦", label:"Calendário"},
-    {id:"interno_radar",      icon:"◎", label:"Radar de Entrega"},
+    {id:"interno_radar",      icon:"◎", label:"Radar de entrega"},
     {id:"interno_pontuacao",  icon:"◈", label:"Pontuação"},
     {id:"interno_contagem",   icon:"▤", label:"Contagem da equipe"},
     {id:"interno_mapeamento", icon:"◉", label:"Mapeamento"},
-    {id:"interno_conexoes",   icon:"◬", label:"Conexão e Contas"},
+    {id:"interno_conexoes",   icon:"◬", label:"Conexão e contas"},
     {id:"interno_360",        icon:"◎", label:"Avaliação 360"},
-    {id:"interno_carreira",   icon:"▲", label:"Histórico Carreira"},
+    {id:"interno_carreira",   icon:"▲", label:"Histórico carreira"},
   ]},
 ];
 
@@ -13926,10 +13926,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   const isSocio=CURRENT_USER.level===1;
   const TABS=[
-    {id:"copys",      label:"Aprovação de Copys",      count:copyQueue.length,    color:C.a},
-    {id:"publicacao", label:"Aprovação de Conteúdo", count:pubQueue.length,     color:C.gr},
-    ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda Interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
-    ...((perms?.verAprAjuste||isSocio)?[{id:"ajuste", label:"Ajustes Solicitados", count:ajusteQueue.length, color:C.or}]:[]),
+    {id:"copys",      label:"Aprovação de copys",      count:copyQueue.length,    color:C.a},
+    {id:"publicacao", label:"Aprovação de conteúdo", count:pubQueue.length,     color:C.gr},
+    ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
+    ...((perms?.verAprAjuste||isSocio)?[{id:"ajuste", label:"Ajustes solicitados", count:ajusteQueue.length, color:C.or}]:[]),
   ];
 
   return (<div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -13964,7 +13964,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     })()}
 
     <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1,fontFamily:"Inter, system-ui, -apple-system, sans-serif"}}>
-      {tab==="copys"?"Aprovação de Copys":tab==="internas"?"Aprovação de Demandas Internas":tab==="ajuste"?"Ajustes Solicitados":"Aprovação de Conteúdo"}
+      {tab==="copys"?"Aprovação de copys":tab==="internas"?"Aprovação de demandas internas":tab==="ajuste"?"Ajustes solicitados":"Aprovação de conteúdo"}
     </div>
 
     {/* Empty state */}
