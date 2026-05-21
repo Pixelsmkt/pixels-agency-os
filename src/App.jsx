@@ -384,25 +384,40 @@ function smartFormatTitle(input){
   // 4. Processa CADA palavra individualmente.
   // - well-formed (lowercase puro, Capitalize, CamelCase, sigla 2 letras) → preserva
   // - bagunçada (OBrA, FOTO, mAcA, etc) → normaliza
+  // Pontuação ao redor (parens, brackets, aspas) é isolada e re-aplicada após processar o core.
+  // Assim "[REFAÇÃO]" → "[Refação]" (não "[refação]"), e "(MG)" → preserva.
   function processWord(word,idx,isTitleSegment){
     if(!word)return word;
-    if(_isCamelCaseValid(word))return word; // VetService, iPhone → sempre preserva
-    const lower=word.toLocaleLowerCase("pt-BR");
-    // Stopword conhecida (de, da, do, the, del, ...) no meio → minúscula
-    if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)){
-      return lower;
-    }
-    if(_isWellFormed(word)){
-      // Palavra já está em formato aceitável — preserva, só ajusta 1ª se necessário
-      if(idx===0&&/^[a-zà-ÿ]/.test(word)){
-        return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1);
+    // Extrai pontuação ao redor: tudo que NÃO é letra/dígito no início e no fim
+    const leadingMatch=word.match(/^[^A-Za-zÀ-ÿ0-9]+/);
+    const trailingMatch=word.match(/[^A-Za-zÀ-ÿ0-9]+$/);
+    const prefix=leadingMatch?leadingMatch[0]:"";
+    const suffix=trailingMatch?trailingMatch[0]:"";
+    // Se a palavra é só pontuação (não tem letras nem números) → preserva como tá
+    if(prefix.length+suffix.length>=word.length)return word;
+    const core=word.slice(prefix.length,word.length-suffix.length);
+
+    let processed;
+    if(_isCamelCaseValid(core)){
+      processed=core; // VetService, iPhone → sempre preserva
+    } else {
+      const lower=core.toLocaleLowerCase("pt-BR");
+      if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)){
+        processed=lower; // stopword no meio → minúscula
+      } else if(_isWellFormed(core)){
+        // Core já está em formato aceitável — preserva, só ajusta 1ª se necessário
+        if(idx===0&&/^[a-zà-ÿ]/.test(core)){
+          processed=core.charAt(0).toLocaleUpperCase("pt-BR")+core.slice(1);
+        } else {
+          processed=core;
+        }
+      } else {
+        // Core mal-formado (CAPS, mistura aleatória) — normaliza
+        if(isTitleSegment||idx===0)processed=_capitalizeFirst(core);
+        else processed=lower;
       }
-      return word;
     }
-    // Palavra mal-formada (CAPS, mistura aleatória) — normaliza
-    if(isTitleSegment)return _capitalizeFirst(word);
-    if(idx===0)return _capitalizeFirst(word);
-    return lower;
+    return prefix+processed+suffix;
   }
 
   const formatted=parts.map(function(part,partIdx){
@@ -412,10 +427,17 @@ function smartFormatTitle(input){
   });
 
   let result=formatted.join(" - ");
-  // Garante 1ª letra do título maiúscula — exceto se a 1ª palavra for CamelCase (iPhone, eBay)
-  const firstWord=result.split(" ")[0]||"";
-  if(!_isCamelCaseValid(firstWord)&&result[0]&&/[a-zà-ÿ]/.test(result[0])){
-    result=result[0].toLocaleUpperCase("pt-BR")+result.slice(1);
+  // Garante 1ª letra alfabética do título maiúscula — pula pontuação inicial ([, (, ", etc.)
+  // Exceto se for CamelCase (iPhone, eBay) ou já estiver capitalizada
+  const firstAlphaMatch=result.match(/[a-zA-ZÀ-ÿ]/);
+  if(firstAlphaMatch&&/[a-zà-ÿ]/.test(firstAlphaMatch[0])){
+    // Pega a 1ª palavra completa (sem pontuação inicial) pra checar CamelCase
+    const wordStart=result.indexOf(firstAlphaMatch[0]);
+    const wordEnd=(result.slice(wordStart).match(/^[A-Za-zÀ-ÿ0-9]+/)||[""])[0].length+wordStart;
+    const firstCoreWord=result.slice(wordStart,wordEnd);
+    if(!_isCamelCaseValid(firstCoreWord)){
+      result=result.slice(0,wordStart)+firstAlphaMatch[0].toLocaleUpperCase("pt-BR")+result.slice(wordStart+1);
+    }
   }
   return result;
 }
@@ -1710,7 +1732,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     if(_migratedRef.current)return;
     if(!user||user.level!==1)return;
     if(!allTasks||allTasks.length===0)return;
-    const FLAG_KEY="pixels-title-migration-v5";
+    const FLAG_KEY="pixels-title-migration-v6";
     try{if(localStorage.getItem(FLAG_KEY))return;}catch(e){}
     const candidates=allTasks.filter(t=>{
       if(!t||!t.title||t.deletedAt)return false;
