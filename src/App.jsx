@@ -308,21 +308,35 @@ function ensureSupervisors(assignees){
 }
 
 /* ─── SMART FORMAT TITLE ───────────────────────────────────────────────
-   Normaliza o título do card pra um padrão consistente:
-   - Trim + colapsa espaços múltiplos
-   - Parte ANTES do " - ": Title Case (cada palavra capitalizada),
-     com preposições/artigos PT-BR em minúscula (de, da, do, e, etc.)
-   - Parte DEPOIS do " - ": Sentence Case (só primeira palavra capitalizada)
-   - Preserva palavras em CamelCase (ex.: "VetService", "iPhone")
+   Normaliza o título do card. Filosofia: respeita o que o user digitou.
+   Só intervém agressivamente quando detecta CAPS LOCK acidental.
+
+   Regras:
+   - SEMPRE: trim + colapsa espaços múltiplos + 1ª letra do título maiúscula.
+   - SE o input está em CAPS LOCK (mais maiúsculas que minúsculas):
+       • Parte ANTES do " - ": Title Case (Nome Próprio, exceto stopwords "de/da/do/e")
+       • Parte DEPOIS do " - ": Sentence Case (só 1ª palavra capitalizada)
+       • Sem " - ": tudo Sentence Case (assume que não é nome próprio)
+   - SE input está normal/misto: preserva capitalização original (user manda).
+   - Sempre preserva CamelCase (VetService, iPhone).
+
    Exemplos:
+     "Foto de obra"                              → "Foto de obra" (preserva)
+     "FOTO DE OBRA"                              → "Foto de obra" (caps→sentence)
+     "Monte Everest"                             → "Monte Everest" (preserva)
      "AGROPECUÁRIA PARAÍSO - PECUÁRIA DE LEITE"  → "Agropecuária Paraíso - Pecuária de leite"
-     "case de sucesso  -  vetService vídeo - 03" → "Case de Sucesso - VetService vídeo - 03"
-     "BETO GUSSO-SUINOCULTURA"                   → "BETO GUSSO-SUINOCULTURA" (sem espaços ao redor do -, não quebra)
+     "Agropecuária Paraíso - Pecuária de leite"  → idêntico (preserva)
+     "case de sucesso"                           → "Case de sucesso" (só 1ª letra)
 */
 const TITLE_STOPWORDS_PTBR = new Set([
+  // PT-BR — preposições, artigos, conjunções
   "de","da","do","das","dos","e","ou","a","o","as","os",
   "para","por","em","na","no","nas","nos","com","sem",
-  "ao","aos","à","às","um","uma","uns","umas"
+  "ao","aos","à","às","um","uma","uns","umas",
+  // ES — comum em datas comemorativas e marcas
+  "del","la","el","los","las","y","en","al","con","sin","un","una","unos","unas",
+  // EN — comum em termos técnicos / nomes em inglês
+  "the","of","and","or","in","on","at","to","for","by","with","an"
 ]);
 function _isCamelCase(word){
   if(!word||word.length<2)return false;
@@ -341,7 +355,22 @@ function smartFormatTitle(input){
   if(!s)return "";
   // 2. Normaliza espaçamento ao redor de separador " - " / " – " / " — "
   s=s.replace(/\s*[–—]\s*/g," - ").replace(/\s+-\s+/g," - ");
-  // 3. Split por " - " (apenas quando tem espaço ao redor — preserva "Bem-vindo")
+
+  // 3. Detecta CAPS LOCK: mais letras maiúsculas que minúsculas no input
+  const upperCount=(s.match(/[A-ZÀ-Ý]/g)||[]).length;
+  const lowerCount=(s.match(/[a-zà-ÿ]/g)||[]).length;
+  const isCapsLock=upperCount > lowerCount && upperCount > 2;
+
+  if(!isCapsLock){
+    // Input em formato normal/misto — preserva capitalização do user.
+    // Só garante que a 1ª letra do título não seja minúscula.
+    if(s[0]&&/[a-zà-ÿ]/.test(s[0])){
+      s=s[0].toLocaleUpperCase("pt-BR")+s.slice(1);
+    }
+    return s;
+  }
+
+  // 4. CAPS LOCK ativo — normaliza agressivamente
   const parts=s.split(" - ");
   const titleCase=function(text){
     return text.split(" ").map(function(word,idx){
@@ -360,7 +389,7 @@ function smartFormatTitle(input){
       return word.toLocaleLowerCase("pt-BR");
     }).join(" ");
   };
-  if(parts.length===1)return titleCase(parts[0]);
+  if(parts.length===1)return sentenceCase(parts[0]);
   return [titleCase(parts[0])].concat(parts.slice(1).map(sentenceCase)).join(" - ");
 }
 
@@ -1654,7 +1683,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     if(_migratedRef.current)return;
     if(!user||user.level!==1)return;
     if(!allTasks||allTasks.length===0)return;
-    const FLAG_KEY="pixels-title-migration-v1";
+    const FLAG_KEY="pixels-title-migration-v3";
     try{if(localStorage.getItem(FLAG_KEY))return;}catch(e){}
     const candidates=allTasks.filter(t=>{
       if(!t||!t.title||t.deletedAt)return false;
