@@ -23901,9 +23901,9 @@ export default function AgencyOS(){
           const isActive=page===n.id||(n.children&&n.children.some(c=>c.id===page));
           const hasChildren=n.children&&n.children.length>0;
           const isExpanded=hasChildren?(expanded[n.id]!==undefined?expanded[n.id]:isActive):false;
-          const isAprOrange=n.id==="aprovacoes"&&pendingAprovacoes>0&&!isActive;
-          const btnBg=isAprOrange?"#f97316":isActive?C.ag:"none";
-          const btnColor=isAprOrange?"#fff":isActive?C.a:C.ts;
+          const showAprBadge=n.id==="aprovacoes"&&pendingAprovacoes>0;
+          const btnBg=isActive?C.ag:"none";
+          const btnColor=isActive?C.a:C.ts;
           return(<div key={n.id}>
             <button onClick={()=>{
               if(sideCollapsed&&!isMob){setSideCollapsed(false);try{localStorage.setItem("pixels-sidebar-collapsed","0");}catch(e){}
@@ -23912,15 +23912,15 @@ export default function AgencyOS(){
               else nav(n.id);
             }}
             title={sideCollapsed&&!isMob?n.label:undefined}
-            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:sideCollapsed&&!isMob?"center":"space-between",padding:"9px 8px",borderRadius:10,border:"none",background:btnBg,color:btnColor,cursor:"pointer",fontWeight:isActive||isAprOrange?700:500,fontSize:12,marginBottom:2,textAlign:"left",transition:"all .15s"}}>
+            style={{width:"100%",display:"flex",alignItems:"center",justifyContent:sideCollapsed&&!isMob?"center":"space-between",padding:"9px 8px",borderRadius:10,border:"none",background:btnBg,color:btnColor,cursor:"pointer",fontWeight:isActive?700:500,fontSize:12,marginBottom:2,textAlign:"left",transition:"all .15s"}}>
               <span style={{display:"flex",alignItems:"center",gap:8}}>
                 <NavIcon id={n.id} size={18} color={btnColor}/>
                 {(!sideCollapsed||isMob)&&<span>{n.label}</span>}
               </span>
               {(!sideCollapsed||isMob)&&<span style={{display:"flex",alignItems:"center",gap:4}}>
                 {n.id==="notificacoes"&&unreadNotifs>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{unreadNotifs}</span>}
-                {isAprOrange&&<span style={{background:"rgba(255,255,255,0.25)",color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{pendingAprovacoes}</span>}
-                {hasChildren&&<span style={{color:isAprOrange?"rgba(255,255,255,0.8)":C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
+                {showAprBadge&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{pendingAprovacoes}</span>}
+                {hasChildren&&<span style={{color:C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
               </span>}
             </button>
             {(!sideCollapsed||isMob)&&hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
