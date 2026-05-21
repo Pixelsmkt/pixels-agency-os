@@ -13943,8 +13943,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       try{const s=localStorage.getItem("pixels-drive-"+(cl?.id||""));if(s)driveUrl=s;}catch(e){}
       return(<div style={{background:C.gr+"15",border:"1px solid "+C.gr+"44",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
         <div style={{flex:1,minWidth:200}}>
-          <div style={{color:C.gr,fontWeight:800,fontSize:13}}>Publicacao aprovada!</div>
-          <div style={{color:C.ts,fontSize:12,marginTop:2}}>"{lastApproved.title}" esta pronta para publicacao.</div>
+          <div style={{color:C.gr,fontWeight:800,fontSize:13}}>Publicação aprovada!</div>
+          <div style={{color:C.ts,fontSize:12,marginTop:2}}>"{lastApproved.title}" está pronta para publicação.</div>
         </div>
         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
           {driveUrl?(
@@ -13963,7 +13963,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       </div>);
     })()}
 
-    <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>
+    <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1,fontFamily:"Inter, system-ui, -apple-system, sans-serif"}}>
       {tab==="copys"?"Aprovação de Copys":tab==="internas"?"Aprovação de Demandas Internas":tab==="ajuste"?"Ajustes Solicitados":"Aprovação de Conteúdo"}
     </div>
 
@@ -13975,39 +13975,39 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     </div>)}
 
     {/* Card view */}
-    {current&&(<div style={{display:"flex",flexDirection:"column",gap:12,maxWidth:800,margin:"0 auto",width:"100%"}}>
+    {current&&(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1280,margin:"0 auto",width:"100%"}}>
 
       {/* Navigation */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <button onClick={prev} disabled={clampedIdx===0} style={{background:C.b1,border:"none",borderRadius:99,width:36,height:36,cursor:clampedIdx===0?"not-allowed":"pointer",color:C.tx,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx===0?.3:1}}>←</button>
-        <span style={{color:C.td,fontSize:12,fontWeight:600}}>{clampedIdx+1} / {queue.length}</span>
-        <button onClick={next} disabled={clampedIdx>=queue.length-1} style={{background:C.b1,border:"none",borderRadius:99,width:36,height:36,cursor:clampedIdx>=queue.length-1?"not-allowed":"pointer",color:C.tx,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx>=queue.length-1?.3:1}}>→</button>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 4px"}}>
+        <button onClick={prev} disabled={clampedIdx===0} style={{background:C.b1,border:"none",borderRadius:99,width:34,height:34,cursor:clampedIdx===0?"not-allowed":"pointer",color:C.tx,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx===0?.3:1,transition:"all .15s"}}>←</button>
+        <span style={{color:C.td,fontSize:12,fontWeight:600,letterSpacing:.2}}>{clampedIdx+1} / {queue.length}</span>
+        <button onClick={next} disabled={clampedIdx>=queue.length-1} style={{background:C.b1,border:"none",borderRadius:99,width:34,height:34,cursor:clampedIdx>=queue.length-1?"not-allowed":"pointer",color:C.tx,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx>=queue.length-1?.3:1,transition:"all .15s"}}>→</button>
       </div>
 
-      {/* Main content: image + sidebar */}
-      <div style={{display:"flex",gap:16,alignItems:"flex-start",flexWrap:"wrap"}}>
+      {/* Main content: image + sidebar — grid responsivo */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 380px",gap:18,alignItems:"flex-start"}}>
 
         {/* Image panel — oculto para demandas internas */}
-        {tab!=="internas"&&<div style={{flex:1,minWidth:260,display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{background:C.s1,borderRadius:14,overflow:"hidden",minHeight:240,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {tab!=="internas"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{background:C.s1,borderRadius:16,overflow:"hidden",minHeight:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
             {allImgs.length>0
-              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="material" style={{width:"100%",maxHeight:"65vh",objectFit:"contain",display:"block"}}/>)
-              :(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,padding:40}}>
-                  <div style={{fontSize:48}}>🖼</div>
+              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="material" style={{width:"100%",maxHeight:"78vh",objectFit:"contain",display:"block"}}/>)
+              :(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:60}}>
+                  <Ico n="image" size={40}/>
                   <div style={{color:C.ts,fontSize:13}}>Nenhuma imagem anexada</div>
                 </div>)
             }
           </div>
-          {allImgs.length>1&&(<div style={{display:"flex",gap:6,justifyContent:"center",flexWrap:"wrap"}}>
+          {allImgs.length>1&&(<div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
             {allImgs.map((src,i)=>(
               <img key={i} src={src} onClick={()=>setImgIdx(i)} alt={"img "+(i+1)}
-                style={{width:52,height:52,objectFit:"cover",borderRadius:8,cursor:"pointer",border:i===imgIdx?"2px solid "+C.a:"2px solid transparent",opacity:i===imgIdx?1:.5,transition:"all .15s"}}/>
+                style={{width:60,height:60,objectFit:"cover",borderRadius:10,cursor:"pointer",border:i===imgIdx?"2px solid "+C.a:"2px solid transparent",opacity:i===imgIdx?1:.55,transition:"all .15s"}}/>
             ))}
           </div>)}
         </div>}
 
-        {/* Right sidebar */}
-        <div style={{width:"min(340px,100%)",flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
+        {/* Right sidebar — info expandida */}
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
 
           {/* Card info */}
           {(()=>{
@@ -14028,83 +14028,97 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             const captionTxt=stripHtml(current.caption);
             const descTxt=stripHtml(current.desc);
             return(
-              <div style={{background:C.card,borderRadius:12,padding:"14px 16px",border:"0.5px solid "+C.b1,display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{background:C.card,borderRadius:14,padding:"18px 20px",border:"1px solid "+C.b1,display:"flex",flexDirection:"column",gap:14}}>
                 {/* Header: cliente + responsável */}
-                {cl&&(<div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:6,padding:"3px 8px",display:"flex",alignItems:"center"}}>
-                    {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:14,maxWidth:60,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:9,fontWeight:600}}>{cl.abbr}</span>)}
+                {cl&&(<div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center"}}>
+                    {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:18,maxWidth:80,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:10,fontWeight:700}}>{cl.abbr}</span>)}
                   </div>
-                  {assigneeUser&&(<span style={{color:C.td,fontSize:11}}>{assigneeUser.name}</span>)}
+                  {assigneeUser&&(<span style={{color:C.ts,fontSize:12,fontWeight:500}}>{assigneeUser.name}</span>)}
                 </div>)}
 
                 {/* Título */}
-                <div style={{color:C.tx,fontWeight:500,fontSize:14,lineHeight:1.4}}>{current.title}</div>
+                <div style={{color:C.tx,fontWeight:700,fontSize:16,lineHeight:1.35,letterSpacing:-.2}}>{current.title}</div>
 
-                {/* Legenda (copy de fato — o que vai ser publicado) */}
-                {captionTxt&&(<div style={{borderTop:"0.5px solid "+C.b1,paddingTop:10}}>
-                  <div style={{color:"#a140ff",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Legenda</div>
-                  <div style={{color:C.tx,fontSize:12,lineHeight:1.6,maxHeight:240,overflowY:"auto",whiteSpace:"pre-wrap",wordBreak:"break-word",paddingRight:4}}>{captionTxt}</div>
+                {/* Legenda — sem limite de altura, sidebar acompanha */}
+                {captionTxt&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:14}}>
+                  <div style={{color:"#a140ff",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Legenda</div>
+                  <div style={{color:C.tx,fontSize:12.5,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{captionTxt}</div>
                 </div>)}
 
                 {/* Briefing pra equipe (desc) */}
-                {descTxt&&(<div style={{borderTop:"0.5px solid "+C.b1,paddingTop:10}}>
-                  <div style={{color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Briefing pra equipe</div>
-                  <div style={{color:C.ts,fontSize:11,lineHeight:1.6,maxHeight:140,overflowY:"auto",whiteSpace:"pre-wrap",wordBreak:"break-word",paddingRight:4}}>{descTxt}</div>
+                {descTxt&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:14}}>
+                  <div style={{color:C.td,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Briefing pra equipe</div>
+                  <div style={{color:C.ts,fontSize:12,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{descTxt}</div>
                 </div>)}
 
                 {/* Caso não tenha nem legenda nem desc */}
-                {!captionTxt&&!descTxt&&(<div style={{color:C.td,fontSize:11,fontStyle:"italic"}}>Nenhuma legenda ou briefing preenchido — abra "Visualizar / Editar" pra ver detalhes do cartão.</div>)}
+                {!captionTxt&&!descTxt&&(<div style={{color:C.td,fontSize:12,fontStyle:"italic"}}>Sem legenda ou briefing preenchido.</div>)}
 
                 {/* Tags */}
-                {(current.tags||[]).length>0&&(<div style={{display:"flex",gap:5,flexWrap:"wrap",borderTop:"0.5px solid "+C.b1,paddingTop:10}}>
-                  {current.tags.map(tag=>(<span key={tag} style={{background:C.ag,color:C.a,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:500}}>{"#"+tag}</span>))}
+                {(current.tags||[]).length>0&&(<div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid "+C.b1,paddingTop:14}}>
+                  {current.tags.map(tag=>(<span key={tag} style={{background:C.ag,color:C.a,borderRadius:7,padding:"3px 9px",fontSize:11,fontWeight:500}}>{"#"+tag}</span>))}
                 </div>)}
               </div>
             );
           })()}
 
-          {/* Action buttons */}
+          {/* Action buttons — modernos: primário sólido + secundário outline */}
           {isApprover?(<div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {tab!=="internas"&&<button onClick={()=>setOpenCard(current)}
-              style={{width:"100%",background:C.b1,color:C.ts,border:"none",borderRadius:12,padding:"11px 0",fontWeight:700,fontSize:13,cursor:"pointer"}}>
-              Visualizar / Editar
-            </button>}
-
             {tab==="copys"&&(<>
               <button onClick={()=>approveCopy(current)}
-                style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px "+C.gr+"40"}}>
+                style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
                 Aprovar Copy
               </button>
-              {/* FIX 6: separado — primeiro abre o card, o ajuste é feito de dentro */}
               <button onClick={()=>markAjustar(current)}
-                style={{width:"100%",background:C.or,color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px "+C.or+"40"}}>
+                style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar Ajuste
               </button>
             </>)}
 
             {tab==="publicacao"&&(<>
               <button onClick={()=>approvePub(current)}
-                style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px "+C.gr+"40"}}>
-                Aprovar Publicacao
+                style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
+                Aprovar Publicação
               </button>
               <button onClick={()=>setEditModal(current)}
-                style={{width:"100%",background:C.or,color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px "+C.or+"40"}}>
+                style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar Ajuste
               </button>
             </>)}
 
             {tab==="internas"&&(<>
               <button onClick={()=>approvePub(current)}
-                style={{width:"100%",background:"#8b5cf6",color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px #8b5cf640"}}>
-                ✅ Aprovar Demanda
+                style={{width:"100%",background:"#8b5cf6",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #8b5cf640"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px #8b5cf666";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #8b5cf640";}}>
+                Aprovar Demanda
               </button>
               <button onClick={()=>requestAdjust(current,[],[],[],[])}
-                style={{width:"100%",background:C.or,color:"#fff",border:"none",borderRadius:12,padding:"11px 0",fontWeight:800,fontSize:13,cursor:"pointer",boxShadow:"0 4px 14px "+C.or+"40"}}>
-                ↩ Devolver para Execução
+                style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
+                Devolver para Execução
               </button>
             </>)}
+
+            {/* Link discreto pra abrir o card completo */}
+            {tab!=="internas"&&<button onClick={()=>setOpenCard(current)}
+              style={{width:"100%",background:"transparent",color:C.td,border:"none",borderRadius:8,padding:"6px 0",fontWeight:500,fontSize:11.5,cursor:"pointer",transition:"color .15s",textDecoration:"underline",textUnderlineOffset:3,marginTop:2}}
+              onMouseEnter={e=>e.currentTarget.style.color=C.ts}
+              onMouseLeave={e=>e.currentTarget.style.color=C.td}>
+              Ver detalhes completos
+            </button>}
           </div>):(<div style={{background:C.s1,borderRadius:10,padding:"12px",color:C.ts,fontSize:11,textAlign:"center"}}>
-            Você não tem permissao para aprovar. Solicite acesso ao administrador.
+            Você não tem permissão para aprovar. Solicite acesso ao administrador.
           </div>)}
         </div>
       </div>
