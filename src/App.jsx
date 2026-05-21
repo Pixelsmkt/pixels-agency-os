@@ -8964,9 +8964,84 @@ function CBriefingTab({cl,isSocio}){
 }
 
 // ======= 04_calendario.jsx =======
-// Página do Calendário de Publicações
+// Página do Calendário de Publicações + helpers compartilhados com Calendário interno
 // Depende de: 00_globals, 00_clientes_data, 11_cardmodal (CardModal)
 // Posição no bundle: após 04_demandas
+
+/* ─── HELPERS DE CALENDÁRIO (compartilhados) ──────────
+   Calendar grid simétrico (aspect-ratio: 1), header de dias da semana,
+   navegação de mês, número do dia, status dot — usados pelos dois calendários
+   (Calendário de publicações e Calendário interno). */
+function CalendarMonthNav({calMonth, setCalMonth, MONTHS}){
+  const isToday = (()=>{const n=new Date();return calMonth.getMonth()===n.getMonth()&&calMonth.getFullYear()===n.getFullYear();})();
+  return(
+    <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:4}}>
+      <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} title="Mês anterior"
+        style={{background:"none",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+        onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="#64748b";}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:13,minWidth:160,textAlign:"center",letterSpacing:-.2}}>
+        {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
+      </div>
+      <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} title="Próximo mês"
+        style={{background:"none",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+        onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color="#64748b";}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
+      <button onClick={()=>setCalMonth(new Date())} disabled={isToday}
+        style={{background:isToday?"#f1f5f9":"#0f172a",color:isToday?"#cbd5e1":"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:isToday?"default":"pointer",fontFamily:"inherit",transition:"all .12s"}}>
+        Hoje
+      </button>
+    </div>
+  );
+}
+function CalendarStatusDot({color,label}){
+  return(
+    <div style={{display:"inline-flex",alignItems:"center",gap:5}}>
+      <div style={{width:8,height:8,borderRadius:"50%",background:color}}/>
+      <span style={{color:"#475569",fontSize:11,fontWeight:500}}>{label}</span>
+    </div>
+  );
+}
+function CalendarDayNumber({day,isToday}){
+  return(
+    <div style={{display:"flex",alignItems:"center",justifyContent:"flex-start"}}>
+      {isToday
+        ? <div style={{width:22,height:22,borderRadius:"50%",background:"#0f172a",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,fontFamily:"'Inter',system-ui,sans-serif"}}>{day.getDate()}</div>
+        : <div style={{color:"#64748b",fontSize:12,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif"}}>{day.getDate()}</div>}
+    </div>
+  );
+}
+function CalendarGrid({WEEKDAYS, days, renderDay}){
+  return(
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      {/* Header dos dias da semana */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid #e8edf2",background:"#fafbfc"}}>
+        {WEEKDAYS.map(d=>(
+          <div key={d} style={{padding:"10px 0",textAlign:"center",color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>{d}</div>
+        ))}
+      </div>
+      {/* Células simétricas — aspect-ratio garante quadrado em qualquer tela */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+        {days.map((day,i)=>(
+          <div key={i} style={{
+            aspectRatio:"1 / 1",
+            borderRight:(i%7===6)?"none":"1px solid #f1f5f9",
+            borderBottom:(i>=days.length-7)?"none":"1px solid #f1f5f9",
+            padding:"8px 8px",
+            background:day?"#fff":"#fafbfc",
+            display:"flex",flexDirection:"column",
+            overflow:"hidden",
+            transition:"background .15s",
+          }}>{renderDay(day,i)}</div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const tasks = propTasks||[];
@@ -9035,209 +9110,117 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   });
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
 
       {/* ── Cabeçalho ── */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div>
-          <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22,letterSpacing:-.3}}>📅 Calendário de Publicações</div>
-          <div style={{color:C.ts,fontSize:12,marginTop:3}}>
-            {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} agendada{tasksThisMonth.length!==1?"s":""} em {MONTHS[calMonth.getMonth()]}
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Calendário de publicações</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
+            {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
           </div>
         </div>
-        {/* Navegação de mês */}
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
-            style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>←</button>
-          <div style={{color:C.tx,fontWeight:800,fontSize:16,minWidth:160,textAlign:"center"}}>
-            {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
-          </div>
-          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))}
-            style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>→</button>
-          <button onClick={()=>setCalMonth(new Date())}
-            style={{background:C.ag,color:C.a,border:"1px solid "+C.a+"44",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-            Hoje
-          </button>
-        </div>
+        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
       </div>
 
-      {/* ── Legenda das cores do status ── */}
-      <div style={{display:"flex",gap:isMob?6:10,flexWrap:"wrap",alignItems:"center",background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:isMob?"6px 10px":"8px 14px"}}>
-        <span style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Status:</span>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:14,height:14,borderRadius:3,background:"#ea580c"}}/>
-          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟠 Em produção</span>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:14,height:14,borderRadius:3,background:"#16a34a"}}/>
-          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟢 Pronto para agendar</span>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:14,height:14,borderRadius:3,background:"#7c3aed"}}/>
-          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟣 Publicado</span>
-        </div>
-      </div>
-
-      {/* ── Filtro de cliente ── */}
-      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        <span style={{color:C.ts,fontSize:11,fontWeight:600,marginRight:2}}>Filtrar por cliente:</span>
-
-        {/* Botão "Todos" */}
-        <button onClick={()=>{setFilterClient("todos");setFilterBioterUnit("todos");}}
-          style={{background:filterClient==="todos"?C.a:C.b1,color:filterClient==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"5px 14px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
-          Todos
-        </button>
-
-        {/* Um botão por cliente */}
-        {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>(
-          <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");}}
-            style={{display:"flex",alignItems:"center",gap:5,background:filterClient===cl.id?cl.color+"22":C.b1,border:`2px solid ${filterClient===cl.id?cl.color:C.b1}`,borderRadius:10,padding:"4px 11px",fontSize:10,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
-            <ClientLogo clientId={cl.id} size="xs"/>
-            <span style={{color:filterClient===cl.id?cl.color:C.ts,whiteSpace:"nowrap"}}>{cl.abbr}</span>
+      {/* ── Filtros (cliente) + Legenda inline ── */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+          <button onClick={()=>{setFilterClient("todos");setFilterBioterUnit("todos");}}
+            style={{background:filterClient==="todos"?"#0f172a":"#fff",color:filterClient==="todos"?"#fff":"#0f172a",border:`1px solid ${filterClient==="todos"?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:filterClient==="todos"?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+            Todos os clientes
           </button>
-        ))}
+          {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>(
+            <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");}}
+              style={{display:"inline-flex",alignItems:"center",gap:6,background:filterClient===cl.id?"#0f172a":"#fff",color:filterClient===cl.id?"#fff":"#0f172a",border:`1px solid ${filterClient===cl.id?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:filterClient===cl.id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+              <ClientLogo clientId={cl.id} size="xs"/>
+              <span>{cl.abbr}</span>
+            </button>
+          ))}
+        </div>
+        {/* Legenda de status (chips pequenos) */}
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Status</span>
+          <CalendarStatusDot color="#ea580c" label="Em produção"/>
+          <CalendarStatusDot color="#16a34a" label="Pronto"/>
+          <CalendarStatusDot color="#7c3aed" label="Publicado"/>
+        </div>
       </div>
 
       {/* ── Sub-filtro Bioter (unidades) ── */}
       {filterClient==="bioter"&&(
-        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center",padding:"10px 14px",background:C.card,borderRadius:10,border:"1px solid #4a8c1c44"}}>
-          <span style={{color:"#4a8c1c",fontSize:11,fontWeight:700,marginRight:2}}>Unidade Bioter:</span>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+          <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Unidades</span>
           <button onClick={()=>setFilterBioterUnit("todos")}
-            style={{background:filterBioterUnit==="todos"?"#4a8c1c":C.s1,color:filterBioterUnit==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+            style={{background:filterBioterUnit==="todos"?"#166534":"#fff",color:filterBioterUnit==="todos"?"#fff":"#475569",border:`1px solid ${filterBioterUnit==="todos"?"#166534":"#e2e8f0"}`,borderRadius:10,padding:"5px 11px",fontSize:11,fontWeight:filterBioterUnit==="todos"?700:500,cursor:"pointer",fontFamily:"inherit"}}>
             Todas
           </button>
           {BIOTER_UNITS.map(u=>(
             <button key={u.id} onClick={()=>setFilterBioterUnit(u.id)}
-              style={{background:filterBioterUnit===u.id?u.color:C.s1,color:filterBioterUnit===u.id?"#fff":C.ts,border:`1px solid ${filterBioterUnit===u.id?u.color:C.b1}`,borderRadius:8,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+              style={{background:filterBioterUnit===u.id?"#166534":"#fff",color:filterBioterUnit===u.id?"#fff":"#475569",border:`1px solid ${filterBioterUnit===u.id?"#166534":"#e2e8f0"}`,borderRadius:10,padding:"5px 11px",fontSize:11,fontWeight:filterBioterUnit===u.id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
               {u.label}
             </button>
           ))}
         </div>
       )}
 
-      {/* ── Grade do calendário ── */}
-      <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
-        {/* Cabeçalho dos dias da semana */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:`2px solid ${C.b1}`,background:C.s1}}>
-          {WEEKDAYS.map(d=>(
-            <div key={d} style={{padding:"12px 0",textAlign:"center",color:C.ts,fontSize:12,fontWeight:700,letterSpacing:.5}}>{d}</div>
-          ))}
-        </div>
-
-        {/* Células dos dias */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
-          {calDays().map((day,i)=>{
-            const dayTasks=day?tasksByDay(day):[];
-            const isToday=day&&day.toDateString()===new Date().toDateString();
-            const hasTasks=dayTasks.length>0;
-
-            return(
-              <div key={i} style={{
-                minHeight:isMob?80:110,
-                borderRight:`1px solid ${C.b1}`,
-                borderBottom:`1px solid ${C.b1}`,
-                padding:"8px 6px 6px",
-                background:isToday?C.ag:hasTasks?C.bl+"06":"transparent",
-                transition:"background .2s",
-              }}>
-                {day&&(<>
-                  {/* Número do dia */}
-                  <div style={{
-                    color:isToday?"#fff":C.ts,
-                    fontWeight:isToday?900:500,
-                    fontSize:13,
-                    marginBottom:5,
-                    width:isToday?24:undefined,
-                    height:isToday?24:undefined,
-                    background:isToday?C.a:undefined,
-                    borderRadius:isToday?"50%":undefined,
-                    display:"flex",alignItems:"center",
-                    justifyContent:isToday?"center":undefined,
-                  }}>{day.getDate()}</div>
-
-                  {/* Cards do dia */}
-                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                    {dayTasks.slice(0,isMob?2:3).map(t=>{
-                      const cl=CLIENTS.find(c=>c.id===t.client);
-                      const assignee=TEAM.find(u=>(t.assignees||[t.assignee]||[]).includes(u.id));
-                      const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
-                      // Cor do card baseada no STATUS (laranja/verde/roxo)
-                      const pubColor=getPubColor(t.status);
-                      return(
-                        <div key={t.id} onClick={()=>setOpenCard(t)}
-                          style={{
-                            background:pubColor.bg,
-                            borderLeft:`4px solid ${pubColor.bg}`,
-                            borderRadius:5,
-                            padding:"4px 6px",
-                            cursor:"pointer",
-                            transition:"all .1s",
-                            boxShadow:"0 1px 3px rgba(0,0,0,0.08)",
-                          }}
-                          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 3px 8px rgba(0,0,0,0.15)";}}
-                          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.08)";}}>
-
-                          {/* Título */}
-                          <div style={{color:"#fff",fontSize:isMob?8:10,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>
-                            {t.title}
-                          </div>
-
-                          {/* Horário + Cliente + responsável */}
-                          <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2,flexWrap:"wrap"}}>
-                            {t.publishTime&&<span style={{background:"#ffffff",color:pubColor.bg,borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:800,whiteSpace:"nowrap"}}>
-                              🕐 {t.publishTime}
-                            </span>}
-                            {cl&&<span style={{color:"#fff",fontSize:8,fontWeight:700,whiteSpace:"nowrap",opacity:0.95}}>
-                              {unit?unit.label.split("/")[0]:cl.abbr}
-                            </span>}
-                            {assignee&&<span style={{background:"rgba(255,255,255,0.25)",color:"#fff",borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:700,whiteSpace:"nowrap"}}>
-                              {assignee.av}
-                            </span>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {dayTasks.length>(isMob?2:3)&&(
-                      <div style={{color:C.ts,fontSize:9,textAlign:"center",fontWeight:600}}>
-                        +{dayTasks.length-(isMob?2:3)} mais
+      {/* ── Grade do calendário (simétrica, células quadradas-ish) ── */}
+      <CalendarGrid
+        WEEKDAYS={WEEKDAYS}
+        days={calDays()}
+        renderDay={(day,i)=>{
+          const dayTasks=day?tasksByDay(day):[];
+          const isToday=day&&day.toDateString()===new Date().toDateString();
+          const maxShow=isMob?2:3;
+          return <>
+            {day&&<>
+              {/* Número do dia */}
+              <CalendarDayNumber day={day} isToday={isToday}/>
+              {/* Cards do dia */}
+              <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:6}}>
+                {dayTasks.slice(0,maxShow).map(t=>{
+                  const cl=CLIENTS.find(c=>c.id===t.client);
+                  const assignee=TEAM.find(u=>(t.assignees||[t.assignee]||[]).includes(u.id));
+                  const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
+                  const pubColor=getPubColor(t.status);
+                  return(
+                    <div key={t.id} onClick={()=>setOpenCard(t)}
+                      style={{background:"#fff",border:"1px solid #e8edf2",borderLeft:`3px solid ${pubColor.bg}`,borderRadius:6,padding:"4px 7px",cursor:"pointer",transition:"all .12s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.borderLeftColor=pubColor.bg;}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#e8edf2";e.currentTarget.style.borderLeftColor=pubColor.bg;}}>
+                      <div style={{color:"#0f172a",fontSize:isMob?9:10.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>{t.title}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
+                        {t.publishTime&&<span style={{color:pubColor.bg,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>{t.publishTime}</span>}
+                        {cl&&<span style={{color:"#94a3b8",fontSize:9,fontWeight:500,whiteSpace:"nowrap"}}>{unit?unit.label.split("/")[0]:cl.abbr}</span>}
+                        {assignee&&<span style={{marginLeft:"auto",background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"0 5px",fontSize:8,fontWeight:700,whiteSpace:"nowrap"}}>{assignee.av}</span>}
                       </div>
-                    )}
+                    </div>
+                  );
+                })}
+                {dayTasks.length>maxShow&&(
+                  <div style={{color:"#94a3b8",fontSize:9.5,textAlign:"center",fontWeight:600,marginTop:1}}>
+                    +{dayTasks.length-maxShow} mais
                   </div>
-                </>)}
+                )}
               </div>
-            );
-          })}
-        </div>
-      </div>
+            </>}
+          </>;
+        }}
+      />
 
       {/* ── Aviso sem agendamentos ── */}
       {tasksThisMonth.length===0&&(
-        <div style={{background:C.card,borderRadius:14,padding:"40px",textAlign:"center",border:`1px dashed ${C.b1}`}}>
-          <div style={{fontSize:36,marginBottom:12}}>📅</div>
-          <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>Nenhuma publicação agendada</div>
-          <div style={{color:C.ts,fontSize:12}}>
+        <div style={{background:"#fff",borderRadius:12,padding:"36px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:48,height:48,borderRadius:12,background:"#f1f5f9",color:"#94a3b8",marginBottom:12}}><Ico n="calendar" size={24}/></div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:4}}>Nenhuma publicação agendada</div>
+          <div style={{color:"#64748b",fontSize:12,maxWidth:420,margin:"0 auto",lineHeight:1.5}}>
             {filterClient!=="todos"
-              ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
-              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para a coluna "Agendadas" e defina a data de publicação.`
+              ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()].toLowerCase()}.`
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()].toLowerCase()}. Mova cards para "Agendadas" e defina a data de publicação.`
             }
           </div>
         </div>
       )}
-
-      {/* ── Legenda ── */}
-      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
-        <span style={{color:C.td,fontSize:11,fontWeight:600}}>Legenda:</span>
-        {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>{
-          const count=agendados.filter(t=>t.client===cl.id&&new Date(t.publishDate+"T12:00:00").getMonth()===calMonth.getMonth()).length;
-          if(count===0) return null;
-          return(
-            <div key={cl.id} style={{display:"flex",alignItems:"center",gap:5}}>
-              <div style={{width:10,height:10,borderRadius:2,background:cl.color}}/>
-              <span style={{color:C.ts,fontSize:11}}>{cl.abbr} ({count})</span>
-            </div>
-          );
-        })}
-      </div>
 
       {/* ── Modal do card — somente leitura no calendário ── */}
       {openCard&&(
@@ -10976,72 +10959,73 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
       {/* ── CLIENTES BOARD ── */}
       {viewMode==="clientes"&&<ClientesBoard tasks={tasks} setTasks={setTasks} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} canDrag={canDrag} canCreate={canCreate}/>}
-      {viewMode==="calendar"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {/* month nav + client filter */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>←</button>
-            <div style={{color:C.tx,fontWeight:800,fontSize:18,minWidth:180,textAlign:"center"}}>{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</div>
-            <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>→</button>
+      {viewMode==="calendar"&&<div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+        {/* Cabeçalho do calendário interno (mesmo padrão visual do Calendário de publicações) */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?16:20,letterSpacing:-.4}}>Calendário interno</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>Demandas com prazo em {MONTHS[calMonth.getMonth()].toLowerCase()}</div>
           </div>
-          {/* client filter for calendar */}
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            <button onClick={()=>setCalFilterClient("todos")} style={{background:calFilterClient==="todos"?C.a:C.b1,color:calFilterClient==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"5px 12px",fontSize:10,fontWeight:700,cursor:"pointer"}}>Todos</button>
-            {CLIENTS.map(cl=><button key={cl.id} onClick={()=>setCalFilterClient(cl.id)} style={{background:calFilterClient===cl.id?cl.color+"33":C.b1,border:`2px solid ${calFilterClient===cl.id?cl.color:C.b1}`,borderRadius:10,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-              <div style={{transform:"scale(0.7)",transformOrigin:"left center"}}><ClientLogo clientId={cl.id} size="xs"/></div>
-              <span style={{color:calFilterClient===cl.id?cl.color:C.ts,whiteSpace:"nowrap",fontSize:10,fontWeight:700}}>{cl.abbr}</span>
-            </button>)}
+          <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
+        </div>
+
+        {/* Filtro cliente + legenda urgência inline */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+            <button onClick={()=>setCalFilterClient("todos")}
+              style={{background:calFilterClient==="todos"?"#0f172a":"#fff",color:calFilterClient==="todos"?"#fff":"#0f172a",border:`1px solid ${calFilterClient==="todos"?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:calFilterClient==="todos"?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+              Todos os clientes
+            </button>
+            {CLIENTS.map(cl=>(
+              <button key={cl.id} onClick={()=>setCalFilterClient(cl.id)}
+                style={{display:"inline-flex",alignItems:"center",gap:6,background:calFilterClient===cl.id?"#0f172a":"#fff",color:calFilterClient===cl.id?"#fff":"#0f172a",border:`1px solid ${calFilterClient===cl.id?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:calFilterClient===cl.id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+                <ClientLogo clientId={cl.id} size="xs"/>
+                <span>{cl.abbr}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Urgência</span>
+            <CalendarStatusDot color="#dc2626" label="Urgente"/>
+            <CalendarStatusDot color="#ea580c" label="Atrasada"/>
+            <CalendarStatusDot color="#eab308" label="Atenção"/>
+            <CalendarStatusDot color="#16a34a" label="No prazo"/>
           </div>
         </div>
-        <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
-          {/* weekday headers */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:`2px solid ${C.b1}`,background:C.s1}}>
-            {WEEKDAYS.map(d=><div key={d} style={{padding:"12px 0",textAlign:"center",color:C.ts,fontSize:12,fontWeight:700,letterSpacing:.5}}>{d}</div>)}
-          </div>
-          {/* days grid */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
-            {calDays().map((day,i)=>{
-              const dayTasks=day?tasksByDay(day):[];
-              const isToday=day&&day.toDateString()===new Date().toDateString();
-              const hasUrgent=dayTasks.some(t=>taskUrgencyLevel(t)===0);
-              const hasLate=dayTasks.some(t=>taskUrgencyLevel(t)===1);
-              return <div key={i} style={{minHeight:isMob?80:120,borderRight:`1px solid ${C.b1}`,borderBottom:`1px solid ${C.b1}`,padding:"8px 8px 6px",background:isToday?C.ag:hasUrgent?C.rd+"14":hasLate?C.or+"10":"none",transition:"background .2s",position:"relative"}}>
-                {day&&<>
-                  <div style={{
-                    color:isToday?"#fff":C.ts,
-                    fontWeight:isToday?900:500,
-                    fontSize:13,
-                    marginBottom:6,
-                    width:isToday?24:undefined,
-                    height:isToday?24:undefined,
-                    background:isToday?C.a:undefined,
-                    borderRadius:isToday?"50%":undefined,
-                    display:"flex",alignItems:"center",justifyContent:isToday?"center":undefined
-                  }}>{day.getDate()}</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                    {dayTasks.slice(0,4).map(t=>{
-                      const u=TEAM.find(x=>x.id===t.assignee);
-                      const cl=CLIENTS.find(c=>c.id===t.client);
-                      const urgColor=getUrgencyColor(taskUrgencyLevel(t));
-                      return <div key={t.id} onClick={()=>setOpenCard(t)}
-                        style={{background:urgColor+"22",border:`1px solid ${urgColor}55`,borderRadius:5,padding:"3px 6px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"all .1s"}}>
-                        <div style={{width:6,height:6,borderRadius:"50%",background:urgColor,flexShrink:0}}/>
-                        <span style={{color:C.tx,fontSize:isMob?8:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,fontWeight:600}}>{t.title}</span>
-                        {u&&<span style={{background:u.color+"44",color:u.color,borderRadius:4,padding:"0 4px",fontSize:8,fontWeight:700,flexShrink:0}}>{u.av}</span>}
-                      </div>;
-                    })}
-                    {dayTasks.length>4&&<div style={{color:C.ts,fontSize:9,textAlign:"center",fontWeight:600}}>+{dayTasks.length-4} mais</div>}
-                  </div>
-                </>}
-              </div>;
-            })}
-          </div>
-        </div>
-        {/* legend */}
-        <div style={{display:"flex",gap:14,flexWrap:"wrap",padding:"4px 0"}}>
-          {[{c:C.rd,l:"🔥 Urgente"},{c:C.or,l:"❌ Atrasado"},{c:C.yw,l:"⚠ Atenção"},{c:C.gr,l:"✅ No prazo"}].map(x=><div key={x.l} style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:10,height:10,borderRadius:"50%",background:x.c}}/><span style={{color:C.ts,fontSize:12}}>{x.l}</span></div>)}
-          {calFilterClient!=="todos"&&<div style={{marginLeft:"auto",color:CLIENTS.find(c=>c.id===calFilterClient)?.color,fontSize:11,fontWeight:700}}>Filtrando: {CLIENTS.find(c=>c.id===calFilterClient)?.name}</div>}
-        </div>
+
+        {/* Grade idêntica ao Calendário de publicações */}
+        <CalendarGrid
+          WEEKDAYS={WEEKDAYS}
+          days={calDays()}
+          renderDay={(day,i)=>{
+            const dayTasks=day?tasksByDay(day):[];
+            const isToday=day&&day.toDateString()===new Date().toDateString();
+            const maxShow=isMob?2:3;
+            return <>
+              {day&&<>
+                <CalendarDayNumber day={day} isToday={isToday}/>
+                <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:6}}>
+                  {dayTasks.slice(0,maxShow).map(t=>{
+                    const u=TEAM.find(x=>x.id===t.assignee);
+                    const cl=CLIENTS.find(c=>c.id===t.client);
+                    const urgColor=getUrgencyColor(taskUrgencyLevel(t));
+                    return <div key={t.id} onClick={()=>setOpenCard(t)}
+                      style={{background:"#fff",border:"1px solid #e8edf2",borderLeft:`3px solid ${urgColor}`,borderRadius:6,padding:"4px 7px",cursor:"pointer",transition:"all .12s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.borderLeftColor=urgColor;}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#e8edf2";e.currentTarget.style.borderLeftColor=urgColor;}}>
+                      <div style={{color:"#0f172a",fontSize:isMob?9:10.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>{t.title}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
+                        {cl&&<span style={{color:"#94a3b8",fontSize:9,fontWeight:500,whiteSpace:"nowrap"}}>{cl.abbr}</span>}
+                        {u&&<span style={{marginLeft:"auto",background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"0 5px",fontSize:8,fontWeight:700,whiteSpace:"nowrap"}}>{u.av}</span>}
+                      </div>
+                    </div>;
+                  })}
+                  {dayTasks.length>maxShow&&<div style={{color:"#94a3b8",fontSize:9.5,textAlign:"center",fontWeight:600,marginTop:1}}>+{dayTasks.length-maxShow} mais</div>}
+                </div>
+              </>}
+            </>;
+          }}
+        />
       </div>}
 
       {/* ── TRASH ── */}
@@ -11068,21 +11052,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
                   {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
-                </div>
-              </div>;
-            })}
-          </>;
-        })()}
-      </div>}
-    </div>
-  </>;
-}
-
-/* ─── CALENDÁRIO DE PUBLICAÇÕES ───────────────
-   Visível apenas para: Vinicius, Gustavo, Hellen
-   Mostra cards com status "agendado" pelo publishDate
-   Filtro: todos os clientes + unidades Bioter
-──────────────────────────────────────────────── */                  {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
                 </div>
               </div>;
             })}
