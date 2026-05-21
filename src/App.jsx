@@ -369,10 +369,48 @@ function _isWellFormed(word){
   if(/^[0-9\-'.,!?:/]+$/.test(word))return true;
   return false;
 }
+// Remove emojis (símbolos pictográficos, dingbats, bandeiras, etc.) — preserva letras, números, pontuação ASCII e acentos latinos
+function stripEmojis(input){
+  if(!input||typeof input!=="string")return input||"";
+  let s=input;
+  // Cobre maioria dos emojis: pictogramas, símbolos, transporte/mapas, dingbats, miscelâneos, bandeiras, setas decorativas, emoticons.
+  // Inclui modificadores de tom de pele, variation selectors (FE0F), zero-width joiner (200D) e keycap (20E3).
+  try{
+    s=s.replace(/[\u{1F1E6}-\u{1F1FF}]/gu,""); // bandeiras
+    s=s.replace(/[\u{1F300}-\u{1F5FF}]/gu,""); // pictogramas
+    s=s.replace(/[\u{1F600}-\u{1F64F}]/gu,""); // emoticons
+    s=s.replace(/[\u{1F680}-\u{1F6FF}]/gu,""); // transporte/mapas
+    s=s.replace(/[\u{1F700}-\u{1F77F}]/gu,""); // alquímicos
+    s=s.replace(/[\u{1F780}-\u{1F7FF}]/gu,""); // geometric extended
+    s=s.replace(/[\u{1F800}-\u{1F8FF}]/gu,""); // setas suplementares
+    s=s.replace(/[\u{1F900}-\u{1F9FF}]/gu,""); // pictogramas suplementares
+    s=s.replace(/[\u{1FA00}-\u{1FA6F}]/gu,""); // simbolos jogos/etc
+    s=s.replace(/[\u{1FA70}-\u{1FAFF}]/gu,""); // pictogramas extended-A
+    s=s.replace(/[\u{2600}-\u{26FF}]/gu,"");   // símbolos misc
+    s=s.replace(/[\u{2700}-\u{27BF}]/gu,"");   // dingbats
+    s=s.replace(/[\u{2300}-\u{23FF}]/gu,"");   // tech misc (relógio, etc)
+    s=s.replace(/[\u{2B00}-\u{2BFF}]/gu,"");   // setas misc
+    s=s.replace(/[\u{1F000}-\u{1F02F}]/gu,""); // mahjong
+    s=s.replace(/[\u{1F0A0}-\u{1F0FF}]/gu,""); // cartas
+    s=s.replace(/[\u{1F100}-\u{1F1FF}]/gu,""); // enclosed alphanum
+    s=s.replace(/[\u{1F200}-\u{1F2FF}]/gu,""); // enclosed CJK
+    s=s.replace(/[\u{1F3FB}-\u{1F3FF}]/gu,""); // modificadores tom de pele
+    s=s.replace(/[\u{200D}\u{FE0F}\u{20E3}]/gu,""); // ZWJ, variation selector, keycap
+  }catch(e){
+    // Fallback se o regex unicode não rolar (browsers antigos): regex limitado
+    s=s.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g,"");
+  }
+  // Colapsa espaços resultantes
+  return s.replace(/\s+/g," ").trim();
+}
+
 function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
+  // 0. Remove emojis primeiro
+  let s=stripEmojis(input);
+  if(!s)return "";
   // 1. Colapsa espaços e trim
-  let s=input.replace(/\s+/g," ").trim();
+  s=s.replace(/\s+/g," ").trim();
   if(!s)return "";
   // 2. Normaliza espaçamento ao redor de separador " - " / " – " / " — "
   s=s.replace(/\s*[–—]\s*/g," - ").replace(/\s+-\s+/g," - ");
@@ -1732,7 +1770,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     if(_migratedRef.current)return;
     if(!user||user.level!==1)return;
     if(!allTasks||allTasks.length===0)return;
-    const FLAG_KEY="pixels-title-migration-v6";
+    const FLAG_KEY="pixels-title-migration-v7";
     try{if(localStorage.getItem(FLAG_KEY))return;}catch(e){}
     const candidates=allTasks.filter(t=>{
       if(!t||!t.title||t.deletedAt)return false;
@@ -19818,15 +19856,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
           {/* FILES */}
           {/* ── LEGENDA / CAPTION TAB ── */}
-          {activeTab==="legenda"&&<div style={{display:"flex",flexDirection:"column",gap:16}}>
-            <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:12,padding:"10px 14px",fontSize:11,color:"#0369a1",lineHeight:1.6}}>
-              <strong>Texto da Legenda</strong> — escreva aqui a legenda final da publicação. Esse texto acompanha o cartão até o agendamento e é exibido no Portal do Cliente.
-            </div>
-            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
-              <div style={{padding:"8px 12px",borderBottom:"1px solid #f1f5f9",background:"#f8fafc",display:"flex",alignItems:"center",gap:6}}>
-                <span style={{color:"#7c3aed",display:"flex"}}><Ico n="fileText" size={13}/></span>
-                <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>Legenda da publicação</span>
-                {caption&&<span style={{marginLeft:"auto",background:"#dcfce7",color:"#16a34a",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700}}>✓ Preenchida</span>}
+          {activeTab==="legenda"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+              <div style={{padding:"12px 16px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,#fafbfc,#fff)",display:"flex",alignItems:"center",gap:8}}>
+                <div style={{width:28,height:28,borderRadius:8,background:"#7c3aed14",color:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="fileText" size={14}/></div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>Legenda da publicação</div>
+                  <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>Texto final que acompanha o cartão até o agendamento e aparece no Portal do Cliente</div>
+                </div>
+                {caption&&<span style={{background:"#dcfce7",color:"#15803d",borderRadius:99,padding:"3px 9px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,flexShrink:0}}><Ico n="check" size={10}/> Preenchida</span>}
               </div>
               {canEdit&&<RichToolbar elRef={captionRef}/>}
               <div
@@ -19852,8 +19890,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{color:"#94a3b8",fontSize:10}}>{caption.replace(/<[^>]*>/g,"").length} caracteres</span>
               {canEdit&&<button onClick={save}
-                style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",color:"#fff",border:"none",borderRadius:9,padding:"8px 20px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                💾 Salvar legenda
+                style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>
+                Salvar legenda
               </button>}
             </div>
           </div>}
@@ -20128,85 +20166,83 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>
           )}
 
-          {/* ══ AGENDADO: sidebar especial ══ */}
-          {isAgendado&&(<>
-            <div style={{background:"linear-gradient(135deg,#4db8ff18,#4db8ff08)",border:"1px solid #4db8ff44",borderRadius:12,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{color:"#4db8ff",display:"flex"}}><Ico n="calendar" size={18}/></span>
-              <div>
-                <div style={{color:"#4db8ff",fontWeight:800,fontSize:12}}>Agendado para publicação</div>
-                <div style={{color:"#64748b",fontSize:10,marginTop:1}}>Defina a data e o responsável</div>
+          {/* ══ AGENDADO/PUBLICADO: sidebar — mesmo estilo (LB/SI) das demais seções ══ */}
+          {isAgendado&&(()=>{
+            const isPub=task.status==="publicado";
+            // Cor de destaque sutil (só pro chip de status — resto segue padrão neutro)
+            const accent=isPub?"#16a34a":"#0284c7";
+            const accentSoft=isPub?"#dcfce7":"#dbeafe";
+            const statusLabel=isPub?"Publicado":"Agendado";
+            return <>
+            {/* Chip de status — pequeno, discreto, mesmo padrão de outras tags do modal */}
+            <div>
+              <label style={LB}>Status</label>
+              <div style={{display:"inline-flex",alignItems:"center",gap:6,background:accentSoft,color:accent,borderRadius:99,padding:"5px 11px",fontSize:11,fontWeight:700}}>
+                <Ico n={isPub?"check":"calendar"} size={12}/> {statusLabel}
               </div>
             </div>
+
+            {/* Data de publicação — usa SI/LB padrão */}
             <div>
-              <label style={{...LB,color:publishDate?"#0284c7":"#ef4444",fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-                <Ico n="calendar" size={12}/> Data de publicação {!publishDate&&<span style={{fontSize:9,color:"#ef4444"}}>* obrigatório</span>}
-              </label>
-              <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
-                style={{...SI,borderColor:publishDate?"#4db8ff66":"#ef444466",background:publishDate?"#eff8ff":"#fff5f5",fontWeight:publishDate?700:400,color:publishDate?"#0284c7":"#ef4444",fontSize:13}}/>
-              {publishDate&&<div style={{color:"#4db8ff",fontSize:10,marginTop:3,fontWeight:600}}>
+              <label style={LB}>{isPub?"Data publicada":"Data de publicação"}</label>
+              <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit||isPub}
+                style={{...SI,borderColor:!publishDate&&!isPub?"#fca5a5":undefined,background:!publishDate&&!isPub?"#fff7f7":undefined}}/>
+              {publishDate&&<div style={{color:"#94a3b8",fontSize:10,marginTop:4}}>
                 {new Date(publishDate+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}
               </div>}
             </div>
+
+            {/* Horário de publicação — mesmo estilo */}
             <div>
-              <label style={{...LB,fontWeight:700,display:"flex",alignItems:"center",gap:5}}><Ico n="clock" size={12}/> Horário de publicação</label>
-              <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
-                style={{...SI,background:"#f0f9ff",borderColor:"#4db8ff44",fontWeight:700,color:"#0284c7",fontSize:14}}/>
-              {publishDate&&publishTime&&<div style={{color:"#64748b",fontSize:10,marginTop:3}}>
-                Publicação programada: {new Date(publishDate+"T"+publishTime).toLocaleString("pt-BR",{weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
+              <label style={LB}>{isPub?"Horário publicado":"Horário de publicação"}</label>
+              <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit||isPub}
+                style={SI}/>
+              {publishDate&&publishTime&&<div style={{color:"#94a3b8",fontSize:10,marginTop:4}}>
+                {isPub?"Publicado em":"Programado para"} {new Date(publishDate+"T"+publishTime).toLocaleString("pt-BR",{weekday:"short",day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}
               </div>}
             </div>
-            {!publishDate&&<div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:8,padding:"9px 12px",fontSize:11,color:"#9a3412",lineHeight:1.5,display:"flex",alignItems:"flex-start",gap:6}}>
-              <span style={{flexShrink:0,marginTop:1}}><Ico n="alert" size={13}/></span> Informe a data de publicação para aparecer no Calendário de Publicações
+
+            {/* Aviso de data faltando — mesma família visual dos demais avisos (caixa cinza-clara) */}
+            {!publishDate&&!isPub&&<div style={{background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 12px",fontSize:11,color:"#64748b",lineHeight:1.5,display:"flex",alignItems:"flex-start",gap:7}}>
+              <span style={{flexShrink:0,marginTop:1,color:"#f97316"}}><Ico n="alert" size={13}/></span>
+              <span>Informe a data para o card aparecer no Calendário de Publicações.</span>
             </div>}
 
-            {/* ══ AÇÕES RÁPIDAS — placeholders em desenvolvimento ══ */}
-            <div style={{marginTop:4}}>
-              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:5}}>
-                <Ico n="zap" size={12}/> Ações Rápidas
-              </div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {/* Ações Rápidas — caixas brancas com borda fina (mesmo padrão SI/LB) */}
+            <div>
+              <label style={LB}>Ações rápidas</label>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 <button
-                  onClick={()=>pixelsToast.info("🚧 Em breve! Vai fazer upload da arte final pra pasta do cliente no Google Drive.",5000)}
-                  style={{
-                    display:"flex",alignItems:"center",gap:10,
-                    background:"linear-gradient(135deg,#fef3c7,#fde68a)",
-                    border:"1px solid #f59e0b44",borderRadius:10,
-                    padding:"10px 14px",cursor:"pointer",
-                    transition:"all .15s",textAlign:"left",width:"100%",
-                  }}
-                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 2px 8px rgba(245,158,11,0.18)";}}
-                  onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}
+                  onClick={()=>pixelsToast.info("Em breve! Vai fazer upload da arte final pra pasta do cliente no Google Drive.",5000)}
+                  style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"10px 12px",cursor:"pointer",transition:"all .15s",textAlign:"left",width:"100%",fontFamily:"inherit"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#cbd5e1";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#e8edf2";}}
                 >
-                  <span style={{fontSize:18}}>☁️</span>
-                  <div style={{flex:1}}>
-                    <div style={{color:"#92400e",fontWeight:700,fontSize:12}}>Enviar para o Drive</div>
-                    <div style={{color:"#a16207",fontSize:10,marginTop:1}}>Sobe a arte final na pasta do cliente</div>
+                  <div style={{width:28,height:28,borderRadius:8,background:"#fff",border:"1px solid #e8edf2",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}><Ico n="upload" size={14}/></div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#0f172a",fontWeight:700,fontSize:12}}>Enviar para o Drive</div>
+                    <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>Sobe a arte final na pasta do cliente</div>
                   </div>
-                  <span style={{fontSize:9,background:"#f59e0b",color:"#fff",padding:"2px 6px",borderRadius:20,fontWeight:700}}>EM BREVE</span>
+                  <span style={{fontSize:9,background:"#f1f5f9",color:"#64748b",padding:"2px 7px",borderRadius:99,fontWeight:700,letterSpacing:.3}}>EM BREVE</span>
                 </button>
 
                 <button
-                  onClick={()=>pixelsToast.info("🚧 Em breve! Vai enviar a arte + legenda direto no WhatsApp do cliente.",5000)}
-                  style={{
-                    display:"flex",alignItems:"center",gap:10,
-                    background:"linear-gradient(135deg,#dcfce7,#bbf7d0)",
-                    border:"1px solid #22c55e44",borderRadius:10,
-                    padding:"10px 14px",cursor:"pointer",
-                    transition:"all .15s",textAlign:"left",width:"100%",
-                  }}
-                  onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 2px 8px rgba(34,197,94,0.18)";}}
-                  onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}
+                  onClick={()=>pixelsToast.info("Em breve! Vai enviar a arte + legenda direto no WhatsApp do cliente.",5000)}
+                  style={{display:"flex",alignItems:"center",gap:10,background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"10px 12px",cursor:"pointer",transition:"all .15s",textAlign:"left",width:"100%",fontFamily:"inherit"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#cbd5e1";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#e8edf2";}}
                 >
-                  <span style={{fontSize:18}}>💬</span>
-                  <div style={{flex:1}}>
-                    <div style={{color:"#166534",fontWeight:700,fontSize:12}}>Enviar no WhatsApp</div>
-                    <div style={{color:"#15803d",fontSize:10,marginTop:1}}>Manda no grupo do cliente quando publicar</div>
+                  <div style={{width:28,height:28,borderRadius:8,background:"#fff",border:"1px solid #e8edf2",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}><Ico n="message" size={14}/></div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#0f172a",fontWeight:700,fontSize:12}}>Enviar no WhatsApp</div>
+                    <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>Manda no grupo do cliente quando publicar</div>
                   </div>
-                  <span style={{fontSize:9,background:"#22c55e",color:"#fff",padding:"2px 6px",borderRadius:20,fontWeight:700}}>EM BREVE</span>
+                  <span style={{fontSize:9,background:"#f1f5f9",color:"#64748b",padding:"2px 7px",borderRadius:99,fontWeight:700,letterSpacing:.3}}>EM BREVE</span>
                 </button>
               </div>
             </div>
-          </>)}
+          </>;
+          })()}
           {/* ══ FIM AGENDADO ══ */}
 
           {!isAgendado&&<div>
@@ -20267,7 +20303,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
 
           {/* Cliente — single-select alfabético + checkboxes pras unidades Bioter (multi) */}
-          {!isAgendado&&(function(){
+          {(function(){
             const sortedClients=CLIENTS.slice().sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
             const selectedUnits=String(bioterUnit||"").split(",").filter(Boolean);
             const hasGroup=selectedUnits.includes("grupo")||selectedUnits.includes("brasil");
@@ -20344,7 +20380,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           })()}
 
           {/* Tipo de Conteúdo — pílulas selecionáveis (4 opções) — tudo em roxo */}
-          {!isAgendado&&<div>
+          <div>
             <label style={LB}>Tipo de conteúdo</label>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
               {[
@@ -20361,17 +20397,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </button>;
               })}
             </div>
-          </div>}
+          </div>
 
           {/* Mês de referência — visível pra todos, mas só sócios editam (contabilização de pagamento) */}
-          {!isAgendado&&<div>
+          <div>
             <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
               <span>Mês de pagamento</span>
               {!isAdmin&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios editam</span>}
             </label>
             <input type="month" value={referenceMonth} onChange={e=>setReferenceMonth(e.target.value)} disabled={!canEdit||!isAdmin}
               style={{...SI,fontSize:13,borderColor:referenceMonth?"#7c3aed44":undefined,background:referenceMonth?"#7c3aed08":undefined,color:referenceMonth?"#7c3aed":"#94a3b8",fontWeight:referenceMonth?700:500,cursor:isAdmin?"pointer":"not-allowed"}}/>
-          </div>}
+          </div>
 
           {/* Prioridade+Prazo */}
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
