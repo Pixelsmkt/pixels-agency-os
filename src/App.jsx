@@ -14070,13 +14070,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
-                Aprovar Copy
+                Aprovar copy
               </button>
               <button onClick={()=>markAjustar(current)}
                 style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
-                Solicitar Ajuste
+                Solicitar ajuste
               </button>
             </>)}
 
@@ -14085,13 +14085,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
-                Aprovar Publicação
+                Aprovar publicação
               </button>
               <button onClick={()=>setEditModal(current)}
                 style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
-                Solicitar Ajuste
+                Solicitar ajuste
               </button>
             </>)}
 
@@ -14100,22 +14100,23 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 style={{width:"100%",background:"#8b5cf6",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #8b5cf640"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px #8b5cf666";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #8b5cf640";}}>
-                Aprovar Demanda
+                Aprovar demanda
               </button>
               <button onClick={()=>requestAdjust(current,[],[],[],[])}
                 style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
-                Devolver para Execução
+                Devolver para execução
               </button>
             </>)}
 
-            {/* Link discreto pra abrir o card completo */}
+            {/* Ver detalhes — botão chip com ícone, discreto mas elegante */}
             {tab!=="internas"&&<button onClick={()=>setOpenCard(current)}
-              style={{width:"100%",background:"transparent",color:C.td,border:"none",borderRadius:8,padding:"6px 0",fontWeight:500,fontSize:11.5,cursor:"pointer",transition:"color .15s",textDecoration:"underline",textUnderlineOffset:3,marginTop:2}}
-              onMouseEnter={e=>e.currentTarget.style.color=C.ts}
-              onMouseLeave={e=>e.currentTarget.style.color=C.td}>
-              Ver detalhes completos
+              style={{alignSelf:"center",marginTop:4,background:C.s1,color:C.ts,border:"1px solid "+C.b1,borderRadius:99,padding:"6px 14px",fontWeight:500,fontSize:11.5,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}
+              onMouseEnter={e=>{e.currentTarget.style.background=C.b1;e.currentTarget.style.color=C.tx;}}
+              onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.ts;}}>
+              <Ico n="eye" size={12}/>
+              <span>Ver detalhes do cartão</span>
             </button>}
           </div>):(<div style={{background:C.s1,borderRadius:10,padding:"12px",color:C.ts,fontSize:11,textAlign:"center"}}>
             Você não tem permissão para aprovar. Solicite acesso ao administrador.
