@@ -10379,7 +10379,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       {/* header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Demandas</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Fluxo de demandas</div>
           <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
             {visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length} abertas
             <span style={{color:"#cbd5e1",margin:"0 6px"}}>·</span>
@@ -10483,127 +10483,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             })}
           </KanbanDropdown>}
 
-          {/* ── ETIQUETAS (Internas + Tags) ── só sócios. Multi-select com checkbox. */}
-          {isAdminUser&&(function(){
-            const adminTagValues=Array.from(new Set((tasks||[]).map(function(x){return((x&&x.adminTag)||"").trim();}).filter(Boolean))).sort();
-            const tagsArrValues=Array.from(new Set(
-              (tasks||[]).flatMap(function(x){return Array.isArray(x&&x.tags)?x.tags:[];}).map(function(t){return(t||"").trim();}).filter(Boolean)
-            )).sort();
-            const totalCount=adminTagValues.length+tagsArrValues.length;
-            const isSem=filterAdminTags.includes("__sem__");
-            const selectedCount=filterAdminTags.length;
-            const labelTxt=selectedCount===0?"Etiqueta":isSem?"Sem etiqueta":selectedCount===1?filterAdminTags[0]:selectedCount+" etiquetas";
-            // Renderiza uma linha clicável estilo checkbox — não fecha o dropdown
-            // count: número de cards dentro do contexto atual que têm essa tag (drill-down)
-            const renderCheckRow=function(opts){
-              const {keyId,label,checked,onClick,chipBg,chipFg,chipBorder,italic,extraStyle,count}=opts;
-              return <button key={keyId} onClick={onClick}
-                style={Object.assign({display:"flex",alignItems:"center",gap:9,width:"100%",padding:"8px 12px",background:checked?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"},extraStyle||{})}
-                onMouseEnter={function(e){if(!checked)e.currentTarget.style.background="#f8fafc";}}
-                onMouseLeave={function(e){if(!checked)e.currentTarget.style.background="transparent";}}>
-                <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(checked?C.a:"#cbd5e1"),background:checked?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  {checked&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
-                </span>
-                {chipBg
-                  ?<span style={{background:chipBg,color:chipFg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:chipBorder?"1px solid "+chipBorder:"none"}}>{label}</span>
-                  :<span style={italic?{color:"#94a3b8",fontStyle:"italic"}:undefined}>{label}</span>
-                }
-                {typeof count==="number"&&<span style={{marginLeft:"auto",color:checked?C.a:"#94a3b8",fontSize:10,fontWeight:checked?700:500,flexShrink:0}}>{count}</span>}
-              </button>;
-            };
-            return <KanbanDropdown label={labelTxt} icon={<Ico n="tag" size={13}/>} active={selectedCount>0}>
-              {function(close){return(<>
-                {/* Header: Todas + Limpar (quando há seleção) */}
-                <button onClick={function(){setFilterAdminTags([]);}}
-                  style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,width:"100%",padding:"9px 12px",background:selectedCount===0?C.ag:"transparent",border:"none",color:selectedCount===0?C.a:C.tx,fontSize:12,fontWeight:selectedCount===0?700:500,cursor:"pointer",textAlign:"left"}}>
-                  <span>Todas</span>
-                  {selectedCount>0&&<span style={{color:C.rd,fontSize:10,fontWeight:600}}>limpar</span>}
-                  {selectedCount===0&&<span style={{color:C.a}}>✓</span>}
-                </button>
-
-                {renderCheckRow({
-                  keyId:"__sem__",
-                  label:"Sem etiqueta nem tag",
-                  checked:isSem,
-                  onClick:function(){toggleAdminTag("__sem__");},
-                  italic:true,
-                  extraStyle:{borderTop:"1px solid "+C.b1}
-                })}
-
-                {/* DRILL-DOWN simples: lista plana ordenada por count desc.
-                    Primeira selecionada = "MÃE" (contexto). Seguintes refinam dentro dela. */}
-                {(function(){
-                  const allUsed=Array.from(new Set(adminTagValues.concat(tagsArrValues)));
-                  // Mostra: tags selecionadas (sempre, na ordem) + tags com count > 0
-                  const selectedOrdered=filterAdminTags.filter(function(t){return t!=="__sem__";});
-                  const others=allUsed
-                    .filter(function(t){return selectedOrdered.indexOf(t)===-1&&(tagContextCounts[t]||0)>0;})
-                    .sort(function(a,b){return(tagContextCounts[b]||0)-(tagContextCounts[a]||0);}); // mais usadas primeiro
-                  const motherTag=selectedOrdered[0]||null;
-                  const refinements=selectedOrdered.slice(1);
-                  const renderTagRow=function(tag,isMother){
-                    const isInTags=tagsArrValues.indexOf(tag)!==-1;
-                    const tc=isInTags&&typeof tagColor==="function"?tagColor(tag):{fg:"#64748b"};
-                    return <button key={"t-"+tag} onClick={function(){toggleAdminTag(tag);}}
-                      style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"8px 12px",background:filterAdminTags.indexOf(tag)!==-1?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
-                      onMouseEnter={function(e){if(filterAdminTags.indexOf(tag)===-1)e.currentTarget.style.background="#f8fafc";}}
-                      onMouseLeave={function(e){if(filterAdminTags.indexOf(tag)===-1)e.currentTarget.style.background="transparent";}}>
-                      <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(filterAdminTags.indexOf(tag)!==-1?C.a:"#cbd5e1"),background:filterAdminTags.indexOf(tag)!==-1?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        {filterAdminTags.indexOf(tag)!==-1&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
-                      </span>
-                      <span style={{background:tc.fg+"18",color:tc.fg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:"1px solid "+tc.fg+"33"}}>{isInTags?"#"+tag:tag}</span>
-                      {isMother&&<span style={{background:C.a,color:"#fff",fontSize:8,fontWeight:700,padding:"1px 6px",borderRadius:99,letterSpacing:.3}}>MÃE</span>}
-                      <span style={{marginLeft:"auto",color:filterAdminTags.indexOf(tag)!==-1?C.a:"#94a3b8",fontSize:10,fontWeight:filterAdminTags.indexOf(tag)!==-1?700:500,flexShrink:0}}>{tagContextCounts[tag]||0}</span>
-                    </button>;
-                  };
-                  return (<>
-                    {/* Breadcrumb: ordem de seleção */}
-                    {motherTag&&<div style={{borderTop:"1px solid "+C.b1,padding:"7px 12px",background:"#faf5ff",fontSize:10,lineHeight:1.5}}>
-                      <div style={{color:"#7c3aed",fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
-                        <span>🎯 Refinando dentro de:</span>
-                      </div>
-                      <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",color:"#475569"}}>
-                        <span style={{background:"#7c3aed",color:"#fff",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:600}}>{motherTag}</span>
-                        {refinements.map(function(r){return <span key={r} style={{display:"inline-flex",alignItems:"center",gap:4}}>
-                          <span style={{color:"#94a3b8",fontSize:11}}>→</span>
-                          <span style={{background:"#fff",border:"1px solid "+C.b1,color:"#475569",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:600}}>{r}</span>
-                        </span>;})}
-                      </div>
-                    </div>}
-
-                    {/* Tags já selecionadas — sempre visíveis */}
-                    {selectedOrdered.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
-                      <div style={{padding:"5px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Selecionadas ({selectedOrdered.length})</div>
-                      {selectedOrdered.map(function(tag,idx){return renderTagRow(tag,idx===0);})}
-                    </div>}
-
-                    {/* Demais tags — ordenadas por contagem desc, count > 0 */}
-                    {others.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
-                      <div style={{padding:"5px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
-                        {motherTag?"Refinar por":"Etiquetas em uso"}
-                      </div>
-                      {others.map(function(tag){return renderTagRow(tag,false);})}
-                    </div>}
-
-                    {selectedOrdered.length===0&&others.length===0&&totalCount===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1,lineHeight:1.5}}>
-                      Nenhuma etiqueta ainda. Abra um cartão e use<br/>
-                      <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
-                    </div>}
-                  </>);
-                })()}
-
-                {totalCount===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1,lineHeight:1.5}}>
-                  Nenhuma etiqueta ainda. Abra um cartão e use os campos<br/>
-                  <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
-                </div>}
-
-                {/* Rodapé — só Fechar */}
-                {totalCount>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"6px 12px",display:"flex",justifyContent:"flex-end"}}>
-                  <button onClick={close} style={{background:C.a,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Fechar</button>
-                </div>}
-              </>);}}
-            </KanbanDropdown>;
-          })()}
 
           {/* Bioter unit sub-filter */}
           {filterClient==="bioter"&&myPerms.filtroCliente&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
@@ -10622,7 +10501,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>}
 
           {/* Limpar filtros */}
-          {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos"||(isAdminUser&&filterAdminTags.length>0))&&
+          {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos")&&
             <button onClick={()=>{setFilterUser("todos");setFilterSector("todos_setores");setFilterClient("todos");setFilterBioterUnit("todos");setFilterAdminTags([]);}}
               style={{background:"none",border:"none",color:C.rd,fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8}}>
               × Limpar filtros
@@ -10634,35 +10513,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
       {/* ── CARTÃO (Kanban) ── */}
       {viewMode==="cartao"&&<>
-        {/* New Column Modal */}
-        {showNewCol&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setShowNewCol(false)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:20,padding:28,width:"100%",maxWidth:360,display:"flex",flexDirection:"column",gap:16}}>
-            <div style={{color:C.tx,fontWeight:900,fontSize:18}}>➕ Nova Coluna</div>
-            <div>
-              <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:6}}>Nome da coluna</div>
-              <input value={newColLabel} onChange={e=>setNewColLabel(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCol()}
-                placeholder="Ex: Em Revisão, Aprovado Cliente..."
-                style={{width:"100%",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 14px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box"}}
-                autoFocus/>
-            </div>
-            <div>
-              <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:8}}>Cor da coluna</div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                {["#a140ff","#ff6eb4","#ffd000","#ff7200","#00e5a0","#4db8ff","#ff3d6b","#cc88ff","#1a0030","#c0001a","#4a8c1c","#ff9500"].map(c=>(
-                  <button key={c} onClick={()=>setNewColColor(c)}
-                    style={{width:32,height:32,borderRadius:8,background:c,border:newColColor===c?"3px solid #fff":"2px solid transparent",cursor:"pointer",boxShadow:newColColor===c?`0 0 10px ${c}90`:"none",transition:"all .15s"}}/>
-                ))}
-              </div>
-            </div>
-            <div style={{display:"flex",gap:10}}>
-              <button onClick={()=>setShowNewCol(false)} style={{flex:1,background:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:C.ts,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
-              <button onClick={addCol} disabled={!newColLabel.trim()}
-                style={{flex:2,background:newColLabel.trim()?`linear-gradient(135deg,${newColColor},${newColColor}88)`:"#333",color:"#fff",border:"none",borderRadius:10,padding:"10px 0",fontWeight:900,cursor:newColLabel.trim()?"pointer":"not-allowed",fontSize:14,transition:"all .2s"}}>
-                ✓ Criar Coluna
-              </button>
-            </div>
-          </div>
-        </div>}
 
         {/* Empty state quando não há cartões */}
         {visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length===0&&!myPerms.verTodosKanban&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 24px",gap:16,textAlign:"center",background:C.card,borderRadius:16,border:`1px solid ${C.b1}`}}>
