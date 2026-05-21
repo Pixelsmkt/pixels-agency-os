@@ -348,14 +348,26 @@ function _capitalizeFirst(word){
   if(!word)return word;
   return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1).toLocaleLowerCase("pt-BR");
 }
-// Detecta se UMA palavra está em ALL CAPS acidental (3+ letras todas maiúsculas).
-// Siglas curtas (2 letras) e CamelCase são preservados.
-function _isAllCapsWord(word){
-  if(!word||word.length<3)return false;
-  if(_isCamelCase(word))return false;
-  const letters=word.replace(/[^A-Za-zÀ-ÿ]/g,"");
-  if(letters.length<3)return false;
-  return letters===letters.toLocaleUpperCase("pt-BR")&&letters!==letters.toLocaleLowerCase("pt-BR");
+// CamelCase válido: primeiro componente (qualquer tamanho), depois 1+ (Maiúscula + 2+ minúsculas).
+// Aceita: VetService, iPhone, McDonald, eBay. REJEITA: MaCa, JoGo, OBrA (componentes curtos).
+function _isCamelCaseValid(word){
+  if(!word||word.length<4)return false;
+  return /^([a-zà-ÿ]+|[A-ZÀ-Ý][a-zà-ÿ]+)([A-ZÀ-Ý][a-zà-ÿ]{2,})+$/.test(word);
+}
+// Palavra "well-formed": uma das formas aceitas. Resto = bagunçado.
+function _isWellFormed(word){
+  if(!word)return true;
+  // (1) all lowercase com acento, dígitos, hífen, apóstrofo, pontuação básica
+  if(/^[a-zà-ÿ0-9\-'.,!?]+$/.test(word))return true;
+  // (2) Capitalize: 1ª maiúscula + resto minúsculo
+  if(/^[A-ZÀ-Ý][a-zà-ÿ0-9\-'.,!?]*$/.test(word))return true;
+  // (3) sigla curta (2 letras maiúsculas) — BR, SP, IA, TV
+  if(/^[A-ZÀ-Ý]{2}$/.test(word))return true;
+  // (4) CamelCase válido
+  if(_isCamelCaseValid(word))return true;
+  // (5) só números/pontuação
+  if(/^[0-9\-'.,!?:/]+$/.test(word))return true;
+  return false;
 }
 function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
@@ -370,27 +382,27 @@ function smartFormatTitle(input){
   const parts=s.split(" - ");
 
   // 4. Processa CADA palavra individualmente.
-  // Palavras em ALL CAPS (3+ letras) são normalizadas; resto preserva.
+  // - well-formed (lowercase puro, Capitalize, CamelCase, sigla 2 letras) → preserva
+  // - bagunçada (OBrA, FOTO, mAcA, etc) → normaliza
   function processWord(word,idx,isTitleSegment){
     if(!word)return word;
-    if(_isCamelCase(word))return word; // VetService, iPhone → preserva
+    if(_isCamelCaseValid(word))return word; // VetService, iPhone → sempre preserva
     const lower=word.toLocaleLowerCase("pt-BR");
-    // Se é stopword conhecida (de, da, do, the, del, ...) e NÃO é a 1ª palavra → minúscula
-    // Cobre tanto "DE" (CAPS) quanto "De" (mid-sentence) — quaisquer 2 letras
-    if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)&&word!==lower){
+    // Stopword conhecida (de, da, do, the, del, ...) no meio → minúscula
+    if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)){
       return lower;
     }
-    if(_isAllCapsWord(word)){
-      // Palavra em CAPS LOCK acidental — normaliza
-      if(isTitleSegment)return _capitalizeFirst(word);
-      if(idx===0)return _capitalizeFirst(word);
-      return lower;
+    if(_isWellFormed(word)){
+      // Palavra já está em formato aceitável — preserva, só ajusta 1ª se necessário
+      if(idx===0&&/^[a-zà-ÿ]/.test(word)){
+        return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1);
+      }
+      return word;
     }
-    // Palavra normal — preserva, mas garante 1ª letra maiúscula se for a 1ª do segmento
-    if(idx===0&&/^[a-zà-ÿ]/.test(word)){
-      return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1);
-    }
-    return word;
+    // Palavra mal-formada (CAPS, mistura aleatória) — normaliza
+    if(isTitleSegment)return _capitalizeFirst(word);
+    if(idx===0)return _capitalizeFirst(word);
+    return lower;
   }
 
   const formatted=parts.map(function(part,partIdx){
@@ -402,7 +414,7 @@ function smartFormatTitle(input){
   let result=formatted.join(" - ");
   // Garante 1ª letra do título maiúscula — exceto se a 1ª palavra for CamelCase (iPhone, eBay)
   const firstWord=result.split(" ")[0]||"";
-  if(!_isCamelCase(firstWord)&&result[0]&&/[a-zà-ÿ]/.test(result[0])){
+  if(!_isCamelCaseValid(firstWord)&&result[0]&&/[a-zà-ÿ]/.test(result[0])){
     result=result[0].toLocaleUpperCase("pt-BR")+result.slice(1);
   }
   return result;
@@ -1698,7 +1710,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     if(_migratedRef.current)return;
     if(!user||user.level!==1)return;
     if(!allTasks||allTasks.length===0)return;
-    const FLAG_KEY="pixels-title-migration-v4";
+    const FLAG_KEY="pixels-title-migration-v5";
     try{if(localStorage.getItem(FLAG_KEY))return;}catch(e){}
     const candidates=allTasks.filter(t=>{
       if(!t||!t.title||t.deletedAt)return false;
