@@ -948,15 +948,15 @@ function NavIcon({id,size=18,color}){
 const NAV=[
   {id:"meudash",    icon:"⊡", label:"Meu Dashboard"},
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
-    {id:"demandas_kanban",     icon:"◈", label:"Fluxo de Demandas"},
-    {id:"demandas_internas",   icon:"◫", label:"Demandas Internas"},
-    {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de Publicações"},
-    {id:"demandas_cal_interno",icon:"▦", label:"Calendário Interno/Clientes"},
+    {id:"demandas_kanban",     icon:"◈", label:"Fluxo de demandas"},
+    {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de publicações"},
+    {id:"demandas_cal_interno",icon:"▦", label:"Calendário interno"},
+    {id:"demandas_internas",   icon:"◫", label:"Demandas internas"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
-    {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de Copys"},
-    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de Conteúdo"},
-    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação Demanda Interna"},
+    {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de copys"},
+    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de conteúdo"},
+    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação demanda interna"},
   ]},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
@@ -9043,7 +9043,13 @@ function CalendarGrid({WEEKDAYS, days, renderDay}){
   );
 }
 
-function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
+// Wrapper — Calendário interno é cópia idêntica do Calendário de publicações.
+// Toda mudança visual vai automaticamente pros dois.
+function PageCalendarioInterno(props){
+  return <PageCalendarioPublicacoes {...props} _internalLabel="Calendário interno"/>;
+}
+
+function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, _internalLabel}){
   const tasks = propTasks||[];
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterClient,setFilterClient]=useState("todos");
@@ -9115,7 +9121,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       {/* ── Cabeçalho ── */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Calendário de publicações</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>{_internalLabel||"Calendário de publicações"}</div>
           <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
             {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
           </div>
@@ -9222,7 +9228,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         </div>
       )}
 
-      {/* ── Modal do card — somente leitura no calendário ── */}
+      {/* Modal do card — somente leitura no calendário */}
       {openCard&&(
         <CardModal
           task={openCard}
@@ -10412,14 +10418,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
             <Ico n="refresh" size={14}/>
           </button>
-          {myPerms.criarDemanda&&<button onClick={()=>{
-            if(myPerms.novaColuna&&viewMode==="cartao"){setShowNewCol(true);}
-            else{addNewTask("demanda");}
-          }}
+          {myPerms.criarDemanda&&<button onClick={()=>addNewTask("demanda")}
             style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 2px 8px rgba(15,23,42,0.15)",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}
             onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
             onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
-            <Ico n="plus" size={13}/> {myPerms.novaColuna&&viewMode==="cartao"?"Nova coluna":"Nova"}
+            <Ico n="plus" size={13}/> Nova
           </button>}
         </div>
       </div>
@@ -10632,30 +10635,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             </button>
           }
 
-          {/* Separador + Ordenação */}
-          <div style={{width:1,height:24,background:C.b1,marginLeft:"auto"}}/>
-          <KanbanDropdown
-            label={sortMode==="smart"?"Inteligente":sortMode==="deadline"?"Prazo":sortMode==="recent"?"Recentes":"Manual"}
-            icon={<Ico n="filter" size={13}/>}
-            active={sortMode!=="smart"}>
-            {function(close){return(<>
-              {[
-                {id:"smart",label:"Inteligente",desc:"Urgência → prazo → ordem"},
-                {id:"deadline",label:"Prazo",desc:"Mais próximo primeiro"},
-                {id:"recent",label:"Mais recentes",desc:"Criados por último"},
-                {id:"manual",label:"Manual",desc:"Você arrasta a ordem"},
-              ].map(function(o){
-                const isActive=sortMode===o.id;
-                return(<button key={o.id} onClick={function(){setSortMode(o.id);close();}}
-                  style={{display:"flex",flexDirection:"column",gap:1,padding:"7px 12px",borderRadius:6,border:"none",background:isActive?"#faf5ff":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}
-                  onMouseEnter={function(e){if(!isActive)e.currentTarget.style.background="#f8fafc";}}
-                  onMouseLeave={function(e){if(!isActive)e.currentTarget.style.background="transparent";}}>
-                  <span style={{color:isActive?C.a:C.tx,fontSize:12,fontWeight:isActive?600:500,display:"flex",alignItems:"center",gap:6}}>{o.label}{isActive&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}</span>
-                  <span style={{color:C.td,fontSize:10}}>{o.desc}</span>
-                </button>);
-              })}
-            </>);}}
-          </KanbanDropdown>
         </div>;
       })()}
 
@@ -23575,7 +23554,7 @@ export default function AgencyOS(){
       case "demandas":
       case "demandas_kanban":      return p.verDemandas;
       case "demandas_internas":    return p.verDemandasInternas||isSocio;
-      case "demandas_cal_interno": return p.verInterno||isSocio;
+      case "demandas_cal_interno": return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
       case "aprovacoes":
       case "aprovacoes_copys":
@@ -23657,7 +23636,7 @@ export default function AgencyOS(){
       case "demandas_kanban":       return effectivePerms.verDemandas?<PageDemandas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs} effectiveUser={effectiveUser}/>:<NoPerm/>;
       case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
-      case "demandas_cal_interno":  return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
+      case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
@@ -24011,6 +23990,14 @@ export default function AgencyOS(){
       </nav>}
     </div>
   </div>;
+}
+an>
+        </button>
+      </nav>}
+    </div>
+  </div>;
+}
+;
 }
 
 // ======= 13_novidades.jsx =======
