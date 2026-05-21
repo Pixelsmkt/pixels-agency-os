@@ -375,7 +375,7 @@ const ACCESS_STORE={
   ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true},
   erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
   andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
-  guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
+  guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colAjustes:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
 };
 
 /* ─── SAFE STORAGE — wrapper localStorage com quota check ─── */
@@ -10054,11 +10054,22 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     return false;
   };
 
+  // Domínio do colaborador freelancer (pagamento por demanda):
+  // Editor de vídeo (dash==="editor") vê TODOS os cards tipo Vídeo, mesmo sem estar marcado.
+  // Designer (dash==="designer") vê TODOS os cards tipo Arte/Carrossel/Foto, mesmo sem estar marcado.
+  // Assim Guilherme/André veem o histórico completo do trabalho deles (incl. aprovados/agendados/publicados).
+  const isMyDomain=(t)=>{
+    if(isMyTask(t))return true;
+    if(activeUser.dash==="editor"&&t.contentType==="video")return true;
+    if(activeUser.dash==="designer"&&(t.contentType==="arte"||t.contentType==="carrossel"||t.contentType==="foto"))return true;
+    return false;
+  };
+
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
-    // Admin/sócio vê tudo; colaborador só vê os seus
-    if(!isAdmin&&!isMyTask(t))return false;
+    // Admin/sócio vê tudo; colaborador só vê os seus (ou do seu domínio se freelancer)
+    if(!isAdmin&&!isMyDomain(t))return false;
     // Busca: case-insensitive substring em título, nome do cliente, e label de unidade Bioter (CSV)
     if(_searchTermNorm){
       const haystack=[];
