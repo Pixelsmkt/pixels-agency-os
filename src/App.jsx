@@ -307,6 +307,63 @@ function ensureSupervisors(assignees){
   return Array.from(set);
 }
 
+/* ─── SMART FORMAT TITLE ───────────────────────────────────────────────
+   Normaliza o título do card pra um padrão consistente:
+   - Trim + colapsa espaços múltiplos
+   - Parte ANTES do " - ": Title Case (cada palavra capitalizada),
+     com preposições/artigos PT-BR em minúscula (de, da, do, e, etc.)
+   - Parte DEPOIS do " - ": Sentence Case (só primeira palavra capitalizada)
+   - Preserva palavras em CamelCase (ex.: "VetService", "iPhone")
+   Exemplos:
+     "AGROPECUÁRIA PARAÍSO - PECUÁRIA DE LEITE"  → "Agropecuária Paraíso - Pecuária de leite"
+     "case de sucesso  -  vetService vídeo - 03" → "Case de Sucesso - VetService vídeo - 03"
+     "BETO GUSSO-SUINOCULTURA"                   → "BETO GUSSO-SUINOCULTURA" (sem espaços ao redor do -, não quebra)
+*/
+const TITLE_STOPWORDS_PTBR = new Set([
+  "de","da","do","das","dos","e","ou","a","o","as","os",
+  "para","por","em","na","no","nas","nos","com","sem",
+  "ao","aos","à","às","um","uma","uns","umas"
+]);
+function _isCamelCase(word){
+  if(!word||word.length<2)return false;
+  const hasLower=/[a-zà-ÿ]/.test(word);
+  const hasUpperInside=/[a-zà-ÿ][A-ZÀ-Ý]/.test(word);
+  return hasLower && hasUpperInside;
+}
+function _capitalizeFirst(word){
+  if(!word)return word;
+  return word.charAt(0).toLocaleUpperCase("pt-BR")+word.slice(1).toLocaleLowerCase("pt-BR");
+}
+function smartFormatTitle(input){
+  if(!input||typeof input!=="string")return input||"";
+  // 1. Colapsa espaços e trim
+  let s=input.replace(/\s+/g," ").trim();
+  if(!s)return "";
+  // 2. Normaliza espaçamento ao redor de separador " - " / " – " / " — "
+  s=s.replace(/\s*[–—]\s*/g," - ").replace(/\s+-\s+/g," - ");
+  // 3. Split por " - " (apenas quando tem espaço ao redor — preserva "Bem-vindo")
+  const parts=s.split(" - ");
+  const titleCase=function(text){
+    return text.split(" ").map(function(word,idx){
+      if(!word)return word;
+      if(_isCamelCase(word))return word;
+      const lower=word.toLocaleLowerCase("pt-BR");
+      if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower))return lower;
+      return _capitalizeFirst(word);
+    }).join(" ");
+  };
+  const sentenceCase=function(text){
+    return text.split(" ").map(function(word,idx){
+      if(!word)return word;
+      if(_isCamelCase(word))return word;
+      if(idx===0)return _capitalizeFirst(word);
+      return word.toLocaleLowerCase("pt-BR");
+    }).join(" ");
+  };
+  if(parts.length===1)return titleCase(parts[0]);
+  return [titleCase(parts[0])].concat(parts.slice(1).map(sentenceCase)).join(" - ");
+}
+
 /* ─── CURRENT USER (proxy dinâmico) ─────── */
 // Reflete o usuário logado via window._pixelsUser sem criar dependência estática
 const CURRENT_USER=new Proxy({},{
@@ -9932,7 +9989,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const nowFmt=now.toLocaleDateString("pt-BR")+` às ${now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`;
     const respId=assigneeId||activeUserId;
     const newTask={
-      id:mkId(),title:titleStr||"Nova Demanda",desc:"",
+      id:mkId(),title:smartFormatTitle(titleStr||"Nova Demanda"),desc:"",
       assignee:respId,assignees:[respId],watchers:[],
       client:"",sector:"",priority:"",status:colId,
       startDate:now.toISOString().split("T")[0],
@@ -18524,11 +18581,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(!sector){pixelsToast.warning("Selecione um setor antes de salvar.");return;}
     if(!assignees||assignees.length===0){pixelsToast.warning("Selecione pelo menos um responsável antes de salvar.");return;}
     // Prioridade não é mais obrigatória — pode salvar sem definir.
+    // ── Auto-formatar título: Title Case + Sentence Case + colapso de espaços ──
+    const formattedTitle=smartFormatTitle(title||"");
+    if(formattedTitle!==title){
+      setTitle(formattedTitle);
+      if(formattedTitle)pixelsToast.info("Título formatado: \""+formattedTitle+"\"",4500);
+    }
     // Pega timeline atual da lista (não da prop task que pode estar stale)
     const currentTask=tasks.find(t=>t.id===task.id)||task;
     const tl=[...(currentTask.timeline||[])];
     const changed=[];
-    if(title!==task.title)changed.push("título");
+    if(formattedTitle!==task.title)changed.push("título");
     if(desc!==task.desc)changed.push("descrição");
     if(JSON.stringify(assignees)!==JSON.stringify(task.assignees||[task.assignee]))changed.push("responsável");
     if(client!==task.client)changed.push("cliente");
@@ -18574,7 +18637,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
       // referenceMonth só pode ser alterado por admin (sócio). Se não-admin salvar, preserva valor antigo.
       const nextReferenceMonth = isAdmin ? (referenceMonth||null) : (t.referenceMonth||null);
-      return{...t,title,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:contentType||null,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:contentType||null,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     }));
     onClose();
   };
@@ -18586,6 +18649,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       return;
     }
     const cleanedFiles=cleanAttachments(attachments);
+    // ── Auto-formatar título no concluir também ──
+    const formattedTitle=smartFormatTitle(title||"");
+    if(formattedTitle!==title){
+      setTitle(formattedTitle);
+      if(formattedTitle)pixelsToast.info("Título formatado: \""+formattedTitle+"\"",4500);
+    }
     // Conteúdo: tanto "execucao" quanto "ajustes" vão pra "avaliacao"
     const fromStatus=task.status;
     const fromLabel=fromStatus==="ajustes"?"Ajustes":"Em execução";
@@ -18599,7 +18668,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const mergedComments=[...prevComments,...localOnly];
       // Limpa flags de ajuste ao reenviar (cartão volta ao fluxo de avaliação normal)
       const cleanFlags=fromStatus==="ajustes"?{isAlteracao:false,ajusteOrigin:null}:{};
-      return{...t,status:"avaliacao",...cleanFlags,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newTlEntry],checklist,desc,title,assignee:assignees[0],assignees,sector,client,priority,deadline,cover,files:cleanedFiles,comments:mergedComments};
+      return{...t,status:"avaliacao",...cleanFlags,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),newTlEntry],checklist,desc,title:formattedTitle,assignee:assignees[0],assignees,sector,client,priority,deadline,cover,files:cleanedFiles,comments:mergedComments};
     }));
     setConclusionStep(null);
     onClose();
