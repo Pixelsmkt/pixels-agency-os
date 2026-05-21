@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 28/28 | Nao editar diretamente
+// Modulos: 29/29 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -349,6 +349,8 @@ const DEFAULT_PERMS={
   verFinanceiro:false, verContratos:false, verDRECompleto:false,
   // Análises / Portal
   verAnalises:false, verPortal:false, verCalPub:false,
+  // Gestão de mídia
+  verGestaoMidia:false, editarGestaoMidia:false, gerenciarClientesMidia:false,
   // Acessos
   verAcessos:false, editarAcessos:false,
   // Ferramentas
@@ -372,7 +374,7 @@ const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
   ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true},
-  erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true},
+  erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verGestaoMidia:true,editarGestaoMidia:true,gerenciarClientesMidia:false},
   andre:   {...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
   guilherme:{...DEFAULT_PERMS,verDemandas:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
 };
@@ -910,6 +912,7 @@ function NavIcon({id,size=18,color}){
   if(id==="aprovacoes_copys")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
   if(id==="aprovacoes_publicacao") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>;
   if(id==="aprovacoes_internas")   return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M12 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
+  if(id==="gestaomidia")           return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 010 18"/><path d="M12 3a14 14 0 000 18"/></svg>;
   // ── Submenus Análises ──
   if(id==="analises_producao") return <svg {...p}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
   if(id==="analises_gargalos") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>;
@@ -958,6 +961,7 @@ const NAV=[
     {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de conteúdo"},
     {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação demanda interna"},
   ]},
+  {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
@@ -22457,6 +22461,1372 @@ function MindMapEditor({clientId,onBack}){
   </div>;
 }
 
+// ======= 17_gestao_midia.jsx =======
+// Gestão de mídia — área focada em tráfego pago (Erick + sócios).
+// Estrutura: lista de clientes → painel cliente → 9 abas internas.
+// Depende de: 00_globals, 00_clientes_data, 04_calendario (helpers)
+
+/* ─── CONSTANTES ─────────────────────────────────────── */
+const MEDIA_STATUS_OPTS=[
+  {id:"em_dia",         label:"Em dia",         color:"#16a34a", bg:"#dcfce7"},
+  {id:"atencao",        label:"Atenção",        color:"#eab308", bg:"#fef9c3"},
+  {id:"critico",        label:"Crítico",        color:"#dc2626", bg:"#fee2e2"},
+  {id:"em_estruturacao",label:"Em estruturação",color:"#64748b", bg:"#f1f5f9"},
+];
+const MEDIA_PLATFORMS=[
+  {id:"meta",         label:"Meta Ads"},
+  {id:"google",       label:"Google Ads"},
+  {id:"meta_google",  label:"Meta + Google"},
+];
+const MEDIA_TASK_STATUS=[
+  {id:"planejamento",     label:"Planejamento",            color:"#64748b"},
+  {id:"configuracao",     label:"Configuração",            color:"#0284c7"},
+  {id:"otimizacao",       label:"Em otimização",           color:"#7c3aed"},
+  {id:"aguard_cliente",   label:"Aguardando cliente",      color:"#ea580c"},
+  {id:"aguard_aprovacao", label:"Aguardando aprovação",    color:"#eab308"},
+  {id:"relatorio",        label:"Relatório",               color:"#4db8ff"},
+  {id:"concluido",        label:"Concluído",               color:"#16a34a"},
+];
+const MEDIA_CLIENTS_SEED=["construschorr","bioter","arabuta","vetservice"];
+
+/* ─── HELPERS DE STORAGE (localStorage por enquanto, Supabase quando tabelas estiverem prontas) ─── */
+const MEDIA_LS_KEY="pixels-media-v1";
+function loadMediaStore(){
+  try{const raw=localStorage.getItem(MEDIA_LS_KEY); if(!raw)return null; return JSON.parse(raw);}
+  catch(e){return null;}
+}
+function saveMediaStore(store){
+  try{localStorage.setItem(MEDIA_LS_KEY,JSON.stringify(store));}catch(e){}
+}
+function initMediaStore(){
+  const ex=loadMediaStore();
+  if(ex)return ex;
+  // Seed inicial: 4 clientes que o usuário definiu
+  const seed={
+    clients:MEDIA_CLIENTS_SEED.map(cid=>{
+      const c=CLIENTS.find(x=>x.id===cid);
+      return {
+        client_id:cid,
+        name:c?.name||cid,
+        plataforma:"meta",
+        investimento_mensal:0,
+        meta_principal:"",
+        resultado_mes:"",
+        status:"em_estruturacao",
+        responsavel:"erick",
+        ultima_atualizacao:new Date().toISOString(),
+        proxima_acao:"",
+      };
+    }),
+    briefings:{}, goals:{}, campaigns:{}, tasks:{}, results:{}, reports:{}, access:{}, history:{}
+  };
+  saveMediaStore(seed);
+  return seed;
+}
+
+/* ─── HOOK PRINCIPAL ─────────────────────────────────── */
+function useMediaStore(){
+  const [store,setStore]=useState(()=>initMediaStore());
+  const update=(patch)=>{
+    setStore(prev=>{
+      const next=typeof patch==="function"?patch(prev):{...prev,...patch};
+      saveMediaStore(next);
+      return next;
+    });
+  };
+  const addHistory=(clientId,event)=>{
+    update(prev=>{
+      const h=prev.history||{};
+      const list=h[clientId]||[];
+      const newEvent={
+        id:Date.now()+"-"+Math.random().toString(36).slice(2,7),
+        ts:new Date().toISOString(),
+        user:CURRENT_USER.name||CURRENT_USER.id,
+        ...event
+      };
+      return {...prev,history:{...h,[clientId]:[newEvent,...list].slice(0,500)}};
+    });
+  };
+  return {store,update,addHistory};
+}
+
+/* ─── FORMATADORES (prefixo _m pra não conflitar com outros módulos) ─── */
+const _mFmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+const _mFmtDate=iso=>iso?new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"}):"—";
+const _mFmtDateShort=iso=>iso?new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}):"—";
+const _mFmtRelative=iso=>{
+  if(!iso)return "—";
+  const d=new Date(iso); const now=new Date();
+  const diff=Math.floor((now-d)/86400000);
+  if(diff===0)return "Hoje";
+  if(diff===1)return "Ontem";
+  if(diff<7)return `${diff} dias atrás`;
+  return _mFmtDate(iso);
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGE GESTÃO DE MÍDIA — lista de clientes + filtros + ações
+   ═══════════════════════════════════════════════════════════════ */
+function PageGestaoMidia({isMob, currentUser}){
+  const {store,update,addHistory}=useMediaStore();
+  const [openClient,setOpenClient]=useState(null);
+  const [showNovoCliente,setShowNovoCliente]=useState(false);
+  const [showNovaDemanda,setShowNovaDemanda]=useState(false);
+  // Filtros
+  const [fClient,setFClient]=useState("todos");
+  const [fPlat,setFPlat]=useState("todos");
+  const [fStatus,setFStatus]=useState("todos");
+  const [fResp,setFResp]=useState("todos");
+  const [fMonth,setFMonth]=useState("");
+
+  const isSocio=currentUser?.level===1;
+  const canManageClients=isSocio; // só sócios criam/excluem clientes
+
+  if(openClient){
+    return <MediaClientPanel
+      clientData={store.clients.find(c=>c.client_id===openClient)}
+      store={store} update={update} addHistory={addHistory}
+      onBack={()=>setOpenClient(null)}
+      isMob={isMob} currentUser={currentUser}/>;
+  }
+
+  // Filtragem
+  const visibleClients=(store.clients||[]).filter(c=>{
+    if(fClient!=="todos"&&c.client_id!==fClient)return false;
+    if(fPlat!=="todos"&&c.plataforma!==fPlat)return false;
+    if(fStatus!=="todos"&&c.status!==fStatus)return false;
+    if(fResp!=="todos"&&c.responsavel!==fResp)return false;
+    return true;
+  });
+
+  const totalInvest=visibleClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* ── Header ── */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Gestão de mídia</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
+          {visibleClients.length} cliente{visibleClients.length!==1?"s":""} de tráfego pago
+          <span style={{color:"#cbd5e1",margin:"0 6px"}}>·</span>
+          Investimento total {_mFmtBRL(totalInvest)}/mês
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={()=>pixelsToast.info("Em breve — em desenvolvimento.",4000)}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
+          Relatório geral
+        </button>
+        <button onClick={()=>setShowNovaDemanda(true)}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+          <Ico n="plus" size={13}/> Nova demanda de mídia
+        </button>
+        {canManageClients&&<button onClick={()=>setShowNovoCliente(true)}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 2px 8px rgba(15,23,42,0.15)"}}>
+          <Ico n="plus" size={13}/> Novo cliente de mídia
+        </button>}
+      </div>
+    </div>
+
+    {/* ── Filtros ── */}
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      <MidiaFilterSelect label="Cliente"     value={fClient} onChange={setFClient}
+        options={[{id:"todos",label:"Todos"},...store.clients.map(c=>({id:c.client_id,label:c.name}))]}/>
+      <MidiaFilterSelect label="Plataforma"  value={fPlat} onChange={setFPlat}
+        options={[{id:"todos",label:"Todas"},...MEDIA_PLATFORMS]}/>
+      <MidiaFilterSelect label="Status"      value={fStatus} onChange={setFStatus}
+        options={[{id:"todos",label:"Todos"},...MEDIA_STATUS_OPTS]}/>
+      <MidiaFilterSelect label="Responsável" value={fResp} onChange={setFResp}
+        options={[{id:"todos",label:"Todos"},...TEAM.filter(u=>u.id==="erick"||u.level===1).map(u=>({id:u.id,label:u.name}))]}/>
+      <input type="month" value={fMonth} onChange={e=>setFMonth(e.target.value)}
+        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 10px",fontSize:11.5,fontWeight:500,color:"#0f172a",outline:"none",fontFamily:"inherit",cursor:"pointer"}}/>
+      {(fClient!=="todos"||fPlat!=="todos"||fStatus!=="todos"||fResp!=="todos"||fMonth)&&
+        <button onClick={()=>{setFClient("todos");setFPlat("todos");setFStatus("todos");setFResp("todos");setFMonth("");}}
+          style={{background:"none",border:"none",color:"#dc2626",fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8,fontFamily:"inherit"}}>
+          × Limpar filtros
+        </button>
+      }
+    </div>
+
+    {/* ── Grid de cards ── */}
+    {visibleClients.length===0
+      ? <div style={{background:"#fff",borderRadius:12,padding:"40px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:48,height:48,borderRadius:12,background:"#f1f5f9",color:"#94a3b8",marginBottom:12}}>
+            <Ico n="folder" size={24}/>
+          </div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:4}}>Nenhum cliente encontrado</div>
+          <div style={{color:"#64748b",fontSize:12,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>
+            {store.clients.length===0?"Cadastre o primeiro cliente de mídia clicando em \"Novo cliente de mídia\".":"Ajuste os filtros para ver clientes."}
+          </div>
+        </div>
+      : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
+          {visibleClients.map(c=><MediaClientCard key={c.client_id} client={c} onOpen={()=>setOpenClient(c.client_id)}/>)}
+        </div>
+    }
+
+    {/* ── Modais ── */}
+    {showNovoCliente&&<MediaNovoClienteModal
+      store={store} update={update} addHistory={addHistory}
+      onClose={()=>setShowNovoCliente(false)}/>}
+    {showNovaDemanda&&<MediaNovaDemandaModal
+      store={store} update={update} addHistory={addHistory}
+      onClose={()=>setShowNovaDemanda(false)}/>}
+  </div>;
+}
+
+/* ─── Card de cliente ──────────────────────────────────── */
+function MediaClientCard({client,onOpen}){
+  const cl=CLIENTS.find(c=>c.id===client.client_id);
+  const status=MEDIA_STATUS_OPTS.find(s=>s.id===client.status)||MEDIA_STATUS_OPTS[3];
+  const plat=MEDIA_PLATFORMS.find(p=>p.id===client.plataforma)||MEDIA_PLATFORMS[0];
+  const resp=TEAM.find(u=>u.id===client.responsavel);
+
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12,transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif"}}
+    onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.06)";}}
+    onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+    {/* Header: logo + nome + status */}
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,justifyContent:"space-between"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
+        {cl&&<ClientLogo clientId={cl.id} size="md"/>}
+        <div style={{minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.name}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{plat.label}</div>
+        </div>
+      </div>
+      <span style={{background:status.bg,color:status.color,borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{status.label}</span>
+    </div>
+
+    {/* Métricas principais */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div style={{background:"#f8fafc",borderRadius:10,padding:"8px 10px"}}>
+        <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Investimento</div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginTop:2}}>{_mFmtBRL(client.investimento_mensal)}<span style={{color:"#94a3b8",fontSize:10,fontWeight:500}}> /mês</span></div>
+      </div>
+      <div style={{background:"#f8fafc",borderRadius:10,padding:"8px 10px"}}>
+        <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Resultado</div>
+        <div style={{color:"#0f172a",fontWeight:600,fontSize:12,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.resultado_mes||"—"}</div>
+      </div>
+    </div>
+
+    {/* Meta principal */}
+    {client.meta_principal&&<div>
+      <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Meta principal</div>
+      <div style={{color:"#0f172a",fontSize:12,lineHeight:1.5}}>{client.meta_principal}</div>
+    </div>}
+
+    {/* Próxima ação */}
+    {client.proxima_acao&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"7px 10px"}}>
+      <div style={{color:"#92400e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,display:"flex",alignItems:"center",gap:4}}><Ico n="alert" size={10}/> Próxima ação</div>
+      <div style={{color:"#78350f",fontSize:12,marginTop:2,lineHeight:1.4}}>{client.proxima_acao}</div>
+    </div>}
+
+    {/* Footer: responsável + última atualização + botão */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginTop:2,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+        {resp&&<UserAvatar user={resp} size={22}/>}
+        <div style={{minWidth:0}}>
+          <div style={{color:"#475569",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resp?.name||"—"}</div>
+          <div style={{color:"#94a3b8",fontSize:9}}>Atualizado {_mFmtRelative(client.ultima_atualizacao)}</div>
+        </div>
+      </div>
+      <button onClick={onOpen}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",transition:"background .12s"}}
+        onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
+        onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
+        Abrir painel →
+      </button>
+    </div>
+  </div>;
+}
+
+/* ─── Filtro inline ──────────────────────────────────── */
+function MidiaFilterSelect({label,value,onChange,options}){
+  const active=value!=="todos"&&value!=="";
+  return <div style={{display:"inline-flex",alignItems:"center",gap:0,position:"relative"}}>
+    <select value={value} onChange={e=>onChange(e.target.value)}
+      style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:`1px solid ${active?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 28px 6px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",outline:"none",appearance:"none",WebkitAppearance:"none"}}>
+      {options.map(o=><option key={o.id} value={o.id}>{value==="todos"?label+": ":""}{o.label}</option>)}
+    </select>
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":"#64748b"} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}><polyline points="6 9 12 15 18 9"/></svg>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAINEL CLIENTE — 9 abas internas
+   ═══════════════════════════════════════════════════════════════ */
+function MediaClientPanel({clientData,store,update,addHistory,onBack,isMob,currentUser}){
+  const [tab,setTab]=useState("dashboard");
+  const cl=CLIENTS.find(c=>c.id===clientData.client_id);
+  const isSocio=currentUser?.level===1;
+  const canEdit=isSocio||currentUser?.id==="erick";
+
+  const TABS=[
+    {id:"dashboard", label:"Dashboard"},
+    {id:"briefing",  label:"Briefing"},
+    {id:"metas",     label:"Metas"},
+    {id:"campanhas", label:"Campanhas"},
+    {id:"demandas",  label:"Demandas"},
+    {id:"resultados",label:"Resultados"},
+    {id:"relatorios",label:"Relatórios"},
+    {id:"contas",    label:"Contas e acessos"},
+    {id:"historico", label:"Histórico"},
+  ];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* Header do painel */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <button onClick={onBack}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",flexShrink:0,transition:"all .12s"}}
+          onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        {cl&&<ClientLogo clientId={cl.id} size="md"/>}
+        <div style={{minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?16:20,letterSpacing:-.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{clientData.name}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{MEDIA_PLATFORMS.find(p=>p.id===clientData.plataforma)?.label||"—"} · Gestão de mídia</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Tabs */}
+    <div style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0",overflowX:"auto",scrollbarWidth:"none"}}>
+      {TABS.map(t=>(
+        <button key={t.id} onClick={()=>setTab(t.id)}
+          style={{background:"none",border:"none",borderBottom:tab===t.id?"2px solid #0f172a":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:tab===t.id?700:500,color:tab===t.id?"#0f172a":"#94a3b8",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"inherit",transition:"all .12s"}}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+
+    {/* Conteúdo de cada tab */}
+    {tab==="dashboard" &&<MediaTabDashboard  data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="briefing"  &&<MediaTabBriefing   data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="metas"     &&<MediaTabMetas      data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="campanhas" &&<MediaTabCampanhas  data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="demandas"  &&<MediaTabDemandas   data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="resultados"&&<MediaTabResultados data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="relatorios"&&<MediaTabRelatorios data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="contas"    &&<MediaTabContas     data={clientData} store={store} update={update} addHistory={addHistory} canEdit={canEdit}/>}
+    {tab==="historico" &&<MediaTabHistorico  data={clientData} store={store}/>}
+  </div>;
+}
+
+/* ─── ESTILOS REUTILIZADOS ────────────────────────────── */
+const MSI={width:"100%",background:"#fff",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 12px",color:"#0f172a",fontSize:12,fontWeight:500,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"};
+const MLB={color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5,display:"block",fontFamily:"inherit"};
+const MCARD={background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",fontFamily:"'Inter',system-ui,sans-serif"};
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 1 — DASHBOARD
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabDashboard({data,store,update,addHistory,canEdit}){
+  const results=(store.results?.[data.client_id]||[]);
+  const lastMonth=results[0]||{};
+  const prevMonth=results[1]||{};
+  const diff=(curr,prev)=>{
+    const c=Number(curr)||0, p=Number(prev)||0;
+    if(p===0)return null;
+    return ((c-p)/p)*100;
+  };
+  const fmt=(n)=>typeof n==="number"?n.toLocaleString("pt-BR"):(n||"—");
+
+  // Diagnóstico rápido — editável
+  const briefing=store.briefings?.[data.client_id]||{};
+  const [diag,setDiag]=useState({
+    funcionando:briefing.diag_funcionando||"",
+    melhorar:briefing.diag_melhorar||"",
+    gargalo:briefing.diag_gargalo||"",
+    proxima:briefing.diag_proxima||"",
+  });
+  const saveDiag=()=>{
+    update(prev=>{
+      const b=prev.briefings||{};
+      const old=b[data.client_id]||{};
+      return {...prev,briefings:{...b,[data.client_id]:{...old,
+        diag_funcionando:diag.funcionando,
+        diag_melhorar:diag.melhorar,
+        diag_gargalo:diag.gargalo,
+        diag_proxima:diag.proxima,
+      }}};
+    });
+    addHistory(data.client_id,{type:"diag",label:"Diagnóstico rápido atualizado"});
+    pixelsToast.success("Diagnóstico salvo.",2500);
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* KPIs */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
+      <KPI label="Investimento"    value={_mFmtBRL(lastMonth.investimento)} delta={diff(lastMonth.investimento,prevMonth.investimento)} reverse/>
+      <KPI label="Leads"           value={fmt(lastMonth.leads)}            delta={diff(lastMonth.leads,prevMonth.leads)}/>
+      <KPI label="Custo por lead"  value={lastMonth.cpl?_mFmtBRL(lastMonth.cpl):"—"} delta={diff(lastMonth.cpl,prevMonth.cpl)} reverse/>
+      <KPI label="Cliques"         value={fmt(lastMonth.cliques)}          delta={diff(lastMonth.cliques,prevMonth.cliques)}/>
+      <KPI label="CPC"             value={lastMonth.cpc?_mFmtBRL(lastMonth.cpc):"—"} delta={diff(lastMonth.cpc,prevMonth.cpc)} reverse/>
+      <KPI label="CTR"             value={lastMonth.ctr?(lastMonth.ctr+"%"):"—"} delta={diff(lastMonth.ctr,prevMonth.ctr)}/>
+      <KPI label="Conversões"      value={fmt(lastMonth.conversoes)}       delta={diff(lastMonth.conversoes,prevMonth.conversoes)}/>
+      <KPI label="Campanhas ativas" value={fmt((store.campaigns?.[data.client_id]||[]).filter(c=>c.status==="ativa").length)}/>
+    </div>
+
+    {/* Diagnóstico rápido */}
+    <div style={MCARD}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Diagnóstico rápido</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>Resumo estratégico editável — atualize sempre que mexer nas campanhas</div>
+        </div>
+        {canEdit&&<button onClick={saveDiag}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+          Salvar
+        </button>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div>
+          <label style={MLB}>O que está funcionando</label>
+          <textarea value={diag.funcionando} onChange={e=>setDiag({...diag,funcionando:e.target.value})} disabled={!canEdit}
+            placeholder="Ex: Campanha XYZ trazendo leads abaixo de R$ 8" rows={3}
+            style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:74}}/>
+        </div>
+        <div>
+          <label style={MLB}>O que precisa melhorar</label>
+          <textarea value={diag.melhorar} onChange={e=>setDiag({...diag,melhorar:e.target.value})} disabled={!canEdit}
+            placeholder="Ex: Públicos com CPM alto, criar variações" rows={3}
+            style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:74}}/>
+        </div>
+        <div>
+          <label style={MLB}>Principal gargalo</label>
+          <textarea value={diag.gargalo} onChange={e=>setDiag({...diag,gargalo:e.target.value})} disabled={!canEdit}
+            placeholder="Ex: Página de destino com baixa conversão" rows={3}
+            style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:74}}/>
+        </div>
+        <div>
+          <label style={MLB}>Próxima ação recomendada</label>
+          <textarea value={diag.proxima} onChange={e=>setDiag({...diag,proxima:e.target.value})} disabled={!canEdit}
+            placeholder="Ex: Subir criativo novo + ajustar público" rows={3}
+            style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:74}}/>
+        </div>
+      </div>
+    </div>
+
+    {/* Mini gráfico de leads últimos 6 meses */}
+    {results.length>0&&<div style={MCARD}>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Evolução de leads (últimos {Math.min(results.length,6)} períodos)</div>
+      <MediaBarChart data={results.slice(0,6).reverse().map(r=>({label:r.periodo||"—",value:Number(r.leads)||0}))}/>
+    </div>}
+  </div>;
+}
+
+/* ─── KPI card ─────────────────────────────────────── */
+function KPI({label,value,delta,reverse}){
+  let deltaColor="#94a3b8", deltaIcon="—", deltaText="";
+  if(typeof delta==="number"){
+    const positive=reverse?delta<0:delta>0;
+    deltaColor=positive?"#16a34a":delta===0?"#94a3b8":"#dc2626";
+    deltaIcon=delta>0?"↑":delta<0?"↓":"—";
+    deltaText=Math.abs(delta).toFixed(1)+"%";
+  }
+  return <div style={{...MCARD,padding:"12px 14px"}}>
+    <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
+    <div style={{color:"#0f172a",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.3}}>{value}</div>
+    {delta!==null&&deltaText&&<div style={{color:deltaColor,fontSize:10,fontWeight:600,marginTop:3}}>{deltaIcon} {deltaText}</div>}
+  </div>;
+}
+
+/* ─── Mini bar chart sem libs ──────────────────────── */
+function MediaBarChart({data}){
+  if(!data||data.length===0)return null;
+  const max=Math.max(...data.map(d=>d.value),1);
+  return <div style={{display:"flex",alignItems:"flex-end",gap:10,height:140,padding:"0 4px"}}>
+    {data.map((d,i)=>(
+      <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:6,minWidth:0}}>
+        <div style={{color:"#475569",fontSize:11,fontWeight:600}}>{d.value}</div>
+        <div style={{width:"100%",height:(d.value/max)*100+"%",minHeight:4,background:"linear-gradient(180deg,#0f172a,#334155)",borderRadius:"6px 6px 0 0",transition:"height .3s"}}/>
+        <div style={{color:"#94a3b8",fontSize:10,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",width:"100%",textAlign:"center"}}>{d.label}</div>
+      </div>
+    ))}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 2 — BRIEFING
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabBriefing({data,store,update,addHistory,canEdit}){
+  const existing=store.briefings?.[data.client_id]||{};
+  const [b,setB]=useState({
+    objetivo:existing.objetivo||"",
+    publico:existing.publico||"",
+    regiao:existing.regiao||"",
+    servicos:existing.servicos||"",
+    oferta:existing.oferta||"",
+    ticket:existing.ticket||"",
+    objecoes:existing.objecoes||"",
+    concorrentes:existing.concorrentes||"",
+    observacoes:existing.observacoes||"",
+  });
+  const save=()=>{
+    // Detecta campos alterados pra histórico granular
+    const changed=Object.keys(b).filter(k=>b[k]!==(existing[k]||""));
+    update(prev=>({...prev,briefings:{...(prev.briefings||{}),[data.client_id]:{...(prev.briefings?.[data.client_id]||{}),...b}}}));
+    if(changed.length>0){
+      addHistory(data.client_id,{type:"briefing",label:`Briefing atualizado (${changed.length} campo${changed.length>1?"s":""}: ${changed.join(", ")})`});
+    }
+    pixelsToast.success("Briefing salvo.",2500);
+  };
+  const FIELDS=[
+    {k:"objetivo",     l:"Objetivo do cliente",          ph:"Ex: gerar 30 leads/mês de obras residenciais"},
+    {k:"publico",      l:"Público-alvo",                 ph:"Ex: homens 30-55, classe B/C, região metropolitana"},
+    {k:"regiao",       l:"Região",                       ph:"Ex: Joinville, Florianópolis, raio 50km"},
+    {k:"servicos",     l:"Serviços prioritários",        ph:"Ex: construção pré-moldada residencial"},
+    {k:"oferta",       l:"Oferta",                       ph:"Ex: 10% off na primeira obra + orçamento grátis"},
+    {k:"ticket",       l:"Ticket médio",                 ph:"Ex: R$ 80 mil"},
+    {k:"objecoes",     l:"Objeções comuns",              ph:"Ex: preço, prazo de entrega, qualidade do material"},
+    {k:"concorrentes", l:"Concorrentes",                 ph:"Ex: Tecnocon, Construtora XYZ, ABC Pré-Moldados"},
+    {k:"observacoes",  l:"Observações estratégicas",     ph:"Notas livres sobre a operação, sazonalidade, etc"},
+  ];
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{...MCARD,padding:"14px 18px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Briefing estratégico</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>Alterações ficam registradas no histórico</div>
+        </div>
+        {canEdit&&<button onClick={save}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+          Salvar
+        </button>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+        {FIELDS.map(f=>(
+          <div key={f.k} style={{gridColumn:["objetivo","observacoes"].includes(f.k)?"span 2":"span 1"}}>
+            <label style={MLB}>{f.l}</label>
+            <textarea value={b[f.k]} onChange={e=>setB({...b,[f.k]:e.target.value})} disabled={!canEdit}
+              placeholder={f.ph} rows={["objetivo","observacoes"].includes(f.k)?3:2}
+              style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:["objetivo","observacoes"].includes(f.k)?74:54}}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 3 — METAS
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabMetas({data,store,update,addHistory,canEdit}){
+  const [refMonth,setRefMonth]=useState(()=>{
+    const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  });
+  const goals=store.goals?.[data.client_id]||{};
+  const monthGoals=goals[refMonth]||{leads:"",cpl:"",investimento:"",conversoes:"",roas:""};
+  const [g,setG]=useState(monthGoals);
+  useEffect(()=>{setG(goals[refMonth]||{leads:"",cpl:"",investimento:"",conversoes:"",roas:""});},[refMonth]);
+
+  const save=()=>{
+    update(prev=>{
+      const allGoals=prev.goals||{};
+      const clientGoals=allGoals[data.client_id]||{};
+      return {...prev,goals:{...allGoals,[data.client_id]:{...clientGoals,[refMonth]:g}}};
+    });
+    addHistory(data.client_id,{type:"goal",label:`Metas atualizadas (${refMonth})`});
+    pixelsToast.success("Metas salvas.",2500);
+  };
+
+  // Calcula percentual atingido com base no último resultado deste mês
+  const results=(store.results?.[data.client_id]||[]).filter(r=>(r.periodo||"").startsWith(refMonth));
+  const monthResult=results[0]||{};
+  const pct=(reach,goal)=>{
+    const r=Number(reach)||0, t=Number(goal)||0;
+    if(t===0)return null;
+    return Math.round((r/t)*100);
+  };
+
+  const ROWS=[
+    {k:"leads",        l:"Meta de leads",              real:monthResult.leads,        invert:false},
+    {k:"cpl",          l:"Meta de custo por lead",     real:monthResult.cpl,          invert:true},
+    {k:"investimento", l:"Meta de investimento",       real:monthResult.investimento, invert:false, currency:true},
+    {k:"conversoes",   l:"Meta de conversões",         real:monthResult.conversoes,   invert:false},
+    {k:"roas",         l:"Meta de ROAS (ou faturamento)",real:monthResult.roas,       invert:false},
+  ];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={MCARD}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Metas mensais</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>Defina metas e acompanhe o atingimento em tempo real</div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <input type="month" value={refMonth} onChange={e=>setRefMonth(e.target.value)}
+            style={{...MSI,width:"auto",cursor:"pointer"}}/>
+          {canEdit&&<button onClick={save}
+            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+            Salvar
+          </button>}
+        </div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {ROWS.map(row=>{
+          const reached=pct(row.real,g[row.k]);
+          const isOK=reached!==null&&(row.invert?reached<=100:reached>=80);
+          const barColor=reached===null?"#cbd5e1":isOK?"#16a34a":reached>=50?"#eab308":"#dc2626";
+          return <div key={row.k} style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",display:"grid",gridTemplateColumns:"1fr auto",gap:12,alignItems:"center"}}>
+            <div>
+              <div style={{color:"#475569",fontSize:11,fontWeight:600,marginBottom:4}}>{row.l}</div>
+              <input type="number" value={g[row.k]} onChange={e=>setG({...g,[row.k]:e.target.value})} disabled={!canEdit}
+                placeholder="0" style={{...MSI,fontSize:14,fontWeight:700,padding:"7px 10px"}}/>
+            </div>
+            <div style={{textAlign:"right",minWidth:120}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Realizado</div>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:16,marginTop:2}}>{row.currency?_mFmtBRL(row.real):(row.real||"—")}</div>
+              {reached!==null&&<div style={{display:"flex",alignItems:"center",gap:6,marginTop:4,justifyContent:"flex-end"}}>
+                <div style={{width:80,height:5,background:"#e2e8f0",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:Math.min(reached,100)+"%",height:"100%",background:barColor,transition:"width .3s"}}/>
+                </div>
+                <span style={{color:barColor,fontSize:11,fontWeight:700,minWidth:36,textAlign:"right"}}>{reached}%</span>
+              </div>}
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 4 — CAMPANHAS
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabCampanhas({data,store,update,addHistory,canEdit}){
+  const campanhas=store.campaigns?.[data.client_id]||[];
+  const [showForm,setShowForm]=useState(false);
+  const [editing,setEditing]=useState(null);
+  const [f,setF]=useState({nome:"",plataforma:"meta",objetivo:"",status:"ativa",orcamento:"",publico:"",criativo:"",pagina:"",observacoes:""});
+
+  const startNew=()=>{setEditing(null);setF({nome:"",plataforma:"meta",objetivo:"",status:"ativa",orcamento:"",publico:"",criativo:"",pagina:"",observacoes:""});setShowForm(true);};
+  const startEdit=(c)=>{setEditing(c.id);setF({...c});setShowForm(true);};
+  const saveCampaign=()=>{
+    if(!f.nome.trim())return pixelsToast.error("Nome da campanha é obrigatório.",2500);
+    update(prev=>{
+      const allCamp=prev.campaigns||{};
+      const cur=allCamp[data.client_id]||[];
+      let next;
+      if(editing){
+        next=cur.map(c=>c.id===editing?{...f,id:editing}:c);
+      } else {
+        next=[{...f,id:"camp-"+Date.now(),created_at:new Date().toISOString()},...cur];
+      }
+      return {...prev,campaigns:{...allCamp,[data.client_id]:next}};
+    });
+    addHistory(data.client_id,{type:"campaign",label:editing?`Campanha editada: ${f.nome}`:`Nova campanha criada: ${f.nome}`});
+    pixelsToast.success("Campanha salva.",2500);
+    setShowForm(false);
+  };
+  const removeCampaign=(c)=>{
+    if(!confirm(`Remover campanha "${c.nome}"?`))return;
+    update(prev=>{
+      const allCamp=prev.campaigns||{};
+      const cur=allCamp[data.client_id]||[];
+      return {...prev,campaigns:{...allCamp,[data.client_id]:cur.filter(x=>x.id!==c.id)}};
+    });
+    addHistory(data.client_id,{type:"campaign",label:`Campanha removida: ${c.nome}`});
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Campanhas</div>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{campanhas.length} campanha{campanhas.length!==1?"s":""} cadastrada{campanhas.length!==1?"s":""}</div>
+      </div>
+      {canEdit&&<button onClick={startNew}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+        <Ico n="plus" size={13}/> Nova campanha
+      </button>}
+    </div>
+
+    {showForm&&<div style={MCARD}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>{editing?"Editar campanha":"Nova campanha"}</div>
+        <button onClick={()=>setShowForm(false)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:4}}><Ico n="x" size={16}/></button>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{gridColumn:"span 2"}}>
+          <label style={MLB}>Nome da campanha</label>
+          <input value={f.nome} onChange={e=>setF({...f,nome:e.target.value})} placeholder="Ex: Construschorr - Conversões - Out/26" style={MSI}/>
+        </div>
+        <div>
+          <label style={MLB}>Plataforma</label>
+          <select value={f.plataforma} onChange={e=>setF({...f,plataforma:e.target.value})} style={MSI}>
+            {MEDIA_PLATFORMS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={MLB}>Status</label>
+          <select value={f.status} onChange={e=>setF({...f,status:e.target.value})} style={MSI}>
+            <option value="ativa">Ativa</option>
+            <option value="pausada">Pausada</option>
+            <option value="rascunho">Rascunho</option>
+            <option value="encerrada">Encerrada</option>
+          </select>
+        </div>
+        <div>
+          <label style={MLB}>Objetivo</label>
+          <input value={f.objetivo} onChange={e=>setF({...f,objetivo:e.target.value})} placeholder="Ex: Geração de leads" style={MSI}/>
+        </div>
+        <div>
+          <label style={MLB}>Orçamento</label>
+          <input value={f.orcamento} onChange={e=>setF({...f,orcamento:e.target.value})} placeholder="Ex: R$ 50/dia" style={MSI}/>
+        </div>
+        <div style={{gridColumn:"span 2"}}>
+          <label style={MLB}>Público</label>
+          <input value={f.publico} onChange={e=>setF({...f,publico:e.target.value})} placeholder="Ex: Homens 30-55, raio 50km de Joinville" style={MSI}/>
+        </div>
+        <div>
+          <label style={MLB}>Criativo</label>
+          <input value={f.criativo} onChange={e=>setF({...f,criativo:e.target.value})} placeholder="Ex: Vídeo 30s + 3 imagens" style={MSI}/>
+        </div>
+        <div>
+          <label style={MLB}>Página de destino</label>
+          <input value={f.pagina} onChange={e=>setF({...f,pagina:e.target.value})} placeholder="URL da landing page" style={MSI}/>
+        </div>
+        <div style={{gridColumn:"span 2"}}>
+          <label style={MLB}>Observações / histórico de otimizações</label>
+          <textarea value={f.observacoes} onChange={e=>setF({...f,observacoes:e.target.value})} rows={3} style={{...MSI,resize:"vertical",minHeight:74}}/>
+        </div>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
+        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={saveCampaign} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+      </div>
+    </div>}
+
+    {campanhas.length===0&&!showForm
+      ? <div style={{background:"#fff",borderRadius:12,padding:"32px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:4}}>Nenhuma campanha cadastrada</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>Use "Nova campanha" para começar.</div>
+        </div>
+      : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {campanhas.map(c=>{
+          const plat=MEDIA_PLATFORMS.find(p=>p.id===c.plataforma);
+          const statusColor={ativa:"#16a34a",pausada:"#eab308",rascunho:"#64748b",encerrada:"#94a3b8"}[c.status]||"#64748b";
+          return <div key={c.id} style={{...MCARD,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{c.nome}</div>
+              <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{plat?.label||"—"} · {c.objetivo||"sem objetivo"} · {c.orcamento||"sem orçamento"}</div>
+            </div>
+            <span style={{background:statusColor+"22",color:statusColor,borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,textTransform:"capitalize"}}>{c.status}</span>
+            {canEdit&&<>
+              <button onClick={()=>startEdit(c)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:8,padding:"6px 10px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Editar</button>
+              <button onClick={()=>removeCampaign(c)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",padding:6}}><Ico n="trash" size={14}/></button>
+            </>}
+          </div>;
+        })}
+      </div>
+    }
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 5 — DEMANDAS DE MÍDIA
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabDemandas({data,store,update,addHistory,canEdit}){
+  const demandas=store.tasks?.[data.client_id]||[];
+  const [showForm,setShowForm]=useState(false);
+  const [f,setF]=useState({titulo:"",tipo:"criar_campanha",status:"planejamento",responsavel:"erick",prazo:"",descricao:""});
+
+  const TIPOS=[
+    {id:"criar_campanha",   label:"Criar campanha"},
+    {id:"ajustar_orcamento",label:"Ajustar orçamento"},
+    {id:"revisar_publicos", label:"Revisar públicos"},
+    {id:"subir_criativos",  label:"Subir criativos"},
+    {id:"conferir_pixel",   label:"Conferir pixel/tag"},
+    {id:"config_conversoes",label:"Configurar conversões"},
+    {id:"criar_relatorio",  label:"Criar relatório"},
+    {id:"analisar_queda",   label:"Analisar queda de resultado"},
+    {id:"outro",            label:"Outro"},
+  ];
+
+  const saveTask=()=>{
+    if(!f.titulo.trim())return pixelsToast.error("Título é obrigatório.",2500);
+    update(prev=>{
+      const all=prev.tasks||{};
+      const cur=all[data.client_id]||[];
+      return {...prev,tasks:{...all,[data.client_id]:[{...f,id:"task-"+Date.now(),created_at:new Date().toISOString()},...cur]}};
+    });
+    addHistory(data.client_id,{type:"task",label:`Demanda criada: ${f.titulo}`});
+    pixelsToast.success("Demanda criada.",2500);
+    setShowForm(false);
+    setF({titulo:"",tipo:"criar_campanha",status:"planejamento",responsavel:"erick",prazo:"",descricao:""});
+  };
+  const changeStatus=(taskId,newStatus)=>{
+    update(prev=>{
+      const all=prev.tasks||{};
+      const cur=all[data.client_id]||[];
+      return {...prev,tasks:{...all,[data.client_id]:cur.map(t=>t.id===taskId?{...t,status:newStatus}:t)}};
+    });
+    addHistory(data.client_id,{type:"task",label:"Status de demanda atualizado"});
+  };
+  const removeTask=(t)=>{
+    if(!confirm(`Remover "${t.titulo}"?`))return;
+    update(prev=>{
+      const all=prev.tasks||{};
+      const cur=all[data.client_id]||[];
+      return {...prev,tasks:{...all,[data.client_id]:cur.filter(x=>x.id!==t.id)}};
+    });
+  };
+
+  // Agrupa por status
+  const byStatus={};
+  MEDIA_TASK_STATUS.forEach(s=>byStatus[s.id]=[]);
+  demandas.forEach(d=>{if(byStatus[d.status])byStatus[d.status].push(d);});
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Demandas de mídia</div>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{demandas.length} demanda{demandas.length!==1?"s":""} · separadas do fluxo de design/vídeo</div>
+      </div>
+      {canEdit&&<button onClick={()=>setShowForm(true)}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+        <Ico n="plus" size={13}/> Nova demanda
+      </button>}
+    </div>
+
+    {showForm&&<div style={MCARD}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{gridColumn:"span 2"}}>
+          <label style={MLB}>Título</label>
+          <input value={f.titulo} onChange={e=>setF({...f,titulo:e.target.value})} placeholder="Ex: Subir 3 criativos novos pra campanha de obras" style={MSI}/>
+        </div>
+        <div>
+          <label style={MLB}>Tipo</label>
+          <select value={f.tipo} onChange={e=>setF({...f,tipo:e.target.value})} style={MSI}>
+            {TIPOS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={MLB}>Status</label>
+          <select value={f.status} onChange={e=>setF({...f,status:e.target.value})} style={MSI}>
+            {MEDIA_TASK_STATUS.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={MLB}>Responsável</label>
+          <select value={f.responsavel} onChange={e=>setF({...f,responsavel:e.target.value})} style={MSI}>
+            {TEAM.filter(u=>u.id==="erick"||u.level===1).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={MLB}>Prazo</label>
+          <input type="date" value={f.prazo} onChange={e=>setF({...f,prazo:e.target.value})} style={MSI}/>
+        </div>
+        <div style={{gridColumn:"span 2"}}>
+          <label style={MLB}>Descrição</label>
+          <textarea value={f.descricao} onChange={e=>setF({...f,descricao:e.target.value})} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/>
+        </div>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
+        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={saveTask} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Criar demanda</button>
+      </div>
+    </div>}
+
+    {/* Lista agrupada por status */}
+    {MEDIA_TASK_STATUS.map(s=>{
+      const list=byStatus[s.id];
+      if(list.length===0)return null;
+      return <div key={s.id}>
+        <div style={{color:s.color,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>{s.label} ({list.length})</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {list.map(t=>{
+            const resp=TEAM.find(u=>u.id===t.responsavel);
+            return <div key={t.id} style={{...MCARD,padding:"10px 14px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+              <div style={{width:6,height:6,borderRadius:"50%",background:s.color,flexShrink:0}}/>
+              <div style={{flex:1,minWidth:180}}>
+                <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{t.titulo}</div>
+                <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{TIPOS.find(x=>x.id===t.tipo)?.label}{t.prazo?` · prazo ${_mFmtDateShort(t.prazo)}`:""}</div>
+              </div>
+              {resp&&<UserAvatar user={resp} size={22}/>}
+              {canEdit&&<select value={t.status} onChange={e=>changeStatus(t.id,e.target.value)}
+                style={{...MSI,width:"auto",padding:"4px 8px",fontSize:11}}>
+                {MEDIA_TASK_STATUS.map(x=><option key={x.id} value={x.id}>{x.label}</option>)}
+              </select>}
+              {canEdit&&<button onClick={()=>removeTask(t)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",padding:6}}><Ico n="trash" size={14}/></button>}
+            </div>;
+          })}
+        </div>
+      </div>;
+    })}
+    {demandas.length===0&&!showForm&&<div style={{background:"#fff",borderRadius:12,padding:"32px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+      <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:4}}>Nenhuma demanda</div>
+      <div style={{color:"#94a3b8",fontSize:11}}>Crie demandas específicas de tráfego sem misturar com o kanban de design.</div>
+    </div>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 6 — RESULTADOS
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabResultados({data,store,update,addHistory,canEdit}){
+  const results=store.results?.[data.client_id]||[];
+  const [showForm,setShowForm]=useState(false);
+  const [f,setF]=useState({periodo:"",granularidade:"mes",investimento:"",impressoes:"",alcance:"",cliques:"",ctr:"",cpc:"",leads:"",cpl:"",conversoes:"",roas:"",observacoes:""});
+
+  const saveResult=()=>{
+    if(!f.periodo)return pixelsToast.error("Período é obrigatório.",2500);
+    update(prev=>{
+      const all=prev.results||{};
+      const cur=all[data.client_id]||[];
+      const next=[{...f,id:"res-"+Date.now(),created_at:new Date().toISOString()},...cur];
+      // Ordena: mais recente primeiro
+      next.sort((a,b)=>(b.periodo||"").localeCompare(a.periodo||""));
+      return {...prev,results:{...all,[data.client_id]:next}};
+    });
+    addHistory(data.client_id,{type:"result",label:`Resultado registrado (${f.periodo})`});
+    pixelsToast.success("Resultado salvo.",2500);
+    setShowForm(false);
+    setF({periodo:"",granularidade:"mes",investimento:"",impressoes:"",alcance:"",cliques:"",ctr:"",cpc:"",leads:"",cpl:"",conversoes:"",roas:"",observacoes:""});
+  };
+  const removeResult=(r)=>{
+    if(!confirm(`Remover resultado ${r.periodo}?`))return;
+    update(prev=>{
+      const all=prev.results||{};
+      const cur=all[data.client_id]||[];
+      return {...prev,results:{...all,[data.client_id]:cur.filter(x=>x.id!==r.id)}};
+    });
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Resultados</div>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{results.length} registro{results.length!==1?"s":""} de desempenho</div>
+      </div>
+      {canEdit&&<button onClick={()=>setShowForm(true)}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+        <Ico n="plus" size={13}/> Registrar resultado
+      </button>}
+    </div>
+
+    {showForm&&<div style={MCARD}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:12}}>
+        <div>
+          <label style={MLB}>Período</label>
+          <input value={f.periodo} onChange={e=>setF({...f,periodo:e.target.value})} placeholder="2026-05 ou 2026-05-15" style={MSI}/>
+        </div>
+        <div>
+          <label style={MLB}>Granularidade</label>
+          <select value={f.granularidade} onChange={e=>setF({...f,granularidade:e.target.value})} style={MSI}>
+            <option value="dia">Dia</option><option value="semana">Semana</option><option value="mes">Mês</option>
+          </select>
+        </div>
+        <div><label style={MLB}>Investimento (R$)</label><input type="number" value={f.investimento} onChange={e=>setF({...f,investimento:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>Impressões</label><input type="number" value={f.impressoes} onChange={e=>setF({...f,impressoes:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>Alcance</label><input type="number" value={f.alcance} onChange={e=>setF({...f,alcance:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>Cliques</label><input type="number" value={f.cliques} onChange={e=>setF({...f,cliques:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>CTR (%)</label><input type="number" step="0.01" value={f.ctr} onChange={e=>setF({...f,ctr:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>CPC (R$)</label><input type="number" step="0.01" value={f.cpc} onChange={e=>setF({...f,cpc:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>Leads</label><input type="number" value={f.leads} onChange={e=>setF({...f,leads:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>CPL (R$)</label><input type="number" step="0.01" value={f.cpl} onChange={e=>setF({...f,cpl:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>Conversões</label><input type="number" value={f.conversoes} onChange={e=>setF({...f,conversoes:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>ROAS</label><input type="number" step="0.01" value={f.roas} onChange={e=>setF({...f,roas:e.target.value})} style={MSI}/></div>
+      </div>
+      <div style={{marginTop:12}}>
+        <label style={MLB}>Observações</label>
+        <textarea value={f.observacoes} onChange={e=>setF({...f,observacoes:e.target.value})} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
+        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={saveResult} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar resultado</button>
+      </div>
+    </div>}
+
+    {results.length>0&&<div style={MCARD}>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Evolução de leads</div>
+      <MediaBarChart data={results.slice(0,8).reverse().map(r=>({label:r.periodo,value:Number(r.leads)||0}))}/>
+    </div>}
+
+    {results.length>0&&<div style={MCARD}>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11.5}}>
+          <thead>
+            <tr style={{borderBottom:"1px solid #e2e8f0"}}>
+              {["Período","Invest.","Impr.","Cliques","CTR","CPC","Leads","CPL","Conv.","ROAS","",""].map((h,i)=>
+                <th key={i} style={{textAlign:"left",padding:"8px 8px",color:"#64748b",fontWeight:700,textTransform:"uppercase",fontSize:9.5,letterSpacing:.4}}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {results.map(r=><tr key={r.id} style={{borderBottom:"1px solid #f1f5f9"}}>
+              <td style={{padding:"8px 8px",color:"#0f172a",fontWeight:600}}>{r.periodo}</td>
+              <td style={{padding:"8px 8px"}}>{r.investimento?_mFmtBRL(r.investimento):"—"}</td>
+              <td style={{padding:"8px 8px"}}>{r.impressoes||"—"}</td>
+              <td style={{padding:"8px 8px"}}>{r.cliques||"—"}</td>
+              <td style={{padding:"8px 8px"}}>{r.ctr?r.ctr+"%":"—"}</td>
+              <td style={{padding:"8px 8px"}}>{r.cpc?_mFmtBRL(r.cpc):"—"}</td>
+              <td style={{padding:"8px 8px",color:"#0f172a",fontWeight:600}}>{r.leads||"—"}</td>
+              <td style={{padding:"8px 8px"}}>{r.cpl?_mFmtBRL(r.cpl):"—"}</td>
+              <td style={{padding:"8px 8px"}}>{r.conversoes||"—"}</td>
+              <td style={{padding:"8px 8px"}}>{r.roas||"—"}</td>
+              <td style={{padding:"8px 8px",color:"#94a3b8"}}>{r.observacoes?<span title={r.observacoes}>💬</span>:""}</td>
+              <td style={{padding:"8px 8px"}}>{canEdit&&<button onClick={()=>removeResult(r)} style={{background:"none",border:"none",color:"#dc2626",cursor:"pointer",padding:4}}><Ico n="trash" size={13}/></button>}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </div>}
+
+    {results.length===0&&!showForm&&<div style={{background:"#fff",borderRadius:12,padding:"32px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+      <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:4}}>Nenhum resultado registrado</div>
+      <div style={{color:"#94a3b8",fontSize:11}}>Registre resultados diários, semanais ou mensais.</div>
+    </div>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 7 — RELATÓRIOS
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabRelatorios({data,store,update,addHistory,canEdit}){
+  const reports=store.reports?.[data.client_id]||[];
+  const [showForm,setShowForm]=useState(false);
+  const [f,setF]=useState({mes:"",data:"",responsavel:"erick",status:"rascunho",link:"",resultados:"",atencao:"",proximas:"",enviado:false});
+
+  const saveReport=()=>{
+    if(!f.mes)return pixelsToast.error("Mês é obrigatório.",2500);
+    update(prev=>{
+      const all=prev.reports||{};
+      const cur=all[data.client_id]||[];
+      return {...prev,reports:{...all,[data.client_id]:[{...f,id:"rep-"+Date.now(),created_at:new Date().toISOString()},...cur]}};
+    });
+    addHistory(data.client_id,{type:"report",label:`Relatório criado (${f.mes})`});
+    pixelsToast.success("Relatório salvo.",2500);
+    setShowForm(false);
+    setF({mes:"",data:"",responsavel:"erick",status:"rascunho",link:"",resultados:"",atencao:"",proximas:"",enviado:false});
+  };
+  const toggleEnviado=(r)=>{
+    update(prev=>{
+      const all=prev.reports||{};
+      const cur=all[data.client_id]||[];
+      return {...prev,reports:{...all,[data.client_id]:cur.map(x=>x.id===r.id?{...x,enviado:!x.enviado}:x)}};
+    });
+    addHistory(data.client_id,{type:"report",label:`Relatório ${r.mes} ${r.enviado?"marcado como não enviado":"marcado como enviado ao cliente"}`});
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Relatórios mensais</div>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{reports.length} relatório{reports.length!==1?"s":""}</div>
+      </div>
+      {canEdit&&<button onClick={()=>setShowForm(true)}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+        <Ico n="plus" size={13}/> Novo relatório
+      </button>}
+    </div>
+
+    {showForm&&<div style={MCARD}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+        <div><label style={MLB}>Mês</label><input type="month" value={f.mes} onChange={e=>setF({...f,mes:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>Data do relatório</label><input type="date" value={f.data} onChange={e=>setF({...f,data:e.target.value})} style={MSI}/></div>
+        <div><label style={MLB}>Status</label>
+          <select value={f.status} onChange={e=>setF({...f,status:e.target.value})} style={MSI}>
+            <option value="rascunho">Rascunho</option><option value="revisao">Em revisão</option><option value="finalizado">Finalizado</option>
+          </select>
+        </div>
+        <div style={{gridColumn:"span 3"}}><label style={MLB}>Link do relatório (Drive/Notion/PDF)</label><input value={f.link} onChange={e=>setF({...f,link:e.target.value})} placeholder="https://..." style={MSI}/></div>
+        <div style={{gridColumn:"span 3"}}><label style={MLB}>Principais resultados</label><textarea value={f.resultados} onChange={e=>setF({...f,resultados:e.target.value})} rows={3} style={{...MSI,resize:"vertical",minHeight:74}}/></div>
+        <div style={{gridColumn:"span 3"}}><label style={MLB}>Pontos de atenção</label><textarea value={f.atencao} onChange={e=>setF({...f,atencao:e.target.value})} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/></div>
+        <div style={{gridColumn:"span 3"}}><label style={MLB}>Próximas ações</label><textarea value={f.proximas} onChange={e=>setF({...f,proximas:e.target.value})} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/></div>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
+        <button onClick={()=>setShowForm(false)} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={saveReport} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar relatório</button>
+      </div>
+    </div>}
+
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {reports.map(r=>{
+        const resp=TEAM.find(u=>u.id===r.responsavel);
+        const statusColor={rascunho:"#64748b",revisao:"#eab308",finalizado:"#16a34a"}[r.status]||"#64748b";
+        return <div key={r.id} style={{...MCARD,padding:"12px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+            <div style={{flex:1,minWidth:180}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{r.mes}</div>
+                <span style={{background:statusColor+"22",color:statusColor,borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700,textTransform:"capitalize"}}>{r.status}</span>
+                {r.enviado&&<span style={{background:"#dcfce7",color:"#15803d",borderRadius:99,padding:"2px 8px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="check" size={9}/> Enviado ao cliente</span>}
+              </div>
+              <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{resp?.name||"—"}{r.data?` · ${_mFmtDate(r.data)}`:""}</div>
+            </div>
+            {r.link&&<a href={r.link} target="_blank" rel="noopener noreferrer" style={{background:"#f1f5f9",color:"#0f172a",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:5}}>
+              <Ico n="link" size={11}/> Abrir
+            </a>}
+            {canEdit&&<button onClick={()=>toggleEnviado(r)}
+              style={{background:r.enviado?"#fff":"#0f172a",color:r.enviado?"#0f172a":"#fff",border:r.enviado?"1px solid #e2e8f0":"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+              {r.enviado?"Desmarcar":"Marcar enviado"}
+            </button>}
+          </div>
+          {(r.resultados||r.atencao||r.proximas)&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,fontSize:11}}>
+            {r.resultados&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Resultados</div><div style={{color:"#475569",lineHeight:1.5}}>{r.resultados}</div></div>}
+            {r.atencao&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Atenção</div><div style={{color:"#475569",lineHeight:1.5}}>{r.atencao}</div></div>}
+            {r.proximas&&<div><div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Próximas ações</div><div style={{color:"#475569",lineHeight:1.5}}>{r.proximas}</div></div>}
+          </div>}
+        </div>;
+      })}
+    </div>
+
+    {reports.length===0&&!showForm&&<div style={{background:"#fff",borderRadius:12,padding:"32px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+      <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:4}}>Nenhum relatório</div>
+      <div style={{color:"#94a3b8",fontSize:11}}>Crie o primeiro relatório mensal pra esse cliente.</div>
+    </div>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 8 — CONTAS E ACESSOS
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabContas({data,store,update,addHistory,canEdit}){
+  const existing=store.access?.[data.client_id]||{};
+  const [a,setA]=useState({
+    metaAccount:existing.metaAccount||"",
+    bm:existing.bm||"",
+    pixel:existing.pixel||"",
+    googleAds:existing.googleAds||"",
+    gtm:existing.gtm||"",
+    analytics:existing.analytics||"",
+    landingPage:existing.landingPage||"",
+    whatsapp:existing.whatsapp||"",
+    statusMeta:existing.statusMeta||"pendente",
+    statusGoogle:existing.statusGoogle||"pendente",
+    observacoes:existing.observacoes||"",
+  });
+  const save=()=>{
+    update(prev=>({...prev,access:{...(prev.access||{}),[data.client_id]:a}}));
+    addHistory(data.client_id,{type:"access",label:"Contas e acessos atualizados"});
+    pixelsToast.success("Acessos salvos.",2500);
+  };
+  const ROWS=[
+    {k:"metaAccount", l:"Conta Meta Ads",       ph:"ID da conta de anúncios Meta"},
+    {k:"bm",          l:"Business Manager (BM)",ph:"ID do BM"},
+    {k:"pixel",       l:"Pixel Meta",           ph:"ID do pixel"},
+    {k:"googleAds",   l:"Conta Google Ads",     ph:"ID Google Ads (XXX-XXX-XXXX)"},
+    {k:"gtm",         l:"GTM (Google Tag Manager)",ph:"GTM-XXXXX"},
+    {k:"analytics",   l:"Google Analytics",     ph:"GA4 measurement ID"},
+    {k:"landingPage", l:"Landing page",         ph:"URL da página de captura"},
+    {k:"whatsapp",    l:"WhatsApp vinculado",   ph:"Número usado nos anúncios"},
+  ];
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={MCARD}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Contas e acessos</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>Não armazene senhas aqui — só IDs e identificadores operacionais</div>
+        </div>
+        {canEdit&&<button onClick={save}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+          Salvar
+        </button>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        {ROWS.map(r=>(
+          <div key={r.k}>
+            <label style={MLB}>{r.l}</label>
+            <input value={a[r.k]} onChange={e=>setA({...a,[r.k]:e.target.value})} disabled={!canEdit} placeholder={r.ph} style={MSI}/>
+          </div>
+        ))}
+        <div>
+          <label style={MLB}>Status acesso Meta</label>
+          <select value={a.statusMeta} onChange={e=>setA({...a,statusMeta:e.target.value})} disabled={!canEdit} style={MSI}>
+            <option value="pendente">Pendente</option><option value="ok">OK</option><option value="bloqueado">Bloqueado</option>
+          </select>
+        </div>
+        <div>
+          <label style={MLB}>Status acesso Google</label>
+          <select value={a.statusGoogle} onChange={e=>setA({...a,statusGoogle:e.target.value})} disabled={!canEdit} style={MSI}>
+            <option value="pendente">Pendente</option><option value="ok">OK</option><option value="bloqueado">Bloqueado</option>
+          </select>
+        </div>
+        <div style={{gridColumn:"span 2"}}>
+          <label style={MLB}>Observações</label>
+          <textarea value={a.observacoes} onChange={e=>setA({...a,observacoes:e.target.value})} disabled={!canEdit} rows={2} style={{...MSI,resize:"vertical",minHeight:54}}/>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ABA 9 — HISTÓRICO
+   ═══════════════════════════════════════════════════════════════ */
+function MediaTabHistorico({data,store}){
+  const events=store.history?.[data.client_id]||[];
+  const typeColor={
+    briefing:"#7c3aed", goal:"#0284c7", campaign:"#16a34a", task:"#ea580c",
+    result:"#4db8ff", report:"#eab308", access:"#64748b", diag:"#a140ff",
+    status:"#dc2626",
+  };
+  return <div style={MCARD}>
+    <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Histórico do cliente</div>
+    {events.length===0
+      ? <div style={{color:"#94a3b8",fontSize:12,padding:"16px 0"}}>Nenhum evento registrado ainda.</div>
+      : <div style={{display:"flex",flexDirection:"column",gap:0}}>
+          {events.map((e,i)=>{
+            const color=typeColor[e.type]||"#94a3b8";
+            return <div key={e.id} style={{display:"flex",gap:12,padding:"10px 0",borderBottom:i<events.length-1?"1px solid #f1f5f9":"none"}}>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0,paddingTop:2}}>
+                <div style={{width:8,height:8,borderRadius:"50%",background:color}}/>
+                {i<events.length-1&&<div style={{width:1,flex:1,background:"#e2e8f0",marginTop:4}}/>}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{e.label}</div>
+                <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{e.user} · {_mFmtDate(e.ts)} {new Date(e.ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}</div>
+              </div>
+            </div>;
+          })}
+        </div>
+    }
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL — Novo cliente de mídia
+   ═══════════════════════════════════════════════════════════════ */
+function MediaNovoClienteModal({store,update,addHistory,onClose}){
+  const [f,setF]=useState({client_id:"",name:"",plataforma:"meta",investimento_mensal:"",meta_principal:"",responsavel:"erick"});
+  // Clientes que ainda não foram cadastrados em mídia
+  const available=CLIENTS.filter(c=>!store.clients.some(mc=>mc.client_id===c.id));
+  const save=()=>{
+    if(!f.client_id)return pixelsToast.error("Selecione um cliente.",2500);
+    const c=CLIENTS.find(x=>x.id===f.client_id);
+    const newClient={
+      client_id:f.client_id,
+      name:c?.name||f.client_id,
+      plataforma:f.plataforma,
+      investimento_mensal:Number(f.investimento_mensal)||0,
+      meta_principal:f.meta_principal,
+      resultado_mes:"",
+      status:"em_estruturacao",
+      responsavel:f.responsavel,
+      ultima_atualizacao:new Date().toISOString(),
+      proxima_acao:"",
+    };
+    update(prev=>({...prev,clients:[...prev.clients,newClient]}));
+    addHistory(f.client_id,{type:"status",label:`Cliente ${c?.name||f.client_id} adicionado em Gestão de mídia`});
+    pixelsToast.success("Cliente adicionado.",2500);
+    onClose();
+  };
+  return <ModalShell onClose={onClose} title="Novo cliente de mídia">
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:"span 2"}}>
+        <label style={MLB}>Cliente</label>
+        <select value={f.client_id} onChange={e=>setF({...f,client_id:e.target.value})} style={MSI}>
+          <option value="">Selecione um cliente...</option>
+          {available.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div>
+        <label style={MLB}>Plataforma</label>
+        <select value={f.plataforma} onChange={e=>setF({...f,plataforma:e.target.value})} style={MSI}>
+          {MEDIA_PLATFORMS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label style={MLB}>Investimento mensal (R$)</label>
+        <input type="number" value={f.investimento_mensal} onChange={e=>setF({...f,investimento_mensal:e.target.value})} placeholder="0" style={MSI}/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <label style={MLB}>Meta principal</label>
+        <input value={f.meta_principal} onChange={e=>setF({...f,meta_principal:e.target.value})} placeholder="Ex: gerar 30 leads/mês" style={MSI}/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <label style={MLB}>Responsável</label>
+        <select value={f.responsavel} onChange={e=>setF({...f,responsavel:e.target.value})} style={MSI}>
+          {TEAM.filter(u=>u.id==="erick"||u.level===1).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+        </select>
+      </div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Adicionar cliente</button>
+    </div>
+  </ModalShell>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MODAL — Nova demanda de mídia (cross-cliente)
+   ═══════════════════════════════════════════════════════════════ */
+function MediaNovaDemandaModal({store,update,addHistory,onClose}){
+  const [f,setF]=useState({client_id:"",titulo:"",tipo:"criar_campanha",status:"planejamento",responsavel:"erick",prazo:"",descricao:""});
+  const TIPOS=[
+    {id:"criar_campanha",label:"Criar campanha"},
+    {id:"ajustar_orcamento",label:"Ajustar orçamento"},
+    {id:"revisar_publicos",label:"Revisar públicos"},
+    {id:"subir_criativos",label:"Subir criativos"},
+    {id:"conferir_pixel",label:"Conferir pixel/tag"},
+    {id:"config_conversoes",label:"Configurar conversões"},
+    {id:"criar_relatorio",label:"Criar relatório"},
+    {id:"analisar_queda",label:"Analisar queda de resultado"},
+    {id:"outro",label:"Outro"},
+  ];
+  const save=()=>{
+    if(!f.client_id)return pixelsToast.error("Cliente é obrigatório.",2500);
+    if(!f.titulo.trim())return pixelsToast.error("Título é obrigatório.",2500);
+    update(prev=>{
+      const all=prev.tasks||{};
+      const cur=all[f.client_id]||[];
+      return {...prev,tasks:{...all,[f.client_id]:[{...f,id:"task-"+Date.now(),created_at:new Date().toISOString()},...cur]}};
+    });
+    addHistory(f.client_id,{type:"task",label:`Demanda criada: ${f.titulo}`});
+    pixelsToast.success("Demanda criada.",2500);
+    onClose();
+  };
+  return <ModalShell onClose={onClose} title="Nova demanda de mídia">
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:"span 2"}}>
+        <label style={MLB}>Cliente</label>
+        <select value={f.client_id} onChange={e=>setF({...f,client_id:e.target.value})} style={MSI}>
+          <option value="">Selecione...</option>
+          {store.clients.map(c=><option key={c.client_id} value={c.client_id}>{c.name}</option>)}
+        </select>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <label style={MLB}>Título</label>
+        <input value={f.titulo} onChange={e=>setF({...f,titulo:e.target.value})} style={MSI}/>
+      </div>
+      <div>
+        <label style={MLB}>Tipo</label>
+        <select value={f.tipo} onChange={e=>setF({...f,tipo:e.target.value})} style={MSI}>
+          {TIPOS.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}
+        </select>
+      </div>
+      <div>
+        <label style={MLB}>Prazo</label>
+        <input type="date" value={f.prazo} onChange={e=>setF({...f,prazo:e.target.value})} style={MSI}/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <label style={MLB}>Descrição</label>
+        <textarea value={f.descricao} onChange={e=>setF({...f,descricao:e.target.value})} rows={3} style={{...MSI,resize:"vertical",minHeight:74}}/>
+      </div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Criar demanda</button>
+    </div>
+  </ModalShell>;
+}
+
+/* ─── Shell de modal ─────────────────────────────────── */
+function ModalShell({onClose,title,children}){
+  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 24px 64px rgba(0,0,0,0.18)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{title}</div>
+        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:10,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer"}}><Ico n="x" size={16}/></button>
+      </div>
+      {children}
+    </div>
+  </div>;
+}
+
 // ======= 12_estrutura.jsx =======
 // v5 — reescrita completa, arquitetura limpa, sem patches
 
@@ -23337,6 +24707,7 @@ export default function AgencyOS(){
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
       case "aprovacoes_internas":  return p.aprovarDemandaInterna||isSocio;
+      case "gestaomidia":          return p.verGestaoMidia||isSocio;
       case "chat":                 return p.verChat;
       case "clientes":             return p.verClientes;
       case "analises":
@@ -23419,6 +24790,7 @@ export default function AgencyOS(){
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_internas":  return (effectivePerms.aprovarDemandaInterna||isSocio)?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="internas"/>:<NoPerm/>;
+      case "gestaomidia":          return (effectivePerms.verGestaoMidia||isSocio)?<PageGestaoMidia {...p} currentUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
       case "analises_producao":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseProd)||isSocio?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
       case "analises_gargalos":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseGarg)||isSocio?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
@@ -23759,6 +25131,8 @@ export default function AgencyOS(){
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="1"/>
             <circle cx="19" cy="12" r="1"/>
+            <circle cx="12" cy="12" r="1"/>
+            <circle cx="19" cy="12" r="1"/>
             <circle cx="5" cy="12" r="1"/>
           </svg>
           </div>
@@ -23767,14 +25141,6 @@ export default function AgencyOS(){
       </nav>}
     </div>
   </div>;
-}
-an>
-        </button>
-      </nav>}
-    </div>
-  </div>;
-}
-;
 }
 
 // ======= 13_novidades.jsx =======
