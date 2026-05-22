@@ -10124,15 +10124,15 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 
       {/* ── Sub-filtro Bioter (unidades) ── */}
       {filterClient==="bioter"&&(
-        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center",padding:"10px 14px",background:C.card,borderRadius:10,border:"1px solid #4a8c1c44"}}>
-          <span style={{color:"#4a8c1c",fontSize:11,fontWeight:700,marginRight:2}}>Unidade Bioter:</span>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",padding:"12px 16px",background:"#fff",borderRadius:12,border:"1px solid #e2e8f0"}}>
+          <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Unidade</span>
           <button onClick={()=>setFilterBioterUnit("todos")}
-            style={{background:filterBioterUnit==="todos"?"#4a8c1c":C.s1,color:filterBioterUnit==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
+            style={{background:filterBioterUnit==="todos"?"#0f172a":"#f8fafc",color:filterBioterUnit==="todos"?"#fff":"#475569",border:`1px solid ${filterBioterUnit==="todos"?"#0f172a":"#e2e8f0"}`,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s"}}>
             Todas
           </button>
           {BIOTER_UNITS.map(u=>(
             <button key={u.id} onClick={()=>setFilterBioterUnit(u.id)}
-              style={{background:filterBioterUnit===u.id?u.color:C.s1,color:filterBioterUnit===u.id?"#fff":C.ts,border:`1px solid ${filterBioterUnit===u.id?u.color:C.b1}`,borderRadius:8,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+              style={{background:filterBioterUnit===u.id?"#0f172a":"#f8fafc",color:filterBioterUnit===u.id?"#fff":"#475569",border:`1px solid ${filterBioterUnit===u.id?"#0f172a":"#e2e8f0"}`,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer",transition:"all .15s"}}>
               {u.label}
             </button>
           ))}
@@ -10162,7 +10162,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 onDragLeave={function(){if(dropDayId===(day&&day.toDateString()))setDropDayId(null);}}
                 onDrop={function(e){if(day){e.preventDefault();handleDropOnDay(day);}}}
                 style={{
-                minHeight:isMob?80:110,
+                height:isMob?110:150,
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
                 padding:"8px 6px 6px",
@@ -10170,6 +10170,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 outline:isDropTarget?"2px dashed #7c3aed":"none",
                 outlineOffset:-2,
                 transition:"background .2s, outline .15s",
+                display:"flex",
+                flexDirection:"column",
+                overflow:"hidden",
               }}>
                 {day&&(<>
                   {/* Número do dia */}
@@ -10187,14 +10190,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                   }}>{day.getDate()}</div>
 
                   {/* Cards do dia */}
-                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflow:"hidden"}}>
                     {dayTasks.slice(0,isMob?2:3).map(t=>{
                       const cl=CLIENTS.find(c=>c.id===t.client);
-                      const assignee=TEAM.find(u=>(t.assignees||[t.assignee]||[]).includes(u.id));
                       const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
                       // Cor do card baseada no STATUS (laranja/verde/roxo)
                       const pubColor=getPubColor(t.status);
                       const isDragging=dragTaskId===t.id;
+                      // Ícone moderno por tipo
+                      const tipo=t.tipo||"";
+                      const isVid=tipo==="video"||tipo==="corte";
+                      const isFoto=tipo==="foto";
+                      const isArte=tipo==="arte"||tipo==="carrossel";
                       return(
                         <div key={t.id} onClick={()=>setOpenCard(t)}
                           draggable={true}
@@ -10203,35 +10210,38 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                           style={{
                             background:pubColor.bg,
                             borderLeft:`4px solid ${pubColor.bg}`,
-                            borderRadius:5,
-                            padding:"4px 6px",
+                            borderRadius:6,
+                            padding:"6px 8px",
                             cursor:isDragging?"grabbing":"grab",
                             opacity:isDragging?0.4:1,
                             transition:"all .1s",
                             boxShadow:"0 1px 3px rgba(0,0,0,0.08)",
+                            flexShrink:0,
                           }}
                           onMouseEnter={e=>{if(!isDragging){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 3px 8px rgba(0,0,0,0.15)";}}}
                           onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.08)";}}>
 
-                          {/* Título */}
-                          <div style={{color:"#fff",fontSize:isMob?8:10,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>
-                            {t.title}
+                          {/* Título com ícone de tipo */}
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            {(isVid||isArte||isFoto)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.95}}>
+                              {isVid&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#fff"/></svg>}
+                              {isArte&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#fff"/><polyline points="21 15 16 10 5 21"/></svg>}
+                              {isFoto&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
+                            </span>}
+                            <div style={{color:"#fff",fontSize:isMob?11:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,flex:1,minWidth:0}}>
+                              {t.title}
+                            </div>
                           </div>
 
-                          {/* Cliente + responsável (sem horário — fica só no card detalhado) */}
-                          <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2,flexWrap:"wrap"}}>
-                            {cl&&<span style={{color:"#fff",fontSize:8,fontWeight:700,whiteSpace:"nowrap",opacity:0.95}}>
-                              {unit?unit.label.split("/")[0]:cl.abbr}
-                            </span>}
-                            {assignee&&<span style={{background:"rgba(255,255,255,0.25)",color:"#fff",borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:700,whiteSpace:"nowrap"}}>
-                              {assignee.av}
-                            </span>}
-                          </div>
+                          {/* Cliente / unidade Bioter */}
+                          {cl&&<div style={{color:"#fff",fontSize:isMob?10:11,fontWeight:600,whiteSpace:"nowrap",opacity:0.92,marginTop:3,overflow:"hidden",textOverflow:"ellipsis"}}>
+                            {unit?unit.label.split("/")[0]:cl.abbr}
+                          </div>}
                         </div>
                       );
                     })}
                     {dayTasks.length>(isMob?2:3)&&(
-                      <div style={{color:"#94a3b8",fontSize:9,textAlign:"center",fontWeight:600}}>
+                      <div style={{color:"#94a3b8",fontSize:10,textAlign:"center",fontWeight:600,marginTop:2}}>
                         +{dayTasks.length-(isMob?2:3)} mais
                       </div>
                     )}
@@ -10269,6 +10279,55 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       )}
     </div>
   );
+}
+    </div>
+  );
+}
+}
+                        +{dayTasks.length-(isMob?2:3)} mais
+                      </div>
+                    )}
+                  </div>
+                </>)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Aviso sem agendamentos ── */}
+      {tasksThisMonth.length===0&&(
+        <div style={{background:"#fff",borderRadius:14,padding:"40px",textAlign:"center",border:"1px dashed #cbd5e1"}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,marginBottom:6}}>Nenhuma publicação agendada</div>
+          <div style={{color:"#64748b",fontSize:12}}>
+            {filterClient!=="todos"
+              ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para "Publicações" e defina a data.`
+            }
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal do card ── */}
+      {openCard&&(
+        <CardModal
+          task={openCard}
+          tasks={tasks}
+          setTasks={setTasks}
+          onClose={()=>setOpenCard(null)}
+          currentUser={CURRENT_USER}
+          cardPerms={{verBriefingCard:true}}
+        />
+      )}
+    </div>
+  );
+}
+>
+      )}
+    </div>
+  );
+}
+}
 }
 
 // ======= 04_demandas.jsx =======
