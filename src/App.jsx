@@ -9810,6 +9810,19 @@ function QuickCreateBody({onConfirm,onCancel}){
   const list=TEAM.filter(u=>u.id!=="erick");
   const [title,setTitle]=useState("Nova Demanda");
   const [selectedId,setSelectedId]=useState(list[0].id);
+  // Hover-preview: depois de ~350ms parado em cima da foto, mostra preview ampliado
+  // ao lado do item (à esquerda do modal pra não escapar pela direita).
+  const [hoverId,setHoverId]=useState(null);
+  const hoverTimerRef=React.useRef(null);
+  const startHover=function(uid){
+    if(hoverTimerRef.current)clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current=setTimeout(function(){setHoverId(uid);},350);
+  };
+  const cancelHover=function(){
+    if(hoverTimerRef.current){clearTimeout(hoverTimerRef.current);hoverTimerRef.current=null;}
+    setHoverId(null);
+  };
+  useEffect(function(){return function(){if(hoverTimerRef.current)clearTimeout(hoverTimerRef.current);};},[]);
   return <div>
     <div style={{marginBottom:16}}>
       <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:7}}>Título</div>
@@ -9825,9 +9838,31 @@ function QuickCreateBody({onConfirm,onCancel}){
         {list.map(u=>{
           const isSel=selectedId===u.id;
           const sector=SECTOR_BY_ID[u.id]||u.role;
+          const isHover=hoverId===u.id;
+          const photo=getProfilePhoto(u.id);
           return <div key={u.id} onClick={()=>setSelectedId(u.id)}
-            style={{display:"flex",alignItems:"center",gap:11,padding:"9px 12px",borderRadius:11,border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,background:isSel?"#f5f3ff":"#fff",cursor:"pointer",transition:"all .12s",boxShadow:isSel?"0 0 0 3px #7c3aed1f":"none"}}>
-            <UserAvatar user={u} size={36}/>
+            style={{display:"flex",alignItems:"center",gap:11,padding:"9px 12px",borderRadius:11,border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,background:isSel?"#f5f3ff":"#fff",cursor:"pointer",transition:"all .12s",boxShadow:isSel?"0 0 0 3px #7c3aed1f":"none",position:"relative"}}>
+            {/* Avatar — com handlers de hover-preview */}
+            <div
+              onMouseEnter={()=>startHover(u.id)}
+              onMouseLeave={cancelHover}
+              style={{position:"relative",flexShrink:0,cursor:"zoom-in"}}>
+              <UserAvatar user={u} size={36}/>
+              {/* Preview ampliado — aparece à esquerda do item após 350ms de hover */}
+              {isHover&&<div style={{position:"absolute",top:"50%",right:"calc(100% + 14px)",transform:"translateY(-50%)",background:"#fff",borderRadius:14,padding:14,boxShadow:"0 16px 40px rgba(15,23,42,0.22), 0 4px 10px rgba(15,23,42,0.08)",display:"flex",flexDirection:"column",alignItems:"center",gap:8,zIndex:1000,pointerEvents:"none",minWidth:160,animation:"none"}}>
+                {/* Foto grande circular */}
+                {photo
+                  ?<img src={photo} alt={u.name} style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",boxShadow:"0 4px 10px rgba(0,0,0,0.12)"}}/>
+                  :<div style={{width:120,height:120,borderRadius:"50%",background:u.color||"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:48,boxShadow:"0 4px 10px rgba(0,0,0,0.12)"}}>{u.av||u.name.charAt(0).toUpperCase()}</div>
+                }
+                <div style={{textAlign:"center"}}>
+                  <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>{u.name}</div>
+                  <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>{sector}</div>
+                </div>
+                {/* Seta apontando pra avatar */}
+                <div style={{position:"absolute",top:"50%",left:"100%",transform:"translateY(-50%)",width:0,height:0,borderTop:"8px solid transparent",borderBottom:"8px solid transparent",borderLeft:"8px solid #fff",filter:"drop-shadow(2px 0 2px rgba(15,23,42,0.08))"}}/>
+              </div>}
+            </div>
             <div style={{minWidth:0,flex:1}}>
               <div style={{color:"#0f172a",fontWeight:600,fontSize:13,lineHeight:1.2}}>{u.name}</div>
               <div style={{color:"#64748b",fontSize:11,fontWeight:500,marginTop:2}}>{sector}</div>
@@ -10367,8 +10402,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   return <>
     {showPixelsIA&&<PixelsIAModal onClose={()=>setShowPixelsIA(false)} setTasks={setTasks} tasks={tasks}/>}
     {showScan&&<ScanModal tasks={tasks} onClose={()=>setShowScan(false)} onFilter={seg=>{setViewMode("lista");}}/>}
-    {quickCreate&&<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}} onClick={()=>setQuickCreate(null)}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:420,boxShadow:"0 24px 64px rgba(15,23,42,0.28), 0 4px 12px rgba(15,23,42,0.10)"}}>
+    {quickCreate&&<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}} onMouseDown={e=>{if(e.target===e.currentTarget)setQuickCreate(null);}}>
+      <div onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:420,boxShadow:"0 24px 64px rgba(15,23,42,0.28), 0 4px 12px rgba(15,23,42,0.10)"}}>
         <div style={{color:"#0f172a",fontWeight:700,fontSize:18,letterSpacing:-.3,marginBottom:4}}>Nova demanda</div>
         <div style={{color:"#64748b",fontSize:13,marginBottom:18}}>Selecione o responsável antes de criar</div>
         <QuickCreateBody colId={quickCreate.colId} extraProps={quickCreate.extraProps} onConfirm={(assigneeId,title)=>{setQuickCreate(null);createTask(quickCreate.colId,assigneeId,title,quickCreate.extraProps);}} onCancel={()=>setQuickCreate(null)}/>
@@ -10880,73 +10915,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
       {/* ── CLIENTES BOARD ── */}
       {viewMode==="clientes"&&<ClientesBoard tasks={tasks} setTasks={setTasks} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} canDrag={canDrag} canCreate={canCreate}/>}
-      {viewMode==="calendar"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {/* month nav + client filter */}
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>←</button>
-            <div style={{color:C.tx,fontWeight:800,fontSize:18,minWidth:180,textAlign:"center"}}>{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</div>
-            <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>→</button>
-          </div>
-          {/* client filter for calendar */}
-          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-            <button onClick={()=>setCalFilterClient("todos")} style={{background:calFilterClient==="todos"?C.a:C.b1,color:calFilterClient==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"5px 12px",fontSize:10,fontWeight:700,cursor:"pointer"}}>Todos</button>
-            {CLIENTS.map(cl=><button key={cl.id} onClick={()=>setCalFilterClient(cl.id)} style={{background:calFilterClient===cl.id?cl.color+"33":C.b1,border:`2px solid ${calFilterClient===cl.id?cl.color:C.b1}`,borderRadius:10,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-              <div style={{transform:"scale(0.7)",transformOrigin:"left center"}}><ClientLogo clientId={cl.id} size="xs"/></div>
-              <span style={{color:calFilterClient===cl.id?cl.color:C.ts,whiteSpace:"nowrap",fontSize:10,fontWeight:700}}>{cl.abbr}</span>
-            </button>)}
-          </div>
-        </div>
-        <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
-          {/* weekday headers */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:`2px solid ${C.b1}`,background:C.s1}}>
-            {WEEKDAYS.map(d=><div key={d} style={{padding:"12px 0",textAlign:"center",color:C.ts,fontSize:12,fontWeight:700,letterSpacing:.5}}>{d}</div>)}
-          </div>
-          {/* days grid */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
-            {calDays().map((day,i)=>{
-              const dayTasks=day?tasksByDay(day):[];
-              const isToday=day&&day.toDateString()===new Date().toDateString();
-              const hasUrgent=dayTasks.some(t=>taskUrgencyLevel(t)===0);
-              const hasLate=dayTasks.some(t=>taskUrgencyLevel(t)===1);
-              return <div key={i} style={{minHeight:isMob?80:120,borderRight:`1px solid ${C.b1}`,borderBottom:`1px solid ${C.b1}`,padding:"8px 8px 6px",background:isToday?C.ag:hasUrgent?C.rd+"14":hasLate?C.or+"10":"none",transition:"background .2s",position:"relative"}}>
-                {day&&<>
-                  <div style={{
-                    color:isToday?"#fff":C.ts,
-                    fontWeight:isToday?900:500,
-                    fontSize:13,
-                    marginBottom:6,
-                    width:isToday?24:undefined,
-                    height:isToday?24:undefined,
-                    background:isToday?C.a:undefined,
-                    borderRadius:isToday?"50%":undefined,
-                    display:"flex",alignItems:"center",justifyContent:isToday?"center":undefined
-                  }}>{day.getDate()}</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                    {dayTasks.slice(0,4).map(t=>{
-                      const u=TEAM.find(x=>x.id===t.assignee);
-                      const cl=CLIENTS.find(c=>c.id===t.client);
-                      const urgColor=getUrgencyColor(taskUrgencyLevel(t));
-                      return <div key={t.id} onClick={()=>setOpenCard(t)}
-                        style={{background:urgColor+"22",border:`1px solid ${urgColor}55`,borderRadius:5,padding:"3px 6px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"all .1s"}}>
-                        <div style={{width:6,height:6,borderRadius:"50%",background:urgColor,flexShrink:0}}/>
-                        <span style={{color:C.tx,fontSize:isMob?8:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,fontWeight:600}}>{t.title}</span>
-                        {u&&<span style={{background:u.color+"44",color:u.color,borderRadius:4,padding:"0 4px",fontSize:8,fontWeight:700,flexShrink:0}}>{u.av}</span>}
-                      </div>;
-                    })}
-                    {dayTasks.length>4&&<div style={{color:C.ts,fontSize:9,textAlign:"center",fontWeight:600}}>+{dayTasks.length-4} mais</div>}
-                  </div>
-                </>}
-              </div>;
-            })}
-          </div>
-        </div>
-        {/* legend */}
-        <div style={{display:"flex",gap:14,flexWrap:"wrap",padding:"4px 0"}}>
-          {[{c:C.rd,l:"🔥 Urgente"},{c:C.or,l:"❌ Atrasado"},{c:C.yw,l:"⚠ Atenção"},{c:C.gr,l:"✅ No prazo"}].map(x=><div key={x.l} style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:10,height:10,borderRadius:"50%",background:x.c}}/><span style={{color:C.ts,fontSize:12}}>{x.l}</span></div>)}
-          {calFilterClient!=="todos"&&<div style={{marginLeft:"auto",color:CLIENTS.find(c=>c.id===calFilterClient)?.color,fontSize:11,fontWeight:700}}>Filtrando: {CLIENTS.find(c=>c.id===calFilterClient)?.name}</div>}
-        </div>
-      </div>}
 
       {/* ── TRASH ── */}
       {viewMode==="trash"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
