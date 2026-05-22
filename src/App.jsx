@@ -9761,7 +9761,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   function _isArteType(t){return t==="arte"||t==="carrossel"||t==="foto";}
   function handleGeneratePlan(){
     const year=calMonth.getFullYear(),month=calMonth.getMonth()+1;
-    const clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";});
+    // Respeita o filtro de cliente ativo: "todos" gera pra todos,
+    // cliente específico gera só pra aquele cliente.
+    const clientesBase=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";});
+    const clientes=filterClient==="todos"?clientesBase:clientesBase.filter(function(c){return c.id===filterClient;});
     const proposals=[];
     clientes.forEach(function(cl){
       // Cards desse cliente em status elegíveis, SEM publishDate ainda
@@ -9903,10 +9906,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             Hoje
           </button>
           <button onClick={handleGeneratePlan}
-            title="Cria rascunhos sugeridos pra cada cliente (1 arte + 1 vídeo por semana, configurável)"
+            title={filterClient==="todos"?"Sugere datas pra cards de todos os clientes":"Sugere datas só pra cards de "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.name||"este cliente")}
             style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-            Gerar plano do mês
+            Gerar plano do mês{filterClient!=="todos"?" · "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.abbr||""):""}
           </button>
         </div>
       </div>
