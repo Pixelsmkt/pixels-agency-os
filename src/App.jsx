@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 29/29 | Nao editar diretamente
+// Modulos: 30/30 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -107,6 +107,265 @@ function saveLiveClient(id,partial){
     if(partial.social)merged.social={...(existing.social||{}),...partial.social};
     localStorage.setItem("pixels-live-"+id,JSON.stringify(merged));
   }catch(e){}
+}
+
+// ======= 00_clientes_perfis.jsx =======
+// Perfis comerciais/fiscais estendidos dos clientes Pixels.
+// Complementa CLIENTS de 00_clientes_data.jsx — usar como camada de gestão.
+// Não substitui o CLIENTS antigo (que ainda alimenta Kanban, Análises, etc).
+// Acesso via getClientProfile(id) ou CLIENT_PROFILES[id].
+
+/* ─── Status válidos pra cliente ─────────────────────── */
+const CLIENTE_STATUS_OPTS = [
+  {id:"onboarding", label:"Onboarding", color:"#0284c7", bg:"#e0f2fe"},
+  {id:"ativo",      label:"Ativo",      color:"#16a34a", bg:"#dcfce7"},
+  {id:"risco",      label:"Em risco",   color:"#f59e0b", bg:"#fef3c7"},
+  {id:"pausado",    label:"Pausado",    color:"#64748b", bg:"#f1f5f9"},
+  {id:"encerrado",  label:"Encerrado",  color:"#dc2626", bg:"#fee2e2"},
+];
+
+/* ─── Unidades do Grupo Bioter ─────────────────────────
+   Grupo econômico — cada unidade tem CNPJ próprio, endereço, MRR.
+   ID consistente com CLIENTS (bioter) + sufixo da cidade.
+─────────────────────────────────────────────────────── */
+const BIOTER_GROUP_UNITS = [
+  {
+    id:"bioter_chapeco",
+    parent:"bioter",
+    name:"Bioter Chapecó",
+    razao_social:"Bioter Proteção Ambiental Ltda.",
+    cnpj:"02.236.436/0001-00",
+    endereco:"Rua Assis Brasil - D, 539 - Santa Maria",
+    cidade:"Chapecó", estado:"SC", pais:"BR",
+    email:"adm@bioter.com.br",
+    telefone:"(49) 3322-2061",
+    mrr:3000,
+    status:"ativo",
+  },
+  {
+    id:"bioter_toledo",
+    parent:"bioter",
+    name:"Bioter Toledo",
+    razao_social:"Bioter Soluções Ambientais em Biodigestores e Reservatório PEAD Ltda.",
+    cnpj:"37.723.397/0001-50",
+    endereco:"Rodovia Perimetral Norte 467, 4005 - Barracão 1 - Vila Industrial",
+    cidade:"Toledo", estado:"PR", pais:"BR",
+    email:"adm@biotersolucoes.com.br",
+    telefone:"(45) 99103-5617",
+    mrr:2000,
+    status:"ativo",
+  },
+  {
+    id:"bioter_castro",
+    parent:"bioter",
+    name:"Bioter Castro",
+    razao_social:"Bioter Gestão Ambiental Ltda.",
+    cnpj:"49.314.364/0001-35",
+    endereco:"Rua Félix Tadeu Meyer, 19 - Jardim Social Primavera",
+    cidade:"Castro", estado:"PR", pais:"BR",
+    email:"adm@biotercastro.com.br",
+    telefone:"(42) 99804-1037",
+    mrr:2500,
+    status:"ativo",
+  },
+  {
+    id:"bioter_gloria",
+    parent:"bioter",
+    name:"Bioter Glória de Dourados",
+    razao_social:"Bioter Soluções Ambientais em Biodigestores e Reservatório PEAD Ltda. (Filial)",
+    cnpj:"37.723.397/0002-30",
+    endereco:"Rodovia BR 376, s/n, km 64,5",
+    cidade:"Glória de Dourados", estado:"MS", pais:"BR",
+    email:"adm@bioterms.com.br",
+    telefone:"(45) 99103-5617",
+    mrr:500,
+    status:"ativo",
+  },
+  {
+    id:"bioter_uberlandia",
+    parent:"bioter",
+    name:"Bioter Uberlândia",
+    razao_social:"Bioter Bioenergia Ltda.",
+    cnpj:"58.815.954/0001-32",
+    endereco:"Rua Nego Amâncio, 749 - Jardim Patrícia",
+    cidade:"Uberlândia", estado:"MG", pais:"BR",
+    email:"adm@biotersolucoes.com.br",
+    telefone:"(45) 99155-6127",
+    mrr:500,
+    status:"ativo",
+  },
+  {
+    id:"bioter_paraguay",
+    parent:"bioter",
+    name:"Bioter Paraguay",
+    razao_social:"OGLAT Sociedad Anónima",
+    cnpj:"", // não tem CNPJ — usa RUC
+    ruc:"80133909-0",
+    endereco:"Hernandarias, 285 - Hohenau",
+    cidade:"Hohenau", estado:"Itapúa", pais:"PY",
+    email:"adm@biotersolucoes.com.br",
+    telefone:"+595 983 127000",
+    mrr:0, // a definir
+    status:"ativo",
+  },
+];
+
+/* ─── Grupo Bioter (cabeça) ───────────────────────────── */
+const BIOTER_GROUP = {
+  id:"bioter",
+  name:"Grupo Bioter",
+  segmento:"Biotecnologia / Agro / Ambiental",
+  responsavel_interno:"gustavo",
+  status:"ativo",
+  // mrr_total é derivado em runtime — soma das unidades
+};
+
+/* ─── CLIENT_PROFILES — perfis dos demais clientes ──────
+   Mantemos os IDs em sintonia com CLIENTS de 00_clientes_data.jsx
+   pra cruzar fácil. Adicionamos os campos novos.
+─────────────────────────────────────────────────────── */
+const CLIENT_PROFILES = {
+  bioter:{
+    id:"bioter",
+    name:"Grupo Bioter",
+    nome_fantasia:"Bioter",
+    grupo_economico:true,
+    unidades:BIOTER_GROUP_UNITS,
+    segmento:BIOTER_GROUP.segmento,
+    responsavel_interno:"gustavo",
+    servicos:"Marketing digital · gestão de mídia · social media · branding",
+    status:"ativo",
+    observacoes:"Grupo econômico com 6 unidades. Receita consolidada do grupo somando todas as unidades.",
+  },
+
+  construschorr:{
+    id:"construschorr",
+    name:"Construschorr",
+    nome_fantasia:"Construschorr Arte Fatos de Cimento",
+    razao_social:"Schorr & Cia Ltda.",
+    cnpj:"74.766.452/0001-15",
+    segmento:"Estruturas pré-moldadas de concreto / pisos vazados para agro",
+    endereco:"Rua Carlos Persch, 361",
+    cidade:"Cruzeiro do Sul", estado:"RS", pais:"BR",
+    email:"engenharia@construschorr.com.br",
+    telefone:"(51) 3714-5770",
+    contatos:[
+      {nome:"Ebrael Dalberto", role:"Comercial", phone:"(51) 9909-9006"},
+      {nome:"Solano Zotti",    role:"Comercial", phone:"(51) 9999-1670"},
+    ],
+    servicos:"Marketing digital · gestão de mídia · social media",
+    mrr:4000,
+    responsavel_interno:"vinicius",
+    status:"ativo",
+    observacoes:"",
+  },
+
+  arabuta:{
+    id:"arabuta",
+    name:"Arabutã Pré-Moldados",
+    nome_fantasia:"Arabutã Pré-Moldados",
+    razao_social:"JE Artefatos de Cimento Ltda.",
+    cnpj:"21.203.162/0001-05",
+    segmento:"Artefatos de cimento e pré-moldados",
+    endereco:"Rodovia SC 154, km 100",
+    cidade:"Arabutã", estado:"SC", pais:"BR",
+    email:"contato@arabutapremoldados.com.br",
+    telefone:"(49) 3448-0038",
+    contatos:[
+      {nome:"Rodrigo Bertussi", role:"Comercial", phone:"(49) 9991-4760"},
+    ],
+    servicos:"Marketing digital · gestão de mídia · social media",
+    mrr:4500,
+    responsavel_interno:"vinicius",
+    status:"ativo",
+    observacoes:"",
+  },
+
+  climaves:{
+    id:"climaves",
+    name:"Climaves",
+    nome_fantasia:"Climaves Equipamentos",
+    razao_social:"Danedini Equipamentos Ltda.",
+    cnpj:"13.587.012/0001-06",
+    segmento:"Equipamentos, construção rural, serviços de máquinas e Plasson",
+    endereco:"Marginal Donassolo, 1556 - Vila Pioneiro",
+    cidade:"Toledo", estado:"PR", pais:"BR",
+    email:"climaves@climaves.com.br",
+    telefone:"(45) 2032-3421",
+    contatos:[
+      {nome:"César", role:"Comercial", phone:"(45) 8804-2583"},
+      {nome:"José",  role:"Comercial", phone:"(45) 8812-6942"},
+    ],
+    servicos:"Marketing digital · gestão de mídia · social media",
+    mrr:2500,
+    responsavel_interno:"vinicius",
+    status:"ativo",
+    observacoes:"",
+  },
+
+  vetservice:{
+    id:"vetservice",
+    name:"VetService",
+    nome_fantasia:"VetService",
+    razao_social:"A.R. dos Santos Agro",
+    cnpj:"35.348.331/0001-00",
+    inscricao_estadual:"280/0006000",
+    segmento:"Veterinária / Agro",
+    endereco:"Passo da Lage, interior, S/N",
+    cidade:"Ibirapuitã", estado:"RS", pais:"BR",
+    email:"cristiano.adam@agroceres.com",
+    telefone:"+55 54 9976-9097",
+    contatos:[
+      {nome:"Cristiano Adam", role:"Responsável", phone:"+55 54 9976-9097", email:"cristiano.adam@agroceres.com"},
+    ],
+    servicos:"Marketing digital · gestão de mídia · social media",
+    mrr:0, // a definir
+    responsavel_interno:"vinicius",
+    status:"ativo",
+    observacoes:"",
+  },
+};
+
+/* ─── Helpers ─────────────────────────────────────────── */
+
+// Retorna o profile de um cliente (ou null se não cadastrado).
+// Aceita id principal (bioter) ou id de unidade (bioter_chapeco).
+function getClientProfile(id){
+  if(!id)return null;
+  if(CLIENT_PROFILES[id])return CLIENT_PROFILES[id];
+  // É unidade do Bioter?
+  const unit=BIOTER_GROUP_UNITS.find(function(u){return u.id===id;});
+  if(unit)return unit;
+  return null;
+}
+
+// MRR total do Grupo Bioter — soma das unidades.
+function getBioterGroupMRR(){
+  return BIOTER_GROUP_UNITS.reduce(function(acc,u){return acc+(u.mrr||0);},0);
+}
+
+// MRR total da agência (soma de todos os clientes ativos).
+function getAgencyTotalMRR(){
+  let total=0;
+  // Grupo Bioter (soma das unidades)
+  total+=getBioterGroupMRR();
+  // Demais clientes (com mrr próprio)
+  ["construschorr","arabuta","climaves","vetservice"].forEach(function(id){
+    const p=CLIENT_PROFILES[id];
+    if(p&&p.status!=="encerrado"&&p.status!=="pausado")total+=p.mrr||0;
+  });
+  return total;
+}
+
+// Formata BRL pra exibição.
+function fmtBRLClient(n){
+  if(typeof n!=="number"||isNaN(n))return "—";
+  return "R$ "+n.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:2});
+}
+
+// Helper visual: pega config de status (cor, label, bg)
+function getStatusConfig(statusId){
+  return CLIENTE_STATUS_OPTS.find(function(s){return s.id===statusId;})||CLIENTE_STATUS_OPTS[1];
 }
 
 // ======= 00_globals.jsx =======
@@ -8020,7 +8279,8 @@ function PageClientes({isMob, tasks}){
   const [filterStatus,setFilterStatus]=useState("todos");
   const [sortCol,setSortCol]=useState(null);
   const [sortDir,setSortDir]=useState("asc");
-  const [viewMode,setViewMode]=useState("table"); // table | card
+  const [viewMode,setViewMode]=useState("table"); // table | card (legado — não usado no render novo)
+  const [bioterExpanded,setBioterExpanded]=useState(false);
 
   const allClients=[...CLIENTS,...extraClients];
 
@@ -8099,282 +8359,140 @@ function PageClientes({isMob, tasks}){
     {id:"pagamento",label:"Pag. Atrasado",count:allClients.filter(c=>c.payment&&c.payment.status==="atrasado").length},
   ];
 
-  return(<div style={{display:"flex",flexDirection:"column",gap:20}}>
+  return(<div style={{display:"flex",flexDirection:"column",gap:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {showNovo&&<NovoClienteModal onClose={()=>setShowNovo(false)} onSave={cl=>setExtraClients(p=>[...p,cl])}/>}
 
-    {/* Header */}
+    {/* ── HEADER ── */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div>
-        <div style={{color:C.tx,fontWeight:900,fontSize:22,letterSpacing:-.5}}>Clientes</div>
-        <div style={{color:C.td,fontSize:12,marginTop:2}}>{allClients.length} clientes · Pressione / para buscar</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:24,letterSpacing:-.5}}>Clientes</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>
+          {allClients.length} clientes · MRR total {fmtBRLClient(getAgencyTotalMRR())}
+        </div>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-        {/* Search */}
         <div style={{position:"relative"}}>
-          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:12,pointerEvents:"none"}}>🔍</span>
-          <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar... (pressione /)"
-            style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"8px 12px 8px 30px",color:C.tx,fontSize:12,outline:"none",width:190,fontFamily:"inherit"}}/>
+          <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:13,pointerEvents:"none"}}>🔍</span>
+          <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar... (/)"
+            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 14px 9px 34px",color:"#0f172a",fontSize:12.5,outline:"none",width:220,fontFamily:"inherit",transition:"border-color .15s"}}
+            onFocus={e=>e.currentTarget.style.borderColor="#7c3aed"}
+            onBlur={e=>e.currentTarget.style.borderColor="#e2e8f0"}/>
         </div>
-        {/* View toggle */}
-        <div style={{display:"flex",background:C.s1,borderRadius:9,padding:2,gap:2}}>
-          {[["table","☰"],["card","⊞"]].map(function(item){
-            return(<button key={item[0]} onClick={()=>setViewMode(item[0])}
-              style={{background:viewMode===item[0]?C.a:"transparent",border:"none",borderRadius:7,width:30,height:28,cursor:"pointer",color:viewMode===item[0]?"#fff":C.td,fontSize:14,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              {item[1]}
-            </button>);
-          })}
-        </div>
-        {/* Export CSV */}
         <button onClick={exportCSV}
-          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 14px",color:"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
           ↓ CSV
         </button>
-        {/* Novo cliente */}
         <button onClick={()=>setShowNovo(true)}
-          style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 12px "+C.a+"40"}}>
-          + Novo Cliente
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+          + Novo cliente
         </button>
       </div>
     </div>
 
-    {/* Filter tabs */}
-    <div style={{display:"flex",gap:4}}>
-      {FILTERS.map(function(f){
-        return(<button key={f.id} onClick={()=>setFilterStatus(f.id)}
-          style={{background:filterStatus===f.id?C.a+"18":"transparent",border:"1px solid "+(filterStatus===f.id?C.a:C.b1),borderRadius:99,padding:"5px 14px",color:filterStatus===f.id?C.a:C.ts,fontWeight:filterStatus===f.id?700:400,fontSize:11,cursor:"pointer",display:"flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+    {/* ── FILTROS POR STATUS ── */}
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {[
+        {id:"todos",label:"Todos",count:allClients.length},
+        {id:"ativo",label:"Ativos",count:allClients.filter(c=>c.status==="ativo").length},
+        {id:"atencao",label:"Atenção",count:allClients.filter(c=>c.status==="atencao"||c.status==="alerta"||(c.health||100)<60).length},
+        {id:"pagamento",label:"Pagamento atrasado",count:allClients.filter(c=>c.payment&&c.payment.status==="atrasado").length},
+      ].map(function(f){
+        const active=filterStatus===f.id;
+        return <button key={f.id} onClick={()=>setFilterStatus(f.id)}
+          style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .12s"}}>
           {f.label}
-          {f.count>0&&<span style={{background:filterStatus===f.id?C.a:C.b1,color:filterStatus===f.id?"#fff":C.td,borderRadius:99,padding:"0 6px",fontSize:9,fontWeight:700}}>{f.count}</span>}
-        </button>);
+          {f.count>0&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{f.count}</span>}
+        </button>;
       })}
     </div>
 
-    {/* ── TABLE VIEW ── */}
-    {viewMode==="table"&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-      {/* Header row */}
-      <div style={{display:"grid",gridTemplateColumns:"2fr 80px 110px 100px 90px 110px 100px 110px 30px",padding:"10px 18px",background:C.s1,borderBottom:"1px solid "+C.b1,gap:0}}>
-        {[
-          {l:"Cliente",c:"nome",align:"left"},
-          {l:"Score",c:"score",align:"center"},
-          {l:"Plataformas",c:null,align:"center"},
-          {l:"Demandas",c:null,align:"center"},
-          {l:"Saude",c:"saude",align:"center"},
-          {l:"Pagamento",c:null,align:"center"},
-          {l:"Contrato",c:null,align:"center"},
-          {l:"Proxima Reuniao",c:null,align:"center"},
-          {l:"",c:null,align:"center"},
-        ].map(function(h,i){
-          return(<div key={i} onClick={h.c?()=>handleSort(h.c):undefined}
-            style={{color:h.c?C.ts:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,textAlign:h.align,cursor:h.c?"pointer":"default",userSelect:"none",display:"flex",alignItems:"center",justifyContent:h.align==="center"?"center":"flex-start",gap:2}}>
-            {h.l}{h.c&&<SortIcon col={h.c}/>}
-          </div>);
-        })}
-      </div>
-
-      {/* Rows */}
-      {filtered.map(function(cl,idx){
-        cl=getLiveClient(cl.id)||cl;
-        let isLast=idx===filtered.length-1;
-        let score=calcScore(cl,TASKS);
-        let scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
-        let healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
-        let clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
-        let activeTasks=clTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="pausado";});
-        let lateTasks=clTasks.filter(function(t){
-          if(!t.deadline)return false;
-          return Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24))<0&&t.status!=="aprovado";
-        });
-        let pendingApproval=clTasks.filter(function(t){return t.status==="demanda"||t.status==="avaliacao";});
-        let pay=cl.payment||{status:"—",date:""};
-        let payColor=pay.status==="pago"?C.gr:pay.status==="atrasado"?C.rd:pay.status==="pendente"?C.yw:C.td;
-        let payLabel=pay.status==="pago"?"Pago":pay.status==="atrasado"?"Atrasado":pay.status==="pendente"?"Pendente":pay.status==="interno"?"Interno":"—";
-        let nextDays=(function(){
-          if(!cl.nextMeeting)return null;
-          let parts=cl.nextMeeting.split("/");
-          return Math.ceil((new Date(parts[2]+"-"+parts[1]+"-"+parts[0])-new Date())/(1000*60*60*24));
-        })();
-        let nextColor=nextDays===null?C.td:nextDays<0?C.rd:nextDays<=3?C.yw:C.gr;
-        let nextLabel=nextDays===null?"—":nextDays<0?Math.abs(nextDays)+"d atras":nextDays===0?"Hoje":nextDays===1?"Amanha":nextDays+"d";
-        let mgr=TEAM.find(function(u){return u.id===cl.manager;});
-        // sparkline from history
-        let sparkData=(cl.history||[]).map(function(h){return h.mr||0;});
-        let ctLabel=cl.contractType==="mensal"?"Mensal":cl.contractType==="trimestral"?"Trim.":cl.contractType==="anual"?"Anual":cl.contractType==="interno"?"Interno":"—";
-        let ctColor=cl.contractType==="anual"?C.gr:cl.contractType==="trimestral"?C.bl:cl.contractType==="mensal"?C.a:C.td;
-
-        return(<div key={cl.id}
-          onClick={()=>{setActiveClient(cl);setActiveSection("dashboard");setDashTab("meta");}}
-          style={{display:"grid",gridTemplateColumns:"2fr 80px 110px 100px 90px 110px 100px 110px 30px",padding:"12px 18px",borderBottom:isLast?"none":"1px solid "+C.b1+"33",alignItems:"center",cursor:"pointer",transition:"background .1s",gap:0}}
-          onMouseEnter={e=>e.currentTarget.style.background=C.s1}
-          onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-
-          {/* Cliente */}
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{background:"#fff",borderRadius:8,padding:"3px 7px",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,width:54,height:26,border:"1px solid #f1f5f9"}}>
-              {CLIENT_LOGOS[cl.id]?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:18,maxWidth:46,objectFit:"contain"}}/>
-                :<span style={{color:cl.color,fontWeight:900,fontSize:10}}>{cl.abbr}</span>}
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:C.tx,fontWeight:700,fontSize:12}}>{cl.name}</div>
-              <div style={{display:"flex",alignItems:"center",gap:5,marginTop:1}}>
-                <span style={{width:4,height:4,borderRadius:"50%",background:cl.status==="ativo"?C.gr:cl.status==="atencao"||cl.status==="atencao"?C.yw:C.td,flexShrink:0}}/>
-                <span style={{color:C.td,fontSize:9,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector}</span>
-                {mgr&&<div title={mgr.name} style={{width:14,height:14,borderRadius:"50%",background:mgr.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:7,flexShrink:0,marginLeft:2}}>{mgr.av}</div>}
-              </div>
-            </div>
-          </div>
-
-          {/* Score */}
-          <div style={{textAlign:"center"}}>
-            <div style={{position:"relative",width:34,height:34,margin:"0 auto"}}>
-              <svg width="34" height="34" viewBox="0 0 34 34">
-                <circle cx="17" cy="17" r="13" fill="none" stroke={C.b1} strokeWidth="3"/>
-                <circle cx="17" cy="17" r="13" fill="none" stroke={scoreColor} strokeWidth="3"
-                  strokeDasharray={2*Math.PI*13} strokeDashoffset={2*Math.PI*13*(1-score/100)}
-                  strokeLinecap="round" transform="rotate(-90 17 17)"/>
-              </svg>
-              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:scoreColor,fontWeight:900,fontSize:9}}>{score}</div>
-            </div>
-          </div>
-
-          {/* Plataformas */}
-          <div style={{display:"flex",gap:3,justifyContent:"center"}}>
-            {["meta","google","instagram","facebook"].map(function(pid){
-              return(<div key={pid} style={{width:20,height:20,borderRadius:5,background:C.s1,display:"flex",alignItems:"center",justifyContent:"center",opacity:cl.connected!==false?1:.3}}>
-                <PlatformLogo id={pid} size={12}/>
-              </div>);
-            })}
-          </div>
-
-          {/* Demandas */}
-          <div style={{textAlign:"center"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-              <span style={{color:C.tx,fontWeight:700,fontSize:13}}>{activeTasks.length}</span>
-              {lateTasks.length>0&&<span style={{background:C.rd+"22",color:C.rd,borderRadius:99,padding:"0 5px",fontSize:9,fontWeight:800}}>{lateTasks.length}!</span>}
-              {pendingApproval.length>0&&<span style={{background:C.a+"22",color:C.a,borderRadius:99,padding:"0 5px",fontSize:9,fontWeight:800}}>◇{pendingApproval.length}</span>}
-            </div>
-            <div style={{color:C.td,fontSize:9,marginTop:1}}>ativas</div>
-          </div>
-
-          {/* Saude + sparkline */}
-          <div style={{textAlign:"center"}}>
-            <div style={{color:healthColor,fontWeight:800,fontSize:13}}>{cl.health}%</div>
-            {sparkData.length>1?<Sparkline data={sparkData} color={healthColor} width={40} height={14}/>
-              :<div style={{background:C.b1,borderRadius:99,height:2,overflow:"hidden",width:32,margin:"3px auto 0"}}>
-                <div style={{width:cl.health+"%",height:"100%",background:healthColor,borderRadius:99}}/>
-              </div>}
-          </div>
-
-          {/* Pagamento */}
-          <div style={{textAlign:"center"}}>
-            <span style={{background:payColor+"18",color:payColor,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700}}>{payLabel}</span>
-            {pay.date&&<div style={{color:C.td,fontSize:9,marginTop:2}}>{pay.date}</div>}
-          </div>
-
-          {/* Tipo contrato */}
-          <div style={{textAlign:"center"}}>
-            <span style={{background:ctColor+"18",color:ctColor,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700}}>{ctLabel}</span>
-          </div>
-
-          {/* Proxima reuniao */}
-          <div style={{textAlign:"center"}}>
-            <div style={{color:nextColor,fontWeight:600,fontSize:11}}>{nextLabel}</div>
-            {cl.nextMeeting&&<div style={{color:C.td,fontSize:9,marginTop:1}}>{cl.nextMeeting}</div>}
-          </div>
-
-          <div style={{textAlign:"center",color:C.td,fontSize:13}}>›</div>
-        </div>);
-      })}
-
-      {filtered.length===0&&(<div style={{padding:"40px",textAlign:"center",color:C.td,fontSize:13}}>Nenhum cliente encontrado.</div>)}
-    </div>)}
-
-    {/* ── CARD VIEW ── */}
-    {viewMode==="card"&&(<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+    {/* ── GRID DE CARDS ── */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14}}>
       {filtered.map(function(cl){
-        cl=getLiveClient(cl.id)||cl;
-        let score=calcScore(cl,TASKS);
-        let scoreColor=score>=80?C.gr:score>=60?C.yw:C.rd;
-        let healthColor=cl.health>=80?C.gr:cl.health>=60?C.yw:C.rd;
-        let pay=cl.payment||{status:"—"};
-        let payColor=pay.status==="pago"?C.gr:pay.status==="atrasado"?C.rd:pay.status==="pendente"?C.yw:C.td;
-        let clTasks=TASKS.filter(function(t){return t.client===cl.id&&!t.deletedAt;});
-        let activeTasks=clTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="pausado";});
-        let lateTasks=clTasks.filter(function(t){
-          if(!t.deadline)return false;
-          return Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24))<0&&t.status!=="aprovado";
-        });
-        let mgr=TEAM.find(function(u){return u.id===cl.manager;});
-        return(<div key={cl.id} onClick={()=>{setActiveClient(cl);setActiveSection("dashboard");setDashTab("meta");}}
-          style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden",cursor:"pointer",transition:"all .12s"}}
-          onMouseEnter={e=>{e.currentTarget.style.borderColor=cl.color+"66";e.currentTarget.style.transform="translateY(-2px)";}}
-          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.transform="translateY(0)";}}>
+        const profile=getClientProfile(cl.id);
+        const isBioterGroup=cl.id==="bioter";
+        const isExpanded=bioterExpanded&&isBioterGroup;
+        const mrr=isBioterGroup?getBioterGroupMRR():(profile&&profile.mrr)||cl.contract||0;
+        const stCfg=getStatusConfig((profile&&profile.status)||cl.status||"ativo");
+        const responsavelId=(profile&&profile.responsavel_interno)||cl.manager;
+        const respUser=responsavelId&&typeof TEAM!=="undefined"?TEAM.find(function(u){return u.id===responsavelId;}):null;
+        return <div key={cl.id}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:18,boxShadow:"0 1px 2px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:12,transition:"all .15s",cursor:"pointer"}}
+          onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor="#cbd5e1";}}
+          onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e2e8f0";}}
+          onClick={function(e){if(e.target.tagName!=="BUTTON")setActiveClient(cl);}}>
 
-          {/* Card header */}
-          <div style={{padding:"14px 16px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:10}}>
-            <div style={{background:"#fff",borderRadius:8,padding:"4px 8px",display:"flex",alignItems:"center",justifyContent:"center",width:60,height:28,border:"1px solid #f1f5f9",flexShrink:0}}>
-              {CLIENT_LOGOS[cl.id]?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:52,objectFit:"contain"}}/>
-                :<span style={{color:cl.color,fontWeight:900,fontSize:10}}>{cl.abbr}</span>}
+          {/* Header do card */}
+          <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+            <div style={{width:44,height:44,borderRadius:11,background:cl.color||"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+              {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
+                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:32,maxWidth:36,objectFit:"contain"}}/>
+                : <span style={{color:"#fff",fontWeight:800,fontSize:16}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</span>
+              }
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{cl.name}</div>
-              <div style={{color:C.td,fontSize:10}}>{cl.sector}</div>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                {(profile&&profile.name)||cl.name}
+                {isBioterGroup&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,letterSpacing:.4}}>GRUPO · {BIOTER_GROUP_UNITS.length} UNIDADES</span>}
+              </div>
+              <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontWeight:500}}>
+                {(profile&&profile.segmento)||cl.sector}
+              </div>
             </div>
-            {/* Score circle */}
-            <div style={{position:"relative",width:38,height:38,flexShrink:0}}>
-              <svg width="38" height="38" viewBox="0 0 38 38">
-                <circle cx="19" cy="19" r="15" fill="none" stroke={C.b1} strokeWidth="3"/>
-                <circle cx="19" cy="19" r="15" fill="none" stroke={scoreColor} strokeWidth="3"
-                  strokeDasharray={2*Math.PI*15} strokeDashoffset={2*Math.PI*15*(1-score/100)}
-                  strokeLinecap="round" transform="rotate(-90 19 19)"/>
-              </svg>
-              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:scoreColor,fontWeight:900,fontSize:10}}>{score}</div>
+            <span style={{background:stCfg.bg,color:stCfg.color,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0}}>{stCfg.label}</span>
+          </div>
+
+          {/* MRR + responsável */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{background:"#f8fafc",borderRadius:9,padding:"10px 12px"}}>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>MRR{isBioterGroup?" (grupo)":""}</div>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:15,marginTop:3}}>{fmtBRLClient(mrr)}</div>
+            </div>
+            <div style={{background:"#f8fafc",borderRadius:9,padding:"10px 12px"}}>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Responsável</div>
+              <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{respUser?respUser.name:"—"}</div>
             </div>
           </div>
 
-          {/* Card body */}
-          <div style={{padding:"12px 16px",display:"flex",flexDirection:"column",gap:10}}>
-            {/* KPIs row */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-              <div style={{textAlign:"center"}}>
-                <div style={{color:healthColor,fontWeight:800,fontSize:15}}>{cl.health}%</div>
-                <div style={{color:C.td,fontSize:9}}>Saúde</div>
-              </div>
-              <div style={{textAlign:"center"}}>
-                <div style={{color:C.tx,fontWeight:700,fontSize:15}}>{activeTasks.length}</div>
-                <div style={{color:C.td,fontSize:9}}>Demandas</div>
-              </div>
-              <div style={{textAlign:"center"}}>
-                <div style={{color:cl.contract>0?C.tx:C.td,fontWeight:700,fontSize:13}}>
-                  {cl.contract>0?"R$"+(cl.contract/1000).toFixed(1)+"k":"—"}
-                </div>
-                <div style={{color:C.td,fontSize:9}}>MRR</div>
-              </div>
-            </div>
-
-            {/* Alerts */}
-            {lateTasks.length>0&&<div style={{background:C.rd+"12",borderRadius:8,padding:"6px 10px",display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontSize:11}}>🔥</span>
-              <span style={{color:C.rd,fontSize:11,fontWeight:600}}>{lateTasks.length} demanda(s) atrasada(s)</span>
+          {/* Info adicional — CNPJ + cidade pra não-grupos */}
+          {!isBioterGroup&&profile&&<div style={{display:"flex",flexDirection:"column",gap:4,paddingTop:4}}>
+            {profile.cnpj&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
+              <span style={{color:"#94a3b8"}}>CNPJ</span><span style={{color:"#0f172a",fontWeight:500,fontFamily:"monospace"}}>{profile.cnpj}</span>
             </div>}
+            {(profile.cidade||profile.estado)&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
+              <span style={{color:"#94a3b8"}}>Localização</span><span style={{color:"#0f172a",fontWeight:500}}>{[profile.cidade,profile.estado].filter(Boolean).join("/")}</span>
+            </div>}
+            {profile.telefone&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
+              <span style={{color:"#94a3b8"}}>Telefone</span><span style={{color:"#0f172a",fontWeight:500}}>{profile.telefone}</span>
+            </div>}
+          </div>}
 
-            {/* Footer */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:4,borderTop:"1px solid "+C.b1+"44"}}>
-              <span style={{background:payColor+"18",color:payColor,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700}}>
-                {pay.status==="pago"?"Pago":pay.status==="atrasado"?"Atrasado":pay.status==="pendente"?"Pendente":pay.status==="interno"?"Interno":"—"}
-              </span>
-              {mgr&&<div style={{display:"flex",alignItems:"center",gap:5}}>
-                <div style={{width:18,height:18,borderRadius:"50%",background:mgr.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:8}}>{mgr.av}</div>
-                <span style={{color:C.td,fontSize:10}}>{mgr.name}</span>
-              </div>}
-            </div>
-          </div>
-        </div>);
+          {/* Botão expandir unidades — só Bioter */}
+          {isBioterGroup&&<button onClick={function(e){e.stopPropagation();setBioterExpanded(!bioterExpanded);}}
+            style={{background:bioterExpanded?"#f5f3ff":"#f8fafc",color:bioterExpanded?"#7c3aed":"#64748b",border:"1px solid "+(bioterExpanded?"#ddd6fe":"#e2e8f0"),borderRadius:9,padding:"8px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s"}}>
+            <span>{bioterExpanded?"▾ Ocultar":"▸ Ver"} unidades</span>
+            <span style={{background:bioterExpanded?"#7c3aed":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:9.5,fontWeight:700}}>{BIOTER_GROUP_UNITS.length}</span>
+          </button>}
+
+          {/* Lista de unidades — quando expandida */}
+          {isExpanded&&<div style={{display:"flex",flexDirection:"column",gap:6,paddingTop:4,borderTop:"1px solid #f1f5f9"}}>
+            {BIOTER_GROUP_UNITS.map(function(u){
+              return <div key={u.id}
+                style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,padding:"9px 11px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,alignItems:"center"}}>
+                <div style={{minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{u.name}</div>
+                  <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>{u.cidade}/{u.estado}{u.cnpj?" · "+u.cnpj:""}{u.ruc?" · RUC "+u.ruc:""}</div>
+                </div>
+                <div style={{color:"#0f172a",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>{u.mrr?fmtBRLClient(u.mrr):"—"}</div>
+              </div>;
+            })}
+          </div>}
+        </div>;
       })}
-      {filtered.length===0&&(<div style={{gridColumn:"1/-1",padding:"40px",textAlign:"center",color:C.td,fontSize:13}}>Nenhum cliente encontrado.</div>)}
-    </div>)}
+      {filtered.length===0&&<div style={{gridColumn:"1/-1",background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:12,padding:48,textAlign:"center",color:"#94a3b8",fontSize:13}}>Nenhum cliente encontrado.</div>}
+    </div>
   </div>);
 }
-
-/* ─── CLIENT DETAIL — 4 ABAS ────────────────── */
 
 // ======= 03_cliente_detalhe.jsx =======
 
@@ -9195,13 +9313,171 @@ function CalendarGrid({WEEKDAYS, days, renderDay}){
   );
 }
 
-// Wrapper — Calendário interno é cópia idêntica do Calendário de publicações.
-// Toda mudança visual vai automaticamente pros dois.
-function PageCalendarioInterno(props){
-  return <PageCalendarioPublicacoes {...props} _internalLabel="Calendário interno"/>;
+/* ─── Calendário INTERNO — eventos próprios ─────────────────────────
+   Mesmo padrão visual do Calendário de publicações, mas mostra eventos
+   internos: aniversários da equipe e dos clientes (contatos), datas
+   comemorativas internas etc.
+   Aniversários de equipe vêm de localStorage pixels-bday-team-<userId>
+   (formato "DD/MM"). Aniversários de cliente vêm de pixels-contacts-<cl.id>
+   (campo .birthday em formato "DD/MM"). Sem dados, cai num mock predicável.
+─────────────────────────────────────────────────────────────────── */
+// Mock fallback determinístico — DD,MM por índice do TEAM/CLIENT (só pra UI
+// não ficar vazia em ambientes sem dados reais). Sócios podem editar depois.
+const _BDAY_FALLBACK_DM=[[15,3],[22,4],[8,5],[30,6],[12,7],[5,8],[18,9],[25,10],[3,11],[14,12]];
+function _getTeamBdayDM(userId, idx){
+  try{
+    const raw=localStorage.getItem("pixels-bday-team-"+userId);
+    if(raw){const m=raw.match(/^(\d{1,2})\/(\d{1,2})/);if(m)return [parseInt(m[1],10),parseInt(m[2],10)];}
+  }catch(e){}
+  return _BDAY_FALLBACK_DM[idx%_BDAY_FALLBACK_DM.length];
+}
+function _getClientBdaysDM(clientId){
+  try{
+    const raw=localStorage.getItem("pixels-contacts-"+clientId);
+    if(!raw)return [];
+    const contacts=JSON.parse(raw);
+    if(!Array.isArray(contacts))return [];
+    return contacts.filter(function(c){return c&&c.birthday;}).map(function(c){
+      const m=String(c.birthday).match(/^(\d{1,2})[\/\-](\d{1,2})/);
+      if(!m)return null;
+      return {day:parseInt(m[1],10),month:parseInt(m[2],10),name:c.name||"Contato"};
+    }).filter(Boolean);
+  }catch(e){return [];}
 }
 
-function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, _internalLabel}){
+function PageCalendarioInterno({isMob}){
+  const [calMonth,setCalMonth]=useState(new Date());
+  const [filterType,setFilterType]=useState("todos"); // "todos"|"equipe"|"clientes"
+
+  const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+  // ── Constrói lista de eventos do MÊS VISÍVEL ──
+  const eventsThisMonth=useMemo(function(){
+    const m=calMonth.getMonth()+1;
+    const out=[];
+    // Aniversários equipe
+    if(filterType==="todos"||filterType==="equipe"){
+      (typeof TEAM!=="undefined"?TEAM:[]).forEach(function(u,i){
+        const [day,month]=_getTeamBdayDM(u.id,i);
+        if(month===m){
+          out.push({
+            type:"equipe",
+            title:u.name,
+            subtitle:u.role||"Equipe",
+            icon:"🎂",
+            day:day,month:month,
+            color:u.color||"#7c3aed",
+            id:"bday_team_"+u.id,
+          });
+        }
+      });
+    }
+    // Aniversários cliente
+    if(filterType==="todos"||filterType==="clientes"){
+      (typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";}).forEach(function(cl){
+        const bdays=_getClientBdaysDM(cl.id);
+        bdays.forEach(function(b){
+          if(b.month===m){
+            out.push({
+              type:"cliente",
+              title:b.name,
+              subtitle:cl.name,
+              icon:"🎁",
+              day:b.day,month:b.month,
+              color:cl.color||"#f97316",
+              id:"bday_client_"+cl.id+"_"+b.name,
+            });
+          }
+        });
+      });
+    }
+    return out;
+  },[calMonth,filterType]);
+
+  // Eventos agrupados por dia
+  const eventsByDay=function(date){
+    if(!date)return [];
+    const d=date.getDate(), m=date.getMonth()+1;
+    return eventsThisMonth.filter(function(ev){return ev.day===d&&ev.month===m;});
+  };
+
+  const calDays=function(){
+    const year=calMonth.getFullYear(), month=calMonth.getMonth();
+    const first=new Date(year,month,1).getDay();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+    const days=[];
+    for(let i=0;i<first;i++)days.push(null);
+    for(let d=1;d<=daysInMonth;d++)days.push(new Date(year,month,d));
+    return days;
+  };
+
+  const total=eventsThisMonth.length;
+  const teamCount=eventsThisMonth.filter(function(e){return e.type==="equipe";}).length;
+  const clientCount=eventsThisMonth.filter(function(e){return e.type==="cliente";}).length;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      {/* Cabeçalho */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Calendário interno</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
+            {total} evento{total!==1?"s":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
+          </div>
+        </div>
+        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
+      </div>
+
+      {/* Filtros tipo de evento + legenda inline */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {[{id:"todos",label:"Todos"},{id:"equipe",label:"🎂 Aniversários equipe",count:teamCount},{id:"clientes",label:"🎁 Aniversários clientes",count:clientCount}].map(function(o){
+            const active=filterType===o.id;
+            return <button key={o.id} onClick={function(){setFilterType(o.id);}}
+              style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}>
+              {o.label}
+              {typeof o.count==="number"&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{o.count}</span>}
+            </button>;
+          })}
+        </div>
+      </div>
+
+      {/* Grid do calendário (mesmo padrão visual) */}
+      <CalendarGrid
+        WEEKDAYS={WEEKDAYS}
+        days={calDays()}
+        renderDay={function(date,i){
+          if(!date)return null;
+          const evs=eventsByDay(date);
+          const isToday=date.toDateString()===new Date().toDateString();
+          return <>
+            <CalendarDayNumber day={date} isToday={isToday}/>
+            <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:4,overflow:"hidden",flex:1}}>
+              {evs.slice(0,3).map(function(ev){
+                return <div key={ev.id} title={ev.title+" — "+ev.subtitle}
+                  style={{background:ev.color+"18",border:"1px solid "+ev.color+"55",borderRadius:6,padding:"3px 6px",fontSize:9.5,color:"#0f172a",lineHeight:1.25,display:"flex",alignItems:"center",gap:4,overflow:"hidden"}}>
+                  <span style={{fontSize:11,flexShrink:0}}>{ev.icon}</span>
+                  <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
+                </div>;
+              })}
+              {evs.length>3&&<div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textAlign:"center"}}>+{evs.length-3} mais</div>}
+            </div>
+          </>;
+        }}
+      />
+
+      {/* Estado vazio */}
+      {total===0&&<div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:12,padding:"32px 20px",textAlign:"center"}}>
+        <div style={{fontSize:32,marginBottom:8}}>🗓</div>
+        <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>Nenhum evento interno em {MONTHS[calMonth.getMonth()].toLowerCase()}</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:4}}>Aniversários da equipe e contatos dos clientes aparecem aqui automaticamente.</div>
+      </div>}
+    </div>
+  );
+}
+
+function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const tasks = propTasks||[];
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterClient,setFilterClient]=useState("todos");
@@ -9231,7 +9507,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, _internalL
 
   // Retorna cor do card baseado no status (laranja/verde/roxo)
   const getPubColor=(status)=>{
-    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicadas"}; // 🟣 roxo
+    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"}; // 🟣 roxo
     if(status==="aprovado"||status==="agendado")return{bg:"#16a34a",border:"#bbf7d0",label:"Pronto"}; // 🟢 verde
     return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"}; // 🟠 laranja (demanda, recebida, execucao, avaliacao)
   };
@@ -9268,119 +9544,211 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks, _internalL
   });
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
       {/* ── Cabeçalho ── */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>{_internalLabel||"Calendário de publicações"}</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
-            {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
+          <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22,letterSpacing:-.3}}>📅 Calendário de Publicações</div>
+          <div style={{color:C.ts,fontSize:12,marginTop:3}}>
+            {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} agendada{tasksThisMonth.length!==1?"s":""} em {MONTHS[calMonth.getMonth()]}
           </div>
         </div>
-        <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
+        {/* Navegação de mês */}
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
+            style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>←</button>
+          <div style={{color:C.tx,fontWeight:800,fontSize:16,minWidth:160,textAlign:"center"}}>
+            {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
+          </div>
+          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))}
+            style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>→</button>
+          <button onClick={()=>setCalMonth(new Date())}
+            style={{background:C.ag,color:C.a,border:"1px solid "+C.a+"44",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+            Hoje
+          </button>
+        </div>
       </div>
 
-      {/* ── Filtros (cliente) + Legenda inline ── */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          <button onClick={()=>{setFilterClient("todos");setFilterBioterUnit("todos");}}
-            style={{background:filterClient==="todos"?"#0f172a":"#fff",color:filterClient==="todos"?"#fff":"#0f172a",border:`1px solid ${filterClient==="todos"?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:filterClient==="todos"?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
-            Todos os clientes
+      {/* ── Legenda das cores do status ── */}
+      <div style={{display:"flex",gap:isMob?6:10,flexWrap:"wrap",alignItems:"center",background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:isMob?"6px 10px":"8px 14px"}}>
+        <span style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Status:</span>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:14,height:14,borderRadius:3,background:"#ea580c"}}/>
+          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟠 Em produção</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:14,height:14,borderRadius:3,background:"#16a34a"}}/>
+          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟢 Pronto para agendar</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:14,height:14,borderRadius:3,background:"#7c3aed"}}/>
+          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟣 Publicado</span>
+        </div>
+      </div>
+
+      {/* ── Filtro de cliente ── */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{color:C.ts,fontSize:11,fontWeight:600,marginRight:2}}>Filtrar por cliente:</span>
+
+        {/* Botão "Todos" */}
+        <button onClick={()=>{setFilterClient("todos");setFilterBioterUnit("todos");}}
+          style={{background:filterClient==="todos"?C.a:C.b1,color:filterClient==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"5px 14px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+          Todos
+        </button>
+
+        {/* Um botão por cliente */}
+        {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>(
+          <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");}}
+            style={{display:"flex",alignItems:"center",gap:5,background:filterClient===cl.id?cl.color+"22":C.b1,border:`2px solid ${filterClient===cl.id?cl.color:C.b1}`,borderRadius:10,padding:"4px 11px",fontSize:10,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+            <ClientLogo clientId={cl.id} size="xs"/>
+            <span style={{color:filterClient===cl.id?cl.color:C.ts,whiteSpace:"nowrap"}}>{cl.abbr}</span>
           </button>
-          {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>(
-            <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");}}
-              style={{display:"inline-flex",alignItems:"center",gap:6,background:filterClient===cl.id?"#0f172a":"#fff",color:filterClient===cl.id?"#fff":"#0f172a",border:`1px solid ${filterClient===cl.id?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:filterClient===cl.id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
-              <ClientLogo clientId={cl.id} size="xs"/>
-              <span>{cl.abbr}</span>
-            </button>
-          ))}
-        </div>
-        {/* Legenda de status (chips pequenos) */}
-        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-          <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Status</span>
-          <CalendarStatusDot color="#ea580c" label="Em produção"/>
-          <CalendarStatusDot color="#16a34a" label="Pronto"/>
-          <CalendarStatusDot color="#7c3aed" label="Publicado"/>
-        </div>
+        ))}
       </div>
 
       {/* ── Sub-filtro Bioter (unidades) ── */}
       {filterClient==="bioter"&&(
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-          <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Unidades</span>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center",padding:"10px 14px",background:C.card,borderRadius:10,border:"1px solid #4a8c1c44"}}>
+          <span style={{color:"#4a8c1c",fontSize:11,fontWeight:700,marginRight:2}}>Unidade Bioter:</span>
           <button onClick={()=>setFilterBioterUnit("todos")}
-            style={{background:filterBioterUnit==="todos"?"#166534":"#fff",color:filterBioterUnit==="todos"?"#fff":"#475569",border:`1px solid ${filterBioterUnit==="todos"?"#166534":"#e2e8f0"}`,borderRadius:10,padding:"5px 11px",fontSize:11,fontWeight:filterBioterUnit==="todos"?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+            style={{background:filterBioterUnit==="todos"?"#4a8c1c":C.s1,color:filterBioterUnit==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"4px 12px",fontSize:10,fontWeight:700,cursor:"pointer"}}>
             Todas
           </button>
           {BIOTER_UNITS.map(u=>(
             <button key={u.id} onClick={()=>setFilterBioterUnit(u.id)}
-              style={{background:filterBioterUnit===u.id?"#166534":"#fff",color:filterBioterUnit===u.id?"#fff":"#475569",border:`1px solid ${filterBioterUnit===u.id?"#166534":"#e2e8f0"}`,borderRadius:10,padding:"5px 11px",fontSize:11,fontWeight:filterBioterUnit===u.id?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+              style={{background:filterBioterUnit===u.id?u.color:C.s1,color:filterBioterUnit===u.id?"#fff":C.ts,border:`1px solid ${filterBioterUnit===u.id?u.color:C.b1}`,borderRadius:8,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
               {u.label}
             </button>
           ))}
         </div>
       )}
 
-      {/* ── Grade do calendário (simétrica, células quadradas-ish) ── */}
-      <CalendarGrid
-        WEEKDAYS={WEEKDAYS}
-        days={calDays()}
-        renderDay={(day,i)=>{
-          const dayTasks=day?tasksByDay(day):[];
-          const isToday=day&&day.toDateString()===new Date().toDateString();
-          const maxShow=isMob?2:3;
-          return <>
-            {day&&<>
-              {/* Número do dia */}
-              <CalendarDayNumber day={day} isToday={isToday}/>
-              {/* Cards do dia */}
-              <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:6}}>
-                {dayTasks.slice(0,maxShow).map(t=>{
-                  const cl=CLIENTS.find(c=>c.id===t.client);
-                  const assignee=TEAM.find(u=>(t.assignees||[t.assignee]||[]).includes(u.id));
-                  const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
-                  const pubColor=getPubColor(t.status);
-                  return(
-                    <div key={t.id} onClick={()=>setOpenCard(t)}
-                      style={{background:"#fff",border:"1px solid #e8edf2",borderLeft:`3px solid ${pubColor.bg}`,borderRadius:6,padding:"4px 7px",cursor:"pointer",transition:"all .12s"}}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.borderLeftColor=pubColor.bg;}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#e8edf2";e.currentTarget.style.borderLeftColor=pubColor.bg;}}>
-                      <div style={{color:"#0f172a",fontSize:isMob?9:10.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>{t.title}</div>
-                      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
-                        {t.publishTime&&<span style={{color:pubColor.bg,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>{t.publishTime}</span>}
-                        {cl&&<span style={{color:"#94a3b8",fontSize:9,fontWeight:500,whiteSpace:"nowrap"}}>{unit?unit.label.split("/")[0]:cl.abbr}</span>}
-                        {assignee&&<span style={{marginLeft:"auto",background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"0 5px",fontSize:8,fontWeight:700,whiteSpace:"nowrap"}}>{assignee.av}</span>}
+      {/* ── Grade do calendário ── */}
+      <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
+        {/* Cabeçalho dos dias da semana */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:`2px solid ${C.b1}`,background:C.s1}}>
+          {WEEKDAYS.map(d=>(
+            <div key={d} style={{padding:"12px 0",textAlign:"center",color:C.ts,fontSize:12,fontWeight:700,letterSpacing:.5}}>{d}</div>
+          ))}
+        </div>
+
+        {/* Células dos dias */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+          {calDays().map((day,i)=>{
+            const dayTasks=day?tasksByDay(day):[];
+            const isToday=day&&day.toDateString()===new Date().toDateString();
+            const hasTasks=dayTasks.length>0;
+
+            return(
+              <div key={i} style={{
+                minHeight:isMob?80:110,
+                borderRight:`1px solid ${C.b1}`,
+                borderBottom:`1px solid ${C.b1}`,
+                padding:"8px 6px 6px",
+                background:isToday?C.ag:hasTasks?C.bl+"06":"transparent",
+                transition:"background .2s",
+              }}>
+                {day&&(<>
+                  {/* Número do dia */}
+                  <div style={{
+                    color:isToday?"#fff":C.ts,
+                    fontWeight:isToday?900:500,
+                    fontSize:13,
+                    marginBottom:5,
+                    width:isToday?24:undefined,
+                    height:isToday?24:undefined,
+                    background:isToday?C.a:undefined,
+                    borderRadius:isToday?"50%":undefined,
+                    display:"flex",alignItems:"center",
+                    justifyContent:isToday?"center":undefined,
+                  }}>{day.getDate()}</div>
+
+                  {/* Cards do dia */}
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {dayTasks.slice(0,isMob?2:3).map(t=>{
+                      const cl=CLIENTS.find(c=>c.id===t.client);
+                      const assignee=TEAM.find(u=>(t.assignees||[t.assignee]||[]).includes(u.id));
+                      const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
+                      // Cor do card baseada no STATUS (laranja/verde/roxo)
+                      const pubColor=getPubColor(t.status);
+                      return(
+                        <div key={t.id} onClick={()=>setOpenCard(t)}
+                          style={{
+                            background:pubColor.bg,
+                            borderLeft:`4px solid ${pubColor.bg}`,
+                            borderRadius:5,
+                            padding:"4px 6px",
+                            cursor:"pointer",
+                            transition:"all .1s",
+                            boxShadow:"0 1px 3px rgba(0,0,0,0.08)",
+                          }}
+                          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 3px 8px rgba(0,0,0,0.15)";}}
+                          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.08)";}}>
+
+                          {/* Título */}
+                          <div style={{color:"#fff",fontSize:isMob?8:10,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>
+                            {t.title}
+                          </div>
+
+                          {/* Horário + Cliente + responsável */}
+                          <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2,flexWrap:"wrap"}}>
+                            {t.publishTime&&<span style={{background:"#ffffff",color:pubColor.bg,borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:800,whiteSpace:"nowrap"}}>
+                              🕐 {t.publishTime}
+                            </span>}
+                            {cl&&<span style={{color:"#fff",fontSize:8,fontWeight:700,whiteSpace:"nowrap",opacity:0.95}}>
+                              {unit?unit.label.split("/")[0]:cl.abbr}
+                            </span>}
+                            {assignee&&<span style={{background:"rgba(255,255,255,0.25)",color:"#fff",borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:700,whiteSpace:"nowrap"}}>
+                              {assignee.av}
+                            </span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {dayTasks.length>(isMob?2:3)&&(
+                      <div style={{color:C.ts,fontSize:9,textAlign:"center",fontWeight:600}}>
+                        +{dayTasks.length-(isMob?2:3)} mais
                       </div>
-                    </div>
-                  );
-                })}
-                {dayTasks.length>maxShow&&(
-                  <div style={{color:"#94a3b8",fontSize:9.5,textAlign:"center",fontWeight:600,marginTop:1}}>
-                    +{dayTasks.length-maxShow} mais
+                    )}
                   </div>
-                )}
+                </>)}
               </div>
-            </>}
-          </>;
-        }}
-      />
+            );
+          })}
+        </div>
+      </div>
 
       {/* ── Aviso sem agendamentos ── */}
       {tasksThisMonth.length===0&&(
-        <div style={{background:"#fff",borderRadius:12,padding:"36px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:48,height:48,borderRadius:12,background:"#f1f5f9",color:"#94a3b8",marginBottom:12}}><Ico n="calendar" size={24}/></div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:4}}>Nenhuma publicação agendada</div>
-          <div style={{color:"#64748b",fontSize:12,maxWidth:420,margin:"0 auto",lineHeight:1.5}}>
+        <div style={{background:C.card,borderRadius:14,padding:"40px",textAlign:"center",border:`1px dashed ${C.b1}`}}>
+          <div style={{fontSize:36,marginBottom:12}}>📅</div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>Nenhuma publicação agendada</div>
+          <div style={{color:C.ts,fontSize:12}}>
             {filterClient!=="todos"
-              ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()].toLowerCase()}.`
-              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()].toLowerCase()}. Mova cards para "Agendadas" e defina a data de publicação.`
+              ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para a coluna "Agendado" e defina a data de publicação.`
             }
           </div>
         </div>
       )}
 
-      {/* Modal do card — somente leitura no calendário */}
+      {/* ── Legenda ── */}
+      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{color:C.td,fontSize:11,fontWeight:600}}>Legenda:</span>
+        {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>{
+          const count=agendados.filter(t=>t.client===cl.id&&new Date(t.publishDate+"T12:00:00").getMonth()===calMonth.getMonth()).length;
+          if(count===0) return null;
+          return(
+            <div key={cl.id} style={{display:"flex",alignItems:"center",gap:5}}>
+              <div style={{width:10,height:10,borderRadius:2,background:cl.color}}/>
+              <span style={{color:C.ts,fontSize:11}}>{cl.abbr} ({count})</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Modal do card — somente leitura no calendário ── */}
       {openCard&&(
         <CardModal
           task={openCard}
