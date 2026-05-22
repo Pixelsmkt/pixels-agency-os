@@ -213,8 +213,8 @@ const THEMES={
     gr:"#00e5a0", rd:"#ff3d6b", yw:"#ffd000", or:"#ff7200",
     bl:"#4db8ff", pk:"#ff6eb4",
     tx:"#f2e8ff", ts:"#9966cc", td:"#3d1a6e",
-    kRascunhos:"#64748b", kDemanda:"#a140ff", kRecebida:"#ff6eb4", kExecucao:"#ffd000",
-    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#4db8ff", kPublicado:"#a78bfa", kPausado:"#1a0030", kAlteracao:"#7c1d1d",
+    kRascunhos:"#64748b", kDemanda:"#4db8ff", kRecebida:"#ff6eb4", kExecucao:"#ffd000",
+    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#a140ff", kPublicado:"#a140ff", kPausado:"#1a0030", kAlteracao:"#7c1d1d",
   },
   light:{
     name:"Light", icon:"○",
@@ -224,8 +224,8 @@ const THEMES={
     gr:"#059669", rd:"#dc2626", yw:"#d97706", or:"#ea580c",
     bl:"#2563eb", pk:"#db2777",
     tx:"#0f172a", ts:"#64748b", td:"#94a3b8",
-    kRascunhos:"#64748b", kDemanda:"#7c3aed", kRecebida:"#db2777", kExecucao:"#d97706",
-    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#2563eb", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#7c1d1d",
+    kRascunhos:"#64748b", kDemanda:"#2563eb", kRecebida:"#db2777", kExecucao:"#d97706",
+    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#7c3aed", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#7c1d1d",
   },
   agro:{
     name:"Agro", icon:"◉",
@@ -235,8 +235,8 @@ const THEMES={
     gr:"#86efac", rd:"#f87171", yw:"#fde047", or:"#fb923c",
     bl:"#60a5fa", pk:"#f472b6",
     tx:"#e8fdf0", ts:"#4ade80", td:"#166534",
-    kRascunhos:"#64748b", kDemanda:"#22c55e", kRecebida:"#4ade80", kExecucao:"#fde047",
-    kAvaliacao:"#fb923c", kAprovado:"#86efac", kAgendado:"#60a5fa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#7c1d1d",
+    kRascunhos:"#64748b", kDemanda:"#60a5fa", kRecebida:"#4ade80", kExecucao:"#fde047",
+    kAvaliacao:"#fb923c", kAprovado:"#a78bfa", kAgendado:"#a78bfa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#7c1d1d",
   },
 };
 
@@ -265,8 +265,7 @@ const KANBAN_COLS = [
   { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
   { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
   { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
-  { id:"agendado",  label:"Agendado",               color:C.kAgendado,  dark:true  },
-  { id:"publicado", label:"Publicado",              color:C.kPublicado, dark:true  },
+  { id:"agendado",  label:"Publicações",            color:C.kAgendado,  dark:true  },
   { id:"pausado",   label:"Pausado",                color:C.kPausado,   dark:false },
 ];
 
@@ -2726,7 +2725,8 @@ function ClientesBoard({tasks,setTasks,setOpenCard,canDelete,handleDelete,canDra
       {/* ── CARTÃO view ── */}
       {boardView==="cartao"&&<div style={{display:"grid",gridTemplateColumns:`repeat(${KANBAN_COLS.length},minmax(180px,1fr))`,gap:8,overflowX:"auto",paddingBottom:8}}>
         {KANBAN_COLS.map(col=>{
-          const colTasks=clTasks.filter(t=>t.status===col.id);
+          // Coluna "agendado" (Publicações) agrega status="agendado" + status="publicado"
+          const colTasks=clTasks.filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id);
           return <div key={col.id} style={{
             background:`linear-gradient(180deg,${col.color}38 0%,${col.color}18 100%)`,
             border:`2px solid ${col.color}55`,borderTop:`4px solid ${col.color}`,
@@ -9945,8 +9945,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [editingColLabel,setEditingColLabel]=useState("");
   const [cols,setCols]=useState(()=>{
     // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
-    // Versão atual: v4 (cor vinho na coluna Ajustes)
-    const COLS_VERSION="v5-rascunhos";
+    // Versão atual: v6 (mescla Agendado+Publicado em "Publicações" + swap cores Copys/Publicações)
+    const COLS_VERSION="v6-publicacoes";
     try{
       const savedVersion=localStorage.getItem("pixels-cols-version");
       if(savedVersion!==COLS_VERSION){
@@ -10528,7 +10528,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
-          const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>{
+          // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
+          const colTasks=visible.filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id).sort((a,b)=>{
             // Manual: respeita position; quem não tem position vai pro final (cinza)
             if(sortMode==="manual"){
               const pa=a.position??999999,pb=b.position??999999;
@@ -10805,7 +10806,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
                   {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
                 </div>
               </div>;
@@ -11393,7 +11393,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
   const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
-  const STAT_COLORS={rascunhos:C.td,demanda:C.a,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.bl,publicado:"#a78bfa",pausado:C.td};
+  const STAT_COLORS={rascunhos:C.td,demanda:C.kDemanda,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.kAgendado,publicado:C.kAgendado,pausado:C.td};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
   // isAdminViewer = pode ver coluna Tag na lista + faixas de tag. Permissão: gerenciarEtiquetas.
   const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
@@ -11761,7 +11761,8 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
     </div>
 
     {orderedCols.map(col=>{
-      const colTasks=sortTasks(filteredVisible.filter(t=>t.status===col.id));
+      // Coluna "agendado" (Publicações) agrega status="agendado" + status="publicado"
+      const colTasks=sortTasks(filteredVisible.filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id));
       // Mantém grupo visível mesmo sem cards SE há drag em andamento (vira drop zone)
       if(colTasks.length===0&&!dragId)return null;
       const isDropTarget=dragId&&dragOverCol===col.id;
