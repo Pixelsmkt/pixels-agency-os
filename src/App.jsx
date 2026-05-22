@@ -9797,37 +9797,55 @@ function ScanModal({tasks,onClose,onFilter}){
 
 /* ─── QUICK CREATE — seletor rápido de responsável ─── */
 function QuickCreateBody({onConfirm,onCancel}){
+  // Mapeamento local de "setor" — sobrescreve u.role só dentro desse modal.
+  // Mantém u.role intocado pra não afetar dashboards, acessos, etc.
+  // Erick é excluído (Gestão de mídia tem aba separada — não cria demanda comum).
+  const SECTOR_BY_ID={
+    vinicius:"Gestão de projetos",
+    gustavo:"Gestão",
+    ellen:"Estratégia",
+    andre:"Design",
+    guilherme:"Edição de vídeo",
+  };
+  const list=TEAM.filter(u=>u.id!=="erick");
   const [title,setTitle]=useState("Nova Demanda");
-  const [selectedId,setSelectedId]=useState(TEAM[0].id);
-  const colabs=TEAM.filter(u=>u.level>=2); // colaboradores (não sócios)
+  const [selectedId,setSelectedId]=useState(list[0].id);
   return <div>
-    <div style={{marginBottom:14}}>
-      <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Título</div>
+    <div style={{marginBottom:16}}>
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:7}}>Título</div>
       <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&selectedId)onConfirm(selectedId,title);}}
-        style={{width:"100%",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
+        style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",boxSizing:"border-box",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .15s"}}
+        onFocus={e=>e.currentTarget.style.borderColor="#7c3aed"}
+        onBlur={e=>e.currentTarget.style.borderColor="#e2e8f0"}
         autoFocus/>
     </div>
     <div style={{marginBottom:18}}>
-      <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Responsável</div>
-      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        {TEAM.map(u=>(
-          <div key={u.id} onClick={()=>setSelectedId(u.id)}
-            style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,border:`2px solid ${selectedId===u.id?u.color:C.b1}`,background:selectedId===u.id?u.color+"18":C.s1,cursor:"pointer",transition:"all .15s"}}>
-            <div style={{width:30,height:30,borderRadius:9,background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:13,flexShrink:0}}>{u.av}</div>
-            <div>
-              <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{u.name}</div>
-              <div style={{color:C.ts,fontSize:11}}>{u.role}</div>
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Responsável</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:340,overflowY:"auto",paddingRight:2}}>
+        {list.map(u=>{
+          const isSel=selectedId===u.id;
+          const sector=SECTOR_BY_ID[u.id]||u.role;
+          return <div key={u.id} onClick={()=>setSelectedId(u.id)}
+            style={{display:"flex",alignItems:"center",gap:11,padding:"9px 12px",borderRadius:11,border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,background:isSel?"#f5f3ff":"#fff",cursor:"pointer",transition:"all .12s",boxShadow:isSel?"0 0 0 3px #7c3aed1f":"none"}}>
+            <UserAvatar user={u} size={36}/>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:"#0f172a",fontWeight:600,fontSize:13,lineHeight:1.2}}>{u.name}</div>
+              <div style={{color:"#64748b",fontSize:11,fontWeight:500,marginTop:2}}>{sector}</div>
             </div>
-            {selectedId===u.id&&<div style={{marginLeft:"auto",color:u.color,fontWeight:800}}>✓</div>}
-          </div>
-        ))}
+            {isSel&&<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
+          </div>;
+        })}
       </div>
     </div>
     <div style={{display:"flex",gap:8}}>
-      <button onClick={onCancel} style={{flex:1,background:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:13}}>Cancelar</button>
+      <button onClick={onCancel} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:10,padding:"11px 0",color:"#64748b",cursor:"pointer",fontWeight:600,fontSize:13,transition:"background .12s"}}
+        onMouseEnter={e=>e.currentTarget.style.background="#e2e8f0"}
+        onMouseLeave={e=>e.currentTarget.style.background="#f1f5f9"}>Cancelar</button>
       <button onClick={()=>onConfirm(selectedId,title)} disabled={!selectedId||!title.trim()}
-        style={{flex:2,background:selectedId?`linear-gradient(135deg,${TEAM.find(u=>u.id===selectedId)?.color||C.a},${C.aD})`:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:"#fff",cursor:"pointer",fontWeight:800,fontSize:13}}>
-        Criar Demanda
+        style={{flex:2,background:selectedId&&title.trim()?"#7c3aed":"#cbd5e1",border:"none",borderRadius:10,padding:"11px 0",color:"#fff",cursor:selectedId&&title.trim()?"pointer":"not-allowed",fontWeight:700,fontSize:13,transition:"background .12s"}}
+        onMouseEnter={e=>{if(selectedId&&title.trim())e.currentTarget.style.background="#6d28d9";}}
+        onMouseLeave={e=>{if(selectedId&&title.trim())e.currentTarget.style.background="#7c3aed";}}>
+        Criar demanda
       </button>
     </div>
   </div>;
@@ -10349,10 +10367,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   return <>
     {showPixelsIA&&<PixelsIAModal onClose={()=>setShowPixelsIA(false)} setTasks={setTasks} tasks={tasks}/>}
     {showScan&&<ScanModal tasks={tasks} onClose={()=>setShowScan(false)} onFilter={seg=>{setViewMode("lista");}}/>}
-    {quickCreate&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setQuickCreate(null)}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:20,padding:24,width:"100%",maxWidth:380,boxShadow:"0 24px 64px rgba(0,0,0,0.4)"}}>
-        <div style={{color:C.tx,fontWeight:800,fontSize:16,marginBottom:4}}>Nova Demanda</div>
-        <div style={{color:C.ts,fontSize:12,marginBottom:16}}>Selecione o responsável antes de criar</div>
+    {quickCreate&&<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}} onClick={()=>setQuickCreate(null)}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:420,boxShadow:"0 24px 64px rgba(15,23,42,0.28), 0 4px 12px rgba(15,23,42,0.10)"}}>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:18,letterSpacing:-.3,marginBottom:4}}>Nova demanda</div>
+        <div style={{color:"#64748b",fontSize:13,marginBottom:18}}>Selecione o responsável antes de criar</div>
         <QuickCreateBody colId={quickCreate.colId} extraProps={quickCreate.extraProps} onConfirm={(assigneeId,title)=>{setQuickCreate(null);createTask(quickCreate.colId,assigneeId,title,quickCreate.extraProps);}} onCancel={()=>setQuickCreate(null)}/>
       </div>
     </div>}
@@ -10936,6 +10954,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           <span style={{fontSize:20}}>🗑</span>
           <div style={{color:C.ts,fontSize:12}}>Cartões excluídos são mantidos por <strong style={{color:C.rd}}>30 dias</strong> antes de serem removidos permanentemente.</div>
         </div>
+        {(()=>{
           const trashVisible=myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)));
           return <>
             {trashVisible.length===0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:28,textAlign:"center"}}>
