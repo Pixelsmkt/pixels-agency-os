@@ -430,6 +430,20 @@ const DEFAULT_PERMS={
 
 const PARTNER_PERMS=Object.keys(DEFAULT_PERMS).reduce((a,k)=>({...a,[k]:true}),{});
 
+// Helper: retorna true se o usuário é sócio (level 1).
+// Usado pra GARANTIR que Vinicius e Gustavo sempre têm tudo true,
+// independente do que está em livePerms ou ACCESS_STORE customizado.
+function isPartner(userId){
+  if(!userId)return false;
+  const u=TEAM.find(function(t){return t.id===userId;});
+  return !!(u&&u.level===1);
+}
+// Helper: aplica PARTNER_PERMS (tudo true) se o user é sócio,
+// senão devolve o objeto perms recebido. Usar como wrapper final.
+function withPartnerOverride(perms, userId){
+  return isPartner(userId)?{...PARTNER_PERMS}:(perms||{...DEFAULT_PERMS});
+}
+
 const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
@@ -1391,7 +1405,6 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
   if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
   if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
-  if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
   if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
   if(n==="plus")      return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
   if(n==="users")     return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
@@ -8581,6 +8594,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   };
   let isSocio=CURRENT_USER.level===1;
   let myPerms=perms||(ACCESS_STORE&&ACCESS_STORE[CURRENT_USER.id])||DEFAULT_PERMS;
+  myPerms=withPartnerOverride(myPerms,CURRENT_USER.id); // sócios sempre tudo true
   // Permissões finas pras features novas — sócios sempre podem; outros via Acessos
   let canVerResumoIA   = isSocio||myPerms.verResumoIA===true;
   let canEditarEvolucao= isSocio||myPerms.editarEvolucao===true;
@@ -10221,7 +10235,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
   // ── myPerms — usa perms prop (effectivePerms do AgencyOS) ──
   // Fallback: ACCESS_STORE do usuário ativo (nunca DEFAULT_PERMS puro)
-  const myPerms=perms||(ACCESS_STORE[activeUserId]?{...DEFAULT_PERMS,...ACCESS_STORE[activeUserId]}:DEFAULT_PERMS);
+  // Sócios (level 1) sempre recebem PARTNER_PERMS via withPartnerOverride, garantindo
+  // acesso total mesmo se livePerms tiver algo desmarcado por engano.
+  const myPermsRaw=perms||(ACCESS_STORE[activeUserId]?{...DEFAULT_PERMS,...ACCESS_STORE[activeUserId]}:DEFAULT_PERMS);
+  const myPerms=withPartnerOverride(myPermsRaw,activeUserId);
 
   const canPixelsIA   = myPerms.pixelsIA;
   const canEscanear   = myPerms.escanear;
@@ -11078,7 +11095,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
                   {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
                 </div>
               </div>;
@@ -11412,7 +11428,8 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
   // FIX BUG-AUDIT: respeita "Ver como" — usa effectiveUser pra todos os filtros e ações
   const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs) || CURRENT_USER) : CURRENT_USER;
   const isSocio  = effectiveUser.level === 1;
-  const myPerms  = perms || { ...DEFAULT_PERMS, ...(ACCESS_STORE?.[effectiveUser.id] || {}) };
+  const myPermsRaw = perms || { ...DEFAULT_PERMS, ...(ACCESS_STORE?.[effectiveUser.id] || {}) };
+  const myPerms = withPartnerOverride(myPermsRaw, effectiveUser.id); // sócios sempre tudo true
   const canCreate = isSocio || myPerms.criarDemandaInterna;
   const canSeeAll = isSocio || myPerms.verTodosInternos;
 
@@ -15595,8 +15612,8 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
 
   const [search,setSearch]=useState("");
   const [filterLevel,setFilterLevel]=useState(0);
-  const isPartner=CURRENT_USER.level===1;
-  const myPerms={...DEFAULT_PERMS,...(ACCESS_STORE[CURRENT_USER.id]||{})};
+  const isMePartner=CURRENT_USER.level===1; // renomeado pra não conflitar com global isPartner(uid)
+  const myPerms=withPartnerOverride({...DEFAULT_PERMS,...(ACCESS_STORE[CURRENT_USER.id]||{})}, CURRENT_USER.id);
   const [collabProfiles,setCollabProfiles]=useState(()=>{
     // Carrega perfis do localStorage como cache inicial
     const out={};
@@ -15900,13 +15917,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
                 onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
                 👤
               </button>
-              {(isPartner||myPerms?.verDashOutros)&&(<button onClick={()=>onViewAs&&onViewAs(u.id)}
+              {(isMePartner||myPerms?.verDashOutros)&&(<button onClick={()=>onViewAs&&onViewAs(u.id)}
                 title={"Ver como "+u.name} style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.ts}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"18";e.currentTarget.style.color=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
                 👁
               </button>)}
-              {isPartner&&(<button onClick={()=>setEditCollab(u.id)}
+              {isMePartner&&(<button onClick={()=>setEditCollab(u.id)}
                 title="Gerenciar permissoes" style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.ts}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.a+"18";e.currentTarget.style.color=C.a;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
@@ -16169,6 +16186,7 @@ function StorageManager({tasks}){
         ))}
       </div>}
     </div>}
+
 
     {/* Log */}
     {log.length>0&&<div style={{background:C.s1,borderRadius:10,padding:"12px 16px"}}>
