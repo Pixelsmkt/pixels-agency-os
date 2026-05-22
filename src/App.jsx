@@ -368,6 +368,60 @@ function getStatusConfig(statusId){
   return CLIENTE_STATUS_OPTS.find(function(s){return s.id===statusId;})||CLIENTE_STATUS_OPTS[1];
 }
 
+/* ─── TIMELINE DE MARCOS — estilo Asana ──────────────────
+   Linha do tempo de eventos por cliente: visitas, materiais
+   de feira, reuniões, campanhas, contratos, etc.
+   Armazenado em localStorage["pixels-marcos-<clientId>"] —
+   array de marcos. Migra pra Supabase depois.
+─────────────────────────────────────────────────────── */
+const MARCO_TYPES = [
+  {id:"visita",    label:"Visita",         color:"#0284c7", bg:"#e0f2fe"},
+  {id:"reuniao",   label:"Reunião",        color:"#7c3aed", bg:"#f5f3ff"},
+  {id:"feira",     label:"Feira / evento", color:"#ea580c", bg:"#ffedd5"},
+  {id:"material",  label:"Material",       color:"#16a34a", bg:"#dcfce7"},
+  {id:"campanha",  label:"Campanha",       color:"#0891b2", bg:"#cffafe"},
+  {id:"contrato",  label:"Contrato",       color:"#0f172a", bg:"#e2e8f0"},
+  {id:"outro",     label:"Outro",          color:"#64748b", bg:"#f1f5f9"},
+];
+
+function getMarcoTypeConfig(typeId){
+  return MARCO_TYPES.find(function(t){return t.id===typeId;})||MARCO_TYPES[MARCO_TYPES.length-1];
+}
+
+// Carrega marcos de um cliente (localStorage)
+function loadMarcos(clientId){
+  if(!clientId)return [];
+  try{
+    const raw=localStorage.getItem("pixels-marcos-"+clientId);
+    if(!raw)return [];
+    const parsed=JSON.parse(raw);
+    if(!Array.isArray(parsed))return [];
+    return parsed.sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+  }catch(e){return [];}
+}
+
+// Salva marcos no localStorage. Dispara evento pra outros componentes recarregarem.
+function saveMarcos(clientId, marcos){
+  if(!clientId)return;
+  try{
+    localStorage.setItem("pixels-marcos-"+clientId,JSON.stringify(marcos||[]));
+    window.dispatchEvent(new CustomEvent("pixels:marcos-updated",{detail:{clientId:clientId}}));
+  }catch(e){console.warn("[marcos] save:",e?.message||e);}
+}
+
+// Cria novo marco — gera id único.
+function buildMarco(input){
+  return Object.assign({
+    id:"m"+Date.now()+"-"+Math.random().toString(36).slice(2,6),
+    date:new Date().toISOString().slice(0,10),
+    type:"outro",
+    title:"",
+    description:"",
+    author:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"",
+    createdAt:new Date().toISOString(),
+  }, input||{});
+}
+
 // ======= 00_globals.jsx =======
 // Módulo de framework: temas, perms, componentes base, navegação
 // Não contém dados de negócio — ver 00_clientes_data.jsx e 00_mindmap_data.jsx
@@ -8367,7 +8421,7 @@ function PageClientes({isMob, tasks}){
       <div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:24,letterSpacing:-.5}}>Clientes</div>
         <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>
-          {allClients.length} clientes · MRR total {fmtBRLClient(getAgencyTotalMRR())}
+          {allClients.length} clientes ativos · Pressione / para buscar
         </div>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
@@ -8442,22 +8496,13 @@ function PageClientes({isMob, tasks}){
             <span style={{background:stCfg.bg,color:stCfg.color,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0}}>{stCfg.label}</span>
           </div>
 
-          {/* MRR + responsável */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            <div style={{background:"#f8fafc",borderRadius:9,padding:"10px 12px"}}>
-              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>MRR{isBioterGroup?" (grupo)":""}</div>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:15,marginTop:3}}>{fmtBRLClient(mrr)}</div>
-            </div>
-            <div style={{background:"#f8fafc",borderRadius:9,padding:"10px 12px"}}>
-              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Responsável</div>
-              <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginTop:3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{respUser?respUser.name:"—"}</div>
-            </div>
-          </div>
-
-          {/* Info adicional — CNPJ + cidade pra não-grupos */}
-          {!isBioterGroup&&profile&&<div style={{display:"flex",flexDirection:"column",gap:4,paddingTop:4}}>
-            {profile.cnpj&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
-              <span style={{color:"#94a3b8"}}>CNPJ</span><span style={{color:"#0f172a",fontWeight:500,fontFamily:"monospace"}}>{profile.cnpj}</span>
+          {/* Dados cadastrais — sem informação financeira (financeiro fica em aba própria) */}
+          {!isBioterGroup&&profile&&<div style={{display:"flex",flexDirection:"column",gap:7,paddingTop:2,borderTop:"1px solid #f1f5f9",paddingBottom:0}}>
+            {profile.cnpj&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8,paddingTop:9}}>
+              <span style={{color:"#94a3b8",fontWeight:500}}>CNPJ</span><span style={{color:"#0f172a",fontWeight:500,fontFamily:"monospace"}}>{profile.cnpj}</span>
+            </div>}
+            {profile.ruc&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
+              <span style={{color:"#94a3b8",fontWeight:500}}>RUC</span><span style={{color:"#0f172a",fontWeight:500,fontFamily:"monospace"}}>{profile.ruc}</span>
             </div>}
             {(profile.cidade||profile.estado)&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
               <span style={{color:"#94a3b8"}}>Localização</span><span style={{color:"#0f172a",fontWeight:500}}>{[profile.cidade,profile.estado].filter(Boolean).join("/")}</span>
@@ -8474,16 +8519,13 @@ function PageClientes({isMob, tasks}){
             <span style={{background:bioterExpanded?"#7c3aed":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:9.5,fontWeight:700}}>{BIOTER_GROUP_UNITS.length}</span>
           </button>}
 
-          {/* Lista de unidades — quando expandida */}
+          {/* Lista de unidades — quando expandida (só dados cadastrais) */}
           {isExpanded&&<div style={{display:"flex",flexDirection:"column",gap:6,paddingTop:4,borderTop:"1px solid #f1f5f9"}}>
             {BIOTER_GROUP_UNITS.map(function(u){
               return <div key={u.id}
-                style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,padding:"9px 11px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,alignItems:"center"}}>
-                <div style={{minWidth:0}}>
-                  <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{u.name}</div>
-                  <div style={{color:"#94a3b8",fontSize:10,marginTop:1}}>{u.cidade}/{u.estado}{u.cnpj?" · "+u.cnpj:""}{u.ruc?" · RUC "+u.ruc:""}</div>
-                </div>
-                <div style={{color:"#0f172a",fontSize:12,fontWeight:700,whiteSpace:"nowrap"}}>{u.mrr?fmtBRLClient(u.mrr):"—"}</div>
+                style={{padding:"9px 11px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
+                <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{u.name}</div>
+                <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{u.cidade}/{u.estado}{u.cnpj?" · "+u.cnpj:""}{u.ruc?" · RUC "+u.ruc:""}</div>
               </div>;
             })}
           </div>}
@@ -8643,6 +8685,152 @@ function CAnalises({cl,isMob}){
   </div>);
 }
 
+/* ─── CClienteTimeline — Marcos estilo Asana ──────────────
+   Lista vertical com linha contínua, dots coloridos por tipo,
+   add-form inline. Persistência via localStorage.
+─────────────────────────────────────────────────────── */
+function CClienteTimeline({cl, canEdit}){
+  const [marcos,setMarcos]=useState(function(){return loadMarcos(cl.id);});
+  const [adding,setAdding]=useState(false);
+  const [form,setForm]=useState({type:"visita",title:"",description:"",date:new Date().toISOString().slice(0,10)});
+  // Re-carrega quando outro tab/sessão atualiza
+  useEffect(function(){
+    function h(e){if(!e||!e.detail||e.detail.clientId===cl.id)setMarcos(loadMarcos(cl.id));}
+    window.addEventListener("pixels:marcos-updated",h);
+    return function(){window.removeEventListener("pixels:marcos-updated",h);};
+  },[cl.id]);
+  function handleAdd(){
+    if(!form.title.trim())return;
+    const m=buildMarco({type:form.type,title:form.title.trim(),description:form.description.trim(),date:form.date});
+    const next=[m].concat(marcos);
+    setMarcos(next);saveMarcos(cl.id,next);
+    setForm({type:"visita",title:"",description:"",date:new Date().toISOString().slice(0,10)});
+    setAdding(false);
+  }
+  function handleDelete(id){
+    if(!canEdit)return;
+    if(typeof window!=="undefined"&&!window.confirm("Excluir esse marco da timeline?"))return;
+    const next=marcos.filter(function(x){return x.id!==id;});
+    setMarcos(next);saveMarcos(cl.id,next);
+  }
+  // Agrupa por ano-mês pra mostrar separadores temporais
+  const grouped=marcos.reduce(function(acc,m){
+    const ym=(m.date||"").slice(0,7)||"sem-data";
+    if(!acc[ym])acc[ym]=[];
+    acc[ym].push(m);
+    return acc;
+  },{});
+  const yms=Object.keys(grouped).sort().reverse();
+  const monthNames=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const fmtMonthLabel=function(ym){
+    if(ym==="sem-data")return "Sem data";
+    const [y,m]=ym.split("-");
+    return monthNames[parseInt(m,10)-1]+" "+y;
+  };
+  const fmtDateBR=function(ds){
+    if(!ds)return "";
+    try{const d=new Date(ds+"T12:00:00");return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");}catch(e){return ds;}
+  };
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:17,letterSpacing:-.3}}>Timeline de marcos</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Registro de visitas, reuniões, materiais, feiras e eventos.</div>
+      </div>
+      {canEdit&&!adding&&<button onClick={function(){setAdding(true);}}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+        + Adicionar marco
+      </button>}
+    </div>
+
+    {/* Form de novo marco */}
+    {adding&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:18,display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 180px",gap:10}}>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Título</div>
+          <input value={form.title} onChange={function(e){setForm(Object.assign({},form,{title:e.target.value}));}} placeholder="Ex: Visita técnica em Chapecó"
+            style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 12px",fontSize:13,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}} autoFocus/>
+        </div>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Data</div>
+          <input type="date" value={form.date} onChange={function(e){setForm(Object.assign({},form,{date:e.target.value}));}}
+            style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 12px",fontSize:13,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+        </div>
+      </div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Tipo</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {MARCO_TYPES.map(function(t){
+            const active=form.type===t.id;
+            return <button key={t.id} onClick={function(){setForm(Object.assign({},form,{type:t.id}));}}
+              style={{background:active?t.bg:"#f8fafc",color:active?t.color:"#64748b",border:"1px solid "+(active?t.color+"55":"#e2e8f0"),borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>;
+          })}
+        </div>
+      </div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Descrição <span style={{color:"#cbd5e1",fontWeight:500,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
+        <textarea value={form.description} onChange={function(e){setForm(Object.assign({},form,{description:e.target.value}));}} rows={3} placeholder="Detalhes do que foi feito..."
+          style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 12px",fontSize:13,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box",resize:"vertical"}}/>
+      </div>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <button onClick={function(){setAdding(false);}}
+          style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={handleAdd} disabled={!form.title.trim()}
+          style={{background:form.title.trim()?"#7c3aed":"#cbd5e1",color:"#fff",border:"none",borderRadius:9,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:form.title.trim()?"pointer":"not-allowed",fontFamily:"inherit"}}>Salvar marco</button>
+      </div>
+    </div>}
+
+    {/* Lista vertical de marcos */}
+    {marcos.length===0&&!adding&&<div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:14,padding:40,textAlign:"center"}}>
+      <div style={{color:"#0f172a",fontWeight:600,fontSize:14}}>Nenhum marco registrado</div>
+      <div style={{color:"#64748b",fontSize:12,marginTop:4}}>Comece adicionando uma visita, reunião ou evento.</div>
+    </div>}
+
+    {marcos.length>0&&<div style={{position:"relative",paddingLeft:isMobOrCompact()?20:32}}>
+      {/* Linha vertical contínua */}
+      <div style={{position:"absolute",left:isMobOrCompact()?7:11,top:8,bottom:8,width:2,background:"#e2e8f0",borderRadius:99}}/>
+      {yms.map(function(ym){
+        return <div key={ym} style={{marginBottom:18}}>
+          <div style={{position:"sticky",top:0,background:"#fafbfc",zIndex:1,marginLeft:-12,padding:"4px 12px",borderRadius:8,marginBottom:8,display:"inline-block"}}>
+            <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7}}>{fmtMonthLabel(ym)}</span>
+          </div>
+          {grouped[ym].map(function(m){
+            const tc=getMarcoTypeConfig(m.type);
+            const u=(typeof TEAM!=="undefined")?TEAM.find(function(t){return t.id===m.author;}):null;
+            return <div key={m.id} style={{position:"relative",marginBottom:14}}>
+              {/* Dot */}
+              <div style={{position:"absolute",left:isMobOrCompact()?-18:-26,top:14,width:16,height:16,borderRadius:"50%",background:tc.color,border:"3px solid #fff",boxShadow:"0 0 0 2px "+tc.color+"33"}}/>
+              <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px",transition:"all .12s"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:m.description?6:0}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      <span style={{background:tc.bg,color:tc.color,fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,textTransform:"uppercase",letterSpacing:.5}}>{tc.label}</span>
+                      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>{fmtDateBR(m.date)}</span>
+                      {u&&<span style={{color:"#64748b",fontSize:11,fontWeight:500}}>· por {u.name}</span>}
+                    </div>
+                    <div style={{color:"#0f172a",fontWeight:600,fontSize:14,marginTop:5,lineHeight:1.35}}>{m.title}</div>
+                    {m.description&&<div style={{color:"#475569",fontSize:12.5,marginTop:6,whiteSpace:"pre-wrap",lineHeight:1.5}}>{m.description}</div>}
+                  </div>
+                  {canEdit&&<button onClick={function(){handleDelete(m.id);}}
+                    title="Excluir marco"
+                    style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:14,padding:"2px 6px",fontFamily:"inherit",borderRadius:6,flexShrink:0,transition:"color .12s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+                    onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>✕</button>}
+                </div>
+              </div>
+            </div>;
+          })}
+        </div>;
+      })}
+    </div>}
+  </div>;
+}
+// helper local pra detectar mobile/sidebar colapsada
+function isMobOrCompact(){
+  try{return typeof window!=="undefined"&&window.innerWidth<640;}catch(e){return false;}
+}
+
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   let TASKS=tasks||[];
   cl=getLiveClient(cl.id)||cl;
@@ -8736,9 +8924,10 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   })();
 
   let TABS=[
-    {id:"analises",    label:"📊 Análises"},
-    {id:"evolucao",    label:"📈 Evolução"},
-    {id:"briefing",    label:"📋 Briefing"},
+    {id:"analises",    label:"Análises"},
+    {id:"timeline",    label:"Timeline"},
+    {id:"evolucao",    label:"Evolução"},
+    {id:"briefing",    label:"Briefing"},
     {id:"ferramentas", label:"Ferramentas"},
     {id:"info",        label:"Informações"},
     ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
@@ -8902,6 +9091,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
 
     {/* CONTEÚDO */}
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob}/>}
+    {tab==="timeline"&&<CClienteTimeline cl={cl} canEdit={isSocio||myPerms.editarBriefing||myPerms.editarEvolucao}/>}
     {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
