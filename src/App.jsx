@@ -25482,8 +25482,17 @@ export default function AgencyOS(){
             <button onClick={()=>{
               if(sideCollapsed&&!isMob){setSideCollapsed(false);try{localStorage.setItem("pixels-sidebar-collapsed","0");}catch(e){}
               if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,sidebar_collapsed:false},{onConflict:"user_id"}).then(()=>{}).catch(()=>{});}
-              if(hasChildren){setExpanded(p=>({...p,[n.id]:!isExpanded}));if(!isExpanded)nav(n.children[0].id);}
-              else nav(n.id);
+              if(hasChildren){
+                // Pai: toggle SÓ esse, fecha todos os outros (accordion behavior)
+                setExpanded(function(){return {[n.id]:!isExpanded};});
+                if(!isExpanded)nav(n.children[0].id);
+              } else {
+                // Folha sem children: ao navegar, fecha qualquer pai expandido
+                // que não contenha a página atual (ex: muda de "Aprovação de copys"
+                // pra "Gestão de mídia" → fecha o submenu de Aprovações).
+                setExpanded({});
+                nav(n.id);
+              }
             }}
             title={sideCollapsed&&!isMob?n.label:undefined}
             style={{width:"100%",display:"flex",alignItems:"center",justifyContent:sideCollapsed&&!isMob?"center":"space-between",padding:"9px 8px",borderRadius:10,border:"none",background:btnBg,color:btnColor,cursor:"pointer",fontWeight:isActive?700:500,fontSize:12,marginBottom:2,textAlign:"left",transition:"all .15s"}}>
@@ -25575,13 +25584,7 @@ export default function AgencyOS(){
         <button onClick={()=>setSideOpen(true)} aria-label="Mais opções"
           style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"6px 2px",color:"#64748b",transition:"color .15s",minHeight:56}}>
           <div style={{borderRadius:10,padding:"4px 12px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="1"/>
-            <circle cx="19" cy="12" r="1"/>
-            <circle cx="12" cy="12" r="1"/>
-            <circle cx="19" cy="12" r="1"/>
-            <circle cx="5" cy="12" r="1"/>
-          </svg>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
           </div>
           <span style={{fontSize:10,fontWeight:500,lineHeight:1,letterSpacing:-.1}}>Mais</span>
         </button>
