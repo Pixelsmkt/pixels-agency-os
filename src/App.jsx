@@ -10194,8 +10194,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                     {dayTasks.slice(0,isMob?2:3).map(t=>{
                       const cl=CLIENTS.find(c=>c.id===t.client);
                       const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
-                      // Cor do card baseada no STATUS (laranja/verde/roxo)
+                      // Card usa cor do CLIENTE (ou unidade Bioter). Status vira indicador (dot + borda).
                       const pubColor=getPubColor(t.status);
+                      const cardColor=unit?unit.color:(cl?cl.color:"#475569");
                       const isDragging=dragTaskId===t.id;
                       // Ícone moderno por tipo
                       const tipo=t.tipo||"";
@@ -10208,34 +10209,37 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                           onDragStart={function(e){setDragTaskId(t.id);if(e.dataTransfer)e.dataTransfer.effectAllowed="move";}}
                           onDragEnd={function(){setDragTaskId(null);setDropDayId(null);}}
                           style={{
-                            background:pubColor.bg,
-                            borderLeft:`4px solid ${pubColor.bg}`,
-                            borderRadius:6,
-                            padding:"6px 8px",
+                            background:cardColor,
+                            borderLeft:`3px solid ${pubColor.bg}`,
+                            borderRadius:7,
+                            padding:"7px 9px",
                             cursor:isDragging?"grabbing":"grab",
                             opacity:isDragging?0.4:1,
-                            transition:"all .1s",
-                            boxShadow:"0 1px 3px rgba(0,0,0,0.08)",
+                            transition:"all .12s",
+                            boxShadow:"0 1px 3px rgba(0,0,0,0.12)",
                             flexShrink:0,
+                            position:"relative",
                           }}
-                          onMouseEnter={e=>{if(!isDragging){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 3px 8px rgba(0,0,0,0.15)";}}}
-                          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.08)";}}>
+                          onMouseEnter={e=>{if(!isDragging){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 10px rgba(0,0,0,0.18)";}}}
+                          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.12)";}}>
 
-                          {/* Título com ícone de tipo */}
+                          {/* Título com ícone de tipo + status dot */}
                           <div style={{display:"flex",alignItems:"center",gap:6}}>
                             {(isVid||isArte||isFoto)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.95}}>
                               {isVid&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#fff"/></svg>}
                               {isArte&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#fff"/><polyline points="21 15 16 10 5 21"/></svg>}
                               {isFoto&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
                             </span>}
-                            <div style={{color:"#fff",fontSize:isMob?11:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,flex:1,minWidth:0}}>
+                            <div style={{color:"#fff",fontSize:isMob?11:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,flex:1,minWidth:0,textShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
                               {t.title}
                             </div>
+                            {/* Status dot — laranja/verde/roxo */}
+                            <span title={pubColor.label||t.status} style={{width:10,height:10,borderRadius:"50%",background:pubColor.bg,border:"2px solid #fff",flexShrink:0,boxShadow:"0 0 0 1px rgba(0,0,0,0.08)"}}/>
                           </div>
 
                           {/* Cliente / unidade Bioter */}
-                          {cl&&<div style={{color:"#fff",fontSize:isMob?10:11,fontWeight:600,whiteSpace:"nowrap",opacity:0.92,marginTop:3,overflow:"hidden",textOverflow:"ellipsis"}}>
-                            {unit?unit.label.split("/")[0]:cl.abbr}
+                          {cl&&<div style={{color:"#fff",fontSize:isMob?10:11,fontWeight:600,whiteSpace:"nowrap",opacity:0.95,marginTop:4,overflow:"hidden",textOverflow:"ellipsis",letterSpacing:.1}}>
+                            {unit?unit.label.split("/")[0]:cl.name}
                           </div>}
                         </div>
                       );
@@ -10329,24 +10333,44 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 }
 }
 }
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para "Publicações" e defina a data.`
+            }
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal do card ── */}
+      {openCard&&(
+        <CardModal
+          task={openCard}
+          tasks={tasks}
+          setTasks={setTasks}
+          onClose={()=>setOpenCard(null)}
+          currentUser={CURRENT_USER}
+          cardPerms={{verBriefingCard:true}}
+        />
+      )}
+    </div>
+  );
+}
+div>
+  );
+}
+}
 
 // ======= 04_demandas.jsx =======
 
 // Dropdown de filtro — definido fora do render para manter estado entre renders
 function KanbanDropdown({label,icon,active,children}){
   const [open,setOpen]=useState(false);
-  return <div style={{position:"relative",fontFamily:"'Inter',system-ui,sans-serif"}}>
+  return <div style={{position:"relative"}}>
     <button onMouseDown={e=>{e.stopPropagation();setOpen(v=>!v);}}
-      style={{display:"inline-flex",alignItems:"center",gap:7,background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:`1px solid ${active?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",fontFamily:"inherit"}}
-      onMouseEnter={e=>{if(!active){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#f8fafc";}}}
-      onMouseLeave={e=>{if(!active){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
-      {icon&&<span style={{display:"flex",alignItems:"center",color:active?"#fff":"#64748b"}}>{icon}</span>}
-      <span>{label}</span>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.6,transform:open?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+      style={{display:"flex",alignItems:"center",gap:6,background:active?C.a:C.card,color:active?"#fff":C.ts,border:`1px solid ${active?C.a:C.b1}`,borderRadius:20,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",boxShadow:active?"0 2px 8px rgba(161,64,255,0.3)":"none"}}>
+      {icon&&<span>{icon}</span>}{label}<span style={{fontSize:9,marginLeft:2}}>{open?"▲":"▼"}</span>
     </button>
     {open&&<>
       <div style={{position:"fixed",inset:0,zIndex:98}} onMouseDown={()=>setOpen(false)}/>
-      <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"6px 0",zIndex:99,minWidth:200,boxShadow:"0 8px 24px rgba(15,23,42,0.12)",fontFamily:"inherit"}} onMouseDown={e=>e.stopPropagation()}>
+      <div style={{position:"absolute",top:"calc(100% + 6px)",left:0,background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"6px 0",zIndex:99,minWidth:180,boxShadow:"0 8px 24px rgba(0,0,0,0.2)"}} onMouseDown={e=>e.stopPropagation()}>
         {children(()=>setOpen(false))}
       </div>
     </>}
@@ -10880,96 +10904,37 @@ function ScanModal({tasks,onClose,onFilter}){
 
 /* ─── QUICK CREATE — seletor rápido de responsável ─── */
 function QuickCreateBody({onConfirm,onCancel}){
-  // Mapeamento local de "setor" — sobrescreve u.role só dentro desse modal.
-  // Mantém u.role intocado pra não afetar dashboards, acessos, etc.
-  // Erick é excluído (Gestão de mídia tem aba separada — não cria demanda comum).
-  const SECTOR_BY_ID={
-    vinicius:"Gestão de projetos",
-    gustavo:"Gestão",
-    ellen:"Estratégia",
-    andre:"Design",
-    guilherme:"Edição de vídeo",
-  };
-  const list=TEAM.filter(u=>u.id!=="erick");
   const [title,setTitle]=useState("Nova Demanda");
-  const [selectedId,setSelectedId]=useState(list[0].id);
-  // Hover-preview: depois de ~350ms parado em cima da foto, mostra preview ampliado
-  // ao lado do item (à esquerda do modal pra não escapar pela direita).
-  const [hoverId,setHoverId]=useState(null);
-  const hoverTimerRef=useRef(null);
-  // ESC fecha o modal — listener inline (pra evitar referência circular ao hook).
-  useEffect(function(){
-    function h(e){if(e.key==="Escape"&&typeof onCancel==="function"){e.stopPropagation();onCancel();}}
-    window.addEventListener("keydown",h);
-    return function(){window.removeEventListener("keydown",h);};
-  },[onCancel]);
-  const startHover=function(uid){
-    if(hoverTimerRef.current)clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current=setTimeout(function(){setHoverId(uid);},350);
-  };
-  const cancelHover=function(){
-    if(hoverTimerRef.current){clearTimeout(hoverTimerRef.current);hoverTimerRef.current=null;}
-    setHoverId(null);
-  };
-  useEffect(function(){return function(){if(hoverTimerRef.current)clearTimeout(hoverTimerRef.current);};},[]);
+  const [selectedId,setSelectedId]=useState(TEAM[0].id);
+  const colabs=TEAM.filter(u=>u.level>=2); // colaboradores (não sócios)
   return <div>
-    <div style={{marginBottom:16}}>
-      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:7}}>Título</div>
+    <div style={{marginBottom:14}}>
+      <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Título</div>
       <input value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&selectedId)onConfirm(selectedId,title);}}
-        style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",boxSizing:"border-box",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .15s"}}
-        onFocus={e=>e.currentTarget.style.borderColor="#7c3aed"}
-        onBlur={e=>e.currentTarget.style.borderColor="#e2e8f0"}
+        style={{width:"100%",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}
         autoFocus/>
     </div>
     <div style={{marginBottom:18}}>
-      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Responsável</div>
-      <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:340,overflowY:"auto",paddingRight:2}}>
-        {list.map(u=>{
-          const isSel=selectedId===u.id;
-          const sector=SECTOR_BY_ID[u.id]||u.role;
-          const isHover=hoverId===u.id;
-          const photo=getProfilePhoto(u.id);
-          return <div key={u.id} onClick={()=>setSelectedId(u.id)}
-            style={{display:"flex",alignItems:"center",gap:11,padding:"9px 12px",borderRadius:11,border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,background:isSel?"#f5f3ff":"#fff",cursor:"pointer",transition:"all .12s",boxShadow:isSel?"0 0 0 3px #7c3aed1f":"none",position:"relative"}}>
-            {/* Avatar — com handlers de hover-preview */}
-            <div
-              onMouseEnter={()=>startHover(u.id)}
-              onMouseLeave={cancelHover}
-              style={{position:"relative",flexShrink:0,cursor:"zoom-in"}}>
-              <UserAvatar user={u} size={36}/>
-              {/* Preview ampliado — aparece à esquerda do item após 350ms de hover */}
-              {isHover&&<div style={{position:"absolute",top:"50%",right:"calc(100% + 14px)",transform:"translateY(-50%)",background:"#fff",borderRadius:14,padding:14,boxShadow:"0 16px 40px rgba(15,23,42,0.22), 0 4px 10px rgba(15,23,42,0.08)",display:"flex",flexDirection:"column",alignItems:"center",gap:8,zIndex:1000,pointerEvents:"none",minWidth:160,animation:"none"}}>
-                {/* Foto grande circular */}
-                {photo
-                  ?<img src={photo} alt={u.name} style={{width:120,height:120,borderRadius:"50%",objectFit:"cover",boxShadow:"0 4px 10px rgba(0,0,0,0.12)"}}/>
-                  :<div style={{width:120,height:120,borderRadius:"50%",background:u.color||"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:48,boxShadow:"0 4px 10px rgba(0,0,0,0.12)"}}>{u.av||u.name.charAt(0).toUpperCase()}</div>
-                }
-                <div style={{textAlign:"center"}}>
-                  <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>{u.name}</div>
-                  <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>{sector}</div>
-                </div>
-                {/* Seta apontando pra avatar */}
-                <div style={{position:"absolute",top:"50%",left:"100%",transform:"translateY(-50%)",width:0,height:0,borderTop:"8px solid transparent",borderBottom:"8px solid transparent",borderLeft:"8px solid #fff",filter:"drop-shadow(2px 0 2px rgba(15,23,42,0.08))"}}/>
-              </div>}
+      <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Responsável</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {TEAM.map(u=>(
+          <div key={u.id} onClick={()=>setSelectedId(u.id)}
+            style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,border:`2px solid ${selectedId===u.id?u.color:C.b1}`,background:selectedId===u.id?u.color+"18":C.s1,cursor:"pointer",transition:"all .15s"}}>
+            <div style={{width:30,height:30,borderRadius:9,background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:13,flexShrink:0}}>{u.av}</div>
+            <div>
+              <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{u.name}</div>
+              <div style={{color:C.ts,fontSize:11}}>{u.role}</div>
             </div>
-            <div style={{minWidth:0,flex:1}}>
-              <div style={{color:"#0f172a",fontWeight:600,fontSize:13,lineHeight:1.2}}>{u.name}</div>
-              <div style={{color:"#64748b",fontSize:11,fontWeight:500,marginTop:2}}>{sector}</div>
-            </div>
-            {isSel&&<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
-          </div>;
-        })}
+            {selectedId===u.id&&<div style={{marginLeft:"auto",color:u.color,fontWeight:800}}>✓</div>}
+          </div>
+        ))}
       </div>
     </div>
     <div style={{display:"flex",gap:8}}>
-      <button onClick={onCancel} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:10,padding:"11px 0",color:"#64748b",cursor:"pointer",fontWeight:600,fontSize:13,transition:"background .12s"}}
-        onMouseEnter={e=>e.currentTarget.style.background="#e2e8f0"}
-        onMouseLeave={e=>e.currentTarget.style.background="#f1f5f9"}>Cancelar</button>
+      <button onClick={onCancel} style={{flex:1,background:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:13}}>Cancelar</button>
       <button onClick={()=>onConfirm(selectedId,title)} disabled={!selectedId||!title.trim()}
-        style={{flex:2,background:selectedId&&title.trim()?"#7c3aed":"#cbd5e1",border:"none",borderRadius:10,padding:"11px 0",color:"#fff",cursor:selectedId&&title.trim()?"pointer":"not-allowed",fontWeight:700,fontSize:13,transition:"background .12s"}}
-        onMouseEnter={e=>{if(selectedId&&title.trim())e.currentTarget.style.background="#6d28d9";}}
-        onMouseLeave={e=>{if(selectedId&&title.trim())e.currentTarget.style.background="#7c3aed";}}>
-        Criar demanda
+        style={{flex:2,background:selectedId?`linear-gradient(135deg,${TEAM.find(u=>u.id===selectedId)?.color||C.a},${C.aD})`:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:"#fff",cursor:"pointer",fontWeight:800,fontSize:13}}>
+        Criar Demanda
       </button>
     </div>
   </div>;
@@ -11002,7 +10967,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [viewMode,setViewMode]=useState("cartao");
   const [filterUser,setFilterUser]=useState("todos");
   const [filterSector,setFilterSector]=useState("todos_setores");
-  const [searchTerm,setSearchTerm]=useState("");
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   // Filtro de etiqueta interna (só sócios). Array de strings — multi-select.
@@ -11085,37 +11049,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [showPixelsIA,setShowPixelsIA]=useState(false);
   const [editingColId,setEditingColId]=useState(null);
   const [editingColLabel,setEditingColLabel]=useState("");
-  // ── Menu ⋯ por coluna (header) + ordenação por data de publicação ──
-  // colMenuOpen: id da coluna com menu aberto, ou null
-  // colSortMode: { [col.id]: "pubAsc"|"pubDesc" } — sobrescreve sortMode global SÓ naquela coluna
-  // Sem entrada = usa o sortMode global. Persiste em localStorage.
-  const [colMenuOpen,setColMenuOpen]=useState(null);
-  const [colSortMode,setColSortMode]=useState(function(){
-    try{const raw=localStorage.getItem("pixels-col-sortmode-v1");if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return p;}}catch(e){}
-    return{};
-  });
-  useEffect(function(){try{localStorage.setItem("pixels-col-sortmode-v1",JSON.stringify(colSortMode));}catch(e){}},[colSortMode]);
-  // Comparador por data de publicação (publishDate); cards sem data vão pro final.
-  const compareByPublishDate=function(a,b,asc){
-    const pa=a.publishDate||a.publish_date;
-    const pb=b.publishDate||b.publish_date;
-    if(!pa&&!pb)return 0;
-    if(!pa)return 1;  // sem data sempre depois
-    if(!pb)return -1;
-    const ta=new Date(typeof pa==="string"&&pa.length===10?pa+"T00:00:00":pa).getTime();
-    const tb=new Date(typeof pb==="string"&&pb.length===10?pb+"T00:00:00":pb).getTime();
-    if(isNaN(ta)&&isNaN(tb))return 0;
-    if(isNaN(ta))return 1;
-    if(isNaN(tb))return -1;
-    return asc?(ta-tb):(tb-ta);
-  };
   const [cols,setCols]=useState(()=>{
     // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
-    // Versão atual: v6 (mescla Agendado+Publicado em "Publicações" + swap cores Copys/Publicações)
-    const COLS_VERSION="v6-publicacoes";
-    // IDs descontinuados — colunas que existiam em versões antigas e devem ser DESCARTADAS no rebuild.
-    // (sem isso, a self-heal defensiva trata como "custom" e mantém visível indevidamente)
-    const DEPRECATED_COL_IDS=new Set(["publicado"]);
+    // Versão atual: v4 (cor vinho na coluna Ajustes)
+    const COLS_VERSION="v5-rascunhos";
     try{
       const savedVersion=localStorage.getItem("pixels-cols-version");
       if(savedVersion!==COLS_VERSION){
@@ -11127,7 +11064,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             const parsed=JSON.parse(saved);
             if(Array.isArray(parsed)){
               const officialIds=new Set(KANBAN_COLS.map(k=>k.id));
-              customCols=parsed.filter(p=>!officialIds.has(p.id)&&!DEPRECATED_COL_IDS.has(p.id));
+              customCols=parsed.filter(p=>!officialIds.has(p.id));
             }
           }
         }catch(e){}
@@ -11138,15 +11075,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       if(saved){
         const parsed=JSON.parse(saved);
         if(Array.isArray(parsed)&&parsed.length>0){
-          // Limpa primeiro qualquer coluna deprecada (publicado → Publicações)
-          const cleaned=parsed.filter(c=>!DEPRECATED_COL_IDS.has(c.id));
           // Self-heal defensivo: garante cols oficiais presentes
-          const savedIds=new Set(cleaned.map(c=>c.id));
+          const savedIds=new Set(parsed.map(c=>c.id));
           const missing=KANBAN_COLS.filter(k=>!savedIds.has(k.id));
-          if(missing.length===0)return cleaned;
+          if(missing.length===0)return parsed;
           // Insere as missing nas posições canônicas em vez de só apender no final
           const officialIds=new Set(KANBAN_COLS.map(k=>k.id));
-          const customCols=cleaned.filter(p=>!officialIds.has(p.id));
+          const customCols=parsed.filter(p=>!officialIds.has(p.id));
           return [...KANBAN_COLS,...customCols];
         }
       }
@@ -11170,10 +11105,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
   // ── myPerms — usa perms prop (effectivePerms do AgencyOS) ──
   // Fallback: ACCESS_STORE do usuário ativo (nunca DEFAULT_PERMS puro)
-  // Sócios (level 1) sempre recebem PARTNER_PERMS via withPartnerOverride, garantindo
-  // acesso total mesmo se livePerms tiver algo desmarcado por engano.
-  const myPermsRaw=perms||(ACCESS_STORE[activeUserId]?{...DEFAULT_PERMS,...ACCESS_STORE[activeUserId]}:DEFAULT_PERMS);
-  const myPerms=withPartnerOverride(myPermsRaw,activeUserId);
+  const myPerms=perms||(ACCESS_STORE[activeUserId]?{...DEFAULT_PERMS,...ACCESS_STORE[activeUserId]}:DEFAULT_PERMS);
 
   const canPixelsIA   = myPerms.pixelsIA;
   const canEscanear   = myPerms.escanear;
@@ -11190,7 +11122,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const nowFmt=now.toLocaleDateString("pt-BR")+` às ${now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`;
     const respId=assigneeId||activeUserId;
     const newTask={
-      id:mkId(),title:smartFormatTitle(titleStr||"Nova Demanda"),desc:"",
+      id:mkId(),title:titleStr||"Nova Demanda",desc:"",
       assignee:respId,assignees:[respId],watchers:[],
       client:"",sector:"",priority:"",status:colId,
       startDate:now.toISOString().split("T")[0],
@@ -11287,48 +11219,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     return false;
   };
 
-  // Domínio do colaborador freelancer (pagamento por demanda):
-  // Editor de vídeo (dash==="editor") vê TODOS os cards tipo Vídeo, mesmo sem estar marcado.
-  // Designer (dash==="designer") vê TODOS os cards tipo Arte/Carrossel/Foto, mesmo sem estar marcado.
-  // Assim Guilherme/André veem o histórico completo do trabalho deles (incl. aprovados/agendados/publicados).
-  const isMyDomain=(t)=>{
-    if(isMyTask(t))return true;
-    if(activeUser.dash==="editor"&&t.contentType==="video")return true;
-    if(activeUser.dash==="designer"&&(t.contentType==="arte"||t.contentType==="carrossel"||t.contentType==="foto"))return true;
-    return false;
-  };
-
-  const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
-    // Admin/sócio vê tudo; colaborador só vê os seus (ou do seu domínio se freelancer)
-    if(!isAdmin&&!isMyDomain(t))return false;
-    // Busca: case-insensitive substring em título, nome do cliente, e label de unidade Bioter (CSV)
-    if(_searchTermNorm){
-      const haystack=[];
-      haystack.push(String(t.title||"").toLowerCase());
-      const cl=CLIENTS.find(c=>c.id===t.client);
-      if(cl){
-        haystack.push(String(cl.name||"").toLowerCase());
-        if(cl.abbr)haystack.push(String(cl.abbr).toLowerCase());
-      }
-      // Unidades Bioter (CSV: "castro,chapeco" / "grupo" / "brasil")
-      const unitIds=String(t.bioterUnit||"").split(",").filter(Boolean);
-      unitIds.forEach(uid=>{
-        if(uid==="grupo")haystack.push("grupo bioter");
-        else if(uid==="brasil")haystack.push("bioter brasil");
-        else{
-          const u=BIOTER_UNITS.find(x=>x.id===uid);
-          if(u){
-            haystack.push(String(u.pickerLabel||"").toLowerCase());
-            haystack.push(String(u.label||"").toLowerCase());
-            haystack.push(String(u.abbr||"").toLowerCase());
-          }
-        }
-      });
-      const match=haystack.some(h=>h.includes(_searchTermNorm));
-      if(!match)return false;
-    }
+    // Admin/sócio vê tudo; colaborador só vê os seus
+    if(!isAdmin&&!isMyTask(t))return false;
     if(filterUser!=="todos"&&t.assignee!==filterUser&&!(Array.isArray(t.assignees)&&t.assignees.includes(filterUser)))return false;
     if(filterSector!=="todos_setores"&&t.sector!==filterSector)return false;
     if(filterClient!=="todos"&&t.client!==filterClient)return false;
@@ -11494,10 +11388,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   return <>
     {showPixelsIA&&<PixelsIAModal onClose={()=>setShowPixelsIA(false)} setTasks={setTasks} tasks={tasks}/>}
     {showScan&&<ScanModal tasks={tasks} onClose={()=>setShowScan(false)} onFilter={seg=>{setViewMode("lista");}}/>}
-    {quickCreate&&<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}} onMouseDown={e=>{if(e.target===e.currentTarget)setQuickCreate(null);}}>
-      <div onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:420,boxShadow:"0 24px 64px rgba(15,23,42,0.28), 0 4px 12px rgba(15,23,42,0.10)"}}>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:18,letterSpacing:-.3,marginBottom:4}}>Nova demanda</div>
-        <div style={{color:"#64748b",fontSize:13,marginBottom:18}}>Selecione o responsável antes de criar</div>
+    {quickCreate&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setQuickCreate(null)}>
+      <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:20,padding:24,width:"100%",maxWidth:380,boxShadow:"0 24px 64px rgba(0,0,0,0.4)"}}>
+        <div style={{color:C.tx,fontWeight:800,fontSize:16,marginBottom:4}}>Nova Demanda</div>
+        <div style={{color:C.ts,fontSize:12,marginBottom:16}}>Selecione o responsável antes de criar</div>
         <QuickCreateBody colId={quickCreate.colId} extraProps={quickCreate.extraProps} onConfirm={(assigneeId,title)=>{setQuickCreate(null);createTask(quickCreate.colId,assigneeId,title,quickCreate.extraProps);}} onCancel={()=>setQuickCreate(null)}/>
       </div>
     </div>}
@@ -11550,103 +11444,96 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>
     </div>}
 
-    <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
       {/* header */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Fluxo de demandas</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
-            {visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length} abertas
-            <span style={{color:"#cbd5e1",margin:"0 6px"}}>·</span>
-            {trash.length} na lixeira
-          </div>
+          <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>Demandas</div>
+          <div style={{color:C.ts,fontSize:12,marginTop:3}}>{visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length} abertas · {trash.length} na lixeira</div>
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          {/* SEARCH input — pesquisar cards por título */}
-          <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </span>
-            <input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Buscar demanda..."
-              style={{background:"#fff",border:`1px solid ${searchTerm?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"7px 30px 7px 30px",fontSize:12,fontWeight:500,color:"#0f172a",outline:"none",width:200,transition:"border-color .15s",fontFamily:"inherit"}}/>
-            {searchTerm&&<button onClick={()=>setSearchTerm("")} title="Limpar busca"
-              style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
-              onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
-              onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>}
-          </div>
-          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")}
-            style={{background:viewMode==="trash"?"#fee2e2":"#f1f5f9",color:viewMode==="trash"?"#dc2626":"#64748b",border:"none",borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:viewMode==="trash"?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}>
-            <Ico n="trash" size={13}/> Lixeira
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {/* ESCANEAR button — só quem tem permissão */}
+          {canEscanear&&<button onClick={()=>setShowScan(true)}
+            style={{background:`linear-gradient(135deg,${C.or},#ff3300)`,color:"#fff",border:"none",borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.or}60`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3}}>
+            🔥 Escanear
           </button>}
+          {/* PIXELS IA button — só quem tem permissão */}
+          {canPixelsIA&&<button onClick={()=>setShowPixelsIA(true)}
+            style={{background:"#ffffff",color:C.a,border:`2px solid ${C.a}`,borderRadius:10,padding:"6px 16px",fontSize:12,fontWeight:900,cursor:"pointer",boxShadow:`0 4px 20px ${C.a}30`,display:"flex",alignItems:"center",gap:6,letterSpacing:.3,position:"relative"}}>
+            ⚡ Pixels IA
+            <span style={{position:"absolute",top:-6,right:-6,background:C.a,color:"#fff",borderRadius:99,padding:"1px 5px",fontSize:8,fontWeight:900}}>IA</span>
+          </button>}
+          {/* view mode group */}
+          <div style={{display:"flex",background:C.b1,borderRadius:10,padding:3,gap:2}}>
+            {[["cartao","⊞ Cartão"],["lista","☰ Lista"],["calendar","📅 Calendário"]].map(([m,l])=>(
+              <button key={m} onClick={()=>setViewMode(m)} style={{background:viewMode===m?C.a:"transparent",color:viewMode===m?"#fff":C.ts,border:"none",borderRadius:8,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>{l}</button>
+            ))}
+          </div>
+          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")} style={{background:viewMode==="trash"?C.rd+"22":C.b1,color:viewMode==="trash"?C.rd:C.ts,border:`1px solid ${viewMode==="trash"?C.rd+"44":C.b1}`,borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:700,cursor:"pointer"}}>🗑 Lixeira</button>}
           {/* Botão de refresh manual */}
           <button onClick={()=>window.location.reload()} title="Recarregar dados"
-            style={{background:"#f1f5f9",border:"none",borderRadius:10,width:32,height:32,fontSize:14,cursor:"pointer",color:"#64748b",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
-            onMouseEnter={e=>{e.currentTarget.style.background="#e2e8f0";e.currentTarget.style.color="#0f172a";}}
-            onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
-            <Ico n="refresh" size={14}/>
+            style={{background:C.b1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 10px",fontSize:14,cursor:"pointer",color:C.ts,transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
+            onMouseEnter={e=>{e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a;}}
+            onMouseLeave={e=>{e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+            ↻
           </button>
-          {myPerms.criarDemanda&&<button onClick={()=>addNewTask("demanda")}
-            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 2px 8px rgba(15,23,42,0.15)",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}
-            onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
-            onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
-            <Ico n="plus" size={13}/> Nova
+          {myPerms.criarDemanda&&<button onClick={()=>{
+            if(myPerms.novaColuna&&viewMode==="cartao"){setShowNewCol(true);}
+            else{addNewTask("demanda");}
+          }}
+            style={{background:`linear-gradient(135deg,${C.a},${C.aD})`,color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",boxShadow:`0 4px 14px ${C.a}40`}}>
+            {myPerms.novaColuna&&viewMode==="cartao"?"＋ Nova Coluna":"+ Nova"}
           </button>}
         </div>
       </div>
 
-      {/* ── FILTER BAR: Setor | Colaborador | Cliente ── */}
+      {/* ── FILTER BAR: Setor | Perfil | Cliente ── */}
       {viewMode!=="clientes"&&(()=>{
         const canSeeAll=myPerms.verTodosKanban;
         const canSeeSocios=myPerms.verKanbanSocios;
-        // Colaboradores que aparecem no filtro — exclui Erick (gestor de mídia, não faz parte do fluxo de demandas)
-        const FLUXO_USERS=["vinicius","gustavo","ellen","andre","guilherme"];
+        // Se não pode ver todos, só vê o próprio nome (sem dropdown de usuário)
         const allowedUsers=canSeeAll
           ?["todos",...TEAM.filter(u=>{
-              if(!FLUXO_USERS.includes(u.id))return false;
               if(!canSeeSocios&&u.level===1)return false;
               return true;
             }).map(u=>u.id)]
-          :[activeUserId];
+          :[activeUserId]; // só as suas próprias
 
-        // Setores do fluxo de demandas — só Design, Edição de vídeo, Copywriting
         const SETORES=[
           {id:"todos_setores", label:"Todos os setores"},
-          {id:"design",   label:"Design"},
-          {id:"video",    label:"Edição de vídeo"},
-          {id:"texto",    label:"Copywriting"},
+          {id:"video",    label:"Edição de Vídeo", icon:"🎬"},
+          {id:"design",   label:"Design",          icon:"🎨"},
+          {id:"trafego",  label:"Estratégia",      icon:"📊"},
+          {id:"agenda",   label:"Agendamentos",    icon:"📅"},
+          {id:"texto",    label:"Copywriting",     icon:"✍"},
         ];
 
-        return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        return <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
           {/* ── SETOR ── só quem tem filtroSetor */}
-          {myPerms.filtroSetor&&<KanbanDropdown label={filterSector==="todos_setores"?"Setor":SETORES.find(s=>s.id===filterSector)?.label||"Setor"} icon={<Ico n="folder" size={13}/>} active={filterSector!=="todos_setores"}>
+          {myPerms.filtroSetor&&<KanbanDropdown label={filterSector==="todos_setores"?"Setor":SETORES.find(s=>s.id===filterSector)?.label||"Setor"} icon="🗂" active={filterSector!=="todos_setores"}>
             {(close)=>SETORES.map(s=><button key={s.id} onClick={()=>{setFilterSector(s.id);close();}}
-              style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterSector===s.id?C.ag:"transparent",border:"none",color:filterSector===s.id?C.a:C.tx,fontSize:12,fontWeight:filterSector===s.id?700:500,cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
-              {s.label}
-              {filterSector===s.id&&<span style={{marginLeft:"auto",color:C.a}}><Ico n="check" size={12}/></span>}
+              style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:filterSector===s.id?C.ag:"transparent",border:"none",color:filterSector===s.id?C.a:C.tx,fontSize:12,fontWeight:filterSector===s.id?700:500,cursor:"pointer",textAlign:"left"}}>
+              {s.icon&&<span>{s.icon}</span>}{s.label}
+              {filterSector===s.id&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
             </button>)}
           </KanbanDropdown>}
 
-          {/* ── COLABORADOR (antes Perfil) ── com foto de perfil */}
-          {myPerms.filtroPerfil&&canSeeAll&&<KanbanDropdown label={filterUser==="todos"?"Colaborador":TEAM.find(u=>u.id===filterUser)?.name||"Colaborador"} icon={<Ico n="users" size={13}/>} active={filterUser!=="todos"}>
+          {/* ── PERFIL ── só quem tem filtroPerfil e verTodosKanban */}
+          {myPerms.filtroPerfil&&canSeeAll&&<KanbanDropdown label={filterUser==="todos"?"Perfil":TEAM.find(u=>u.id===filterUser)?.name||"Perfil"} icon="👤" active={filterUser!=="todos"}>
             {(close)=>allowedUsers.map(f=>{
               const u=TEAM.find(x=>x.id===f);
               const active=filterUser===f;
               return <button key={f} onClick={()=>{setFilterUser(f);close();}}
-                style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left",fontFamily:"inherit"}}>
-                {f==="todos"
-                  ?<div style={{width:22,height:22,borderRadius:"50%",background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}><Ico n="users" size={11}/></div>
-                  :u&&<UserAvatar user={u} size={22}/>
-                }
+                style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"9px 14px",background:active?C.ag:"transparent",border:"none",color:active?C.a:C.tx,fontSize:12,fontWeight:active?700:500,cursor:"pointer",textAlign:"left"}}>
+                {u&&<div style={{width:20,height:20,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:8,fontWeight:800,flexShrink:0}}>{u.av}</div>}
                 {f==="todos"?"Todos":u?.name||f}
-                {active&&<span style={{marginLeft:"auto",color:C.a}}><Ico n="check" size={12}/></span>}
+                {active&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}
               </button>;
             })}
           </KanbanDropdown>}
 
           {/* ── CLIENTE ── só quem tem filtroCliente */}
-          {myPerms.filtroCliente&&<KanbanDropdown label={filterClient==="todos"?"Cliente":CLIENTS.find(c=>c.id===filterClient)?.abbr||"Cliente"} icon={<Ico n="building" size={13}/>} active={filterClient!=="todos"}>
+          {myPerms.filtroCliente&&<KanbanDropdown label={filterClient==="todos"?"Cliente":CLIENTS.find(c=>c.id===filterClient)?.abbr||"Cliente"} icon="🏢" active={filterClient!=="todos"}>
             {(close)=>[{id:"todos",name:"Todos os clientes",color:C.a},...CLIENTS].map(cl=>{
               const active=filterClient===cl.id;
               return <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");close();}}
@@ -11658,6 +11545,127 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             })}
           </KanbanDropdown>}
 
+          {/* ── ETIQUETAS (Internas + Tags) ── só sócios. Multi-select com checkbox. */}
+          {isAdminUser&&(function(){
+            const adminTagValues=Array.from(new Set((tasks||[]).map(function(x){return((x&&x.adminTag)||"").trim();}).filter(Boolean))).sort();
+            const tagsArrValues=Array.from(new Set(
+              (tasks||[]).flatMap(function(x){return Array.isArray(x&&x.tags)?x.tags:[];}).map(function(t){return(t||"").trim();}).filter(Boolean)
+            )).sort();
+            const totalCount=adminTagValues.length+tagsArrValues.length;
+            const isSem=filterAdminTags.includes("__sem__");
+            const selectedCount=filterAdminTags.length;
+            const labelTxt=selectedCount===0?"Etiqueta":isSem?"Sem etiqueta":selectedCount===1?filterAdminTags[0]:selectedCount+" etiquetas";
+            // Renderiza uma linha clicável estilo checkbox — não fecha o dropdown
+            // count: número de cards dentro do contexto atual que têm essa tag (drill-down)
+            const renderCheckRow=function(opts){
+              const {keyId,label,checked,onClick,chipBg,chipFg,chipBorder,italic,extraStyle,count}=opts;
+              return <button key={keyId} onClick={onClick}
+                style={Object.assign({display:"flex",alignItems:"center",gap:9,width:"100%",padding:"8px 12px",background:checked?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"},extraStyle||{})}
+                onMouseEnter={function(e){if(!checked)e.currentTarget.style.background="#f8fafc";}}
+                onMouseLeave={function(e){if(!checked)e.currentTarget.style.background="transparent";}}>
+                <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(checked?C.a:"#cbd5e1"),background:checked?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {checked&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
+                </span>
+                {chipBg
+                  ?<span style={{background:chipBg,color:chipFg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:chipBorder?"1px solid "+chipBorder:"none"}}>{label}</span>
+                  :<span style={italic?{color:"#94a3b8",fontStyle:"italic"}:undefined}>{label}</span>
+                }
+                {typeof count==="number"&&<span style={{marginLeft:"auto",color:checked?C.a:"#94a3b8",fontSize:10,fontWeight:checked?700:500,flexShrink:0}}>{count}</span>}
+              </button>;
+            };
+            return <KanbanDropdown label={labelTxt} icon="🏷" active={selectedCount>0}>
+              {function(close){return(<>
+                {/* Header: Todas + Limpar (quando há seleção) */}
+                <button onClick={function(){setFilterAdminTags([]);}}
+                  style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,width:"100%",padding:"9px 12px",background:selectedCount===0?C.ag:"transparent",border:"none",color:selectedCount===0?C.a:C.tx,fontSize:12,fontWeight:selectedCount===0?700:500,cursor:"pointer",textAlign:"left"}}>
+                  <span>Todas</span>
+                  {selectedCount>0&&<span style={{color:C.rd,fontSize:10,fontWeight:600}}>limpar</span>}
+                  {selectedCount===0&&<span style={{color:C.a}}>✓</span>}
+                </button>
+
+                {renderCheckRow({
+                  keyId:"__sem__",
+                  label:"Sem etiqueta nem tag",
+                  checked:isSem,
+                  onClick:function(){toggleAdminTag("__sem__");},
+                  italic:true,
+                  extraStyle:{borderTop:"1px solid "+C.b1}
+                })}
+
+                {/* DRILL-DOWN simples: lista plana ordenada por count desc.
+                    Primeira selecionada = "MÃE" (contexto). Seguintes refinam dentro dela. */}
+                {(function(){
+                  const allUsed=Array.from(new Set(adminTagValues.concat(tagsArrValues)));
+                  // Mostra: tags selecionadas (sempre, na ordem) + tags com count > 0
+                  const selectedOrdered=filterAdminTags.filter(function(t){return t!=="__sem__";});
+                  const others=allUsed
+                    .filter(function(t){return selectedOrdered.indexOf(t)===-1&&(tagContextCounts[t]||0)>0;})
+                    .sort(function(a,b){return(tagContextCounts[b]||0)-(tagContextCounts[a]||0);}); // mais usadas primeiro
+                  const motherTag=selectedOrdered[0]||null;
+                  const refinements=selectedOrdered.slice(1);
+                  const renderTagRow=function(tag,isMother){
+                    const isInTags=tagsArrValues.indexOf(tag)!==-1;
+                    const tc=isInTags&&typeof tagColor==="function"?tagColor(tag):{fg:"#64748b"};
+                    return <button key={"t-"+tag} onClick={function(){toggleAdminTag(tag);}}
+                      style={{display:"flex",alignItems:"center",gap:9,width:"100%",padding:"8px 12px",background:filterAdminTags.indexOf(tag)!==-1?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:500,cursor:"pointer",textAlign:"left"}}
+                      onMouseEnter={function(e){if(filterAdminTags.indexOf(tag)===-1)e.currentTarget.style.background="#f8fafc";}}
+                      onMouseLeave={function(e){if(filterAdminTags.indexOf(tag)===-1)e.currentTarget.style.background="transparent";}}>
+                      <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(filterAdminTags.indexOf(tag)!==-1?C.a:"#cbd5e1"),background:filterAdminTags.indexOf(tag)!==-1?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        {filterAdminTags.indexOf(tag)!==-1&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
+                      </span>
+                      <span style={{background:tc.fg+"18",color:tc.fg,borderRadius:4,padding:"2px 8px",fontSize:10,fontWeight:600,border:"1px solid "+tc.fg+"33"}}>{isInTags?"#"+tag:tag}</span>
+                      {isMother&&<span style={{background:C.a,color:"#fff",fontSize:8,fontWeight:700,padding:"1px 6px",borderRadius:99,letterSpacing:.3}}>MÃE</span>}
+                      <span style={{marginLeft:"auto",color:filterAdminTags.indexOf(tag)!==-1?C.a:"#94a3b8",fontSize:10,fontWeight:filterAdminTags.indexOf(tag)!==-1?700:500,flexShrink:0}}>{tagContextCounts[tag]||0}</span>
+                    </button>;
+                  };
+                  return (<>
+                    {/* Breadcrumb: ordem de seleção */}
+                    {motherTag&&<div style={{borderTop:"1px solid "+C.b1,padding:"7px 12px",background:"#faf5ff",fontSize:10,lineHeight:1.5}}>
+                      <div style={{color:"#7c3aed",fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:4}}>
+                        <span>🎯 Refinando dentro de:</span>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",color:"#475569"}}>
+                        <span style={{background:"#7c3aed",color:"#fff",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:600}}>{motherTag}</span>
+                        {refinements.map(function(r){return <span key={r} style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                          <span style={{color:"#94a3b8",fontSize:11}}>→</span>
+                          <span style={{background:"#fff",border:"1px solid "+C.b1,color:"#475569",borderRadius:4,padding:"1px 7px",fontSize:10,fontWeight:600}}>{r}</span>
+                        </span>;})}
+                      </div>
+                    </div>}
+
+                    {/* Tags já selecionadas — sempre visíveis */}
+                    {selectedOrdered.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                      <div style={{padding:"5px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Selecionadas ({selectedOrdered.length})</div>
+                      {selectedOrdered.map(function(tag,idx){return renderTagRow(tag,idx===0);})}
+                    </div>}
+
+                    {/* Demais tags — ordenadas por contagem desc, count > 0 */}
+                    {others.length>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"4px 0"}}>
+                      <div style={{padding:"5px 14px",color:"#94a3b8",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
+                        {motherTag?"Refinar por":"Etiquetas em uso"}
+                      </div>
+                      {others.map(function(tag){return renderTagRow(tag,false);})}
+                    </div>}
+
+                    {selectedOrdered.length===0&&others.length===0&&totalCount===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1,lineHeight:1.5}}>
+                      Nenhuma etiqueta ainda. Abra um cartão e use<br/>
+                      <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
+                    </div>}
+                  </>);
+                })()}
+
+                {totalCount===0&&<div style={{padding:"10px 14px",color:"#94a3b8",fontSize:11,fontStyle:"italic",borderTop:"1px solid "+C.b1,lineHeight:1.5}}>
+                  Nenhuma etiqueta ainda. Abra um cartão e use os campos<br/>
+                  <b>🏷 Etiqueta interna</b> ou <b>🎨 Tags do cartão</b>.
+                </div>}
+
+                {/* Rodapé — só Fechar */}
+                {totalCount>0&&<div style={{borderTop:"1px solid "+C.b1,padding:"6px 12px",display:"flex",justifyContent:"flex-end"}}>
+                  <button onClick={close} style={{background:C.a,color:"#fff",border:"none",borderRadius:6,padding:"5px 14px",fontSize:11,fontWeight:600,cursor:"pointer"}}>Fechar</button>
+                </div>}
+              </>);}}
+            </KanbanDropdown>;
+          })()}
 
           {/* Bioter unit sub-filter */}
           {filterClient==="bioter"&&myPerms.filtroCliente&&<div style={{display:"flex",gap:4,alignItems:"center",flexWrap:"wrap"}}>
@@ -11676,18 +11684,98 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>}
 
           {/* Limpar filtros */}
-          {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos")&&
+          {(filterUser!=="todos"||filterSector!=="todos_setores"||filterClient!=="todos"||(isAdminUser&&filterAdminTags.length>0))&&
             <button onClick={()=>{setFilterUser("todos");setFilterSector("todos_setores");setFilterClient("todos");setFilterBioterUnit("todos");setFilterAdminTags([]);}}
               style={{background:"none",border:"none",color:C.rd,fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8}}>
               × Limpar filtros
             </button>
           }
 
+          {/* Separador + Ordenação */}
+          <div style={{width:1,height:24,background:C.b1,marginLeft:"auto"}}/>
+          <KanbanDropdown
+            label={sortMode==="smart"?"Inteligente":sortMode==="deadline"?"Prazo":sortMode==="recent"?"Recentes":"Manual"}
+            icon="⇅"
+            active={sortMode!=="smart"}>
+            {function(close){return(<>
+              {[
+                {id:"smart",label:"Inteligente",desc:"Urgência → prazo → ordem"},
+                {id:"deadline",label:"Prazo",desc:"Mais próximo primeiro"},
+                {id:"recent",label:"Mais recentes",desc:"Criados por último"},
+                {id:"manual",label:"Manual",desc:"Você arrasta a ordem"},
+              ].map(function(o){
+                const isActive=sortMode===o.id;
+                return(<button key={o.id} onClick={function(){setSortMode(o.id);close();}}
+                  style={{display:"flex",flexDirection:"column",gap:1,padding:"7px 12px",borderRadius:6,border:"none",background:isActive?"#faf5ff":"transparent",cursor:"pointer",textAlign:"left",width:"100%"}}
+                  onMouseEnter={function(e){if(!isActive)e.currentTarget.style.background="#f8fafc";}}
+                  onMouseLeave={function(e){if(!isActive)e.currentTarget.style.background="transparent";}}>
+                  <span style={{color:isActive?C.a:C.tx,fontSize:12,fontWeight:isActive?600:500,display:"flex",alignItems:"center",gap:6}}>{o.label}{isActive&&<span style={{marginLeft:"auto",color:C.a}}>✓</span>}</span>
+                  <span style={{color:C.td,fontSize:10}}>{o.desc}</span>
+                </button>);
+              })}
+            </>);}}
+          </KanbanDropdown>
         </div>;
+      })()}
+
+      {/* ── PROGRESSO DO MÊS — estrategista vê quantas demandas estão em produção vs necessárias por cliente ── */}
+      {viewMode==="cartao"&&(()=>{
+        const now=new Date();
+        const monthStr=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+        const STS=["execucao","ajustes","avaliacao","aprovado","agendado","publicado"];
+        function wks(y,m){let w=0;const last=new Date(y,m,0).getDate();for(let d=1;d<=last;d++){if(new Date(y,m-1,d).getDay()===1)w++;}return w||4;}
+        const weeks=wks(now.getFullYear(),now.getMonth()+1);
+        function req(id){const c=typeof getPostsConfig==="function"?getPostsConfig(id):null;if(!c)return 0;return ((c.arte||0)+(c.video||0)+(c.collab||0))*weeks;}
+        function inMonth(t){if(t.referenceMonth)return t.referenceMonth===monthStr;if(t.publishDate){const d=new Date(t.publishDate);return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();}return true;}
+        const rows=[];
+        CLIENTS.filter(c=>c.id!=="bioter"&&c.status!=="interno").forEach(c=>{const r=req(c.id);const d=tasks.filter(t=>t.client===c.id&&STS.indexOf(t.status)>=0&&inMonth(t)).length;if(r>0||d>0)rows.push({id:c.id,label:c.name,color:c.color,req:r,done:d});});
+        BIOTER_UNITS.forEach(u=>{const r=req(u.id);const d=tasks.filter(t=>t.client==="bioter"&&t.bioterUnit===u.id&&STS.indexOf(t.status)>=0&&inMonth(t)).length;if(r>0||d>0)rows.push({id:"bio_"+u.id,label:u.label.split("/")[0],color:u.color,req:r,done:d});});
+        if(rows.length===0)return null;
+        return(
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",padding:"10px 14px",background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
+            <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginRight:4}}>Progresso do mês</span>
+            {rows.map(r=>{const pct=r.req>0?Math.min(100,Math.round((r.done/r.req)*100)):0;const ok=r.req>0&&r.done>=r.req;const bc=r.color||"#475569";return(
+              <div key={r.id} title={r.label+": "+r.done+" de "+r.req+" demandas"} style={{display:"inline-flex",alignItems:"center",gap:7,padding:"5px 10px",borderRadius:99,background:"#f8fafc",border:"1px solid #e2e8f0"}}>
+                <span style={{width:8,height:8,borderRadius:"50%",background:bc,flexShrink:0}}/>
+                <span style={{color:"#0f172a",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{r.label}</span>
+                <span style={{color:ok?"#16a34a":(r.done>0?"#0f172a":"#94a3b8"),fontSize:11,fontWeight:800,whiteSpace:"nowrap"}}>{r.done}/{r.req||"?"}</span>
+                {r.req>0&&<div style={{width:42,height:5,background:"#e2e8f0",borderRadius:99,overflow:"hidden",flexShrink:0}}><div style={{width:pct+"%",height:"100%",background:ok?"#16a34a":bc,transition:"width .3s"}}/></div>}
+              </div>);})}
+          </div>
+        );
       })()}
 
       {/* ── CARTÃO (Kanban) ── */}
       {viewMode==="cartao"&&<>
+        {/* New Column Modal */}
+        {showNewCol&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setShowNewCol(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:20,padding:28,width:"100%",maxWidth:360,display:"flex",flexDirection:"column",gap:16}}>
+            <div style={{color:C.tx,fontWeight:900,fontSize:18}}>➕ Nova Coluna</div>
+            <div>
+              <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:6}}>Nome da coluna</div>
+              <input value={newColLabel} onChange={e=>setNewColLabel(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCol()}
+                placeholder="Ex: Em Revisão, Aprovado Cliente..."
+                style={{width:"100%",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 14px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box"}}
+                autoFocus/>
+            </div>
+            <div>
+              <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",marginBottom:8}}>Cor da coluna</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {["#a140ff","#ff6eb4","#ffd000","#ff7200","#00e5a0","#4db8ff","#ff3d6b","#cc88ff","#1a0030","#c0001a","#4a8c1c","#ff9500"].map(c=>(
+                  <button key={c} onClick={()=>setNewColColor(c)}
+                    style={{width:32,height:32,borderRadius:8,background:c,border:newColColor===c?"3px solid #fff":"2px solid transparent",cursor:"pointer",boxShadow:newColColor===c?`0 0 10px ${c}90`:"none",transition:"all .15s"}}/>
+                ))}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>setShowNewCol(false)} style={{flex:1,background:C.b1,border:"none",borderRadius:10,padding:"10px 0",color:C.ts,fontWeight:700,cursor:"pointer"}}>Cancelar</button>
+              <button onClick={addCol} disabled={!newColLabel.trim()}
+                style={{flex:2,background:newColLabel.trim()?`linear-gradient(135deg,${newColColor},${newColColor}88)`:"#333",color:"#fff",border:"none",borderRadius:10,padding:"10px 0",fontWeight:900,cursor:newColLabel.trim()?"pointer":"not-allowed",fontSize:14,transition:"all .2s"}}>
+                ✓ Criar Coluna
+              </button>
+            </div>
+          </div>
+        </div>}
 
         {/* Empty state quando não há cartões */}
         {visible.filter(t=>t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado").length===0&&!myPerms.verTodosKanban&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 24px",gap:16,textAlign:"center",background:C.card,borderRadius:16,border:`1px solid ${C.b1}`}}>
@@ -11699,18 +11787,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
         </div>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:10,overflowX:"auto",paddingBottom:8,justifyContent:"center"}}>
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
-          // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
-          // Override por coluna: se colSortMode[col.id] existir, sobrescreve sortMode global.
-          const _colSort=colSortMode[col.id];
-          const colTasks=visible
-            .filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id)
-            .sort((a,b)=>{
-            // Override por coluna — ordenação por data de publicação (asc/desc)
-            if(_colSort==="pubAsc")return compareByPublishDate(a,b,true);
-            if(_colSort==="pubDesc")return compareByPublishDate(a,b,false);
+          const colTasks=visible.filter(t=>t.status===col.id).sort((a,b)=>{
             // Manual: respeita position; quem não tem position vai pro final (cinza)
             if(sortMode==="manual"){
               const pa=a.position??999999,pb=b.position??999999;
@@ -11745,15 +11825,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             onDrop={()=>drag&&moveTask(drag,col.id)}
             onDragLeave={()=>setOver(null)}
             style={{
-              background:isDraggingOver?"#9ca3af":"#d1d5db",
-              borderRadius:12,padding:"5px 5px 6px",
-              maxHeight:"calc(100vh - 240px)",
-              overflow:"hidden",
-              transition:"background .15s",display:"flex",flexDirection:"column",gap:0
+              background:isDraggingOver?"#e2e8f0":"#eef2f7",
+              border:`1px solid ${isDraggingOver?col.color+"55":"#dbe3ec"}`,
+              borderRadius:12,padding:"8px 8px 8px",
+              height:"78vh",maxHeight:680,
+              transition:"all .15s",display:"flex",flexDirection:"column",gap:0
             }}>
 
             {/* Column header — barra colorida no topo, integrada à coluna */}
-            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"12px 12px 0 0",margin:"-5px -5px 6px -5px"}}>
+            <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"10px 10px 0 0",margin:"-8px -8px 8px -8px"}}>
               <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
                 {editingColId===col.id&&canNewCol
                   ? <input value={editingColLabel} onChange={e=>setEditingColLabel(e.target.value)}
@@ -11768,57 +11848,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     </span>
                 }
                 <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600,flexShrink:0}}>{colTasks.length}</span>
-                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"2px 7px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="clock" size={10}/>{colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
+                {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700}}>⏳ {colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
               </div>
-              <div style={{display:"flex",gap:3,alignItems:"center",position:"relative"}}>
-                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><Ico n="x" size={11}/></button>}
-                {/* Menu ⋯ — ordenação por data de publicação. Visual: minimal, sem fundo,
-                    ícone SVG real (não emoji), hover suave. Fica destacado quando há ordem ativa. */}
-                {(function(){
-                  const hasOverride=!!colSortMode[col.id];
-                  return <button
-                    onClick={e=>{e.stopPropagation();setColMenuOpen(colMenuOpen===col.id?null:col.id);}}
-                    title="Opções da coluna"
-                    style={{background:hasOverride?"rgba(255,255,255,0.22)":"transparent",border:"none",borderRadius:6,width:22,height:22,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,transition:"background .15s"}}
-                    onMouseEnter={e=>{if(!hasOverride)e.currentTarget.style.background="rgba(255,255,255,0.18)";}}
-                    onMouseLeave={e=>{if(!hasOverride)e.currentTarget.style.background="transparent";}}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
-                  </button>;
-                })()}
-                {colMenuOpen===col.id&&(function(){
-                  const opts=[
-                    {id:null,    label:"Ordenação padrão",                  hint:"Inteligente / Prazo / Manual"},
-                    {id:"pubAsc",label:"Data de publicação (mais próxima)", hint:"Cards com data primeiro"},
-                    {id:"pubDesc",label:"Data de publicação (mais distante)",hint:"Cards mais distantes primeiro"},
-                  ];
-                  const current=colSortMode[col.id]||null;
-                  return <>
-                    {/* Overlay para fechar ao clicar fora */}
-                    <div onClick={()=>setColMenuOpen(null)} style={{position:"fixed",inset:0,zIndex:998}}/>
-                    <div style={{position:"absolute",top:"calc(100% + 8px)",right:0,minWidth:240,background:"#fff",borderRadius:12,boxShadow:"0 12px 32px rgba(15,23,42,0.20), 0 2px 6px rgba(15,23,42,0.08)",padding:6,zIndex:999,fontFamily:"'Inter',system-ui,sans-serif"}}>
-                      <div style={{padding:"8px 12px 6px 12px",color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Ordenar coluna</div>
-                      {opts.map(o=>(
-                        <button key={String(o.id)} onClick={()=>{
-                          setColSortMode(prev=>{const out={...prev};if(o.id===null)delete out[col.id];else out[col.id]=o.id;return out;});
-                          setColMenuOpen(null);
-                        }} style={{display:"flex",width:"100%",alignItems:"center",justifyContent:"space-between",gap:10,background:current===o.id?"#f5f3ff":"transparent",border:"none",borderRadius:8,padding:"9px 12px",color:"#0f172a",cursor:"pointer",textAlign:"left",transition:"background .12s"}}
-                          onMouseEnter={e=>{if(current!==o.id)e.currentTarget.style.background="#f8fafc";}}
-                          onMouseLeave={e=>{if(current!==o.id)e.currentTarget.style.background="transparent";}}>
-                          <div style={{display:"flex",flexDirection:"column",gap:1,minWidth:0,flex:1}}>
-                            <span style={{fontSize:13,fontWeight:current===o.id?600:500,color:current===o.id?"#7c3aed":"#0f172a"}}>{o.label}</span>
-                            <span style={{fontSize:10,color:"#94a3b8",fontWeight:500}}>{o.hint}</span>
-                          </div>
-                          {current===o.id&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
-                        </button>
-                      ))}
-                    </div>
-                  </>;
-                })()}
+              <div style={{display:"flex",gap:3,alignItems:"center"}}>
+                {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",fontSize:11,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>✕</button>}
               </div>
             </div>
 
             {/* Cards — scroll inside column, Trello style */}
-            <div className="pixels-kanban-scroll" style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,paddingLeft:4,paddingRight:4}}>
+            <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1}}>
               {colTasks.map(t=>{
                 const u=TEAM.find(x=>x.id===t.assignee);
                 // Todos os responsáveis (stack de avatares — múltiplas iniciais)
@@ -11829,10 +11867,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const urgLevel=taskUrgencyLevel(t);
                 const hasCover=t.cover;
                 const urgColor=getUrgencyColor(urgLevel);
-                // Pega a ÚLTIMA imagem anexada (mais recente). slice() copia o array
-                // antes de reverter pra não mutar t.files. findLast seria ideal mas
-                // depende de runtime ES2023 — slice+reverse+find é universal.
-                const imgAttachment=(t.files||[]).slice().reverse().find(f=>f.type&&f.type.startsWith("image/"));
+                const imgAttachment=(t.files||[]).find(f=>f.type&&f.type.startsWith("image/"));
                 const thumbUrl=hasCover?hasCover:imgAttachment?imgAttachment.url:null;
                 const isAlteracao=t.status==="alteracao"||t.isAlteracao;
                 const isAjustar=t.ajustar===true&&t.status==="demanda";
@@ -11873,60 +11908,25 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
-                  onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 0 0 1px #7c3aed, 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
-                  onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
-                  {/* Tipo de Conteúdo + Mês de pagamento — badges roxos no TOPO do card */}
-                  {(t.contentType||t.referenceMonth)&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>
-                    {/* Tipo de conteúdo (Arte única/Carrossel/Vídeo/Foto de obra) */}
-                    {t.contentType&&(function(){
-                      const types={
-                        arte:{label:"Arte única",icon:"image"},
-                        carrossel:{label:"Carrossel",icon:"layers"},
-                        video:{label:"Vídeo",icon:"play"},
-                        foto:{label:"Foto de obra",icon:"camera"},
-                      };
-                      const ct=types[t.contentType];
-                      if(!ct)return null;
-                      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          {ct.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
-                          {ct.icon==="layers"&&<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}
-                          {ct.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
-                          {ct.icon==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
-                        </svg>
-                        {ct.label}
-                      </span>;
-                    })()}
-                    {/* Mês de pagamento (formato YYYY-MM → "Mai/26") */}
-                    {t.referenceMonth&&(function(){
-                      const parts=String(t.referenceMonth).split("-");
-                      if(parts.length<2)return null;
-                      const monthNames=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
-                      const mn=monthNames[parseInt(parts[1],10)-1];
-                      const yy=parts[0].slice(-2);
-                      if(!mn)return null;
-                      return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/></svg>
-                        {mn}/{yy}
-                      </span>;
-                    })()}
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:(isAlteracao||isAjustar)?"3px solid #ea580c":"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:isStale?.65:1,userSelect:"none",boxShadow:"0 1px 2px rgba(0,0,0,0.04)",transition:"box-shadow .12s, border-color .12s, opacity .2s",flexShrink:0,filter:isStale?"saturate(0.7)":undefined}}
+                  onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 6px rgba(0,0,0,0.06)"}
+                  onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 2px rgba(0,0,0,0.04)"}>
+                  {/* BARRAS COLORIDAS DE TAGS — só admins veem (criação/visualização restrita) */}
+                  {isAdminUser&&(t.tags||[]).length>0&&<div style={{display:"flex",gap:2,padding:"6px 9px 0"}}>
+                    {(t.tags||[]).slice(0,4).map(tag=>{const tc=tagColor(tag);return <div key={tag} title={"#"+tag} style={{height:5,flex:1,background:tc.fg,borderRadius:2,maxWidth:60}}/>;})}
                   </div>}
-                  {/* (barras de tags antigas — feature removida) */}
-                  {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
+                  {/* THUMBNAIL CAPADO 90px — margin top depende de ter faixa de tag visível acima */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
-                    const mt=hasVisibleTagStripe?5:0;
+                    const m=hasVisibleTagStripe?"5px 9px 0":"6px 9px 0";
                     return thumbUrl.startsWith("#")
-                      ?<div style={{height:200,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,marginTop:mt}}/>
-                      :<div style={{height:200,background:"#f1f5f9",marginTop:mt,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
-                        <img src={thumbUrl} alt="" loading="lazy" style={{display:"block",maxWidth:"100%",maxHeight:"100%",objectFit:"contain",pointerEvents:"none"}}/>
-                      </div>;
+                      ?<div style={{height:80,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,margin:m,borderRadius:5}}/>
+                      :<img src={thumbUrl} alt="" loading="lazy" style={{display:"block",width:"calc(100% - 18px)",height:90,objectFit:"cover",margin:m,borderRadius:5,pointerEvents:"none"}}/>;
                   })()}
-                  <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"9px 11px 8px"}}>
+                  <div style={{padding:"9px 11px 8px"}}>
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
-                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:9})}}>
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,marginBottom:9,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word"}}>
                       {t.title}
                     </div>
 
@@ -11941,38 +11941,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           </div>
                           :<span title={cl.name} style={{background:(cl.color||"#64748b")+"18",color:cl.color||"#64748b",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:600,flexShrink:0,whiteSpace:"nowrap"}}>{cl.abbr||cl.name.slice(0,3).toUpperCase()}</span>
                         )}
-                        {/* Siglas das unidades Bioter — GRUPO/BR pra agrupamentos, ou siglas individuais */}
-                        {cl&&cl.id==="bioter"&&t.bioterUnit&&(function(){
-                          const ids=String(t.bioterUnit).split(",").filter(Boolean);
-                          if(!ids.length)return null;
-                          return ids.map(uid=>{
-                            if(uid==="grupo"){
-                              return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
-                            }
-                            if(uid==="brasil"){
-                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>BRASIL</span>;
-                            }
-                            const u=BIOTER_UNITS.find(x=>x.id===uid);
-                            if(!u)return null;
-                            return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>{u.abbr}</span>;
-                          });
-                        })()}
-                        {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
-                          <Ico n="alarmClock" size={11}/>
-                          {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
+                        {days!==null&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":days===0?"#ea580c":days<=2?"#d97706":"#94a3b8",fontWeight:days<=2?600:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0}}>
+                          {days<0?Math.abs(days)+"d atraso":days===0?"hoje":days+"d"}
                         </span>}
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0}}>
-                        {/* Data de publicação — badge moderno com calendário */}
-                        {t.publishDate&&(function(){
-                          const d=new Date(t.publishDate+"T12:00:00");
-                          const fmt=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
-                          const titleFmt=d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"})+(t.publishTime?" às "+t.publishTime:"");
-                          return <span title={"Publicação: "+titleFmt} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#e0f2fe",color:"#0369a1",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                            {fmt}
-                          </span>;
-                        })()}
+                        {(t.files||[]).length>0&&<span title={`${(t.files||[]).length} arquivo(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>📎{(t.files||[]).length}</span>}
+                        {(t.comments||[]).length>0&&<span title={`${(t.comments||[]).length} comentário(s)`} style={{display:"flex",alignItems:"center",gap:1,color:"#94a3b8",fontSize:10}}>💬{(t.comments||[]).length}</span>}
                         {/* Stack de avatares — usa UserAvatar (foto real ou fallback letra) */}
                         {allAssignees.length>0&&<div style={{display:"flex",alignItems:"center",marginLeft:2}}>
                           {allAssignees.slice(0,3).map((au,idx)=>(
@@ -12007,6 +11982,73 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
       {/* ── CLIENTES BOARD ── */}
       {viewMode==="clientes"&&<ClientesBoard tasks={tasks} setTasks={setTasks} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} canDrag={canDrag} canCreate={canCreate}/>}
+      {viewMode==="calendar"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {/* month nav + client filter */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>←</button>
+            <div style={{color:C.tx,fontWeight:800,fontSize:18,minWidth:180,textAlign:"center"}}>{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</div>
+            <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>→</button>
+          </div>
+          {/* client filter for calendar */}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <button onClick={()=>setCalFilterClient("todos")} style={{background:calFilterClient==="todos"?C.a:C.b1,color:calFilterClient==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"5px 12px",fontSize:10,fontWeight:700,cursor:"pointer"}}>Todos</button>
+            {CLIENTS.map(cl=><button key={cl.id} onClick={()=>setCalFilterClient(cl.id)} style={{background:calFilterClient===cl.id?cl.color+"33":C.b1,border:`2px solid ${calFilterClient===cl.id?cl.color:C.b1}`,borderRadius:10,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+              <div style={{transform:"scale(0.7)",transformOrigin:"left center"}}><ClientLogo clientId={cl.id} size="xs"/></div>
+              <span style={{color:calFilterClient===cl.id?cl.color:C.ts,whiteSpace:"nowrap",fontSize:10,fontWeight:700}}>{cl.abbr}</span>
+            </button>)}
+          </div>
+        </div>
+        <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
+          {/* weekday headers */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:`2px solid ${C.b1}`,background:C.s1}}>
+            {WEEKDAYS.map(d=><div key={d} style={{padding:"12px 0",textAlign:"center",color:C.ts,fontSize:12,fontWeight:700,letterSpacing:.5}}>{d}</div>)}
+          </div>
+          {/* days grid */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {calDays().map((day,i)=>{
+              const dayTasks=day?tasksByDay(day):[];
+              const isToday=day&&day.toDateString()===new Date().toDateString();
+              const hasUrgent=dayTasks.some(t=>taskUrgencyLevel(t)===0);
+              const hasLate=dayTasks.some(t=>taskUrgencyLevel(t)===1);
+              return <div key={i} style={{minHeight:isMob?80:120,borderRight:`1px solid ${C.b1}`,borderBottom:`1px solid ${C.b1}`,padding:"8px 8px 6px",background:isToday?C.ag:hasUrgent?C.rd+"14":hasLate?C.or+"10":"none",transition:"background .2s",position:"relative"}}>
+                {day&&<>
+                  <div style={{
+                    color:isToday?"#fff":C.ts,
+                    fontWeight:isToday?900:500,
+                    fontSize:13,
+                    marginBottom:6,
+                    width:isToday?24:undefined,
+                    height:isToday?24:undefined,
+                    background:isToday?C.a:undefined,
+                    borderRadius:isToday?"50%":undefined,
+                    display:"flex",alignItems:"center",justifyContent:isToday?"center":undefined
+                  }}>{day.getDate()}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {dayTasks.slice(0,4).map(t=>{
+                      const u=TEAM.find(x=>x.id===t.assignee);
+                      const cl=CLIENTS.find(c=>c.id===t.client);
+                      const urgColor=getUrgencyColor(taskUrgencyLevel(t));
+                      return <div key={t.id} onClick={()=>setOpenCard(t)}
+                        style={{background:urgColor+"22",border:`1px solid ${urgColor}55`,borderRadius:5,padding:"3px 6px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"all .1s"}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:urgColor,flexShrink:0}}/>
+                        <span style={{color:C.tx,fontSize:isMob?8:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,fontWeight:600}}>{t.title}</span>
+                        {u&&<span style={{background:u.color+"44",color:u.color,borderRadius:4,padding:"0 4px",fontSize:8,fontWeight:700,flexShrink:0}}>{u.av}</span>}
+                      </div>;
+                    })}
+                    {dayTasks.length>4&&<div style={{color:C.ts,fontSize:9,textAlign:"center",fontWeight:600}}>+{dayTasks.length-4} mais</div>}
+                  </div>
+                </>}
+              </div>;
+            })}
+          </div>
+        </div>
+        {/* legend */}
+        <div style={{display:"flex",gap:14,flexWrap:"wrap",padding:"4px 0"}}>
+          {[{c:C.rd,l:"🔥 Urgente"},{c:C.or,l:"❌ Atrasado"},{c:C.yw,l:"⚠ Atenção"},{c:C.gr,l:"✅ No prazo"}].map(x=><div key={x.l} style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:10,height:10,borderRadius:"50%",background:x.c}}/><span style={{color:C.ts,fontSize:12}}>{x.l}</span></div>)}
+          {calFilterClient!=="todos"&&<div style={{marginLeft:"auto",color:CLIENTS.find(c=>c.id===calFilterClient)?.color,fontSize:11,fontWeight:700}}>Filtrando: {CLIENTS.find(c=>c.id===calFilterClient)?.name}</div>}
+        </div>
+      </div>}
 
       {/* ── TRASH ── */}
       {viewMode==="trash"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -12030,6 +12072,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
                   {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
                 </div>
               </div>;
@@ -12040,6 +12083,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     </div>
   </>;
 }
+
+/* ─── CALENDÁRIO DE PUBLICAÇÕES ───────────────
+   Visível apenas para: Vinicius, Gustavo, Hellen
+   Mostra cards com status "agendado" pelo publishDate
+   Filtro: todos os clientes + unidades Bioter
+──────────────────────────────────────────────── */
 
 // ======= 04_demandas_internas.jsx =======
 
