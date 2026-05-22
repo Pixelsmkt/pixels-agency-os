@@ -9733,6 +9733,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
   const [genConfirm,setGenConfirm]=useState(null);
+  // Snapshot pra UNDO do último "Aplicar datas" — guarda os publishDates anteriores
+  const [lastApplySnapshot,setLastApplySnapshot]=useState(null);
   // Drag-and-drop: arrastar card entre dias atualiza publishDate automaticamente
   const [dragTaskId,setDragTaskId]=useState(null);
   const [dropDayId,setDropDayId]=useState(null);
@@ -9812,6 +9814,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   }
   function confirmGeneratePlan(){
     if(!genConfirm)return;
+    // Snapshot dos publishDates/Times anteriores pra permitir UNDO
+    const snapshot=genConfirm.proposals.map(function(prop){
+      const task=tasks.find(function(t){return t.id===prop.taskId;});
+      return {taskId:prop.taskId, oldDate:task?.publishDate||"", oldTime:task?.publishTime||""};
+    });
+    setLastApplySnapshot({when:Date.now(), snapshot, month:genConfirm.month, year:genConfirm.year});
     if(typeof setTasks==="function"){
       setTasks(function(prev){
         return (prev||[]).map(function(t){
@@ -9821,8 +9829,22 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         });
       });
     }
-    if(typeof pixelsToast!=="undefined")pixelsToast.success(genConfirm.proposals.length+" cards com data sugerida em "+MONTHS[genConfirm.month-1]+"/"+genConfirm.year);
+    if(typeof pixelsToast!=="undefined")pixelsToast.success(genConfirm.proposals.length+" cards com data sugerida em "+MONTHS[genConfirm.month-1]+"/"+genConfirm.year+". Use 'Desfazer' se quiser reverter.");
     setGenConfirm(null);
+  }
+  function handleUndoApply(){
+    if(!lastApplySnapshot)return;
+    if(typeof setTasks==="function"){
+      setTasks(function(prev){
+        return (prev||[]).map(function(t){
+          const s=lastApplySnapshot.snapshot.find(function(x){return x.taskId===t.id;});
+          if(!s)return t;
+          return Object.assign({},t,{publishDate:s.oldDate||null, publishTime:s.oldTime||""});
+        });
+      });
+    }
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Sugestões revertidas. Cards voltaram pro estado anterior.");
+    setLastApplySnapshot(null);
   }
 
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -9911,6 +9933,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
             Gerar plano do mês{filterClient!=="todos"?" · "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.abbr||""):""}
           </button>
+          {lastApplySnapshot&&<button onClick={handleUndoApply}
+            title="Desfaz a última 'Aplicar datas' — devolve os cards pra como estavam antes."
+            style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
+            Desfazer última sugestão
+          </button>}
         </div>
       </div>
 
@@ -9986,22 +10014,22 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 
       {/* ── Filtro de cliente ── */}
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-        <span style={{color:C.ts,fontSize:11,fontWeight:600,marginRight:2}}>Filtrar por cliente:</span>
+        <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Cliente</span>
 
-        {/* Botão "Todos" */}
+        {/* Chip "Todos" */}
         <button onClick={()=>{setFilterClient("todos");setFilterBioterUnit("todos");}}
-          style={{background:filterClient==="todos"?C.a:C.b1,color:filterClient==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"5px 14px",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
+          style={{background:filterClient==="todos"?"#0f172a":"#fff",color:filterClient==="todos"?"#fff":"#0f172a",border:"1px solid "+(filterClient==="todos"?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:11.5,fontWeight:filterClient==="todos"?700:500,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s"}}>
           Todos
         </button>
 
-        {/* Um botão por cliente */}
-        {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>(
-          <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");}}
-            style={{display:"flex",alignItems:"center",gap:5,background:filterClient===cl.id?cl.color+"22":C.b1,border:`2px solid ${filterClient===cl.id?cl.color:C.b1}`,borderRadius:10,padding:"4px 11px",fontSize:10,fontWeight:700,cursor:"pointer",transition:"all .15s"}}>
-            <ClientLogo clientId={cl.id} size="xs"/>
-            <span style={{color:filterClient===cl.id?cl.color:C.ts,whiteSpace:"nowrap"}}>{cl.abbr}</span>
-          </button>
-        ))}
+        {/* Chips por cliente — sem logo, só texto moderno */}
+        {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>{
+          const active=filterClient===cl.id;
+          return <button key={cl.id} onClick={()=>{setFilterClient(cl.id);setFilterBioterUnit("todos");}}
+            style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s",whiteSpace:"nowrap"}}>
+            {cl.name}
+          </button>;
+        })}
       </div>
 
       {/* ── Sub-filtro Bioter (unidades) ── */}
@@ -10127,19 +10155,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 
       {/* ── Aviso sem agendamentos ── */}
       {tasksThisMonth.length===0&&(
-        <div style={{background:C.card,borderRadius:14,padding:"40px",textAlign:"center",border:`1px dashed ${C.b1}`}}>
-          <div style={{fontSize:36,marginBottom:12}}>📅</div>
-          <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>Nenhuma publicação agendada</div>
-          <div style={{color:C.ts,fontSize:12}}>
+        <div style={{background:"#fff",borderRadius:14,padding:"40px",textAlign:"center",border:"1px dashed #cbd5e1"}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,marginBottom:6}}>Nenhuma publicação agendada</div>
+          <div style={{color:"#64748b",fontSize:12}}>
             {filterClient!=="todos"
               ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
-              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para a coluna "Agendado" e defina a data de publicação.`
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para "Publicações" e defina a data.`
             }
           </div>
         </div>
       )}
 
-      {/* ── Modal do card — somente leitura no calendário ── */}
+      {/* ── Modal do card ── */}
       {openCard&&(
         <CardModal
           task={openCard}
