@@ -2524,9 +2524,6 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   </div>;
 }
 
-</div>;
-}
-
 // ======= 02_clientes.jsx =======
 function MindMap({clientId,centerColor}){
   const [expanded,setExpanded]=useState({});
@@ -20294,9 +20291,6 @@ function OrientacoesView({clientId}){
     </div>
   );
 }
-    </div>
-  );
-}
 
 // ======= 12_dashboard.jsx =======
 
@@ -22452,11 +22446,6 @@ function MindMapEditor({clientId,onBack}){
       <div style={{position:"absolute",top:8,right:10,color:C.td,fontSize:8,lineHeight:1.6,textAlign:"right"}}>
         Tab = filho · Del = deletar<br/>Enter = editar · Ctrl+Z = desfazer<br/>Scroll = zoom · Drag = mover
       </div>
-    </div>
-  </div>;
-}
-
-
     </div>
   </div>;
 }
