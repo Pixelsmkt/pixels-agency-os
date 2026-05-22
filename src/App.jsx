@@ -9943,10 +9943,38 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [showPixelsIA,setShowPixelsIA]=useState(false);
   const [editingColId,setEditingColId]=useState(null);
   const [editingColLabel,setEditingColLabel]=useState("");
+  // ── Menu ⋯ por coluna (header) + filtro por data de publicação ──
+  // colMenuOpen: id da coluna com menu aberto, ou null
+  // colDateFilter: { [col.id]: "todas"|"hoje"|"7d"|"30d"|"sem" } persistido em localStorage
+  const [colMenuOpen,setColMenuOpen]=useState(null);
+  const [colDateFilter,setColDateFilter]=useState(function(){
+    try{const raw=localStorage.getItem("pixels-col-datefilter-v1");if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return p;}}catch(e){}
+    return{};
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-col-datefilter-v1",JSON.stringify(colDateFilter));}catch(e){}},[colDateFilter]);
+  // Predicate: passa cards que casam com o filtro de data da sua coluna
+  const matchesColDateFilter=function(t,colId){
+    const mode=colDateFilter[colId];
+    if(!mode||mode==="todas")return true;
+    const pd=t.publishDate||t.publish_date;
+    if(mode==="sem")return !pd;
+    if(!pd)return false;
+    let d;
+    try{d=new Date(typeof pd==="string"&&pd.length===10?pd+"T00:00:00":pd);if(isNaN(d.getTime()))return false;}catch(e){return false;}
+    const now=new Date();now.setHours(0,0,0,0);
+    const diffDays=Math.floor((d-now)/86400000);
+    if(mode==="hoje")return diffDays===0;
+    if(mode==="7d")return diffDays>=0&&diffDays<=7;
+    if(mode==="30d")return diffDays>=0&&diffDays<=30;
+    return true;
+  };
   const [cols,setCols]=useState(()=>{
     // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
     // Versão atual: v6 (mescla Agendado+Publicado em "Publicações" + swap cores Copys/Publicações)
     const COLS_VERSION="v6-publicacoes";
+    // IDs descontinuados — colunas que existiam em versões antigas e devem ser DESCARTADAS no rebuild.
+    // (sem isso, a self-heal defensiva trata como "custom" e mantém visível indevidamente)
+    const DEPRECATED_COL_IDS=new Set(["publicado"]);
     try{
       const savedVersion=localStorage.getItem("pixels-cols-version");
       if(savedVersion!==COLS_VERSION){
@@ -9958,7 +9986,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             const parsed=JSON.parse(saved);
             if(Array.isArray(parsed)){
               const officialIds=new Set(KANBAN_COLS.map(k=>k.id));
-              customCols=parsed.filter(p=>!officialIds.has(p.id));
+              customCols=parsed.filter(p=>!officialIds.has(p.id)&&!DEPRECATED_COL_IDS.has(p.id));
             }
           }
         }catch(e){}
@@ -9969,13 +9997,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       if(saved){
         const parsed=JSON.parse(saved);
         if(Array.isArray(parsed)&&parsed.length>0){
+          // Limpa primeiro qualquer coluna deprecada (publicado → Publicações)
+          const cleaned=parsed.filter(c=>!DEPRECATED_COL_IDS.has(c.id));
           // Self-heal defensivo: garante cols oficiais presentes
-          const savedIds=new Set(parsed.map(c=>c.id));
+          const savedIds=new Set(cleaned.map(c=>c.id));
           const missing=KANBAN_COLS.filter(k=>!savedIds.has(k.id));
-          if(missing.length===0)return parsed;
+          if(missing.length===0)return cleaned;
           // Insere as missing nas posições canônicas em vez de só apender no final
           const officialIds=new Set(KANBAN_COLS.map(k=>k.id));
-          const customCols=parsed.filter(p=>!officialIds.has(p.id));
+          const customCols=cleaned.filter(p=>!officialIds.has(p.id));
           return [...KANBAN_COLS,...customCols];
         }
       }
@@ -10529,7 +10559,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
-          const colTasks=visible.filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id).sort((a,b)=>{
+          // Filtro por data de publicação (do menu ⋯) também é aplicado aqui.
+          const colTasks=visible
+            .filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id)
+            .filter(t=>matchesColDateFilter(t,col.id))
+            .sort((a,b)=>{
             // Manual: respeita position; quem não tem position vai pro final (cinza)
             if(sortMode==="manual"){
               const pa=a.position??999999,pb=b.position??999999;
@@ -10589,8 +10623,38 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600,flexShrink:0}}>{colTasks.length}</span>
                 {col.id==="demanda"&&colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length>0&&<span title="Aguardando aprovacao de copy" style={{background:"#fff",color:col.color,borderRadius:99,padding:"2px 7px",fontSize:9,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="clock" size={10}/>{colTasks.filter(t=>t.assignee==="ellen"||t.sector==="texto").length}</span>}
               </div>
-              <div style={{display:"flex",gap:3,alignItems:"center"}}>
+              <div style={{display:"flex",gap:3,alignItems:"center",position:"relative"}}>
                 {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><Ico n="x" size={11}/></button>}
+                {/* Menu ⋯ — filtro por data de publicação */}
+                <button onClick={e=>{e.stopPropagation();setColMenuOpen(colMenuOpen===col.id?null:col.id);}} title="Opções da coluna" style={{background:(colDateFilter[col.id]&&colDateFilter[col.id]!=="todas")?"rgba(255,255,255,0.32)":"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:20,height:20,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:14,fontWeight:700,lineHeight:1}}>⋯</button>
+                {colMenuOpen===col.id&&(function(){
+                  const opts=[
+                    {id:"todas",label:"Todas as publicações"},
+                    {id:"hoje",label:"Publicam hoje"},
+                    {id:"7d",label:"Próximos 7 dias"},
+                    {id:"30d",label:"Próximos 30 dias"},
+                    {id:"sem",label:"Sem data marcada"},
+                  ];
+                  const current=colDateFilter[col.id]||"todas";
+                  return <>
+                    {/* Overlay para fechar ao clicar fora */}
+                    <div onClick={()=>setColMenuOpen(null)} style={{position:"fixed",inset:0,zIndex:998}}/>
+                    <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:200,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(15,23,42,0.18)",padding:6,zIndex:999}}>
+                      <div style={{padding:"6px 10px 4px",color:"#64748b",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Filtrar por data de publicação</div>
+                      {opts.map(o=>(
+                        <button key={o.id} onClick={()=>{
+                          setColDateFilter(prev=>{const out={...prev};if(o.id==="todas")delete out[col.id];else out[col.id]=o.id;return out;});
+                          setColMenuOpen(null);
+                        }} style={{display:"flex",width:"100%",alignItems:"center",justifyContent:"space-between",gap:8,background:current===o.id?"#f1f5f9":"transparent",border:"none",borderRadius:6,padding:"7px 10px",color:"#0f172a",fontSize:12,fontWeight:current===o.id?600:500,cursor:"pointer",textAlign:"left"}}
+                          onMouseEnter={e=>{if(current!==o.id)e.currentTarget.style.background="#f8fafc";}}
+                          onMouseLeave={e=>{if(current!==o.id)e.currentTarget.style.background="transparent";}}>
+                          <span>{o.label}</span>
+                          {current===o.id&&<span style={{color:"#7c3aed",fontSize:14,fontWeight:700,lineHeight:1}}>✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  </>;
+                })()}
               </div>
             </div>
 
@@ -10784,6 +10848,74 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
       {/* ── CLIENTES BOARD ── */}
       {viewMode==="clientes"&&<ClientesBoard tasks={tasks} setTasks={setTasks} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} canDrag={canDrag} canCreate={canCreate}/>}
+      {viewMode==="calendar"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {/* month nav + client filter */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>←</button>
+            <div style={{color:C.tx,fontWeight:800,fontSize:18,minWidth:180,textAlign:"center"}}>{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</div>
+            <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>→</button>
+          </div>
+          {/* client filter for calendar */}
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            <button onClick={()=>setCalFilterClient("todos")} style={{background:calFilterClient==="todos"?C.a:C.b1,color:calFilterClient==="todos"?"#fff":C.ts,border:"none",borderRadius:20,padding:"5px 12px",fontSize:10,fontWeight:700,cursor:"pointer"}}>Todos</button>
+            {CLIENTS.map(cl=><button key={cl.id} onClick={()=>setCalFilterClient(cl.id)} style={{background:calFilterClient===cl.id?cl.color+"33":C.b1,border:`2px solid ${calFilterClient===cl.id?cl.color:C.b1}`,borderRadius:10,padding:"4px 10px",fontSize:10,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+              <div style={{transform:"scale(0.7)",transformOrigin:"left center"}}><ClientLogo clientId={cl.id} size="xs"/></div>
+              <span style={{color:calFilterClient===cl.id?cl.color:C.ts,whiteSpace:"nowrap",fontSize:10,fontWeight:700}}>{cl.abbr}</span>
+            </button>)}
+          </div>
+        </div>
+        <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
+          {/* weekday headers */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:`2px solid ${C.b1}`,background:C.s1}}>
+            {WEEKDAYS.map(d=><div key={d} style={{padding:"12px 0",textAlign:"center",color:C.ts,fontSize:12,fontWeight:700,letterSpacing:.5}}>{d}</div>)}
+          </div>
+          {/* days grid */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+            {calDays().map((day,i)=>{
+              const dayTasks=day?tasksByDay(day):[];
+              const isToday=day&&day.toDateString()===new Date().toDateString();
+              const hasUrgent=dayTasks.some(t=>taskUrgencyLevel(t)===0);
+              const hasLate=dayTasks.some(t=>taskUrgencyLevel(t)===1);
+              return <div key={i} style={{minHeight:isMob?80:120,borderRight:`1px solid ${C.b1}`,borderBottom:`1px solid ${C.b1}`,padding:"8px 8px 6px",background:isToday?C.ag:hasUrgent?C.rd+"14":hasLate?C.or+"10":"none",transition:"background .2s",position:"relative"}}>
+                {day&&<>
+                  <div style={{
+                    color:isToday?"#fff":C.ts,
+                    fontWeight:isToday?900:500,
+                    fontSize:13,
+                    marginBottom:6,
+                    width:isToday?24:undefined,
+                    height:isToday?24:undefined,
+                    background:isToday?C.a:undefined,
+                    borderRadius:isToday?"50%":undefined,
+                    display:"flex",alignItems:"center",justifyContent:isToday?"center":undefined
+                  }}>{day.getDate()}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {dayTasks.slice(0,4).map(t=>{
+                      const u=TEAM.find(x=>x.id===t.assignee);
+                      const cl=CLIENTS.find(c=>c.id===t.client);
+                      const urgColor=getUrgencyColor(taskUrgencyLevel(t));
+                      return <div key={t.id} onClick={()=>setOpenCard(t)}
+                        style={{background:urgColor+"22",border:`1px solid ${urgColor}55`,borderRadius:5,padding:"3px 6px",cursor:"pointer",display:"flex",alignItems:"center",gap:4,transition:"all .1s"}}>
+                        <div style={{width:6,height:6,borderRadius:"50%",background:urgColor,flexShrink:0}}/>
+                        <span style={{color:C.tx,fontSize:isMob?8:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,fontWeight:600}}>{t.title}</span>
+                        {u&&<span style={{background:u.color+"44",color:u.color,borderRadius:4,padding:"0 4px",fontSize:8,fontWeight:700,flexShrink:0}}>{u.av}</span>}
+                      </div>;
+                    })}
+                    {dayTasks.length>4&&<div style={{color:C.ts,fontSize:9,textAlign:"center",fontWeight:600}}>+{dayTasks.length-4} mais</div>}
+                  </div>
+                </>}
+              </div>;
+            })}
+          </div>
+        </div>
+        {/* legend */}
+        <div style={{display:"flex",gap:14,flexWrap:"wrap",padding:"4px 0"}}>
+          {[{c:C.rd,l:"🔥 Urgente"},{c:C.or,l:"❌ Atrasado"},{c:C.yw,l:"⚠ Atenção"},{c:C.gr,l:"✅ No prazo"}].map(x=><div key={x.l} style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:10,height:10,borderRadius:"50%",background:x.c}}/><span style={{color:C.ts,fontSize:12}}>{x.l}</span></div>)}
+          {calFilterClient!=="todos"&&<div style={{marginLeft:"auto",color:CLIENTS.find(c=>c.id===calFilterClient)?.color,fontSize:11,fontWeight:700}}>Filtrando: {CLIENTS.find(c=>c.id===calFilterClient)?.name}</div>}
+        </div>
+      </div>}
+
       {/* ── TRASH ── */}
       {viewMode==="trash"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div style={{background:C.rd+"12",border:`1px solid ${C.rd}33`,borderRadius:12,padding:"12px 16px",display:"flex",gap:10,alignItems:"center"}}>
