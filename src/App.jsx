@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 30/30 | Nao editar diretamente
+// Modulos: 31/31 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -724,6 +724,10 @@ const DEFAULT_PERMS={
   verAnalises:false, verPortal:false, verCalPub:false,
   // Gestão de mídia
   verGestaoMidia:false, editarGestaoMidia:false, gerenciarClientesMidia:false,
+  // Comercial
+  verComercial:false, editarComercial:false,
+  // Financeiro (granular)
+  editarFinanceiro:false,
   // Acessos
   verAcessos:false, editarAcessos:false,
   // Ferramentas
@@ -1355,6 +1359,7 @@ function NavIcon({id,size=18,color}){
   if(id==="aprovacoes_publicacao") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M9 12l2 2 4-4"/></svg>;
   if(id==="aprovacoes_internas")   return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M12 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
   if(id==="gestaomidia")           return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 010 18"/><path d="M12 3a14 14 0 000 18"/></svg>;
+  if(id==="comercial")             return <svg {...p}><path d="M3 3v18h18"/><path d="M7 14l3-3 4 4 6-7"/><circle cx="20" cy="8" r="1.5"/></svg>;
   // ── Submenus Análises ──
   if(id==="analises_producao") return <svg {...p}><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg>;
   if(id==="analises_gargalos") return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>;
@@ -1404,6 +1409,7 @@ const NAV=[
     {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação demanda interna"},
   ]},
   {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
+  {id:"comercial",  icon:"◈", label:"Comercial"},
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
@@ -1719,7 +1725,6 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
   if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
   if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
-  if(n==="plus")      return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
   if(n==="users")     return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(n==="building")  return <svg {...p}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>;
   return null;
@@ -15276,161 +15281,361 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
 }
 
 // ======= 08_financeiro.jsx =======
-function PageFinanceiro({isMob}){
-  const [tab,setTab]=useState("visao");
+// Aba Financeiro — visão consolidada de receita da Pixels.
+// Mostra SÓ o que já é contrato/receita/projeto vendido/projeção/cobrança.
+// NUNCA mostra prospects ou oportunidades em aberto — isso é Comercial.
 
-  // Lê contratos do mesmo localStorage que PageContratos usa
-  const [contratos] = useState(()=>{
-    try{return JSON.parse(localStorage.getItem("pixels-contratos")||"[]");}catch(e){return[];}
-  });
+const FIN_CONTRATO_STATUS = [
+  {id:"ativo",     label:"Ativo",     color:"#16a34a", bg:"#dcfce7"},
+  {id:"pausado",   label:"Pausado",   color:"#64748b", bg:"#f1f5f9"},
+  {id:"encerrado", label:"Encerrado", color:"#dc2626", bg:"#fee2e2"},
+];
+const FIN_PAGAMENTO_STATUS = [
+  {id:"em_dia",    label:"Em dia",   color:"#16a34a", bg:"#dcfce7"},
+  {id:"em_aberto", label:"Em aberto",color:"#ca8a04", bg:"#fef9c3"},
+  {id:"atrasado",  label:"Atrasado", color:"#dc2626", bg:"#fee2e2"},
+  {id:"pago",      label:"Pago",     color:"#0284c7", bg:"#e0f2fe"},
+];
+const FIN_PROJETO_STATUS = [
+  {id:"proposta",    label:"Proposta",    color:"#64748b", bg:"#f1f5f9"},
+  {id:"aprovado",    label:"Aprovado",    color:"#0284c7", bg:"#e0f2fe"},
+  {id:"em_producao", label:"Em produção", color:"#ca8a04", bg:"#fef9c3"},
+  {id:"entregue",    label:"Entregue",    color:"#16a34a", bg:"#dcfce7"},
+  {id:"cancelado",   label:"Cancelado",   color:"#dc2626", bg:"#fee2e2"},
+];
+const FIN_TIPOS_PROJETO = ["Landing Page","Site","Google Perfil de Empresa","Apresentação Comercial","Catálogo Digital","Campanha de Feira","Automação WhatsApp/CRM","Relatório Premium","Edição Extra de Vídeos","Pacote Extra de Posts","Setup Pixel/Tag","CRM/Funil","Outro"];
 
-  // MRR: usa contratos editáveis se existirem, senão fallback para CLIENTS.contract
-  const temContratos = contratos.filter(c=>c.status==="ativo").length > 0;
-  const mrr = temContratos
-    ? contratos.filter(c=>c.status==="ativo").reduce((s,c)=>s+(parseFloat(c.valor)||0),0)
-    : CLIENTS.reduce((a,c)=>a+c.contract,0);
-  const costs=Math.round(mrr*0.45);
-  const profit=mrr-costs;
-  const margin=Math.round((profit/mrr)*100);
-  const totalMetaSpend=CLIENTS.reduce((a,c)=>a+getLiveClient(c.id).meta.spend,0);
-  const totalGoogleSpend=CLIENTS.reduce((a,c)=>a+getLiveClient(c.id).google.spend,0);
-  const totalInvest=totalMetaSpend+totalGoogleSpend;
+const FIN_STORE_KEY = "pixels-financeiro-v1";
 
-  const TABS=[["visao","💰 Visão Geral"],["contratos","📋 Contratos"],["dre","📊 DRE"]];
+function _finInitial(){
+  const contratos=[];
+  if(typeof BIOTER_GROUP_UNITS!=="undefined"){
+    BIOTER_GROUP_UNITS.forEach(function(u){
+      if(u.mrr>0)contratos.push({id:"c_"+u.id,clienteId:u.id,clienteNome:u.name,grupo:"bioter",unidade:u.cidade||"",valorMensal:u.mrr,servicos:"Social media · Meta Ads · Google Ads",dataInicio:"2024-01-01",dataRevisao:"",statusContrato:"ativo",statusPagamento:"em_dia",responsavel:"gustavo",custoEstimado:0,margem:0,observacoes:""});
+    });
+  }
+  if(typeof CLIENT_PROFILES!=="undefined"){
+    ["construschorr","arabuta","climaves","vetservice"].forEach(function(id){
+      const p=CLIENT_PROFILES[id];
+      if(p&&p.mrr>0)contratos.push({id:"c_"+id,clienteId:id,clienteNome:p.name,grupo:"",unidade:"",valorMensal:p.mrr,servicos:p.servicos||"",dataInicio:"2024-01-01",dataRevisao:"",statusContrato:"ativo",statusPagamento:"em_dia",responsavel:p.responsavel_interno||"vinicius",custoEstimado:0,margem:0,observacoes:""});
+    });
+  }
+  return {contratos:contratos,pontuais:[],cobrancas:[]};
+}
+function _finLoad(){
+  try{const raw=localStorage.getItem(FIN_STORE_KEY);if(!raw){const init=_finInitial();_finSave(init);return init;}const p=JSON.parse(raw);return Object.assign(_finInitial(),p||{});}catch(e){return _finInitial();}
+}
+function _finSave(s){try{localStorage.setItem(FIN_STORE_KEY,JSON.stringify(s));}catch(e){}}
+function useFinanceiroStore(){
+  const [store,setStore]=useState(_finLoad);
+  const update=useCallback(function(updater){setStore(function(prev){const next=typeof updater==="function"?updater(prev):updater;_finSave(next);return next;});},[]);
+  return {store,update};
+}
 
-  const DRE_ROWS=[
-    {label:"Receita Bruta (MRR)",         val:mrr,         color:C.gr,  bold:true},
-    {label:"Impostos estimados (8%)",      val:-Math.round(mrr*0.08),  color:C.rd},
-    {label:"Receita Líquida",             val:Math.round(mrr*0.92),   color:C.gr, bold:true},
-    {label:"",val:null},
-    {label:"Folha de pagamento",           val:-Math.round(mrr*0.28),  color:C.rd},
-    {label:"Ferramentas & Softwares",      val:-Math.round(mrr*0.06),  color:C.rd},
-    {label:"Infraestrutura",              val:-Math.round(mrr*0.04),  color:C.rd},
-    {label:"Marketing da agência",         val:-Math.round(mrr*0.03),  color:C.rd},
-    {label:"Outros custos",               val:-Math.round(mrr*0.04),  color:C.rd},
-    {label:"Total Despesas",              val:-costs,      color:C.rd,  bold:true},
-    {label:"",val:null},
-    {label:"EBITDA",                      val:profit,      color:profit>0?C.gr:C.rd, bold:true},
-    {label:"Margem EBITDA",               val:null,        color:margin>=35?C.gr:C.yw, label2:`${margin}%`, bold:true},
-  ];
+const _FIN_CARD={background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:18,fontFamily:"'Inter',system-ui,sans-serif"};
+const _FIN_LBL={color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5};
+const _FIN_INP={width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",fontFamily:"'Inter',system-ui,sans-serif",boxSizing:"border-box"};
 
-  const months=["Out/25","Nov/25","Dez/25","Jan/26","Fev/26","Mar/26"];
-  const mrrHistory=months.map((m,i)=>({m, val:Math.round(mrr*(0.85+i*0.03))}));
+function _finFmtBRL(n){return "R$ "+(Number(n)||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});}
+function _finFmtDateBR(ds){if(!ds)return "—";try{const d=new Date((ds+"").length===10?ds+"T12:00:00":ds);if(isNaN(d.getTime()))return ds;return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});}catch(e){return ds;}}
+function _finFindCfg(arr,id){return arr.find(function(x){return x.id===id;})||arr[0];}
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22}}>Financeiro</div>
-      <div style={{background:C.gr+"22",color:C.gr,borderRadius:99,padding:"4px 14px",fontSize:11,fontWeight:700}}>
-        Lucro est. {margin}%
-      </div>
-    </div>
-
-    {/* KPI Strip */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
-      <Tile label="MRR Total"    val={f$(mrr)}    color={C.gr}  trend={8}/>
-      <Tile label="Custos Est."  val={f$(costs)}  color={C.rd}  sub="~45% receita"/>
-      <Tile label="Lucro Est."   val={f$(profit)} color={C.a}   trend={12}/>
-      <Tile label="Invest. Mídia" val={f$(totalInvest)} color={C.bl} sub="Meta + Google"/>
-    </div>
-
-    {/* Tabs */}
-    <div style={{display:"flex",gap:4,background:C.s1,borderRadius:12,padding:4}}>
-      {TABS.map(([id,lbl])=>(
-        <button key={id} onClick={()=>setTab(id)}
-          style={{flex:1,background:tab===id?C.card:"transparent",border:"none",borderRadius:9,
-                  padding:"8px 0",fontSize:12,fontWeight:tab===id?700:500,
-                  color:tab===id?C.a:C.ts,cursor:"pointer",transition:"all .15s"}}>
-          {lbl}
-        </button>
-      ))}
-    </div>
-
-    {/* Visão Geral */}
-    {tab==="visao"&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {/* MRR histórico */}
-      <Card style={{padding:"16px 18px"}}>
-        <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:14}}>📈 Evolução MRR</div>
-        <div style={{display:"flex",alignItems:"flex-end",gap:6,height:80}}>
-          {mrrHistory.map((m,i)=>{
-            const pct=m.val/mrr;
-            return <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-              <div style={{fontSize:8,color:C.ts}}>{f$(m.val).replace("R$ ","")}</div>
-              <div style={{width:"100%",background:`linear-gradient(180deg,${C.gr},${C.a})`,
-                          height:Math.round(60*pct)+"px",borderRadius:"4px 4px 0 0",
-                          opacity:0.6+i*0.08}}/>
-              <div style={{fontSize:9,color:C.td}}>{m.m}</div>
-            </div>;
-          })}
+function FinModal({title,subtitle,children,onClose,maxWidth}){
+  if(typeof useEscToClose==="function")useEscToClose(true,onClose);
+  return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose&&onClose();}}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:maxWidth||560,maxHeight:"92vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,0.28)"}}>
+      <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.3}}>{title}</div>
+          {subtitle&&<div style={{color:"#64748b",fontSize:12,marginTop:3}}>{subtitle}</div>}
         </div>
-      </Card>
-      {/* Investimento por plataforma */}
-      <Card style={{padding:"16px 18px"}}>
-        <div style={{color:C.tx,fontWeight:700,fontSize:13,marginBottom:14}}>🎯 Investimento em Mídia</div>
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {[["Meta Ads",totalMetaSpend,C.bl,"#1877f2"],["Google Ads",totalGoogleSpend,C.gr,"#34a853"]].map(([lbl,val,color])=>(
-            <div key={lbl}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{color:C.ts,fontSize:12}}>{lbl}</span>
-                <span style={{color:color,fontWeight:700,fontSize:12}}>{f$(val)}</span>
-              </div>
-              <Bar v={Math.round((val/totalInvest)*100)} color={color} h={6}/>
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>}
-
-    {/* Contratos */}
-    {tab==="contratos"&&<Card style={{padding:0}}>
-      <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.b1}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <span style={{color:C.tx,fontWeight:700}}>Contratos Ativos</span>
-        <span style={{color:C.ts,fontSize:11}}>{CLIENTS.length} clientes</span>
+        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",fontSize:13}}>✕</button>
       </div>
-      {CLIENTS.map((cl,i)=>{
-        const pctOfMrr=Math.round((cl.contract/mrr)*100);
-        return <div key={cl.id} style={{padding:"14px 18px",borderBottom:i<CLIENTS.length-1?`1px solid ${C.b1}`:"none"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <ClientLogo clientId={cl.id} size="xs"/>
-              <div>
-                <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{cl.name}</div>
-                <div style={{color:C.ts,fontSize:10}}>Responsável: {cl.manager}</div>
-              </div>
-            </div>
-            <div style={{textAlign:"right"}}>
-              <div style={{color:C.gr,fontWeight:900,fontSize:15}}>{cl.contract>0?f$(cl.contract)+"/mês":"Interno"}</div>
-              {cl.contract>0&&<div style={{color:C.td,fontSize:10}}>{pctOfMrr}% do MRR</div>}
-            </div>
-          </div>
-          {cl.contract>0&&<Bar v={pctOfMrr} color={cl.color} h={4}/>}
-        </div>;
-      })}
-      <div style={{padding:"14px 18px",borderTop:`2px solid ${C.b1}`,display:"flex",justifyContent:"space-between"}}>
-        <span style={{color:C.tx,fontWeight:700}}>Total MRR</span>
-        <span style={{color:C.gr,fontWeight:900,fontSize:16}}>{f$(mrr)}/mês</span>
-      </div>
-    </Card>}
-
-    {/* DRE */}
-    {tab==="dre"&&<Card style={{padding:0}}>
-      <div style={{padding:"14px 18px",borderBottom:`1px solid ${C.b1}`}}>
-        <span style={{color:C.tx,fontWeight:700}}>DRE — {new Date().toLocaleDateString("pt-BR",{month:"long",year:"numeric"})} (Estimado)</span>
-      </div>
-      <div style={{padding:"8px 0"}}>
-        {DRE_ROWS.map((row,i)=>{
-          if(!row.label&&row.val===null) return <div key={i} style={{height:8}}/>;
-          return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",
-                      padding:"9px 18px",background:row.bold?C.s1:"transparent",
-                      borderBottom:`1px solid ${C.b1}22`}}>
-            <span style={{color:row.bold?C.tx:C.ts,fontWeight:row.bold?700:400,fontSize:row.bold?13:12}}>{row.label}</span>
-            <span style={{color:row.color,fontWeight:row.bold?800:500,fontSize:row.bold?14:12}}>
-              {row.label2||( row.val!==null?(row.val>0?"+":"")+f$(row.val):"")}
-            </span>
-          </div>;
-        })}
-      </div>
-    </Card>}
+      <div style={{padding:22}}>{children}</div>
+    </div>
   </div>;
+}
+
+function PageFinanceiro({isMob,perms,effectiveUser}){
+  const {store,update}=useFinanceiroStore();
+  const [tab,setTab]=useState("mrr");
+  const isSocio=(effectiveUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null))?.level===1;
+  const canEdit=isSocio||(perms&&perms.editarFinanceiro);
+
+  const contratosAtivos=(store.contratos||[]).filter(function(c){return c.statusContrato==="ativo";});
+  const mrrAtual=contratosAtivos.reduce(function(s,c){return s+(c.valorMensal||0);},0);
+  const proj12=mrrAtual*12;
+  const pontualMes=(store.pontuais||[]).filter(function(p){if(p.status==="cancelado")return false;if(!p.dataVenda)return false;const d=new Date(p.dataVenda);const now=new Date();return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();}).reduce(function(s,p){return s+(p.valor||0);},0);
+  const receitaTotalMes=mrrAtual+pontualMes;
+  const clientesAtivos=new Set(contratosAtivos.map(function(c){return c.grupo||c.clienteId;})).size;
+  const ticketMedio=contratosAtivos.length>0?(mrrAtual/contratosAtivos.length):0;
+  const porGrupo={};
+  contratosAtivos.forEach(function(c){const k=c.grupo||c.clienteNome;porGrupo[k]=(porGrupo[k]||0)+(c.valorMensal||0);});
+  const concentracao=Object.entries(porGrupo).sort(function(a,b){return b[1]-a[1];})[0];
+  const concentracaoNome=concentracao?(concentracao[0]==="bioter"?"Grupo Bioter":concentracao[0]):"—";
+  const concentracaoValor=concentracao?concentracao[1]:0;
+  const concentracaoPct=mrrAtual>0?Math.round((concentracaoValor/mrrAtual)*100):0;
+  const contasAbertas=(store.cobrancas||[]).filter(function(c){return c.statusPagamento==="em_aberto";});
+  const contasAtrasadas=(store.cobrancas||[]).filter(function(c){return c.statusPagamento==="atrasado";});
+  const ltvTotal=contratosAtivos.reduce(function(s,c){if(!c.dataInicio)return s+(c.valorMensal||0);const start=new Date(c.dataInicio);const meses=Math.max(1,Math.round((Date.now()-start.getTime())/(30*86400000)));return s+meses*(c.valorMensal||0);},0);
+
+  const KPIS=[
+    {label:"MRR atual",value:_finFmtBRL(mrrAtual),accent:"#16a34a"},
+    {label:"Receita projetada (12m)",value:_finFmtBRL(proj12)},
+    {label:"Receita pontual do mês",value:_finFmtBRL(pontualMes)},
+    {label:"Receita total do mês",value:_finFmtBRL(receitaTotalMes)},
+    {label:"Contratos ativos",value:contratosAtivos.length},
+    {label:"Clientes ativos",value:clientesAtivos},
+    {label:"Ticket médio",value:_finFmtBRL(ticketMedio)},
+    {label:"LTV total acumulado",value:_finFmtBRL(ltvTotal)},
+    {label:"Contas em aberto",value:contasAbertas.length,accent:contasAbertas.length>0?"#ca8a04":undefined},
+    {label:"Contas atrasadas",value:contasAtrasadas.length,accent:contasAtrasadas.length>0?"#dc2626":undefined},
+    {label:"Maior concentração",value:concentracaoNome,small:_finFmtBRL(concentracaoValor)+" · "+concentracaoPct+"%"},
+  ];
+  const SUBTABS=[{id:"mrr",label:"MRR & Contratos"},{id:"pontual",label:"Receita pontual"},{id:"ltv",label:"LTV por cliente"},{id:"projecao",label:"Projeção"},{id:"status",label:"Status financeiro"}];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:24,letterSpacing:-.5}}>Financeiro</div>
+      <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Receita recorrente, pontual, projeção e status financeiro da Pixels.</div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:10}}>
+      {KPIS.map(function(k,i){return <div key={i} style={Object.assign({},_FIN_CARD,{padding:"14px 16px"})}>
+        <div style={_FIN_LBL}>{k.label}</div>
+        <div style={{color:k.accent||"#0f172a",fontWeight:800,fontSize:k.small?17:20,marginTop:4,letterSpacing:-.3}}>{k.value}</div>
+        {k.small&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:3,fontWeight:600}}>{k.small}</div>}
+      </div>;})}
+    </div>
+    <div style={{display:"flex",gap:4,borderBottom:"1px solid #e2e8f0",overflowX:"auto"}}>
+      {SUBTABS.map(function(s){const active=tab===s.id;return <button key={s.id} onClick={function(){setTab(s.id);}}
+        style={{background:"none",border:"none",borderBottom:active?"2px solid #0f172a":"2px solid transparent",padding:"10px 16px",color:active?"#0f172a":"#64748b",fontWeight:active?700:500,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginBottom:-1,whiteSpace:"nowrap"}}>{s.label}</button>;})}
+    </div>
+    {tab==="mrr"&&<FinMRRContratos store={store} update={update} canEdit={canEdit}/>}
+    {tab==="pontual"&&<FinReceitaPontual store={store} update={update} canEdit={canEdit}/>}
+    {tab==="ltv"&&<FinLTV store={store}/>}
+    {tab==="projecao"&&<FinProjecao store={store} mrrAtual={mrrAtual} proj12={proj12}/>}
+    {tab==="status"&&<FinStatus store={store} update={update} canEdit={canEdit}/>}
+  </div>;
+}
+
+function FinMRRContratos({store,update,canEdit}){
+  const [editing,setEditing]=useState(null);
+  const contratos=store.contratos||[];
+  const groups={};
+  contratos.forEach(function(c){if(c.grupo==="bioter"){if(!groups.bioter)groups.bioter={name:"Grupo Bioter",total:0,items:[]};groups.bioter.total+=(c.valorMensal||0);groups.bioter.items.push(c);}});
+  const semGrupo=contratos.filter(function(c){return !c.grupo;});
+
+  function newContrato(){setEditing({id:"c"+Date.now()+"-"+Math.random().toString(36).slice(2,5),clienteId:"",clienteNome:"",grupo:"",unidade:"",valorMensal:0,servicos:"",dataInicio:new Date().toISOString().slice(0,10),dataRevisao:"",statusContrato:"ativo",statusPagamento:"em_dia",responsavel:"",custoEstimado:0,margem:0,observacoes:""});}
+  function saveContrato(c){const exists=(store.contratos||[]).some(function(x){return x.id===c.id;});update(function(prev){const arr=prev.contratos||[];return Object.assign({},prev,{contratos:exists?arr.map(function(x){return x.id===c.id?c:x;}):[c].concat(arr)});});setEditing(null);}
+  function delContrato(id){if(!window.confirm("Excluir esse contrato?"))return;update(function(prev){return Object.assign({},prev,{contratos:(prev.contratos||[]).filter(function(c){return c.id!==id;})});});}
+
+  function renderRow(c){
+    const stC=_finFindCfg(FIN_CONTRATO_STATUS,c.statusContrato),stP=_finFindCfg(FIN_PAGAMENTO_STATUS,c.statusPagamento);
+    return <div key={c.id} style={{display:"grid",gridTemplateColumns:"2fr 0.9fr 0.9fr 1fr 1fr 70px",padding:"12px 14px",borderBottom:"1px solid #f1f5f9",gap:10,alignItems:"center",cursor:canEdit?"pointer":"default"}} onClick={function(){canEdit&&setEditing(c);}}>
+      <div><div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{c.clienteNome}</div><div style={{color:"#64748b",fontSize:11,marginTop:2}}>{c.servicos||"—"}</div></div>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{_finFmtBRL(c.valorMensal)}</div>
+      <div style={{color:"#475569",fontSize:11}}>{_finFmtDateBR(c.dataInicio)}</div>
+      <div><span style={{background:stC.bg,color:stC.color,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>{stC.label}</span></div>
+      <div><span style={{background:stP.bg,color:stP.color,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>{stP.label}</span></div>
+      {canEdit&&<button onClick={function(e){e.stopPropagation();delContrato(c.id);}} style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:14,padding:6}}>✕</button>}
+    </div>;
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{color:"#64748b",fontSize:13}}>{contratos.length} contrato{contratos.length!==1?"s":""}</div>
+      {canEdit&&<button onClick={newContrato} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>+ Novo contrato</button>}
+    </div>
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 0.9fr 0.9fr 1fr 1fr 70px",padding:"12px 14px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",gap:10}}>
+        {["Cliente / serviços","Mensal","Início","Contrato","Pagamento",""].map(function(h,i){return <div key={i} style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{h}</div>;})}
+      </div>
+      {groups.bioter&&<div>
+        <div style={{padding:"10px 14px",background:"#f5f3ff",borderBottom:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{color:"#7c3aed",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,display:"flex",alignItems:"center",gap:8}}>Grupo Bioter <span style={{background:"#7c3aed",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:9,fontWeight:700}}>{groups.bioter.items.length} unidades</span></div>
+          <div style={{color:"#7c3aed",fontWeight:800,fontSize:13}}>{_finFmtBRL(groups.bioter.total)}/mês</div>
+        </div>
+        {groups.bioter.items.map(renderRow)}
+      </div>}
+      {semGrupo.map(renderRow)}
+      {contratos.length===0&&<div style={{padding:36,textAlign:"center",color:"#94a3b8",fontSize:13}}>Nenhum contrato cadastrado.</div>}
+    </div>
+    {editing&&<FinContratoModal c={editing} onClose={function(){setEditing(null);}} onSave={saveContrato}/>}
+  </div>;
+}
+
+function FinContratoModal({c,onClose,onSave}){
+  const [f,setF]=useState(c);const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
+  return <FinModal title={c.clienteNome?"Editar contrato":"Novo contrato"} onClose={onClose} maxWidth={640}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Cliente</div><input value={f.clienteNome||""} onChange={function(e){set("clienteNome",e.target.value);}} style={_FIN_INP} autoFocus/></div>
+      <div><div style={_FIN_LBL}>Grupo econômico (opcional)</div><input value={f.grupo||""} onChange={function(e){set("grupo",e.target.value);}} style={_FIN_INP} placeholder="Ex: bioter"/></div>
+      <div><div style={_FIN_LBL}>Unidade / filial</div><input value={f.unidade||""} onChange={function(e){set("unidade",e.target.value);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Valor mensal (R$)</div><input type="number" value={f.valorMensal||0} onChange={function(e){set("valorMensal",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Custo estimado (R$)</div><input type="number" value={f.custoEstimado||0} onChange={function(e){set("custoEstimado",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Serviços contratados</div><textarea rows={2} value={f.servicos||""} onChange={function(e){set("servicos",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:50})}/></div>
+      <div><div style={_FIN_LBL}>Data de início</div><input type="date" value={f.dataInicio||""} onChange={function(e){set("dataInicio",e.target.value);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Data de revisão</div><input type="date" value={f.dataRevisao||""} onChange={function(e){set("dataRevisao",e.target.value);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Status do contrato</div><select value={f.statusContrato||"ativo"} onChange={function(e){set("statusContrato",e.target.value);}} style={_FIN_INP}>{FIN_CONTRATO_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}</select></div>
+      <div><div style={_FIN_LBL}>Status do pagamento</div><select value={f.statusPagamento||"em_dia"} onChange={function(e){set("statusPagamento",e.target.value);}} style={_FIN_INP}>{FIN_PAGAMENTO_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}</select></div>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Responsável interno</div><select value={f.responsavel||""} onChange={function(e){set("responsavel",e.target.value);}} style={_FIN_INP}><option value="">—</option>{(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}</select></div>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={function(){onSave(f);}} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+    </div>
+  </FinModal>;
+}
+
+function FinReceitaPontual({store,update,canEdit}){
+  const [editing,setEditing]=useState(null);
+  const pontuais=store.pontuais||[];
+  const total=pontuais.filter(function(p){return p.status!=="cancelado";}).reduce(function(s,p){return s+(p.valor||0);},0);
+  function newProj(){setEditing({id:"p"+Date.now()+"-"+Math.random().toString(36).slice(2,5),projeto:"",cliente:"",tipo:"Landing Page",valor:0,custoEstimado:0,margem:0,status:"proposta",dataVenda:new Date().toISOString().slice(0,10),dataEntrega:"",responsavel:"",observacoes:""});}
+  function saveProj(p){const exists=(store.pontuais||[]).some(function(x){return x.id===p.id;});update(function(prev){const arr=prev.pontuais||[];return Object.assign({},prev,{pontuais:exists?arr.map(function(x){return x.id===p.id?p:x;}):[p].concat(arr)});});setEditing(null);}
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{color:"#64748b",fontSize:13}}>{pontuais.length} projeto{pontuais.length!==1?"s":""} · receita total {_finFmtBRL(total)}</div>
+      {canEdit&&<button onClick={newProj} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>+ Novo projeto</button>}
+    </div>
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 1fr 1.2fr",padding:"12px 14px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",gap:10}}>
+        {["Projeto","Cliente / tipo","Valor","Venda","Status"].map(function(h,i){return <div key={i} style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{h}</div>;})}
+      </div>
+      {pontuais.length===0&&<div style={{padding:36,textAlign:"center",color:"#94a3b8",fontSize:13}}>Nenhum projeto pontual cadastrado.</div>}
+      {pontuais.map(function(p){const stCfg=_finFindCfg(FIN_PROJETO_STATUS,p.status);return <div key={p.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 1fr 1.2fr",padding:"12px 14px",borderBottom:"1px solid #f1f5f9",gap:10,alignItems:"center",cursor:canEdit?"pointer":"default"}} onClick={function(){canEdit&&setEditing(p);}}>
+        <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{p.projeto||"(sem nome)"}</div>
+        <div><div style={{color:"#475569",fontSize:12}}>{p.cliente||"—"}</div><div style={{color:"#94a3b8",fontSize:10.5,marginTop:1}}>{p.tipo}</div></div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{_finFmtBRL(p.valor)}</div>
+        <div style={{color:"#475569",fontSize:11}}>{_finFmtDateBR(p.dataVenda)}</div>
+        <div><span style={{background:stCfg.bg,color:stCfg.color,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>{stCfg.label}</span></div>
+      </div>;})}
+    </div>
+    {editing&&<FinPontualModal p={editing} onClose={function(){setEditing(null);}} onSave={saveProj}/>}
+  </div>;
+}
+
+function FinPontualModal({p,onClose,onSave}){
+  const [f,setF]=useState(p);const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
+  return <FinModal title={p.projeto?"Editar projeto":"Novo projeto pontual"} onClose={onClose} maxWidth={640}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Nome do projeto</div><input value={f.projeto||""} onChange={function(e){set("projeto",e.target.value);}} style={_FIN_INP} autoFocus/></div>
+      <div><div style={_FIN_LBL}>Cliente</div><input value={f.cliente||""} onChange={function(e){set("cliente",e.target.value);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Tipo</div><select value={f.tipo||"Landing Page"} onChange={function(e){set("tipo",e.target.value);}} style={_FIN_INP}>{FIN_TIPOS_PROJETO.map(function(t){return <option key={t} value={t}>{t}</option>;})}</select></div>
+      <div><div style={_FIN_LBL}>Valor (R$)</div><input type="number" value={f.valor||0} onChange={function(e){set("valor",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Custo estimado (R$)</div><input type="number" value={f.custoEstimado||0} onChange={function(e){set("custoEstimado",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Status</div><select value={f.status||"proposta"} onChange={function(e){set("status",e.target.value);}} style={_FIN_INP}>{FIN_PROJETO_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}</select></div>
+      <div><div style={_FIN_LBL}>Data da venda</div><input type="date" value={f.dataVenda||""} onChange={function(e){set("dataVenda",e.target.value);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Data prevista de entrega</div><input type="date" value={f.dataEntrega||""} onChange={function(e){set("dataEntrega",e.target.value);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Responsável</div><select value={f.responsavel||""} onChange={function(e){set("responsavel",e.target.value);}} style={_FIN_INP}><option value="">—</option>{(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}</select></div>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={function(){onSave(f);}} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+    </div>
+  </FinModal>;
+}
+
+function FinLTV({store}){
+  const contratos=store.contratos||[];const byClient={};
+  contratos.forEach(function(c){const key=c.grupo||c.clienteNome;if(!byClient[key])byClient[key]={nome:key,grupo:c.grupo||"",mrr:0,mesesAtivos:0,inicio:c.dataInicio,unidades:[]};byClient[key].mrr+=(c.valorMensal||0);byClient[key].unidades.push(c);if(c.dataInicio&&(!byClient[key].inicio||c.dataInicio<byClient[key].inicio))byClient[key].inicio=c.dataInicio;});
+  Object.values(byClient).forEach(function(b){if(b.inicio){const start=new Date(b.inicio);b.mesesAtivos=Math.max(1,Math.round((Date.now()-start.getTime())/(30*86400000)));}b.acumulado=b.mrr*b.mesesAtivos;b.projetada=b.mrr*12;});
+  const sorted=Object.values(byClient).sort(function(a,b){return b.acumulado-a.acumulado;});
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+    <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1.2fr 1.2fr",padding:"12px 14px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",gap:10}}>
+      {["Cliente / grupo","MRR","Tempo (m)","Acumulado","Projetada 12m"].map(function(h,i){return <div key={i} style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{h}</div>;})}
+    </div>
+    {sorted.length===0&&<div style={{padding:36,textAlign:"center",color:"#94a3b8",fontSize:13}}>Sem contratos pra calcular.</div>}
+    {sorted.map(function(b){return <div key={b.nome} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1.2fr 1.2fr",padding:"12px 14px",borderBottom:"1px solid #f1f5f9",gap:10,alignItems:"center"}}>
+      <div><div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{b.grupo==="bioter"?"Grupo Bioter":b.nome}</div>{b.unidades.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:1}}>{b.unidades.length} unidades</div>}</div>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{_finFmtBRL(b.mrr)}</div>
+      <div style={{color:"#475569",fontSize:12}}>{b.mesesAtivos}</div>
+      <div style={{color:"#16a34a",fontWeight:700,fontSize:13}}>{_finFmtBRL(b.acumulado)}</div>
+      <div style={{color:"#7c3aed",fontWeight:700,fontSize:13}}>{_finFmtBRL(b.projetada)}</div>
+    </div>;})}
+  </div>;
+}
+
+function FinProjecao({store,mrrAtual,proj12}){
+  const proj3=mrrAtual*3,proj6=mrrAtual*6;
+  const pontualPrev=(store.pontuais||[]).filter(function(p){return p.status==="aprovado"||p.status==="em_producao";}).reduce(function(s,p){return s+(p.valor||0);},0);
+  const contratosRisco=(store.contratos||[]).filter(function(c){return c.statusPagamento==="atrasado";});
+  const hoje=Date.now();
+  const renovacao=(store.contratos||[]).filter(function(c){if(!c.dataRevisao)return false;const d=new Date(c.dataRevisao).getTime();return d>hoje&&d<hoje+90*86400000;});
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
+      <div style={Object.assign({},_FIN_CARD,{padding:"14px 16px"})}><div style={_FIN_LBL}>Receita projetada (3 meses)</div><div style={{color:"#0f172a",fontWeight:800,fontSize:20,marginTop:4}}>{_finFmtBRL(proj3)}</div></div>
+      <div style={Object.assign({},_FIN_CARD,{padding:"14px 16px"})}><div style={_FIN_LBL}>Receita projetada (6 meses)</div><div style={{color:"#0f172a",fontWeight:800,fontSize:20,marginTop:4}}>{_finFmtBRL(proj6)}</div></div>
+      <div style={Object.assign({},_FIN_CARD,{padding:"14px 16px"})}><div style={_FIN_LBL}>Receita projetada (12 meses)</div><div style={{color:"#0f172a",fontWeight:800,fontSize:20,marginTop:4}}>{_finFmtBRL(proj12)}</div></div>
+      <div style={Object.assign({},_FIN_CARD,{padding:"14px 16px"})}><div style={_FIN_LBL}>Receita pontual prevista</div><div style={{color:"#0f172a",fontWeight:800,fontSize:20,marginTop:4}}>{_finFmtBRL(pontualPrev)}</div></div>
+    </div>
+    <div style={_FIN_CARD}>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:10}}>Contratos em risco</div>
+      {contratosRisco.length===0&&<div style={{color:"#94a3b8",fontSize:12}}>Nenhum contrato em risco no momento.</div>}
+      {contratosRisco.map(function(c){return <div key={c.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
+        <span style={{color:"#0f172a",fontSize:13,fontWeight:600}}>{c.clienteNome}</span>
+        <span style={{color:"#dc2626",fontSize:12,fontWeight:700}}>{_finFmtBRL(c.valorMensal)}/mês · pagamento atrasado</span>
+      </div>;})}
+    </div>
+    <div style={_FIN_CARD}>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:10}}>Renovação próxima (90 dias)</div>
+      {renovacao.length===0&&<div style={{color:"#94a3b8",fontSize:12}}>Nenhuma renovação prevista.</div>}
+      {renovacao.map(function(c){return <div key={c.id} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f1f5f9"}}>
+        <span style={{color:"#0f172a",fontSize:13,fontWeight:600}}>{c.clienteNome}</span>
+        <span style={{color:"#ca8a04",fontSize:12,fontWeight:700}}>Revisão em {_finFmtDateBR(c.dataRevisao)}</span>
+      </div>;})}
+    </div>
+  </div>;
+}
+
+function FinStatus({store,update,canEdit}){
+  const [editing,setEditing]=useState(null);
+  const cobrancas=store.cobrancas||[];
+  function newCob(){setEditing({id:"cb"+Date.now()+"-"+Math.random().toString(36).slice(2,5),cliente:"",valor:0,vencimento:new Date().toISOString().slice(0,10),statusPagamento:"em_aberto",tipo:"recorrente",observacoes:"",responsavelCobranca:""});}
+  function saveCob(c){const exists=(store.cobrancas||[]).some(function(x){return x.id===c.id;});update(function(prev){const arr=prev.cobrancas||[];return Object.assign({},prev,{cobrancas:exists?arr.map(function(x){return x.id===c.id?c:x;}):[c].concat(arr)});});setEditing(null);}
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{color:"#64748b",fontSize:13}}>{cobrancas.length} cobrança{cobrancas.length!==1?"s":""}</div>
+      {canEdit&&<button onClick={newCob} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>+ Nova cobrança</button>}
+    </div>
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",padding:"12px 14px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",gap:10}}>
+        {["Cliente","Valor","Vencimento","Tipo","Status"].map(function(h,i){return <div key={i} style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{h}</div>;})}
+      </div>
+      {cobrancas.length===0&&<div style={{padding:36,textAlign:"center",color:"#94a3b8",fontSize:13}}>Nenhuma cobrança registrada.</div>}
+      {cobrancas.map(function(c){const stCfg=_finFindCfg(FIN_PAGAMENTO_STATUS,c.statusPagamento);return <div key={c.id} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr 1fr",padding:"12px 14px",borderBottom:"1px solid #f1f5f9",gap:10,alignItems:"center",cursor:canEdit?"pointer":"default"}} onClick={function(){canEdit&&setEditing(c);}}>
+        <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{c.cliente||"—"}</div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{_finFmtBRL(c.valor)}</div>
+        <div style={{color:"#475569",fontSize:12}}>{_finFmtDateBR(c.vencimento)}</div>
+        <div style={{color:"#64748b",fontSize:11,textTransform:"capitalize"}}>{c.tipo}</div>
+        <div><span style={{background:stCfg.bg,color:stCfg.color,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99}}>{stCfg.label}</span></div>
+      </div>;})}
+    </div>
+    {editing&&<FinCobrancaModal c={editing} onClose={function(){setEditing(null);}} onSave={saveCob}/>}
+  </div>;
+}
+
+function FinCobrancaModal({c,onClose,onSave}){
+  const [f,setF]=useState(c);const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
+  return <FinModal title={c.cliente?"Editar cobrança":"Nova cobrança"} onClose={onClose}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Cliente</div><input value={f.cliente||""} onChange={function(e){set("cliente",e.target.value);}} style={_FIN_INP} autoFocus/></div>
+      <div><div style={_FIN_LBL}>Valor (R$)</div><input type="number" value={f.valor||0} onChange={function(e){set("valor",Number(e.target.value)||0);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Vencimento</div><input type="date" value={f.vencimento||""} onChange={function(e){set("vencimento",e.target.value);}} style={_FIN_INP}/></div>
+      <div><div style={_FIN_LBL}>Tipo</div><select value={f.tipo||"recorrente"} onChange={function(e){set("tipo",e.target.value);}} style={_FIN_INP}><option value="recorrente">Recorrente</option><option value="pontual">Pontual</option></select></div>
+      <div><div style={_FIN_LBL}>Status</div><select value={f.statusPagamento||"em_aberto"} onChange={function(e){set("statusPagamento",e.target.value);}} style={_FIN_INP}>{FIN_PAGAMENTO_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}</select></div>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Responsável pela cobrança</div><select value={f.responsavelCobranca||""} onChange={function(e){set("responsavelCobranca",e.target.value);}} style={_FIN_INP}><option value="">—</option>{(typeof TEAM!=="undefined"?TEAM:[]).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}</select></div>
+      <div style={{gridColumn:"span 2"}}><div style={_FIN_LBL}>Observações</div><textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_FIN_INP,{resize:"vertical",minHeight:60})}/></div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={function(){onSave(f);}} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+    </div>
+  </FinModal>;
 }
 
 // ======= 09_acessos.jsx =======
@@ -25731,6 +25936,7 @@ export default function AgencyOS(){
       case "aprovacoes_publicacao":return p.verAprovacoes;
       case "aprovacoes_internas":  return p.aprovarDemandaInterna||isSocio;
       case "gestaomidia":          return p.verGestaoMidia||isSocio;
+      case "comercial":            return p.verComercial||isSocio;
       case "chat":                 return p.verChat;
       case "clientes":             return p.verClientes;
       case "analises":
@@ -25814,6 +26020,7 @@ export default function AgencyOS(){
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_internas":  return (effectivePerms.aprovarDemandaInterna||isSocio)?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="internas"/>:<NoPerm/>;
       case "gestaomidia":          return (effectivePerms.verGestaoMidia||isSocio)?<PageGestaoMidia {...p} currentUser={CURRENT_USER}/>:<NoPerm/>;
+      case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
       case "analises_producao":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseProd)||isSocio?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
       case "analises_gargalos":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseGarg)||isSocio?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
@@ -26160,7 +26367,7 @@ export default function AgencyOS(){
         <button onClick={()=>setSideOpen(true)} aria-label="Mais opções"
           style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4,background:"none",border:"none",cursor:"pointer",padding:"6px 2px",color:"#64748b",transition:"color .15s",minHeight:56}}>
           <div style={{borderRadius:10,padding:"4px 12px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
           </div>
           <span style={{fontSize:10,fontWeight:500,lineHeight:1,letterSpacing:-.1}}>Mais</span>
         </button>
@@ -30206,4 +30413,1090 @@ PROMPT DE IMAGEM:
       </div>
     </div>)}
   </div>);
+}
+
+// ======= 18_comercial.jsx =======
+// Aba Comercial — vendas, prospects, oportunidades, upsell, propostas, follow-ups.
+// Independente de Gestão. Não mostra dados financeiros consolidados.
+// Storage local (localStorage) — migra pra Supabase depois.
+//
+// Sub-abas internas:
+//   1. dashboard  — Dashboard Comercial
+//   2. prospects  — Kanban de Prospects
+//   3. oportun    — Oportunidades / Upsell
+//   4. propostas  — Propostas
+//   5. followups  — Follow-ups
+//   6. historico  — Histórico Comercial
+
+/* ─── CONSTANTES ─────────────────────────────────────── */
+
+const COMERCIAL_PROSPECT_COLS = [
+  {id:"novo_lead",         label:"Novo lead",          color:"#64748b"},
+  {id:"qualificar",        label:"Qualificar",         color:"#94a3b8"},
+  {id:"primeiro_contato",  label:"Primeiro contato",   color:"#0284c7"},
+  {id:"reuniao_marcada",   label:"Reunião marcada",    color:"#0891b2"},
+  {id:"diagnostico",       label:"Diagnóstico",        color:"#0d9488"},
+  {id:"proposta_preparar", label:"Proposta a preparar",color:"#ca8a04"},
+  {id:"proposta_enviada",  label:"Proposta enviada",   color:"#ea580c"},
+  {id:"negociacao",        label:"Negociação",         color:"#7c3aed"},
+  {id:"ganho",             label:"Ganho",              color:"#16a34a"},
+  {id:"perdido",           label:"Perdido",            color:"#dc2626"},
+];
+
+const COMERCIAL_TEMPS = [
+  {id:"frio",   label:"Frio",  color:"#0284c7", bg:"#e0f2fe"},
+  {id:"morno",  label:"Morno", color:"#ca8a04", bg:"#fef9c3"},
+  {id:"quente", label:"Quente",color:"#dc2626", bg:"#fee2e2"},
+];
+
+const COMERCIAL_OFERTAS = [
+  "Gestão de Redes Sociais","Gestão Meta Ads","Gestão Google Ads",
+  "Social + Mídia","Social + Meta + Google",
+  "Landing Page","Site","Google Perfil de Empresa",
+  "Relatório Premium","Automação WhatsApp/CRM",
+  "Apresentação Comercial","Catálogo Digital",
+  "Campanha de Feira","Campanhas Regionais por Filial",
+  "Pacote Extra de Vídeos","Pacote Extra de Posts",
+  "Setup Pixel/Tag","CRM/Funil",
+  "Produção de conteúdo extra","Relatórios avançados",
+  "Portal do cliente personalizado",
+];
+
+const COMERCIAL_OPORTUN_STATUS = [
+  {id:"ideia",             label:"Ideia",           color:"#64748b", bg:"#f1f5f9"},
+  {id:"preparar_proposta", label:"Preparar proposta",color:"#ca8a04",bg:"#fef9c3"},
+  {id:"apresentada",       label:"Apresentada",     color:"#0284c7", bg:"#e0f2fe"},
+  {id:"negociando",        label:"Negociando",      color:"#7c3aed", bg:"#f5f3ff"},
+  {id:"vendida",           label:"Vendida",         color:"#16a34a", bg:"#dcfce7"},
+  {id:"perdida",           label:"Perdida",         color:"#dc2626", bg:"#fee2e2"},
+];
+
+const COMERCIAL_PROPOSTA_STATUS = [
+  {id:"rascunho",   label:"Rascunho",      color:"#64748b", bg:"#f1f5f9"},
+  {id:"enviada",    label:"Enviada",       color:"#0284c7", bg:"#e0f2fe"},
+  {id:"negociacao", label:"Em negociação", color:"#7c3aed", bg:"#f5f3ff"},
+  {id:"aprovada",   label:"Aprovada",      color:"#16a34a", bg:"#dcfce7"},
+  {id:"recusada",   label:"Recusada",      color:"#dc2626", bg:"#fee2e2"},
+];
+
+const COMERCIAL_FOLLOWUP_STATUS = [
+  {id:"pendente", label:"Pendente",  color:"#ca8a04", bg:"#fef9c3"},
+  {id:"feito",    label:"Feito",     color:"#16a34a", bg:"#dcfce7"},
+  {id:"atrasado", label:"Atrasado",  color:"#dc2626", bg:"#fee2e2"},
+];
+
+const COMERCIAL_PERDIDA_MOTIVOS = ["preço","timing","concorrente","sem resposta","não qualificado","outro"];
+
+/* ─── HOOK: useComercialStore ────────────────────────
+   State global persistido em localStorage. Estrutura:
+   { prospects:[], oportunidades:[], propostas:[], followups:[], historico:[] }
+─────────────────────────────────────────────────── */
+const COMERCIAL_STORE_KEY = "pixels-comercial-v1";
+
+function _comInitial(){
+  return {prospects:[],oportunidades:[],propostas:[],followups:[],historico:[]};
+}
+function _comLoad(){
+  try{
+    const raw=localStorage.getItem(COMERCIAL_STORE_KEY);
+    if(!raw)return _comInitial();
+    const p=JSON.parse(raw);
+    return Object.assign(_comInitial(),p||{});
+  }catch(e){return _comInitial();}
+}
+function _comSave(s){
+  try{localStorage.setItem(COMERCIAL_STORE_KEY,JSON.stringify(s));}catch(e){}
+}
+function useComercialStore(){
+  const [store,setStore]=useState(_comLoad);
+  const update=useCallback(function(updater){
+    setStore(function(prev){
+      const next=typeof updater==="function"?updater(prev):updater;
+      _comSave(next);
+      return next;
+    });
+  },[]);
+  // Push registro no histórico
+  const log=useCallback(function(clienteOuProspect,tipo,resumo,extra){
+    update(function(prev){
+      const ev={
+        id:"h"+Date.now()+"-"+Math.random().toString(36).slice(2,5),
+        at:new Date().toISOString(),
+        target:clienteOuProspect||"",
+        type:tipo||"interacao",
+        author:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"",
+        resumo:resumo||"",
+      };
+      if(extra)Object.assign(ev,extra);
+      return Object.assign({},prev,{historico:[ev].concat(prev.historico||[])});
+    });
+  },[update]);
+  return {store,update,log};
+}
+
+/* ─── Helpers visuais ──────────────────────────────── */
+const _COM_CARD = {background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:18,fontFamily:"'Inter',system-ui,sans-serif"};
+const _COM_LBL  = {color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5};
+const _COM_INP  = {width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",fontFamily:"'Inter',system-ui,sans-serif",boxSizing:"border-box"};
+
+function _comFmtBRL(n){
+  const v=Number(n)||0;
+  return "R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+function _comFmtDateBR(ds){
+  if(!ds)return "—";
+  try{
+    const d=new Date((ds+"").length===10?ds+"T12:00:00":ds);
+    if(isNaN(d.getTime()))return ds;
+    return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"2-digit"});
+  }catch(e){return ds;}
+}
+function _comFindCfg(arr,id){return arr.find(function(x){return x.id===id;})||arr[0];}
+
+/* ─── Modal genérico (reutiliza ModalShell se existir) ─── */
+function ComModal({title,subtitle,children,onClose,maxWidth}){
+  if(typeof useEscToClose==="function")useEscToClose(true, onClose);
+  return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose&&onClose();}}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:maxWidth||560,maxHeight:"92vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,0.28)"}}>
+      <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.3}}>{title}</div>
+          {subtitle&&<div style={{color:"#64748b",fontSize:12,marginTop:3}}>{subtitle}</div>}
+        </div>
+        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",fontSize:13}}>✕</button>
+      </div>
+      <div style={{padding:22}}>{children}</div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGE COMERCIAL — root com sub-abas
+   ═══════════════════════════════════════════════════════════════ */
+function PageComercial({isMob, perms, effectiveUser}){
+  const {store,update,log}=useComercialStore();
+  const [tab,setTab]=useState("dashboard");
+  const isSocio=(effectiveUser||(typeof CURRENT_USER!=="undefined"?CURRENT_USER:null))?.level===1;
+  const myPerms=perms||{};
+  const canEdit=isSocio||myPerms.editarComercial;
+
+  const SUBTABS=[
+    {id:"dashboard", label:"Dashboard"},
+    {id:"prospects", label:"Kanban de prospects"},
+    {id:"oportun",   label:"Oportunidades / upsell"},
+    {id:"propostas", label:"Propostas"},
+    {id:"followups", label:"Follow-ups"},
+    {id:"historico", label:"Histórico"},
+  ];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:14,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:24,letterSpacing:-.5}}>Comercial</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Vendas, prospects, oportunidades, propostas e follow-ups.</div>
+      </div>
+    </div>
+
+    {/* Sub-tabs */}
+    <div style={{display:"flex",gap:4,borderBottom:"1px solid #e2e8f0",overflowX:"auto"}}>
+      {SUBTABS.map(function(s){
+        const active=tab===s.id;
+        return <button key={s.id} onClick={function(){setTab(s.id);}}
+          style={{background:"none",border:"none",borderBottom:active?"2px solid #0f172a":"2px solid transparent",padding:"10px 16px",color:active?"#0f172a":"#64748b",fontWeight:active?700:500,fontSize:13,cursor:"pointer",fontFamily:"inherit",marginBottom:-1,whiteSpace:"nowrap",transition:"color .12s"}}>
+          {s.label}
+        </button>;
+      })}
+    </div>
+
+    {/* Conteúdo */}
+    {tab==="dashboard"&&<ComDashboard store={store}/>}
+    {tab==="prospects"&&<ComKanbanProspects store={store} update={update} log={log} canEdit={canEdit}/>}
+    {tab==="oportun"&&<ComOportunidades store={store} update={update} log={log} canEdit={canEdit}/>}
+    {tab==="propostas"&&<ComPropostas store={store} update={update} log={log} canEdit={canEdit}/>}
+    {tab==="followups"&&<ComFollowUps store={store} update={update} log={log} canEdit={canEdit}/>}
+    {tab==="historico"&&<ComHistorico store={store}/>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   2.1 DASHBOARD COMERCIAL
+   ═══════════════════════════════════════════════════════════════ */
+function ComDashboard({store}){
+  const prospects=store.prospects||[];
+  const oportunidades=store.oportunidades||[];
+  const propostas=store.propostas||[];
+  const followups=store.followups||[];
+
+  // Cálculos
+  const ativos=prospects.filter(function(p){return p.status!=="ganho"&&p.status!=="perdido";});
+  const oportunAbertas=oportunidades.filter(function(o){return o.status!=="vendida"&&o.status!=="perdida";});
+  const propostasEnv=propostas.filter(function(p){return p.status==="enviada"||p.status==="negociacao";});
+  const propostasNegoc=propostas.filter(function(p){return p.status==="negociacao";});
+
+  // Mês atual
+  const now=new Date();
+  const mesAtual=now.getMonth(), anoAtual=now.getFullYear();
+  function inMonth(ds){
+    if(!ds)return false;
+    try{const d=new Date((ds+"").length===10?ds+"T12:00:00":ds);return d.getMonth()===mesAtual&&d.getFullYear()===anoAtual;}catch(e){return false;}
+  }
+  const ganhosMes=prospects.filter(function(p){return p.status==="ganho"&&inMonth(p.ganhoEm||p.updatedAt);}).length
+    +oportunidades.filter(function(o){return o.status==="vendida"&&inMonth(o.vendidaEm||o.updatedAt);}).length;
+  const perdidosMes=prospects.filter(function(p){return p.status==="perdido"&&inMonth(p.perdidoEm||p.updatedAt);}).length
+    +oportunidades.filter(function(o){return o.status==="perdida"&&inMonth(o.perdidaEm||o.updatedAt);}).length;
+
+  // Valores
+  const valorNegoc=propostasEnv.reduce(function(s,p){return s+((p.valorMensal||0)+(p.valorPontual||0));},0)
+    +oportunAbertas.reduce(function(s,o){return s+(o.valorPotencial||0);},0);
+  const potencialMRR=ativos.reduce(function(s,p){return s+((p.tipo==="mrr"||p.tipo==="hibrido")?(p.valorPotencial||0):0);},0)
+    +oportunAbertas.reduce(function(s,o){return s+((o.tipo==="mrr"||o.tipo==="hibrido")?(o.valorPotencial||0):0);},0);
+  const potencialPontual=ativos.reduce(function(s,p){return s+((p.tipo==="pontual"||p.tipo==="hibrido")?(p.valorPotencial||0):0);},0)
+    +oportunAbertas.reduce(function(s,o){return s+((o.tipo==="pontual"||o.tipo==="hibrido")?(o.valorPotencial||0):0);},0);
+
+  // Próximos follow-ups
+  const proxFup=followups.filter(function(f){return f.status==="pendente";}).length;
+  const semProxAcao=ativos.filter(function(p){return !p.proximaAcaoData;}).length
+    +oportunAbertas.filter(function(o){return !o.proximaAcaoData;}).length;
+
+  // Ticket médio das oportunidades vendidas
+  const vendidas=oportunidades.filter(function(o){return o.status==="vendida";});
+  const ticketMedio=vendidas.length>0?(vendidas.reduce(function(s,o){return s+(o.valorPotencial||0);},0)/vendidas.length):0;
+
+  // Taxa de conversão
+  const totalFechados=ganhosMes+perdidosMes;
+  const taxaConv=totalFechados>0?Math.round((ganhosMes/totalFechados)*100):0;
+
+  // Origens dos prospects
+  const origens={};
+  prospects.forEach(function(p){const o=p.origem||"Não informado";origens[o]=(origens[o]||0)+1;});
+
+  const KPIS=[
+    {label:"Prospects ativos",      value:ativos.length},
+    {label:"Oportunidades abertas", value:oportunAbertas.length},
+    {label:"Potencial de MRR",      value:_comFmtBRL(potencialMRR)},
+    {label:"Potencial pontual",     value:_comFmtBRL(potencialPontual)},
+    {label:"Propostas enviadas",    value:propostasEnv.length},
+    {label:"Em negociação",         value:propostasNegoc.length},
+    {label:"Ganhos no mês",         value:ganhosMes, accent:"#16a34a"},
+    {label:"Perdidos no mês",       value:perdidosMes, accent:"#dc2626"},
+    {label:"Próx. follow-ups",      value:proxFup},
+    {label:"Sem próxima ação",      value:semProxAcao, accent:semProxAcao>0?"#ca8a04":undefined},
+    {label:"Em negociação (valor)", value:_comFmtBRL(valorNegoc)},
+    {label:"Ticket médio",          value:_comFmtBRL(ticketMedio)},
+    {label:"Taxa de conversão",     value:taxaConv+"%"},
+  ];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16}}>
+    {/* Grid de KPIs */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+      {KPIS.map(function(k,i){
+        return <div key={i} style={Object.assign({},_COM_CARD,{padding:"14px 16px"})}>
+          <div style={_COM_LBL}>{k.label}</div>
+          <div style={{color:k.accent||"#0f172a",fontWeight:800,fontSize:20,marginTop:4,letterSpacing:-.3}}>{k.value}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* Origens */}
+    {Object.keys(origens).length>0&&<div style={_COM_CARD}>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Origem dos prospects</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+        {Object.entries(origens).map(function(arr){
+          const [origem,count]=arr;
+          return <div key={origem} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:99,padding:"7px 14px",fontSize:12,fontWeight:600,color:"#475569",display:"inline-flex",alignItems:"center",gap:6}}>
+            <span>{origem}</span>
+            <span style={{background:"#0f172a",color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{count}</span>
+          </div>;
+        })}
+      </div>
+    </div>}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   2.2 KANBAN DE PROSPECTS
+   ═══════════════════════════════════════════════════════════════ */
+function ComKanbanProspects({store,update,log,canEdit}){
+  const [editing,setEditing]=useState(null); // prospect sendo editado
+  const [showLoss,setShowLoss]=useState(null); // {prospectId} pra modal de motivo
+  const [showConvert,setShowConvert]=useState(null);
+  const prospects=store.prospects||[];
+
+  function moveStatus(id,newStatus){
+    if(!canEdit)return;
+    if(newStatus==="perdido"){setShowLoss({id});return;}
+    update(function(prev){
+      const next=(prev.prospects||[]).map(function(p){
+        if(p.id!==id)return p;
+        const upd={...p,status:newStatus,updatedAt:new Date().toISOString()};
+        if(newStatus==="ganho")upd.ganhoEm=new Date().toISOString();
+        return upd;
+      });
+      return Object.assign({},prev,{prospects:next});
+    });
+    log(id,"prospect_status","Status: "+newStatus);
+    if(newStatus==="ganho"){
+      // Pergunta se quer converter
+      const p=prospects.find(function(x){return x.id===id;});
+      if(p)setTimeout(function(){setShowConvert(Object.assign({},p,{status:"ganho"}));},100);
+    }
+  }
+  function confirmLoss(motivo){
+    const id=showLoss.id;
+    update(function(prev){
+      const next=(prev.prospects||[]).map(function(p){
+        if(p.id!==id)return p;
+        return {...p,status:"perdido",motivoPerda:motivo,perdidoEm:new Date().toISOString(),updatedAt:new Date().toISOString()};
+      });
+      return Object.assign({},prev,{prospects:next});
+    });
+    log(id,"prospect_perdido","Motivo: "+motivo);
+    setShowLoss(null);
+  }
+
+  function newProspect(){
+    const p={
+      id:"p"+Date.now()+"-"+Math.random().toString(36).slice(2,5),
+      empresa:"", responsavel:"", origem:"", segmento:"", cidade:"",
+      servico:"", valorPotencial:0, tipo:"mrr",
+      proximaAcao:"", proximaAcaoData:"",
+      temperatura:"morno",
+      status:"novo_lead",
+      observacoes:"",
+      createdAt:new Date().toISOString(),
+      updatedAt:new Date().toISOString(),
+    };
+    setEditing(p);
+  }
+  function saveProspect(p){
+    const exists=(store.prospects||[]).some(function(x){return x.id===p.id;});
+    update(function(prev){
+      const arr=prev.prospects||[];
+      const next=exists?arr.map(function(x){return x.id===p.id?Object.assign({},p,{updatedAt:new Date().toISOString()}):x;})
+                       :[Object.assign({},p,{updatedAt:new Date().toISOString()})].concat(arr);
+      return Object.assign({},prev,{prospects:next});
+    });
+    log(p.id,exists?"prospect_edit":"prospect_new",p.empresa);
+    setEditing(null);
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{color:"#64748b",fontSize:13}}>{prospects.length} prospects · arraste entre colunas pra mudar o status</div>
+      {canEdit&&<button onClick={newProspect}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>
+        + Novo prospect
+      </button>}
+    </div>
+
+    {/* Kanban */}
+    <div style={{display:"flex",gap:10,overflowX:"auto",padding:"4px 0"}}>
+      {COMERCIAL_PROSPECT_COLS.map(function(col){
+        const cards=prospects.filter(function(p){return p.status===col.id;});
+        return <div key={col.id}
+          style={{minWidth:240,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:12,padding:8,display:"flex",flexDirection:"column",gap:6,flexShrink:0,minHeight:120}}
+          onDragOver={function(e){e.preventDefault();}}
+          onDrop={function(e){const id=e.dataTransfer.getData("text/plain");if(id)moveStatus(id,col.id);}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 8px 8px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:col.color}}/>
+              <span style={{color:"#0f172a",fontWeight:700,fontSize:11.5}}>{col.label}</span>
+            </div>
+            <span style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{cards.length}</span>
+          </div>
+          {cards.map(function(p){
+            const tc=_comFindCfg(COMERCIAL_TEMPS,p.temperatura);
+            return <div key={p.id}
+              draggable={canEdit}
+              onDragStart={function(e){e.dataTransfer.setData("text/plain",p.id);}}
+              onClick={function(){canEdit&&setEditing(p);}}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",cursor:canEdit?"grab":"default",transition:"box-shadow .12s"}}
+              onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.08)";}}
+              onMouseLeave={function(e){e.currentTarget.style.boxShadow="none";}}>
+              <div style={{color:"#0f172a",fontWeight:600,fontSize:13,lineHeight:1.3,marginBottom:5}}>{p.empresa||"(sem nome)"}</div>
+              {p.servico&&<div style={{color:"#64748b",fontSize:10.5,marginBottom:5}}>{p.servico}</div>}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:4}}>
+                <span style={{background:tc.bg,color:tc.color,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,textTransform:"uppercase",letterSpacing:.4}}>{tc.label}</span>
+                <span style={{color:"#0f172a",fontSize:11,fontWeight:700}}>{p.valorPotencial?_comFmtBRL(p.valorPotencial):"—"}</span>
+              </div>
+              {p.proximaAcaoData&&<div style={{color:"#64748b",fontSize:10,marginTop:6,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
+                ↗ {_comFmtDateBR(p.proximaAcaoData)} · {p.proximaAcao||"sem ação descrita"}
+              </div>}
+            </div>;
+          })}
+          {cards.length===0&&<div style={{color:"#cbd5e1",fontSize:11,textAlign:"center",padding:"16px 8px",border:"1px dashed #e2e8f0",borderRadius:8}}>Vazio</div>}
+        </div>;
+      })}
+    </div>
+
+    {/* Modais */}
+    {editing&&<ComProspectModal prospect={editing} onClose={function(){setEditing(null);}} onSave={saveProspect}/>}
+    {showLoss&&<ComLossModal onConfirm={confirmLoss} onClose={function(){setShowLoss(null);}}/>}
+    {showConvert&&<ComConvertModal prospect={showConvert} onClose={function(){setShowConvert(null);}} update={update} log={log}/>}
+  </div>;
+}
+
+function ComProspectModal({prospect,onClose,onSave}){
+  const [f,setF]=useState(prospect);
+  const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
+  return <ComModal title={prospect.empresa?"Editar prospect":"Novo prospect"} onClose={onClose} maxWidth={640}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Empresa / prospect</div>
+        <input value={f.empresa||""} onChange={function(e){set("empresa",e.target.value);}} style={_COM_INP} placeholder="Nome da empresa" autoFocus/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Responsável comercial</div>
+        <select value={f.responsavel||""} onChange={function(e){set("responsavel",e.target.value);}} style={_COM_INP}>
+          <option value="">—</option>
+          {(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.level===1;}).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Origem</div>
+        <input value={f.origem||""} onChange={function(e){set("origem",e.target.value);}} style={_COM_INP} placeholder="Indicação, Instagram, evento..."/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Segmento</div>
+        <input value={f.segmento||""} onChange={function(e){set("segmento",e.target.value);}} style={_COM_INP} placeholder="Ex: Agro / Construção"/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Cidade/Estado</div>
+        <input value={f.cidade||""} onChange={function(e){set("cidade",e.target.value);}} style={_COM_INP} placeholder="Ex: Chapecó/SC"/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Serviço de interesse</div>
+        <select value={f.servico||""} onChange={function(e){set("servico",e.target.value);}} style={_COM_INP}>
+          <option value="">— Selecione —</option>
+          {COMERCIAL_OFERTAS.map(function(o){return <option key={o} value={o}>{o}</option>;})}
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Tipo</div>
+        <select value={f.tipo||"mrr"} onChange={function(e){set("tipo",e.target.value);}} style={_COM_INP}>
+          <option value="mrr">Recorrente (MRR)</option>
+          <option value="pontual">Projeto pontual</option>
+          <option value="hibrido">Híbrido</option>
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Valor potencial (R$)</div>
+        <input type="number" value={f.valorPotencial||0} onChange={function(e){set("valorPotencial",Number(e.target.value)||0);}} style={_COM_INP}/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Temperatura</div>
+        <select value={f.temperatura||"morno"} onChange={function(e){set("temperatura",e.target.value);}} style={_COM_INP}>
+          {COMERCIAL_TEMPS.map(function(t){return <option key={t.id} value={t.id}>{t.label}</option>;})}
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Próximo follow-up</div>
+        <input type="date" value={f.proximaAcaoData||""} onChange={function(e){set("proximaAcaoData",e.target.value);}} style={_COM_INP}/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Próxima ação</div>
+        <input value={f.proximaAcao||""} onChange={function(e){set("proximaAcao",e.target.value);}} style={_COM_INP} placeholder="Ex: ligar pra agendar reunião"/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Observações</div>
+        <textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:60})}/>
+      </div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={function(){onSave(f);}} disabled={!(f.empresa||"").trim()}
+        style={{background:(f.empresa||"").trim()?"#7c3aed":"#cbd5e1",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:(f.empresa||"").trim()?"pointer":"not-allowed",fontFamily:"inherit"}}>Salvar</button>
+    </div>
+  </ComModal>;
+}
+
+function ComLossModal({onConfirm,onClose}){
+  return <ComModal title="Motivo da perda" subtitle="Por que o prospect foi pra perdido?" onClose={onClose} maxWidth={420}>
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {COMERCIAL_PERDIDA_MOTIVOS.map(function(m){
+        return <button key={m} onClick={function(){onConfirm(m);}}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 14px",fontSize:13,fontWeight:600,color:"#0f172a",textAlign:"left",cursor:"pointer",fontFamily:"inherit",transition:"all .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fecaca";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>
+          {m.charAt(0).toUpperCase()+m.slice(1)}
+        </button>;
+      })}
+    </div>
+  </ComModal>;
+}
+
+function ComConvertModal({prospect,onClose,update,log}){
+  const [tipo,setTipo]=useState(prospect.tipo||"mrr");
+  const [valor,setValor]=useState(prospect.valorPotencial||0);
+  const [observacoes,setObservacoes]=useState("");
+  function converter(){
+    // Cria oportunidade vendida + entry no histórico
+    const opp={
+      id:"o"+Date.now()+"-"+Math.random().toString(36).slice(2,5),
+      cliente:prospect.empresa,
+      origemProspectId:prospect.id,
+      tipo:tipo,
+      produto:prospect.servico||"",
+      valorPotencial:Number(valor)||0,
+      status:"vendida",
+      vendidaEm:new Date().toISOString(),
+      observacoes:observacoes,
+      createdAt:new Date().toISOString(),
+    };
+    update(function(prev){
+      return Object.assign({},prev,{oportunidades:[opp].concat(prev.oportunidades||[])});
+    });
+    log(prospect.id,"prospect_convertido","Prospect "+prospect.empresa+" convertido em "+tipo);
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Prospect convertido. Adicione o cliente manualmente na aba Clientes.");
+    onClose();
+  }
+  return <ComModal title={"Converter prospect: "+prospect.empresa} subtitle="Marca como ganho e gera oportunidade vendida pra alimentar o Financeiro." onClose={onClose}>
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div>
+        <div style={_COM_LBL}>Tipo de venda</div>
+        <select value={tipo} onChange={function(e){setTipo(e.target.value);}} style={_COM_INP}>
+          <option value="mrr">Contrato recorrente (MRR)</option>
+          <option value="pontual">Projeto pontual</option>
+          <option value="hibrido">Híbrido (recorrente + pontual)</option>
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Valor fechado (R$)</div>
+        <input type="number" value={valor} onChange={function(e){setValor(e.target.value);}} style={_COM_INP}/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Observações</div>
+        <textarea rows={3} value={observacoes} onChange={function(e){setObservacoes(e.target.value);}} style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:60})}/>
+      </div>
+      <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",color:"#92400e",fontSize:12}}>
+        Próximo passo: vá na aba Clientes e cadastre {prospect.empresa} manualmente. Em seguida, o contrato/projeto aparece em Financeiro.
+      </div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={converter} style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Converter</button>
+    </div>
+  </ComModal>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   2.3 OPORTUNIDADES / UPSELL
+   ═══════════════════════════════════════════════════════════════ */
+function ComOportunidades({store,update,log,canEdit}){
+  const [editing,setEditing]=useState(null);
+  const [filterStatus,setFilterStatus]=useState("todas");
+  const oportunidades=store.oportunidades||[];
+
+  const filtered=filterStatus==="todas"?oportunidades:oportunidades.filter(function(o){return o.status===filterStatus;});
+  const totalPot=filtered.reduce(function(s,o){return s+(o.valorPotencial||0);},0);
+
+  function newOpp(){
+    setEditing({
+      id:"o"+Date.now()+"-"+Math.random().toString(36).slice(2,5),
+      cliente:"", clienteId:"", grupo:"", unidade:"",
+      oferta:"", produto:"", tipo:"mrr",
+      valorPotencial:0, chance:"media",
+      motivo:"", donoAbordagem:"", melhorMomento:"",
+      status:"ideia", proximaAcao:"", proximaAcaoData:"",
+      observacoes:"",
+      createdAt:new Date().toISOString(),
+    });
+  }
+  function saveOpp(o){
+    const exists=(store.oportunidades||[]).some(function(x){return x.id===o.id;});
+    update(function(prev){
+      const arr=prev.oportunidades||[];
+      const next=exists?arr.map(function(x){return x.id===o.id?Object.assign({},o,{updatedAt:new Date().toISOString()}):x;})
+                       :[Object.assign({},o,{updatedAt:new Date().toISOString()})].concat(arr);
+      return Object.assign({},prev,{oportunidades:next});
+    });
+    log(o.clienteId||o.cliente, exists?"opp_edit":"opp_new", o.oferta||o.produto);
+    setEditing(null);
+  }
+  function changeStatus(id,newStatus){
+    update(function(prev){
+      const next=(prev.oportunidades||[]).map(function(o){
+        if(o.id!==id)return o;
+        const upd={...o,status:newStatus,updatedAt:new Date().toISOString()};
+        if(newStatus==="vendida")upd.vendidaEm=new Date().toISOString();
+        if(newStatus==="perdida")upd.perdidaEm=new Date().toISOString();
+        return upd;
+      });
+      return Object.assign({},prev,{oportunidades:next});
+    });
+    log(id,"opp_status",newStatus);
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{color:"#64748b",fontSize:13}}>{filtered.length} oportunidade{filtered.length!==1?"s":""} · valor potencial {_comFmtBRL(totalPot)}</div>
+      {canEdit&&<button onClick={newOpp}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>
+        + Nova oportunidade
+      </button>}
+    </div>
+
+    {/* Filtros */}
+    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+      {[{id:"todas",label:"Todas"}].concat(COMERCIAL_OPORTUN_STATUS.map(function(s){return {id:s.id,label:s.label};})).map(function(f){
+        const active=filterStatus===f.id;
+        return <button key={f.id} onClick={function(){setFilterStatus(f.id);}}
+          style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+          {f.label}
+        </button>;
+      })}
+    </div>
+
+    {/* Tabela */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 0.9fr 0.9fr 1.2fr 70px",padding:"12px 16px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",gap:10}}>
+        {["Cliente / oferta","Produto","Valor","Chance","Status","Ações"].map(function(h,i){
+          return <div key={i} style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,textAlign:i>=2&&i<=3?"center":"left"}}>{h}</div>;
+        })}
+      </div>
+      {filtered.length===0&&<div style={{padding:36,textAlign:"center",color:"#94a3b8",fontSize:13}}>Nenhuma oportunidade {filterStatus!=="todas"?"nesse status":"cadastrada"}.</div>}
+      {filtered.map(function(o){
+        const stCfg=_comFindCfg(COMERCIAL_OPORTUN_STATUS,o.status);
+        const chanceColor=o.chance==="alta"?"#16a34a":o.chance==="media"?"#ca8a04":"#dc2626";
+        return <div key={o.id} style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 0.9fr 0.9fr 1.2fr 70px",padding:"12px 16px",borderBottom:"1px solid #f1f5f9",gap:10,alignItems:"center",cursor:"pointer"}}
+          onClick={function(){canEdit&&setEditing(o);}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{o.cliente||"(sem cliente)"}</div>
+            <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{o.oferta||"(sem oferta)"}</div>
+          </div>
+          <div style={{color:"#475569",fontSize:12}}>{o.produto||"—"}</div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13,textAlign:"center"}}>{o.valorPotencial?_comFmtBRL(o.valorPotencial):"—"}</div>
+          <div style={{textAlign:"center"}}>
+            <span style={{background:chanceColor+"18",color:chanceColor,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,textTransform:"uppercase",letterSpacing:.4}}>{o.chance||"média"}</span>
+          </div>
+          <div>
+            <select value={o.status} onChange={function(e){e.stopPropagation();changeStatus(o.id,e.target.value);}} onClick={function(e){e.stopPropagation();}}
+              style={{background:stCfg.bg,color:stCfg.color,border:"1px solid "+stCfg.color+"55",borderRadius:9,padding:"5px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
+              {COMERCIAL_OPORTUN_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}
+            </select>
+          </div>
+          <div style={{textAlign:"right",color:"#cbd5e1",fontSize:11}}>{_comFmtDateBR(o.updatedAt||o.createdAt)}</div>
+        </div>;
+      })}
+    </div>
+
+    {editing&&<ComOpportunidadeModal opp={editing} onClose={function(){setEditing(null);}} onSave={saveOpp}/>}
+  </div>;
+}
+
+function ComOpportunidadeModal({opp,onClose,onSave}){
+  const [f,setF]=useState(opp);
+  const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
+  return <ComModal title={opp.oferta?"Editar oportunidade":"Nova oportunidade / upsell"} onClose={onClose} maxWidth={640}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div>
+        <div style={_COM_LBL}>Cliente atual</div>
+        <select value={f.clienteId||""} onChange={function(e){const id=e.target.value;const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===id;});setF(Object.assign({},f,{clienteId:id,cliente:cl?cl.name:f.cliente,grupo:cl?cl.name:f.grupo}));}} style={_COM_INP}>
+          <option value="">— Selecionar —</option>
+          {(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";}).map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Unidade / filial</div>
+        <input value={f.unidade||""} onChange={function(e){set("unidade",e.target.value);}} style={_COM_INP} placeholder="Opcional (ex: Bioter Chapecó)"/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Oferta sugerida</div>
+        <select value={f.oferta||""} onChange={function(e){set("oferta",e.target.value);}} style={_COM_INP}>
+          <option value="">— Selecione —</option>
+          {COMERCIAL_OFERTAS.map(function(o){return <option key={o} value={o}>{o}</option>;})}
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Tipo</div>
+        <select value={f.tipo||"mrr"} onChange={function(e){set("tipo",e.target.value);}} style={_COM_INP}>
+          <option value="mrr">Recorrente (MRR)</option>
+          <option value="pontual">Pontual</option>
+          <option value="hibrido">Híbrido</option>
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Valor potencial (R$)</div>
+        <input type="number" value={f.valorPotencial||0} onChange={function(e){set("valorPotencial",Number(e.target.value)||0);}} style={_COM_INP}/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Chance</div>
+        <select value={f.chance||"media"} onChange={function(e){set("chance",e.target.value);}} style={_COM_INP}>
+          <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Dono da abordagem</div>
+        <select value={f.donoAbordagem||""} onChange={function(e){set("donoAbordagem",e.target.value);}} style={_COM_INP}>
+          <option value="">—</option>
+          {(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.level===1;}).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}
+        </select>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Motivo da oferta</div>
+        <textarea rows={2} value={f.motivo||""} onChange={function(e){set("motivo",e.target.value);}} style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:50})} placeholder="Por que essa oferta faz sentido pra esse cliente?"/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Melhor momento</div>
+        <input value={f.melhorMomento||""} onChange={function(e){set("melhorMomento",e.target.value);}} style={_COM_INP} placeholder="Ex: após renovação"/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Próxima ação (data)</div>
+        <input type="date" value={f.proximaAcaoData||""} onChange={function(e){set("proximaAcaoData",e.target.value);}} style={_COM_INP}/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Observações</div>
+        <textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:60})}/>
+      </div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={function(){onSave(f);}}
+        style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+    </div>
+  </ComModal>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   2.4 PROPOSTAS
+   ═══════════════════════════════════════════════════════════════ */
+function ComPropostas({store,update,log,canEdit}){
+  const [editing,setEditing]=useState(null);
+  const propostas=store.propostas||[];
+
+  function newProp(){
+    setEditing({
+      id:"pr"+Date.now()+"-"+Math.random().toString(36).slice(2,5),
+      nome:"", cliente:"", tipo:"mrr",
+      valorMensal:0, valorPontual:0, servicos:"",
+      status:"rascunho", dataEnvio:"", validade:"",
+      responsavel:"", proximaAcao:"", link:"", observacoes:"",
+      createdAt:new Date().toISOString(),
+    });
+  }
+  function saveProp(p){
+    const exists=(store.propostas||[]).some(function(x){return x.id===p.id;});
+    update(function(prev){
+      const arr=prev.propostas||[];
+      const next=exists?arr.map(function(x){return x.id===p.id?Object.assign({},p,{updatedAt:new Date().toISOString()}):x;})
+                       :[Object.assign({},p,{updatedAt:new Date().toISOString()})].concat(arr);
+      return Object.assign({},prev,{propostas:next});
+    });
+    log(p.cliente,exists?"prop_edit":"prop_new",p.nome);
+    setEditing(null);
+  }
+  function changeStatus(id,newStatus){
+    update(function(prev){
+      const next=(prev.propostas||[]).map(function(p){return p.id===id?{...p,status:newStatus,updatedAt:new Date().toISOString()}:p;});
+      return Object.assign({},prev,{propostas:next});
+    });
+    log(id,"prop_status",newStatus);
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{color:"#64748b",fontSize:13}}>{propostas.length} proposta{propostas.length!==1?"s":""}</div>
+      {canEdit&&<button onClick={newProp}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>
+        + Nova proposta
+      </button>}
+    </div>
+
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 1fr 1.2fr 90px",padding:"12px 16px",background:"#f8fafc",borderBottom:"1px solid #e2e8f0",gap:10}}>
+        {["Proposta","Cliente","Mensal","Pontual","Status","Envio"].map(function(h,i){
+          return <div key={i} style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,textAlign:i>=2&&i<=3?"center":"left"}}>{h}</div>;
+        })}
+      </div>
+      {propostas.length===0&&<div style={{padding:36,textAlign:"center",color:"#94a3b8",fontSize:13}}>Nenhuma proposta cadastrada.</div>}
+      {propostas.map(function(p){
+        const stCfg=_comFindCfg(COMERCIAL_PROPOSTA_STATUS,p.status);
+        return <div key={p.id} style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 1fr 1.2fr 90px",padding:"12px 16px",borderBottom:"1px solid #f1f5f9",gap:10,alignItems:"center",cursor:"pointer"}}
+          onClick={function(){canEdit&&setEditing(p);}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{p.nome||"(sem nome)"}</div>
+            <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{p.tipo}</div>
+          </div>
+          <div style={{color:"#475569",fontSize:12}}>{p.cliente||"—"}</div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:12,textAlign:"center"}}>{p.valorMensal?_comFmtBRL(p.valorMensal):"—"}</div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:12,textAlign:"center"}}>{p.valorPontual?_comFmtBRL(p.valorPontual):"—"}</div>
+          <div>
+            <select value={p.status} onChange={function(e){e.stopPropagation();changeStatus(p.id,e.target.value);}} onClick={function(e){e.stopPropagation();}}
+              style={{background:stCfg.bg,color:stCfg.color,border:"1px solid "+stCfg.color+"55",borderRadius:9,padding:"5px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",width:"100%"}}>
+              {COMERCIAL_PROPOSTA_STATUS.map(function(s){return <option key={s.id} value={s.id}>{s.label}</option>;})}
+            </select>
+          </div>
+          <div style={{textAlign:"right",color:"#94a3b8",fontSize:11}}>{_comFmtDateBR(p.dataEnvio)}</div>
+        </div>;
+      })}
+    </div>
+
+    {editing&&<ComPropostaModal prop={editing} onClose={function(){setEditing(null);}} onSave={saveProp}/>}
+  </div>;
+}
+
+function ComPropostaModal({prop,onClose,onSave}){
+  const [f,setF]=useState(prop);
+  const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
+  return <ComModal title={prop.nome?"Editar proposta":"Nova proposta"} onClose={onClose} maxWidth={640}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Nome da proposta</div>
+        <input value={f.nome||""} onChange={function(e){set("nome",e.target.value);}} style={_COM_INP} placeholder="Ex: Pacote Bioter 2026" autoFocus/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Cliente / prospect</div>
+        <input value={f.cliente||""} onChange={function(e){set("cliente",e.target.value);}} style={_COM_INP}/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Tipo</div>
+        <select value={f.tipo||"mrr"} onChange={function(e){set("tipo",e.target.value);}} style={_COM_INP}>
+          <option value="mrr">Recorrente</option><option value="pontual">Pontual</option><option value="hibrido">Híbrido</option>
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Valor mensal (R$)</div>
+        <input type="number" value={f.valorMensal||0} onChange={function(e){set("valorMensal",Number(e.target.value)||0);}} style={_COM_INP}/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Valor pontual (R$)</div>
+        <input type="number" value={f.valorPontual||0} onChange={function(e){set("valorPontual",Number(e.target.value)||0);}} style={_COM_INP}/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Serviços incluídos</div>
+        <textarea rows={3} value={f.servicos||""} onChange={function(e){set("servicos",e.target.value);}} style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:60})} placeholder="Liste os serviços, um por linha"/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Data de envio</div>
+        <input type="date" value={f.dataEnvio||""} onChange={function(e){set("dataEnvio",e.target.value);}} style={_COM_INP}/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Validade</div>
+        <input type="date" value={f.validade||""} onChange={function(e){set("validade",e.target.value);}} style={_COM_INP}/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Responsável</div>
+        <select value={f.responsavel||""} onChange={function(e){set("responsavel",e.target.value);}} style={_COM_INP}>
+          <option value="">—</option>
+          {(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.level===1;}).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Próxima ação</div>
+        <input value={f.proximaAcao||""} onChange={function(e){set("proximaAcao",e.target.value);}} style={_COM_INP}/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Link da proposta</div>
+        <input value={f.link||""} onChange={function(e){set("link",e.target.value);}} style={_COM_INP} placeholder="https://..."/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Observações</div>
+        <textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:60})}/>
+      </div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={function(){onSave(f);}}
+        style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+    </div>
+  </ComModal>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   2.5 FOLLOW-UPS
+   ═══════════════════════════════════════════════════════════════ */
+function ComFollowUps({store,update,log,canEdit}){
+  const [editing,setEditing]=useState(null);
+  const followups=store.followups||[];
+
+  function newFu(){
+    setEditing({
+      id:"fu"+Date.now()+"-"+Math.random().toString(36).slice(2,5),
+      target:"", tipo:"prospect",
+      responsavel:"", proximaAcao:"", data:new Date().toISOString().slice(0,10),
+      prioridade:"media", status:"pendente",
+      observacoes:"",
+    });
+  }
+  function saveFu(f){
+    const exists=(store.followups||[]).some(function(x){return x.id===f.id;});
+    update(function(prev){
+      const arr=prev.followups||[];
+      const next=exists?arr.map(function(x){return x.id===f.id?f:x;}):[f].concat(arr);
+      return Object.assign({},prev,{followups:next});
+    });
+    log(f.target,exists?"fu_edit":"fu_new",f.proximaAcao);
+    setEditing(null);
+  }
+  function toggleDone(id){
+    update(function(prev){
+      const next=(prev.followups||[]).map(function(f){return f.id===id?{...f,status:f.status==="feito"?"pendente":"feito"}:f;});
+      return Object.assign({},prev,{followups:next});
+    });
+  }
+
+  // Status calculado: atrasado se data < hoje e status === pendente
+  const today=new Date().toISOString().slice(0,10);
+  const enriched=followups.map(function(f){
+    if(f.status==="pendente"&&f.data&&f.data<today)return Object.assign({},f,{status:"atrasado"});
+    return f;
+  });
+  const pendentes=enriched.filter(function(f){return f.status==="pendente"||f.status==="atrasado";}).sort(function(a,b){return (a.data||"").localeCompare(b.data||"");});
+  const feitos=enriched.filter(function(f){return f.status==="feito";}).slice(0,10);
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div style={{color:"#64748b",fontSize:13}}>{pendentes.length} pendente{pendentes.length!==1?"s":""} · {enriched.filter(function(f){return f.status==="atrasado";}).length} atrasado{enriched.filter(function(f){return f.status==="atrasado";}).length!==1?"s":""}</div>
+      {canEdit&&<button onClick={newFu}
+        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit"}}>
+        + Novo follow-up
+      </button>}
+    </div>
+
+    {/* Pendentes */}
+    <div style={_COM_CARD}>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Pendentes</div>
+      {pendentes.length===0&&<div style={{color:"#94a3b8",fontSize:12,padding:"12px 0",textAlign:"center"}}>Nenhum follow-up pendente.</div>}
+      {pendentes.map(function(f){
+        const stCfg=_comFindCfg(COMERCIAL_FOLLOWUP_STATUS,f.status);
+        return <div key={f.id} onClick={function(){canEdit&&setEditing(f);}}
+          style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",background:f.status==="atrasado"?"#fef2f2":"#f8fafc",border:"1px solid "+(f.status==="atrasado"?"#fecaca":"#e2e8f0"),borderRadius:10,marginBottom:6,cursor:"pointer"}}>
+          <input type="checkbox" checked={f.status==="feito"} onChange={function(e){e.stopPropagation();toggleDone(f.id);}} onClick={function(e){e.stopPropagation();}}
+            style={{width:16,height:16,cursor:"pointer"}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>{f.proximaAcao||"(sem ação)"}</div>
+            <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{f.target||"—"} · {f.tipo}</div>
+          </div>
+          <span style={{background:stCfg.bg,color:stCfg.color,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap"}}>{stCfg.label}</span>
+          <span style={{color:"#475569",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{_comFmtDateBR(f.data)}</span>
+        </div>;
+      })}
+    </div>
+
+    {/* Concluídos recentes */}
+    {feitos.length>0&&<div style={_COM_CARD}>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Concluídos recentes</div>
+      {feitos.map(function(f){
+        return <div key={f.id}
+          style={{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",background:"transparent",borderBottom:"1px solid #f1f5f9",opacity:.7}}>
+          <span style={{color:"#16a34a",fontWeight:700,fontSize:14}}>✓</span>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#475569",fontSize:12,textDecoration:"line-through"}}>{f.proximaAcao}</div>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{f.target}</div>
+          </div>
+          <span style={{color:"#94a3b8",fontSize:10}}>{_comFmtDateBR(f.data)}</span>
+        </div>;
+      })}
+    </div>}
+
+    {editing&&<ComFollowUpModal fu={editing} onClose={function(){setEditing(null);}} onSave={saveFu}/>}
+  </div>;
+}
+
+function ComFollowUpModal({fu,onClose,onSave}){
+  const [f,setF]=useState(fu);
+  const set=function(k,v){setF(Object.assign({},f,{[k]:v}));};
+  return <ComModal title={fu.proximaAcao?"Editar follow-up":"Novo follow-up"} onClose={onClose}>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Prospect / cliente</div>
+        <input value={f.target||""} onChange={function(e){set("target",e.target.value);}} style={_COM_INP} placeholder="Nome do alvo" autoFocus/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Tipo</div>
+        <select value={f.tipo||"prospect"} onChange={function(e){set("tipo",e.target.value);}} style={_COM_INP}>
+          <option value="prospect">Prospect</option>
+          <option value="upsell">Upsell</option>
+          <option value="proposta">Proposta</option>
+          <option value="renovacao">Renovação</option>
+        </select>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Responsável</div>
+        <select value={f.responsavel||""} onChange={function(e){set("responsavel",e.target.value);}} style={_COM_INP}>
+          <option value="">—</option>
+          {(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.level===1;}).map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}
+        </select>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Próxima ação</div>
+        <input value={f.proximaAcao||""} onChange={function(e){set("proximaAcao",e.target.value);}} style={_COM_INP} placeholder="Ex: ligar pra confirmar reunião"/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Data</div>
+        <input type="date" value={f.data||""} onChange={function(e){set("data",e.target.value);}} style={_COM_INP}/>
+      </div>
+      <div>
+        <div style={_COM_LBL}>Prioridade</div>
+        <select value={f.prioridade||"media"} onChange={function(e){set("prioridade",e.target.value);}} style={_COM_INP}>
+          <option value="alta">Alta</option><option value="media">Média</option><option value="baixa">Baixa</option>
+        </select>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
+        <div style={_COM_LBL}>Observações</div>
+        <textarea rows={3} value={f.observacoes||""} onChange={function(e){set("observacoes",e.target.value);}} style={Object.assign({},_COM_INP,{resize:"vertical",minHeight:60})}/>
+      </div>
+    </div>
+    <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+      <button onClick={onClose} style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={function(){onSave(f);}}
+        style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+    </div>
+  </ComModal>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   2.6 HISTÓRICO COMERCIAL
+   ═══════════════════════════════════════════════════════════════ */
+function ComHistorico({store}){
+  const historico=store.historico||[];
+  const typeColor={
+    prospect_new:"#0284c7", prospect_edit:"#64748b", prospect_status:"#7c3aed", prospect_perdido:"#dc2626", prospect_convertido:"#16a34a",
+    opp_new:"#0284c7", opp_edit:"#64748b", opp_status:"#7c3aed",
+    prop_new:"#0284c7", prop_edit:"#64748b", prop_status:"#7c3aed",
+    fu_new:"#0284c7", fu_edit:"#64748b",
+    interacao:"#94a3b8",
+  };
+  const typeLabel={
+    prospect_new:"Novo prospect", prospect_edit:"Editado", prospect_status:"Status alterado", prospect_perdido:"Perdido", prospect_convertido:"Convertido",
+    opp_new:"Nova oportunidade", opp_edit:"Editada", opp_status:"Status",
+    prop_new:"Nova proposta", prop_edit:"Editada", prop_status:"Status",
+    fu_new:"Follow-up criado", fu_edit:"Follow-up editado",
+    interacao:"Interação",
+  };
+  return <div style={_COM_CARD}>
+    <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:14}}>Histórico de interações</div>
+    {historico.length===0&&<div style={{color:"#94a3b8",fontSize:12,padding:"20px 0",textAlign:"center"}}>Nenhum evento registrado.</div>}
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {historico.slice(0,80).map(function(h){
+        const color=typeColor[h.type]||"#94a3b8";
+        const label=typeLabel[h.type]||h.type;
+        const u=(typeof TEAM!=="undefined"?TEAM.find(function(t){return t.id===h.author;}):null);
+        const d=h.at?new Date(h.at):null;
+        return <div key={h.id} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
+          <div style={{width:8,height:8,borderRadius:"50%",background:color,marginTop:6,flexShrink:0}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+              <span style={{color:color,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</span>
+              <span style={{color:"#0f172a",fontWeight:600,fontSize:12.5}}>{h.target||"—"}</span>
+            </div>
+            {h.resumo&&<div style={{color:"#475569",fontSize:12,marginTop:3}}>{h.resumo}</div>}
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:3}}>
+              {d?d.toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):""}
+              {u?" · "+u.name:""}
+            </div>
+          </div>
+        </div>;
+      })}
+    </div>
+  </div>;
 }
