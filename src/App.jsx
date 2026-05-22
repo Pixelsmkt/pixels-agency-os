@@ -432,9 +432,34 @@ function stripEmojis(input){
   }
   return s.replace(/\s+/g," ").trim();
 }
+// Remove menções a nomes de clientes do título — o cliente já é indicado pela logo/badge
+// no card, então repetir o nome no título é redundante. Roda como parte do smartFormatTitle.
+// Lista cobre: CLIENTS oficiais + variações comuns ("Grupo Bioter", "Bioter Paraguay", etc).
+const _CLIENT_STRIP_PATTERNS=[
+  /\bgrupo\s+bioter\b/gi,
+  /\bbioter\s+(?:brasil|paraguay|paraguai|chapec[oó]|toledo|castro|uberl[aâ]ndia|gl[oó]ria(?:\s+de\s+dourados)?)\b/gi,
+  /\bbioter\b/gi,
+  /\bconstruschorr\b/gi,
+  /\barabut[aã](?:\s+pr[eé]-?moldados)?\b/gi,
+  /\bclimaves\b/gi,
+  /\bvetservice\b/gi,
+  /\bpixels(?:\s+ag[eê]ncia)?\b/gi,
+];
+function stripClientNames(s){
+  if(!s||typeof s!=="string")return s||"";
+  let out=s;
+  for(let i=0;i<_CLIENT_STRIP_PATTERNS.length;i++){out=out.replace(_CLIENT_STRIP_PATTERNS[i],"");}
+  // Limpa separadores órfãos: " - " no início/fim, "  " duplo, "- -", etc.
+  out=out.replace(/\s+/g," ").trim();
+  out=out.replace(/^\s*-\s*/,"").replace(/\s*-\s*$/,"");
+  out=out.replace(/\s*-\s*-\s*/g," - ");
+  return out.trim();
+}
 function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
   let s=stripEmojis(input);
+  if(!s)return "";
+  s=stripClientNames(s);
   if(!s)return "";
   s=s.replace(/\s+/g," ").trim();
   if(!s)return "";
@@ -1277,11 +1302,12 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="moreHor")   return <svg {...p}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>;
   if(n==="download")  return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
   if(n==="upload")    return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
-  if(n==="rotate")    return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>;
   if(n==="bomb")      return <svg {...p}><circle cx="11" cy="13" r="9"/><path d="M14.35 4.65L16.3 2.7a2.41 2.41 0 013.4 0l1.6 1.6a2.4 2.4 0 010 3.4l-1.95 1.95"/><path d="m22 2-1.5 1.5"/></svg>;
   if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
   if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+  if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
   if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
   if(n==="plus")      return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
   if(n==="users")     return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(n==="building")  return <svg {...p}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>;
