@@ -462,7 +462,13 @@ function smartFormatTitle(input){
         if(_isWellFormed(core)){processed=core;}
         else {processed=lower;}
       }
-      else {processed=lower;}
+      else {
+        // Sentence segment (depois de " - "): força lowercase EXCETO em palavras
+        // bem-formadas com inicial maiúscula (nomes próprios, feriados etc).
+        // Ex: "Junho - Corpus Christi" → preserva "Christi" porque já vem Title Case.
+        if(_isWellFormed(core)&&/^[A-ZÀ-Ý]/.test(core)){processed=core;}
+        else {processed=lower;}
+      }
     }
     return prefix+processed+suffix;
   }
@@ -1045,6 +1051,25 @@ function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyl
   })}>{u.av||(u.name||"?").charAt(0).toUpperCase()}</div>;
 }
 
+/* ─── HOOK: useEscToClose ──────────────────── */
+// Captura Esc enquanto a condição `active` é verdadeira e dispara `onClose`.
+// Padrão pra TODO modal/overlay do app — usar assim:
+//   useEscToClose(!!isOpen, ()=>setIsOpen(false));
+// Stop propagation pra que múltiplos modais sobrepostos só fechem o topo.
+function useEscToClose(active, onClose){
+  useEffect(function(){
+    if(!active)return undefined;
+    function handler(e){
+      if(e.key==="Escape"){
+        e.stopPropagation();
+        if(typeof onClose==="function")onClose();
+      }
+    }
+    window.addEventListener("keydown",handler);
+    return function(){window.removeEventListener("keydown",handler);};
+  },[active,onClose]);
+}
+
 /* ─── HOOK: useOpenCardSync ─────────────────── */
 // Mantém o card aberto sincronizado com a versão mais recente de tasks.
 // IMPORTANTE: NÃO fecha o cartão automaticamente — se o cartão sumir do array
@@ -1256,9 +1281,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="bomb")      return <svg {...p}><circle cx="11" cy="13" r="9"/><path d="M14.35 4.65L16.3 2.7a2.41 2.41 0 013.4 0l1.6 1.6a2.4 2.4 0 010 3.4l-1.95 1.95"/><path d="m22 2-1.5 1.5"/></svg>;
   if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
   if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
-  if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
   if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
-  if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
   if(n==="plus")      return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
   if(n==="users")     return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(n==="building")  return <svg {...p}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>;
@@ -9810,10 +9833,12 @@ function QuickCreateBody({onConfirm,onCancel}){
   const list=TEAM.filter(u=>u.id!=="erick");
   const [title,setTitle]=useState("Nova Demanda");
   const [selectedId,setSelectedId]=useState(list[0].id);
+  // ESC fecha o modal — padrão básico do app
+  useEscToClose(true, onCancel);
   // Hover-preview: depois de ~350ms parado em cima da foto, mostra preview ampliado
   // ao lado do item (à esquerda do modal pra não escapar pela direita).
   const [hoverId,setHoverId]=useState(null);
-  const hoverTimerRef=React.useRef(null);
+  const hoverTimerRef=useRef(null);
   const startHover=function(uid){
     if(hoverTimerRef.current)clearTimeout(hoverTimerRef.current);
     hoverTimerRef.current=setTimeout(function(){setHoverId(uid);},350);
@@ -10948,6 +10973,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>}
     </div>
   </>;
+}
 }
 
 // ======= 04_demandas_internas.jsx =======
@@ -16040,7 +16066,7 @@ function StorageManager({tasks}){
 // ======= 10_interno.jsx =======
 
 /* ─── Constantes de módulo ─────────────────── */
-const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const INT_MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const DAYS_LABELS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const BDAY_MONTHS=["03","04","05","06","07","08","09","10","11","12","01","02"];
 const BDAY_DAYS=["15","22","08","30","12","05","18","25","03","14","28","10"];
@@ -16247,7 +16273,7 @@ function CalendarioInterno({tasks}){
       <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 18px",borderBottom:"1px solid "+C.b1}}>
           <button onClick={()=>setCurrentDate(new Date(year,month-1,1))} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,width:32,height:32,cursor:"pointer",color:C.ts,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
-          <div style={{color:C.tx,fontWeight:800,fontSize:15}}>{MONTHS[month]} {year}</div>
+          <div style={{color:C.tx,fontWeight:800,fontSize:15}}>{INT_MONTHS[month]} {year}</div>
           <button onClick={()=>setCurrentDate(new Date(year,month+1,1))} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:8,width:32,height:32,cursor:"pointer",color:C.ts,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"1px solid "+C.b1}}>
@@ -16286,7 +16312,7 @@ function CalendarioInterno({tasks}){
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         {selectedDay&&(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
           <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:13}}>
-            {selectedDay} de {MONTHS[month]}
+            {selectedDay} de {INT_MONTHS[month]}
           </div>
           <div style={{padding:"10px 12px",maxHeight:280,overflowY:"auto"}}>
             {selectedEvents.length===0&&<div style={{color:C.td,fontSize:12,textAlign:"center",padding:"16px 0"}}>Nenhum evento</div>}
