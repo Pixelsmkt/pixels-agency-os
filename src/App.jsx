@@ -422,6 +422,60 @@ function buildMarco(input){
   }, input||{});
 }
 
+/* ─── PACOTE DE POSTS POR CLIENTE ─────────────────────
+   Quantidade de publicações que cada cliente recebe por semana.
+   Default: 1 arte + 1 vídeo = 2 posts/semana. Override por cliente
+   via localStorage["pixels-posts-config-<clientId>"] = {arte,video}.
+─────────────────────────────────────────────────────── */
+const POSTS_PADRAO = {arte:1, video:1};
+function getPostsConfig(clientId){
+  if(!clientId)return Object.assign({},POSTS_PADRAO);
+  try{
+    const raw=localStorage.getItem("pixels-posts-config-"+clientId);
+    if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return Object.assign({},POSTS_PADRAO,p);}
+  }catch(e){}
+  return Object.assign({},POSTS_PADRAO);
+}
+function savePostsConfig(clientId, cfg){
+  if(!clientId)return;
+  try{localStorage.setItem("pixels-posts-config-"+clientId,JSON.stringify(Object.assign({},POSTS_PADRAO,cfg||{})));}catch(e){}
+}
+// Calcula as datas sugeridas pra um mês: distribui posts em dias úteis (seg-sex)
+// alternando entre arte e vídeo. Retorna [{date:"YYYY-MM-DD", type:"arte"|"video"}].
+function generateMonthPlanDates(year, month, postsConfig){
+  const cfg=postsConfig||POSTS_PADRAO;
+  const totalSemana=(cfg.arte||0)+(cfg.video||0);
+  if(totalSemana<=0)return [];
+  // Pega segundas-feiras do mês como referência de início de semana
+  const firstDay=new Date(year, month-1, 1);
+  const lastDay=new Date(year, month, 0);
+  const result=[];
+  // Iterar semana a semana — começar na primeira segunda do mês ou anterior
+  const cur=new Date(firstDay);
+  while(cur.getDay()!==1){cur.setDate(cur.getDate()-1);}
+  while(cur<=lastDay){
+    // Distribui posts da semana: spread igual entre dias úteis disponíveis
+    const slots=[1,3,2,4,5]; // ordem de preferência: seg, qua, ter, qui, sex
+    let artesRestantes=cfg.arte||0;
+    let videosRestantes=cfg.video||0;
+    let i=0;
+    while((artesRestantes>0||videosRestantes>0)&&i<slots.length){
+      const dayOffset=slots[i]-1; // 0=seg, 1=ter, etc
+      const d=new Date(cur);d.setDate(d.getDate()+dayOffset);
+      if(d.getMonth()===month-1&&d>=firstDay){
+        const ds=d.toISOString().slice(0,10);
+        // Alterna: prioriza arte se ainda tem, senão vídeo
+        const type=artesRestantes>=videosRestantes&&artesRestantes>0?"arte":(videosRestantes>0?"video":"arte");
+        result.push({date:ds, type:type});
+        if(type==="arte")artesRestantes--;else videosRestantes--;
+      }
+      i++;
+    }
+    cur.setDate(cur.getDate()+7);
+  }
+  return result.sort(function(a,b){return a.date.localeCompare(b.date);});
+}
+
 // ======= 00_globals.jsx =======
 // Módulo de framework: temas, perms, componentes base, navegação
 // Não contém dados de negócio — ver 00_clientes_data.jsx e 00_mindmap_data.jsx
@@ -9678,8 +9732,95 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
+  const [genConfirm,setGenConfirm]=useState(null);
+  // Drag-and-drop: arrastar card entre dias atualiza publishDate automaticamente
+  const [dragTaskId,setDragTaskId]=useState(null);
+  const [dropDayId,setDropDayId]=useState(null);
+  function handleDropOnDay(targetDate){
+    if(!dragTaskId||!targetDate)return;
+    const ds=targetDate.getFullYear()+"-"+String(targetDate.getMonth()+1).padStart(2,"0")+"-"+String(targetDate.getDate()).padStart(2,"0");
+    if(typeof setTasks==="function"){
+      setTasks(function(prev){
+        return (prev||[]).map(function(t){
+          if(t.id!==dragTaskId)return t;
+          if(t.publishDate===ds)return t; // mesmo dia, sem mudança
+          return Object.assign({},t,{publishDate:ds, publishTime:t.publishTime||"11:00"});
+        });
+      });
+    }
+    setDragTaskId(null);setDropDayId(null);
+  }
   // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
   useOpenCardSync(openCard,setOpenCard,tasks);
+
+  // Sugere datas de publicação pra cards que JÁ EXISTEM no fluxo (sem publishDate).
+  // Pega cards em status [demanda, recebida, execucao, ajustes, avaliacao, aprovado],
+  // distribui em 2ª e 5ª de cada semana alternando arte/vídeo. Estrategista confirma/edita.
+  const ELIGIBLE_STATUSES_PLAN=["demanda","recebida","execucao","ajustes","avaliacao","aprovado"];
+  function _isVideoType(t){return t==="video"||t==="corte";}
+  function _isArteType(t){return t==="arte"||t==="carrossel"||t==="foto";}
+  function handleGeneratePlan(){
+    const year=calMonth.getFullYear(),month=calMonth.getMonth()+1;
+    const clientes=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";});
+    const proposals=[];
+    clientes.forEach(function(cl){
+      // Cards desse cliente em status elegíveis, SEM publishDate ainda
+      const cards=tasks.filter(function(t){
+        return !t.deletedAt
+          && t.client===cl.id
+          && ELIGIBLE_STATUSES_PLAN.indexOf(t.status)>=0
+          && !t.publishDate;
+      });
+      if(cards.length===0)return;
+      // Separar por tipo
+      const artes=cards.filter(function(t){return _isArteType(t.contentType);});
+      const videos=cards.filter(function(t){return _isVideoType(t.contentType);});
+      const semTipo=cards.filter(function(t){return !_isArteType(t.contentType)&&!_isVideoType(t.contentType);});
+      // Gera slots do mês (config do cliente)
+      const cfg=(typeof getPostsConfig==="function")?getPostsConfig(cl.id):{arte:1,video:1};
+      const slots=(typeof generateMonthPlanDates==="function")?generateMonthPlanDates(year,month,cfg):[];
+      let artIdx=0,vidIdx=0,semIdx=0;
+      slots.forEach(function(slot){
+        let card=null;
+        // Tenta casar tipo do slot com tipo do card
+        if(slot.type==="arte"&&artes[artIdx])card=artes[artIdx++];
+        else if(slot.type==="video"&&videos[vidIdx])card=videos[vidIdx++];
+        // Fallback: usa o que tiver (alterna se possível)
+        if(!card&&semTipo[semIdx])card=semTipo[semIdx++];
+        if(!card&&artes[artIdx])card=artes[artIdx++];
+        if(!card&&videos[vidIdx])card=videos[vidIdx++];
+        if(card)proposals.push({
+          taskId:card.id,
+          cardTitle:card.title,
+          clientId:cl.id,
+          clientName:cl.name,
+          contentType:card.contentType||slot.type,
+          status:card.status,
+          proposedDate:slot.date,
+          slotType:slot.type,
+        });
+      });
+    });
+    if(proposals.length===0){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Nenhum card elegível. Crie cards em Demanda/Execução/Ajustes/Avaliação/Aprovado primeiro.");
+      return;
+    }
+    setGenConfirm({proposals, month, year});
+  }
+  function confirmGeneratePlan(){
+    if(!genConfirm)return;
+    if(typeof setTasks==="function"){
+      setTasks(function(prev){
+        return (prev||[]).map(function(t){
+          const prop=genConfirm.proposals.find(function(p){return p.taskId===t.id;});
+          if(!prop)return t;
+          return Object.assign({},t,{publishDate:prop.proposedDate, publishTime:t.publishTime||"11:00"});
+        });
+      });
+    }
+    if(typeof pixelsToast!=="undefined")pixelsToast.success(genConfirm.proposals.length+" cards com data sugerida em "+MONTHS[genConfirm.month-1]+"/"+genConfirm.year);
+    setGenConfirm(null);
+  }
 
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -9741,44 +9882,102 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-      {/* ── Cabeçalho ── */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
+      {/* ── Cabeçalho moderno ── */}
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
         <div>
-          <div style={{color:C.tx,fontWeight:900,fontSize:isMob?17:22,letterSpacing:-.3}}>📅 Calendário de Publicações</div>
-          <div style={{color:C.ts,fontSize:12,marginTop:3}}>
-            {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} agendada{tasksThisMonth.length!==1?"s":""} em {MONTHS[calMonth.getMonth()]}
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Calendário de publicações</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>
+            {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} agendada{tasksThisMonth.length!==1?"s":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
           </div>
         </div>
-        {/* Navegação de mês */}
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))}
-            style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>←</button>
-          <div style={{color:C.tx,fontWeight:800,fontSize:16,minWidth:160,textAlign:"center"}}>
+          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} aria-label="Mês anterior"
+            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,minWidth:150,textAlign:"center"}}>
             {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
           </div>
-          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))}
-            style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>→</button>
+          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} aria-label="Próximo mês"
+            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
           <button onClick={()=>setCalMonth(new Date())}
-            style={{background:C.ag,color:C.a,border:"1px solid "+C.a+"44",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+            style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
             Hoje
+          </button>
+          <button onClick={handleGeneratePlan}
+            title="Cria rascunhos sugeridos pra cada cliente (1 arte + 1 vídeo por semana, configurável)"
+            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            Gerar plano do mês
           </button>
         </div>
       </div>
 
-      {/* ── Legenda das cores do status ── */}
-      <div style={{display:"flex",gap:isMob?6:10,flexWrap:"wrap",alignItems:"center",background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:isMob?"6px 10px":"8px 14px"}}>
-        <span style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Status:</span>
+      {/* Modal: preview da sugestão de datas — cards existentes */}
+      {genConfirm&&(function(){
+        // Agrupa por cliente, ordena por data
+        const byClient={};
+        genConfirm.proposals.forEach(function(p){
+          if(!byClient[p.clientId])byClient[p.clientId]={name:p.clientName,items:[]};
+          byClient[p.clientId].items.push(p);
+        });
+        Object.values(byClient).forEach(function(c){c.items.sort(function(a,b){return a.proposedDate.localeCompare(b.proposedDate);});});
+        const fmtDate=function(ds){try{const d=new Date(ds+"T12:00:00");return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");}catch(e){return ds;}};
+        return <div onMouseDown={function(e){if(e.target===e.currentTarget)setGenConfirm(null);}}
+          style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+          <div onMouseDown={function(e){e.stopPropagation();}}
+            style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,0.28)"}}>
+            <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9"}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.3}}>Sugestão de datas — {MONTHS[genConfirm.month-1]}/{genConfirm.year}</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:3}}>{genConfirm.proposals.length} card{genConfirm.proposals.length!==1?"s":""} vão receber data de publicação sugerida. Alternando arte e vídeo, distribuídos em 2ª e 5ª feiras.</div>
+            </div>
+            <div style={{padding:22}}>
+              {Object.entries(byClient).map(function(arr){
+                const clId=arr[0], data=arr[1];
+                return <div key={clId} style={{marginBottom:16}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                    <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{data.name}</div>
+                    <span style={{color:"#7c3aed",fontSize:11,fontWeight:700,background:"#f5f3ff",padding:"2px 8px",borderRadius:99}}>{data.items.length} card{data.items.length!==1?"s":""}</span>
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    {data.items.map(function(p){
+                      const tipoLabel=_isArteType(p.contentType)?"Arte":_isVideoType(p.contentType)?"Vídeo":(p.contentType||"—");
+                      const tipoColor=_isVideoType(p.contentType)?"#0284c7":"#7c3aed";
+                      return <div key={p.taskId} style={{display:"grid",gridTemplateColumns:"60px 1fr auto",gap:10,padding:"8px 12px",background:"#f8fafc",border:"1px solid #f1f5f9",borderRadius:9,alignItems:"center"}}>
+                        <span style={{color:"#475569",fontSize:11,fontWeight:700}}>{fmtDate(p.proposedDate)}</span>
+                        <span style={{color:"#0f172a",fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.cardTitle||"(sem título)"}</span>
+                        <span style={{background:tipoColor+"18",color:tipoColor,fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,textTransform:"uppercase",letterSpacing:.4,whiteSpace:"nowrap"}}>{tipoLabel}</span>
+                      </div>;
+                    })}
+                  </div>
+                </div>;
+              })}
+              <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"10px 14px",color:"#0369a1",fontSize:11.5,marginBottom:18,marginTop:6}}>
+                Só foram considerados cards em <strong>Demanda · Execução · Ajustes · Concluído p/ avaliação · Aprovado</strong> e <strong>sem data de publicação</strong>. A estrategista pode editar qualquer data depois clicando no card.
+              </div>
+              <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+                <button onClick={function(){setGenConfirm(null);}}
+                  style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                <button onClick={confirmGeneratePlan}
+                  style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>Aplicar datas</button>
+              </div>
+            </div>
+          </div>
+        </div>;
+      })()}
+
+      {/* ── Legenda das cores do status — visual clean sem emojis ── */}
+      <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Status</span>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:14,height:14,borderRadius:3,background:"#ea580c"}}/>
-          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟠 Em produção</span>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#ea580c"}}/>
+          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Em produção</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:14,height:14,borderRadius:3,background:"#16a34a"}}/>
-          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟢 Pronto para agendar</span>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#16a34a"}}/>
+          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Pronto para agendar</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:14,height:14,borderRadius:3,background:"#7c3aed"}}/>
-          <span style={{color:C.tx,fontSize:11,fontWeight:600}}>🟣 Publicado</span>
+          <div style={{width:8,height:8,borderRadius:"50%",background:"#7c3aed"}}/>
+          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Publicado</span>
         </div>
       </div>
 
@@ -9835,14 +10034,21 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             const isToday=day&&day.toDateString()===new Date().toDateString();
             const hasTasks=dayTasks.length>0;
 
+            const isDropTarget=day&&dropDayId===day.toDateString();
             return(
-              <div key={i} style={{
+              <div key={i}
+                onDragOver={function(e){if(day&&dragTaskId){e.preventDefault();if(dropDayId!==day.toDateString())setDropDayId(day.toDateString());}}}
+                onDragLeave={function(){if(dropDayId===(day&&day.toDateString()))setDropDayId(null);}}
+                onDrop={function(e){if(day){e.preventDefault();handleDropOnDay(day);}}}
+                style={{
                 minHeight:isMob?80:110,
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
                 padding:"8px 6px 6px",
-                background:isToday?C.ag:hasTasks?C.bl+"06":"transparent",
-                transition:"background .2s",
+                background:isDropTarget?"#f5f3ff":(isToday?C.ag:hasTasks?C.bl+"06":"transparent"),
+                outline:isDropTarget?"2px dashed #7c3aed":"none",
+                outlineOffset:-2,
+                transition:"background .2s, outline .15s",
               }}>
                 {day&&(<>
                   {/* Número do dia */}
@@ -9867,18 +10073,23 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                       const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
                       // Cor do card baseada no STATUS (laranja/verde/roxo)
                       const pubColor=getPubColor(t.status);
+                      const isDragging=dragTaskId===t.id;
                       return(
                         <div key={t.id} onClick={()=>setOpenCard(t)}
+                          draggable={true}
+                          onDragStart={function(e){setDragTaskId(t.id);if(e.dataTransfer)e.dataTransfer.effectAllowed="move";}}
+                          onDragEnd={function(){setDragTaskId(null);setDropDayId(null);}}
                           style={{
                             background:pubColor.bg,
                             borderLeft:`4px solid ${pubColor.bg}`,
                             borderRadius:5,
                             padding:"4px 6px",
-                            cursor:"pointer",
+                            cursor:isDragging?"grabbing":"grab",
+                            opacity:isDragging?0.4:1,
                             transition:"all .1s",
                             boxShadow:"0 1px 3px rgba(0,0,0,0.08)",
                           }}
-                          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 3px 8px rgba(0,0,0,0.15)";}}
+                          onMouseEnter={e=>{if(!isDragging){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 3px 8px rgba(0,0,0,0.15)";}}}
                           onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.08)";}}>
 
                           {/* Título */}
@@ -9886,11 +10097,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                             {t.title}
                           </div>
 
-                          {/* Horário + Cliente + responsável */}
+                          {/* Cliente + responsável (sem horário — fica só no card detalhado) */}
                           <div style={{display:"flex",alignItems:"center",gap:4,marginTop:2,flexWrap:"wrap"}}>
-                            {t.publishTime&&<span style={{background:"#ffffff",color:pubColor.bg,borderRadius:3,padding:"0 4px",fontSize:7,fontWeight:800,whiteSpace:"nowrap"}}>
-                              🕐 {t.publishTime}
-                            </span>}
                             {cl&&<span style={{color:"#fff",fontSize:8,fontWeight:700,whiteSpace:"nowrap",opacity:0.95}}>
                               {unit?unit.label.split("/")[0]:cl.abbr}
                             </span>}
@@ -9927,21 +10135,6 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           </div>
         </div>
       )}
-
-      {/* ── Legenda ── */}
-      <div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
-        <span style={{color:C.td,fontSize:11,fontWeight:600}}>Legenda:</span>
-        {CLIENTS.filter(cl=>cl.status!=="interno").map(cl=>{
-          const count=agendados.filter(t=>t.client===cl.id&&new Date(t.publishDate+"T12:00:00").getMonth()===calMonth.getMonth()).length;
-          if(count===0) return null;
-          return(
-            <div key={cl.id} style={{display:"flex",alignItems:"center",gap:5}}>
-              <div style={{width:10,height:10,borderRadius:2,background:cl.color}}/>
-              <span style={{color:C.ts,fontSize:11}}>{cl.abbr} ({count})</span>
-            </div>
-          );
-        })}
-      </div>
 
       {/* ── Modal do card — somente leitura no calendário ── */}
       {openCard&&(
