@@ -424,53 +424,97 @@ function buildMarco(input){
 
 /* ─── PACOTE DE POSTS POR CLIENTE ─────────────────────
    Quantidade de publicações que cada cliente recebe por semana.
-   Default: 1 arte + 1 vídeo = 2 posts/semana. Override por cliente
-   via localStorage["pixels-posts-config-<clientId>"] = {arte,video}.
+   Default: 1 arte + 1 vídeo = 2 posts/semana.
+   Tipos de slot: arte, video, collab, foto (foto-obra).
+   Flag fotoObraQuinzenal: a cada 2 semanas, 1 slot vira foto-obra
+   substituindo um arte/video.
+   Override por cliente via localStorage["pixels-posts-config-<clientId>"].
 ─────────────────────────────────────────────────────── */
-const POSTS_PADRAO = {arte:1, video:1};
+const POSTS_PADRAO = {arte:1, video:1, collab:0, fotoObraQuinzenal:false};
+
+// Presets específicos por unidade Bioter (sobrescreve o default)
+// Principais (3/semana): 1 arte + 1 vídeo + 1 collab (foto-obra quinzenal substitui o vídeo)
+// Filiais (2/semana): 1 arte + 1 collab
+// "Collab" aqui é alocado a partir de cards com bioterUnit="grupo" ou "brasil"
+// (cards de Grupo Bioter / Bioter Brasil servem como collab pra todas as unidades).
+const BIOTER_POSTS_PRESETS = {
+  bioter_chapeco:    {arte:1, video:1, collab:1, fotoObraQuinzenal:true},
+  bioter_castro:     {arte:1, video:1, collab:1, fotoObraQuinzenal:true},
+  bioter_toledo:     {arte:1, video:1, collab:1, fotoObraQuinzenal:true},
+  bioter_gloria:     {arte:1, video:0, collab:1, fotoObraQuinzenal:false},
+  bioter_paraguay:   {arte:1, video:0, collab:1, fotoObraQuinzenal:false},
+  bioter_uberlandia: {arte:1, video:0, collab:1, fotoObraQuinzenal:false},
+};
+// Helper: identifica se um card é "collab" baseado no bioterUnit
+// (Grupo Bioter / Bioter Brasil servem como collab pras unidades individuais).
+function isBioterCollabCard(task){
+  if(!task||task.client!=="bioter")return false;
+  const unit=task.bioterUnit;
+  // Multi-select: pode ser "grupo,brasil" ou só "grupo"/"brasil"
+  if(typeof unit!=="string")return false;
+  const ids=unit.split(",").map(function(s){return s.trim();});
+  return ids.indexOf("grupo")>=0||ids.indexOf("brasil")>=0;
+}
+
 function getPostsConfig(clientId){
   if(!clientId)return Object.assign({},POSTS_PADRAO);
+  // 1. Tem override salvo no localStorage?
   try{
     const raw=localStorage.getItem("pixels-posts-config-"+clientId);
     if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return Object.assign({},POSTS_PADRAO,p);}
   }catch(e){}
+  // 2. É unidade Bioter? Usa preset
+  if(BIOTER_POSTS_PRESETS[clientId])return Object.assign({},POSTS_PADRAO,BIOTER_POSTS_PRESETS[clientId]);
   return Object.assign({},POSTS_PADRAO);
 }
 function savePostsConfig(clientId, cfg){
   if(!clientId)return;
   try{localStorage.setItem("pixels-posts-config-"+clientId,JSON.stringify(Object.assign({},POSTS_PADRAO,cfg||{})));}catch(e){}
 }
-// Calcula as datas sugeridas pra um mês: distribui posts em dias úteis (seg-sex)
-// alternando entre arte e vídeo. Retorna [{date:"YYYY-MM-DD", type:"arte"|"video"}].
+
+// Calcula as datas sugeridas pra um mês.
+// Retorna [{date:"YYYY-MM-DD", type:"arte"|"video"|"collab"|"foto"}].
+// Se fotoObraQuinzenal=true, a cada 2 semanas substitui 1 slot por foto-obra.
 function generateMonthPlanDates(year, month, postsConfig){
   const cfg=postsConfig||POSTS_PADRAO;
-  const totalSemana=(cfg.arte||0)+(cfg.video||0);
-  if(totalSemana<=0)return [];
-  // Pega segundas-feiras do mês como referência de início de semana
+  const result=[];
   const firstDay=new Date(year, month-1, 1);
   const lastDay=new Date(year, month, 0);
-  const result=[];
-  // Iterar semana a semana — começar na primeira segunda do mês ou anterior
   const cur=new Date(firstDay);
   while(cur.getDay()!==1){cur.setDate(cur.getDate()-1);}
+  // Slots: seg=2ª, qua=4ª, qui=5ª (ordem visual); pra 3 posts/semana usa essas 3.
+  // Pra 2 posts/semana usa 2ª e 5ª.
+  let weekIndex=0;
   while(cur<=lastDay){
-    // Distribui posts da semana: spread igual entre dias úteis disponíveis
-    const slots=[1,3,2,4,5]; // ordem de preferência: seg, qua, ter, qui, sex
-    let artesRestantes=cfg.arte||0;
-    let videosRestantes=cfg.video||0;
-    let i=0;
-    while((artesRestantes>0||videosRestantes>0)&&i<slots.length){
-      const dayOffset=slots[i]-1; // 0=seg, 1=ter, etc
+    let artes=cfg.arte||0, videos=cfg.video||0, collabs=cfg.collab||0, fotos=0;
+    // Quinzenal: na semana 0, 2, 4... substitui 1 vídeo (preferencial) ou arte por foto
+    if(cfg.fotoObraQuinzenal&&weekIndex%2===0){
+      if(videos>0){videos--;fotos++;}else if(artes>0){artes--;fotos++;}
+    }
+    const totalSemana=artes+videos+collabs+fotos;
+    if(totalSemana<=0){weekIndex++;cur.setDate(cur.getDate()+7);continue;}
+    // Distribuição em dias úteis: começa seg, qua, sex
+    const dayOrder=[1,3,5,2,4]; // 2ª, 4ª, 6ª (priorizando), depois 3ª e 5ª
+    let slotIdx=0;
+    while((artes>0||videos>0||collabs>0||fotos>0)&&slotIdx<dayOrder.length){
+      const dayOffset=dayOrder[slotIdx]-1;
       const d=new Date(cur);d.setDate(d.getDate()+dayOffset);
       if(d.getMonth()===month-1&&d>=firstDay){
         const ds=d.toISOString().slice(0,10);
-        // Alterna: prioriza arte se ainda tem, senão vídeo
-        const type=artesRestantes>=videosRestantes&&artesRestantes>0?"arte":(videosRestantes>0?"video":"arte");
+        // Ordem preferencial: arte → collab → foto → video
+        // (tenta alternar pra mostrar variedade visual)
+        let type;
+        if(artes>=videos&&artes>=collabs&&artes>=fotos&&artes>0){type="arte";artes--;}
+        else if(collabs>0){type="collab";collabs--;}
+        else if(fotos>0){type="foto";fotos--;}
+        else if(videos>0){type="video";videos--;}
+        else if(artes>0){type="arte";artes--;}
+        else break;
         result.push({date:ds, type:type});
-        if(type==="arte")artesRestantes--;else videosRestantes--;
       }
-      i++;
+      slotIdx++;
     }
+    weekIndex++;
     cur.setDate(cur.getDate()+7);
   }
   return result.sort(function(a,b){return a.date.localeCompare(b.date);});
@@ -9760,51 +9804,97 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   // distribui em 2ª e 5ª de cada semana alternando arte/vídeo. Estrategista confirma/edita.
   const ELIGIBLE_STATUSES_PLAN=["demanda","recebida","execucao","ajustes","avaliacao","aprovado"];
   function _isVideoType(t){return t==="video"||t==="corte";}
-  function _isArteType(t){return t==="arte"||t==="carrossel"||t==="foto";}
+  function _isArteType(t){return t==="arte"||t==="carrossel";}
+  function _isFotoType(t){return t==="foto";}
   function handleGeneratePlan(){
     const year=calMonth.getFullYear(),month=calMonth.getMonth()+1;
     // Respeita o filtro de cliente ativo: "todos" gera pra todos,
-    // cliente específico gera só pra aquele cliente.
+    // cliente específico gera só pra aquele cliente. Pra Bioter, considera unidades.
     const clientesBase=(typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";});
     const clientes=filterClient==="todos"?clientesBase:clientesBase.filter(function(c){return c.id===filterClient;});
+    // Unidades Bioter individuais (cada uma tem sua própria config de posts)
+    const unidadesBioter=(typeof BIOTER_GROUP_UNITS!=="undefined")?BIOTER_GROUP_UNITS:[];
     const proposals=[];
-    clientes.forEach(function(cl){
-      // Cards desse cliente em status elegíveis, SEM publishDate ainda
+    // Rastreador: cards já alocados em alguma unidade — evita um card de "Grupo
+    // Bioter" ser usado pra 6 unidades diferentes (cada card só pode ser publicado uma vez).
+    const cardsAlocados=new Set();
+    // Helper: processa um "alvo" (cliente normal ou unidade Bioter)
+    function processarAlvo(alvoId, alvoNome, taskMatcherFn){
+      const cfg=(typeof getPostsConfig==="function")?getPostsConfig(alvoId):{arte:1,video:1};
+      const slots=(typeof generateMonthPlanDates==="function")?generateMonthPlanDates(year,month,cfg):[];
+      if(slots.length===0)return;
+      // Cards desse alvo, status elegível, sem publishDate, e ainda não alocados
+      // em outra unidade (evita 1 card de Grupo Bioter ser usado 6 vezes)
       const cards=tasks.filter(function(t){
         return !t.deletedAt
-          && t.client===cl.id
+          && taskMatcherFn(t)
           && ELIGIBLE_STATUSES_PLAN.indexOf(t.status)>=0
-          && !t.publishDate;
+          && !t.publishDate
+          && !cardsAlocados.has(t.id);
       });
       if(cards.length===0)return;
-      // Separar por tipo
-      const artes=cards.filter(function(t){return _isArteType(t.contentType);});
-      const videos=cards.filter(function(t){return _isVideoType(t.contentType);});
-      const semTipo=cards.filter(function(t){return !_isArteType(t.contentType)&&!_isVideoType(t.contentType);});
-      // Gera slots do mês (config do cliente)
-      const cfg=(typeof getPostsConfig==="function")?getPostsConfig(cl.id):{arte:1,video:1};
-      const slots=(typeof generateMonthPlanDates==="function")?generateMonthPlanDates(year,month,cfg):[];
-      let artIdx=0,vidIdx=0,semIdx=0;
+      // Separar por tipo: collab = card de Grupo Bioter ou Bioter Brasil
+      // (vale pra qualquer unidade Bioter coberta), demais = cards normais
+      const isCollabFn=(typeof isBioterCollabCard==="function")?isBioterCollabCard:function(){return false;};
+      const collabs=cards.filter(function(t){return isCollabFn(t);});
+      const naoCollabs=cards.filter(function(t){return !isCollabFn(t);});
+      const artes=naoCollabs.filter(function(t){return _isArteType(t.contentType);});
+      const videos=naoCollabs.filter(function(t){return _isVideoType(t.contentType);});
+      const fotos=naoCollabs.filter(function(t){return _isFotoType(t.contentType);});
+      const semTipo=naoCollabs.filter(function(t){return !_isArteType(t.contentType)&&!_isVideoType(t.contentType)&&!_isFotoType(t.contentType);});
+      let cIdx=0,aIdx=0,vIdx=0,fIdx=0,sIdx=0;
       slots.forEach(function(slot){
         let card=null;
         // Tenta casar tipo do slot com tipo do card
-        if(slot.type==="arte"&&artes[artIdx])card=artes[artIdx++];
-        else if(slot.type==="video"&&videos[vidIdx])card=videos[vidIdx++];
-        // Fallback: usa o que tiver (alterna se possível)
-        if(!card&&semTipo[semIdx])card=semTipo[semIdx++];
-        if(!card&&artes[artIdx])card=artes[artIdx++];
-        if(!card&&videos[vidIdx])card=videos[vidIdx++];
-        if(card)proposals.push({
-          taskId:card.id,
-          cardTitle:card.title,
-          clientId:cl.id,
-          clientName:cl.name,
-          contentType:card.contentType||slot.type,
-          status:card.status,
-          proposedDate:slot.date,
-          slotType:slot.type,
-        });
+        if(slot.type==="collab"&&collabs[cIdx])card=collabs[cIdx++];
+        else if(slot.type==="arte"&&artes[aIdx])card=artes[aIdx++];
+        else if(slot.type==="video"&&videos[vIdx])card=videos[vIdx++];
+        else if(slot.type==="foto"&&fotos[fIdx])card=fotos[fIdx++];
+        // Fallback: usa o que tiver (alterna conforme disponibilidade)
+        if(!card&&semTipo[sIdx])card=semTipo[sIdx++];
+        if(!card&&slot.type!=="collab"&&collabs[cIdx])card=collabs[cIdx++];
+        if(!card&&artes[aIdx])card=artes[aIdx++];
+        if(!card&&fotos[fIdx])card=fotos[fIdx++];
+        if(!card&&videos[vIdx])card=videos[vIdx++];
+        if(card){
+          cardsAlocados.add(card.id);
+          proposals.push({
+            taskId:card.id,
+            cardTitle:card.title,
+            clientId:alvoId,
+            clientName:alvoNome,
+            contentType:card.contentType||slot.type,
+            isCollab:isCollabFn(card),
+            status:card.status,
+            proposedDate:slot.date,
+            slotType:slot.type,
+          });
+        }
       });
+    }
+    clientes.forEach(function(cl){
+      // Bioter: processa cada unidade separadamente. Cards de "Grupo Bioter" ou
+      // "Bioter Brasil" são incluídos como collab pra TODAS as unidades cobertas.
+      if(cl.id==="bioter"&&unidadesBioter.length>0){
+        unidadesBioter.forEach(function(unit){
+          // ID sem prefixo bioter_ — usado pra match com t.bioterUnit
+          const unitKey=unit.id.replace(/^bioter_/,"");
+          processarAlvo(unit.id, cl.name+" — "+unit.name.replace(/^Bioter\s+/i,""), function(t){
+            if(t.client!=="bioter")return false;
+            const tUnit=t.bioterUnit||"";
+            const tIds=tUnit.split(",").map(function(s){return s.trim();}).filter(Boolean);
+            // Match direto: card endereçado a essa unidade específica
+            if(tIds.indexOf(unitKey)>=0)return true;
+            // Collab: card de Grupo (todas) cobre essa unidade
+            if(tIds.indexOf("grupo")>=0)return true;
+            // Collab: card de Bioter Brasil cobre todas EXCETO paraguay
+            if(tIds.indexOf("brasil")>=0&&unitKey!=="paraguay")return true;
+            return false;
+          });
+        });
+      } else {
+        processarAlvo(cl.id, cl.name, function(t){return t.client===cl.id;});
+      }
     });
     if(proposals.length===0){
       if(typeof pixelsToast!=="undefined")pixelsToast.warning("Nenhum card elegível. Crie cards em Demanda/Execução/Ajustes/Avaliação/Aprovado primeiro.");
@@ -10141,7 +10231,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                       );
                     })}
                     {dayTasks.length>(isMob?2:3)&&(
-                      <div style={{color:C.ts,fontSize:9,textAlign:"center",fontWeight:600}}>
+                      <div style={{color:"#94a3b8",fontSize:9,textAlign:"center",fontWeight:600}}>
                         +{dayTasks.length-(isMob?2:3)} mais
                       </div>
                     )}
