@@ -9943,30 +9943,29 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [showPixelsIA,setShowPixelsIA]=useState(false);
   const [editingColId,setEditingColId]=useState(null);
   const [editingColLabel,setEditingColLabel]=useState("");
-  // ── Menu ⋯ por coluna (header) + filtro por data de publicação ──
+  // ── Menu ⋯ por coluna (header) + ordenação por data de publicação ──
   // colMenuOpen: id da coluna com menu aberto, ou null
-  // colDateFilter: { [col.id]: "todas"|"hoje"|"7d"|"30d"|"sem" } persistido em localStorage
+  // colSortMode: { [col.id]: "pubAsc"|"pubDesc" } — sobrescreve sortMode global SÓ naquela coluna
+  // Sem entrada = usa o sortMode global. Persiste em localStorage.
   const [colMenuOpen,setColMenuOpen]=useState(null);
-  const [colDateFilter,setColDateFilter]=useState(function(){
-    try{const raw=localStorage.getItem("pixels-col-datefilter-v1");if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return p;}}catch(e){}
+  const [colSortMode,setColSortMode]=useState(function(){
+    try{const raw=localStorage.getItem("pixels-col-sortmode-v1");if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return p;}}catch(e){}
     return{};
   });
-  useEffect(function(){try{localStorage.setItem("pixels-col-datefilter-v1",JSON.stringify(colDateFilter));}catch(e){}},[colDateFilter]);
-  // Predicate: passa cards que casam com o filtro de data da sua coluna
-  const matchesColDateFilter=function(t,colId){
-    const mode=colDateFilter[colId];
-    if(!mode||mode==="todas")return true;
-    const pd=t.publishDate||t.publish_date;
-    if(mode==="sem")return !pd;
-    if(!pd)return false;
-    let d;
-    try{d=new Date(typeof pd==="string"&&pd.length===10?pd+"T00:00:00":pd);if(isNaN(d.getTime()))return false;}catch(e){return false;}
-    const now=new Date();now.setHours(0,0,0,0);
-    const diffDays=Math.floor((d-now)/86400000);
-    if(mode==="hoje")return diffDays===0;
-    if(mode==="7d")return diffDays>=0&&diffDays<=7;
-    if(mode==="30d")return diffDays>=0&&diffDays<=30;
-    return true;
+  useEffect(function(){try{localStorage.setItem("pixels-col-sortmode-v1",JSON.stringify(colSortMode));}catch(e){}},[colSortMode]);
+  // Comparador por data de publicação (publishDate); cards sem data vão pro final.
+  const compareByPublishDate=function(a,b,asc){
+    const pa=a.publishDate||a.publish_date;
+    const pb=b.publishDate||b.publish_date;
+    if(!pa&&!pb)return 0;
+    if(!pa)return 1;  // sem data sempre depois
+    if(!pb)return -1;
+    const ta=new Date(typeof pa==="string"&&pa.length===10?pa+"T00:00:00":pa).getTime();
+    const tb=new Date(typeof pb==="string"&&pb.length===10?pb+"T00:00:00":pb).getTime();
+    if(isNaN(ta)&&isNaN(tb))return 0;
+    if(isNaN(ta))return 1;
+    if(isNaN(tb))return -1;
+    return asc?(ta-tb):(tb-ta);
   };
   const [cols,setCols]=useState(()=>{
     // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
@@ -10559,11 +10558,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
-          // Filtro por data de publicação (do menu ⋯) também é aplicado aqui.
+          // Override por coluna: se colSortMode[col.id] existir, sobrescreve sortMode global.
+          const _colSort=colSortMode[col.id];
           const colTasks=visible
             .filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id)
-            .filter(t=>matchesColDateFilter(t,col.id))
             .sort((a,b)=>{
+            // Override por coluna — ordenação por data de publicação (asc/desc)
+            if(_colSort==="pubAsc")return compareByPublishDate(a,b,true);
+            if(_colSort==="pubDesc")return compareByPublishDate(a,b,false);
             // Manual: respeita position; quem não tem position vai pro final (cinza)
             if(sortMode==="manual"){
               const pa=a.position??999999,pb=b.position??999999;
@@ -10625,31 +10627,43 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               </div>
               <div style={{display:"flex",gap:3,alignItems:"center",position:"relative"}}>
                 {canNewCol&&col.custom&&<button onClick={()=>removeCol(col.id)} title="Excluir coluna" style={{background:"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:18,height:18,color:"rgba(255,255,255,0.85)",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}><Ico n="x" size={11}/></button>}
-                {/* Menu ⋯ — filtro por data de publicação */}
-                <button onClick={e=>{e.stopPropagation();setColMenuOpen(colMenuOpen===col.id?null:col.id);}} title="Opções da coluna" style={{background:(colDateFilter[col.id]&&colDateFilter[col.id]!=="todas")?"rgba(255,255,255,0.32)":"rgba(0,0,0,0.18)",border:"none",borderRadius:5,width:20,height:20,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:14,fontWeight:700,lineHeight:1}}>⋯</button>
+                {/* Menu ⋯ — ordenação por data de publicação. Visual: minimal, sem fundo,
+                    ícone SVG real (não emoji), hover suave. Fica destacado quando há ordem ativa. */}
+                {(function(){
+                  const hasOverride=!!colSortMode[col.id];
+                  return <button
+                    onClick={e=>{e.stopPropagation();setColMenuOpen(colMenuOpen===col.id?null:col.id);}}
+                    title="Opções da coluna"
+                    style={{background:hasOverride?"rgba(255,255,255,0.22)":"transparent",border:"none",borderRadius:6,width:22,height:22,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,transition:"background .15s"}}
+                    onMouseEnter={e=>{if(!hasOverride)e.currentTarget.style.background="rgba(255,255,255,0.18)";}}
+                    onMouseLeave={e=>{if(!hasOverride)e.currentTarget.style.background="transparent";}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+                  </button>;
+                })()}
                 {colMenuOpen===col.id&&(function(){
                   const opts=[
-                    {id:"todas",label:"Todas as publicações"},
-                    {id:"hoje",label:"Publicam hoje"},
-                    {id:"7d",label:"Próximos 7 dias"},
-                    {id:"30d",label:"Próximos 30 dias"},
-                    {id:"sem",label:"Sem data marcada"},
+                    {id:null,    label:"Ordenação padrão",                  hint:"Inteligente / Prazo / Manual"},
+                    {id:"pubAsc",label:"Data de publicação (mais próxima)", hint:"Cards com data primeiro"},
+                    {id:"pubDesc",label:"Data de publicação (mais distante)",hint:"Cards mais distantes primeiro"},
                   ];
-                  const current=colDateFilter[col.id]||"todas";
+                  const current=colSortMode[col.id]||null;
                   return <>
                     {/* Overlay para fechar ao clicar fora */}
                     <div onClick={()=>setColMenuOpen(null)} style={{position:"fixed",inset:0,zIndex:998}}/>
-                    <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,minWidth:200,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(15,23,42,0.18)",padding:6,zIndex:999}}>
-                      <div style={{padding:"6px 10px 4px",color:"#64748b",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Filtrar por data de publicação</div>
+                    <div style={{position:"absolute",top:"calc(100% + 8px)",right:0,minWidth:240,background:"#fff",borderRadius:12,boxShadow:"0 12px 32px rgba(15,23,42,0.20), 0 2px 6px rgba(15,23,42,0.08)",padding:6,zIndex:999,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                      <div style={{padding:"8px 12px 6px 12px",color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Ordenar coluna</div>
                       {opts.map(o=>(
-                        <button key={o.id} onClick={()=>{
-                          setColDateFilter(prev=>{const out={...prev};if(o.id==="todas")delete out[col.id];else out[col.id]=o.id;return out;});
+                        <button key={String(o.id)} onClick={()=>{
+                          setColSortMode(prev=>{const out={...prev};if(o.id===null)delete out[col.id];else out[col.id]=o.id;return out;});
                           setColMenuOpen(null);
-                        }} style={{display:"flex",width:"100%",alignItems:"center",justifyContent:"space-between",gap:8,background:current===o.id?"#f1f5f9":"transparent",border:"none",borderRadius:6,padding:"7px 10px",color:"#0f172a",fontSize:12,fontWeight:current===o.id?600:500,cursor:"pointer",textAlign:"left"}}
+                        }} style={{display:"flex",width:"100%",alignItems:"center",justifyContent:"space-between",gap:10,background:current===o.id?"#f5f3ff":"transparent",border:"none",borderRadius:8,padding:"9px 12px",color:"#0f172a",cursor:"pointer",textAlign:"left",transition:"background .12s"}}
                           onMouseEnter={e=>{if(current!==o.id)e.currentTarget.style.background="#f8fafc";}}
                           onMouseLeave={e=>{if(current!==o.id)e.currentTarget.style.background="transparent";}}>
-                          <span>{o.label}</span>
-                          {current===o.id&&<span style={{color:"#7c3aed",fontSize:14,fontWeight:700,lineHeight:1}}>✓</span>}
+                          <div style={{display:"flex",flexDirection:"column",gap:1,minWidth:0,flex:1}}>
+                            <span style={{fontSize:13,fontWeight:current===o.id?600:500,color:current===o.id?"#7c3aed":"#0f172a"}}>{o.label}</span>
+                            <span style={{fontSize:10,color:"#94a3b8",fontWeight:500}}>{o.hint}</span>
+                          </div>
+                          {current===o.id&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
                         </button>
                       ))}
                     </div>
@@ -10922,7 +10936,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           <span style={{fontSize:20}}>🗑</span>
           <div style={{color:C.ts,fontSize:12}}>Cartões excluídos são mantidos por <strong style={{color:C.rd}}>30 dias</strong> antes de serem removidos permanentemente.</div>
         </div>
-        {(()=>{
           const trashVisible=myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)));
           return <>
             {trashVisible.length===0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:28,textAlign:"center"}}>
@@ -10938,6 +10951,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{color:days<=5?C.rd:C.ts,fontSize:11,fontWeight:700}}>{days} dia{days!==1?"s":""} restante{days!==1?"s":""}</span>
                   {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
                 </div>
               </div>;
