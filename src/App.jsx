@@ -432,23 +432,47 @@ function stripEmojis(input){
   }
   return s.replace(/\s+/g," ").trim();
 }
-// Remove menções a nomes de clientes do título — o cliente já é indicado pela logo/badge
-// no card, então repetir o nome no título é redundante. Roda como parte do smartFormatTitle.
-// Lista cobre: CLIENTS oficiais + variações comuns ("Grupo Bioter", "Bioter Paraguay", etc).
+// Remove menções a nomes de clientes/empresas do título — o cliente já é indicado pela
+// logo/badge no card. Roda como parte do smartFormatTitle.
+// Variações cobertas: forma junta, com espaço, com hífen ("VetService"/"Vet Service"/"Vet-Service").
+// IMPORTANTE: nomes de CIDADES (Chapecó, Toledo, Paraguay, etc) NÃO são removidos isolados —
+// só quando colados ao nome da empresa (ex: "Bioter Chapecó"). Boundary manual com (?:^|[^A-Za-zÀ-ÿ0-9])
+// pra funcionar com acentos (o \b nativo do JS não trata acentuação como letra).
+const _B="(?:^|[^A-Za-zÀ-ÿ0-9])"; // boundary "antes"
+const _E="(?:[^A-Za-zÀ-ÿ0-9]|$)"; // boundary "depois"
 const _CLIENT_STRIP_PATTERNS=[
-  /\bgrupo\s+bioter\b/gi,
-  /\bbioter\s+(?:brasil|paraguay|paraguai|chapec[oó]|toledo|castro|uberl[aâ]ndia|gl[oó]ria(?:\s+de\s+dourados)?)\b/gi,
-  /\bbioter\b/gi,
-  /\bconstruschorr\b/gi,
-  /\barabut[aã](?:\s+pr[eé]-?moldados)?\b/gi,
-  /\bclimaves\b/gi,
-  /\bvetservice\b/gi,
-  /\bpixels(?:\s+ag[eê]ncia)?\b/gi,
+  // Bioter — variações com cidade/região vêm ANTES do "bioter" sozinho pra match mais específico primeiro
+  new RegExp(_B+"grupo\\s+bioter"+_E, "gi"),
+  new RegExp(_B+"bioter\\s+(?:brasil|paraguay|paraguai|chapec[oó]|toledo|castro|uberl[aâ]ndia|gl[oó]ria(?:\\s+de\\s+dourados)?)"+_E, "gi"),
+  new RegExp(_B+"bioter"+_E, "gi"),
+  // Construschorr
+  new RegExp(_B+"construschorr"+_E, "gi"),
+  // Arabutã / Arabuta — com ou sem "Pré-Moldados" depois
+  new RegExp(_B+"arabut[aã](?:\\s+pr[eé]\\s*-?\\s*moldados)?"+_E, "gi"),
+  // Climaves
+  new RegExp(_B+"climaves"+_E, "gi"),
+  // VetService — junto ou separado por espaço/hífen ("Vet Service", "Vet-Service")
+  new RegExp(_B+"vet\\s*-?\\s*service"+_E, "gi"),
+  // Pixels (Marketing/Agência)
+  new RegExp(_B+"pixels(?:\\s+(?:marketing|ag[eê]ncia|digital))*"+_E, "gi"),
 ];
 function stripClientNames(s){
   if(!s||typeof s!=="string")return s||"";
   let out=s;
-  for(let i=0;i<_CLIENT_STRIP_PATTERNS.length;i++){out=out.replace(_CLIENT_STRIP_PATTERNS[i],"");}
+  for(let i=0;i<_CLIENT_STRIP_PATTERNS.length;i++){
+    // Repete até não casar mais — necessário porque o boundary consome um caractere
+    // que pode ser o boundary de um próximo match adjacente.
+    let prev;
+    do {
+      prev=out;
+      out=out.replace(_CLIENT_STRIP_PATTERNS[i], function(m){
+        // Preserva o boundary inicial (caractere não-alfanumérico) se houver
+        const head=m.match(/^[^A-Za-zÀ-ÿ0-9]/)?m[0]:"";
+        const tail=m.match(/[^A-Za-zÀ-ÿ0-9]$/)?m[m.length-1]:"";
+        return head+tail;
+      });
+    } while(out!==prev);
+  }
   // Limpa separadores órfãos: " - " no início/fim, "  " duplo, "- -", etc.
   out=out.replace(/\s+/g," ").trim();
   out=out.replace(/^\s*-\s*/,"").replace(/\s*-\s*$/,"");
@@ -1302,6 +1326,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="moreHor")   return <svg {...p}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>;
   if(n==="download")  return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
   if(n==="upload")    return <svg {...p}><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+  if(n==="rotate")    return <svg {...p}><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>;
   if(n==="bomb")      return <svg {...p}><circle cx="11" cy="13" r="9"/><path d="M14.35 4.65L16.3 2.7a2.41 2.41 0 013.4 0l1.6 1.6a2.4 2.4 0 010 3.4l-1.95 1.95"/><path d="m22 2-1.5 1.5"/></svg>;
   if(n==="alarmClock")return <svg {...p}><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/><path d="M6.38 18.7 4 21"/><path d="M17.64 18.67 20 21"/></svg>;
   if(n==="layers")    return <svg {...p}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
