@@ -269,6 +269,67 @@ const KANBAN_COLS = [
   { id:"pausado",   label:"Pausado",                color:C.kPausado,   dark:false },
 ];
 
+/* ─── FUNIL DE VENDAS — config por cliente ─────────────────────────────
+   Cada cliente tem um funil próprio. Cliente preenche no Portal, a equipe
+   consome via Gestão de Mídia. Etapas são FIXAS (não editáveis em runtime
+   hoje — se quiser editar, mexe aqui e roda deploy).
+   Default = Bioter (5 etapas) pra clientes sem config customizada (Climaves,
+   novos clientes futuros).
+─────────────────────────────────────────────────────────────────────── */
+const FUNNELS_BY_CLIENT = {
+  bioter: [
+    {id:"lead",         name:"Lead"},
+    {id:"agendamento",  name:"Agendamento de visita"},
+    {id:"visita",       name:"Visita"},
+    {id:"orcamento",    name:"Orçamento"},
+    {id:"fechamento",   name:"Fechamento"},
+  ],
+  vetservice: [
+    {id:"contato",         name:"Contato"},
+    {id:"agendamento",     name:"Agendamento de visita"},
+    {id:"demonstracao",    name:"Demonstração do trabalho"},
+    {id:"personalizacao",  name:"Personalização do trabalho"},
+    {id:"apresentacao",    name:"Apresentação personalizada / gargalos"},
+    {id:"fechamento",      name:"Fechamento"},
+  ],
+  construschorr: [
+    {id:"contato",            name:"Contato / indicação"},
+    {id:"visita",             name:"Visita e entendimento"},
+    {id:"orcamento",          name:"Orçamento"},
+    {id:"aprovacao_bancaria", name:"Aguardando aprovação bancária"},
+    {id:"pedido",             name:"Pedido aprovado / obra iniciada"},
+    {id:"acompanhamento",     name:"Acompanhamento e entrega"},
+  ],
+  arabuta: [
+    {id:"contato",     name:"Primeiro contato / indicação"},
+    {id:"coleta",      name:"Coleta de informações"},
+    {id:"orcamento",   name:"Orçamento"},
+    {id:"negociacao",  name:"Negociação"},
+    {id:"fechamento",  name:"Fechamento"},
+  ],
+};
+const FUNNEL_DEFAULT_STAGES = FUNNELS_BY_CLIENT.bioter; // fallback: copia do Bioter
+function getFunnelForClient(clientId){
+  if(!clientId)return FUNNEL_DEFAULT_STAGES;
+  return FUNNELS_BY_CLIENT[clientId] || FUNNEL_DEFAULT_STAGES;
+}
+// Calcula conversão entre etapa anterior e atual + conversão total do topo até a última.
+// stages = [{quantity:Number}, ...] na ordem do funil.
+function calcFunnelConversions(stages){
+  if(!stages||!stages.length)return {pairwise:[], total:0};
+  const pairwise=stages.map(function(s,i){
+    if(i===0)return null;
+    const prev=stages[i-1]?.quantity||0;
+    const cur=s.quantity||0;
+    if(prev<=0)return 0;
+    return Math.round((cur/prev)*1000)/10; // 1 casa decimal
+  });
+  const top=stages[0]?.quantity||0;
+  const bot=stages[stages.length-1]?.quantity||0;
+  const total=top>0?Math.round((bot/top)*1000)/10:0;
+  return {pairwise, total};
+}
+
 /* ─── TEAM ───────────────────────────────── */
 const TEAM = [
   { id:"vinicius",  name:"Vinicius",  role:"CEO / Gestor",          av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
@@ -1316,7 +1377,6 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="mic")       return <svg {...p}><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
   if(n==="tag")       return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
   if(n==="send")      return <svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
-  if(n==="bell")      return <svg {...p}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>;
   if(n==="sparkles")  return <svg {...p}><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>;
   if(n==="edit")      return <svg {...p}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
   if(n==="pin")       return <svg {...p}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 002-2V3H6v1a2 2 0 002 2h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>;
@@ -23113,6 +23173,9 @@ function MediaTabDashboard({data,store,update,addHistory,canEdit}){
       </div>
     </div>
 
+    {/* Funil de Vendas — alimentado pelo Portal do Cliente */}
+    <MediaFunnelView clientId={data.client_id} clientName={data.name} canEdit={canEdit}/>
+
     {/* Mini gráfico de leads últimos 6 meses */}
     {results.length>0&&<div style={MCARD}>
       <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:12}}>Evolução de leads (últimos {Math.min(results.length,6)} períodos)</div>
@@ -23134,6 +23197,184 @@ function KPI({label,value,delta,reverse}){
     <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
     <div style={{color:"#0f172a",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.3}}>{value}</div>
     {delta!==null&&deltaText&&<div style={{color:deltaColor,fontSize:10,fontWeight:600,marginTop:3}}>{deltaIcon} {deltaText}</div>}
+  </div>;
+}
+
+/* ─── MediaFunnelView ─────────────────────────────────
+   Funil de Vendas — read-only (dados vêm do Portal do Cliente via Supabase).
+   Pixels (sócios+Erick) podem corrigir/editar manualmente quando necessário.
+─────────────────────────────────────────────────────── */
+const _MEDIA_MES_NAMES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+function MediaFunnelView({clientId, clientName, canEdit}){
+  const now=new Date();
+  const [month,setMonth]=useState(now.getMonth()+1);
+  const [year,setYear]=useState(now.getFullYear());
+  const stages=getFunnelForClient(clientId);
+  const [entry,setEntry]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [history,setHistory]=useState([]);
+  const [editMode,setEditMode]=useState(false);
+  const [form,setForm]=useState({});
+  const [saving,setSaving]=useState(false);
+  // Fetch entry atual + histórico
+  const reload=useCallback(function(){
+    if(!clientId||!window._sb){setLoading(false);return;}
+    setLoading(true);
+    window._sb.from("media_funnel_entries").select("*")
+      .eq("client_id",clientId).eq("month",month).eq("year",year)
+      .maybeSingle()
+      .then(function(r){setEntry(r.data||null);setLoading(false);})
+      .catch(function(e){console.warn("[mfunnel]",e?.message||e);setLoading(false);});
+    window._sb.from("media_funnel_entries").select("*")
+      .eq("client_id",clientId)
+      .order("year",{ascending:false}).order("month",{ascending:false}).limit(12)
+      .then(function(r){setHistory(r.data||[]);});
+  },[clientId,month,year]);
+  useEffect(function(){reload();},[reload]);
+  // Realtime — atualiza quando cliente salva no Portal
+  useEffect(function(){
+    if(!clientId||!window._sb)return undefined;
+    const ch=window._sb.channel("mfunnel-"+clientId+"-"+year+"-"+month)
+      .on("postgres_changes",{event:"*",schema:"public",table:"media_funnel_entries",filter:"client_id=eq."+clientId},function(){reload();})
+      .subscribe();
+    return function(){try{window._sb.removeChannel(ch);}catch(e){}};
+  },[clientId,month,year,reload]);
+  // Espelha entry no form ao entrar em modo de edição
+  function enterEdit(){
+    const init={};
+    if(entry&&Array.isArray(entry.stages))entry.stages.forEach(function(s){init[s.id]=s.quantity||0;});
+    stages.forEach(function(s){if(init[s.id]===undefined)init[s.id]=0;});
+    setForm(init);setEditMode(true);
+  }
+  function handleSaveAdmin(){
+    if(saving||!window._sb)return;
+    const currentStages=stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:Number(form[s.id]||0)};});
+    const userId=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"unknown";
+    const payload={client_id:clientId,month:month,year:year,stages:currentStages,updated_by:userId};
+    if(!entry)payload.submitted_by=userId;
+    setSaving(true);
+    window._sb.from("media_funnel_entries")
+      .upsert(payload,{onConflict:"client_id,month,year"})
+      .select().maybeSingle()
+      .then(function(r){setSaving(false);if(r.data)setEntry(r.data);setEditMode(false);if(typeof pixelsToast!=="undefined")pixelsToast.success("Funil atualizado pela equipe.");})
+      .catch(function(e){setSaving(false);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e?.message||""));});
+  }
+  // Stages efetivos (mostra os do entry se existir, senão zerados)
+  const effectiveStages=editMode
+    ? stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:Number(form[s.id]||0)};})
+    : (entry&&Array.isArray(entry.stages)&&entry.stages.length>0
+        ? entry.stages
+        : stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:0};}));
+  const conv=calcFunnelConversions(effectiveStages);
+  const maxQty=Math.max.apply(null,effectiveStages.map(function(s){return s.quantity||0;}).concat([1]));
+  const isEmpty=!entry||(entry.stages||[]).every(function(s){return !s.quantity;});
+  const yearOpts=[year-1,year,year+1];
+
+  return <div style={MCARD}>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14,display:"flex",alignItems:"center",gap:8}}>
+          📈 Funil de vendas
+          {isEmpty&&!loading&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:99}}>NÃO PREENCHIDO</span>}
+        </div>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>
+          Dados preenchidos pelo cliente no Portal. Consumido aqui pra cruzar com resultados de mídia.
+        </div>
+      </div>
+      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));setEditMode(false);}}
+          style={{...MSI,padding:"6px 10px",fontSize:12,fontWeight:600,width:"auto",cursor:"pointer"}}>
+          {_MEDIA_MES_NAMES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
+        </select>
+        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));setEditMode(false);}}
+          style={{...MSI,padding:"6px 10px",fontSize:12,fontWeight:600,width:"auto",cursor:"pointer"}}>
+          {yearOpts.map(function(y){return <option key={y} value={y}>{y}</option>;})}
+        </select>
+        {canEdit&&!editMode&&<button onClick={enterEdit}
+          style={{background:"#f1f5f9",color:"#0f172a",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+          {entry?"Corrigir":"Preencher"}
+        </button>}
+      </div>
+    </div>
+
+    {/* Aviso quando cliente ainda não preencheu o MÊS ATUAL */}
+    {isEmpty&&!loading&&!editMode&&month===now.getMonth()+1&&year===now.getFullYear()&&
+      <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,padding:"12px 16px",fontSize:12,color:"#92400e",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:18}}>⚠</span>
+        <span>{clientName||"Cliente"} ainda não atualizou o funil deste mês.</span>
+      </div>
+    }
+
+    {/* Bars + inputs (quando editing) ou só bars */}
+    <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+      {effectiveStages.map(function(s,i){
+        const qty=s.quantity||0;
+        const w=Math.max(8,(qty/maxQty)*100);
+        const convPair=conv.pairwise[i];
+        return <div key={s.id} style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{minWidth:200,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{width:22,height:22,borderRadius:6,background:"#f5f3ff",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:800,flexShrink:0}}>{i+1}</span>
+            <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{s.name}</span>
+          </div>
+          <div style={{flex:1,height:28,background:"#f1f5f9",borderRadius:7,position:"relative",overflow:"hidden",minWidth:100}}>
+            <div style={{position:"absolute",inset:0,width:w+"%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",borderRadius:7,transition:"width .3s"}}/>
+            {convPair!=null&&qty>0&&<span style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",color:convPair>=70?"#16a34a":convPair>=40?"#ca8a04":"#dc2626",fontSize:9,fontWeight:700,background:"rgba(255,255,255,0.94)",padding:"1px 5px",borderRadius:99}}>↘ {convPair}%</span>}
+          </div>
+          {editMode
+            ? <input type="number" min="0" value={form[s.id]||0} onChange={function(e){setForm(Object.assign({},form,{[s.id]:Math.max(0,parseInt(e.target.value,10)||0)}));}}
+                style={{...MSI,width:70,padding:"5px 8px",fontSize:13,fontWeight:700,textAlign:"center"}}/>
+            : <span style={{minWidth:60,textAlign:"right",color:"#0f172a",fontSize:13,fontWeight:700}}>{qty}</span>
+          }
+        </div>;
+      })}
+    </div>
+
+    {/* Ações em modo edit */}
+    {editMode&&<div style={{display:"flex",gap:8,marginBottom:14,justifyContent:"flex-end"}}>
+      <button onClick={function(){setEditMode(false);}}
+        style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:8,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+      <button onClick={handleSaveAdmin} disabled={saving}
+        style={{background:saving?"#cbd5e1":"#7c3aed",color:"#fff",border:"none",borderRadius:8,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit"}}>{saving?"Salvando...":"Salvar"}</button>
+    </div>}
+
+    {/* Conversão total + última atualização */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+      <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:10,padding:"12px 14px",border:"1px solid #ddd6fe"}}>
+        <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Conversão total</div>
+        <div style={{color:"#7c3aed",fontWeight:800,fontSize:22,marginTop:3}}>{conv.total}%</div>
+      </div>
+      <div style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",border:"1px solid #e2e8f0"}}>
+        <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Última atualização</div>
+        <div style={{color:"#0f172a",fontWeight:600,fontSize:12,marginTop:5}}>
+          {entry
+            ? new Date(entry.updated_at||entry.submitted_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})
+            : "—"
+          }
+        </div>
+        {entry&&entry.updated_by&&<div style={{color:"#64748b",fontSize:10,marginTop:2}}>por {entry.updated_by}</div>}
+      </div>
+    </div>
+
+    {/* Histórico mensal */}
+    {history.length>0&&<div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #e2e8f0"}}>
+      <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Histórico mensal</div>
+      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+        {history.slice(0,8).map(function(h){
+          const c=calcFunnelConversions(h.stages||[]);
+          const isCurrent=h.month===month&&h.year===year;
+          return <div key={h.id} onClick={function(){setMonth(h.month);setYear(h.year);}}
+            style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:7,background:isCurrent?"#f5f3ff":"transparent",cursor:"pointer"}}>
+            <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{_MEDIA_MES_NAMES[h.month-1]}/{h.year}</span>
+            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+              <span style={{color:"#64748b",fontSize:10}}>Topo: <b style={{color:"#0f172a"}}>{h.stages?.[0]?.quantity||0}</b></span>
+              <span style={{color:"#64748b",fontSize:10}}>Fim: <b style={{color:"#0f172a"}}>{h.stages?.[h.stages.length-1]?.quantity||0}</b></span>
+              <span style={{color:"#7c3aed",fontSize:11,fontWeight:700,background:"#f5f3ff",padding:"2px 7px",borderRadius:99}}>{c.total}%</span>
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>}
   </div>;
 }
 
@@ -23991,10 +24232,6 @@ function MediaNovaDemandaModal({store,update,addHistory,onClose}){
           {store.clients.map(c=><option key={c.client_id} value={c.client_id}>{c.name}</option>)}
         </select>
       </div>
-      <div style={{gridColumn:"span 2"}}>
-        <label style={MLB}>Título</label>
-        <input value={f.titulo} onChange={e=>setF({...f,titulo:e.target.value})} style={MSI}/>
-      </div>
       <div>
         <label style={MLB}>Tipo</label>
         <select value={f.tipo} onChange={e=>setF({...f,tipo:e.target.value})} style={MSI}>
@@ -24002,12 +24239,16 @@ function MediaNovaDemandaModal({store,update,addHistory,onClose}){
         </select>
       </div>
       <div>
-        <label style={MLB}>Prazo</label>
+        <label style={MLB}>Prazo (opcional)</label>
         <input type="date" value={f.prazo} onChange={e=>setF({...f,prazo:e.target.value})} style={MSI}/>
       </div>
       <div style={{gridColumn:"span 2"}}>
+        <label style={MLB}>Título</label>
+        <input value={f.titulo} onChange={e=>setF({...f,titulo:e.target.value})} placeholder="Ex: Subir 3 criativos novos" style={MSI}/>
+      </div>
+      <div style={{gridColumn:"span 2"}}>
         <label style={MLB}>Descrição</label>
-        <textarea value={f.descricao} onChange={e=>setF({...f,descricao:e.target.value})} rows={3} style={{...MSI,resize:"vertical",minHeight:74}}/>
+        <textarea value={f.descricao} onChange={e=>setF({...f,descricao:e.target.value})} rows={3} style={{...MSI,resize:"vertical",fontFamily:"inherit",minHeight:70}}/>
       </div>
     </div>
     <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
@@ -24017,15 +24258,18 @@ function MediaNovaDemandaModal({store,update,addHistory,onClose}){
   </ModalShell>;
 }
 
-/* ─── Shell de modal ─────────────────────────────────── */
-function ModalShell({onClose,title,children}){
-  return <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflowY:"auto",padding:24,boxShadow:"0 24px 64px rgba(0,0,0,0.18)"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{title}</div>
-        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:10,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer"}}><Ico n="x" size={16}/></button>
+/* ─── ModalShell — wrapper padrão dos modais da Gestão de Mídia ─── */
+function ModalShell({title, children, onClose, maxWidth}){
+  useEscToClose(true, onClose);
+  return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose&&onClose();}}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:maxWidth||560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,0.28), 0 4px 12px rgba(15,23,42,0.10)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9"}}>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.3}}>{title}</div>
+        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",fontSize:14}}>✕</button>
       </div>
-      {children}
+      <div style={{padding:22}}>{children}</div>
     </div>
   </div>;
 }
@@ -26835,6 +27079,7 @@ const PORTAL_ALL_TABS=[
   {id:"solicitar",   icon:"⚡", label:"Solicitar"},
   {id:"calendario",  icon:"📅", label:"Calendário"},
   {id:"publicacoes", icon:"✅", label:"Publicações"},
+  {id:"funil",       icon:"📈", label:"Funil comercial"},
   {id:"analises",    icon:"📊", label:"Análises"},
   {id:"faturamento", icon:"💰", label:"Faturamento"},
   {id:"chat",        icon:"💬", label:"Chat"},
@@ -27291,6 +27536,206 @@ function PortalSolicitar({tasks, selCl, cl}) {
   );
 }
 
+/* ─── HOOK: useFunnelEntry ──────────────────────────────────────────
+   Fetch da entry do funil pra um (cliente, mês, ano) específico, com
+   subscribe Realtime pra atualizar quando o cliente salvar no Portal.
+   Retorna {entry, loading, save(stages), refresh()}.
+─────────────────────────────────────────────────────────────────── */
+function useFunnelEntry(clientId, month, year){
+  const [entry,setEntry]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const fetchOnce=useCallback(function(){
+    if(!clientId||!window._sb){setLoading(false);return;}
+    setLoading(true);
+    window._sb.from("media_funnel_entries").select("*")
+      .eq("client_id",clientId).eq("month",month).eq("year",year)
+      .maybeSingle()
+      .then(function(r){setEntry(r.data||null);setLoading(false);})
+      .catch(function(e){console.warn("[funil] fetch:",e?.message||e);setLoading(false);});
+  },[clientId,month,year]);
+  useEffect(function(){fetchOnce();},[fetchOnce]);
+  // Realtime: escuta UPDATE/INSERT dessa entry específica
+  useEffect(function(){
+    if(!clientId||!window._sb)return undefined;
+    const ch=window._sb.channel("funnel-"+clientId+"-"+year+"-"+month)
+      .on("postgres_changes",{event:"*",schema:"public",table:"media_funnel_entries",filter:"client_id=eq."+clientId},function(){fetchOnce();})
+      .subscribe();
+    return function(){try{window._sb.removeChannel(ch);}catch(e){}};
+  },[clientId,month,year,fetchOnce]);
+  const save=useCallback(function(stages){
+    if(!clientId||!window._sb)return Promise.reject(new Error("Supabase indisponível"));
+    const userId=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"unknown";
+    const payload={client_id:clientId,month:month,year:year,stages:stages,updated_by:userId};
+    if(!entry){payload.submitted_by=userId;}
+    return window._sb.from("media_funnel_entries")
+      .upsert(payload,{onConflict:"client_id,month,year"})
+      .select().maybeSingle()
+      .then(function(r){if(r.data)setEntry(r.data);return r.data;});
+  },[clientId,month,year,entry]);
+  return {entry,loading,save,refresh:fetchOnce};
+}
+
+/* ─── HOOK: useFunnelHistory ────────────────────────────────────────
+   Últimas N entries de um cliente, ordenadas mais recente primeiro.
+─────────────────────────────────────────────────────────────────── */
+function useFunnelHistory(clientId, limit){
+  const [rows,setRows]=useState([]);
+  const [loading,setLoading]=useState(true);
+  useEffect(function(){
+    if(!clientId||!window._sb){setLoading(false);return undefined;}
+    let cancelled=false;
+    setLoading(true);
+    window._sb.from("media_funnel_entries").select("*")
+      .eq("client_id",clientId)
+      .order("year",{ascending:false}).order("month",{ascending:false})
+      .limit(limit||12)
+      .then(function(r){if(!cancelled){setRows(r.data||[]);setLoading(false);}})
+      .catch(function(e){if(!cancelled){console.warn("[funil-hist]",e?.message||e);setLoading(false);}});
+    // Realtime
+    const ch=window._sb.channel("funnel-hist-"+clientId)
+      .on("postgres_changes",{event:"*",schema:"public",table:"media_funnel_entries",filter:"client_id=eq."+clientId},function(){
+        window._sb.from("media_funnel_entries").select("*").eq("client_id",clientId)
+          .order("year",{ascending:false}).order("month",{ascending:false}).limit(limit||12)
+          .then(function(r){if(!cancelled)setRows(r.data||[]);});
+      }).subscribe();
+    return function(){cancelled=true;try{window._sb.removeChannel(ch);}catch(e){}};
+  },[clientId,limit]);
+  return {rows,loading};
+}
+
+/* ─── PortalFunil — área "Atualização do Funil Comercial" ───────────
+   Cliente seleciona mês/ano, preenche quantidade por etapa, salva.
+   Pode editar a qualquer momento. Vê resumo de conversões + histórico.
+─────────────────────────────────────────────────────────────────── */
+const _MES_NAMES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+function PortalFunil({cl, isMob}){
+  const now=new Date();
+  const [month,setMonth]=useState(now.getMonth()+1);
+  const [year,setYear]=useState(now.getFullYear());
+  const stages=getFunnelForClient(cl.id);
+  const {entry,loading,save}=useFunnelEntry(cl.id,month,year);
+  const {rows:history}=useFunnelHistory(cl.id,12);
+  // Form state — espelha entry quando carrega/troca período
+  const [form,setForm]=useState({});
+  const [dirty,setDirty]=useState(false);
+  const [saving,setSaving]=useState(false);
+  useEffect(function(){
+    const init={};
+    if(entry&&Array.isArray(entry.stages)){
+      entry.stages.forEach(function(s){init[s.id]=s.quantity||0;});
+    }
+    stages.forEach(function(s){if(init[s.id]===undefined)init[s.id]=0;});
+    setForm(init);
+    setDirty(false);
+  },[entry,cl.id,month,year]);
+  // Recalcula conversões on-the-fly
+  const currentStages=stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:Number(form[s.id]||0)};});
+  const conv=calcFunnelConversions(currentStages);
+  function setQty(id,v){
+    const n=Math.max(0,parseInt(v,10)||0);
+    setForm(function(p){return Object.assign({},p,{[id]:n});});
+    setDirty(true);
+  }
+  function handleSave(){
+    if(saving)return;
+    setSaving(true);
+    save(currentStages).then(function(){
+      setSaving(false);setDirty(false);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Funil de "+_MES_NAMES[month-1]+"/"+year+" salvo.");
+    }).catch(function(e){
+      setSaving(false);
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar: "+(e?.message||"desconhecido"));
+    });
+  }
+  const yearOpts=[year-1,year,year+1];
+  // Visual: barras decrescentes (max width = quantidade da etapa 1)
+  const maxQty=Math.max.apply(null,currentStages.map(function(s){return s.quantity;}).concat([1]));
+  return <div style={{display:"flex",flexDirection:"column",gap:18}}>
+    {/* Header + period picker */}
+    <div style={{background:"#fff",borderRadius:14,padding:"18px 20px",border:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:17,letterSpacing:-.3}}>📈 Funil comercial</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:3}}>Registre mensalmente quantas oportunidades passaram em cada etapa.</div>
+      </div>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
+          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {_MES_NAMES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
+        </select>
+        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
+          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {yearOpts.map(function(y){return <option key={y} value={y}>{y}</option>;})}
+        </select>
+      </div>
+    </div>
+
+    {/* Inputs por etapa */}
+    <div style={{background:"#fff",borderRadius:14,padding:20,border:"1px solid #e2e8f0"}}>
+      <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:14}}>Etapas do funil de {cl.name}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {stages.map(function(s,i){
+          const qty=form[s.id]||0;
+          const w=Math.max(8,(qty/maxQty)*100);
+          const convPair=conv.pairwise[i];
+          return <div key={s.id} style={{display:"flex",alignItems:"center",gap:12,flexWrap:isMob?"wrap":"nowrap"}}>
+            <div style={{minWidth:isMob?"100%":220,display:"flex",alignItems:"center",gap:8}}>
+              <span style={{width:24,height:24,borderRadius:6,background:"#f5f3ff",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{i+1}</span>
+              <span style={{color:"#0f172a",fontSize:13,fontWeight:600}}>{s.name}</span>
+            </div>
+            <div style={{flex:1,height:32,background:"#f1f5f9",borderRadius:8,position:"relative",overflow:"hidden",minWidth:120}}>
+              <div style={{position:"absolute",inset:0,width:w+"%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",borderRadius:8,transition:"width .3s"}}/>
+              {convPair!=null&&qty>0&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:convPair>=70?"#16a34a":convPair>=40?"#ca8a04":"#dc2626",fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.92)",padding:"1px 6px",borderRadius:99}}>↘ {convPair}%</span>}
+            </div>
+            <input type="number" min="0" value={qty} onChange={function(e){setQty(s.id,e.target.value);}}
+              style={{width:isMob?"100%":80,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px",color:"#0f172a",fontSize:14,fontWeight:700,outline:"none",textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif"}}/>
+          </div>;
+        })}
+      </div>
+    </div>
+
+    {/* Resumo + botão Salvar */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr auto",gap:14,alignItems:"start"}}>
+      <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:14,padding:"16px 20px",border:"1px solid #ddd6fe"}}>
+        <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Conversão total ({_MES_NAMES[month-1]}/{year})</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:10}}>
+          <span style={{color:"#7c3aed",fontWeight:800,fontSize:32,letterSpacing:-1}}>{conv.total}%</span>
+          <span style={{color:"#64748b",fontSize:12}}>do topo do funil ao fechamento</span>
+        </div>
+      </div>
+      <button onClick={handleSave} disabled={!dirty||saving}
+        style={{background:dirty&&!saving?"#7c3aed":"#cbd5e1",border:"none",borderRadius:12,padding:"14px 28px",color:"#fff",fontSize:14,fontWeight:700,cursor:dirty&&!saving?"pointer":"not-allowed",alignSelf:"stretch",minWidth:160,transition:"background .12s"}}>
+        {saving?"Salvando...":entry?"Atualizar":"Salvar funil"}
+      </button>
+    </div>
+
+    {/* Última atualização */}
+    {entry&&<div style={{color:"#64748b",fontSize:11,padding:"0 4px"}}>
+      Última atualização: {new Date(entry.updated_at||entry.submitted_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})}
+      {entry.updated_by&&" · "+entry.updated_by}
+    </div>}
+
+    {/* Histórico */}
+    {history.length>0&&<div style={{background:"#fff",borderRadius:14,padding:20,border:"1px solid #e2e8f0"}}>
+      <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:12}}>Histórico recente</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {history.slice(0,6).map(function(h){
+          const c=calcFunnelConversions(h.stages||[]);
+          const isCurrent=h.month===month&&h.year===year;
+          return <div key={h.id} onClick={function(){setMonth(h.month);setYear(h.year);}}
+            style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",borderRadius:10,background:isCurrent?"#f5f3ff":"#f8fafc",border:"1px solid "+(isCurrent?"#ddd6fe":"#e2e8f0"),cursor:"pointer",transition:"background .12s"}}>
+            <span style={{color:"#0f172a",fontSize:13,fontWeight:600}}>{_MES_NAMES[h.month-1]}/{h.year}</span>
+            <div style={{display:"flex",gap:14,alignItems:"center"}}>
+              <span style={{color:"#64748b",fontSize:11}}>Topo: {h.stages?.[0]?.quantity||0}</span>
+              <span style={{color:"#64748b",fontSize:11}}>Fim: {h.stages?.[h.stages.length-1]?.quantity||0}</span>
+              <span style={{color:"#7c3aed",fontSize:12,fontWeight:700,background:"#f5f3ff",padding:"2px 8px",borderRadius:99}}>{c.total}%</span>
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>}
+  </div>;
+}
+
 function PagePortalCliente({isMob, tasks, initTab, lockedClientId}){
   const TASKS=tasks||[];
   // Se lockedClientId foi passado (cliente logado no portal), trava a seleção.
@@ -27439,6 +27884,9 @@ function PagePortalCliente({isMob, tasks, initTab, lockedClientId}){
     {/* ── CALENDÁRIO ── */}
     {tab==="solicitar"&&<PortalSolicitar tasks={tasks} selCl={selCl} cl={cl}/>}
         {tab==="calendario"&&<PortalCalendario cl={cl} tasks={TASKS} isMob={isMob}/>}
+
+    {/* ── FUNIL COMERCIAL ── cliente preenche, gestão de mídia consome */}
+    {tab==="funil"&&<PortalFunil cl={cl} isMob={isMob}/>}
 
     {/* ── PUBLICAÇÕES ── (material final para o cliente) */}
     {tab==="publicacoes"&&(()=>{
