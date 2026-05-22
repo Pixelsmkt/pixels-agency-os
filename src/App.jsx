@@ -9833,12 +9833,16 @@ function QuickCreateBody({onConfirm,onCancel}){
   const list=TEAM.filter(u=>u.id!=="erick");
   const [title,setTitle]=useState("Nova Demanda");
   const [selectedId,setSelectedId]=useState(list[0].id);
-  // ESC fecha o modal — padrão básico do app
-  useEscToClose(true, onCancel);
   // Hover-preview: depois de ~350ms parado em cima da foto, mostra preview ampliado
   // ao lado do item (à esquerda do modal pra não escapar pela direita).
   const [hoverId,setHoverId]=useState(null);
   const hoverTimerRef=useRef(null);
+  // ESC fecha o modal — listener inline (pra evitar referência circular ao hook).
+  useEffect(function(){
+    function h(e){if(e.key==="Escape"&&typeof onCancel==="function"){e.stopPropagation();onCancel();}}
+    window.addEventListener("keydown",h);
+    return function(){window.removeEventListener("keydown",h);};
+  },[onCancel]);
   const startHover=function(uid){
     if(hoverTimerRef.current)clearTimeout(hoverTimerRef.current);
     hoverTimerRef.current=setTimeout(function(){setHoverId(uid);},350);
@@ -10973,7 +10977,6 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>}
     </div>
   </>;
-}
 }
 
 // ======= 04_demandas_internas.jsx =======
