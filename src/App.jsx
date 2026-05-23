@@ -682,7 +682,7 @@ const KANBAN_COLS = [
   { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
   { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
   { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
-  { id:"agendado",  label:"Publicações",            color:C.kAgendado,  dark:true  },
+  { id:"agendado",  label:"Publicadas",            color:C.kAgendado,  dark:true  },
   { id:"pausado",   label:"Pausado",                color:C.kPausado,   dark:false },
 ];
 
@@ -1533,7 +1533,7 @@ const NAV=[
     {id:"portal_dashboard",  icon:"⊡", label:"Dashboard"},
     {id:"portal_demandas",   icon:"◈", label:"Demandas"},
     {id:"portal_calendario", icon:"▦", label:"Calendário"},
-    {id:"portal_publicacoes",icon:"▷", label:"Publicações"},
+    {id:"portal_publicacoes",icon:"▷", label:"Publicadas"},
     {id:"portal_analises",   icon:"◫", label:"Análises"},
     {id:"portal_faturamento",icon:"◫", label:"Faturamento"},
     {id:"portal_chat",       icon:"◐", label:"Chat"},
@@ -10350,7 +10350,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           <div style={{color:"#64748b",fontSize:12}}>
             {filterClient!=="todos"
               ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
-              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para "Publicações" e defina a data.`
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para "Publicadas" e defina a data.`
             }
           </div>
         </div>
@@ -11375,6 +11375,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Admin/sócio vê tudo; colaborador só vê os seus (ou do seu domínio se freelancer)
     if(!isAdmin&&!isMyDomain(t))return false;
     // Busca: case-insensitive substring em título, nome do cliente, e label de unidade Bioter (CSV)
@@ -19509,7 +19513,7 @@ function PageRadarEntrega({ tasks, isMob }) {
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {[
               {label:"Total",       atual:total,              ant:totalAnt,  color:C.a},
-              {label:"Publicações", atual:publicacoes.length, ant:publAnt,   color:"#6366f1"},
+              {label:"Publicadas", atual:publicacoes.length, ant:publAnt,   color:"#6366f1"},
               {label:"Extras",      atual:extras.length,      ant:extrasAnt, color:"#f59e0b"},
             ].map((row,i)=>{
               const max=Math.max(row.atual,row.ant,1);
@@ -28320,7 +28324,7 @@ const PORTAL_ALL_TABS=[
   {id:"demandas",    icon:"◈",  label:"Demandas"},
   {id:"solicitar",   icon:"⚡", label:"Solicitar"},
   {id:"calendario",  icon:"📅", label:"Calendário"},
-  {id:"publicacoes", icon:"✅", label:"Publicações"},
+  {id:"publicacoes", icon:"✅", label:"Publicadas"},
   {id:"funil",       icon:"📈", label:"Funil comercial"},
   {id:"analises",    icon:"📊", label:"Análises"},
   {id:"faturamento", icon:"💰", label:"Faturamento"},
