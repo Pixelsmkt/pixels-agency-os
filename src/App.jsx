@@ -11481,7 +11481,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [cols,setCols]=useState(()=>{
     // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
     // Versão atual: v6 (mescla Agendado+Publicado em "Publicações" + swap cores Copys/Publicações)
-    const COLS_VERSION="v6-publicacoes";
+    const COLS_VERSION="v7-publicadas-fix";
     // IDs descontinuados — colunas que existiam em versões antigas e devem ser DESCARTADAS no rebuild.
     // (sem isso, a self-heal defensiva trata como "custom" e mantém visível indevidamente)
     const DEPRECATED_COL_IDS=new Set(["publicado"]);
@@ -11699,6 +11699,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
@@ -11840,12 +11841,23 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     }
     // Normaliza: status "publicado" eh tratado como coluna "agendado" (Publicadas)
     const _fromColId=t.status==="publicado"?"agendado":t.status;
-    const fromIdx=cols.findIndex(c=>c.id===_fromColId);
-    const toIdx=cols.findIndex(c=>c.id===toColId);
+    // Valida contra cols (config local) OU KANBAN_COLS (canonico — fallback)
+    let fromIdx=cols.findIndex(c=>c.id===_fromColId);
+    let toIdx=cols.findIndex(c=>c.id===toColId);
+    if(fromIdx<0)fromIdx=KANBAN_COLS.findIndex(c=>c.id===_fromColId);
+    if(toIdx<0)toIdx=KANBAN_COLS.findIndex(c=>c.id===toColId);
     if(fromIdx<0||toIdx<0){
       pixelsToast.error("Coluna inválida. Recarregue a página (F5) para sincronizar as colunas.",5000);
       setDrag(null);setOver(null);
       return;
+    }
+    // Auto-corrige cols se a coluna estava faltando — adiciona oficial e segue o jogo
+    if(!cols.find(c=>c.id===_fromColId)||!cols.find(c=>c.id===toColId)){
+      setCols(prev=>{
+        const officialIds=new Set(KANBAN_COLS.map(k=>k.id));
+        const custom=prev.filter(p=>!officialIds.has(p.id));
+        return [...KANBAN_COLS,...custom];
+      });
     }
     // FIX: removida regra "±1 coluna por vez" — bloqueava transições legítimas
     // (ex: Aprovado → Agendado quando havia coluna custom no meio). O user sabe
