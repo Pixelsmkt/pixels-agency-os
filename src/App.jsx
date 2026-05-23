@@ -21725,16 +21725,6 @@ function OrientacoesView({clientId}){
     </div>
   );
 }
-eight:500}}>{v} ↗</span>
-            </a>);
-          })}
-        </div>
-      </div>}
-    </div>
-  );
-}
- );
-}
 
 // ======= 12_dashboard.jsx =======
 
