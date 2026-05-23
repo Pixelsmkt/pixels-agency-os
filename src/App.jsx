@@ -14,7 +14,7 @@ import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
 
 /* ─── CLIENTS ───────────────────────────── */
 const CLIENTS = [
-  { id:"construschorr", name:"Construschorr",       abbr:"CS", color:"#c0001a", sector:"Construção Civil",   contract:6800, health:87, nps:84, status:"ativo",
+  { id:"construschorr", name:"Construschorr",       abbr:"CS", color:"#B00f0A", sector:"Construção Civil",   contract:6800, health:87, nps:84, status:"ativo",
     payment:{status:"pago",date:"05/03/2026"}, lastMeeting:"12/03/2026", nextMeeting:"02/04/2026", contractType:"mensal", contacts:[{name:"Carlos Schorr",role:"Dono",phone:"(49) 99901-1111",email:"carlos@construschorr.com.br"},{name:"Ana Schorr",role:"Financeiro",phone:"(49) 99901-2222",email:"financeiro@construschorr.com.br"}], goals:[{title:"Leads Meta",target:150,current:124,unit:"leads"},{title:"ROAS Meta",target:5.0,current:4.1,unit:"x"},{title:"Leads Google",target:90,current:78,unit:"leads"}], meetingNotes:[],
     meta:{spend:5200,budget:6000,roas:4.1,leads:124,cpc:1.3,ctr:3.4,cpm:18.2,impressions:285714,clicks:9714,reach:198000,frequency:1.44,conversions:124,costPerConv:41.9,videoViews:42000,vtr:14.7,campaigns:4,adsets:12,ads:28,topAd:"Residencial Novo · ROAS 5.2x"},
     google:{spend:3100,budget:3500,roas:4.4,leads:78,cpc:0.95,ctr:3.8,cpm:12.1,impressions:258065,clicks:9806,conversions:78,costPerConv:39.7,searchImpr:68000,displayImpr:190065,qualityScore:7.2,campaigns:3,adgroups:9,topKw:"construção civil chapecó"},
@@ -28,14 +28,14 @@ const CLIENTS = [
     social:{followers:11200,growth:1.8,reach:41200,eng:2.1,posts:16,stories:32,reels:5,saved:198,likes:1100},
     history:[{m:"Jan",mr:3.0,gr:3.2,leads:154},{m:"Fev",mr:3.1,gr:3.4,leads:172},{m:"Mar",mr:3.3,gr:3.6,leads:198}],
     since:"Mar 2023", manager:"gustavo", connected:true, metaId:"act_9988776655", googleId:"998-877-6655", upsell:["LinkedIn Ads"], driveUrl:"" },
-  { id:"arabuta", name:"Arabutã Pré-Moldados", abbr:"AP", color:"#7b1040", sector:"Pré-Moldados", contract:4200, health:93, nps:90, status:"ativo",
+  { id:"arabuta", name:"Arabutã Pré-Moldados", abbr:"AP", color:"#666766", sector:"Pré-Moldados", contract:4200, health:93, nps:90, status:"ativo",
     payment:{status:"pago",date:"03/03/2026"}, lastMeeting:"20/03/2026", nextMeeting:"07/04/2026", contractType:"trimestral", contacts:[{name:"Paulo Arabuta",role:"Dono",phone:"(49) 99903-1111",email:"paulo@arabuta.com.br"}], goals:[{title:"Leads Meta",target:100,current:92,unit:"leads"},{title:"ROAS",target:6.0,current:5.6,unit:"x"}], meetingNotes:[],
     meta:{spend:3100,budget:3500,roas:5.6,leads:92,cpc:0.88,ctr:4.8,cpm:11.4,impressions:272000,clicks:13056,reach:198000,frequency:1.37,conversions:92,costPerConv:33.7,videoViews:38000,vtr:13.9,campaigns:3,adsets:9,ads:21,topAd:"Muro 6m · ROAS 6.8x"},
     google:{spend:1600,budget:2000,roas:5.9,leads:48,cpc:0.66,ctr:4.4,cpm:9.8,impressions:163265,clicks:7184,conversions:48,costPerConv:33.3,searchImpr:54000,displayImpr:109265,qualityScore:8.4,campaigns:2,adgroups:7,topKw:"pré-moldados arabutã sc"},
     social:{followers:2980,growth:9.4,reach:12400,eng:6.8,posts:34,stories:68,reels:12,saved:892,likes:2180},
     history:[{m:"Jan",mr:5.0,gr:5.2,leads:71},{m:"Fev",mr:5.2,gr:5.5,leads:81},{m:"Mar",mr:5.6,gr:5.9,leads:92}],
     since:"Jun 2024", manager:"vinicius", connected:true, metaId:"act_5556667778", googleId:"555-666-7778", upsell:["WhatsApp Ads"], driveUrl:"" },
-  { id:"climaves", name:"Climaves", abbr:"CV", color:"#39e600", sector:"Climatizacao / HVAC", contract:5500, health:62, nps:58, status:"atencao",
+  { id:"climaves", name:"Climaves", abbr:"CV", color:"#659645", sector:"Climatizacao / HVAC", contract:5500, health:62, nps:58, status:"atencao",
     payment:{status:"atrasado",date:"28/02/2026"}, lastMeeting:"10/03/2026", nextMeeting:"08/04/2026", contractType:"mensal",
     contacts:[{name:"Joao Climaves",role:"Dono",phone:"(49) 99904-1111",email:"joao@climaves.com.br"}],
     goals:[{title:"Leads Meta",target:100,current:72,unit:"leads"},{title:"ROAS",target:3.5,current:2.6,unit:"x"}], meetingNotes:[],
@@ -44,7 +44,7 @@ const CLIENTS = [
     google:{spend:2900,budget:2800,roas:2.4,leads:41,cpc:2.3,ctr:2.0,cpm:19.4,impressions:149485,clicks:2990,conversions:41,costPerConv:70.7,searchImpr:48000,displayImpr:101485,qualityScore:5.9,campaigns:2,adgroups:6,topKw:"ar condicionado chapeco"},
     social:{followers:3820,growth:-2.4,reach:8900,eng:1.2,posts:9,stories:18,reels:2,saved:61,likes:310},
     history:[{m:"Jan",mr:2.9,gr:2.7,leads:82},{m:"Fev",mr:2.7,gr:2.5,leads:74},{m:"Mar",mr:2.6,gr:2.4,leads:68}] },
-  { id:"vetservice", name:"VetService", abbr:"VS", color:"#00c853", sector:"Veterinária / Pet", contract:3600, health:81, nps:79, status:"ativo",
+  { id:"vetservice", name:"VetService", abbr:"VS", color:"#009700", sector:"Veterinária / Pet", contract:3600, health:81, nps:79, status:"ativo",
     payment:{status:"pago",date:"07/03/2026"}, lastMeeting:"22/03/2026", nextMeeting:"05/04/2026", contractType:"anual", contacts:[{name:"Dra. Fernanda Vet",role:"Diretora",phone:"(49) 99905-1111",email:"fernanda@vetservice.com.br"},{name:"Lucas Vet",role:"Comercial",phone:"(49) 99905-2222",email:"lucas@vetservice.com.br"}], goals:[{title:"Leads Meta",target:100,current:88,unit:"leads"},{title:"Seguidores",target:5000,current:3820,unit:""}], meetingNotes:[],
     meta:{spend:2800,budget:3200,roas:4.8,leads:88,cpc:1.1,ctr:4.0,cpm:15.4,impressions:181818,clicks:7273,reach:142000,frequency:1.28,conversions:88,costPerConv:31.8,videoViews:32000,vtr:17.6,campaigns:3,adsets:10,ads:24,topAd:"Consulta + Vacina · ROAS 5.8x"},
     google:{spend:1400,budget:1800,roas:5.1,leads:44,cpc:0.8,ctr:3.6,cpm:10.9,impressions:128440,clicks:4624,conversions:44,costPerConv:31.8,searchImpr:42000,displayImpr:86440,qualityScore:7.9,campaigns:2,adgroups:6,topKw:"veterinário concordia sc"},
@@ -1828,7 +1828,6 @@ function Ico({n,size=14,color,strokeWidth=2}){
   return null;
 }
 
-// ======= 00_mindmap_data.jsx =======
 // Dados estratégicos e mapas mentais de todos os clientes
 // Depende de: 00_globals.jsx (C para cores)
 
@@ -10194,7 +10193,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                     {dayTasks.slice(0,isMob?2:3).map(t=>{
                       const cl=CLIENTS.find(c=>c.id===t.client);
                       const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
-                      // Card usa cor do CLIENTE (ou unidade Bioter). Status vira indicador (dot + borda).
+                      // Card usa cor do CLIENTE (ou unidade Bioter). Status vira badge moderno com ícone.
                       const pubColor=getPubColor(t.status);
                       const cardColor=unit?unit.color:(cl?cl.color:"#475569");
                       const isDragging=dragTaskId===t.id;
@@ -10203,6 +10202,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                       const isVid=tipo==="video"||tipo==="corte";
                       const isFoto=tipo==="foto";
                       const isArte=tipo==="arte"||tipo==="carrossel";
+                      // Status: ícone moderno por etapa
+                      const stIsDone=t.status==="aprovado"||t.status==="agendado";
+                      const stIsPub=t.status==="publicado";
+                      const hasLogo=typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[t.client];
                       return(
                         <div key={t.id} onClick={()=>setOpenCard(t)}
                           draggable={true}
@@ -10210,36 +10213,51 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                           onDragEnd={function(){setDragTaskId(null);setDropDayId(null);}}
                           style={{
                             background:cardColor,
-                            borderLeft:`3px solid ${pubColor.bg}`,
-                            borderRadius:7,
-                            padding:"7px 9px",
+                            borderRadius:8,
+                            padding:"6px 8px 7px",
                             cursor:isDragging?"grabbing":"grab",
                             opacity:isDragging?0.4:1,
                             transition:"all .12s",
-                            boxShadow:"0 1px 3px rgba(0,0,0,0.12)",
+                            boxShadow:"0 1px 3px rgba(0,0,0,0.14)",
                             flexShrink:0,
                             position:"relative",
                           }}
                           onMouseEnter={e=>{if(!isDragging){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 10px rgba(0,0,0,0.18)";}}}
-                          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.12)";}}>
+                          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.14)";}}>
 
-                          {/* Título com ícone de tipo + status dot */}
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            {(isVid||isArte||isFoto)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.95}}>
-                              {isVid&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#fff"/></svg>}
-                              {isArte&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#fff"/><polyline points="21 15 16 10 5 21"/></svg>}
-                              {isFoto&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
-                            </span>}
-                            <div style={{color:"#fff",fontSize:isMob?11:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,flex:1,minWidth:0,textShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
-                              {t.title}
+                          {/* Topo: chip da logo do cliente + badge de status moderno */}
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:4}}>
+                            <div style={{display:"inline-flex",alignItems:"center",background:"#fff",borderRadius:5,padding:"1px 5px",height:18,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.10)",maxWidth:"70%"}}>
+                              {hasLogo
+                                ? <img src={CLIENT_LOGOS[t.client]} alt={cl?cl.name:""} style={{height:13,maxWidth:60,objectFit:"contain",display:"block"}}/>
+                                : <span style={{color:cl?cl.color:"#0f172a",fontWeight:800,fontSize:9.5,letterSpacing:.4,lineHeight:1}}>{cl?cl.abbr:"·"}</span>
+                              }
                             </div>
-                            {/* Status dot — laranja/verde/roxo */}
-                            <span title={pubColor.label||t.status} style={{width:10,height:10,borderRadius:"50%",background:pubColor.bg,border:"2px solid #fff",flexShrink:0,boxShadow:"0 0 0 1px rgba(0,0,0,0.08)"}}/>
+                            <span title={pubColor.label||t.status} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:pubColor.bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
+                              {stIsPub
+                                ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+                                : stIsDone
+                                  ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                              }
+                            </span>
                           </div>
 
-                          {/* Cliente / unidade Bioter */}
-                          {cl&&<div style={{color:"#fff",fontSize:isMob?10:11,fontWeight:600,whiteSpace:"nowrap",opacity:0.95,marginTop:4,overflow:"hidden",textOverflow:"ellipsis",letterSpacing:.1}}>
-                            {unit?unit.label.split("/")[0]:cl.name}
+                          {/* Título com ícone de tipo */}
+                          <div style={{display:"flex",alignItems:"center",gap:5}}>
+                            {(isVid||isArte||isFoto)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.95}}>
+                              {isVid&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#fff"/></svg>}
+                              {isArte&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#fff"/><polyline points="21 15 16 10 5 21"/></svg>}
+                              {isFoto&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
+                            </span>}
+                            <div style={{color:"#fff",fontSize:isMob?11:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.25,flex:1,minWidth:0,textShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
+                              {t.title}
+                            </div>
+                          </div>
+
+                          {/* Unidade Bioter — só pra clientes Bioter (não-Bioter já tem logo identificando) */}
+                          {unit&&<div style={{color:"#fff",fontSize:isMob?9.5:10.5,fontWeight:600,whiteSpace:"nowrap",opacity:0.92,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",letterSpacing:.1}}>
+                            {unit.label.split("/")[0]}
                           </div>}
                         </div>
                       );
@@ -10283,6 +10301,62 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       )}
     </div>
   );
+}
+
+                          {/* Unidade Bioter — só pra clientes Bioter (não-Bioter já tem logo identificando) */}
+                          {unit&&<div style={{color:"#fff",fontSize:isMob?9.5:10.5,fontWeight:600,whiteSpace:"nowrap",opacity:0.92,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",letterSpacing:.1}}>
+                            {unit.label.split("/")[0]}
+                          </div>}
+                        </div>
+                      );
+                    })}
+                    {dayTasks.length>(isMob?2:3)&&(
+                      <div style={{color:"#94a3b8",fontSize:10,textAlign:"center",fontWeight:600,marginTop:2}}>
+                        +{dayTasks.length-(isMob?2:3)} mais
+                      </div>
+                    )}
+                  </div>
+                </>)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Aviso sem agendamentos ── */}
+      {tasksThisMonth.length===0&&(
+        <div style={{background:"#fff",borderRadius:14,padding:"40px",textAlign:"center",border:"1px dashed #cbd5e1"}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,marginBottom:6}}>Nenhuma publicação agendada</div>
+          <div style={{color:"#64748b",fontSize:12}}>
+            {filterClient!=="todos"
+              ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
+              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para "Publicações" e defina a data.`
+            }
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal do card ── */}
+      {openCard&&(
+        <CardModal
+          task={openCard}
+          tasks={tasks}
+          setTasks={setTasks}
+          onClose={()=>setOpenCard(null)}
+          currentUser={CURRENT_USER}
+          cardPerms={{verBriefingCard:true}}
+        />
+      )}
+    </div>
+  );
+}
+ingCard:true}}
+        />
+      )}
+    </div>
+  );
+}
+;
 }
 
 // ======= 04_demandas.jsx =======
