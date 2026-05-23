@@ -9999,7 +9999,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   // Retorna cor do card baseado no status (laranja/verde/roxo)
   const getPubColor=(status)=>{
     if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"}; // 🟣 roxo
-    if(status==="aprovado"||status==="agendado")return{bg:"#16a34a",border:"#bbf7d0",label:"Pronto"}; // 🟢 verde
+    if(status==="aprovado"||status==="agendado")return{bg:"#eab308",border:"#fde68a",label:"Agendar"}; // 🟢 verde
     return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"}; // 🟠 laranja (demanda, recebida, execucao, avaliacao)
   };
 
@@ -10236,13 +10236,20 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                   }}>{day.getDate()}</div>
 
                   {/* Cards do dia */}
-                  <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflow:"hidden"}}>
-                    {dayTasks.slice(0,isMob?2:3).map(t=>{
+                  <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden"}}>
+                    {dayTasks.map(function(t){
                       const cl=CLIENTS.find(c=>c.id===t.client);
                       const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
                       // Card usa cor do CLIENTE (ou unidade Bioter). Status vira badge moderno com ícone.
                       const pubColor=getPubColor(t.status);
-                      const cardColor=unit?unit.color:(cl?cl.color:"#475569");
+                      const _BIOTER_PRINC=["chapeco","castro","toledo"];
+                      const _BIOTER_FIL=["gloria","uberlandia","paraguay"];
+                      const _bunit=(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+                      const _hasFil=_bunit.some(function(u){return _BIOTER_FIL.indexOf(u)>=0;});
+                      const _hasPrinc=_bunit.some(function(u){return _BIOTER_PRINC.indexOf(u)>=0;});
+                      const cardColor=t.client==="bioter"
+                        ? (_hasFil&&!_hasPrinc?"#16a34a":"#166534")
+                        : (cl?cl.color:"#475569");
                       const isDragging=dragTaskId===t.id;
                       // Ícone moderno por tipo
                       const tipo=t.tipo||"";
@@ -10288,7 +10295,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                                 : stIsPub
                                   ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
                                   : stIsDone
-                                    ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                    ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                                     : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
                               }
                             </span>
@@ -10313,11 +10320,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                         </div>
                       );
                     })}
-                    {dayTasks.length>(isMob?2:3)&&(
-                      <div style={{color:"#94a3b8",fontSize:10,textAlign:"center",fontWeight:600,marginTop:2}}>
-                        +{dayTasks.length-(isMob?2:3)} mais
-                      </div>
-                    )}
+
                   </div>
                 </>)}
               </div>
