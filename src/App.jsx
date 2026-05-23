@@ -9870,17 +9870,33 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       // Separar por tipo: collab = card de Grupo Bioter ou Bioter Brasil
       // (vale pra qualquer unidade Bioter coberta), demais = cards normais
       const isCollabFn=(typeof isBioterCollabCard==="function")?isBioterCollabCard:function(){return false;};
-      // Collab SO aceita arte/carrossel/video normal — nao pode ser foto-de-obra nem short
+      // Detecta tipo do card POR contentType OU titulo (cards "Foto de obra" sem
+      // contentType viram tipo "foto" pra nao caírem em collab/fallback).
+      const _detectType=function(t){
+        const ct=(t.contentType||t.tipo||"").toLowerCase();
+        if(ct==="arte"||ct==="carrossel")return "arte";
+        if(ct==="video"||ct==="vídeo")return "video";
+        if(ct==="foto")return "foto";
+        if(ct==="video_short")return "video_short";
+        const title=String(t.title||"").toLowerCase();
+        if(/foto\s+de\s+obra|^foto\b|obra\s+(?:finaliz|conclu)/i.test(title))return "foto";
+        if(/short|reels?\b/i.test(title))return "video_short";
+        if(/carrossel|carousel/i.test(title))return "arte";
+        if(/v[íi]deo|reels?/i.test(title))return "video";
+        return "";
+      };
+      // Collab SO aceita cards arte/carrossel/video EXPLICITOS (sem ambiguidade).
+      // Foto, video_short, ou sem tipo NUNCA viram collab — preserva integridade da sugestao.
       const isCollabValidType=function(t){
-        const ct=(t.contentType||t.tipo||"");
-        return ct===""||ct==="arte"||ct==="carrossel"||ct==="video";
+        const tt=_detectType(t);
+        return tt==="arte"||tt==="video";
       };
       const collabs=cards.filter(function(t){return isCollabFn(t)&&isCollabValidType(t);});
       const naoCollabs=cards.filter(function(t){return !isCollabFn(t)||!isCollabValidType(t);});
-      const artes=naoCollabs.filter(function(t){return _isArteType(t.contentType);});
-      const videos=naoCollabs.filter(function(t){return _isVideoType(t.contentType);});
-      const fotos=naoCollabs.filter(function(t){return _isFotoType(t.contentType);});
-      const semTipo=naoCollabs.filter(function(t){return !_isArteType(t.contentType)&&!_isVideoType(t.contentType)&&!_isFotoType(t.contentType);});
+      const artes=naoCollabs.filter(function(t){return _detectType(t)==="arte";});
+      const videos=naoCollabs.filter(function(t){return _detectType(t)==="video";});
+      const fotos=naoCollabs.filter(function(t){return _detectType(t)==="foto";});
+      const semTipo=naoCollabs.filter(function(t){const tt=_detectType(t);return tt===""||tt==="video_short";});
       let cIdx=0,aIdx=0,vIdx=0,fIdx=0,sIdx=0;
       slots.forEach(function(slot){
         if(slot.type==="video_short"){_createShortCard(slot,alvoId,alvoNome,newShortCards,proposals,year,month);return;}
@@ -9903,8 +9919,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             cardTitle:card.title,
             clientId:alvoId,
             clientName:alvoNome,
-            contentType:card.contentType||slot.type,
-            isCollab:isCollabFn(card),
+            contentType:card.contentType||_detectType(card)||slot.type,
+            isCollab:isCollabFn(card)&&(slot.type==="collab"),
             status:card.status,
             proposedDate:slot.date,
             slotType:slot.type,
@@ -10114,8 +10130,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:4}}>
                     {data.items.map(function(p){
-                      const tipoLabel=_isArteType(p.contentType)?"Arte":_isVideoType(p.contentType)?"Vídeo":(p.contentType||"—");
-                      const tipoColor=_isVideoType(p.contentType)?"#0284c7":"#7c3aed";
+                      const tipoLabel=p.slotType==="video_short"?"Short do Drive":(p.isCollab?"Collab":(_isArteType(p.contentType)?"Arte":_isVideoType(p.contentType)?"Vídeo":(p.contentType==="foto"?"Foto":(p.contentType||"—"))));
+                      const tipoColor=p.slotType==="video_short"?"#dc2626":(p.isCollab?"#3b82f6":(_isVideoType(p.contentType)?"#0284c7":(p.contentType==="foto"?"#ea580c":"#7c3aed")));
                       return <div key={p.taskId} style={{display:"grid",gridTemplateColumns:"60px 1fr auto",gap:10,padding:"8px 12px",background:"#f8fafc",border:"1px solid #f1f5f9",borderRadius:9,alignItems:"center"}}>
                         <span style={{color:"#475569",fontSize:11,fontWeight:700}}>{fmtDate(p.proposedDate)}</span>
                         <span style={{color:"#0f172a",fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.cardTitle||"(sem título)"}</span>
@@ -11394,6 +11410,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
