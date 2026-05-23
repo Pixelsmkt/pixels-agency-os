@@ -10190,6 +10190,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         </div>
       </div>
 
+      {/* ── Progresso do mês (publicar) ── */}
+      {typeof ProgressoDoMes!=="undefined"&&<ProgressoDoMes visible={(tasks||[]).filter(function(t){return !t.deletedAt;})} mode="publicar"/>}
+
       {/* ── Filtro de cliente ── */}
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
         <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginRight:4}}>Cliente</span>
@@ -10444,7 +10447,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 // Dropdown de filtro — definido fora do render para manter estado entre renders
 
 /* ─── ProgressoDoMes — widget moderno com seletor de mês ─────────── */
-function ProgressoDoMes({visible}){
+function ProgressoDoMes({visible,mode="produzir"}){
   const [offset,setOffset]=useState(0);
   const now=new Date();
   const cur=new Date(now.getFullYear(),now.getMonth()+offset,1);
@@ -10579,35 +10582,32 @@ function ProgressoDoMes({visible}){
             {offset!==0&&<button onClick={()=>setOffset(0)} style={{height:34,padding:"0 14px",borderRadius:10,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:.3,fontFamily:"inherit",marginLeft:4}}>Hoje</button>}
           </div>
         </div>
-        {/* Direita — dois totais (a produzir / a publicar) + anel de producao */}
-        <div style={{display:"flex",alignItems:"center",gap:20}}>
-          <div style={{display:"flex",gap:18}}>
+        {/* Direita — total e anel (mode produzir OU publicar) */}
+        {(()=>{
+          const isProd=mode!=="publicar";
+          const done=isProd?totalProduzirDone:totalPublicarDone;
+          const meta=isProd?totalProduzirMeta:totalPublicarMeta;
+          const pctMode=isProd?pctProduzir:pctPublicar;
+          const label=isProd?"A produzir":"A publicar";
+          return <div style={{display:"flex",alignItems:"center",gap:20}}>
             <div style={{textAlign:"right"}}>
               <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
-                <span style={{color:accentMain,fontSize:38,fontWeight:900,letterSpacing:-1.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{totalProduzirDone}</span>
-                <span style={{color:"#64748b",fontSize:18,fontWeight:700,lineHeight:1}}>/{totalProduzirMeta}</span>
+                <span style={{color:accentMain,fontSize:46,fontWeight:900,letterSpacing:-2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{done}</span>
+                <span style={{color:"#64748b",fontSize:22,fontWeight:700,lineHeight:1}}>/{meta}</span>
               </div>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>A produzir</div>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>{label}</div>
             </div>
-            <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-            <div style={{textAlign:"right"}}>
-              <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
-                <span style={{color:"#cbd5e1",fontSize:32,fontWeight:800,letterSpacing:-1.2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{totalPublicarDone}</span>
-                <span style={{color:"#64748b",fontSize:16,fontWeight:700,lineHeight:1}}>/{totalPublicarMeta}</span>
+            <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
+              <svg width="72" height="72" viewBox="0 0 72 72" style={{transform:"rotate(-90deg)"}}>
+                <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6"/>
+                <circle cx="36" cy="36" r="30" fill="none" stroke={accentMain} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${2*Math.PI*30}`} strokeDashoffset={`${2*Math.PI*30*(1-Math.min(pctMode,100)/100)}`} style={{transition:"stroke-dashoffset .6s ease-out, stroke .3s"}}/>
+              </svg>
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+                <span style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{pctMode}<span style={{fontSize:10,color:"#cbd5e1"}}>%</span></span>
               </div>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>A publicar</div>
             </div>
-          </div>
-          <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
-            <svg width="72" height="72" viewBox="0 0 72 72" style={{transform:"rotate(-90deg)"}}>
-              <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6"/>
-              <circle cx="36" cy="36" r="30" fill="none" stroke={accentMain} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${2*Math.PI*30}`} strokeDashoffset={`${2*Math.PI*30*(1-Math.min(pctProduzir,100)/100)}`} style={{transition:"stroke-dashoffset .6s ease-out, stroke .3s"}}/>
-            </svg>
-            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
-              <span style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{pctProduzir}<span style={{fontSize:10,color:"#cbd5e1"}}>%</span></span>
-            </div>
-          </div>
-        </div>
+          </div>;
+        })()}
       </div>
     </div>
     {/* GRID DE CLIENTES */}
@@ -11629,6 +11629,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
@@ -12042,7 +12043,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         </div>}
 
         {/* ── Progresso do mês (com seletor) ── */}
-        <ProgressoDoMes visible={visible}/>
+        <ProgressoDoMes visible={visible} mode="produzir"/>
 
         <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
           {visibleCols.map(col=>{
