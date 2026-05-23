@@ -11415,6 +11415,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
@@ -11827,39 +11828,137 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
         </div>}
 
-        {/* ── Progresso do mês — chip por cliente ── */}
+        {/* ── Progresso do mês — separado por tipo (artes / vídeos / fotos / shorts / collabs) ── */}
         {(()=>{
           const now=new Date();
           const monthStr=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-          const STS=["execucao","ajustes","avaliacao","aprovado","agendado"];
+          const monthLabel=now.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+          const STS=["execucao","ajustes","avaliacao","aprovado","agendado","publicado"];
           function wks(y,m){let c=0;const d=new Date(y,m-1,1);while(d.getMonth()===m-1){if(d.getDay()===1)c++;d.setDate(d.getDate()+1);}return c||4;}
           const weeks=wks(now.getFullYear(),now.getMonth()+1);
-          function req(id){const c=getPostsConfig(id);return ((c.arte||0)+(c.video||0)+(c.collab||0))*weeks;}
           function inMonth(t){if(t.referenceMonth)return t.referenceMonth===monthStr;if(t.publishDate){const d=new Date(t.publishDate);return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();}return true;}
+          // Detecta tipo do card (por contentType ou titulo)
+          function tipo(t){
+            const ct=String(t.contentType||t.tipo||"").toLowerCase();
+            if(ct==="arte"||ct==="carrossel")return "arte";
+            if(ct==="video"||ct==="vídeo")return "video";
+            if(ct==="foto")return "foto";
+            if(ct==="video_short")return "short";
+            const ti=String(t.title||"").toLowerCase();
+            if(/foto\s+de\s+obra|^foto\b|obra\s+(?:finaliz|conclu)/i.test(ti))return "foto";
+            if(/short|reels?\b/i.test(ti))return "short";
+            if(/carrossel/i.test(ti))return "arte";
+            if(/v[íi]deo/i.test(ti))return "video";
+            return "outro";
+          }
+          function isCollabCard(t){
+            if(t.client!=="bioter")return false;
+            const u=String(t.bioterUnit||"").split(",").map(s=>s.trim());
+            return u.indexOf("grupo")>=0||u.indexOf("brasil")>=0;
+          }
+          // Constroi linhas por cliente/unidade
           const rows=[];
-          CLIENTS.filter(c=>c.id!=="bioter"&&c.status!=="interno").forEach(c=>{
-            const done=visible.filter(t=>t.client===c.id&&STS.includes(t.status)&&inMonth(t)).length;
-            const need=req(c.id);
-            if(need>0||done>0)rows.push({id:c.id,name:c.name,color:c.color,done,need});
+          // Padrao (nao Bioter)
+          CLIENTS.filter(c=>c.id!=="bioter"&&c.id!=="pixels"&&c.status!=="interno").forEach(c=>{
+            const cardsDoMes=visible.filter(t=>t.client===c.id&&STS.indexOf(t.status)>=0&&inMonth(t));
+            const cfg=(typeof getPostsConfig==="function")?getPostsConfig(c.id):{arte:1,video:1};
+            const metaArte=(cfg.arte||0)*weeks;
+            const metaVideo=(cfg.video||0)*weeks;
+            const cArte=cardsDoMes.filter(t=>tipo(t)==="arte").length;
+            const cVideo=cardsDoMes.filter(t=>tipo(t)==="video"||tipo(t)==="short").length;
+            const totalDone=cArte+cVideo;
+            const totalMeta=metaArte+metaVideo;
+            if(totalMeta>0||totalDone>0){
+              rows.push({id:c.id,name:c.name,color:c.color,tipos:[
+                {label:"Artes",done:cArte,meta:metaArte,color:"#a140ff"},
+                {label:"Vídeos",done:cVideo,meta:metaVideo,color:"#0284c7"},
+              ],totalDone,totalMeta});
+            }
           });
-          (typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).forEach(u=>{
-            const done=visible.filter(t=>{const us=t.bioterUnits||(t.bioterUnit?[t.bioterUnit]:[]);return t.client==="bioter"&&us.includes(u.id)&&STS.includes(t.status)&&inMonth(t);}).length;
-            const need=req("bioter_"+u.id);
-            if(need>0||done>0)rows.push({id:"bioter_"+u.id,name:u.label.split("/")[0],color:u.color,done,need});
-          });
+          // Bioter — por unidade
+          if(typeof BIOTER_UNITS!=="undefined"){
+            BIOTER_UNITS.forEach(u=>{
+              const cfg=(typeof getPostsConfig==="function")?getPostsConfig("bioter_"+u.id):null;
+              if(!cfg)return;
+              // Cards individuais (nao collab) endereçados a essa unidade
+              const cardsUnit=visible.filter(t=>{
+                if(t.client!=="bioter"||STS.indexOf(t.status)<0||!inMonth(t))return false;
+                if(isCollabCard(t))return false;
+                const us=String(t.bioterUnit||"").split(",").map(s=>s.trim()).filter(Boolean);
+                return us.indexOf(u.id)>=0;
+              });
+              // Cards collab — contados separadamente, soh uma vez no widget mas associados a cada unidade coberta
+              const cardsCollab=visible.filter(t=>{
+                if(t.client!=="bioter"||STS.indexOf(t.status)<0||!inMonth(t))return false;
+                if(!isCollabCard(t))return false;
+                const us=String(t.bioterUnit||"").split(",").map(s=>s.trim()).filter(Boolean);
+                if(us.indexOf("grupo")>=0)return true;
+                if(us.indexOf("brasil")>=0&&u.id!=="paraguay")return true;
+                return false;
+              });
+              const cArte=cardsUnit.filter(t=>tipo(t)==="arte"||tipo(t)==="video").length;
+              const cFoto=cardsUnit.filter(t=>tipo(t)==="foto").length;
+              const cShort=cardsUnit.filter(t=>tipo(t)==="short").length;
+              const cCollab=cardsCollab.length;
+              const metaCollab=(cfg.collab||0)*weeks;
+              const metaFoto=(cfg.foto||0)*weeks + (cfg.fotoOrShortAlternado?Math.ceil(weeks/2):0);
+              const metaShort=(cfg.videoShort||0)*weeks + (cfg.fotoOrShortAlternado?Math.floor(weeks/2):0);
+              const totalDone=cCollab+cFoto+cShort+cArte;
+              const totalMeta=metaCollab+metaFoto+metaShort;
+              if(totalMeta>0||totalDone>0){
+                rows.push({id:"bioter_"+u.id,name:"Bioter — "+(({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.split("/")[0]),color:u.color,tipos:[
+                  {label:"Collab",done:cCollab,meta:metaCollab,color:"#3b82f6"},
+                  {label:"Fotos",done:cFoto,meta:metaFoto,color:"#ea580c"},
+                  {label:"Shorts",done:cShort,meta:metaShort,color:"#dc2626"},
+                ],totalDone,totalMeta});
+              }
+            });
+          }
           if(rows.length===0)return null;
-          return <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",padding:"10px 14px",background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,marginBottom:10,fontFamily:"'Inter',system-ui,sans-serif"}}>
-            <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.6,textTransform:"uppercase"}}>Progresso do mês</span>
-            {rows.map(r=>{
-              const pct=r.need?Math.min(100,Math.round(r.done/r.need*100)):100;
-              const ok=r.need&&r.done>=r.need;
-              return <div key={r.id} title={`${r.done} de ${r.need||"-"} demandas`} style={{display:"inline-flex",alignItems:"center",gap:7,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"5px 9px",fontSize:11.5}}>
-                <span style={{width:8,height:8,borderRadius:"50%",background:r.color}}/>
-                <span style={{color:"#0f172a",fontWeight:600}}>{r.name}</span>
-                <span style={{color:ok?"#16a34a":"#475569",fontWeight:700}}>{r.done}/{r.need||"-"}</span>
-                {r.need>0&&<div style={{width:36,height:4,background:"#e2e8f0",borderRadius:99,overflow:"hidden"}}><div style={{width:pct+"%",height:"100%",background:ok?"#16a34a":r.color,borderRadius:99,transition:"width .25s"}}/></div>}
-              </div>;
-            })}
+          const totalGeralDone=rows.reduce((s,r)=>s+r.totalDone,0);
+          const totalGeralMeta=rows.reduce((s,r)=>s+r.totalMeta,0);
+          const pctGeral=totalGeralMeta?Math.round(totalGeralDone/totalGeralMeta*100):0;
+          return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",marginBottom:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
+            {/* Header */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,paddingBottom:10,borderBottom:"1px solid #f1f5f9"}}>
+              <div>
+                <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>Progresso do mês</div>
+                <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,textTransform:"capitalize",marginTop:1}}>{monthLabel}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{color:pctGeral>=100?"#16a34a":"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4}}>{totalGeralDone}<span style={{color:"#94a3b8",fontWeight:600,fontSize:14}}>/{totalGeralMeta}</span></div>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>{pctGeral}% total</div>
+              </div>
+            </div>
+            {/* Linhas por cliente */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
+              {rows.map(r=>{
+                const pct=r.totalMeta?Math.min(100,Math.round(r.totalDone/r.totalMeta*100)):0;
+                const ok=r.totalMeta&&r.totalDone>=r.totalMeta;
+                return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 11px"}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                    <div style={{display:"inline-flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                      <span style={{width:8,height:8,borderRadius:"50%",background:r.color,flexShrink:0}}/>
+                      <span style={{color:"#0f172a",fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}</span>
+                    </div>
+                    <span style={{color:ok?"#16a34a":"#475569",fontSize:11,fontWeight:800,flexShrink:0,marginLeft:6}}>{r.totalDone}/{r.totalMeta||"-"}</span>
+                  </div>
+                  {/* Barra geral */}
+                  {r.totalMeta>0&&<div style={{width:"100%",height:3,background:"#e2e8f0",borderRadius:99,overflow:"hidden",marginBottom:7}}>
+                    <div style={{width:pct+"%",height:"100%",background:ok?"#16a34a":r.color,borderRadius:99,transition:"width .3s"}}/>
+                  </div>}
+                  {/* Chips por tipo */}
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {r.tipos.filter(tt=>tt.meta>0||tt.done>0).map(tt=>{
+                      const tOk=tt.meta&&tt.done>=tt.meta;
+                      return <span key={tt.label} style={{display:"inline-flex",alignItems:"center",gap:4,background:tt.color+"15",color:tt.color,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>
+                        {tt.label} <span style={{color:tOk?"#16a34a":tt.color,fontWeight:800}}>{tt.done}/{tt.meta||"-"}</span>
+                      </span>;
+                    })}
+                  </div>
+                </div>;
+              })}
+            </div>
           </div>;
         })()}
 
