@@ -20637,12 +20637,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             {/* Cor de Capa removida — botão de paleta sumiu do header */}
             {/* Salvar + Enviar p/ Aprovação + Drive empilhados (Demanda Concluída e Lixeira removidos — usar drag-and-drop e × do card no kanban) */}
             <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"stretch"}}>
-              {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 20px",fontWeight:700,fontSize:13,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap"}}>Salvar</button>}
-              {/* Enviar para Aprovação — only for copy cards marked ajustar */}
+              {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap",minWidth:170,textAlign:"center",letterSpacing:.1}}>Salvar</button>}
+              {/* Enviar para Aprovação — só pra cards de copy marcados como "ajustar" */}
               {canEdit&&task.ajustar===true&&task.status==="demanda"&&<button
                 onClick={()=>{setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:false,timeline:[...(t.timeline||[]),{type:"edit",label:"Reenviada para aprovação por "+user.name,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name}]}:t));onClose();}}
-                style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:10,padding:"6px 14px",fontWeight:700,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(161,64,255,0.28)"}}>
-                Enviar p/ Aprovacao
+                style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(161,64,255,0.28)",minWidth:170,textAlign:"center",letterSpacing:.1}}>
+                Enviar p/ aprovação
               </button>}
               {/* Drive folder — shown when approved */}
               {task.status==="aprovado"&&(()=>{
@@ -21782,6 +21782,16 @@ function OrientacoesView({clientId}){
       </div>}
     </div>
   );
+}
+eight:500}}>{v} ↗</span>
+            </a>);
+          })}
+        </div>
+      </div>}
+    </div>
+  );
+}
+ );
 }
 
 // ======= 12_dashboard.jsx =======
