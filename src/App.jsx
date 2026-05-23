@@ -10542,7 +10542,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
         ]);
         const _totalDone=mode==="publicar"?totalDone:(_isPrincipal?(cArteTotal+cVideoTotal+cFoto):cFoto);
         const _totalMeta=mode==="publicar"?totalMeta:(_isPrincipal?(metaCollab+metaFoto):metaFoto);
-        rows.push({id:"bioter_"+u.id,name:"Bioter "+cityName,color:u.color,tipos:_tipos,totalDone:_totalDone,totalMeta:_totalMeta});
+        rows.push({id:"bioter_"+u.id,name:"Bioter "+cityName,color:u.color,clientLogo:"bioter",tipos:_tipos,totalDone:_totalDone,totalMeta:_totalMeta});
       }
     });
   }
@@ -10652,6 +10652,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 6px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e2e8f0";}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,paddingLeft:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                  {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]&&<img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:18,maxWidth:54,objectFit:"contain",flexShrink:0}}/>}
                   <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>{r.name}</span>
                 </div>
                 <span style={{color:accent,fontSize:14,fontWeight:800,letterSpacing:-.3,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
@@ -11653,6 +11654,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
