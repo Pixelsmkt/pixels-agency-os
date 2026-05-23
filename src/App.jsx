@@ -429,7 +429,7 @@ function buildMarco(input){
    substituindo um arte/video.
    Override por cliente via localStorage["pixels-posts-config-<clientId>"].
 ─────────────────────────────────────────────────────── */
-const POSTS_PADRAO = {arte:1, video:1, collab:0, fotoObraQuinzenal:false};
+const POSTS_PADRAO = {arte:1, video:1, collab:0, foto:0, videoShort:0, fotoOrShortAlternado:false, fotoObraQuinzenal:false};
 
 // Presets específicos por unidade Bioter (sobrescreve o default)
 // Principais (3/semana): 1 arte + 1 vídeo + 1 collab (foto-obra quinzenal substitui o vídeo)
@@ -437,12 +437,14 @@ const POSTS_PADRAO = {arte:1, video:1, collab:0, fotoObraQuinzenal:false};
 // "Collab" aqui é alocado a partir de cards com bioterUnit="grupo" ou "brasil"
 // (cards de Grupo Bioter / Bioter Brasil servem como collab pra todas as unidades).
 const BIOTER_POSTS_PRESETS = {
-  bioter_chapeco:    {arte:1, video:1, collab:1, fotoObraQuinzenal:true},
-  bioter_castro:     {arte:1, video:1, collab:1, fotoObraQuinzenal:true},
-  bioter_toledo:     {arte:1, video:1, collab:1, fotoObraQuinzenal:true},
-  bioter_gloria:     {arte:1, video:0, collab:1, fotoObraQuinzenal:false},
-  bioter_paraguay:   {arte:1, video:0, collab:1, fotoObraQuinzenal:false},
-  bioter_uberlandia: {arte:1, video:0, collab:1, fotoObraQuinzenal:false},
+  // Principais: 3 posts/sem = 1 collab + 1 foto-de-obra + 1 vídeo-short-do-drive
+  bioter_chapeco:    {arte:0, video:0, collab:1, foto:1, videoShort:1, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  bioter_castro:     {arte:0, video:0, collab:1, foto:1, videoShort:1, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  bioter_toledo:     {arte:0, video:0, collab:1, foto:1, videoShort:1, fotoOrShortAlternado:false, fotoObraQuinzenal:false},
+  // Filiais: 2 posts/sem = 1 collab + 1 alternando (foto-de-obra/vídeo-short)
+  bioter_gloria:     {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
+  bioter_paraguay:   {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
+  bioter_uberlandia: {arte:0, video:0, collab:1, foto:0, videoShort:0, fotoOrShortAlternado:true,  fotoObraQuinzenal:false},
 };
 // Helper: identifica se um card é "collab" baseado no bioterUnit
 // (Grupo Bioter / Bioter Brasil servem como collab pras unidades individuais).
@@ -485,27 +487,32 @@ function generateMonthPlanDates(year, month, postsConfig){
   // Pra 2 posts/semana usa 2ª e 5ª.
   let weekIndex=0;
   while(cur<=lastDay){
-    let artes=cfg.arte||0, videos=cfg.video||0, collabs=cfg.collab||0, fotos=0;
-    // Quinzenal: na semana 0, 2, 4... substitui 1 vídeo (preferencial) ou arte por foto
+    let artes=cfg.arte||0, videos=cfg.video||0, collabs=cfg.collab||0;
+    let fotos=cfg.foto||0, shorts=cfg.videoShort||0;
+    // Legacy: quinzenal vira 1 vídeo em foto a cada 2 semanas
     if(cfg.fotoObraQuinzenal&&weekIndex%2===0){
       if(videos>0){videos--;fotos++;}else if(artes>0){artes--;fotos++;}
     }
-    const totalSemana=artes+videos+collabs+fotos;
+    // Filiais Bioter: 1 slot adicional alternando foto/short (semana par=foto, ímpar=short)
+    if(cfg.fotoOrShortAlternado){
+      if(weekIndex%2===0)fotos++; else shorts++;
+    }
+    const totalSemana=artes+videos+collabs+fotos+shorts;
     if(totalSemana<=0){weekIndex++;cur.setDate(cur.getDate()+7);continue;}
     // Distribuição em dias úteis: começa seg, qua, sex
     const dayOrder=[1,3,5,2,4]; // 2ª, 4ª, 6ª (priorizando), depois 3ª e 5ª
     let slotIdx=0;
-    while((artes>0||videos>0||collabs>0||fotos>0)&&slotIdx<dayOrder.length){
+    while((artes>0||videos>0||collabs>0||fotos>0||shorts>0)&&slotIdx<dayOrder.length){
       const dayOffset=dayOrder[slotIdx]-1;
       const d=new Date(cur);d.setDate(d.getDate()+dayOffset);
       if(d.getMonth()===month-1&&d>=firstDay){
         const ds=d.toISOString().slice(0,10);
-        // Ordem preferencial: arte → collab → foto → video
-        // (tenta alternar pra mostrar variedade visual)
+        // Ordem preferencial: collab → foto → short → arte → video
         let type;
-        if(artes>=videos&&artes>=collabs&&artes>=fotos&&artes>0){type="arte";artes--;}
-        else if(collabs>0){type="collab";collabs--;}
+        if(collabs>0){type="collab";collabs--;}
         else if(fotos>0){type="foto";fotos--;}
+        else if(shorts>0){type="video_short";shorts--;}
+        else if(artes>=videos&&artes>0){type="arte";artes--;}
         else if(videos>0){type="video";videos--;}
         else if(artes>0){type="arte";artes--;}
         else break;
@@ -517,6 +524,28 @@ function generateMonthPlanDates(year, month, postsConfig){
     cur.setDate(cur.getDate()+7);
   }
   return result.sort(function(a,b){return a.date.localeCompare(b.date);});
+}
+.getMonth()===month-1&&d>=firstDay){
+        const ds=d.toISOString().slice(0,10);
+        // Ordem preferencial: collab -> foto -> short -> arte -> video
+        let type;
+        if(collabs>0){type="collab";collabs--;}
+        else if(fotos>0){type="foto";fotos--;}
+        else if(shorts>0){type="video_short";shorts--;}
+        else if(artes>=videos&&artes>0){type="arte";artes--;}
+        else if(videos>0){type="video";videos--;}
+        else if(artes>0){type="arte";artes--;}
+        else break;
+        result.push({date:ds, type:type});
+      }
+      slotIdx++;
+    }
+    weekIndex++;
+    cur.setDate(cur.getDate()+7);
+  }
+  return result.sort(function(a,b){return a.date.localeCompare(b.date);});
+}
+;
 }
 
 // ======= 00_globals.jsx =======
@@ -9803,6 +9832,34 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   function _isVideoType(t){return t==="video"||t==="corte";}
   function _isArteType(t){return t==="arte"||t==="carrossel";}
   function _isFotoType(t){return t==="foto";}
+  // Cria card-fantasma de vídeo short (do Drive) — não vira demanda.
+  function _createShortCard(slot,alvoId,alvoNome,outArr,outProposals,year,month){
+    const unitKey=String(alvoId||"").replace(/^bioter_/,"");
+    const unitLabel=(typeof BIOTER_UNITS!=="undefined")
+      ?((BIOTER_UNITS.find(function(u){return u.id===unitKey;})||{}).label||alvoNome)
+      :alvoNome;
+    const shortName=String(unitLabel).split("/")[0];
+    const newId="short-"+slot.date+"-"+unitKey+"-"+Math.random().toString(36).slice(2,7);
+    const userName=(typeof CURRENT_USER!=="undefined")?CURRENT_USER.name:"Sistema";
+    outArr.push({
+      id:newId, title:"Short — "+shortName,
+      client:"bioter", bioterUnit:unitKey,
+      contentType:"video_short", tipo:"video_short",
+      status:"agendado", fromDrive:true,
+      publishDate:slot.date, publishTime:"11:00",
+      referenceMonth:String(year)+"-"+String(month).padStart(2,"0"),
+      assignee:"", assignees:[], priority:"normal", files:[],
+      timeline:[{type:"created",label:"Vídeo short do Drive (gerado automaticamente)",atFmt:new Date().toLocaleDateString("pt-BR"),user:userName}],
+      comments:[], checklist:[],
+      createdAt:new Date().toLocaleDateString("pt-BR"), createdBy:userName,
+    });
+    outProposals.push({
+      taskId:newId, cardTitle:"Short — "+shortName,
+      clientId:alvoId, clientName:alvoNome,
+      contentType:"video_short", isCollab:false, isNewShort:true,
+      status:"agendado", proposedDate:slot.date, slotType:"video_short",
+    });
+  }
   function handleGeneratePlan(){
     const year=calMonth.getFullYear(),month=calMonth.getMonth()+1;
     // Respeita o filtro de cliente ativo: "todos" gera pra todos,
@@ -9812,6 +9869,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     // Unidades Bioter individuais (cada uma tem sua própria config de posts)
     const unidadesBioter=(typeof BIOTER_GROUP_UNITS!=="undefined")?BIOTER_GROUP_UNITS:[];
     const proposals=[];
+    const newShortCards=[];
     // Rastreador: cards já alocados em alguma unidade — evita um card de "Grupo
     // Bioter" ser usado pra 6 unidades diferentes (cada card só pode ser publicado uma vez).
     const cardsAlocados=new Set();
@@ -9841,6 +9899,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       const semTipo=naoCollabs.filter(function(t){return !_isArteType(t.contentType)&&!_isVideoType(t.contentType)&&!_isFotoType(t.contentType);});
       let cIdx=0,aIdx=0,vIdx=0,fIdx=0,sIdx=0;
       slots.forEach(function(slot){
+        if(slot.type==="video_short"){_createShortCard(slot,alvoId,alvoNome,newShortCards,proposals,year,month);return;}
         let card=null;
         // Tenta casar tipo do slot com tipo do card
         if(slot.type==="collab"&&collabs[cIdx])card=collabs[cIdx++];
@@ -9897,7 +9956,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       if(typeof pixelsToast!=="undefined")pixelsToast.warning("Nenhum card elegível. Crie cards em Demanda/Execução/Ajustes/Avaliação/Aprovado primeiro.");
       return;
     }
-    setGenConfirm({proposals, month, year});
+    setGenConfirm({proposals, month, year, newShortCards});
   }
   function confirmGeneratePlan(){
     if(!genConfirm)return;
@@ -9906,14 +9965,16 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       const task=tasks.find(function(t){return t.id===prop.taskId;});
       return {taskId:prop.taskId, oldDate:task?.publishDate||"", oldTime:task?.publishTime||""};
     });
-    setLastApplySnapshot({when:Date.now(), snapshot, month:genConfirm.month, year:genConfirm.year});
+    const newShortIds=(genConfirm.newShortCards||[]).map(function(c){return c.id;});
+    setLastApplySnapshot({when:Date.now(), snapshot, month:genConfirm.month, year:genConfirm.year, newShortIds:newShortIds});
     if(typeof setTasks==="function"){
       setTasks(function(prev){
-        return (prev||[]).map(function(t){
-          const prop=genConfirm.proposals.find(function(p){return p.taskId===t.id;});
+        const arr=(prev||[]).map(function(t){
+          const prop=genConfirm.proposals.find(function(p){return p.taskId===t.id&&!p.isNewShort;});
           if(!prop)return t;
           return Object.assign({},t,{publishDate:prop.proposedDate, publishTime:t.publishTime||"11:00"});
         });
+        return arr.concat(genConfirm.newShortCards||[]);
       });
     }
     if(typeof pixelsToast!=="undefined")pixelsToast.success(genConfirm.proposals.length+" cards com data sugerida em "+MONTHS[genConfirm.month-1]+"/"+genConfirm.year+". Use 'Desfazer' se quiser reverter.");
@@ -9921,13 +9982,16 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   }
   function handleUndoApply(){
     if(!lastApplySnapshot)return;
+    const newShortIds=lastApplySnapshot.newShortIds||[];
     if(typeof setTasks==="function"){
       setTasks(function(prev){
-        return (prev||[]).map(function(t){
-          const s=lastApplySnapshot.snapshot.find(function(x){return x.taskId===t.id;});
-          if(!s)return t;
-          return Object.assign({},t,{publishDate:s.oldDate||null, publishTime:s.oldTime||""});
-        });
+        return (prev||[])
+          .filter(function(t){return newShortIds.indexOf(t.id)<0;})
+          .map(function(t){
+            const s=lastApplySnapshot.snapshot.find(function(x){return x.taskId===t.id;});
+            if(!s)return t;
+            return Object.assign({},t,{publishDate:s.oldDate||null, publishTime:s.oldTime||""});
+          });
       });
     }
     if(typeof pixelsToast!=="undefined")pixelsToast.success("Sugestões revertidas. Cards voltaram pro estado anterior.");
@@ -10293,6 +10357,83 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           tasks={tasks}
           setTasks={setTasks}
           onClose={()=>setOpenCard(null)}
+          currentUser={CURRENT_USER}
+          cardPerms={{verBriefingCard:true}}
+        />
+      )}
+    </div>
+  );
+}
+
+      )}
+    </div>
+  );
+}
+terSpacing:.1}}>
+                            {unit.label.split("/")[0]}
+                          </div>}
+                        </div>
+                      );
+                    })}
+                    {dayTasks.length>(isMob?2:3)&&(
+                      <div style={{color:"#94a3b8",fontSize:10,textAlign:"center",fontWeight:600,marginTop:2}}>
+                        +{dayTasks.length-(isMob?2:3)} mais
+                      </div>
+                    )}
+                  </div>
+                </>)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Aviso sem agendamentos */}
+      {tasksThisMonth.length===0&&(
+        <div style={{background:"#fff",borderRadius:14,padding:"40px",textAlign:"center",border:"1px dashed #cbd5e1"}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,marginBottom:6}}>Nenhuma publicacao agendada</div>
+          <div style={{color:"#64748b",fontSize:12}}>
+            {filterClient!=="todos"
+              ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
+              :`Nenhum conteudo agendado em ${MONTHS[calMonth.getMonth()]}.`
+            }
+          </div>
+        </div>
+      )}
+
+      {/* Modal do card */}
+      {openCard&&(
+        <CardModal
+          task={openCard}
+          tasks={tasks}
+          setTasks={setTasks}
+          onClose={()=>setOpenCard(null)}
+          currentUser={CURRENT_USER}
+          cardPerms={{verBriefingCard:true}}
+        />
+      )}
+    </div>
+  );
+}
+       cardPerms={{verBriefingCard:true}}
+        />
+      )}
+    </div>
+  );
+}
+ </div>
+  );
+}
+   setTasks={setTasks}
+          onClose={()=>setOpenCard(null)}
+          currentUser={CURRENT_USER}
+          cardPerms={{verBriefingCard:true}}
+        />
+      )}
+    </div>
+  );
+}
+{()=>setOpenCard(null)}
           currentUser={CURRENT_USER}
           cardPerms={{verBriefingCard:true}}
         />
