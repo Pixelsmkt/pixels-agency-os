@@ -10511,23 +10511,20 @@ function ProgressoDoMes({visible,mode="produzir"}){
       const cShort=cardsUnit.filter(t=>tipo(t)==="short").length;
       const cArteIndiv=cardsUnit.filter(t=>tipo(t)==="arte").length;
       const cVideoIndiv=cardsUnit.filter(t=>tipo(t)==="video").length;
-      // Mode "produzir": collabs sao classificados como Arte/Video conforme o contentType
-      const cArteCollab=cardsCollab.filter(t=>tipo(t)==="arte").length;
-      const cVideoCollab=cardsCollab.filter(t=>tipo(t)==="video").length;
-      // Total Arte e Video pra mode produzir = individual + collab
-      const cArteTotal=cArteIndiv+cArteCollab;
-      const cVideoTotal=cVideoIndiv+cVideoCollab;
-      // cExtra fica como soma de arte+video individuais (pra mode publicar)
-      const cExtra=cArteIndiv+cVideoIndiv;
-      const cCollab=cardsCollab.length;
-      const metaCollab=(cfg.collab||0)*weeks;
-      const metaFoto=(cfg.foto||0)*weeks + (cfg.fotoOrShortAlternado?Math.ceil(weeks/2):0);
-      const metaShort=(cfg.videoShort||0)*weeks + (cfg.fotoOrShortAlternado?Math.floor(weeks/2):0);
-      const totalDone=cCollab+cFoto+cShort+cExtra;
-      const totalMeta=metaCollab+metaFoto+metaShort;
-      if(totalMeta>0||totalDone>0){
-        const cityName=({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.split("/")[0];
-        rows.push({id:"bioter_"+u.id,name:"Bioter "+cityName,color:u.color,tipos:[{l:"Collab",done:cCollab,meta:metaCollab},{l:"Foto",done:cFoto,meta:metaFoto},{l:"Short",done:cShort,meta:metaShort}],totalDone,totalMeta});
+        // Categorias por mode — Foto de obra em ambos; produzir omite Collab e Short
+        const _tipos=mode==="publicar"?[
+          {l:"Arte",done:cArteIndiv,meta:0},
+          {l:"Collab",done:cCollab,meta:metaCollab},
+          {l:"Foto de obra",done:cFoto,meta:metaFoto},
+          {l:"Short",done:cShort,meta:metaShort},
+        ]:[
+          {l:"Arte",done:cArteTotal,meta:0},
+          {l:"Vídeo",done:cVideoTotal,meta:0},
+          {l:"Foto de obra",done:cFoto,meta:metaFoto},
+        ];
+        const _totalDone=mode==="publicar"?totalDone:(cArteTotal+cVideoTotal+cFoto);
+        const _totalMeta=mode==="publicar"?totalMeta:(metaCollab+metaFoto);
+        rows.push({id:"bioter_"+u.id,name:"Bioter "+cityName,color:u.color,tipos:_tipos,totalDone:_totalDone,totalMeta:_totalMeta});
       }
     });
   }
@@ -10638,10 +10635,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
               <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:accent,borderRadius:"0 2px 2px 0"}}/>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,paddingLeft:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
-                  {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]
-                    ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:18,maxWidth:60,objectFit:"contain",flexShrink:0}}/>
-                    : <span style={{width:8,height:8,borderRadius:"50%",background:r.color,flexShrink:0}}/>
-                  }
+                  <span style={{width:8,height:8,borderRadius:"50%",background:r.color,flexShrink:0}}/>
                   <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>{r.name}</span>
                 </div>
                 <span style={{color:accent,fontSize:14,fontWeight:800,letterSpacing:-.3,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
@@ -11643,6 +11637,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
