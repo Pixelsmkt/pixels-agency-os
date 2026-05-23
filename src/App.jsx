@@ -30160,7 +30160,7 @@ function PageIAPixels({isMob, tasks}){
   };
 
   const CATEGORIAS = Object.keys(ESTRUTURA);
-  const BIOTER_UNITS = ["Chapecó/SC","Toledo/PR","Castro/PR","Uberlândia/MG","Glória de Dourados/MS","Bioter Paraguay 🇵🇾"];
+  const BIOTER_UNITS = ["Chapecó/SC","Toledo/PR","Castro/PR","Uberlândia/MG","Glória de Dourados/MS","Bioter Paraguay"];
   const OBJETIVOS = [{v:"engajamento",l:"❤ Engajamento"},{v:"venda",l:"💰 Venda"},{v:"autoridade",l:"🏆 Autoridade"},{v:"institucional",l:"🏢 Institucional"},{v:"awareness",l:"📢 Awareness"},{v:"lead",l:"🎯 Lead"}];
   const TONS = [{v:"leve",l:"😊 Leve"},{v:"tecnico",l:"🔬 Técnico"},{v:"emocional",l:"❤ Emocional"},{v:"comercial",l:"💰 Comercial"},{v:"institucional",l:"🏢 Institucional"},{v:"trend",l:"🔥 Trend"}];
   const FORMATOS = [{v:"foto",l:"📸 Foto"},{v:"video_curto",l:"🎬 Vídeo Curto"},{v:"reels",l:"📱 Reels"},{v:"stories",l:"💬 Stories"},{v:"carrossel",l:"🃏 Carrossel"},{v:"anuncio",l:"📣 Anúncio"}];
