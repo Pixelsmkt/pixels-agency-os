@@ -10523,19 +10523,25 @@ function ProgressoDoMes({visible,mode="produzir"}){
       const totalMeta=metaCollab+metaFoto+metaShort;
       if(totalMeta>0||totalDone>0){
         const cityName=({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.split("/")[0];
-        // Categorias por mode — Foto de obra em ambos; produzir omite Collab e Short
+        // Categorias por mode
+        // Mode publicar: Arte / Collab / Foto de obra / Short (todas as unidades)
+        // Mode produzir PRINCIPAIS (chapeco/castro/toledo): Arte / Vídeo / Foto de obra
+        // Mode produzir FILIAIS (gloria/uberlandia/paraguay): SO Foto de obra
+        const _isPrincipal=["chapeco","castro","toledo"].indexOf(u.id)>=0;
         const _tipos=mode==="publicar"?[
           {l:"Arte",done:cArteIndiv,meta:0},
           {l:"Collab",done:cCollab,meta:metaCollab},
           {l:"Foto de obra",done:cFoto,meta:metaFoto},
           {l:"Short",done:cShort,meta:metaShort},
-        ]:[
-          {l:"Arte",done:cArteTotal,meta:0},
-          {l:"Vídeo",done:cVideoTotal,meta:0},
+        ]:(_isPrincipal?[
+          {l:"Arte",done:cArteTotal,meta:Math.ceil(metaCollab/2)},
+          {l:"Vídeo",done:cVideoTotal,meta:Math.floor(metaCollab/2)},
           {l:"Foto de obra",done:cFoto,meta:metaFoto},
-        ];
-        const _totalDone=mode==="publicar"?totalDone:(cArteTotal+cVideoTotal+cFoto);
-        const _totalMeta=mode==="publicar"?totalMeta:(metaCollab+metaFoto);
+        ]:[
+          {l:"Foto de obra",done:cFoto,meta:metaFoto},
+        ]);
+        const _totalDone=mode==="publicar"?totalDone:(_isPrincipal?(cArteTotal+cVideoTotal+cFoto):cFoto);
+        const _totalMeta=mode==="publicar"?totalMeta:(_isPrincipal?(metaCollab+metaFoto):metaFoto);
         rows.push({id:"bioter_"+u.id,name:"Bioter "+cityName,color:u.color,tipos:_tipos,totalDone:_totalDone,totalMeta:_totalMeta});
       }
     });
@@ -11649,6 +11655,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
