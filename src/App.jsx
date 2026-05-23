@@ -10452,8 +10452,7 @@ function ProgressoDoMes({visible}){
   const monthLabel=cur.toLocaleDateString("pt-BR",{month:"long"});
   const yearLabel=cur.getFullYear();
   const STS=["execucao","ajustes","avaliacao","aprovado","agendado","publicado"];
-  function wks(y,m){let c=0;const d=new Date(y,m-1,1);while(d.getMonth()===m-1){if(d.getDay()===1)c++;d.setDate(d.getDate()+1);}return c||4;}
-  const weeks=wks(cur.getFullYear(),cur.getMonth()+1);
+  const weeks=4;
   function inMonth(t){
     if(t.referenceMonth)return t.referenceMonth===monthStr;
     if(t.publishDate){const d=new Date(t.publishDate);return d.getFullYear()===cur.getFullYear()&&d.getMonth()===cur.getMonth();}
@@ -11579,6 +11578,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
