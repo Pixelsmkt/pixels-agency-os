@@ -109,7 +109,6 @@ function saveLiveClient(id,partial){
   }catch(e){}
 }
 
-// ======= 00_clientes_perfis.jsx =======
 // Perfis comerciais/fiscais estendidos dos clientes Pixels.
 // Complementa CLIENTS de 00_clientes_data.jsx — usar como camada de gestão.
 // Não substitui o CLIENTS antigo (que ainda alimenta Kanban, Análises, etc).
@@ -9525,7 +9524,6 @@ function CBriefingTab({cl,isSocio}){
   </div>);
 }
 
-// ======= 04_calendario.jsx =======
 // Página do Calendário de Publicações + helpers compartilhados com Calendário interno
 // Depende de: 00_globals, 00_clientes_data, 11_cardmodal (CardModal)
 // Posição no bundle: após 04_demandas
