@@ -10580,7 +10580,8 @@ function ProgressoDoMes({visible,mode="produzir"}){
   const pctProduzir=totalProduzirMeta?Math.round(totalProduzirDone/totalProduzirMeta*100):0;
   const pctPublicar=totalPublicarMeta?Math.round(totalPublicarDone/totalPublicarMeta*100):0;
   const isComplete=pctProduzir>=100&&totalProduzirMeta>0;
-  const accentMain=isComplete?"#22c55e":(pctProduzir>=70?"#fff":(pctProduzir>=40?"#fbbf24":"#f87171"));
+  const _pctRef=mode==="publicar"?pctPublicar:pctProduzir;
+  const accentMain=_pctRef>=80?"#22c55e":(_pctRef>=50?"#fbbf24":"#ef4444");
   return <div style={{borderRadius:18,marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.06),0 8px 24px rgba(15,23,42,0.04)"}}>
     {/* HERO HEADER — gradiente escuro */}
     <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",padding:"22px 24px",position:"relative",overflow:"hidden"}}>
@@ -10660,14 +10661,16 @@ function ProgressoDoMes({visible,mode="produzir"}){
               {r.totalMeta>0&&<div style={{width:"100%",height:6,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:9}}>
                 <div style={{width:cpct+"%",height:"100%",background:`linear-gradient(90deg, ${accent}, ${accent}cc)`,borderRadius:99,transition:"width .5s ease-out"}}/>
               </div>}
-              <div style={{display:"flex",gap:14}}>
+              <div style={{display:"grid",gridTemplateColumns:`repeat(${r.tipos.filter(tt=>tt.meta>0||tt.done>0).length},1fr)`,gap:6}}>
                 {r.tipos.filter(tt=>tt.meta>0||tt.done>0).map(tt=>{
                   const tOk=tt.meta&&tt.done>=tt.meta;
-                  return <div key={tt.l} style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:2}}>{tt.l}</div>
-                    <div style={{display:"flex",alignItems:"baseline",gap:2}}>
-                      <span style={{color:tOk?"#22c55e":"#0f172a",fontSize:17,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{tt.done}</span>
-                      <span style={{color:"#cbd5e1",fontSize:12,fontWeight:600,lineHeight:1}}>/{tt.meta||"-"}</span>
+                  const tPct=tt.meta?Math.round(tt.done/tt.meta*100):0;
+                  const tCor=tOk?"#22c55e":(tPct>=80?"#22c55e":(tPct>=50?"#eab308":"#ef4444"));
+                  return <div key={tt.l} style={{minWidth:0,display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",padding:"4px 2px",background:"#f8fafc",borderRadius:7}}>
+                    <div style={{color:"#64748b",fontSize:8.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,lineHeight:1.1,marginBottom:3,whiteSpace:"nowrap"}}>{tt.l}</div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:1,justifyContent:"center"}}>
+                      <span style={{color:tCor,fontSize:16,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{tt.done}</span>
+                      <span style={{color:"#cbd5e1",fontSize:11,fontWeight:600,lineHeight:1,fontFeatureSettings:"'tnum'"}}>/{tt.meta||"-"}</span>
                     </div>
                   </div>;
                 })}
@@ -11654,6 +11657,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
