@@ -1841,12 +1841,12 @@ function Ico({n,size=14,color,strokeWidth=2}){
 // pickerLabel = como aparece no select de Cliente (já com "Bioter " na frente)
 // abbr = sigla de 2 letras exibida no card ao lado da logo
 const BIOTER_UNITS = [
-  { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Bioter Chapecó" },          // verde escuro (principal)
-  { id:"toledo",    label:"Toledo/PR",             color:"#166534", abbr:"TO", pickerLabel:"Bioter Toledo" },           // verde escuro (principal)
-  { id:"castro",    label:"Castro/PR",             color:"#166534", abbr:"CA", pickerLabel:"Bioter Castro" },           // verde escuro (principal)
-  { id:"uberlandia",label:"Uberlândia/MG",         color:"#16a34a", abbr:"UB", pickerLabel:"Bioter Uberlândia" },       // verde médio (filial)
-  { id:"gloria",    label:"Glória de Dourados/MS", color:"#16a34a", abbr:"GD", pickerLabel:"Bioter Glória de Dourados" }, // verde médio (filial)
-  { id:"paraguay",  label:"Bioter Paraguay",       color:"#16a34a", abbr:"PY", pickerLabel:"Bioter Paraguay" },         // verde médio (filial)
+  { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Chapecó" },          // verde escuro (principal)
+  { id:"toledo",    label:"Toledo/PR",             color:"#166534", abbr:"TO", pickerLabel:"Toledo" },           // verde escuro (principal)
+  { id:"castro",    label:"Castro/PR",             color:"#166534", abbr:"CA", pickerLabel:"Castro" },           // verde escuro (principal)
+  { id:"uberlandia",label:"Uberlândia/MG",         color:"#16a34a", abbr:"UB", pickerLabel:"Uberlândia" },       // verde médio (filial)
+  { id:"gloria",    label:"Glória de Dourados/MS", color:"#16a34a", abbr:"GD", pickerLabel:"Glória de Dourados" }, // verde médio (filial)
+  { id:"paraguay",  label:"Bioter Paraguay",       color:"#16a34a", abbr:"PY", pickerLabel:"Paraguay" },         // verde médio (filial)
 ];
 
 /* ─── MIND MAP COMPONENT (MindMeister-style) ── */
