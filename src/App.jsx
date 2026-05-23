@@ -10521,11 +10521,41 @@ function ProgressoDoMes({visible}){
       }
     });
   }
-  const totalDone=rows.reduce((s,r)=>s+r.totalDone,0);
-  const totalMeta=rows.reduce((s,r)=>s+r.totalMeta,0);
-  const pct=totalMeta?Math.round(totalDone/totalMeta*100):0;
-  const isComplete=pct>=100&&totalMeta>0;
-  const accentMain=isComplete?"#22c55e":(pct>=70?"#0f172a":(pct>=40?"#f59e0b":"#ef4444"));
+  // PUBLICACOES — somatorio de todas as unidades (cada collab conta por unidade)
+  const totalPublicarDone=rows.reduce((s,r)=>s+r.totalDone,0);
+  const totalPublicarMeta=rows.reduce((s,r)=>s+r.totalMeta,0);
+  // PRODUCAO — cards UNICOS a produzir (collabs contam 1x, shorts do Drive nao contam)
+  // Conta cards distintos que precisam ser criados pela equipe
+  const uniqProduzir=new Set();
+  visible.forEach(t=>{
+    if(STS.indexOf(t.status)<0||!inMonth(t))return;
+    const ti=tipo(t);
+    if(ti==="short")return; // short vem do Drive, nao produz
+    if(t.fromDrive)return;
+    uniqProduzir.add(t.id);
+  });
+  const totalProduzirDone=uniqProduzir.size;
+  // Meta producao: padrao (4 clientes × 8) + bioter collabs unicas (4/mes) + fotos bioter (12 princ + 6 filial)
+  let metaProduzirPadrao=0, metaProduzirCollab=0, metaProduzirFoto=0;
+  CLIENTS.filter(c=>c.id!=="bioter"&&c.id!=="pixels"&&c.status!=="interno").forEach(c=>{
+    const cfg=(typeof getPostsConfig==="function")?getPostsConfig(c.id):{arte:1,video:1};
+    metaProduzirPadrao += ((cfg.arte||0)+(cfg.video||0))*weeks;
+  });
+  // Collabs Bioter — meta unica do grupo (nao por unidade)
+  metaProduzirCollab = weeks; // 1 collab por semana × 4
+  // Fotos Bioter — soma de todas as unidades
+  if(typeof BIOTER_UNITS!=="undefined"){
+    BIOTER_UNITS.forEach(u=>{
+      const cfg=(typeof getPostsConfig==="function")?getPostsConfig("bioter_"+u.id):null;
+      if(!cfg)return;
+      metaProduzirFoto += (cfg.foto||0)*weeks + (cfg.fotoOrShortAlternado?Math.ceil(weeks/2):0);
+    });
+  }
+  const totalProduzirMeta=metaProduzirPadrao+metaProduzirCollab+metaProduzirFoto;
+  const pctProduzir=totalProduzirMeta?Math.round(totalProduzirDone/totalProduzirMeta*100):0;
+  const pctPublicar=totalPublicarMeta?Math.round(totalPublicarDone/totalPublicarMeta*100):0;
+  const isComplete=pctProduzir>=100&&totalProduzirMeta>0;
+  const accentMain=isComplete?"#22c55e":(pctProduzir>=70?"#0f172a":(pctProduzir>=40?"#f59e0b":"#ef4444"));
   return <div style={{borderRadius:18,marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.06),0 8px 24px rgba(15,23,42,0.04)"}}>
     {/* HERO HEADER — gradiente escuro */}
     <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",padding:"22px 24px",position:"relative",overflow:"hidden"}}>
@@ -10549,22 +10579,32 @@ function ProgressoDoMes({visible}){
             {offset!==0&&<button onClick={()=>setOffset(0)} style={{height:34,padding:"0 14px",borderRadius:10,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:.3,fontFamily:"inherit",marginLeft:4}}>Hoje</button>}
           </div>
         </div>
-        {/* Direita — número total + anel de progresso */}
-        <div style={{display:"flex",alignItems:"center",gap:18}}>
-          <div style={{textAlign:"right"}}>
-            <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
-              <span style={{color:accentMain,fontSize:46,fontWeight:900,letterSpacing:-2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{totalDone}</span>
-              <span style={{color:"#64748b",fontSize:22,fontWeight:700,lineHeight:1}}>/{totalMeta}</span>
+        {/* Direita — dois totais (a produzir / a publicar) + anel de producao */}
+        <div style={{display:"flex",alignItems:"center",gap:20}}>
+          <div style={{display:"flex",gap:18}}>
+            <div style={{textAlign:"right"}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
+                <span style={{color:accentMain,fontSize:38,fontWeight:900,letterSpacing:-1.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{totalProduzirDone}</span>
+                <span style={{color:"#64748b",fontSize:18,fontWeight:700,lineHeight:1}}>/{totalProduzirMeta}</span>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>A produzir</div>
             </div>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>Materiais do mês</div>
+            <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+            <div style={{textAlign:"right"}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
+                <span style={{color:"#cbd5e1",fontSize:32,fontWeight:800,letterSpacing:-1.2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{totalPublicarDone}</span>
+                <span style={{color:"#64748b",fontSize:16,fontWeight:700,lineHeight:1}}>/{totalPublicarMeta}</span>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>A publicar</div>
+            </div>
           </div>
           <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
             <svg width="72" height="72" viewBox="0 0 72 72" style={{transform:"rotate(-90deg)"}}>
               <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6"/>
-              <circle cx="36" cy="36" r="30" fill="none" stroke={accentMain} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${2*Math.PI*30}`} strokeDashoffset={`${2*Math.PI*30*(1-Math.min(pct,100)/100)}`} style={{transition:"stroke-dashoffset .6s ease-out, stroke .3s"}}/>
+              <circle cx="36" cy="36" r="30" fill="none" stroke={accentMain} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${2*Math.PI*30}`} strokeDashoffset={`${2*Math.PI*30*(1-Math.min(pctProduzir,100)/100)}`} style={{transition:"stroke-dashoffset .6s ease-out, stroke .3s"}}/>
             </svg>
             <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
-              <span style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{pct}<span style={{fontSize:10,color:"#cbd5e1"}}>%</span></span>
+              <span style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{pctProduzir}<span style={{fontSize:10,color:"#cbd5e1"}}>%</span></span>
             </div>
           </div>
         </div>
@@ -11578,6 +11618,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
