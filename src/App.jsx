@@ -10443,7 +10443,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 
 // Dropdown de filtro — definido fora do render para manter estado entre renders
 
-/* ─── ProgressoDoMes — widget com seletor de mês ─────────────────── */
+/* ─── ProgressoDoMes — widget moderno com seletor de mês ─────────── */
 function ProgressoDoMes({visible}){
   const [offset,setOffset]=useState(0);
   const now=new Date();
@@ -10457,7 +10457,6 @@ function ProgressoDoMes({visible}){
   function inMonth(t){
     if(t.referenceMonth)return t.referenceMonth===monthStr;
     if(t.publishDate){const d=new Date(t.publishDate);return d.getFullYear()===cur.getFullYear()&&d.getMonth()===cur.getMonth();}
-    // Sem data: so conta no mes atual (offset=0)
     return offset===0;
   }
   function tipo(t){
@@ -10488,7 +10487,7 @@ function ProgressoDoMes({visible}){
     const cVideo=cm.filter(t=>tipo(t)==="video"||tipo(t)==="short").length;
     const totalDone=cArte+cVideo;
     const totalMeta=metaArte+metaVideo;
-    if(totalMeta>0||totalDone>0)rows.push({id:c.id,name:c.name,tipos:[{l:"arte",done:cArte,meta:metaArte},{l:"vídeo",done:cVideo,meta:metaVideo}],totalDone,totalMeta});
+    if(totalMeta>0||totalDone>0)rows.push({id:c.id,name:c.name,color:c.color,tipos:[{l:"Arte",done:cArte,meta:metaArte},{l:"Vídeo",done:cVideo,meta:metaVideo}],totalDone,totalMeta});
   });
   if(typeof BIOTER_UNITS!=="undefined"){
     BIOTER_UNITS.forEach(u=>{
@@ -10519,75 +10518,89 @@ function ProgressoDoMes({visible}){
       const totalMeta=metaCollab+metaFoto+metaShort;
       if(totalMeta>0||totalDone>0){
         const cityName=({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.split("/")[0];
-        rows.push({id:"bioter_"+u.id,name:"Bioter "+cityName,tipos:[{l:"collab",done:cCollab,meta:metaCollab},{l:"foto",done:cFoto,meta:metaFoto},{l:"short",done:cShort,meta:metaShort}],totalDone,totalMeta});
+        rows.push({id:"bioter_"+u.id,name:"Bioter "+cityName,color:u.color,tipos:[{l:"Collab",done:cCollab,meta:metaCollab},{l:"Foto",done:cFoto,meta:metaFoto},{l:"Short",done:cShort,meta:metaShort}],totalDone,totalMeta});
       }
     });
   }
-  const totalGeralDone=rows.reduce((s,r)=>s+r.totalDone,0);
-  const totalGeralMeta=rows.reduce((s,r)=>s+r.totalMeta,0);
-  const pctGeral=totalGeralMeta?Math.round(totalGeralDone/totalGeralMeta*100):0;
-  const isComplete=pctGeral>=100&&totalGeralMeta>0;
-  const navBtn={width:28,height:28,borderRadius:8,border:"1px solid #e2e8f0",background:"#fff",color:"#475569",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s",padding:0};
-  return <div style={{background:"#fff",border:"1px solid #e8edf2",borderRadius:14,padding:0,marginBottom:12,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 16px",borderBottom:"1px solid #f1f5f9",gap:10}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+  const totalDone=rows.reduce((s,r)=>s+r.totalDone,0);
+  const totalMeta=rows.reduce((s,r)=>s+r.totalMeta,0);
+  const pct=totalMeta?Math.round(totalDone/totalMeta*100):0;
+  const isComplete=pct>=100&&totalMeta>0;
+  const accentMain=isComplete?"#22c55e":(pct>=70?"#0f172a":(pct>=40?"#f59e0b":"#ef4444"));
+  return <div style={{borderRadius:18,marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.06),0 8px 24px rgba(15,23,42,0.04)"}}>
+    {/* HERO HEADER — gradiente escuro */}
+    <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",padding:"22px 24px",position:"relative",overflow:"hidden"}}>
+      {/* Decoração — anel sutil no canto */}
+      <div style={{position:"absolute",right:-40,top:-40,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between",gap:20,flexWrap:"wrap"}}>
+        {/* Esquerda — navegação de mês */}
         <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:1}}>Progresso do mês</div>
-          <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-            <span style={{color:"#0f172a",fontSize:17,fontWeight:700,letterSpacing:-.3,textTransform:"capitalize"}}>{monthLabel}</span>
-            <span style={{color:"#94a3b8",fontSize:13,fontWeight:600}}>{yearLabel}</span>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,marginBottom:6}}>Progresso do mês</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <button onClick={()=>setOffset(o=>o-1)} title="Mês anterior" style={{width:34,height:34,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div style={{minWidth:170,textAlign:"center"}}>
+              <div style={{color:"#fff",fontSize:22,fontWeight:800,letterSpacing:-.5,textTransform:"capitalize",lineHeight:1.1}}>{monthLabel}</div>
+              <div style={{color:"#64748b",fontSize:12,fontWeight:600,marginTop:2}}>{yearLabel}</div>
+            </div>
+            <button onClick={()=>setOffset(o=>o+1)} title="Próximo mês" style={{width:34,height:34,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            {offset!==0&&<button onClick={()=>setOffset(0)} style={{height:34,padding:"0 14px",borderRadius:10,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:.3,fontFamily:"inherit",marginLeft:4}}>Hoje</button>}
           </div>
         </div>
-        <div style={{display:"inline-flex",alignItems:"center",gap:4,marginLeft:6}}>
-          <button title="Mês anterior" onClick={()=>setOffset(o=>o-1)} style={navBtn} onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}} onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
-          {offset!==0&&<button onClick={()=>setOffset(0)} style={{height:28,borderRadius:8,border:"1px solid #0f172a",background:"#0f172a",color:"#fff",cursor:"pointer",padding:"0 10px",fontSize:11,fontWeight:700,letterSpacing:.3,fontFamily:"inherit"}}>Hoje</button>}
-          <button title="Próximo mês" onClick={()=>setOffset(o=>o+1)} style={navBtn} onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}} onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
-        </div>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div style={{textAlign:"right"}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:2,justifyContent:"flex-end"}}>
-            <span style={{color:isComplete?"#16a34a":"#0f172a",fontSize:24,fontWeight:800,letterSpacing:-.8,lineHeight:1}}>{totalGeralDone}</span>
-            <span style={{color:"#cbd5e1",fontSize:15,fontWeight:600,lineHeight:1}}>/{totalGeralMeta}</span>
+        {/* Direita — número total + anel de progresso */}
+        <div style={{display:"flex",alignItems:"center",gap:18}}>
+          <div style={{textAlign:"right"}}>
+            <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
+              <span style={{color:accentMain,fontSize:46,fontWeight:900,letterSpacing:-2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{totalDone}</span>
+              <span style={{color:"#64748b",fontSize:22,fontWeight:700,lineHeight:1}}>/{totalMeta}</span>
+            </div>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>Materiais do mês</div>
           </div>
-          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:1}}>materiais</div>
-        </div>
-        <div style={{position:"relative",width:48,height:48,flexShrink:0}}>
-          <svg width="48" height="48" viewBox="0 0 48 48" style={{transform:"rotate(-90deg)"}}>
-            <circle cx="24" cy="24" r="19" fill="none" stroke="#f1f5f9" strokeWidth="4.5"/>
-            <circle cx="24" cy="24" r="19" fill="none" stroke={isComplete?"#16a34a":"#0f172a"} strokeWidth="4.5" strokeLinecap="round" strokeDasharray={`${2*Math.PI*19}`} strokeDashoffset={`${2*Math.PI*19*(1-Math.min(pctGeral,100)/100)}`} style={{transition:"stroke-dashoffset .5s"}}/>
-          </svg>
-          <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:isComplete?"#16a34a":"#0f172a",fontSize:11,fontWeight:800}}>{pctGeral}%</div>
+          <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
+            <svg width="72" height="72" viewBox="0 0 72 72" style={{transform:"rotate(-90deg)"}}>
+              <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6"/>
+              <circle cx="36" cy="36" r="30" fill="none" stroke={accentMain} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${2*Math.PI*30}`} strokeDashoffset={`${2*Math.PI*30*(1-Math.min(pct,100)/100)}`} style={{transition:"stroke-dashoffset .6s ease-out, stroke .3s"}}/>
+            </svg>
+            <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+              <span style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{pct}<span style={{fontSize:10,color:"#cbd5e1"}}>%</span></span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+    {/* GRID DE CLIENTES */}
     {rows.length===0
-      ? <div style={{padding:"22px 16px",textAlign:"center",color:"#94a3b8",fontSize:12,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
-      : <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:8}}>
+      ? <div style={{padding:"28px 20px",background:"#fff",textAlign:"center",color:"#94a3b8",fontSize:13,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
+      : <div style={{padding:"16px",background:"#fafbfc",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
           {rows.map(r=>{
-            const pct=r.totalMeta?Math.min(100,Math.round(r.totalDone/r.totalMeta*100)):0;
+            const cpct=r.totalMeta?Math.min(100,Math.round(r.totalDone/r.totalMeta*100)):0;
             const ok=r.totalMeta&&r.totalDone>=r.totalMeta;
-            const accent=ok?"#16a34a":"#0f172a";
-            return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"11px 12px"}}>
-              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8,gap:8}}>
-                <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,minWidth:0}}>{r.name}</span>
-                <span style={{color:accent,fontSize:13,fontWeight:800,letterSpacing:-.2,flexShrink:0}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
+            const accent=ok?"#22c55e":(cpct>=70?r.color:(cpct>=40?"#f59e0b":"#ef4444"));
+            return <div key={r.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px 13px",border:"1px solid #f1f5f9",position:"relative",overflow:"hidden",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor="#e2e8f0";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#f1f5f9";}}>
+              {/* Barra lateral colorida */}
+              <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:accent,borderRadius:"0 2px 2px 0"}}/>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:6,gap:8,paddingLeft:4}}>
+                <span style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,minWidth:0}}>{r.name}</span>
+                <span style={{color:accent,fontSize:14,fontWeight:800,letterSpacing:-.3,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
               </div>
-              {r.totalMeta>0&&<div style={{width:"100%",height:3,background:"#e8edf2",borderRadius:99,overflow:"hidden",marginBottom:8}}>
-                <div style={{width:pct+"%",height:"100%",background:accent,borderRadius:99,transition:"width .35s"}}/>
+              {/* Barra */}
+              {r.totalMeta>0&&<div style={{width:"100%",height:6,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:9,marginLeft:4}}>
+                <div style={{width:cpct+"%",height:"100%",background:`linear-gradient(90deg, ${accent}, ${accent}cc)`,borderRadius:99,transition:"width .5s ease-out"}}/>
               </div>}
-              <div style={{display:"flex",gap:10}}>
+              {/* Mini-stats por tipo */}
+              <div style={{display:"flex",gap:14,paddingLeft:4}}>
                 {r.tipos.filter(tt=>tt.meta>0||tt.done>0).map(tt=>{
                   const tOk=tt.meta&&tt.done>=tt.meta;
                   return <div key={tt.l} style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:1}}>{tt.l}</div>
+                    <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:2}}>{tt.l}</div>
                     <div style={{display:"flex",alignItems:"baseline",gap:2}}>
-                      <span style={{color:tOk?"#16a34a":"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.3,lineHeight:1}}>{tt.done}</span>
-                      <span style={{color:"#cbd5e1",fontSize:11,fontWeight:600,lineHeight:1}}>/{tt.meta||"-"}</span>
+                      <span style={{color:tOk?"#22c55e":"#0f172a",fontSize:17,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{tt.done}</span>
+                      <span style={{color:"#cbd5e1",fontSize:12,fontWeight:600,lineHeight:1}}>/{tt.meta||"-"}</span>
                     </div>
                   </div>;
                 })}
@@ -11566,6 +11579,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
