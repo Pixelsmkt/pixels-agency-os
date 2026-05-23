@@ -10653,7 +10653,6 @@ function ProgressoDoMes({visible,mode="produzir"}){
               <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:accent,borderRadius:"0 2px 2px 0"}}/>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,paddingLeft:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
-                  <span style={{width:8,height:8,borderRadius:"50%",background:r.color,flexShrink:0}}/>
                   <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>{r.name}</span>
                 </div>
                 <span style={{color:accent,fontSize:14,fontWeight:800,letterSpacing:-.3,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
@@ -10675,7 +10674,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
               </div>
             </div>;
           };
-          return <div style={{padding:"14px 16px 16px",background:"#e2e8f0"}}>
+          return <div style={{padding:"14px 16px 16px",background:"#64748b"}}>
             {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:10,marginBottom:bioter.length>0?10:0}}>
               {padrao.map(renderCard)}
             </div>}
@@ -11655,6 +11654,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
