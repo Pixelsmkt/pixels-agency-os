@@ -11490,7 +11490,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     // ── Validação ANTES do setTasks (evita toast duplicado em StrictMode) ──
     const t=tasks.find(x=>x.id===id);
     if(!t){setDrag(null);setOver(null);return;}
-    // Mesma coluna primeiro — evita toast ruidoso em drag-drop sem movimento real
+    // Mesma coluna primeiro — evita toast ruidoso em drag-drop sem movimento real.
+    // "publicado" e "agendado" estão na mesma coluna visual ("Publicadas"), entao
+    // arrastar entre eles eh no-op.
+    const _statusToCol=(s)=>s==="publicado"?"agendado":s;
+    if(_statusToCol(t.status)===toColId&&toColId==="agendado"){setDrag(null);setOver(null);return;}
     if(t.status===toColId){setDrag(null);setOver(null);return;}
     if(t.status==="demanda"){
       // Copys normalmente NÃO podem ser arrastadas — saem APENAS pelo fluxo de aprovação.
@@ -11510,10 +11514,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       setDrag(null);setOver(null);
       return;
     }
-    const fromIdx=cols.findIndex(c=>c.id===t.status);
+    // Normaliza: status "publicado" eh tratado como coluna "agendado" (Publicadas)
+    const _fromColId=t.status==="publicado"?"agendado":t.status;
+    const fromIdx=cols.findIndex(c=>c.id===_fromColId);
     const toIdx=cols.findIndex(c=>c.id===toColId);
     if(fromIdx<0||toIdx<0){
-      // Diagnóstico explícito — antes falhava silenciosamente
       pixelsToast.error("Coluna inválida. Recarregue a página (F5) para sincronizar as colunas.",5000);
       setDrag(null);setOver(null);
       return;
