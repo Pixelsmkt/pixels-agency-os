@@ -9999,7 +9999,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   // Retorna cor do card baseado no status (laranja/verde/roxo)
   const getPubColor=(status)=>{
     if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"}; // 🟣 roxo
-    if(status==="aprovado"||status==="agendado")return{bg:"#eab308",border:"#fde68a",label:"Agendar"}; // 🟢 verde
+    if(status==="aprovado"||status==="agendado")return{bg:"#ec4899",border:"#fbcfe8",label:"Agendar"}; // 🟢 verde
     return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"}; // 🟠 laranja (demanda, recebida, execucao, avaliacao)
   };
 
@@ -10138,7 +10138,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:6,background:"#16a34a",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           </span>
-          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Pronto para agendar</span>
+          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Agendar</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:6,background:"#7c3aed",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
@@ -10283,11 +10283,14 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 
                           {/* Topo: chip da logo do cliente + badge de status moderno */}
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:4}}>
-                            <div style={{display:"inline-flex",alignItems:"center",background:"#fff",borderRadius:5,padding:"1px 5px",height:18,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.10)",maxWidth:"70%"}}>
-                              {hasLogo
-                                ? <img src={CLIENT_LOGOS[t.client]} alt={cl?cl.name:""} style={{height:13,maxWidth:60,objectFit:"contain",display:"block"}}/>
-                                : <span style={{color:cl?cl.color:"#0f172a",fontWeight:800,fontSize:9.5,letterSpacing:.4,lineHeight:1}}>{cl?cl.abbr:"·"}</span>
-                              }
+                            <div style={{display:"inline-flex",alignItems:"center",gap:4,flexShrink:0,maxWidth:"78%",minWidth:0}}>
+                              <div style={{display:"inline-flex",alignItems:"center",background:"#fff",borderRadius:4,padding:"1px 4px",height:15,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.10)"}}>
+                                {hasLogo
+                                  ? <img src={CLIENT_LOGOS[t.client]} alt={cl?cl.name:""} style={{height:11,maxWidth:48,objectFit:"contain",display:"block"}}/>
+                                  : <span style={{color:cl?cl.color:"#0f172a",fontWeight:800,fontSize:8.5,letterSpacing:.4,lineHeight:1}}>{cl?cl.abbr:"·"}</span>
+                                }
+                              </div>
+                              {unit&&<span title={unit.label} style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:4,padding:"1px 6px",fontSize:9.5,fontWeight:700,lineHeight:1.4,flexShrink:0,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:90}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[unit.id]||unit.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>}
                             </div>
                             <span title={isShortFromDrive?"Vídeo short (do Drive)":(pubColor.label||t.status)} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:isShortFromDrive?"#1a73e8":pubColor.bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
                               {isShortFromDrive
@@ -10313,10 +10316,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                             </div>
                           </div>
 
-                          {/* Unidade Bioter — só pra clientes Bioter (não-Bioter já tem logo identificando) */}
-                          {unit&&<div style={{color:"#fff",fontSize:isMob?9.5:10.5,fontWeight:600,whiteSpace:"nowrap",opacity:0.92,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",letterSpacing:.1}}>
-                            {unit.label.split("/")[0]}
-                          </div>}
+
                         </div>
                       );
                     })}
