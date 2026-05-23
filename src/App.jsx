@@ -10486,7 +10486,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
     const cVideo=cm.filter(t=>tipo(t)==="video"||tipo(t)==="short").length;
     const totalDone=cArte+cVideo;
     const totalMeta=metaArte+metaVideo;
-    if(totalMeta>0||totalDone>0)rows.push({id:c.id,name:c.name,color:c.color,tipos:[{l:"Arte",done:cArte,meta:metaArte},{l:"Vídeo",done:cVideo,meta:metaVideo}],totalDone,totalMeta});
+    if(totalMeta>0||totalDone>0)rows.push({id:c.id,name:c.name,color:c.color,clientLogo:c.id,tipos:[{l:"Arte",done:cArte,meta:metaArte},{l:"Vídeo",done:cVideo,meta:metaVideo}],totalDone,totalMeta});
   });
   if(typeof BIOTER_UNITS!=="undefined"){
     BIOTER_UNITS.forEach(u=>{
@@ -10636,8 +10636,14 @@ function ProgressoDoMes({visible,mode="produzir"}){
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor="#cbd5e1";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
               <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:accent,borderRadius:"0 2px 2px 0"}}/>
-              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:6,gap:8,paddingLeft:4}}>
-                <span style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,minWidth:0}}>{r.name}</span>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,paddingLeft:4}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                  {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]
+                    ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:18,maxWidth:60,objectFit:"contain",flexShrink:0}}/>
+                    : <span style={{width:8,height:8,borderRadius:"50%",background:r.color,flexShrink:0}}/>
+                  }
+                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>{r.name}</span>
+                </div>
                 <span style={{color:accent,fontSize:14,fontWeight:800,letterSpacing:-.3,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
               </div>
               {r.totalMeta>0&&<div style={{width:"100%",height:6,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:9,marginLeft:4}}>
@@ -10658,10 +10664,10 @@ function ProgressoDoMes({visible,mode="produzir"}){
             </div>;
           };
           return <div style={{padding:"14px 16px 16px",background:"#e2e8f0"}}>
-            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10,marginBottom:bioter.length>0?10:0}}>
+            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:10,marginBottom:bioter.length>0?10:0}}>
               {padrao.map(renderCard)}
             </div>}
-            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:10}}>
               {bioter.map(renderCard)}
             </div>}
           </div>;
@@ -11637,6 +11643,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
