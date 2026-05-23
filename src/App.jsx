@@ -525,28 +525,6 @@ function generateMonthPlanDates(year, month, postsConfig){
   }
   return result.sort(function(a,b){return a.date.localeCompare(b.date);});
 }
-.getMonth()===month-1&&d>=firstDay){
-        const ds=d.toISOString().slice(0,10);
-        // Ordem preferencial: collab -> foto -> short -> arte -> video
-        let type;
-        if(collabs>0){type="collab";collabs--;}
-        else if(fotos>0){type="foto";fotos--;}
-        else if(shorts>0){type="video_short";shorts--;}
-        else if(artes>=videos&&artes>0){type="arte";artes--;}
-        else if(videos>0){type="video";videos--;}
-        else if(artes>0){type="arte";artes--;}
-        else break;
-        result.push({date:ds, type:type});
-      }
-      slotIdx++;
-    }
-    weekIndex++;
-    cur.setDate(cur.getDate()+7);
-  }
-  return result.sort(function(a,b){return a.date.localeCompare(b.date);});
-}
-;
-}
 
 // ======= 00_globals.jsx =======
 // Módulo de framework: temas, perms, componentes base, navegação
