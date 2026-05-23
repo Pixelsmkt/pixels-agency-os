@@ -1841,7 +1841,7 @@ const BIOTER_UNITS = [
   { id:"castro",    label:"Castro/PR",             color:"#16a34a", abbr:"CA", pickerLabel:"Bioter Castro" },           // verde médio
   { id:"uberlandia",label:"Uberlândia/MG",         color:"#22c55e", abbr:"UB", pickerLabel:"Bioter Uberlândia" },       // verde claro
   { id:"gloria",    label:"Glória de Dourados/MS", color:"#4a8c1c", abbr:"GD", pickerLabel:"Bioter Glória de Dourados" }, // verde brand Bioter (olive)
-  { id:"paraguay",  label:"Bioter Paraguay 🇵🇾",  color:"#65a30d", abbr:"PY", pickerLabel:"Bioter Paraguay" },         // verde lime
+  { id:"paraguay",  label:"Bioter Paraguay",  color:"#65a30d", abbr:"PY", pickerLabel:"Bioter Paraguay" },         // verde lime
 ];
 
 /* ─── MIND MAP COMPONENT (MindMeister-style) ── */
@@ -11658,7 +11658,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         {(()=>{
           const now=new Date();
           const monthStr=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-          const STS=["execucao","ajustes","avaliacao","aprovado","agendado","publicado"];
+          const STS=["execucao","ajustes","avaliacao","aprovado","agendado"];
           function wks(y,m){let c=0;const d=new Date(y,m-1,1);while(d.getMonth()===m-1){if(d.getDay()===1)c++;d.setDate(d.getDate()+1);}return c||4;}
           const weeks=wks(now.getFullYear(),now.getMonth()+1);
           function req(id){const c=getPostsConfig(id);return ((c.arte||0)+(c.video||0)+(c.collab||0))*weeks;}
