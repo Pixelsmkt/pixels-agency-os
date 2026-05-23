@@ -11416,6 +11416,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
@@ -11828,16 +11829,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
         </div>}
 
-        {/* ── Progresso do mês — separado por tipo (artes / vídeos / fotos / shorts / collabs) ── */}
+        {/* ── Progresso do mês — visual minimalista ── */}
         {(()=>{
           const now=new Date();
           const monthStr=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-          const monthLabel=now.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+          const monthLabel=now.toLocaleDateString("pt-BR",{month:"long"});
           const STS=["execucao","ajustes","avaliacao","aprovado","agendado","publicado"];
           function wks(y,m){let c=0;const d=new Date(y,m-1,1);while(d.getMonth()===m-1){if(d.getDay()===1)c++;d.setDate(d.getDate()+1);}return c||4;}
           const weeks=wks(now.getFullYear(),now.getMonth()+1);
           function inMonth(t){if(t.referenceMonth)return t.referenceMonth===monthStr;if(t.publishDate){const d=new Date(t.publishDate);return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();}return true;}
-          // Detecta tipo do card (por contentType ou titulo)
           function tipo(t){
             const ct=String(t.contentType||t.tipo||"").toLowerCase();
             if(ct==="arte"||ct==="carrossel")return "arte";
@@ -11856,38 +11856,28 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             const u=String(t.bioterUnit||"").split(",").map(s=>s.trim());
             return u.indexOf("grupo")>=0||u.indexOf("brasil")>=0;
           }
-          // Constroi linhas por cliente/unidade
           const rows=[];
-          // Padrao (nao Bioter)
           CLIENTS.filter(c=>c.id!=="bioter"&&c.id!=="pixels"&&c.status!=="interno").forEach(c=>{
-            const cardsDoMes=visible.filter(t=>t.client===c.id&&STS.indexOf(t.status)>=0&&inMonth(t));
+            const cm=visible.filter(t=>t.client===c.id&&STS.indexOf(t.status)>=0&&inMonth(t));
             const cfg=(typeof getPostsConfig==="function")?getPostsConfig(c.id):{arte:1,video:1};
             const metaArte=(cfg.arte||0)*weeks;
             const metaVideo=(cfg.video||0)*weeks;
-            const cArte=cardsDoMes.filter(t=>tipo(t)==="arte").length;
-            const cVideo=cardsDoMes.filter(t=>tipo(t)==="video"||tipo(t)==="short").length;
+            const cArte=cm.filter(t=>tipo(t)==="arte").length;
+            const cVideo=cm.filter(t=>tipo(t)==="video"||tipo(t)==="short").length;
             const totalDone=cArte+cVideo;
             const totalMeta=metaArte+metaVideo;
-            if(totalMeta>0||totalDone>0){
-              rows.push({id:c.id,name:c.name,color:c.color,tipos:[
-                {label:"Artes",done:cArte,meta:metaArte,color:"#a140ff"},
-                {label:"Vídeos",done:cVideo,meta:metaVideo,color:"#0284c7"},
-              ],totalDone,totalMeta});
-            }
+            if(totalMeta>0||totalDone>0)rows.push({id:c.id,name:c.name,kind:"padrao",tipos:[{l:"arte",done:cArte,meta:metaArte},{l:"vídeo",done:cVideo,meta:metaVideo}],totalDone,totalMeta});
           });
-          // Bioter — por unidade
           if(typeof BIOTER_UNITS!=="undefined"){
             BIOTER_UNITS.forEach(u=>{
               const cfg=(typeof getPostsConfig==="function")?getPostsConfig("bioter_"+u.id):null;
               if(!cfg)return;
-              // Cards individuais (nao collab) endereçados a essa unidade
               const cardsUnit=visible.filter(t=>{
                 if(t.client!=="bioter"||STS.indexOf(t.status)<0||!inMonth(t))return false;
                 if(isCollabCard(t))return false;
                 const us=String(t.bioterUnit||"").split(",").map(s=>s.trim()).filter(Boolean);
                 return us.indexOf(u.id)>=0;
               });
-              // Cards collab — contados separadamente, soh uma vez no widget mas associados a cada unidade coberta
               const cardsCollab=visible.filter(t=>{
                 if(t.client!=="bioter"||STS.indexOf(t.status)<0||!inMonth(t))return false;
                 if(!isCollabCard(t))return false;
@@ -11896,21 +11886,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 if(us.indexOf("brasil")>=0&&u.id!=="paraguay")return true;
                 return false;
               });
-              const cArte=cardsUnit.filter(t=>tipo(t)==="arte"||tipo(t)==="video").length;
               const cFoto=cardsUnit.filter(t=>tipo(t)==="foto").length;
               const cShort=cardsUnit.filter(t=>tipo(t)==="short").length;
+              const cExtra=cardsUnit.filter(t=>tipo(t)==="arte"||tipo(t)==="video").length;
               const cCollab=cardsCollab.length;
               const metaCollab=(cfg.collab||0)*weeks;
               const metaFoto=(cfg.foto||0)*weeks + (cfg.fotoOrShortAlternado?Math.ceil(weeks/2):0);
               const metaShort=(cfg.videoShort||0)*weeks + (cfg.fotoOrShortAlternado?Math.floor(weeks/2):0);
-              const totalDone=cCollab+cFoto+cShort+cArte;
+              const totalDone=cCollab+cFoto+cShort+cExtra;
               const totalMeta=metaCollab+metaFoto+metaShort;
               if(totalMeta>0||totalDone>0){
-                rows.push({id:"bioter_"+u.id,name:"Bioter — "+(({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.split("/")[0]),color:u.color,tipos:[
-                  {label:"Collab",done:cCollab,meta:metaCollab,color:"#3b82f6"},
-                  {label:"Fotos",done:cFoto,meta:metaFoto,color:"#ea580c"},
-                  {label:"Shorts",done:cShort,meta:metaShort,color:"#dc2626"},
-                ],totalDone,totalMeta});
+                const cityName=({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.split("/")[0];
+                rows.push({id:"bioter_"+u.id,name:"Bioter "+cityName,kind:"bioter",tipos:[{l:"collab",done:cCollab,meta:metaCollab},{l:"foto",done:cFoto,meta:metaFoto},{l:"short",done:cShort,meta:metaShort}],totalDone,totalMeta});
               }
             });
           }
@@ -11918,42 +11905,58 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           const totalGeralDone=rows.reduce((s,r)=>s+r.totalDone,0);
           const totalGeralMeta=rows.reduce((s,r)=>s+r.totalMeta,0);
           const pctGeral=totalGeralMeta?Math.round(totalGeralDone/totalGeralMeta*100):0;
-          return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",marginBottom:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
-            {/* Header */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,paddingBottom:10,borderBottom:"1px solid #f1f5f9"}}>
-              <div>
-                <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>Progresso do mês</div>
-                <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,textTransform:"capitalize",marginTop:1}}>{monthLabel}</div>
+          const isComplete=pctGeral>=100;
+          return <div style={{background:"#fff",border:"1px solid #e8edf2",borderRadius:14,padding:0,marginBottom:12,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden"}}>
+            {/* HEADER */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 18px",borderBottom:"1px solid #f1f5f9"}}>
+              <div style={{minWidth:0}}>
+                <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:2}}>Progresso do mês</div>
+                <div style={{color:"#0f172a",fontSize:18,fontWeight:700,letterSpacing:-.3,textTransform:"capitalize"}}>{monthLabel}</div>
               </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{color:pctGeral>=100?"#16a34a":"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4}}>{totalGeralDone}<span style={{color:"#94a3b8",fontWeight:600,fontSize:14}}>/{totalGeralMeta}</span></div>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>{pctGeral}% total</div>
+              <div style={{display:"flex",alignItems:"baseline",gap:10}}>
+                <div style={{textAlign:"right"}}>
+                  <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
+                    <span style={{color:isComplete?"#16a34a":"#0f172a",fontSize:28,fontWeight:800,letterSpacing:-1,lineHeight:1}}>{totalGeralDone}</span>
+                    <span style={{color:"#cbd5e1",fontSize:18,fontWeight:600,lineHeight:1}}>/{totalGeralMeta}</span>
+                  </div>
+                  <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:2}}>materiais</div>
+                </div>
+                {/* Anel de progresso */}
+                <div style={{position:"relative",width:54,height:54,flexShrink:0}}>
+                  <svg width="54" height="54" viewBox="0 0 54 54" style={{transform:"rotate(-90deg)"}}>
+                    <circle cx="27" cy="27" r="22" fill="none" stroke="#f1f5f9" strokeWidth="5"/>
+                    <circle cx="27" cy="27" r="22" fill="none" stroke={isComplete?"#16a34a":"#0f172a"} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${2*Math.PI*22}`} strokeDashoffset={`${2*Math.PI*22*(1-Math.min(pctGeral,100)/100)}`} style={{transition:"stroke-dashoffset .5s"}}/>
+                  </svg>
+                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",color:isComplete?"#16a34a":"#0f172a",fontSize:12,fontWeight:800}}>{pctGeral}%</div>
+                </div>
               </div>
             </div>
-            {/* Linhas por cliente */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:8}}>
+            {/* GRID DE CLIENTES */}
+            <div style={{padding:"12px 14px",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:8}}>
               {rows.map(r=>{
                 const pct=r.totalMeta?Math.min(100,Math.round(r.totalDone/r.totalMeta*100)):0;
                 const ok=r.totalMeta&&r.totalDone>=r.totalMeta;
-                return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 11px"}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-                    <div style={{display:"inline-flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
-                      <span style={{width:8,height:8,borderRadius:"50%",background:r.color,flexShrink:0}}/>
-                      <span style={{color:"#0f172a",fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.name}</span>
-                    </div>
-                    <span style={{color:ok?"#16a34a":"#475569",fontSize:11,fontWeight:800,flexShrink:0,marginLeft:6}}>{r.totalDone}/{r.totalMeta||"-"}</span>
+                const accent=ok?"#16a34a":"#0f172a";
+                return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"11px 12px",transition:"border-color .15s"}}>
+                  <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8,gap:8}}>
+                    <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,minWidth:0}}>{r.name}</span>
+                    <span style={{color:accent,fontSize:13,fontWeight:800,letterSpacing:-.2,flexShrink:0}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
                   </div>
-                  {/* Barra geral */}
-                  {r.totalMeta>0&&<div style={{width:"100%",height:3,background:"#e2e8f0",borderRadius:99,overflow:"hidden",marginBottom:7}}>
-                    <div style={{width:pct+"%",height:"100%",background:ok?"#16a34a":r.color,borderRadius:99,transition:"width .3s"}}/>
+                  {/* Barra */}
+                  {r.totalMeta>0&&<div style={{width:"100%",height:3,background:"#e8edf2",borderRadius:99,overflow:"hidden",marginBottom:8}}>
+                    <div style={{width:pct+"%",height:"100%",background:accent,borderRadius:99,transition:"width .35s"}}/>
                   </div>}
-                  {/* Chips por tipo */}
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                  {/* Tipos */}
+                  <div style={{display:"flex",gap:10}}>
                     {r.tipos.filter(tt=>tt.meta>0||tt.done>0).map(tt=>{
                       const tOk=tt.meta&&tt.done>=tt.meta;
-                      return <span key={tt.label} style={{display:"inline-flex",alignItems:"center",gap:4,background:tt.color+"15",color:tt.color,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>
-                        {tt.label} <span style={{color:tOk?"#16a34a":tt.color,fontWeight:800}}>{tt.done}/{tt.meta||"-"}</span>
-                      </span>;
+                      return <div key={tt.l} style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:1}}>{tt.l}</div>
+                        <div style={{display:"flex",alignItems:"baseline",gap:2}}>
+                          <span style={{color:tOk?"#16a34a":"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.3,lineHeight:1}}>{tt.done}</span>
+                          <span style={{color:"#cbd5e1",fontSize:11,fontWeight:600,lineHeight:1}}>/{tt.meta||"-"}</span>
+                        </div>
+                      </div>;
                     })}
                   </div>
                 </div>;
