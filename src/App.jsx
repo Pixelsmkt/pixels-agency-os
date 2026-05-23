@@ -10506,9 +10506,19 @@ function ProgressoDoMes({visible,mode="produzir"}){
         if(us.indexOf("brasil")>=0&&u.id!=="paraguay")return true;
         return false;
       });
+      // Cards individuais (nao-collab) classificados por tipo
       const cFoto=cardsUnit.filter(t=>tipo(t)==="foto").length;
       const cShort=cardsUnit.filter(t=>tipo(t)==="short").length;
-      const cExtra=cardsUnit.filter(t=>tipo(t)==="arte"||tipo(t)==="video").length;
+      const cArteIndiv=cardsUnit.filter(t=>tipo(t)==="arte").length;
+      const cVideoIndiv=cardsUnit.filter(t=>tipo(t)==="video").length;
+      // Mode "produzir": collabs sao classificados como Arte/Video conforme o contentType
+      const cArteCollab=cardsCollab.filter(t=>tipo(t)==="arte").length;
+      const cVideoCollab=cardsCollab.filter(t=>tipo(t)==="video").length;
+      // Total Arte e Video pra mode produzir = individual + collab
+      const cArteTotal=cArteIndiv+cArteCollab;
+      const cVideoTotal=cVideoIndiv+cVideoCollab;
+      // cExtra fica como soma de arte+video individuais (pra mode publicar)
+      const cExtra=cArteIndiv+cVideoIndiv;
       const cCollab=cardsCollab.length;
       const metaCollab=(cfg.collab||0)*weeks;
       const metaFoto=(cfg.foto||0)*weeks + (cfg.fotoOrShortAlternado?Math.ceil(weeks/2):0);
@@ -10610,7 +10620,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
     {/* GRID DE CLIENTES */}
     {rows.length===0
       ? <div style={{padding:"28px 20px",background:"#fff",textAlign:"center",color:"#94a3b8",fontSize:13,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
-      : <div style={{padding:"16px",background:"#f1f5f9",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+      : <div style={{padding:"16px",background:"#e2e8f0",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
           {rows.map(r=>{
             const cpct=r.totalMeta?Math.min(100,Math.round(r.totalDone/r.totalMeta*100)):0;
             const ok=r.totalMeta&&r.totalDone>=r.totalMeta;
@@ -11615,6 +11625,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
