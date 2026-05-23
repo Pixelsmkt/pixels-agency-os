@@ -1925,10 +1925,6 @@ const CLIENT_MINDMAP = {
     ]
   },
 };
-"d",label:"Tecnologia no campo"}]},
-    ]
-  },
-};
 
 // ======= 01_dashboard.jsx =======
 
