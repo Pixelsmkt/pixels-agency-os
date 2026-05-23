@@ -10450,16 +10450,28 @@ function ProgressoDoMes({visible,mode="produzir"}){
   const monthStr=cur.getFullYear()+"-"+String(cur.getMonth()+1).padStart(2,"0");
   const monthLabel=cur.toLocaleDateString("pt-BR",{month:"long"});
   const yearLabel=cur.getFullYear();
-  const STS=["execucao","ajustes","avaliacao","aprovado","agendado","publicado"];
+  const STS=["recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado"];
   const weeks=4;
   function inMonth(t){
-    // Prioridade: publishDate (data real de entrega) > referenceMonth (orcamento)
+    // Prioridade: publishDate > referenceMonth > createdAt > mes atual
     if(t.publishDate){
       const d=new Date(t.publishDate);
       return d.getFullYear()===cur.getFullYear()&&d.getMonth()===cur.getMonth();
     }
     if(t.referenceMonth)return t.referenceMonth===monthStr;
-    return offset===0; // sem data: so no mes atual
+    if(t.createdAt){
+      let d=null;
+      if(/^\d{2}\/\d{2}\/\d{4}$/.test(t.createdAt)){
+        const p=t.createdAt.split("/");
+        d=new Date(parseInt(p[2],10),parseInt(p[1],10)-1,parseInt(p[0],10));
+      }else{
+        d=new Date(t.createdAt);
+      }
+      if(d&&!isNaN(d.getTime())){
+        return d.getFullYear()===cur.getFullYear()&&d.getMonth()===cur.getMonth();
+      }
+    }
+    return offset===0;
   }
   function tipo(t){
     // Detecta APENAS pelo contentType setado — sem fallback por titulo
@@ -10815,7 +10827,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
       startDate:new Date().toISOString().split("T")[0],deadline,
       completedAt:null,score:null,tags:[...(aiResult.tags||[]),"pixels-ia"],
       comments:[{id:Date.now(),user:"Pixels IA",av:"⚡",color:C.a,text:`💡 Ideia: "${idea||"Áudio enviado"}"`,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}],
-      files:[],cover:C.a,deletedAt:null,bioterUnit:null,isAlteracao:false,ajustar:false,caption:"",publishDate:"",publishTime:"09:00",checklist:[],timeline:[{type:"created",label:"Demanda criada via Pixels IA",atFmt:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name}],colEnteredAt:new Date().toISOString(),createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:CURRENT_USER.name
+      files:[],cover:C.a,deletedAt:null,bioterUnit:null,isAlteracao:false,ajustar:false,caption:"",publishDate:"",publishTime:"09:00",referenceMonth:(new Date()).getFullYear()+"-"+String((new Date()).getMonth()+1).padStart(2,"0"),checklist:[],timeline:[{type:"created",label:"Demanda criada via Pixels IA",atFmt:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name}],colEnteredAt:new Date().toISOString(),createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:CURRENT_USER.name
     };
     const cards=[];
     if(recipient==="ellen"||recipient==="both") cards.push({...base,id:mkId(),assignee:"ellen",title:`[Hellen] ${base.title}`,tags:[...base.tags,"social"]});
@@ -11553,7 +11565,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       startDate:now.toISOString().split("T")[0],
       deadline:new Date(Date.now()+7*86400000).toISOString().split("T")[0],
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
-      deletedAt:null,bioterUnit:null,
+      deletedAt:null,bioterUnit:null,referenceMonth:(new Date()).getFullYear()+"-"+String((new Date()).getMonth()+1).padStart(2,"0"),  // auto referenceMonth
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:activeUserName,
       timeline:[{type:"created",label:`Demanda criada por ${activeUserName} → ${TEAM.find(u=>u.id===respId)?.name||respId}`,atFmt:nowFmt,user:activeUserName}],
@@ -11658,6 +11670,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
