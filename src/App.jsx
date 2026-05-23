@@ -10511,6 +10511,18 @@ function ProgressoDoMes({visible,mode="produzir"}){
       const cShort=cardsUnit.filter(t=>tipo(t)==="short").length;
       const cArteIndiv=cardsUnit.filter(t=>tipo(t)==="arte").length;
       const cVideoIndiv=cardsUnit.filter(t=>tipo(t)==="video").length;
+      const cArteCollab=cardsCollab.filter(t=>tipo(t)==="arte").length;
+      const cVideoCollab=cardsCollab.filter(t=>tipo(t)==="video").length;
+      const cArteTotal=cArteIndiv+cArteCollab;
+      const cVideoTotal=cVideoIndiv+cVideoCollab;
+      const cCollab=cardsCollab.length;
+      const metaCollab=(cfg.collab||0)*weeks;
+      const metaFoto=(cfg.foto||0)*weeks + (cfg.fotoOrShortAlternado?Math.ceil(weeks/2):0);
+      const metaShort=(cfg.videoShort||0)*weeks + (cfg.fotoOrShortAlternado?Math.floor(weeks/2):0);
+      const totalDone=cCollab+cFoto+cShort+cArteIndiv+cVideoIndiv;
+      const totalMeta=metaCollab+metaFoto+metaShort;
+      if(totalMeta>0||totalDone>0){
+        const cityName=({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.split("/")[0];
         // Categorias por mode — Foto de obra em ambos; produzir omite Collab e Short
         const _tipos=mode==="publicar"?[
           {l:"Arte",done:cArteIndiv,meta:0},
@@ -11637,6 +11649,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
