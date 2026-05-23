@@ -10647,20 +10647,19 @@ function ProgressoDoMes({visible,mode="produzir"}){
             const cpct=r.totalMeta?Math.min(100,Math.round(r.totalDone/r.totalMeta*100)):0;
             const ok=r.totalMeta&&r.totalDone>=r.totalMeta;
             const accent=ok?"#22c55e":(cpct>=70?r.color:(cpct>=40?"#f59e0b":"#ef4444"));
-            return <div key={r.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px 13px",border:"1px solid #e2e8f0",position:"relative",overflow:"hidden",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor="#cbd5e1";}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
-              <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:accent,borderRadius:"0 2px 2px 0"}}/>
+            return <div key={r.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px 13px",border:"1px solid #e2e8f0",boxShadow:"0 2px 6px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04)",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(15,23,42,0.12), 0 2px 4px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#cbd5e1";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 6px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e2e8f0";}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,gap:8,paddingLeft:4}}>
                 <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
                   <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0}}>{r.name}</span>
                 </div>
                 <span style={{color:accent,fontSize:14,fontWeight:800,letterSpacing:-.3,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
               </div>
-              {r.totalMeta>0&&<div style={{width:"100%",height:6,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:9,marginLeft:4}}>
+              {r.totalMeta>0&&<div style={{width:"100%",height:6,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:9}}>
                 <div style={{width:cpct+"%",height:"100%",background:`linear-gradient(90deg, ${accent}, ${accent}cc)`,borderRadius:99,transition:"width .5s ease-out"}}/>
               </div>}
-              <div style={{display:"flex",gap:14,paddingLeft:4}}>
+              <div style={{display:"flex",gap:14}}>
                 {r.tipos.filter(tt=>tt.meta>0||tt.done>0).map(tt=>{
                   const tOk=tt.meta&&tt.done>=tt.meta;
                   return <div key={tt.l} style={{flex:1,minWidth:0}}>
@@ -11678,6 +11677,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
@@ -12282,7 +12282,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       };
                       const ct=types[t.contentType];
                       if(!ct)return null;
-                      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                           {ct.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
                           {ct.icon==="layers"&&<><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>}
@@ -12300,7 +12300,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       const mn=monthNames[parseInt(parts[1],10)-1];
                       const yy=parts[0].slice(-2);
                       if(!mn)return null;
-                      return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:700,letterSpacing:.3,whiteSpace:"nowrap"}}>
+                      return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/></svg>
                         {mn}/{yy}
                       </span>;
