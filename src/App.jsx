@@ -10303,62 +10303,6 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   );
 }
 
-                          {/* Unidade Bioter — só pra clientes Bioter (não-Bioter já tem logo identificando) */}
-                          {unit&&<div style={{color:"#fff",fontSize:isMob?9.5:10.5,fontWeight:600,whiteSpace:"nowrap",opacity:0.92,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",letterSpacing:.1}}>
-                            {unit.label.split("/")[0]}
-                          </div>}
-                        </div>
-                      );
-                    })}
-                    {dayTasks.length>(isMob?2:3)&&(
-                      <div style={{color:"#94a3b8",fontSize:10,textAlign:"center",fontWeight:600,marginTop:2}}>
-                        +{dayTasks.length-(isMob?2:3)} mais
-                      </div>
-                    )}
-                  </div>
-                </>)}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Aviso sem agendamentos ── */}
-      {tasksThisMonth.length===0&&(
-        <div style={{background:"#fff",borderRadius:14,padding:"40px",textAlign:"center",border:"1px dashed #cbd5e1"}}>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,marginBottom:6}}>Nenhuma publicação agendada</div>
-          <div style={{color:"#64748b",fontSize:12}}>
-            {filterClient!=="todos"
-              ?`Sem agendamentos para ${CLIENTS.find(c=>c.id===filterClient)?.name||"este cliente"} em ${MONTHS[calMonth.getMonth()]}.`
-              :`Nenhum conteúdo agendado em ${MONTHS[calMonth.getMonth()]}. Mova cards para "Publicações" e defina a data.`
-            }
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal do card ── */}
-      {openCard&&(
-        <CardModal
-          task={openCard}
-          tasks={tasks}
-          setTasks={setTasks}
-          onClose={()=>setOpenCard(null)}
-          currentUser={CURRENT_USER}
-          cardPerms={{verBriefingCard:true}}
-        />
-      )}
-    </div>
-  );
-}
-ingCard:true}}
-        />
-      )}
-    </div>
-  );
-}
-;
-}
-
 // ======= 04_demandas.jsx =======
 
 // Dropdown de filtro — definido fora do render para manter estado entre renders
