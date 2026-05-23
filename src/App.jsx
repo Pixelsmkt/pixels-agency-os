@@ -9873,16 +9873,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       // Detecta tipo do card POR contentType OU titulo (cards "Foto de obra" sem
       // contentType viram tipo "foto" pra nao caírem em collab/fallback).
       const _detectType=function(t){
+        // SO contentType — sem fallback por titulo (evita falso positivo)
         const ct=(t.contentType||t.tipo||"").toLowerCase();
         if(ct==="arte"||ct==="carrossel")return "arte";
-        if(ct==="video"||ct==="vídeo")return "video";
+        if(ct==="video"||ct==="vídeo"||ct==="corte")return "video";
         if(ct==="foto")return "foto";
         if(ct==="video_short")return "video_short";
-        const title=String(t.title||"").toLowerCase();
-        if(/foto\s+de\s+obra|^foto\b|obra\s+(?:finaliz|conclu)/i.test(title))return "foto";
-        if(/short|reels?\b/i.test(title))return "video_short";
-        if(/carrossel|carousel/i.test(title))return "arte";
-        if(/v[íi]deo|reels?/i.test(title))return "video";
         return "";
       };
       // Collab SO aceita cards arte/carrossel/video EXPLICITOS (sem ambiguidade).
@@ -10308,7 +10304,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                       const stIsDone=t.status==="aprovado"||t.status==="agendado";
                       const stIsPub=t.status==="publicado";
                       const hasLogo=typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[t.client];
-                      const isShortFromDrive=t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short"||/^Short\s*[—-]/.test(t.title||"");
+                      const isShortFromDrive=t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short";
                       return(
                         <div key={t.id} onClick={()=>setOpenCard(t)}
                           draggable={true}
@@ -10466,16 +10462,13 @@ function ProgressoDoMes({visible,mode="produzir"}){
     return offset===0; // sem data: so no mes atual
   }
   function tipo(t){
+    // Detecta APENAS pelo contentType setado — sem fallback por titulo
+    // (evita falsos positivos tipo "Lagoa de estabilização" virar foto)
     const ct=String(t.contentType||t.tipo||"").toLowerCase();
     if(ct==="arte"||ct==="carrossel")return "arte";
-    if(ct==="video"||ct==="vídeo")return "video";
+    if(ct==="video"||ct==="vídeo"||ct==="corte")return "video";
     if(ct==="foto")return "foto";
     if(ct==="video_short")return "short";
-    const ti=String(t.title||"").toLowerCase();
-    if(/foto\s+de\s+obra|^foto\b|obra\s+(?:finaliz|conclu)/i.test(ti))return "foto";
-    if(/short|reels?\b/i.test(ti))return "short";
-    if(/carrossel/i.test(ti))return "arte";
-    if(/v[íi]deo/i.test(ti))return "video";
     return "outro";
   }
   function isCollabCard(t){
@@ -11622,6 +11615,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
