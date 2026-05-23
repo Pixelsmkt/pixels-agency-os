@@ -10555,7 +10555,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
   const pctProduzir=totalProduzirMeta?Math.round(totalProduzirDone/totalProduzirMeta*100):0;
   const pctPublicar=totalPublicarMeta?Math.round(totalPublicarDone/totalPublicarMeta*100):0;
   const isComplete=pctProduzir>=100&&totalProduzirMeta>0;
-  const accentMain=isComplete?"#22c55e":(pctProduzir>=70?"#0f172a":(pctProduzir>=40?"#f59e0b":"#ef4444"));
+  const accentMain=isComplete?"#22c55e":(pctProduzir>=70?"#fff":(pctProduzir>=40?"#fbbf24":"#f87171"));
   return <div style={{borderRadius:18,marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.06),0 8px 24px rgba(15,23,42,0.04)"}}>
     {/* HERO HEADER — gradiente escuro */}
     <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",padding:"22px 24px",position:"relative",overflow:"hidden"}}>
@@ -10610,12 +10610,12 @@ function ProgressoDoMes({visible,mode="produzir"}){
     {/* GRID DE CLIENTES */}
     {rows.length===0
       ? <div style={{padding:"28px 20px",background:"#fff",textAlign:"center",color:"#94a3b8",fontSize:13,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
-      : <div style={{padding:"16px",background:"#fafbfc",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+      : <div style={{padding:"16px",background:"#f1f5f9",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
           {rows.map(r=>{
             const cpct=r.totalMeta?Math.min(100,Math.round(r.totalDone/r.totalMeta*100)):0;
             const ok=r.totalMeta&&r.totalDone>=r.totalMeta;
             const accent=ok?"#22c55e":(cpct>=70?r.color:(cpct>=40?"#f59e0b":"#ef4444"));
-            return <div key={r.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px 13px",border:"1px solid #f1f5f9",position:"relative",overflow:"hidden",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
+            return <div key={r.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px 13px",border:"1px solid #e2e8f0",position:"relative",overflow:"hidden",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor="#e2e8f0";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#f1f5f9";}}>
               {/* Barra lateral colorida */}
@@ -11615,6 +11615,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
