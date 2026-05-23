@@ -9780,6 +9780,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
+  const [ctxMenu,setCtxMenu]=useState(null); // {x,y,task} pro menu botao-direito
   const [genConfirm,setGenConfirm]=useState(null);
   // Snapshot pra UNDO do último "Aplicar datas" — guarda os publishDates anteriores
   const [lastApplySnapshot,setLastApplySnapshot]=useState(null);
@@ -10252,11 +10253,13 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                       const stIsDone=t.status==="aprovado"||t.status==="agendado";
                       const stIsPub=t.status==="publicado";
                       const hasLogo=typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[t.client];
+                      const isShortFromDrive=t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short"||/^Short\s*[—-]/.test(t.title||"");
                       return(
                         <div key={t.id} onClick={()=>setOpenCard(t)}
                           draggable={true}
                           onDragStart={function(e){setDragTaskId(t.id);if(e.dataTransfer)e.dataTransfer.effectAllowed="move";}}
                           onDragEnd={function(){setDragTaskId(null);setDropDayId(null);}}
+                          onContextMenu={function(e){e.preventDefault();e.stopPropagation();setCtxMenu({x:e.clientX,y:e.clientY,task:t});}}
                           style={{
                             background:cardColor,
                             borderRadius:8,
@@ -10279,8 +10282,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                                 : <span style={{color:cl?cl.color:"#0f172a",fontWeight:800,fontSize:9.5,letterSpacing:.4,lineHeight:1}}>{cl?cl.abbr:"·"}</span>
                               }
                             </div>
-                            <span title={t.fromDrive?"Vídeo do Drive":(pubColor.label||t.status)} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:t.fromDrive?"#1a73e8":pubColor.bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
-                              {t.fromDrive
+                            <span title={isShortFromDrive?"Vídeo short (do Drive)":(pubColor.label||t.status)} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:isShortFromDrive?"#1a73e8":pubColor.bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
+                              {isShortFromDrive
                                 ? <svg width="12" height="12" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#fff"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#fff"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#fff"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#fff"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#fff"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#fff"/></svg>
                                 : stIsPub
                                   ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
@@ -10335,6 +10338,39 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           </div>
         </div>
       )}
+
+      {/* ── Context Menu (botao direito) ── */}
+      {ctxMenu&&<>
+        <div onClick={function(){setCtxMenu(null);}} onContextMenu={function(e){e.preventDefault();setCtxMenu(null);}}
+          style={{position:"fixed",inset:0,zIndex:999998}}/>
+        <div style={{position:"fixed",left:Math.min(ctxMenu.x,window.innerWidth-180),top:Math.min(ctxMenu.y,window.innerHeight-100),background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:5,minWidth:160,boxShadow:"0 8px 24px rgba(0,0,0,0.18)",zIndex:999999,fontFamily:"'Inter',system-ui,sans-serif"}}>
+          <button onClick={function(){
+            const t=ctxMenu.task;
+            const newId=(t.client||"")+"-dup-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+            const dup=Object.assign({},t,{id:newId,publishDate:"",publishTime:"",createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"Sistema"),timeline:[{type:"created",label:"Duplicado do card #"+t.id,atFmt:new Date().toLocaleDateString("pt-BR"),user:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"Sistema")}]});
+            setTasks(function(prev){return (prev||[]).concat([dup]);});
+            if(typeof pixelsToast!=="undefined")pixelsToast.success("Card duplicado.");
+            setCtxMenu(null);
+          }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:"none",border:"none",padding:"8px 12px",borderRadius:7,fontSize:12.5,fontWeight:500,color:"#0f172a",cursor:"pointer",textAlign:"left"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Duplicar card
+          </button>
+          <button onClick={function(){
+            const t=ctxMenu.task;
+            if(!window.confirm("Mover este card pra lixeira? (fica 30 dias)"))return;
+            setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{deletedAt:new Date().toISOString()}):x;});});
+            if(typeof pixelsToast!=="undefined")pixelsToast.success("Card movido pra lixeira (30 dias).");
+            setCtxMenu(null);
+          }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:"none",border:"none",padding:"8px 12px",borderRadius:7,fontSize:12.5,fontWeight:500,color:"#dc2626",cursor:"pointer",textAlign:"left"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Excluir card
+          </button>
+        </div>
+      </>}
 
       {/* ── Modal do card ── */}
       {openCard&&(
