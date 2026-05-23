@@ -10666,22 +10666,6 @@ function ProgressoDoMes({visible,mode="produzir"}){
             </div>}
           </div>;
         })()}
-              {/* Mini-stats por tipo */}
-              <div style={{display:"flex",gap:14,paddingLeft:4}}>
-                {r.tipos.filter(tt=>tt.meta>0||tt.done>0).map(tt=>{
-                  const tOk=tt.meta&&tt.done>=tt.meta;
-                  return <div key={tt.l} style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:2}}>{tt.l}</div>
-                    <div style={{display:"flex",alignItems:"baseline",gap:2}}>
-                      <span style={{color:tOk?"#22c55e":"#0f172a",fontSize:17,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{tt.done}</span>
-                      <span style={{color:"#cbd5e1",fontSize:12,fontWeight:600,lineHeight:1}}>/{tt.meta||"-"}</span>
-                    </div>
-                  </div>;
-                })}
-              </div>
-            </div>;
-          })}
-        </div>}
   </div>;
 }
 
@@ -11653,6 +11637,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
