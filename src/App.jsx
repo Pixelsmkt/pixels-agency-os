@@ -9870,8 +9870,13 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       // Separar por tipo: collab = card de Grupo Bioter ou Bioter Brasil
       // (vale pra qualquer unidade Bioter coberta), demais = cards normais
       const isCollabFn=(typeof isBioterCollabCard==="function")?isBioterCollabCard:function(){return false;};
-      const collabs=cards.filter(function(t){return isCollabFn(t);});
-      const naoCollabs=cards.filter(function(t){return !isCollabFn(t);});
+      // Collab SO aceita arte/carrossel/video normal — nao pode ser foto-de-obra nem short
+      const isCollabValidType=function(t){
+        const ct=(t.contentType||t.tipo||"");
+        return ct===""||ct==="arte"||ct==="carrossel"||ct==="video";
+      };
+      const collabs=cards.filter(function(t){return isCollabFn(t)&&isCollabValidType(t);});
+      const naoCollabs=cards.filter(function(t){return !isCollabFn(t)||!isCollabValidType(t);});
       const artes=naoCollabs.filter(function(t){return _isArteType(t.contentType);});
       const videos=naoCollabs.filter(function(t){return _isVideoType(t.contentType);});
       const fotos=naoCollabs.filter(function(t){return _isFotoType(t.contentType);});
@@ -11376,6 +11381,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
