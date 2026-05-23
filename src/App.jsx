@@ -10620,24 +10620,52 @@ function ProgressoDoMes({visible,mode="produzir"}){
     {/* GRID DE CLIENTES */}
     {rows.length===0
       ? <div style={{padding:"28px 20px",background:"#fff",textAlign:"center",color:"#94a3b8",fontSize:13,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
-      : <div style={{padding:"16px",background:"#e2e8f0",display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
-          {rows.map(r=>{
+      : (()=>{
+          const principais=["chapeco","castro","toledo"];
+          const filiais=["gloria","paraguay","uberlandia"];
+          const padrao=rows.filter(r=>!r.id.startsWith("bioter_")).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+          const bioterRows=rows.filter(r=>r.id.startsWith("bioter_"));
+          const bPrinc=bioterRows.filter(r=>principais.indexOf(r.id.replace("bioter_",""))>=0).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+          const bFil=bioterRows.filter(r=>filiais.indexOf(r.id.replace("bioter_",""))>=0).sort((a,b)=>a.name.localeCompare(b.name,"pt-BR"));
+          const bioter=bPrinc.concat(bFil);
+          const renderCard=function(r){
             const cpct=r.totalMeta?Math.min(100,Math.round(r.totalDone/r.totalMeta*100)):0;
             const ok=r.totalMeta&&r.totalDone>=r.totalMeta;
             const accent=ok?"#22c55e":(cpct>=70?r.color:(cpct>=40?"#f59e0b":"#ef4444"));
             return <div key={r.id} style={{background:"#fff",borderRadius:12,padding:"12px 14px 13px",border:"1px solid #e2e8f0",position:"relative",overflow:"hidden",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor="#e2e8f0";}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#f1f5f9";}}>
-              {/* Barra lateral colorida */}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor="#cbd5e1";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
               <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:accent,borderRadius:"0 2px 2px 0"}}/>
               <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:6,gap:8,paddingLeft:4}}>
                 <span style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",flex:1,minWidth:0}}>{r.name}</span>
                 <span style={{color:accent,fontSize:14,fontWeight:800,letterSpacing:-.3,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
               </div>
-              {/* Barra */}
               {r.totalMeta>0&&<div style={{width:"100%",height:6,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:9,marginLeft:4}}>
                 <div style={{width:cpct+"%",height:"100%",background:`linear-gradient(90deg, ${accent}, ${accent}cc)`,borderRadius:99,transition:"width .5s ease-out"}}/>
               </div>}
+              <div style={{display:"flex",gap:14,paddingLeft:4}}>
+                {r.tipos.filter(tt=>tt.meta>0||tt.done>0).map(tt=>{
+                  const tOk=tt.meta&&tt.done>=tt.meta;
+                  return <div key={tt.l} style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:2}}>{tt.l}</div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:2}}>
+                      <span style={{color:tOk?"#22c55e":"#0f172a",fontSize:17,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{tt.done}</span>
+                      <span style={{color:"#cbd5e1",fontSize:12,fontWeight:600,lineHeight:1}}>/{tt.meta||"-"}</span>
+                    </div>
+                  </div>;
+                })}
+              </div>
+            </div>;
+          };
+          return <div style={{padding:"14px 16px 16px",background:"#e2e8f0"}}>
+            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10,marginBottom:bioter.length>0?10:0}}>
+              {padrao.map(renderCard)}
+            </div>}
+            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10}}>
+              {bioter.map(renderCard)}
+            </div>}
+          </div>;
+        })()}
               {/* Mini-stats por tipo */}
               <div style={{display:"flex",gap:14,paddingLeft:4}}>
                 {r.tipos.filter(tt=>tt.meta>0||tt.done>0).map(tt=>{
@@ -11625,6 +11653,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
