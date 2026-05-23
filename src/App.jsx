@@ -10004,11 +10004,13 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     return true;
   });
 
-  // Retorna cor do card baseado no status (laranja/verde/roxo)
+  // Retorna cor do card baseado no status.
+  // Aprovado/agendado -> "Agendar" (pink). Publicado -> "Publicado" (roxo).
+  // Diferenca eh visual: alerta vs confirmado.
   const getPubColor=(status)=>{
-    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"}; // 🟣 roxo
-    if(status==="aprovado"||status==="agendado")return{bg:"#ec4899",border:"#fbcfe8",label:"Agendar"}; // 🟢 verde
-    return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"}; // 🟠 laranja (demanda, recebida, execucao, avaliacao)
+    if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"};
+    if(status==="aprovado"||status==="agendado")return{bg:"#ec4899",border:"#fbcfe8",label:"Agendar"};
+    return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"};
   };
 
   // Dias do mês
@@ -11524,11 +11526,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     setTasks(p=>p.map(x=>{
       if(x.id!==id)return x;
       const entry=mkTimelineEntry(x.status,toColId,cols);
+      // Coluna "agendado" (Publicadas) -> status real "publicado".
+      // Mantém a separação: Aprovado (etapa) vs Publicadas (já publicado).
+      const newStatus=toColId==="agendado"?"publicado":toColId;
       return {
         ...x,
-        status:toColId,
+        status:newStatus,
         colEnteredAt:new Date().toISOString(),
-        completedAt:(toColId==="aprovado"||toColId==="publicado")?new Date().toISOString().split("T")[0]:x.completedAt,
+        completedAt:(newStatus==="aprovado"||newStatus==="publicado")?new Date().toISOString().split("T")[0]:x.completedAt,
         timeline:[...(x.timeline||[]),entry],
       };
     }));
