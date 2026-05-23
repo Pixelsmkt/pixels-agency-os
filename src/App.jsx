@@ -10006,7 +10006,6 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
 
   // Retorna cor do card baseado no status.
   // Aprovado/agendado -> "Agendar" (pink). Publicado -> "Publicado" (roxo).
-  // Diferenca eh visual: alerta vs confirmado.
   const getPubColor=(status)=>{
     if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"};
     if(status==="aprovado"||status==="agendado")return{bg:"#ec4899",border:"#fbcfe8",label:"Agendar"};
@@ -11377,6 +11376,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
