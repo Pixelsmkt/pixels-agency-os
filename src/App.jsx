@@ -11435,6 +11435,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   });
   useEffect(function(){try{localStorage.setItem("pixels-kanban-sort",sortMode);}catch(e){}},[sortMode]);
   const [showTrashConfirm,setShowTrashConfirm]=useState(null);
+  const [ctxMenuKanban,setCtxMenuKanban]=useState(null); // {x,y,task} pro menu botao-direito no kanban
   const [calMonth,setCalMonth]=useState(new Date());
   const [calFilterClient,setCalFilterClient]=useState("todos");
   const [showScan,setShowScan]=useState(false);
@@ -11657,6 +11658,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
@@ -11935,14 +11937,48 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 
     {/* (Modal de gerenciar grupos foi removido — agora o filtro usa primeira tag = MÃE) */}
 
-    {showTrashConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
-        <div style={{fontSize:40,marginBottom:12}}>🗑</div>
-        <div style={{color:C.tx,fontWeight:800,fontSize:18,marginBottom:8}}>Mover para lixeira?</div>
-        <div style={{color:C.ts,fontSize:13,marginBottom:20}}>O cartão ficará na lixeira por 30 dias antes de ser excluído permanentemente.</div>
-        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
-          <button onClick={()=>setShowTrashConfirm(null)} style={{background:C.b1,border:"none",borderRadius:10,padding:"10px 20px",color:C.ts,cursor:"pointer",fontWeight:700}}>Cancelar</button>
-          <button onClick={()=>confirmDelete(showTrashConfirm)} style={{background:C.rd,border:"none",borderRadius:10,padding:"10px 20px",color:"#fff",cursor:"pointer",fontWeight:700}}>Mover para lixeira</button>
+    {/* Context Menu (botao direito) no kanban */}
+    {ctxMenuKanban&&<>
+      <div onClick={()=>setCtxMenuKanban(null)} onContextMenu={e=>{e.preventDefault();setCtxMenuKanban(null);}} style={{position:"fixed",inset:0,zIndex:1999998}}/>
+      <div style={{position:"fixed",left:Math.min(ctxMenuKanban.x,window.innerWidth-200),top:Math.min(ctxMenuKanban.y,window.innerHeight-110),background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:5,minWidth:180,boxShadow:"0 12px 32px rgba(15,23,42,0.18),0 4px 8px rgba(15,23,42,0.06)",zIndex:1999999,fontFamily:"'Inter',system-ui,sans-serif",animation:"fadeIn .12s ease"}}>
+        <button onClick={()=>{
+          const t=ctxMenuKanban.task;
+          const newId="dup-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+          const dup=Object.assign({},t,{id:newId,publishDate:"",publishTime:"",completedAt:null,createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"Sistema"),timeline:[{type:"created",label:"Duplicado do card #"+t.id,atFmt:new Date().toLocaleDateString("pt-BR"),user:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"Sistema")}]});
+          setTasks(p=>(p||[]).concat([dup]));
+          if(typeof pixelsToast!=="undefined")pixelsToast.success("Card duplicado.");
+          setCtxMenuKanban(null);
+        }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",background:"none",border:"none",padding:"9px 12px",borderRadius:8,fontSize:13,fontWeight:500,color:"#0f172a",cursor:"pointer",textAlign:"left",transition:"background .1s"}}
+        onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";}}
+        onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Duplicar card
+        </button>
+        <div style={{height:1,background:"#f1f5f9",margin:"3px 0"}}/>
+        <button onClick={()=>{
+          setCtxMenuKanban(null);
+          setShowTrashConfirm(ctxMenuKanban.task.id);
+        }} style={{display:"flex",alignItems:"center",gap:9,width:"100%",background:"none",border:"none",padding:"9px 12px",borderRadius:8,fontSize:13,fontWeight:500,color:"#dc2626",cursor:"pointer",textAlign:"left",transition:"background .1s"}}
+        onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
+        onMouseLeave={e=>{e.currentTarget.style.background="none";}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          Mover pra lixeira
+        </button>
+      </div>
+    </>}
+
+        {showTrashConfirm&&<div onClick={()=>setShowTrashConfirm(null)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif",animation:"fadeIn .2s ease"}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:0,maxWidth:420,width:"100%",overflow:"hidden",boxShadow:"0 20px 60px rgba(15,23,42,0.30),0 8px 20px rgba(15,23,42,0.15)"}}>
+        <div style={{padding:"26px 28px 22px"}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:44,height:44,borderRadius:12,background:"#fef2f2",color:"#dc2626",marginBottom:14}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:17,letterSpacing:-.3,marginBottom:5}}>Mover pra lixeira?</div>
+          <div style={{color:"#64748b",fontSize:13,lineHeight:1.55,fontWeight:500}}>O cartão fica disponível na lixeira por 30 dias antes de ser excluído de vez. Você pode restaurar a qualquer momento.</div>
+        </div>
+        <div style={{display:"flex",gap:8,padding:"12px 14px",background:"#f8fafc",borderTop:"1px solid #f1f5f9"}}>
+          <button onClick={()=>setShowTrashConfirm(null)} style={{flex:1,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 16px",color:"#475569",cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"inherit",transition:"all .12s"}} onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.borderColor="#cbd5e1";}} onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>Cancelar</button>
+          <button onClick={()=>confirmDelete(showTrashConfirm)} style={{flex:1,background:"#dc2626",border:"none",borderRadius:10,padding:"10px 16px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13,fontFamily:"inherit",transition:"all .12s",boxShadow:"0 1px 2px rgba(220,38,38,0.30)"}} onMouseEnter={e=>{e.currentTarget.style.background="#b91c1c";}} onMouseLeave={e=>{e.currentTarget.style.background="#dc2626";}}>Mover pra lixeira</button>
         </div>
       </div>
     </div>}
@@ -12272,6 +12308,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     setDragOverId(null);
                   }:undefined}
                   onClick={()=>setOpenCard(t)}
+                  onContextMenu={e=>{e.preventDefault();e.stopPropagation();setCtxMenuKanban({x:e.clientX,y:e.clientY,task:t});}}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
                   style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
                   onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 0 0 1px #7c3aed, 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
