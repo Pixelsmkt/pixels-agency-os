@@ -1841,12 +1841,12 @@ function Ico({n,size=14,color,strokeWidth=2}){
 // pickerLabel = como aparece no select de Cliente (já com "Bioter " na frente)
 // abbr = sigla de 2 letras exibida no card ao lado da logo
 const BIOTER_UNITS = [
-  { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Bioter Chapecó" },          // verde forest escuro
-  { id:"toledo",    label:"Toledo/PR",             color:"#15803d", abbr:"TO", pickerLabel:"Bioter Toledo" },           // verde escuro
-  { id:"castro",    label:"Castro/PR",             color:"#16a34a", abbr:"CA", pickerLabel:"Bioter Castro" },           // verde médio
-  { id:"uberlandia",label:"Uberlândia/MG",         color:"#22c55e", abbr:"UB", pickerLabel:"Bioter Uberlândia" },       // verde claro
-  { id:"gloria",    label:"Glória de Dourados/MS", color:"#4a8c1c", abbr:"GD", pickerLabel:"Bioter Glória de Dourados" }, // verde brand Bioter (olive)
-  { id:"paraguay",  label:"Bioter Paraguay",  color:"#65a30d", abbr:"PY", pickerLabel:"Bioter Paraguay" },         // verde lime
+  { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Bioter Chapecó" },          // verde escuro (principal)
+  { id:"toledo",    label:"Toledo/PR",             color:"#166534", abbr:"TO", pickerLabel:"Bioter Toledo" },           // verde escuro (principal)
+  { id:"castro",    label:"Castro/PR",             color:"#166534", abbr:"CA", pickerLabel:"Bioter Castro" },           // verde escuro (principal)
+  { id:"uberlandia",label:"Uberlândia/MG",         color:"#16a34a", abbr:"UB", pickerLabel:"Bioter Uberlândia" },       // verde médio (filial)
+  { id:"gloria",    label:"Glória de Dourados/MS", color:"#16a34a", abbr:"GD", pickerLabel:"Bioter Glória de Dourados" }, // verde médio (filial)
+  { id:"paraguay",  label:"Bioter Paraguay",       color:"#16a34a", abbr:"PY", pickerLabel:"Bioter Paraguay" },         // verde médio (filial)
 ];
 
 /* ─── MIND MAP COMPONENT (MindMeister-style) ── */
@@ -1922,6 +1922,10 @@ const CLIENT_MINDMAP = {
       {...MM_BRANCHES.design, children:[{id:"a",label:"Arte veterinária"}, {id:"b",label:"Infográficos saúde"}, {id:"c",label:"Material de campanha"}, {id:"d",label:"Identidade VetService"}]},
       {...MM_BRANCHES.video, children:[{id:"a",label:"Procedimento vet"}, {id:"b",label:"Depoimento produtor"}, {id:"c",label:"Reels saúde animal"}, {id:"d",label:"Institucional"}]},
       {...MM_BRANCHES.leite, children:[{id:"a",label:"Monitoramento rebanho"}, {id:"b",label:"Nutrição bovina"}, {id:"c",label:"Produtividade leiteira"}, {id:"d",label:"Tecnologia no campo"}]},
+    ]
+  },
+};
+"d",label:"Tecnologia no campo"}]},
     ]
   },
 };
@@ -10124,19 +10128,25 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         </div>;
       })()}
 
-      {/* ── Legenda das cores do status — visual clean sem emojis ── */}
+      {/* ── Legenda dos status — badges identicos aos dos cards ── */}
       <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>
         <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Status</span>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:"#ea580c"}}/>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:6,background:"#ea580c",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          </span>
           <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Em produção</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:"#16a34a"}}/>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:6,background:"#16a34a",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
           <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Pronto para agendar</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:8,height:8,borderRadius:"50%",background:"#7c3aed"}}/>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:6,background:"#7c3aed",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+          </span>
           <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Publicado</span>
         </div>
       </div>
@@ -10273,12 +10283,14 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                                 : <span style={{color:cl?cl.color:"#0f172a",fontWeight:800,fontSize:9.5,letterSpacing:.4,lineHeight:1}}>{cl?cl.abbr:"·"}</span>
                               }
                             </div>
-                            <span title={pubColor.label||t.status} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:pubColor.bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
-                              {stIsPub
-                                ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
-                                : stIsDone
-                                  ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                            <span title={t.fromDrive?"Vídeo do Drive":(pubColor.label||t.status)} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:t.fromDrive?"#1a73e8":pubColor.bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
+                              {t.fromDrive
+                                ? <svg width="12" height="12" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#fff"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#fff"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#fff"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#fff"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#fff"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#fff"/></svg>
+                                : stIsPub
+                                  ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+                                  : stIsDone
+                                    ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                    : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
                               }
                             </span>
                           </div>
