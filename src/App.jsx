@@ -11677,6 +11677,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
@@ -12340,14 +12341,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           if(!ids.length)return null;
                           return ids.map(uid=>{
                             if(uid==="grupo"){
-                              return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
+                              return <span key="grupo" title="Grupo Bioter (todas as unidades)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>GRUPO</span>;
                             }
                             if(uid==="brasil"){
-                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.4,flexShrink:0,whiteSpace:"nowrap"}}>BRASIL</span>;
+                              return <span key="brasil" title="Bioter Brasil (todas as unidades do Brasil)" style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 6px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>BRASIL</span>;
                             }
                             const u=BIOTER_UNITS.find(x=>x.id===uid);
                             if(!u)return null;
-                            return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:9.5,fontWeight:700,letterSpacing:.2,flexShrink:0,whiteSpace:"nowrap"}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>;
+                            return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>;
                           });
                         })()}
                         {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
