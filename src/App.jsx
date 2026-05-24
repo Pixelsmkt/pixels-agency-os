@@ -10064,37 +10064,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
       {/* ── Cabeçalho moderno ── */}
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{display:"flex",alignItems:"flex-start",flexWrap:"wrap",gap:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
         <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Calendário de publicações</div>
           <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>
             {tasksThisMonth.length} publicação{tasksThisMonth.length!==1?"ões":""} agendada{tasksThisMonth.length!==1?"s":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
           </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} aria-label="Mês anterior"
-            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,minWidth:150,textAlign:"center"}}>
-            {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
-          </div>
-          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} aria-label="Próximo mês"
-            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
-          <button onClick={()=>setCalMonth(new Date())}
-            style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-            Hoje
-          </button>
-          <button onClick={handleGeneratePlan}
-            title={filterClient==="todos"?"Sugere datas pra cards de todos os clientes":"Sugere datas só pra cards de "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.name||"este cliente")}
-            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-            Gerar plano do mês{filterClient!=="todos"?" · "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.abbr||""):""}
-          </button>
-          {lastApplySnapshot&&<button onClick={handleUndoApply}
-            title="Desfaz a última 'Aplicar datas' — devolve os cards pra como estavam antes."
-            style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
-            Desfazer última sugestão
-          </button>}
         </div>
       </div>
 
@@ -10225,6 +10200,34 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           ))}
         </div>
       )}
+
+
+      {/* ── Seletor de mes + acoes (proximo da grade) ── */}
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} aria-label="Mês anterior"
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14,minWidth:150,textAlign:"center"}}>
+          {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
+        </div>
+        <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} aria-label="Próximo mês"
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+        <button onClick={()=>setCalMonth(new Date())}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+          Hoje
+        </button>
+        <button onClick={handleGeneratePlan}
+          title={filterClient==="todos"?"Sugere datas pra cards de todos os clientes":"Sugere datas só pra cards de "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.name||"este cliente")}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          Gerar plano do mês{filterClient!=="todos"?" · "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.abbr||""):""}
+        </button>
+        {lastApplySnapshot&&<button onClick={handleUndoApply}
+          title="Desfaz a última 'Aplicar datas' — devolve os cards pra como estavam antes."
+          style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v6h6"/><path d="M3 13a9 9 0 109-9c-2.5 0-4.8 1-6.5 2.6L3 9"/></svg>
+          Desfazer última sugestão
+        </button>}
+      </div>
 
       {/* ── Grade do calendário ── */}
       <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:16,overflow:"hidden"}}>
@@ -11683,6 +11686,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
