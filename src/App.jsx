@@ -10647,7 +10647,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
     </div>
     {/* GRID DE CLIENTES */}
     {rows.length===0
-      ? <div style={{padding:"28px 20px",background:"linear-gradient(180deg,#1e293b 0%,#0f172a 100%)",textAlign:"center",color:"#64748b",fontSize:13,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
+      ? <div style={{padding:"28px 20px",background:"#f8f9fc",textAlign:"center",color:"#94a3b8",fontSize:13,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
       : (()=>{
           const principais=["chapeco","castro","toledo"];
           const filiais=["gloria","paraguay","uberlandia"];
@@ -10662,20 +10662,20 @@ function ProgressoDoMes({visible,mode="produzir"}){
             const accent=ok?"#22c55e":(cpct>=70?r.color:(cpct>=40?"#f59e0b":"#ef4444"));
             const tiposAtivos=r.tipos.filter(tt=>tt.meta>0||tt.done>0);
             const R=24, CIRC=2*Math.PI*R;
-            return <div key={r.id} style={{background:"rgba(255,255,255,0.04)",borderRadius:14,padding:"14px",border:"1px solid rgba(255,255,255,0.08)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)",transition:"transform .15s, background .15s, border-color .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.background="rgba(255,255,255,0.07)";e.currentTarget.style.borderColor="rgba(255,255,255,0.16)";}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.background="rgba(255,255,255,0.04)";e.currentTarget.style.borderColor="rgba(255,255,255,0.08)";}}>
+            return <div key={r.id} style={{background:"#fff",borderRadius:14,padding:"14px",border:"1px solid #e5e7eb",boxShadow:"0 1px 2px rgba(15,23,42,0.04)",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#cbd5e1";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e5e7eb";}}>
               {/* Header: logo + nome + fracao total muted */}
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,minWidth:0}}>
                 {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]&&<img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:18,maxWidth:54,objectFit:"contain",flexShrink:0}}/>}
-                <span style={{color:"#f1f5f9",fontSize:12.5,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1}}>{r.name}</span>
-                <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#475569",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
+                <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1}}>{r.name}</span>
+                <span style={{color:"#64748b",fontSize:11,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
               </div>
               {/* Body: anel circular + lista de chips por tipo */}
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <div style={{position:"relative",width:60,height:60,flexShrink:0}}>
                   <svg width="60" height="60" viewBox="0 0 60 60" style={{transform:"rotate(-90deg)"}}>
-                    <circle cx="30" cy="30" r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6"/>
+                    <circle cx="30" cy="30" r={R} fill="none" stroke="#f1f5f9" strokeWidth="6"/>
                     {r.totalMeta>0&&<circle cx="30" cy="30" r={R} fill="none" stroke={accent} strokeWidth="6" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={CIRC*(1-cpct/100)} style={{transition:"stroke-dashoffset .5s ease-out, stroke .3s"}}/>}
                   </svg>
                   <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -10684,17 +10684,17 @@ function ProgressoDoMes({visible,mode="produzir"}){
                 </div>
                 <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:5}}>
                   {tiposAtivos.length===0?
-                    <div style={{color:"#475569",fontSize:10,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
+                    <div style={{color:"#cbd5e1",fontSize:10,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
                     :tiposAtivos.map(tt=>{
                       const tOk=tt.meta&&tt.done>=tt.meta;
                       const tPct=tt.meta?Math.round(tt.done/tt.meta*100):0;
-                      const tCor=tOk?"#22c55e":(tPct>=80?"#22c55e":(tPct>=50?"#eab308":(tt.done>0?"#f59e0b":"#475569")));
+                      const tCor=tOk?"#22c55e":(tPct>=80?"#22c55e":(tPct>=50?"#eab308":(tt.done>0?"#f59e0b":"#cbd5e1")));
                       return <div key={tt.l} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,fontSize:10.5,lineHeight:1.2}}>
-                        <span style={{display:"flex",alignItems:"center",gap:5,color:"#94a3b8",fontWeight:600,minWidth:0}}>
+                        <span style={{display:"flex",alignItems:"center",gap:5,color:"#64748b",fontWeight:600,minWidth:0}}>
                           <span style={{width:6,height:6,borderRadius:"50%",background:tCor,flexShrink:0}}/>
                           <span style={{textOverflow:"ellipsis",overflow:"hidden",whiteSpace:"nowrap"}}>{tt.l}</span>
                         </span>
-                        <span style={{color:tCor,fontSize:11.5,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{tt.done}<span style={{color:"#475569",fontWeight:600,fontSize:10}}>/{tt.meta||"-"}</span></span>
+                        <span style={{color:tCor,fontSize:11.5,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{tt.done}<span style={{color:"#cbd5e1",fontWeight:600,fontSize:10}}>/{tt.meta||"-"}</span></span>
                       </div>;
                     })
                   }
@@ -10702,7 +10702,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
               </div>
             </div>;
           };
-          return <div style={{padding:"14px 16px 16px",background:"linear-gradient(180deg,#1e293b 0%,#0f172a 100%)"}}>
+          return <div style={{padding:"14px 16px 16px",background:"#f8f9fc"}}>
             {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginBottom:bioter.length>0?10:0}}>
               {padrao.map(renderCard)}
             </div>}
@@ -11683,6 +11683,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
