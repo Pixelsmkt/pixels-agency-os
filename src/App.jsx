@@ -10091,15 +10091,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         });
         Object.values(byClient).forEach(function(c){c.items.sort(function(a,b){return a.proposedDate.localeCompare(b.proposedDate);});});
         const fmtDate=function(ds){try{const d=new Date(ds+"T12:00:00");return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");}catch(e){return ds;}};
+        const _MS_FMT=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+        const _WS_FMT=["dom","seg","ter","qua","qui","sex","sáb"];
+        const _fmtDateStack=function(ds){try{const d=new Date(ds+"T12:00:00");return {day:String(d.getDate()).padStart(2,"0"),mon:_MS_FMT[d.getMonth()],wd:_WS_FMT[d.getDay()]};}catch(e){return {day:ds,mon:"",wd:""};}};
         return <div onMouseDown={function(e){if(e.target===e.currentTarget)setGenConfirm(null);}}
           style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
           <div onMouseDown={function(e){e.stopPropagation();}}
             style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 24px 64px rgba(15,23,42,0.28)"}}>
-            <div style={{padding:"18px 22px 14px",borderBottom:"1px solid #f1f5f9"}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.3}}>Sugestão de datas — {MONTHS[genConfirm.month-1]}/{genConfirm.year}</div>
-              <div style={{color:"#64748b",fontSize:12,marginTop:3}}>{genConfirm.proposals.length} card{genConfirm.proposals.length!==1?"s":""} vão receber data de publicação sugerida. Alternando arte e vídeo, distribuídos em 2ª e 5ª feiras.</div>
+            <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #f1f5f9"}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4}}>Sugestão de datas · {MONTHS[genConfirm.month-1]} {genConfirm.year}</div>
+              <div style={{color:"#64748b",fontSize:12.5,marginTop:4,fontWeight:500}}>{genConfirm.proposals.length} card{genConfirm.proposals.length!==1?"s":""} vão receber data de publicação sugerida.</div>
             </div>
-            <div style={{padding:22}}>
+            <div style={{padding:"18px 24px 22px"}}>
               {(function(){
                 // Agrupa missingSlots por cliente + tipo pra renderizar lista compacta
                 const ms=(genConfirm.missingSlots||[]);
@@ -10138,26 +10141,44 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
               })()}
               {Object.entries(byClient).map(function(arr){
                 const clId=arr[0], data=arr[1];
-                return <div key={clId} style={{marginBottom:16}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-                    <div style={{color:"#0f172a",fontWeight:700,fontSize:13}}>{data.name}</div>
-                    <span style={{color:"#7c3aed",fontSize:11,fontWeight:700,background:"#f5f3ff",padding:"2px 8px",borderRadius:99}}>{data.items.length} card{data.items.length!==1?"s":""}</span>
+                // Cor do cliente (Bioter units herdam cor do bioter)
+                const baseClId=String(clId||"").replace(/^bioter_.*/,"bioter");
+                const cl=(CLIENTS||[]).find(function(c){return c.id===baseClId;});
+                const clColor=(cl&&cl.color)||"#7c3aed";
+                return <div key={clId} style={{marginBottom:24}}>
+                  {/* Header do cliente: dot + nome + contador discreto */}
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,paddingBottom:9,borderBottom:"1px solid #f1f5f9"}}>
+                    <span style={{width:9,height:9,borderRadius:"50%",background:clColor,flexShrink:0,boxShadow:"0 0 0 3px "+clColor+"22"}}/>
+                    <span style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>{data.name}</span>
+                    <span style={{flex:1}}/>
+                    <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{data.items.length} card{data.items.length!==1?"s":""}</span>
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  {/* Rows */}
+                  <div style={{display:"flex",flexDirection:"column"}}>
                     {data.items.map(function(p){
-                      const tipoLabel=p.slotType==="video_short"?"Short do Drive":(p.isCollab?"Collab":(_isArteType(p.contentType)?"Arte":_isVideoType(p.contentType)?"Vídeo":(p.contentType==="foto"?"Foto":(p.contentType||"—"))));
+                      const tipoLabel=p.slotType==="video_short"?"short do Drive":(p.isCollab?"collab":(_isArteType(p.contentType)?"arte":_isVideoType(p.contentType)?"vídeo":(p.contentType==="foto"?"foto":(p.contentType||"—"))));
                       const tipoColor=p.slotType==="video_short"?"#dc2626":(p.isCollab?"#3b82f6":(_isVideoType(p.contentType)?"#0284c7":(p.contentType==="foto"?"#ea580c":"#7c3aed")));
-                      return <div key={p.taskId} style={{display:"grid",gridTemplateColumns:"60px 1fr auto",gap:10,padding:"8px 12px",background:"#f8fafc",border:"1px solid #f1f5f9",borderRadius:9,alignItems:"center"}}>
-                        <span style={{color:"#475569",fontSize:11,fontWeight:700}}>{fmtDate(p.proposedDate)}</span>
-                        <span style={{color:"#0f172a",fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.cardTitle||"(sem título)"}</span>
-                        <span style={{background:tipoColor+"18",color:tipoColor,fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,textTransform:"uppercase",letterSpacing:.4,whiteSpace:"nowrap"}}>{tipoLabel}</span>
+                      const dInfo=_fmtDateStack(p.proposedDate);
+                      return <div key={p.taskId}
+                        onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}}
+                        onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}
+                        style={{display:"grid",gridTemplateColumns:"58px 1fr auto",gap:14,padding:"9px 10px",borderRadius:8,alignItems:"center",transition:"background .12s"}}>
+                        <div style={{display:"flex",flexDirection:"column",lineHeight:1.15}}>
+                          <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.1}}>{dInfo.day} {dInfo.mon}</span>
+                          <span style={{color:"#94a3b8",fontSize:10.5,marginTop:1,fontWeight:500}}>{dInfo.wd}</span>
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                          <span style={{width:6,height:6,borderRadius:"50%",background:tipoColor,flexShrink:0}}/>
+                          <span style={{color:"#0f172a",fontSize:12.5,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.cardTitle||"(sem título)"}</span>
+                        </div>
+                        <span style={{color:tipoColor,fontSize:11,fontWeight:600,whiteSpace:"nowrap",letterSpacing:.1}}>{tipoLabel}</span>
                       </div>;
                     })}
                   </div>
                 </div>;
               })}
-              <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"10px 14px",color:"#0369a1",fontSize:11.5,marginBottom:18,marginTop:6}}>
-                Só foram considerados cards em <strong>Demanda · Execução · Ajustes · Concluído p/ avaliação · Aprovado</strong> e <strong>sem data de publicação</strong>. A estrategista pode editar qualquer data depois clicando no card.
+              <div style={{background:"#f8fafc",borderLeft:"3px solid #cbd5e1",borderRadius:"0 8px 8px 0",padding:"10px 14px",color:"#475569",fontSize:11.5,marginBottom:18,marginTop:8,lineHeight:1.5}}>
+                Considera apenas cards em <strong style={{color:"#0f172a"}}>demanda · execução · ajustes · concluído p/ avaliação · aprovado</strong> e <strong style={{color:"#0f172a"}}>sem data de publicação</strong>. A estrategista pode editar qualquer data depois clicando no card.
               </div>
               <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
                 <button onClick={function(){setGenConfirm(null);}}
@@ -11731,6 +11752,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de video short (vem do Drive, so aparecem no calendario)
