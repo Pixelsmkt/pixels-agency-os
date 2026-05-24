@@ -9782,6 +9782,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const [openCard,setOpenCard]=useState(null);
   const [ctxMenu,setCtxMenu]=useState(null); // {x,y,task} pro menu botao-direito
   const [genConfirm,setGenConfirm]=useState(null);
+  const [showMissingSlots,setShowMissingSlots]=useState(false);
   // Snapshot pra UNDO do último "Aplicar datas" — guarda os publishDates anteriores
   const [lastApplySnapshot,setLastApplySnapshot]=useState(null);
   // Drag-and-drop: arrastar card entre dias atualiza publishDate automaticamente
@@ -9849,6 +9850,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     const unidadesBioter=(typeof BIOTER_GROUP_UNITS!=="undefined")?BIOTER_GROUP_UNITS:[];
     const proposals=[];
     const newShortCards=[];
+    // Slots que ficaram sem card real (collab/arte/foto/video) — pra alerta no preview.
+    // Short nao entra aqui porque sempre cria fantasma.
+    const missingSlots=[];
     // Rastreador: cards já alocados em alguma unidade — evita um card de "Grupo
     // Bioter" ser usado pra 6 unidades diferentes (cada card só pode ser publicado uma vez).
     const cardsAlocados=new Set();
@@ -9921,6 +9925,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
             proposedDate:slot.date,
             slotType:slot.type,
           });
+        } else {
+          // Slot ficou sem card real — registra pra alerta no preview.
+          // (slot.type==="video_short" ja entrou no createShortCard la em cima.)
+          missingSlots.push({clientId:alvoId, clientName:alvoNome, slotType:slot.type, date:slot.date});
         }
       });
     }
@@ -9952,7 +9960,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       if(typeof pixelsToast!=="undefined")pixelsToast.warning("Nenhum card elegível. Crie cards em Demanda/Execução/Ajustes/Avaliação/Aprovado primeiro.");
       return;
     }
-    setGenConfirm({proposals, month, year, newShortCards});
+    setGenConfirm({proposals, month, year, newShortCards, missingSlots});
   }
   function confirmGeneratePlan(){
     if(!genConfirm)return;
@@ -10092,6 +10100,42 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
               <div style={{color:"#64748b",fontSize:12,marginTop:3}}>{genConfirm.proposals.length} card{genConfirm.proposals.length!==1?"s":""} vão receber data de publicação sugerida. Alternando arte e vídeo, distribuídos em 2ª e 5ª feiras.</div>
             </div>
             <div style={{padding:22}}>
+              {(function(){
+                // Agrupa missingSlots por cliente + tipo pra renderizar lista compacta
+                const ms=(genConfirm.missingSlots||[]);
+                if(ms.length===0)return null;
+                const SLOT_LABEL={collab:"Collab",arte:"Arte",video:"Vídeo",foto:"Foto-de-obra"};
+                // {clientName: {slotType: count}}
+                const agg={};
+                ms.forEach(function(s){
+                  if(!agg[s.clientName])agg[s.clientName]={};
+                  agg[s.clientName][s.slotType]=(agg[s.clientName][s.slotType]||0)+1;
+                });
+                const totalClients=Object.keys(agg).length;
+                return <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",marginBottom:14,fontFamily:"inherit"}}>
+                  <div onClick={function(){setShowMissingSlots(function(v){return !v;});}}
+                    style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",gap:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      <span style={{color:"#92400e",fontSize:12,fontWeight:600}}>{ms.length} slot{ms.length!==1?"s":""} sem card no fluxo {totalClients>1?"(em "+totalClients+" clientes)":""}</span>
+                    </div>
+                    <span style={{color:"#b45309",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{showMissingSlots?"Ocultar ▲":"Ver detalhes ▼"}</span>
+                  </div>
+                  {showMissingSlots&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #fde68a",display:"flex",flexDirection:"column",gap:6}}>
+                    {Object.entries(agg).map(function(arr){
+                      const cliName=arr[0], tipos=arr[1];
+                      const partes=Object.entries(tipos).map(function(t){return t[1]+" "+(SLOT_LABEL[t[0]]||t[0]);}).join(" + ");
+                      return <div key={cliName} style={{display:"flex",alignItems:"baseline",gap:8,fontSize:11.5,color:"#78350f"}}>
+                        <span style={{fontWeight:700,minWidth:120}}>{cliName}</span>
+                        <span style={{color:"#92400e"}}>{partes}</span>
+                      </div>;
+                    })}
+                    <div style={{marginTop:6,fontSize:10.5,color:"#92400e",fontStyle:"italic"}}>
+                      Pra preencher esses slots, crie cards desses tipos no Fluxo de demandas e rode "Gerar plano" de novo.
+                    </div>
+                  </div>}
+                </div>;
+              })()}
               {Object.entries(byClient).map(function(arr){
                 const clId=arr[0], data=arr[1];
                 return <div key={clId} style={{marginBottom:16}}>
@@ -11687,6 +11731,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de video short (vem do Drive, so aparecem no calendario)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
