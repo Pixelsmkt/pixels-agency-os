@@ -11031,7 +11031,8 @@ function ScanModal({tasks,onClose,onFilter}){
   const [activeId,setActiveId]=useState(null);
   const [scanStep,setScanStep]=useState(0);
 
-  const all=tasks.filter(t=>!t.deletedAt);
+  // Esconder cards-fantasma de video short do scan (vem do Drive, nao sao demandas)
+  const all=tasks.filter(t=>!t.deletedAt && !t.fromDrive && t.contentType!=="video_short" && t.tipo!=="video_short");
   const urgent   = all.filter(t=>taskUrgencyLevel(t)===0);
   const late     = all.filter(t=>taskUrgencyLevel(t)===1);
   const attention= all.filter(t=>taskUrgencyLevel(t)===2);
@@ -11687,49 +11688,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    // Esconder cards-fantasma de video short (vem do Drive, so aparecem no calendario)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    // Esconder cards-fantasma de vídeo short (vêm do Drive, só aparecem no calendário)
-    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
-    // Admin/sócio vê tudo; colaborador só vê os seus (ou do seu domínio se freelancer)
     if(!isAdmin&&!isMyDomain(t))return false;
     // Busca: case-insensitive substring em título, nome do cliente, e label de unidade Bioter (CSV)
     if(_searchTermNorm){
