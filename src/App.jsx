@@ -10647,7 +10647,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
     </div>
     {/* GRID DE CLIENTES */}
     {rows.length===0
-      ? <div style={{padding:"28px 20px",background:"#f8f9fc",textAlign:"center",color:"#94a3b8",fontSize:13,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
+      ? <div style={{padding:"28px 20px",background:"#273548",textAlign:"center",color:"#cbd5e1",fontSize:13,fontWeight:500}}>Sem cards agendados pra {monthLabel}.</div>
       : (()=>{
           const principais=["chapeco","castro","toledo"];
           const filiais=["gloria","paraguay","uberlandia"];
@@ -10702,7 +10702,7 @@ function ProgressoDoMes({visible,mode="produzir"}){
               </div>
             </div>;
           };
-          return <div style={{padding:"14px 16px 16px",background:"#f8f9fc"}}>
+          return <div style={{padding:"14px 16px 16px",background:"#273548"}}>
             {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginBottom:bioter.length>0?10:0}}>
               {padrao.map(renderCard)}
             </div>}
@@ -11683,6 +11683,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
     if(t.deletedAt)return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
