@@ -30231,6 +30231,354 @@ function PortalTimeline({cl, clTasks, isMob}){
   </div>;
 }
 
+/* ─── PORTAL DEMANDAS CLIENTE — central de pedidos do próprio cliente ───
+   Kanban simples (4 colunas) + botão "+ Nova demanda" com a cor do cliente.
+   Quando cria Arte/Vídeo: vai pro Rascunhos da Hellen no fluxo interno.
+   Outros tipos (Banner, Material, Campanha, Outro): ficam só no portal.
+─────────────────────────────────────────────────────────────────────── */
+const TIPOS_DEMANDA_CLIENTE = [
+  {id:"arte",      label:"Arte (única ou carrossel)", routesFluxo:true,  contentType:"arte"},
+  {id:"video",     label:"Vídeo",                     routesFluxo:true,  contentType:"video"},
+  {id:"banner",    label:"Banner",                    routesFluxo:false},
+  {id:"material",  label:"Material interno",          routesFluxo:false},
+  {id:"campanha",  label:"Campanha",                  routesFluxo:false},
+  {id:"outro",     label:"Outro",                     routesFluxo:false},
+];
+
+function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
+  const [novaDemandaOpen,setNovaDemandaOpen]=useState(false);
+  const [ajusteModal,setAjusteModal]=useState(null);
+
+  const _nowIso=function(){return new Date().toISOString();};
+  const _nowFmt=function(){const n=new Date();return n.toLocaleDateString("pt-BR")+" às "+n.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
+  const _ddmm=function(s){if(!s)return "";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
+
+  // ── Categorização das colunas ──
+  // Todas as demandas do cliente (origem portal ou não) entram nas 4 colunas.
+  const STATUS_RECEBIDAS=["interno_demanda","interno_execucao","interno_avaliacao","rascunhos","demanda","recebida"];
+  const STATUS_EM_PRODUCAO=["execucao","ajustes","avaliacao"];
+  const STATUS_AGUARDANDO=["aprovado"];
+  const STATUS_CONCLUIDAS=["aprovacao_final","agendado","publicado","interno_executado"];
+
+  const cardsValidos=clTasks.filter(function(t){return !t.deletedAt;});
+  const colRecebidas =cardsValidos.filter(function(t){return STATUS_RECEBIDAS.indexOf(t.status)>=0;});
+  const colEmProducao=cardsValidos.filter(function(t){return STATUS_EM_PRODUCAO.indexOf(t.status)>=0;});
+  const colAguardando=cardsValidos.filter(function(t){return STATUS_AGUARDANDO.indexOf(t.status)>=0;});
+  const colConcluidas=cardsValidos.filter(function(t){return STATUS_CONCLUIDAS.indexOf(t.status)>=0;}).slice(0,20); // últimas 20
+
+  // ── Helpers de tipo (label + cor) ──
+  const tipoInfo=function(t){
+    const map={
+      arte:        {label:"Arte",        color:"#7c3aed"},
+      carrossel:   {label:"Carrossel",   color:"#7c3aed"},
+      video:       {label:"Vídeo",       color:"#0284c7"},
+      video_short: {label:"Short",       color:"#dc2626"},
+      foto:        {label:"Foto de obra",color:"#ea580c"},
+      banner:      {label:"Banner",      color:"#0891b2"},
+      material:    {label:"Material",    color:"#475569"},
+      campanha:    {label:"Campanha",    color:"#db2777"},
+      outro:       {label:"Outro",       color:"#64748b"},
+    };
+    const k=t.contentType||t.tipo_solicitacao||"outro";
+    return map[k]||map.outro;
+  };
+
+  // ── Aprovar / Solicitar ajuste (mesma lógica do PortalAprovacoes) ──
+  const handleAprovar=function(task){
+    setTasks(function(prev){return prev.map(function(t){
+      if(t.id!==task.id)return t;
+      return Object.assign({},t,{
+        status:"aprovacao_final",
+        colEnteredAt:_nowIso(),
+        timeline:[].concat(t.timeline||[],[{
+          type:"client_approved",
+          fromLabel:"Aprovação interna",toLabel:"Aprovação final",
+          from:"aprovado",to:"aprovacao_final",
+          clientId:cl.id,clientName:cl.name,
+          at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name,
+        }]),
+      });
+    });});
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda aprovada!",3000);
+  };
+
+  const handleConfirmarAjuste=function(){
+    if(!ajusteModal)return;
+    const t=ajusteModal.task;
+    const text=(ajusteModal.text||"").trim();
+    if(!text){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Descreva o ajuste solicitado.",3500);
+      return;
+    }
+    setTasks(function(prev){return prev.map(function(x){
+      if(x.id!==t.id)return x;
+      return Object.assign({},x,{
+        status:"ajustes",ajustar:true,isAlteracao:true,colEnteredAt:_nowIso(),
+        comments:[].concat(x.comments||[],[{
+          id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+          type:"client_request",text:text,user:"Cliente: "+cl.name,
+          clientId:cl.id,at:_nowIso(),atFmt:_nowFmt(),
+        }]),
+        timeline:[].concat(x.timeline||[],[{
+          type:"client_rejected",fromLabel:"Aprovação interna",toLabel:"Ajustes",
+          from:"aprovado",to:"ajustes",clientId:cl.id,clientName:cl.name,
+          text:text,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name,
+        }]),
+      });
+    });});
+    setAjusteModal(null);
+    if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação enviada à equipe.",3500);
+  };
+
+  // ── Render do card ──
+  const Card=function(props){
+    const t=props.task;
+    const actionable=props.actionable;
+    const tipo=tipoInfo(t);
+    const prazo=t.data_prevista_entrega||t.publishDate||"";
+    const numComents=(t.comments||[]).length;
+    return <div key={t.id}
+      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 12px",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 1px 2px rgba(15,23,42,0.04)",transition:"all .12s"}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=cl.color;e.currentTarget.style.boxShadow="0 4px 10px rgba(15,23,42,0.06)";}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04)";}}>
+      {/* Tipo + título */}
+      <div>
+        <span style={{display:"inline-block",background:tipo.color+"18",color:tipo.color,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 8px",borderRadius:99,marginBottom:5}}>{tipo.label}</span>
+        <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35}}>{t.title||"(sem título)"}</div>
+      </div>
+      {/* Linha de meta: prazo + comentários */}
+      <div style={{display:"flex",alignItems:"center",gap:10,color:"#64748b",fontSize:10.5}}>
+        {prazo&&<span style={{display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
+          <Ico n="calendar" size={11}/> {_ddmm(prazo)}
+        </span>}
+        {numComents>0&&<span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+          <Ico n="message" size={11}/> {numComents}
+        </span>}
+      </div>
+      {/* Botões (só na coluna Aguardando) */}
+      {actionable&&<div style={{display:"flex",gap:5,marginTop:2}}>
+        <button onClick={function(){handleAprovar(t);}}
+          style={{flex:1,background:"#059669",color:"#fff",border:"none",borderRadius:7,padding:"7px 8px",fontSize:11,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4,letterSpacing:-.1}}>
+          <Ico n="check" size={12}/> Aprovar
+        </button>
+        <button onClick={function(){setAjusteModal({task:t,text:""});}}
+          style={{flex:1,background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:7,padding:"7px 8px",fontSize:11,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4,letterSpacing:-.1}}>
+          <Ico n="rotate" size={12}/> Ajuste
+        </button>
+      </div>}
+    </div>;
+  };
+
+  // ── Coluna (visual igual ao kanban interno) ──
+  const Coluna=function(props){
+    const items=props.items;
+    return <div style={{background:"#d1d5db",borderRadius:12,padding:"5px 5px 6px",maxHeight:"calc(100vh - 320px)",overflow:"hidden",display:"flex",flexDirection:"column",gap:0}}>
+      <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:props.color,borderRadius:"12px 12px 0 0",margin:"-5px -5px 6px -5px"}}>
+        <span style={{color:"#fff",fontWeight:600,fontSize:12,letterSpacing:.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{props.label}</span>
+        <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600}}>{items.length}</span>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,overflowY:"auto",paddingRight:2,flex:1}}>
+        {items.length===0
+          ?<div style={{color:"#475569",fontSize:11,fontStyle:"italic",padding:"24px 8px",textAlign:"center"}}>nenhuma demanda</div>
+          :items.map(function(t){return <Card key={t.id} task={t} actionable={props.actionable}/>;})
+        }
+      </div>
+    </div>;
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header + botão "+ Nova demanda" */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Minhas demandas</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Solicitações enviadas e o andamento de cada uma.</div>
+      </div>
+      <button onClick={function(){setNovaDemandaOpen(true);}}
+        style={{background:cl.color,color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 2px 8px "+cl.color+"33",transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 12px "+cl.color+"55";}}
+        onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+cl.color+"33";}}>
+        + Nova demanda
+      </button>
+    </div>
+
+    {/* Kanban — 4 colunas */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(220px,1fr))",gap:12,overflowX:"auto",background:"#1e293b",padding:"14px",borderRadius:14,alignItems:"flex-start"}}>
+      <Coluna label="Recebidas"               color="#64748b" items={colRecebidas}  actionable={false}/>
+      <Coluna label="Em produção"             color="#ea580c" items={colEmProducao} actionable={false}/>
+      <Coluna label="Aguardando sua aprovação" color="#059669" items={colAguardando} actionable={true}/>
+      <Coluna label="Concluídas"              color="#7c3aed" items={colConcluidas} actionable={false}/>
+    </div>
+
+    {/* Modal: Nova demanda */}
+    {novaDemandaOpen&&<NovaDemandaModal cl={cl} onClose={function(){setNovaDemandaOpen(false);}}/>}
+
+    {/* Modal: Solicitar ajuste */}
+    {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,padding:"22px 24px",maxWidth:520,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:6}}>Solicitar ajuste</div>
+        <div style={{color:"#64748b",fontSize:12,marginBottom:14}}>Demanda: <strong style={{color:"#0f172a"}}>{ajusteModal.task.title||"(sem título)"}</strong></div>
+        <div style={{color:"#475569",fontSize:12,marginBottom:6,fontWeight:600}}>O que precisa ser ajustado?</div>
+        <textarea value={ajusteModal.text} onChange={function(e){setAjusteModal(Object.assign({},ajusteModal,{text:e.target.value}));}}
+          placeholder="Ex: deixar a cor da logo mais escura, trocar a foto principal..."
+          autoFocus
+          style={{width:"100%",minHeight:110,padding:"10px 12px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
+          <button onClick={function(){setAjusteModal(null);}}
+            style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"9px 18px",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={handleConfirmarAjuste}
+            style={{background:"#dc2626",border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer"}}>Enviar solicitação</button>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+/* ─── MODAL NOVA DEMANDA ──────────────────────────────────────────────
+   Tipo Arte/Vídeo → cria task em status="rascunhos", assignee="ellen"
+   Outros tipos      → cria task em status="interno_demanda" (só no portal)
+─────────────────────────────────────────────────────────────────────── */
+function NovaDemandaModal({cl, onClose}){
+  const [titulo,setTitulo]=useState("");
+  const [tipo,setTipo]=useState("arte");
+  const [descricao,setDescricao]=useState("");
+  const [dataDesejada,setDataDesejada]=useState("");
+  const [prioridade,setPrioridade]=useState("media");
+  const [enviando,setEnviando]=useState(false);
+
+  const enviar=async function(){
+    if(!titulo.trim()){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Informe o título da demanda.",3500);
+      return;
+    }
+    if(titulo.length>200){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título muito longo (máx 200 caracteres).",3500);
+      return;
+    }
+    setEnviando(true);
+    const tipoCfg=TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===tipo;})||TIPOS_DEMANDA_CLIENTE[5];
+    const id="portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+    const now=new Date().toISOString();
+
+    // Roteamento:
+    //  - Arte/Vídeo: vai pro Rascunhos da Hellen no fluxo interno
+    //  - Outros: fica como demanda interna (visível só no portal + Radar)
+    const status=tipoCfg.routesFluxo?"rascunhos":"interno_demanda";
+    const assignee=tipoCfg.routesFluxo?"ellen":"";
+    const contentType=tipoCfg.contentType||tipo;
+
+    if(typeof window!=="undefined"&&window._sb){
+      try{
+        const payload={
+          id, title:titulo.trim(), status:status,
+          description:descricao.trim(),
+          priority:prioridade, client:cl.id,
+          origem:"portal", tipo_solicitacao:tipo,
+          content_type:contentType,
+          assignee:assignee, assignees:assignee?[assignee]:[],
+          checklist:[], timeline:[{
+            type:"created_by_client", from:"", to:status,
+            fromLabel:"", toLabel:tipoCfg.routesFluxo?"Rascunhos":"Demanda interna",
+            clientId:cl.id, clientName:cl.name,
+            at:now, atFmt:new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
+            user:"Cliente: "+cl.name,
+          }],
+          created_by:"portal_"+cl.id, created_at:now, col_entered_at:now,
+          tags:[], comments:[], files:[], watchers:[], cover:null,
+          ajustar:false, is_alteracao:false, score:null,
+          publish_date:null, publish_time:"09:00", bioter_unit:"",
+          deadline_time:"", deleted_at:null,
+          data_desejada:dataDesejada||null,
+        };
+        const {error}=await window._sb.from("tasks").insert(payload);
+        if(error)throw error;
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! "+(tipoCfg.routesFluxo?"Foi pra equipe de design/vídeo.":"Sua solicitação está registrada."),4000);
+        onClose();
+      }catch(e){
+        if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao enviar: "+(e.message||e),5000);
+      }
+    }
+    setEnviando(false);
+  };
+
+  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+    <div onClick={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:16,maxWidth:560,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+      {/* Header colorido com a cor do cliente */}
+      <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"18px 22px",color:"#fff"}}>
+        <div style={{fontWeight:800,fontSize:17,letterSpacing:-.3}}>Nova demanda</div>
+        <div style={{fontSize:12,opacity:.9,marginTop:2}}>Conte pra equipe Pixels o que você precisa</div>
+      </div>
+
+      <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
+
+        {/* Tipo */}
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Tipo de demanda *</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:6}}>
+            {TIPOS_DEMANDA_CLIENTE.map(function(opt){
+              const active=tipo===opt.id;
+              return <button key={opt.id} onClick={function(){setTipo(opt.id);}}
+                style={{background:active?cl.color:"#fff",color:active?"#fff":"#475569",border:"1px solid "+(active?cl.color:"#cbd5e1"),borderRadius:8,padding:"9px 11px",fontSize:12,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",textAlign:"left",letterSpacing:-.1,transition:"all .12s"}}>
+                {opt.label}
+                {opt.routesFluxo&&<div style={{fontSize:9.5,fontWeight:500,opacity:.85,marginTop:2}}>→ Equipe de design/vídeo</div>}
+              </button>;
+            })}
+          </div>
+        </div>
+
+        {/* Título */}
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Título da demanda *</div>
+          <input value={titulo} onChange={function(e){setTitulo(e.target.value);}} maxLength={200}
+            placeholder="Ex: Banner promocional para Black Friday"
+            style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+        </div>
+
+        {/* Descrição */}
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Detalhes / o que precisa</div>
+          <textarea value={descricao} onChange={function(e){setDescricao(e.target.value);}} maxLength={5000}
+            placeholder="Conte tudo que a equipe precisa saber: referências, cores, mensagem, dimensões..."
+            rows={4}
+            style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+        </div>
+
+        {/* Data desejada + prioridade */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Data desejada (referência)</div>
+            <input type="date" value={dataDesejada} onChange={function(e){setDataDesejada(e.target.value);}}
+              style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+          <div>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Prioridade</div>
+            <select value={prioridade} onChange={function(e){setPrioridade(e.target.value);}}
+              style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fff",boxSizing:"border-box"}}>
+              <option value="baixa">Baixa</option>
+              <option value="media">Média</option>
+              <option value="alta">Alta</option>
+              <option value="urgente">Urgente</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Botões */}
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:6}}>
+          <button onClick={onClose} disabled={enviando}
+            style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 20px",color:"#64748b",fontWeight:700,fontSize:13,cursor:enviando?"not-allowed":"pointer"}}>
+            Cancelar
+          </button>
+          <button onClick={enviar} disabled={enviando}
+            style={{background:enviando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:enviando?"not-allowed":"pointer",letterSpacing:-.1}}>
+            {enviando?"Enviando...":"Enviar demanda"}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
 function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
   const TASKS=tasks||[];
   // Se lockedClientId foi passado (cliente logado no portal), trava a seleção.
@@ -30390,7 +30738,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
     {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
-    {tab==="demandas"&&<PortalTimeline cl={cl} clTasks={clTasks} isMob={isMob}/>}
+    {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
 
     {/* ── CALENDÁRIO ── */}
     {tab==="solicitar"&&<PortalSolicitar tasks={tasks} selCl={selCl} cl={cl}/>}
