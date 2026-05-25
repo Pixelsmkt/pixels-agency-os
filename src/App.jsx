@@ -1551,6 +1551,7 @@ const NAV=[
     {id:"interno_conexoes",   icon:"◬", label:"Conexão e Contas"},
     {id:"interno_360",        icon:"◎", label:"Avaliação 360"},
     {id:"interno_carreira",   icon:"▲", label:"Histórico Carreira"},
+    {id:"interno_sprint",     icon:"⊟", label:"Sprints"},
   ]},
 ];
 
@@ -1777,6 +1778,154 @@ async function askClaude({model="claude-sonnet-4-20250514",max_tokens=500,system
   }
   if(data?.error)throw new Error(data.error);
   return data;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SPRINT HELPERS — lógica de cálculo de sprint e previsão de entrega
+   Toda a lógica vive aqui pra ser testável e reusable.
+═══════════════════════════════════════════════════════════════════ */
+
+// Default config (fallback se Supabase ainda não retornou)
+const SPRINT_CONFIG_DEFAULT = {
+  id: 1,
+  dia_inicio: 1,           // 0=dom, 1=seg, ..., 6=sáb
+  dia_limite: 3,           // até quando aceita demanda na sprint atual (ex: quarta)
+  horario_limite: "18:00",
+  prazo_padrao_dias: 5,    // dias úteis
+  texto_cliente: "Esta demanda entrou na sprint de {inicio} a {fim}. Previsão de entrega: {fim}.",
+  texto_aguardando: "O prazo pode ser ajustado após o envio das informações pendentes.",
+  texto_urgente: "Urgência em análise — a equipe definirá um prazo personalizado em breve.",
+};
+
+// Cache global em memória pra evitar fetch repetido
+let _sprintConfigCache = null;
+async function loadSprintConfig(){
+  if(_sprintConfigCache)return _sprintConfigCache;
+  if(typeof window!=="undefined"&&window._sb){
+    try{
+      const {data,error}=await window._sb.from("sprint_config").select("*").eq("id",1).single();
+      if(!error&&data){_sprintConfigCache=data;return data;}
+    }catch(e){console.warn("[sprint] load config:",e);}
+  }
+  return SPRINT_CONFIG_DEFAULT;
+}
+function invalidateSprintConfigCache(){_sprintConfigCache=null;}
+
+// Formato data: 'YYYY-MM-DD'
+function _ymd(d){
+  const yyyy=d.getFullYear(),mm=String(d.getMonth()+1).padStart(2,"0"),dd=String(d.getDate()).padStart(2,"0");
+  return yyyy+"-"+mm+"-"+dd;
+}
+// Formato pt-br: 'DD/MM'
+function _ddmm(d){return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");}
+// Cópia de data zerando hora
+function _atMidnight(d){const x=new Date(d);x.setHours(0,0,0,0);return x;}
+// Adiciona N dias úteis (pula sáb=6 e dom=0)
+function _addBusinessDays(date,n){
+  let d=new Date(date);
+  let added=0;
+  while(added<n){
+    d.setDate(d.getDate()+1);
+    const w=d.getDay();
+    if(w!==0&&w!==6)added++;
+  }
+  return d;
+}
+
+// Calcula o início da sprint pra uma data qualquer.
+// Ex: hoje é quinta (4), dia_inicio=1 (seg) → volta 3 dias → segunda dessa semana.
+function sprintInicioPara(date,config){
+  const cfg=config||SPRINT_CONFIG_DEFAULT;
+  const d=_atMidnight(date);
+  const diaSemana=d.getDay();
+  let diff=diaSemana-cfg.dia_inicio;
+  if(diff<0)diff+=7;
+  d.setDate(d.getDate()-diff);
+  return d;
+}
+
+// ID semântico da sprint (ex: '2026-W23').
+function sprintIdPara(date,config){
+  const inicio=sprintInicioPara(date,config);
+  // ISO week number
+  const tmp=new Date(Date.UTC(inicio.getFullYear(),inicio.getMonth(),inicio.getDate()));
+  const dayNum=(tmp.getUTCDay()+6)%7; // 0=seg ... 6=dom
+  tmp.setUTCDate(tmp.getUTCDate()-dayNum+3); // quinta da mesma semana
+  const week1=new Date(Date.UTC(tmp.getUTCFullYear(),0,4));
+  const weekNum=1+Math.round(((tmp-week1)/86400000-3+((week1.getUTCDay()+6)%7))/7);
+  return tmp.getUTCFullYear()+"-W"+String(weekNum).padStart(2,"0");
+}
+
+// Sprint ATUAL (baseada em hoje).
+function sprintAtual(config){
+  const cfg=config||SPRINT_CONFIG_DEFAULT;
+  const hoje=new Date();
+  const inicio=sprintInicioPara(hoje,cfg);
+  const fim=_addBusinessDays(inicio,cfg.prazo_padrao_dias-1);
+  return {
+    id: sprintIdPara(inicio,cfg),
+    data_inicio: _ymd(inicio),
+    data_fim: _ymd(fim),
+    prazo_dias: cfg.prazo_padrao_dias,
+  };
+}
+
+// Sprint pra uma demanda nova (considera cutoff: se passou do dia/horário limite, vai pra próxima)
+function sprintParaDemanda(dataSolicitacao,config){
+  const cfg=config||SPRINT_CONFIG_DEFAULT;
+  const d=dataSolicitacao?new Date(dataSolicitacao):new Date();
+  const diaSemana=d.getDay();
+  const inicioAtual=sprintInicioPara(d,cfg);
+  // Cutoff: dia da semana atual passou do dia_limite?
+  // Ex: dia_limite=3 (quarta), hoje é quinta (4) → passou
+  // Ex: hoje é quarta (3) e horário > horario_limite → passou
+  let cutoffPassou=false;
+  if(diaSemana>cfg.dia_limite){
+    cutoffPassou=true;
+  }else if(diaSemana===cfg.dia_limite){
+    const [h,m]=cfg.horario_limite.split(":").map(function(x){return parseInt(x,10)||0;});
+    if(d.getHours()>h||(d.getHours()===h&&d.getMinutes()>=m))cutoffPassou=true;
+  }
+  // Se passou, vai pra próxima sprint (+7 dias)
+  const inicio=cutoffPassou?(function(){const n=new Date(inicioAtual);n.setDate(n.getDate()+7);return n;})():inicioAtual;
+  const fim=_addBusinessDays(inicio,cfg.prazo_padrao_dias-1);
+  return {
+    id: sprintIdPara(inicio,cfg),
+    data_inicio: _ymd(inicio),
+    data_fim: _ymd(fim),
+    prazo_dias: cfg.prazo_padrao_dias,
+    cutoff_passou: cutoffPassou,
+  };
+}
+
+// Calcula a data de entrega prevista pra uma sprint
+function calcularPrazoEntrega(sprint){
+  if(!sprint||!sprint.data_fim)return null;
+  return sprint.data_fim; // data_fim JÁ é a previsão de entrega (último dia útil da sprint)
+}
+
+// Status do prazo da demanda
+// Retorna: "no_prazo" | "atrasado" | "entregue" | "aguardando" | "urgencia_pendente" | "sem_sprint"
+function statusPrazo(task){
+  if(!task)return "sem_sprint";
+  if(task.completed_at||task.data_real_entrega)return "entregue";
+  if(task.urgente&&!task.data_prevista_entrega)return "urgencia_pendente";
+  if(task.aguardando_info)return "aguardando";
+  if(!task.sprint_id||!task.data_prevista_entrega)return "sem_sprint";
+  const hoje=_atMidnight(new Date());
+  const prevista=_atMidnight(new Date(task.data_prevista_entrega+"T12:00:00"));
+  return hoje>prevista?"atrasado":"no_prazo";
+}
+
+// Renderiza o texto pro cliente (substitui placeholders {inicio} e {fim})
+function textoSprintCliente(sprint,config){
+  if(!sprint)return "";
+  const cfg=config||SPRINT_CONFIG_DEFAULT;
+  const ini=new Date(sprint.data_inicio+"T12:00:00");
+  const fim=new Date(sprint.data_fim+"T12:00:00");
+  return (cfg.texto_cliente||SPRINT_CONFIG_DEFAULT.texto_cliente)
+    .replace(/\{inicio\}/g,_ddmm(ini))
+    .replace(/\{fim\}/g,_ddmm(fim));
 }
 
 function Ico({n,size=14,color,strokeWidth=2}){
@@ -19585,6 +19734,183 @@ function PageContagemEquipe({isMob}){
   </div>;
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAGE SPRINT CONFIG — admin pra editar regras globais de sprint
+═══════════════════════════════════════════════════════════════════ */
+function PageSprintConfig({isMob}){
+  const [cfg,setCfg]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const [sprintPreview,setSprintPreview]=useState(null);
+
+  // Carrega config do Supabase
+  useEffect(function(){
+    let active=true;
+    (async function(){
+      try{
+        if(window._sb){
+          const {data,error}=await window._sb.from("sprint_config").select("*").eq("id",1).single();
+          if(!active)return;
+          if(error||!data){
+            setCfg({...SPRINT_CONFIG_DEFAULT});
+          }else{
+            setCfg(data);
+          }
+        }else{
+          setCfg({...SPRINT_CONFIG_DEFAULT});
+        }
+      }catch(e){
+        if(active)setCfg({...SPRINT_CONFIG_DEFAULT});
+      }
+      if(active)setLoading(false);
+    })();
+    return function(){active=false;};
+  },[]);
+
+  // Calcula preview da sprint atual + da sprint da próxima demanda
+  useEffect(function(){
+    if(!cfg)return;
+    setSprintPreview({
+      atual: sprintAtual(cfg),
+      proxima_demanda: sprintParaDemanda(new Date(),cfg),
+    });
+  },[cfg]);
+
+  const _set=function(field,value){setCfg(function(prev){return Object.assign({},prev,{[field]:value});});};
+
+  const handleSave=async function(){
+    if(!cfg||saving)return;
+    setSaving(true);
+    try{
+      if(window._sb){
+        const payload={
+          dia_inicio:cfg.dia_inicio,
+          dia_limite:cfg.dia_limite,
+          horario_limite:cfg.horario_limite,
+          prazo_padrao_dias:cfg.prazo_padrao_dias,
+          texto_cliente:cfg.texto_cliente,
+          texto_aguardando:cfg.texto_aguardando,
+          texto_urgente:cfg.texto_urgente,
+          updated_at:new Date().toISOString(),
+        };
+        const {error}=await window._sb.from("sprint_config").update(payload).eq("id",1);
+        if(error)throw error;
+        if(typeof invalidateSprintConfigCache==="function")invalidateSprintConfigCache();
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Configuração de sprint salva!",3000);
+      }
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar: "+(e.message||e),5000);
+    }finally{
+      setSaving(false);
+    }
+  };
+
+  if(loading){
+    return <div style={{padding:"40px 20px",textAlign:"center",color:"#94a3b8"}}>Carregando configuração...</div>;
+  }
+  if(!cfg)return <div style={{padding:"40px 20px",color:"#dc2626"}}>Não foi possível carregar a configuração.</div>;
+
+  const diasSemana=[
+    {v:0,l:"Domingo"},{v:1,l:"Segunda"},{v:2,l:"Terça"},{v:3,l:"Quarta"},
+    {v:4,l:"Quinta"},{v:5,l:"Sexta"},{v:6,l:"Sábado"},
+  ];
+
+  const _ddmmStr=function(s){if(!s)return "";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,maxWidth:920,margin:"0 auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header */}
+    <div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5}}>Configuração de Sprints</div>
+      <div style={{color:"#64748b",fontSize:13,marginTop:4}}>Regras globais usadas pra calcular automaticamente a previsão de entrega das demandas avulsas.</div>
+    </div>
+
+    {/* Preview da sprint atual */}
+    {sprintPreview&&<div style={{background:"linear-gradient(135deg,#f0fdf4,#dcfce7)",border:"1px solid #bbf7d0",borderRadius:12,padding:"14px 18px",display:"flex",flexWrap:"wrap",gap:18}}>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{color:"#166534",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Sprint atual</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,fontFeatureSettings:"'tnum'"}}>{sprintPreview.atual.id}</div>
+        <div style={{color:"#475569",fontSize:12,marginTop:2}}>{_ddmmStr(sprintPreview.atual.data_inicio)} → {_ddmmStr(sprintPreview.atual.data_fim)}</div>
+      </div>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{color:"#166534",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Próxima demanda iria pra</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,fontFeatureSettings:"'tnum'"}}>{sprintPreview.proxima_demanda.id}{sprintPreview.proxima_demanda.cutoff_passou?" (após cutoff)":""}</div>
+        <div style={{color:"#475569",fontSize:12,marginTop:2}}>Previsão: <strong>{_ddmmStr(sprintPreview.proxima_demanda.data_fim)}</strong></div>
+      </div>
+    </div>}
+
+    {/* Form principal */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"20px 22px",display:"flex",flexDirection:"column",gap:18}}>
+      {/* Dia de início + dia limite */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Dia de início da sprint</div>
+          <select value={cfg.dia_inicio} onChange={function(e){_set("dia_inicio",parseInt(e.target.value,10));}}
+            style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none"}}>
+            {diasSemana.map(function(d){return <option key={d.v} value={d.v}>{d.l}</option>;})}
+          </select>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Sprint começa nesse dia da semana toda semana.</div>
+        </div>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Dia limite (cutoff)</div>
+          <select value={cfg.dia_limite} onChange={function(e){_set("dia_limite",parseInt(e.target.value,10));}}
+            style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none"}}>
+            {diasSemana.map(function(d){return <option key={d.v} value={d.v}>{d.l}</option>;})}
+          </select>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Depois desse dia, demandas vão pra próxima sprint.</div>
+        </div>
+      </div>
+
+      {/* Horário limite + prazo padrão */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Horário limite</div>
+          <input type="time" value={cfg.horario_limite} onChange={function(e){_set("horario_limite",e.target.value);}}
+            style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none"}}/>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>No dia limite, depois desse horário também é cutoff.</div>
+        </div>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Prazo padrão (dias úteis)</div>
+          <input type="number" min="1" max="30" value={cfg.prazo_padrao_dias} onChange={function(e){_set("prazo_padrao_dias",parseInt(e.target.value,10)||1);}}
+            style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none",fontFeatureSettings:"'tnum'"}}/>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Quantos dias úteis a sprint dura (pula sáb/dom).</div>
+        </div>
+      </div>
+
+      {/* Textos */}
+      <div>
+        <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Texto exibido ao cliente</div>
+        <textarea value={cfg.texto_cliente} onChange={function(e){_set("texto_cliente",e.target.value);}}
+          rows={2}
+          style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+        <div style={{color:"#94a3b8",fontSize:11,marginTop:4}}>Use <code style={{background:"#f1f5f9",padding:"1px 5px",borderRadius:4}}>{"{inicio}"}</code> e <code style={{background:"#f1f5f9",padding:"1px 5px",borderRadius:4}}>{"{fim}"}</code> como placeholders das datas.</div>
+      </div>
+
+      <div>
+        <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Texto pra demanda aguardando informações</div>
+        <textarea value={cfg.texto_aguardando} onChange={function(e){_set("texto_aguardando",e.target.value);}}
+          rows={2}
+          style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+      </div>
+
+      <div>
+        <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Texto pra demanda urgente em análise</div>
+        <textarea value={cfg.texto_urgente} onChange={function(e){_set("texto_urgente",e.target.value);}}
+          rows={2}
+          style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+      </div>
+
+      {/* Botão salvar */}
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,borderTop:"1px solid #f1f5f9",paddingTop:14,marginTop:4}}>
+        <button onClick={handleSave} disabled={saving}
+          style={{background:saving?"#94a3b8":"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:700,fontSize:13,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7}}>
+          {saving?"Salvando...":<><Ico n="check" size={14}/> Salvar configuração</>}
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
 // ======= 10_radar_entrega.jsx =======
 
 const RADAR_ORIGENS = {
@@ -21259,44 +21585,33 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>
               );
             })()}
-            {/* Editor de descrição — escondido quando card tá em "ajustes" sem conteúdo
-                (Solicitação de ajuste já mostra tudo que importa; editor vazio só polui). */}
-            {(function(){
-              const _isAjuste=task.status==="ajustes"||task.isAlteracao;
-              const _descTxt=String(desc||"").replace(/<[^>]*>/g,"").trim();
-              const _hideEmpty=_isAjuste&&!_descTxt&&!canEdit;
-              if(_hideEmpty)return null;
-              // Se em ajustes e vazio mas tem permissão de editar, mostra collapsed (link "Adicionar descrição")
-              const [_showDescEditor,_setShowDescEditor]=[true,function(){}]; // placeholder — sempre mostra
-              return <div>
-                {canEdit&&<RichToolbar elRef={descRef}/>}
-                <div
-                  ref={descRef}
-                  contentEditable={canEdit}
-                  suppressContentEditableWarning
-                  onBlur={e=>setDesc(e.currentTarget.innerHTML)}
-                  onMouseDown={e=>e.stopPropagation()}
-                  onClick={e=>{
-                    const a=e.target.closest&&e.target.closest("a");
-                    if(!a)return;
-                    const href=a.getAttribute("href");
-                    if(!href)return;
-                    if(/^(https?:|mailto:|tel:)/i.test(href)){
-                      e.preventDefault();
-                      e.stopPropagation();
-                      window.open(href,"_blank","noopener,noreferrer");
-                    }
-                  }}
-                  data-placeholder={_isAjuste?"Anotações internas (opcional)":"Descrição da demanda"}
-                  style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:_isAjuste&&!_descTxt?80:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
-                {canEdit&&_descTxt&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
-                  <button onClick={save}
-                    style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 18px",fontWeight:700,fontSize:12,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
-                    <Ico n="check" size={13}/> Salvar descrição
-                  </button>
-                </div>}
-              </div>;
-            })()}
+            <div>
+              {canEdit&&<RichToolbar elRef={descRef}/>}
+              <div
+                ref={descRef}
+                contentEditable={canEdit}
+                suppressContentEditableWarning
+                onBlur={e=>setDesc(e.currentTarget.innerHTML)}
+                onMouseDown={e=>e.stopPropagation()}
+                onClick={e=>{
+                  const a=e.target.closest&&e.target.closest("a");
+                  if(!a)return;
+                  const href=a.getAttribute("href");
+                  if(!href)return;
+                  if(/^(https?:|mailto:|tel:)/i.test(href)){
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.open(href,"_blank","noopener,noreferrer");
+                  }
+                }}
+                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
+              {canEdit&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
+                <button onClick={save}
+                  style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 20px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                  💾 Salvar descrição
+                </button>
+              </div>}
+            </div>
 
             {/* ── BRIEFING DO CLIENTE ── */}
             {(()=>{
@@ -26956,6 +27271,7 @@ export default function AgencyOS(){
       case "interno_conexoes":      return (effectivePerms.verInterno&&effectivePerms.verConexoes)||isSocio?<PageConexoes {...p}/>:<NoPerm/>;
       case "interno_360":           return (effectivePerms.verInterno&&effectivePerms.verAvaliacao360)||isSocio?<PageAvaliacao360 {...p}/>:<NoPerm/>;
       case "interno_carreira":      return (effectivePerms.verInterno&&effectivePerms.verCarreira)||isSocio?<PageCarreira {...p} tasks={tasks}/>:<NoPerm/>;
+      case "interno_sprint":        return isSocio?<PageSprintConfig {...p}/>:<NoPerm/>;
       case "notificacoes":          return <PageNotificacoes notifs={notifs} setNotifs={setNotifs}/>;
       default:                      return <NoPerm/>;
     }
