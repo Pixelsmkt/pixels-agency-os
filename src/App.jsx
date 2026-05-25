@@ -31898,24 +31898,55 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
     {/* ── FUNIL COMERCIAL ── cliente preenche, gestão de mídia consome */}
     {tab==="funil"&&<PortalFunil cl={cl} isMob={isMob}/>}
 
-    {/* ── PUBLICAÇÕES ── (material final para o cliente) */}
+    {/* ── PUBLICAÇÕES ── grid estilo feed (cards pequenos, capa única) */}
     {tab==="publicacoes"&&(()=>{
       const pub=clTasks.filter(t=>["agendado","publicado"].includes(t.status)&&(t.caption||((t.files||[]).some(f=>!f.isAnnotation&&(f.type?.startsWith("image/")||f.type?.startsWith("video/"))))));
       if(pub.length===0)return(
-        <div style={{background:C.card,borderRadius:14,padding:"48px",textAlign:"center",border:"1px solid "+C.b1}}>
-          <div style={{fontSize:36,marginBottom:8}}>🖼</div>
-          <div style={{color:C.tx,fontWeight:700}}>Nenhuma publicação disponível</div>
-          <div style={{color:C.td,fontSize:12,marginTop:4}}>Os materiais aprovados para publicação aparecerão aqui com a legenda final.</div>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"50px 36px",textAlign:"center"}}>
+          <div style={{width:60,height:60,borderRadius:"50%",background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
+            <Ico n="image" size={26} color={cl.color}/>
+          </div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:16}}>Nenhuma publicação disponível</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:6,maxWidth:380,margin:"6px auto 0",lineHeight:1.5}}>Os materiais aprovados para publicação aparecerão aqui.</div>
         </div>
       );
+      const ordenadas=pub.slice().sort((a,b)=>(b.publishDate||"").localeCompare(a.publishDate||""));
       return(
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{background:cl.color+"10",border:"1px solid "+cl.color+"33",borderRadius:10,padding:"10px 14px",fontSize:11,color:cl.color,fontWeight:600}}>
-            ✅ Aqui você visualiza apenas o material final aprovado e a legenda de cada publicação.
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Publicações</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{ordenadas.length} {ordenadas.length===1?"publicação":"publicações"} · do mais recente ao mais antigo</div>
+            </div>
           </div>
-          {pub.sort((a,b)=>(b.publishDate||"").localeCompare(a.publishDate||"")).map(t=>(
-            <PortalCard key={t.id} task={t} cl={cl}/>
-          ))}
+          {/* Grid estilo Instagram — 4 colunas desktop, 2 mobile */}
+          <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
+            {ordenadas.map(function(t){
+              const img=(t.files||[]).slice().reverse().find(function(f){return f&&f.url&&!f.isAnnotation&&(f.type||"").startsWith("image/");});
+              const cover=t.cover||(img?img.url:null);
+              const dataPub=t.publishDate?new Date(t.publishDate+"T12:00:00"):null;
+              const dataLabel=dataPub?String(dataPub.getDate()).padStart(2,"0")+"/"+String(dataPub.getMonth()+1).padStart(2,"0"):"";
+              return <div key={t.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column"}}
+                onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=cl.color+"66";}}
+                onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                {/* Imagem capa quadrada — estilo Instagram */}
+                <div style={{aspectRatio:"1/1",background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                  {cover
+                    ?<img src={cover} alt={t.title||""} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                    :<Ico n="image" size={28} color="#cbd5e1"/>
+                  }
+                  {/* Badge data no canto */}
+                  {dataLabel&&<div style={{position:"absolute",top:7,right:7,background:"rgba(0,0,0,0.65)",color:"#fff",fontSize:9.5,fontWeight:700,padding:"3px 8px",borderRadius:99,fontFeatureSettings:"'tnum'",letterSpacing:.2}}>
+                    {dataLabel}
+                  </div>}
+                </div>
+                {/* Título compacto */}
+                <div style={{padding:"8px 10px",color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",minHeight:34}}>
+                  {t.title||"(sem título)"}
+                </div>
+              </div>;
+            })}
+          </div>
         </div>
       );
     })()}
