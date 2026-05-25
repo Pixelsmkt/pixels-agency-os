@@ -16753,6 +16753,9 @@ const GF_SOCIOS = {
   ],
 };
 
+// Reserva de caixa — 10% do MRR vai pra RDB Nubank (caixinhas)
+const GF_RESERVA_CAIXA_PCT = 0.10;
+
 // Meta de margem (configurável)
 const GF_META_MARGEM_PCT = 0.50;
 
@@ -16786,25 +16789,29 @@ function PageGestaoFinanceiro({isMob}){
   const imposto=GF_IMPOSTOS_VALOR;
   const impostoPctAtual=mrr>0?imposto/mrr:0;
 
+  // Reserva de caixa (10% do MRR → RDB Nubank / caixinhas)
+  const reservaCaixa=mrr*GF_RESERVA_CAIXA_PCT;
+
   // Sócios
   const prolaboreTotal=GF_SOCIOS.prolabore.reduce(function(s,p){return s+p.valor;},0);
   const lucrosTotal=GF_SOCIOS.lucros.reduce(function(s,p){return s+p.valor;},0);
 
-  // Resultado operacional
-  const resultadoOp=mrr-imposto-custoServirTotal-custoFixoTotal;
+  // Resultado operacional (já descontando reserva de caixa)
+  const resultadoOp=mrr-imposto-custoServirTotal-custoFixoTotal-reservaCaixa;
   const margemAntesImpostos=mrr>0?(mrr-custoServirTotal-custoFixoTotal)/mrr:0;
   const margemApos=mrr>0?resultadoOp/mrr:0;
 
   // Meta de margem (50%) — solve for receita necessária
-  // (R - R*i - CS - CF) / R = 0.5  =>  R * (1 - i - 0.5) = CS + CF  =>  R = (CS+CF) / (0.5 - i)
-  // (impostoPct é constante atual)
-  const fatorMeta=GF_META_MARGEM_PCT+impostoPctAtual; // 0.5 + 0.0769 = 0.5769
-  const denomMeta=1-fatorMeta; // 1 - 0.5769 = 0.4231
+  // (R - R*i - CS - CF - R*reserva) / R = 0.5
+  // 1 - i - reserva - (CS+CF)/R = 0.5
+  // (CS+CF)/R = 0.5 - i - reserva
+  // R = (CS+CF) / (0.5 - i - reserva)
+  // OBS: i é constante atual; reserva é porcentagem fixa
+  const denomMeta=1-GF_META_MARGEM_PCT-impostoPctAtual-GF_RESERVA_CAIXA_PCT; // 1 - 0.5 - 0.0769 - 0.10 = 0.3231
   const mrrNecessario=denomMeta>0?(custoFixoTotal+custoServirTotal)/denomMeta:0;
   const faltaVender=mrrNecessario-mrr;
   const gapMargem=(GF_META_MARGEM_PCT-margemApos)*100;
   const clientesAdic=ticketCliente>0?Math.ceil(faltaVender/ticketCliente):0;
-  const unidadesAdic=ticketUnidade>0?Math.ceil(faltaVender/ticketUnidade):0;
 
   // ── Helpers visuais ──
   const Block=function(props){
@@ -16864,11 +16871,10 @@ function PageGestaoFinanceiro({isMob}){
           </span>
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:18,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
-        <BigStat label="Clientes ativos"   value={clientesAtivos}      size={22} color="#fff" style={{color:"#fff"}}/>
-        <BigStat label="Unidades faturadas" value={unidadesFaturadas}   size={22} color="#fff" style={{color:"#fff"}}/>
-        <BigStat label="Ticket / cliente"   value={_brl(ticketCliente)} size={22} color="#fff" style={{color:"#fff"}}/>
-        <BigStat label="Ticket / unidade"   value={_brlF(ticketUnidade)} size={22} color="#fff" style={{color:"#fff"}}/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(3,1fr)",gap:18,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+        <BigStat label="Clientes ativos" value={clientesAtivos}      size={22} color="#fff" style={{color:"#fff"}}/>
+        <BigStat label="Ticket médio"    value={_brl(ticketCliente)} size={22} color="#fff" style={{color:"#fff"}}/>
+        <BigStat label="LTV (12m)"       value={_brl(ltv)}           size={22} color="#fff" style={{color:"#fff"}}/>
       </div>
     </div>
 
@@ -16889,7 +16895,7 @@ function PageGestaoFinanceiro({isMob}){
       <BlockHeader ico="layers" color="#475569" title="Custo fixo / Estrutura" subtitle="Despesas que não variam com o número de clientes"
         right={<div style={{textAlign:"right"}}>
           <div style={{color:"#475569",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{_brlF(custoFixoTotal)}</div>
-          <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoFixoTotal/clientesAtivos)} por cliente · {_brlF(custoFixoTotal/unidadesFaturadas)} por unidade</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoFixoTotal/clientesAtivos)} por cliente</div>
         </div>}/>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:12}}>
         {Object.entries(GF_CUSTO_FIXO).map(function(arr){
@@ -16923,7 +16929,7 @@ function PageGestaoFinanceiro({isMob}){
       <BlockHeader ico="users" color="#0891b2" title="Custo de servir" subtitle="O que custa entregar os serviços contratados"
         right={<div style={{textAlign:"right"}}>
           <div style={{color:"#0891b2",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{_brlF(custoServirTotal)}</div>
-          <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoServirTotal/clientesAtivos)} por cliente · {_brlF(custoServirTotal/unidadesFaturadas)} por unidade</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoServirTotal/clientesAtivos)} por cliente</div>
         </div>}/>
       {/* Gráfico horizontal por área */}
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -16955,15 +16961,15 @@ function PageGestaoFinanceiro({isMob}){
         <div style={{fontSize:12,opacity:.75,marginTop:6}}>Custo fixo {_brlF(custoFixoTotal)} + Custo de servir {_brlF(custoServirTotal)}</div>
       </div>
       <div style={{display:"flex",gap:24}}>
-        <BigStat label="Por cliente"  value={_brlF(custoOperacional/clientesAtivos)}  color="#fff" size={20}/>
-        <BigStat label="Por unidade"  value={_brlF(custoOperacional/unidadesFaturadas)} color="#fff" size={20}/>
+        <BigStat label="Por cliente"   value={_brlF(custoOperacional/clientesAtivos)} color="#fff" size={20}/>
+        <BigStat label="% da receita"  value={mrr>0?_pct((custoOperacional/mrr)*100):"-"} color="#fff" size={20}/>
       </div>
     </div>
 
-    {/* ════ 6. SÓCIOS, IMPOSTOS E RETIRADAS ════ */}
+    {/* ════ 6. SÓCIOS, IMPOSTOS, RESERVA E RETIRADAS ════ */}
     <Block>
-      <BlockHeader ico="users" color="#7c3aed" title="Sócios, impostos e retiradas" subtitle="Pró-labore (custo fixo) · Distribuição de lucros (separada) · Impostos"/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
+      <BlockHeader ico="users" color="#7c3aed" title="Sócios, impostos e reservas" subtitle="Pró-labore (custo fixo) · Lucros (separada) · Impostos · Reserva de caixa 10%"/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,1fr)",gap:12}}>
         {/* A) Pró-labore */}
         <div style={{background:"#faf5ff",border:"1px solid #e9d5ff",borderRadius:10,padding:"14px 16px"}}>
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
@@ -17016,18 +17022,36 @@ function PageGestaoFinanceiro({isMob}){
             <span style={{color:"#dc2626",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_brlF(imposto)}</span>
           </div>
         </div>
+        {/* D) Reserva de caixa */}
+        <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"14px 16px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+            <div style={{width:6,height:18,borderRadius:3,background:"#2563eb"}}/>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:12.5}}>D · Reserva de caixa</div>
+            <span style={{background:"#dbeafe",color:"#1d4ed8",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",marginLeft:"auto"}}>{_pct(GF_RESERVA_CAIXA_PCT*100)} da receita</span>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:5}}>
+            <span style={{color:"#475569"}}>RDB Nubank · caixinhas</span>
+            <span style={{color:"#0f172a",fontWeight:700,fontFeatureSettings:"'tnum'"}}>{_brlF(reservaCaixa)}</span>
+          </div>
+          <div style={{color:"#64748b",fontSize:10.5,marginTop:6,marginBottom:2}}>Acumula 12m: <strong style={{color:"#0f172a"}}>{_brl(reservaCaixa*12)}</strong></div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginTop:6,paddingTop:8,borderTop:"1px solid #bfdbfe"}}>
+            <span style={{color:"#0f172a",fontWeight:700}}>Total</span>
+            <span style={{color:"#2563eb",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_brlF(reservaCaixa)}</span>
+          </div>
+        </div>
       </div>
     </Block>
 
     {/* ════ 7. RESULTADO OPERACIONAL ════ */}
     <Block>
-      <BlockHeader ico="funnel" color="#0d9488" title="Resultado operacional" subtitle="Composição visual: receita - impostos - custos = sobra"/>
+      <BlockHeader ico="funnel" color="#0d9488" title="Resultado operacional" subtitle="Receita − impostos − custos − reserva de caixa = sobra para sócios"/>
       <div style={{display:"flex",flexDirection:"column",gap:0}}>
         {[
-          {label:"Receita total",   v:mrr,             op:"",  cor:"#16a34a"},
-          {label:"Impostos",        v:imposto,         op:"−", cor:"#dc2626"},
-          {label:"Custo de servir", v:custoServirTotal,op:"−", cor:"#0891b2"},
-          {label:"Custo fixo",      v:custoFixoTotal,  op:"−", cor:"#475569"},
+          {label:"Receita total",     v:mrr,             op:"",  cor:"#16a34a"},
+          {label:"Impostos",          v:imposto,         op:"−", cor:"#dc2626"},
+          {label:"Custo de servir",   v:custoServirTotal,op:"−", cor:"#0891b2"},
+          {label:"Custo fixo",        v:custoFixoTotal,  op:"−", cor:"#475569"},
+          {label:"Reserva de caixa",  v:reservaCaixa,    op:"−", cor:"#2563eb"},
         ].map(function(r,i){
           return <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #f1f5f9"}}>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -17082,23 +17106,14 @@ function PageGestaoFinanceiro({isMob}){
         <BigStat label="MRR necessário" value={_brlF(mrrNecessario)}         color="#fff"    size={22}/>
         <BigStat label="Falta vender"   value={_brlF(faltaVender)+"/mês"}    color="#fde047" size={22}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14,marginTop:18,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
-        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:11}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr",gap:14,marginTop:18,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
+        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:11}}>
           <div style={{width:36,height:36,borderRadius:9,background:"rgba(253,224,71,0.18)",display:"flex",alignItems:"center",justifyContent:"center"}}>
             <Ico n="users" size={18} color="#fde047"/>
           </div>
           <div>
-            <div style={{fontSize:24,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>+{clientesAdic}</div>
-            <div style={{fontSize:11.5,opacity:.85,marginTop:2}}>clientes médios pra atingir a meta <span style={{opacity:.65}}>· ticket {_brl(ticketCliente)}</span></div>
-          </div>
-        </div>
-        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",gap:11}}>
-          <div style={{width:36,height:36,borderRadius:9,background:"rgba(253,224,71,0.18)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Ico n="layers" size={18} color="#fde047"/>
-          </div>
-          <div>
-            <div style={{fontSize:24,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>+{unidadesAdic}</div>
-            <div style={{fontSize:11.5,opacity:.85,marginTop:2}}>unidades médias <span style={{opacity:.65}}>· ticket {_brlF(ticketUnidade)}</span></div>
+            <div style={{fontSize:24,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>+{clientesAdic} clientes</div>
+            <div style={{fontSize:11.5,opacity:.85,marginTop:2}}>pra atingir a meta de 50% <span style={{opacity:.65}}>· ticket médio {_brl(ticketCliente)}</span></div>
           </div>
         </div>
       </div>
@@ -17106,7 +17121,7 @@ function PageGestaoFinanceiro({isMob}){
 
     {/* ════ 9. CONTRATOS ATIVOS — expansível ════ */}
     <Block>
-      <BlockHeader ico="fileText" color="#475569" title="Contratos ativos" subtitle={unidadesFaturadas+" unidades · MRR consolidado "+_brl(mrr)}/>
+      <BlockHeader ico="fileText" color="#475569" title="Contratos ativos" subtitle={clientesAtivos+" clientes · MRR consolidado "+_brl(mrr)}/>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {GF_CONTRATOS.map(function(c,idx){
           if(c.grupoEcon&&c.unidades){
@@ -17145,10 +17160,11 @@ function PageGestaoFinanceiro({isMob}){
               </div>}
             </div>;
           }
-          return <div key={idx} style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:11,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          // Cliente individual (sem unidades)
+          return <div key={idx} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:11}}>
               <div style={{width:8,height:30,borderRadius:3,background:c.cor}}/>
-              <span style={{color:"#0f172a",fontSize:14.5,fontWeight:800,letterSpacing:-.2}}>{c.grupo}</span>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>{c.grupo}</div>
             </div>
             <div style={{color:c.cor,fontWeight:800,fontSize:17,fontFeatureSettings:"'tnum'"}}>{_brl(c.valor)}<span style={{fontSize:11,opacity:.75,marginLeft:4}}>/mês</span></div>
           </div>;
