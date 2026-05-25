@@ -631,7 +631,7 @@ const THEMES={
     bl:"#4db8ff", pk:"#ff6eb4",
     tx:"#f2e8ff", ts:"#9966cc", td:"#3d1a6e",
     kRascunhos:"#64748b", kDemanda:"#4db8ff", kRecebida:"#ff6eb4", kExecucao:"#ffd000",
-    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAgendado:"#a140ff", kPublicado:"#a140ff", kPausado:"#1a0030", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#ff7200", kAprovado:"#00e5a0", kAprovacaoFinal:"#14b8a6", kAgendado:"#a140ff", kPublicado:"#a140ff", kPausado:"#1a0030", kAlteracao:"#7c1d1d",
   },
   light:{
     name:"Light", icon:"○",
@@ -642,7 +642,7 @@ const THEMES={
     bl:"#2563eb", pk:"#db2777",
     tx:"#0f172a", ts:"#64748b", td:"#94a3b8",
     kRascunhos:"#64748b", kDemanda:"#2563eb", kRecebida:"#db2777", kExecucao:"#d97706",
-    kAvaliacao:"#ea580c", kAprovado:"#059669", kAgendado:"#7c3aed", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#ea580c", kAprovado:"#059669", kAprovacaoFinal:"#0d9488", kAgendado:"#7c3aed", kPublicado:"#7c3aed", kPausado:"#94a3b8", kAlteracao:"#7c1d1d",
   },
   agro:{
     name:"Agro", icon:"◉",
@@ -653,7 +653,7 @@ const THEMES={
     bl:"#60a5fa", pk:"#f472b6",
     tx:"#e8fdf0", ts:"#4ade80", td:"#166534",
     kRascunhos:"#64748b", kDemanda:"#60a5fa", kRecebida:"#4ade80", kExecucao:"#fde047",
-    kAvaliacao:"#fb923c", kAprovado:"#a78bfa", kAgendado:"#a78bfa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#7c1d1d",
+    kAvaliacao:"#fb923c", kAprovado:"#a78bfa", kAprovacaoFinal:"#c084fc", kAgendado:"#a78bfa", kPublicado:"#a78bfa", kPausado:"#052e0c", kAlteracao:"#7c1d1d",
   },
 };
 
@@ -681,8 +681,9 @@ const KANBAN_COLS = [
   { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
   { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
   { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
-  { id:"aprovado",  label:"Aprovado",               color:C.kAprovado,  dark:true  },
-  { id:"agendado",  label:"Publicadas",            color:C.kAgendado,  dark:true  },
+  { id:"aprovado",        label:"Aprovação interna", color:C.kAprovado,       dark:true  },
+  { id:"aprovacao_final", label:"Aprovação final",   color:C.kAprovacaoFinal, dark:true  },
+  { id:"agendado",        label:"Publicadas",        color:C.kAgendado,       dark:true  },
   { id:"pausado",   label:"Pausado",                color:C.kPausado,   dark:false },
 ];
 
@@ -804,7 +805,7 @@ const DEFAULT_PERMS={
   filtroSetor:false, filtroCliente:false, filtroPerfil:false,
   // Colunas — abertas para todos por padrão (permissões finas definidas por sócio)
   colRascunhos:false, colCopys:false, colDemanda:true, colExecucao:true, colAvaliacao:false,
-  colAjustes:true, colAprovado:false, colAgendado:false, colPublicado:false, colPausado:false,
+  colAjustes:true, colAprovado:false, colAprovacaoFinal:false, colAgendado:false, colPublicado:false, colPausado:false,
   // Fluxo especial — só certos níveis podem desfazer aprovação de copy
   desfazerCopy:false,
   // Etiquetas/Tags (admin features no card)
@@ -868,10 +869,10 @@ function withPartnerOverride(perms, userId){
 const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
-  ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true},
-  erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verGestaoMidia:true,editarGestaoMidia:true,gerenciarClientesMidia:false},
-  andre:   {...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
-  guilherme:{...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
+  ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true},
+  erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verGestaoMidia:true,editarGestaoMidia:true,gerenciarClientesMidia:false},
+  andre:   {...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
+  guilherme:{...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
 };
 
 /* ─── SMART FORMAT TITLE — auto-formata título do card ─── */
@@ -11725,6 +11726,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     ajustes:   myPerms.colAjustes!==false, // default true (todos veem ajustes — designer/copywriter precisam)
     avaliacao: !!myPerms.colAvaliacao,
     aprovado:  !!myPerms.colAprovado,
+    aprovacao_final: !!myPerms.colAprovacaoFinal,
     agendado:  !!myPerms.colAgendado,
     publicado: !!myPerms.colPublicado,
     pausado:   !!myPerms.colPausado,
@@ -16576,7 +16578,8 @@ const PERM_GROUPS={
     {key:"colExecucao",       label:"Em execução",                desc:"Coluna de trabalho em andamento"},
     {key:"colAjustes",        label:"Ajustes",                    desc:"Coluna de ajustes solicitados pelo cliente"},
     {key:"colAvaliacao",      label:"Concluídas para avaliação",  desc:"Coluna aguardando aprovação"},
-    {key:"colAprovado",       label:"Aprovadas",                  desc:"Coluna de entregas aprovadas"},
+    {key:"colAprovado",       label:"Aprovação interna",          desc:"Coluna de demandas aprovadas internamente pela Pixels (aguardando cliente)"},
+    {key:"colAprovacaoFinal", label:"Aprovação final",            desc:"Coluna de demandas que o cliente também aprovou — prontas pra agendar"},
     {key:"colAgendado",       label:"Agendadas",                  desc:"Coluna de publicações programadas"},
     {key:"colPublicado",      label:"Publicadas",                 desc:"Coluna de conteúdos publicados"},
     {key:"colPausado",        label:"Pausadas",                   desc:"Coluna de demandas pausadas"},
