@@ -30380,6 +30380,9 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
   const [ajusteModal,setAjusteModal]=useState(null);
   const [cfg,setCfg]=useState(null);
   const [registrarEntregaOpen,setRegistrarEntregaOpen]=useState(false);
+  const [sprintPickerTask,setSprintPickerTask]=useState(null); // {task}
+  const [excluirTask,setExcluirTask]=useState(null);           // {task}
+  const isAdminUser=typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1;
 
   // ── Form de Nova Solicitação inline (substitui modal + tab Solicitar) ──
   const [solTitulo,setSolTitulo]=useState("");
@@ -30558,6 +30561,37 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
     });});
     setAjusteModal(null);
     if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação enviada à equipe.",3500);
+  };
+
+  // ── Excluir demanda (soft delete) ──
+  const handleExcluir=async function(task){
+    setTasks(function(prev){return prev.map(function(t){
+      if(t.id!==task.id)return t;
+      return Object.assign({},t,{deletedAt:_nowIso(),deleted_at:_nowIso()});
+    });});
+    setExcluirTask(null);
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda excluída.",3000);
+  };
+
+  // ── Vincular sprint (calcula data prevista de entrega) ──
+  const handleVincularSprint=function(task,sprintData){
+    setTasks(function(prev){return prev.map(function(t){
+      if(t.id!==task.id)return t;
+      return Object.assign({},t,{
+        sprint_id:sprintData.id,
+        data_entrada_sprint:_nowIso(),
+        data_prevista_entrega:sprintData.data_fim,
+        timeline:[].concat(t.timeline||[],[{
+          type:"sprint_linked",
+          sprint_id:sprintData.id,
+          at:_nowIso(),atFmt:_nowFmt(),
+          user:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Equipe Pixels",
+          text:"Demanda vinculada à sprint "+sprintData.id+" ("+sprintData.data_inicio+" → "+sprintData.data_fim+")",
+        }]),
+      });
+    });});
+    setSprintPickerTask(null);
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda vinculada à sprint "+sprintData.id,3500);
   };
 
   // ── Agrupamento por sprint ──
@@ -30755,6 +30789,22 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
                     <Ico n="rotate" size={11}/> Ajuste
                   </button>
                 </>}
+                {/* Vincular sprint (só admin, só se ainda não tiver sprint) */}
+                {isAdminUser&&!t.sprint_id&&<button onClick={function(){setSprintPickerTask({task:t});}}
+                  title="Vincular a uma sprint"
+                  style={{background:"#fff",color:"#0f172a",border:"1px solid #cbd5e1",borderRadius:7,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,fontFamily:"inherit"}}
+                  onMouseEnter={function(e){e.currentTarget.style.borderColor=cl.color;e.currentTarget.style.color=cl.color;}}
+                  onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}>
+                  <Ico n="calendar" size={11}/> Vincular sprint
+                </button>}
+                {/* Excluir demanda */}
+                <button onClick={function(){setExcluirTask({task:t});}}
+                  title="Excluir demanda"
+                  style={{background:"#fff",color:cl.color,border:"1px solid "+cl.color+"44",borderRadius:7,padding:"5px 8px",cursor:"pointer",display:"inline-flex",alignItems:"center",fontFamily:"inherit",transition:"all .12s"}}
+                  onMouseEnter={function(e){e.currentTarget.style.background=cl.color;e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor=cl.color;}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color=cl.color;e.currentTarget.style.borderColor=cl.color+"44";}}>
+                  <Ico n="trash" size={12}/>
+                </button>
               </div>
             </div>;
           })}
@@ -30767,6 +30817,79 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
 
     {/* Modal: Registrar entrega (só admin) */}
     {registrarEntregaOpen&&<RegistrarEntregaModal cl={cl} onClose={function(){setRegistrarEntregaOpen(false);}}/>}
+
+    {/* Modal: Vincular sprint */}
+    {sprintPickerTask&&(function(){
+      const sprintAtualAgora=sprintAtual(cfg||undefined);
+      // Próxima sprint = atual + 7 dias
+      const proxIni=new Date(sprintAtualAgora.data_inicio+"T12:00:00");
+      proxIni.setDate(proxIni.getDate()+7);
+      const proxFim=new Date(sprintAtualAgora.data_fim+"T12:00:00");
+      proxFim.setDate(proxFim.getDate()+7);
+      const _ymd=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+      const sprintProxima={
+        id:sprintIdPara(proxIni,cfg||undefined),
+        data_inicio:_ymd(proxIni),
+        data_fim:_ymd(proxFim),
+        prazo_dias:(cfg&&cfg.prazo_padrao_dias)||5,
+      };
+      const _ddmmS=function(s){if(!s)return "";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
+      return <div onClick={function(){setSprintPickerTask(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+        <div onClick={function(e){e.stopPropagation();}}
+          style={{background:"#fff",borderRadius:14,maxWidth:480,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+          <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"16px 22px",color:"#fff"}}>
+            <div style={{fontWeight:800,fontSize:16,letterSpacing:-.3}}>Vincular sprint</div>
+            <div style={{fontSize:12,opacity:.9,marginTop:2}}>{sprintPickerTask.task.title}</div>
+          </div>
+          <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{color:"#475569",fontSize:11.5,marginBottom:4}}>Escolha em qual sprint essa demanda entra. A previsão de entrega é calculada automaticamente.</div>
+            {[
+              {label:"Sprint atual",sprint:sprintAtualAgora,subtitle:"Entrega prevista até "+_ddmmS(sprintAtualAgora.data_fim)},
+              {label:"Próxima sprint",sprint:sprintProxima,subtitle:"Entrega prevista até "+_ddmmS(sprintProxima.data_fim)},
+            ].map(function(opt,i){
+              return <button key={i} onClick={function(){handleVincularSprint(sprintPickerTask.task,opt.sprint);}}
+                style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px",cursor:"pointer",fontFamily:"inherit",textAlign:"left",transition:"all .12s",display:"flex",alignItems:"center",gap:11}}
+                onMouseEnter={function(e){e.currentTarget.style.borderColor=cl.color;e.currentTarget.style.background=cl.color+"05";}}
+                onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}>
+                <div style={{width:36,height:36,borderRadius:8,background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Ico n="calendar" size={17} color={cl.color}/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5}}>{opt.label}</div>
+                  <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>{_ddmmS(opt.sprint.data_inicio)} → {_ddmmS(opt.sprint.data_fim)} · {opt.subtitle}</div>
+                </div>
+                <div style={{color:cl.color,fontSize:18,fontWeight:700}}>›</div>
+              </button>;
+            })}
+            <button onClick={function(){setSprintPickerTask(null);}}
+              style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 16px",color:"#64748b",fontWeight:700,fontSize:12.5,cursor:"pointer",marginTop:4}}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>;
+    })()}
+
+    {/* Modal: Confirmar exclusão */}
+    {excluirTask&&<div onClick={function(){setExcluirTask(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}}
+        style={{background:"#fff",borderRadius:14,maxWidth:420,width:"100%",padding:"22px 24px",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div style={{width:48,height:48,borderRadius:12,background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+          <Ico n="trash" size={22} color={cl.color}/>
+        </div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>Excluir essa demanda?</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:6,lineHeight:1.5}}>
+          <strong style={{color:"#0f172a"}}>{excluirTask.task.title}</strong><br/>
+          A demanda será removida da lista. Você pode reativá-la depois pela lixeira (admin).
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:18}}>
+          <button onClick={function(){setExcluirTask(null);}}
+            style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 18px",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={function(){handleExcluir(excluirTask.task);}}
+            style={{background:cl.color,color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontWeight:800,fontSize:13,cursor:"pointer"}}>Excluir demanda</button>
+        </div>
+      </div>
+    </div>}
 
     {/* Modal: Solicitar ajuste */}
     {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
