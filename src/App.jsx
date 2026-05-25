@@ -17078,43 +17078,74 @@ function PageGestaoFinanceiro({isMob}){
       </div>
     </Block>
 
-    {/* ════ 8. META DE MARGEM 50% — bloco destaque ════ */}
-    <div style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",borderRadius:18,padding:"24px 28px",color:"#fff",boxShadow:"0 12px 36px rgba(124,58,237,0.30)"}}>
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap",marginBottom:18}}>
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-            <Ico n="sparkles" size={18} color="#fde047"/>
-            <div style={{fontSize:11,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.95}}>Meta de margem</div>
-          </div>
-          <div style={{fontSize:13.5,opacity:.95,maxWidth:520,lineHeight:1.5}}>Quanto a Pixels precisa faturar pra atingir <strong>50% de margem</strong> sem mudar a estrutura de custos atual.</div>
-        </div>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:11,opacity:.85,fontWeight:600}}>Margem atual</div>
-          <div style={{fontSize:32,fontWeight:800,letterSpacing:-1,fontFeatureSettings:"'tnum'"}}>{_pct(margemApos*100)}</div>
-        </div>
-      </div>
-      {/* Barra de progresso */}
-      <div style={{background:"rgba(255,255,255,0.15)",borderRadius:99,height:12,overflow:"hidden",marginBottom:18}}>
-        <div style={{width:Math.min(100,(margemApos/GF_META_MARGEM_PCT)*100)+"%",height:"100%",background:"linear-gradient(90deg,#fde047,#facc15)",borderRadius:99,transition:"width .3s"}}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:18,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
-        <BigStat label="Meta"           value={_pct(GF_META_MARGEM_PCT*100)} color="#fde047" size={22}/>
-        <BigStat label="Gap"            value={gapMargem.toFixed(2)+" pp"}   color="#fff"    size={22}/>
-        <BigStat label="MRR necessário" value={_brlF(mrrNecessario)}         color="#fff"    size={22}/>
-        <BigStat label="Falta vender"   value={_brlF(faltaVender)+"/mês"}    color="#fde047" size={22}/>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr",gap:14,marginTop:18,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
-        <div style={{background:"rgba(255,255,255,0.08)",borderRadius:10,padding:"14px 18px",display:"flex",alignItems:"center",gap:11}}>
-          <div style={{width:36,height:36,borderRadius:9,background:"rgba(253,224,71,0.18)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Ico n="users" size={18} color="#fde047"/>
+    {/* ════ 8. META DE MARGEM 50% — bloco destaque clean ════ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px",display:"flex",flexDirection:"column",gap:20,position:"relative",overflow:"hidden"}}>
+      {/* Acento sutil no canto */}
+      <div style={{position:"absolute",top:-40,right:-40,width:180,height:180,borderRadius:"50%",background:"radial-gradient(circle,#ede9fe,transparent 70%)",pointerEvents:"none"}}/>
+
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap",position:"relative"}}>
+        <div style={{display:"flex",alignItems:"center",gap:11}}>
+          <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#7c3aed,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(124,58,237,0.25)"}}>
+            <Ico n="sparkles" size={18} color="#fff"/>
           </div>
           <div>
-            <div style={{fontSize:24,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>+{clientesAdic} clientes</div>
-            <div style={{fontSize:11.5,opacity:.85,marginTop:2}}>pra atingir a meta de 50% <span style={{opacity:.65}}>· ticket médio {_brl(ticketCliente)}</span></div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Meta de margem 50%</div>
+            <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Quanto faturar pra chegar lá sem mexer nos custos atuais</div>
           </div>
         </div>
+        <span style={{background:margemApos>=GF_META_MARGEM_PCT?"#dcfce7":"#fef3c7",color:margemApos>=GF_META_MARGEM_PCT?"#15803d":"#a16207",padding:"5px 12px",borderRadius:99,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+(margemApos>=GF_META_MARGEM_PCT?"#86efac":"#fde047")}}>
+          {margemApos>=GF_META_MARGEM_PCT?"Meta batida":"Em construção"}
+        </span>
       </div>
-    </div>
+
+      {/* Visualização principal: Atual vs Meta */}
+      <div style={{display:"flex",alignItems:"flex-end",gap:18,padding:"14px 4px 0",position:"relative"}}>
+        <div style={{flex:1}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Margem atual</div>
+          <div style={{color:"#7c3aed",fontWeight:800,fontSize:36,letterSpacing:-1.2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{_pct(margemApos*100)}</div>
+        </div>
+        <div style={{flex:"0 0 auto",display:"flex",alignItems:"center",gap:6,paddingBottom:8}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <div style={{flex:1,textAlign:"right"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Meta</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:36,letterSpacing:-1.2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{_pct(GF_META_MARGEM_PCT*100)}</div>
+        </div>
+      </div>
+
+      {/* Barra de progresso elegante */}
+      <div style={{position:"relative"}}>
+        <div style={{background:"#f1f5f9",borderRadius:99,height:8,overflow:"hidden"}}>
+          <div style={{width:Math.min(100,Math.max(2,(margemApos/GF_META_MARGEM_PCT)*100))+"%",height:"100%",background:"linear-gradient(90deg,#a855f7,#7c3aed)",borderRadius:99,transition:"width .3s",boxShadow:"0 1px 4px rgba(124,58,237,0.4)"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:6,fontSize:10.5,color:"#94a3b8",fontWeight:600}}>
+          <span>{Math.round((margemApos/GF_META_MARGEM_PCT)*100)}% do caminho</span>
+          <span>Gap: <strong style={{color:"#7c3aed"}}>{gapMargem.toFixed(1)} pp</strong></span>
+        </div>
+      </div>
+
+      {/* 3 KPIs em cards limpos */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12,position:"relative"}}>
+        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"14px 16px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>MRR necessário</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{_brl(mrrNecessario)}</div>
+          <div style={{color:"#64748b",fontSize:10.5,marginTop:3}}>por mês</div>
+        </div>
+        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"14px 16px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Falta vender</div>
+          <div style={{color:"#7c3aed",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{_brl(faltaVender)}</div>
+          <div style={{color:"#64748b",fontSize:10.5,marginTop:3}}>por mês</div>
+        </div>
+        <div style={{background:"linear-gradient(135deg,#faf5ff,#f3e8ff)",border:"1px solid #e9d5ff",borderRadius:11,padding:"14px 16px"}}>
+          <div style={{color:"#7c3aed",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4,display:"flex",alignItems:"center",gap:5}}>
+            <Ico n="users" size={11} color="#7c3aed"/> Clientes a vender
+          </div>
+          <div style={{color:"#7c3aed",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>+{clientesAdic}</div>
+          <div style={{color:"#64748b",fontSize:10.5,marginTop:3}}>ticket médio {_brl(ticketCliente)}</div>
+        </div>
+      </div>
+    </section>
 
     {/* ════ 9. CONTRATOS ATIVOS — expansível ════ */}
     <Block>
