@@ -30381,7 +30381,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
   const [solEnviando,setSolEnviando]=useState(false);
 
   // Prazo padrão por prioridade (dias úteis)
-  const PRAZO_POR_PRIORIDADE={baixa:10,media:7,alta:3,urgente:1};
+  const PRAZO_POR_PRIORIDADE={baixa:14,media:7,alta:3,urgente:1};
   // Helper: data desejada = hoje + N dias úteis
   const _calcDataDesejada=function(prioridade){
     const dias=PRAZO_POR_PRIORIDADE[prioridade]||7;
@@ -30616,7 +30616,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
         <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Prioridade</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {[
-            {id:"baixa",   l:"Baixa",   c:"#64748b", dias:10},
+            {id:"baixa",   l:"Baixa",   c:"#64748b", dias:14},
             {id:"media",   l:"Média",   c:"#f97316", dias:7},
             {id:"alta",    l:"Alta",    c:"#ef4444", dias:3},
             {id:"urgente", l:"Urgente", c:"#dc2626", dias:1},
@@ -31696,18 +31696,6 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       <div>
         <div style={{color:C.tx,fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>{cl.name}{isBioter&&selUnit!=="grupo"&&availableUnits.find(function(u){return u.id===selUnit;})?" · "+availableUnits.find(function(u){return u.id===selUnit;}).pickerLabel:""}</div>
         <div style={{color:C.td,fontSize:11,marginTop:1}}>{cl.sector}</div>
-      </div>
-      <div style={{display:"flex",gap:18,marginLeft:"auto",flexWrap:"wrap"}}>
-        {[
-          {l:"Agendadas",v:clTasks.filter(function(t){return t.status==="agendado";}).length,c:"#0284c7"},
-          {l:"Aguardando aprovação",v:clTasks.filter(function(t){return t.status==="aprovado";}).length,c:"#059669"},
-          {l:"Em produção",v:clTasks.filter(function(t){return ["agendado","publicado","aprovado","aprovacao_final"].indexOf(t.status)===-1;}).length,c:C.a},
-        ].map(function(k,i){
-          return <div key={i} style={{textAlign:"center"}}>
-            <div style={{color:k.c,fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.5}}>{k.v}</div>
-            <div style={{color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.3,marginTop:1}}>{k.l}</div>
-          </div>;
-        })}
       </div>
     </div>
 
