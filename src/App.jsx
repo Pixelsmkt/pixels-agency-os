@@ -30371,6 +30371,7 @@ const TIPOS_DEMANDA_CLIENTE = [
 function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
   const [ajusteModal,setAjusteModal]=useState(null);
   const [cfg,setCfg]=useState(null);
+  const [registrarEntregaOpen,setRegistrarEntregaOpen]=useState(false);
 
   // ── Form de Nova Solicitação inline (substitui modal + tab Solicitar) ──
   const [solTitulo,setSolTitulo]=useState("");
@@ -30617,14 +30618,23 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
         </div>
       </div>
 
-      {/* Botão enviar — alinhado à direita, tamanho normal */}
-      <div style={{display:"flex",justifyContent:"flex-end",marginTop:4}}>
+      {/* Botões: Enviar (esquerda) + Registrar entrega (direita, só admin) */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:4,flexWrap:"wrap"}}>
         <button onClick={enviarSolicitacao} disabled={solEnviando}
           style={{background:solEnviando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"9px 22px",fontWeight:700,fontSize:13,cursor:solEnviando?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
           onMouseEnter={function(e){if(!solEnviando)e.currentTarget.style.opacity=".92";}}
           onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
           {solEnviando?"Enviando...":<><Ico n="send" size={13}/> Enviar solicitação</>}
         </button>
+
+        {/* Registrar entrega — só visível pra equipe Pixels (admin/sócio) */}
+        {(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level<=2)&&<button
+          onClick={function(){setRegistrarEntregaOpen(true);}}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid "+cl.color,borderRadius:9,padding:"8px 18px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background=cl.color+"10";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+          <Ico n="check" size={13} color={cl.color}/> Registrar entrega
+        </button>}
       </div>
     </div>
 
@@ -30711,6 +30721,12 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
         </div>
       </section>;
     })}
+
+    {/* Linha do tempo de entregas — visualização anual */}
+    <EntregasTimeline cl={cl} clTasks={clTasks}/>
+
+    {/* Modal: Registrar entrega (só admin) */}
+    {registrarEntregaOpen&&<RegistrarEntregaModal cl={cl} onClose={function(){setRegistrarEntregaOpen(false);}}/>}
 
     {/* Modal: Solicitar ajuste */}
     {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -30872,6 +30888,196 @@ function NovaDemandaModal({cl, onClose}){
           <button onClick={enviar} disabled={enviando}
             style={{background:enviando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:enviando?"not-allowed":"pointer",letterSpacing:-.1}}>
             {enviando?"Enviando...":"Enviar demanda"}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ─── ENTREGAS TIMELINE — visualização anual de tudo que foi entregue ──── */
+function EntregasTimeline({cl, clTasks}){
+  // Pega tudo que tem completed_at (publicado, agendado, ou registrado manual)
+  const entregues=(clTasks||[]).filter(function(t){
+    if(t.deletedAt)return false;
+    return t.completedAt||t.completed_at;
+  }).sort(function(a,b){
+    const da=new Date(a.completedAt||a.completed_at).getTime()||0;
+    const db=new Date(b.completedAt||b.completed_at).getTime()||0;
+    return db-da; // mais recentes primeiro
+  });
+
+  if(entregues.length===0)return null;
+
+  const _ddmm=function(s){const d=new Date(s);if(isNaN(d.getTime()))return "";return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
+  const _MES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  // Agrupa por ano-mês
+  const grupos={};
+  entregues.forEach(function(t){
+    const d=new Date(t.completedAt||t.completed_at);
+    if(isNaN(d.getTime()))return;
+    const key=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+    if(!grupos[key])grupos[key]={key:key,ano:d.getFullYear(),mes:d.getMonth(),items:[]};
+    grupos[key].items.push(t);
+  });
+  const grupos_ordenados=Object.values(grupos).sort(function(a,b){return b.key.localeCompare(a.key);});
+
+  const tipoInfo=function(t){
+    const map={
+      arte:{label:"Arte",color:"#7c3aed"},carrossel:{label:"Carrossel",color:"#7c3aed"},
+      video:{label:"Vídeo",color:"#0284c7"},video_short:{label:"Short",color:"#dc2626"},
+      foto:{label:"Foto de obra",color:"#ea580c"},banner:{label:"Banner",color:"#0891b2"},
+      material:{label:"Material",color:"#475569"},campanha:{label:"Campanha",color:"#db2777"},
+      outro:{label:"Outro",color:"#64748b"},entrega_manual:{label:"Entrega",color:cl.color},
+    };
+    const k=t.contentType||t.tipo_solicitacao||"outro";
+    return map[k]||map.outro;
+  };
+
+  return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",marginTop:6}}>
+    <header style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",background:"linear-gradient(180deg,"+cl.color+"06,#fff)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <Ico n="clock" size={17} color={cl.color}/>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Linha do tempo de entregas</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Tudo que a Pixels já entregou pra você, em ordem cronológica.</div>
+        </div>
+      </div>
+      <span style={{background:cl.color+"15",color:cl.color,borderRadius:99,padding:"3px 11px",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{entregues.length} {entregues.length===1?"entrega":"entregas"}</span>
+    </header>
+
+    {grupos_ordenados.map(function(g){
+      return <div key={g.key} style={{borderBottom:"1px solid #f5f6f8"}}>
+        {/* Header do mês */}
+        <div style={{padding:"10px 20px",background:"#fafbfc",display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:6,height:6,borderRadius:"50%",background:cl.color}}/>
+          <span style={{color:"#0f172a",fontSize:12,fontWeight:700,letterSpacing:.1,textTransform:"uppercase"}}>{_MES[g.mes]} {g.ano}</span>
+          <span style={{color:"#94a3b8",fontSize:11,fontFeatureSettings:"'tnum'"}}>· {g.items.length}</span>
+        </div>
+        {/* Items do mês */}
+        {g.items.map(function(t,idx){
+          const tipo=tipoInfo(t);
+          const dataEntrega=t.completedAt||t.completed_at;
+          return <div key={t.id} style={{padding:"8px 20px",borderTop:idx>0?"1px solid #f8f9fa":"none",display:"flex",alignItems:"center",gap:12}}>
+            <span style={{background:tipo.color+"15",color:tipo.color,fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 8px",borderRadius:99,flexShrink:0,minWidth:55,textAlign:"center"}}>{tipo.label}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(sem título)"}</div>
+            </div>
+            <span style={{color:"#64748b",fontSize:11,fontWeight:600,fontFeatureSettings:"'tnum'",flexShrink:0}}>{_ddmm(dataEntrega)}</span>
+          </div>;
+        })}
+      </div>;
+    })}
+  </section>;
+}
+
+/* ─── REGISTRAR ENTREGA MODAL — admin loga manualmente uma entrega ─── */
+function RegistrarEntregaModal({cl, onClose}){
+  const [titulo,setTitulo]=useState("");
+  const [tipo,setTipo]=useState("entrega_manual");
+  const [descricao,setDescricao]=useState("");
+  const [dataEntrega,setDataEntrega]=useState(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");});
+  const [salvando,setSalvando]=useState(false);
+
+  const TIPOS_ENTREGA=[
+    {id:"entrega_manual", label:"Entrega geral"},
+    {id:"arte",     label:"Arte"},
+    {id:"video",    label:"Vídeo"},
+    {id:"banner",   label:"Banner"},
+    {id:"campanha", label:"Campanha"},
+    {id:"material", label:"Material"},
+    {id:"outro",    label:"Outro"},
+  ];
+
+  const salvar=async function(){
+    if(!titulo.trim()){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Informe o título da entrega.",3500);
+      return;
+    }
+    setSalvando(true);
+    const id="entrega-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+    const now=new Date().toISOString();
+    const dataEntregaIso=dataEntrega?new Date(dataEntrega+"T12:00:00").toISOString():now;
+
+    if(typeof window!=="undefined"&&window._sb){
+      try{
+        const payload={
+          id, title:titulo.trim(),
+          status:"publicado", // marca como entregue
+          description:descricao.trim(),
+          priority:"media", client:cl.id,
+          origem:"registro_manual", tipo_solicitacao:tipo,
+          content_type:tipo==="entrega_manual"?null:tipo,
+          assignee:"", assignees:[],
+          checklist:[], comments:[], files:[], watchers:[], tags:[],
+          timeline:[{
+            type:"entrega_registrada", at:now, atFmt:new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
+            user:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Equipe Pixels",
+            text:"Entrega registrada manualmente pela equipe",
+          }],
+          completed_at:dataEntregaIso,
+          created_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"sistema",
+          created_at:now, col_entered_at:now, cover:null,
+          ajustar:false, is_alteracao:false, score:null,
+          publish_date:dataEntrega||null, publish_time:"09:00", bioter_unit:"",
+          deadline_time:"", deleted_at:null,
+        };
+        const {error}=await window._sb.from("tasks").insert(payload);
+        if(error)throw error;
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Entrega registrada na linha do tempo.",3500);
+        onClose();
+      }catch(e){
+        if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e.message||e),5000);
+      }
+    }
+    setSalvando(false);
+  };
+
+  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+    <div onClick={function(e){e.stopPropagation();}}
+      style={{background:"#fff",borderRadius:16,maxWidth:520,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"18px 22px",color:"#fff"}}>
+        <div style={{fontWeight:800,fontSize:17,letterSpacing:-.3}}>Registrar entrega</div>
+        <div style={{fontSize:12,opacity:.9,marginTop:2}}>Adicione uma entrega manual à linha do tempo do {cl.name}</div>
+      </div>
+      <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Título *</div>
+          <input value={titulo} onChange={function(e){setTitulo(e.target.value);}} maxLength={200}
+            placeholder="Ex: Relatório mensal de performance"
+            autoFocus
+            style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+        </div>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Tipo</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {TIPOS_ENTREGA.map(function(opt){
+              const active=tipo===opt.id;
+              return <button key={opt.id} onClick={function(){setTipo(opt.id);}}
+                style={{background:active?cl.color+"15":"#fff",color:active?cl.color:"#64748b",border:"1px solid "+(active?cl.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                {opt.label}
+              </button>;
+            })}
+          </div>
+        </div>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Data da entrega</div>
+          <input type="date" value={dataEntrega} onChange={function(e){setDataEntrega(e.target.value);}}
+            style={{border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fff"}}/>
+        </div>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Descrição (opcional)</div>
+          <textarea value={descricao} onChange={function(e){setDescricao(e.target.value);}} maxLength={5000} rows={3}
+            placeholder="Detalhes da entrega..."
+            style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"10px 12px",fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:6}}>
+          <button onClick={onClose} disabled={salvando}
+            style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 20px",color:"#64748b",fontWeight:700,fontSize:13,cursor:salvando?"not-allowed":"pointer"}}>Cancelar</button>
+          <button onClick={salvar} disabled={salvando}
+            style={{background:salvando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:salvando?"not-allowed":"pointer"}}>
+            {salvando?"Salvando...":"Registrar entrega"}
           </button>
         </div>
       </div>
