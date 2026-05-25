@@ -30444,6 +30444,32 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
         };
         const {error}=await window._sb.from("tasks").insert(payload);
         if(error)throw error;
+        // ── Optimistic update: adiciona no state local pra aparecer JÁ na lista ──
+        if(typeof setTasks==="function"){
+          const novoTaskReact={
+            id:id, title:solTitulo.trim(), status:status,
+            desc:solDescricao.trim(), description:solDescricao.trim(),
+            priority:solPrioridade, client:cl.id,
+            origem:"portal", tipo_solicitacao:solTipo,
+            contentType:contentType, content_type:contentType,
+            assignee:assignee, assignees:assignee?[assignee]:[],
+            checklist:[], comments:[], files:[], tags:[], watchers:[],
+            timeline:payload.timeline,
+            createdAt:now, created_at:now,
+            colEnteredAt:now, col_entered_at:now,
+            createdBy:"portal_"+cl.id, created_by:"portal_"+cl.id,
+            cover:null, deletedAt:null, deleted_at:null,
+            ajustar:false, isAlteracao:false, is_alteracao:false,
+            score:null,
+            publishDate:"", publish_date:null,
+            publishTime:"09:00", publish_time:"09:00",
+            bioterUnit:"", bioter_unit:"",
+            data_desejada:payload.data_desejada,
+            data_entrada_sprint:null, data_prevista_entrega:null,
+            data_prevista_manual:false, urgente:false, aguardando_info:false,
+          };
+          setTasks(function(prev){return [].concat(prev||[],[novoTaskReact]);});
+        }
         if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! "+(tipoCfg.routesFluxo?"Foi pra equipe de design/vídeo.":"Sua solicitação está registrada."),4000);
         // Reset
         setSolTitulo("");setSolDescricao("");setSolPrioridade("media");setSolTipo("arte");
@@ -30661,12 +30687,12 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
     </div>
 
     {/* Empty state */}
-    {validas.length===0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"60px 40px",textAlign:"center"}}>
-      <div style={{width:64,height:64,borderRadius:"50%",background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
-        <Ico n="zap" size={28} color={cl.color}/>
+    {validas.length===0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"50px 36px",textAlign:"center"}}>
+      <div style={{width:60,height:60,borderRadius:"50%",background:cl.color+"15",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 12px"}}>
+        <Ico n="zap" size={26} color={cl.color}/>
       </div>
-      <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Nenhuma demanda ainda</div>
-      <div style={{color:"#64748b",fontSize:13,marginTop:6,maxWidth:380,margin:"6px auto 0",lineHeight:1.55}}>Clique em <strong>+ Nova demanda</strong> pra enviar sua primeira solicitação pra equipe.</div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Nenhuma demanda ainda</div>
+      <div style={{color:"#64748b",fontSize:12.5,marginTop:6,maxWidth:380,margin:"6px auto 0",lineHeight:1.55}}>Use o formulário acima pra enviar sua primeira solicitação pra equipe.</div>
     </div>}
 
     {/* Seções por sprint — visual compacto e clean */}
