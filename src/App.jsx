@@ -21189,91 +21189,73 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             {/* ══ AJUSTES SOLICITADOS — aparece sempre que há anotações ou flag isAlteracao ══ */}
             {(task.isAlteracao||task.status==="alteracao"||task.status==="ajustes"||(task.files||[]).some(f=>f.isAnnotation))&&(()=>{
               const annotations=(task.files||[]).filter(f=>f.isAnnotation);
-              const feedbackComments=(task.comments||[]).filter(c=>c.type==="feedback"||c.type==="audio");
+              // Inclui client_request (vindo do portal do cliente) na lista de ajustes.
+              // Ordenacao: mais recente PRIMEIRO (cliente acabou de pedir aparece no topo).
+              const feedbackComments=(task.comments||[])
+                .filter(c=>c.type==="feedback"||c.type==="audio"||c.type==="client_request")
+                .slice()
+                .sort((a,b)=>{
+                  const da=a.at?new Date(a.at).getTime():0;
+                  const db=b.at?new Date(b.at).getTime():0;
+                  return db-da;
+                });
               const audioComment=feedbackComments.find(c=>c.type==="audio");
               const textComments=feedbackComments.filter(c=>c.type!=="audio");
               if(annotations.length===0&&feedbackComments.length===0&&!task.isAlteracao&&task.status!=="ajustes")return null;
 
-              // Quem solicitou + quando (último evento de "ajustes" no timeline)
+              // Quem solicitou (ultimo evento de ajuste no timeline)
               const lastAdjust=(task.timeline||[]).slice().reverse().find(t=>t.to==="ajustes"||t.to==="execucao"||(t.label||"").toLowerCase().includes("ajuste"));
               const reqUserName=lastAdjust?.user||"Revisor";
-              const reqUser=TEAM.find(u=>u.name===reqUserName);
-              const reqDate=lastAdjust?.atFmt||"";
-
-              // Tempo estimado: 8min por imagem + 5min por comentário + 10min se tiver áudio
-              const estimatedMin=Math.max(15,annotations.length*8+textComments.length*5+(audioComment?10:0));
-
-              // Checklist gerado das anotações + comentários
-              const checklistItems=[
-                ...annotations.map((a,i)=>({id:`ann-${a.id}`,label:`Corrigir ${a.name||`arte ${i+1}`}`,icon:"🖊"})),
-                ...textComments.map(c=>({id:`cmt-${c.id}`,label:c.text.replace("AJUSTE NECESSARIO: ","").slice(0,100)+(c.text.length>100?"…":""),icon:"💬"})),
-                ...(audioComment?[{id:`aud-${audioComment.id}`,label:"Ouvir feedback em áudio e ajustar",icon:"🔊"}]:[]),
-              ];
-              const totalChecklist=checklistItems.length;
-              const doneChecklist=checklistItems.filter(i=>adjustChecked[i.id]).length;
-              const allDone=totalChecklist>0&&doneChecklist===totalChecklist;
 
               return(
-                <div style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:12,overflow:"hidden"}}>
+                <div style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:12,overflow:"hidden"}}>
 
-                  {/* Header — solicitante + tempo estimado */}
-                  <div style={{padding:"12px 16px",borderBottom:"0.5px solid #e9d5ff",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
-                    <div style={{display:"flex",gap:10,alignItems:"center",flex:1,minWidth:200}}>
-                      <div style={{width:32,height:32,borderRadius:"50%",background:reqUser?.color||"#7c3aed",color:"#fff",fontSize:13,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        {reqUser?.av||"?"}
-                      </div>
-                      <div style={{minWidth:0}}>
-                        <div style={{fontSize:12,color:"#0f172a"}}><strong>{reqUserName}</strong> solicitou ajustes</div>
-                        <div style={{fontSize:10,color:"#94a3b8",marginTop:1}}>{reqDate&&reqDate+" · "}~{estimatedMin} min de trabalho estimado</div>
-                      </div>
-                    </div>
-                    <span style={{background:"#ede9fe",color:"#7c3aed",fontSize:9,padding:"3px 9px",borderRadius:4,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>✎ Ajuste pendente</span>
+                  {/* Header minimalista — quem pediu + badge */}
+                  <div style={{padding:"12px 16px",borderBottom:"1px solid #f3e8ff",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1}}>Solicitação de ajuste</div>
+                    <span style={{background:"#fef3c7",color:"#92400e",fontSize:9,padding:"3px 10px",borderRadius:99,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pendente</span>
                   </div>
 
-                  {/* Áudio inline */}
-                  {audioComment&&audioComment.audioUrl&&(
-                    <div style={{padding:"10px 16px",borderBottom:"0.5px solid #e9d5ff",background:"#fff"}}>
-                      <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>🔊 Feedback em áudio</div>
-                      <audio src={audioComment.audioUrl} controls style={{width:"100%",height:30}}/>
-                    </div>
-                  )}
+                  {/* Audio inline (se houver) */}
+                  {audioComment&&audioComment.audioUrl&&<div style={{padding:"10px 16px",borderBottom:"1px solid #f3e8ff"}}>
+                    <audio src={audioComment.audioUrl} controls style={{width:"100%",height:32}}/>
+                  </div>}
 
-                  {/* Grid de thumbnails de anotações */}
-                  {annotations.length>0&&(
-                    <div style={{padding:"12px 16px",borderBottom:textComments.length>0?"0.5px solid #e9d5ff":"none",background:"#fff"}}>
-                      <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>🖊 Imagens com marcações ({annotations.length})</div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(100px, 1fr))",gap:8}}>
-                        {annotations.map((f,i)=>(
-                          <div key={f.id} onClick={()=>setLightbox({url:f.url,name:f.name||`Arte ${i+1}`,storagePath:f.storagePath})}
-                            style={{position:"relative",cursor:"zoom-in",borderRadius:6,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
-                            <img src={f.url} alt={`Arte ${i+1}`} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                            <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(to top, rgba(0,0,0,0.7), transparent)",padding:"14px 6px 4px",color:"#fff",fontSize:9,fontWeight:500}}>Arte {i+1}</div>
-                            <div style={{position:"absolute",top:4,right:4,background:"#7c3aed",color:"#fff",fontSize:9,padding:"1px 6px",borderRadius:3,fontWeight:600}}>✎</div>
+                  {/* Comentarios — ordenados newest first, com badge CLIENTE/REVISOR */}
+                  {textComments.length>0&&<div style={{padding:"12px 16px",borderBottom:annotations.length>0?"1px solid #f3e8ff":"none"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {textComments.map(function(c){
+                        const isClient=c.type==="client_request"||String(c.user||"").toLowerCase().indexOf("cliente:")===0;
+                        const when=c.atFmt||c.time||"";
+                        const userName=String(c.user||"").replace(/^Cliente:\s*/i,"");
+                        return <div key={c.id} style={{background:isClient?"#f0fdf4":"#faf5ff",borderLeft:"3px solid "+(isClient?"#16a34a":"#7c3aed"),borderRadius:"0 8px 8px 0",padding:"9px 12px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                            <span style={{background:isClient?"#16a34a":"#7c3aed",color:"#fff",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
+                            <span style={{color:"#0f172a",fontSize:11,fontWeight:600}}>{userName}</span>
+                            {when&&<span style={{color:"#94a3b8",fontSize:10,marginLeft:"auto"}}>{when}</span>}
                           </div>
-                        ))}
-                      </div>
-                      <div style={{textAlign:"center",fontSize:10,color:"#94a3b8",marginTop:6,fontStyle:"italic"}}>Click em cada imagem para abrir em tela cheia</div>
+                          <div style={{color:"#0f172a",fontSize:12,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{String(c.text||"").replace("AJUSTE NECESSARIO: ","")}</div>
+                        </div>;
+                      })}
                     </div>
-                  )}
+                  </div>}
 
-                  {/* Comentários texto */}
-                  {textComments.length>0&&(
-                    <div style={{padding:"12px 16px",background:"#fff"}}>
-                      <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>💬 Instruções do revisor</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                        {textComments.map(c=>(
-                          <div key={c.id} style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:8,padding:"9px 12px"}}>
-                            <div style={{fontSize:9,color:"#94a3b8",marginBottom:4,fontWeight:500}}>{c.user} · {c.time}</div>
-                            <div style={{color:"#0f172a",fontSize:12,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{c.text.replace("AJUSTE NECESSARIO: ","")}</div>
-                          </div>
-                        ))}
-                      </div>
+                  {/* Imagens com marcacoes — grid compacto, sem header poluido */}
+                  {annotations.length>0&&<div style={{padding:"12px 16px"}}>
+                    <div style={{fontSize:9.5,color:"#7c3aed",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Imagens com marcações</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(88px, 1fr))",gap:6}}>
+                      {annotations.map(function(f,i){
+                        return <div key={f.id} onClick={function(){setLightbox({url:f.url,name:f.name||("Arte "+(i+1)),storagePath:f.storagePath});}}
+                          style={{position:"relative",cursor:"zoom-in",borderRadius:6,overflow:"hidden",border:"1px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
+                          <img src={f.url} alt={"Arte "+(i+1)} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                        </div>;
+                      })}
                     </div>
-                  )}
+                  </div>}
 
-                  {annotations.length===0&&feedbackComments.length===0&&(
-                    <div style={{padding:"14px 16px",color:"#7c3aed",fontSize:12,textAlign:"center"}}>Ajuste solicitado — verifique os comentários e arquivos para mais detalhes.</div>
-                  )}
+                  {annotations.length===0&&feedbackComments.length===0&&<div style={{padding:"16px",color:"#94a3b8",fontSize:12,textAlign:"center",fontStyle:"italic"}}>
+                    Ajuste solicitado — verifique os arquivos do card.
+                  </div>}
                 </div>
               );
             })()}
