@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 31/31 | Nao editar diretamente
+// Modulos: 32/32 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -1507,6 +1507,7 @@ const NAV=[
     {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de publicações"},
     {id:"demandas_cal_interno",icon:"▦", label:"Calendário interno"},
     {id:"demandas_internas",   icon:"◫", label:"Demandas internas"},
+    {id:"demandas_planejamento",icon:"◬",label:"Planejamento mensal"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de copys"},
@@ -1530,9 +1531,7 @@ const NAV=[
     {id:"ia_biblioteca", icon:"◇", label:"Biblioteca"},
   ]},
   {type:"divider",label:"PORTAL"},
-  {id:"portal",     icon:"◯", label:"Portal Cliente",children:[
-    {id:"portal_dashboard",  icon:"⊡", label:"Dashboard"},
-  ]},
+  {id:"portal",     icon:"◯", label:"Portal do cliente"},
   {type:"divider",label:"ADMIN"},
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
     {id:"contratos_lista",      icon:"▤", label:"Contratos"},
@@ -16694,7 +16693,7 @@ const PERM_TABS=[
   {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706"},
   {id:"analises",     navIcon:"analises",   label:"Análises",           color:"#7c3aed"},
   {id:"ia",           navIcon:"ia",         label:"Pixels IA",          color:"#f97316"},
-  {id:"portal",       navIcon:"portal",     label:"Portal Cliente",     color:"#0d9488"},
+  {id:"portal",       navIcon:"portal",     label:"Portal do cliente",  color:"#0d9488"},
   {id:"gestao",       navIcon:"gestao",     label:"Gestão",             color:"#dc2626"},
   {id:"acessos",      navIcon:"acessos",    label:"Acessos",            color:"#475569"},
   {id:"interno",      navIcon:"interno",    label:"Interno",            color:"#7c3aed"},
@@ -27178,6 +27177,7 @@ export default function AgencyOS(){
       case "demandas_internas":    return p.verDemandasInternas||isSocio;
       case "demandas_cal_interno": return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
+      case "demandas_planejamento":return p.verDemandas||isSocio;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
@@ -27261,6 +27261,7 @@ export default function AgencyOS(){
       case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "demandas_planejamento": return (effectivePerms.verDemandas||isSocio)?<PageMonthlyPlanInterno {...p}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
@@ -29093,6 +29094,7 @@ const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
   {id:"demandas",    ico:"zap",         label:"Demandas"},
+  {id:"planejamento",ico:"layers",      label:"Planejamento mensal"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
   {id:"funil",       ico:"funnel",      label:"Funil comercial"},
@@ -31793,6 +31795,13 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       return units.indexOf(selUnit)!==-1||units.indexOf("grupo")!==-1;
     });
   })();
+
+  // ── PRIVACIDADE: cliente só ENXERGA itens que ja passaram pela aprovação interna.
+  // (Exceção: Demandas tab usa origem="portal" pra mostrar demandas que o próprio cliente
+  // criou — esses ele rastreia em todas as etapas.)
+  // STATUSES_VISIVEIS_CLIENTE = pós aprovação interna.
+  const STATUSES_VISIVEIS_CLIENTE=["aprovado","aprovacao_final","agendado","publicado"];
+  const clTasksVisiveis=clTasks.filter(function(t){return STATUSES_VISIVEIS_CLIENTE.indexOf(t.status)>=0;});
   // Reset selUnit ao trocar de cliente (se cliente novo nao for bioter)
   useEffect(function(){
     if(!isBioter&&selUnit!=="grupo")setSelUnit("grupo");
@@ -31830,7 +31839,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       <div>
         <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4,display:"flex",alignItems:"center",gap:8}}>
           <Ico n="globe" size={20} color={cl.color}/>
-          Portal do Cliente
+          Portal do cliente
         </div>
         <div style={{color:C.td,fontSize:11.5,marginTop:3,fontWeight:500}}>Visão exclusiva do cliente · sem informações internas</div>
       </div>
@@ -31890,6 +31899,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
+
+    {/* ── PLANEJAMENTO MENSAL ── plano do mês compartilhado entre Pixels e cliente */}
+    {tab==="planejamento"&&<PortalMonthlyPlan cl={cl} selUnit={selUnit} isMob={isMob}/>}
 
     {/* ── CALENDÁRIO ── */}
     {tab==="solicitar"&&<PortalSolicitar tasks={tasks} selCl={selCl} cl={cl}/>}
@@ -31974,10 +31986,10 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
           return(
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12}}>
           {[
-            {l:"Agendadas",v:clTasks.filter(t=>t.status==="agendado").length,c:"#0284c7",ico:"calendar"},
-            {l:"Em Produção",v:clTasks.filter(t=>["recebida","execucao","avaliacao"].includes(t.status)).length,c:C.yw,ico:"layers"},
-            {l:"Aguardando sua aprovação",v:clTasks.filter(t=>t.status==="aprovado").length,c:"#059669",ico:"checkCircle"},
-            {l:"Total do mês",v:clTasks.filter(t=>{if(!t.completedAt)return false;const d=new Date(t.completedAt);return d.getMonth()===_nm&&d.getFullYear()===_ny;}).length,c:C.a,ico:"fileText"},
+            {l:"Aguardando sua aprovação",v:clTasksVisiveis.filter(t=>t.status==="aprovado").length,c:"#059669",ico:"checkCircle"},
+            {l:"Aprovadas por você",v:clTasksVisiveis.filter(t=>t.status==="aprovacao_final").length,c:"#0d9488",ico:"check"},
+            {l:"Agendadas",v:clTasksVisiveis.filter(t=>t.status==="agendado").length,c:"#0284c7",ico:"calendar"},
+            {l:"Publicadas do mês",v:clTasksVisiveis.filter(t=>{if(!t.completedAt&&t.status!=="publicado")return false;const dt=t.completedAt||t.publishDate;if(!dt)return false;const d=new Date(dt);return d.getMonth()===_nm&&d.getFullYear()===_ny;}).length,c:C.a,ico:"fileText"},
           ].map((k,i)=>(
             <div key={i} style={{background:"linear-gradient(135deg,"+k.c+"15,"+k.c+"05)",border:"1px solid "+k.c+"28",borderRadius:14,padding:"16px",textAlign:"center"}}>
               <div style={{marginBottom:6,display:"flex",justifyContent:"center"}}><Ico n={k.ico} size={22} color={k.c}/></div>
@@ -32017,7 +32029,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
           <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:12,display:"inline-flex",alignItems:"center",gap:6}}>
             <Ico n="clock" size={13} color={C.tx}/> Últimas atualizações
           </div>
-          {(()=>{const _slice=clTasks.slice(0,5);return _slice.map((t,i)=>(
+          {(()=>{const _slice=clTasksVisiveis.slice(0,5);return _slice.map((t,i)=>(
             <div key={t.id} style={{padding:"10px 16px",borderBottom:i<_slice.length-1?"1px solid "+C.b1+"33":"none",display:"flex",alignItems:"center",gap:10}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:CARD_STATUS_COLOR[t.status]||C.a,flexShrink:0}}/>
               <div style={{flex:1,color:C.tx,fontSize:12,fontWeight:500}}>{t.title}</div>
@@ -32026,7 +32038,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
               </span>
             </div>
           ))})()}
-          {clTasks.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.td,fontSize:12}}>Nenhuma demanda registrada.</div>}
+          {clTasksVisiveis.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.td,fontSize:12}}>Nenhuma demanda registrada.</div>}
         </div>
       </div>
     )}
@@ -34716,6 +34728,411 @@ function ComHistorico({store}){
           </div>
         </div>;
       })}
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   19_planejamento_mensal.jsx — Planejamento Mensal compartilhado
+   - PageMonthlyPlanInterno: visão da equipe Pixels (CRUD)
+   - PortalMonthlyPlan: visão do cliente (read + comments + aprovar/ajustar)
+   Fonte de dados: tabela `monthly_plans` no Supabase (mesma pra os dois)
+═══════════════════════════════════════════════════════════════════ */
+
+const _MP_MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+// Helper: composite client unit (Bioter usa client_unit, outros vazio)
+const _mpUnit=function(cl, selUnit){
+  if(!cl)return "";
+  if(cl.id==="bioter"&&selUnit&&selUnit!=="grupo")return selUnit;
+  return "";
+};
+
+// Campos do plano mensal
+const MP_CAMPOS = [
+  {k:"objetivo",          label:"Objetivo do mês",        placeholder:"Qual a meta de comunicação/vendas deste mês?",      icon:"target"},
+  {k:"produtos_foco",     label:"Produtos / serviços foco",placeholder:"O que vamos destacar nas peças deste mês?",         icon:"sparkles"},
+  {k:"feiras_eventos",    label:"Feiras / eventos",       placeholder:"Eventos que a empresa vai participar ou cobrir.",   icon:"calendar"},
+  {k:"sazonalidades",     label:"Sazonalidades",          placeholder:"Datas comemorativas, períodos de alta venda, etc.", icon:"flame"},
+  {k:"datas_importantes", label:"Datas importantes",      placeholder:"Aniversários, lançamentos, prazos internos.",       icon:"pin"},
+  {k:"campanhas",         label:"Campanhas previstas",    placeholder:"Promoções, lançamentos, parcerias planejadas.",     icon:"zap"},
+  {k:"conteudos",         label:"Conteúdos previstos",    placeholder:"Reels, posts, vídeos, fotos planejadas.",           icon:"video"},
+];
+
+const STATUS_INTERNO_OPTS=[
+  {id:"rascunho",                label:"Rascunho",                bg:"#f1f5f9", color:"#475569"},
+  {id:"em_revisao",              label:"Em revisão",              bg:"#fef3c7", color:"#92400e"},
+  {id:"aprovado_internamente",   label:"Aprovado internamente",   bg:"#dcfce7", color:"#15803d"},
+];
+const STATUS_CLIENTE_OPTS=[
+  {id:"pendente",  label:"Aguardando o cliente", bg:"#f1f5f9", color:"#475569"},
+  {id:"aprovado",  label:"Aprovado pelo cliente",bg:"#dcfce7", color:"#15803d"},
+  {id:"em_ajuste", label:"Cliente pediu ajuste", bg:"#fee2e2", color:"#b91c1c"},
+];
+
+/* ─── Hook que carrega/salva 1 plano (cliente + ano + mês) ───────── */
+function useMonthlyPlan(clientId, clientUnit, year, month){
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+
+  useEffect(function(){
+    let active=true;
+    setLoading(true);
+    (async function(){
+      if(!window._sb){if(active)setLoading(false);return;}
+      try{
+        const {data:row}=await window._sb.from("monthly_plans")
+          .select("*")
+          .eq("client_id",clientId).eq("client_unit",clientUnit||"")
+          .eq("year",year).eq("month",month)
+          .maybeSingle();
+        if(active)setData(row||null);
+      }catch(e){console.warn("[MP load]",e);}
+      if(active)setLoading(false);
+    })();
+    return function(){active=false;};
+  },[clientId,clientUnit,year,month]);
+
+  const save=async function(partial){
+    if(!window._sb)return;
+    setSaving(true);
+    try{
+      const payload=Object.assign({
+        client_id:clientId, client_unit:clientUnit||"",
+        year:year, month:month,
+        updated_at:new Date().toISOString(),
+        updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Sistema",
+      }, data||{}, partial||{});
+      // Remove campos que vêm do banco e não devem ir no upsert
+      delete payload.id; delete payload.created_at;
+      const {data:saved,error}=await window._sb.from("monthly_plans")
+        .upsert(payload,{onConflict:"client_id,client_unit,year,month"})
+        .select().single();
+      if(error)throw error;
+      setData(saved);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar: "+(e.message||e),5000);
+    }finally{setSaving(false);}
+  };
+
+  return {data:data,loading:loading,saving:saving,save:save};
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   PageMonthlyPlanInterno — visão da equipe Pixels
+═══════════════════════════════════════════════════════════════════ */
+function PageMonthlyPlanInterno({isMob}){
+  const _now=new Date();
+  const isSocio=CURRENT_USER&&CURRENT_USER.level===1;
+  const clientesVisiveis=(CLIENTS||[]).filter(function(c){return c.status!=="interno";});
+  const [selCl,setSelCl]=useState((clientesVisiveis[0]||{}).id||"");
+  const [selUnit,setSelUnit]=useState("grupo");
+  const [month,setMonth]=useState(_now.getMonth()+1);
+  const [year,setYear]=useState(_now.getFullYear());
+  const cl=CLIENTS.find(function(c){return c.id===selCl;})||clientesVisiveis[0];
+  const isBioter=cl&&cl.id==="bioter";
+  const unit=_mpUnit(cl,selUnit);
+
+  const {data,loading,saving,save}=useMonthlyPlan(selCl,unit,year,month);
+  // Form state espelha data, com edição local antes de salvar
+  const [form,setForm]=useState({});
+  const [dirty,setDirty]=useState(false);
+  useEffect(function(){
+    const init={};
+    MP_CAMPOS.forEach(function(c){init[c.k]=(data&&data[c.k])||"";});
+    init.status_interno=(data&&data.status_interno)||"rascunho";
+    init.status_cliente=(data&&data.status_cliente)||"pendente";
+    setForm(init);
+    setDirty(false);
+  },[data,selCl,unit,year,month]);
+
+  function _set(k,v){setForm(function(p){return Object.assign({},p,{[k]:v});});setDirty(true);}
+
+  function handleSave(){
+    save({
+      objetivo:form.objetivo,
+      produtos_foco:form.produtos_foco,
+      feiras_eventos:form.feiras_eventos,
+      sazonalidades:form.sazonalidades,
+      datas_importantes:form.datas_importantes,
+      campanhas:form.campanhas,
+      conteudos:form.conteudos,
+      status_interno:form.status_interno,
+      status_cliente:form.status_cliente,
+    }).then(function(){
+      setDirty(false);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Planejamento salvo.",3000);
+    });
+  }
+
+  function addComment(text){
+    if(!text.trim())return;
+    const novo={
+      id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+      author:(CURRENT_USER&&CURRENT_USER.name)||"Equipe",
+      author_type:"team",
+      text:text.trim(),
+      at:new Date().toISOString(),
+    };
+    save({comments:[].concat((data&&data.comments)||[],[novo])}).then(function(){
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Comentário adicionado.",3000);
+    });
+  }
+
+  const stInterno=STATUS_INTERNO_OPTS.find(function(s){return s.id===form.status_interno;})||STATUS_INTERNO_OPTS[0];
+  const stCliente=STATUS_CLIENTE_OPTS.find(function(s){return s.id===form.status_cliente;})||STATUS_CLIENTE_OPTS[0];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header + filtros */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4}}>Planejamento mensal</div>
+        <div style={{color:C.td,fontSize:12,marginTop:2}}>Estruture o mês de conteúdo de cada cliente. Mesma fonte de dados que aparece pro cliente no portal.</div>
+      </div>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        <select value={selCl} onChange={function(e){setSelCl(e.target.value);}}
+          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {clientesVisiveis.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+        </select>
+        {isBioter&&(typeof BIOTER_UNITS!=="undefined")&&<select value={selUnit} onChange={function(e){setSelUnit(e.target.value);}}
+          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          <option value="grupo">Grupo Bioter</option>
+          {BIOTER_UNITS.map(function(u){return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>;})}
+        </select>}
+        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
+          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {_MP_MESES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
+        </select>
+        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
+          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y}>{y}</option>;})}
+        </select>
+      </div>
+    </div>
+
+    {/* Status badges */}
+    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+      <div style={{background:stInterno.bg,color:stInterno.color,borderRadius:99,padding:"5px 14px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:6}}>
+        <span style={{opacity:.7}}>Equipe:</span> {stInterno.label}
+      </div>
+      <div style={{background:stCliente.bg,color:stCliente.color,borderRadius:99,padding:"5px 14px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:6}}>
+        <span style={{opacity:.7}}>Cliente:</span> {stCliente.label}
+      </div>
+    </div>
+
+    {loading?<div style={{padding:30,textAlign:"center",color:C.td}}>Carregando…</div>:<>
+
+      {/* Campos do plano */}
+      <div style={{background:C.card,border:"1px solid "+C.b1,borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+        {MP_CAMPOS.map(function(c){
+          return <div key={c.k}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+              <Ico n={c.icon} size={13} color={cl&&cl.color||C.a}/>
+              <div style={{color:C.tx,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{c.label}</div>
+            </div>
+            <textarea value={form[c.k]||""} onChange={function(e){_set(c.k,e.target.value);}}
+              placeholder={c.placeholder} rows={2}
+              style={{width:"100%",border:"1px solid "+C.b1,borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",color:C.tx,outline:"none",resize:"vertical",boxSizing:"border-box",background:C.s1}}/>
+          </div>;
+        })}
+        {/* Status do plano */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14,paddingTop:6,borderTop:"1px solid "+C.b1+"66"}}>
+          <div>
+            <div style={{color:C.tx,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Status interno</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {STATUS_INTERNO_OPTS.map(function(s){
+                const active=form.status_interno===s.id;
+                return <button key={s.id} onClick={function(){_set("status_interno",s.id);}}
+                  style={{background:active?s.bg:"#fff",color:active?s.color:"#64748b",border:"1px solid "+(active?s.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                  {s.label}
+                </button>;
+              })}
+            </div>
+          </div>
+          <div>
+            <div style={{color:C.tx,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Status do cliente</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {STATUS_CLIENTE_OPTS.map(function(s){
+                const active=form.status_cliente===s.id;
+                return <button key={s.id} onClick={function(){_set("status_cliente",s.id);}}
+                  style={{background:active?s.bg:"#fff",color:active?s.color:"#64748b",border:"1px solid "+(active?s.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                  {s.label}
+                </button>;
+              })}
+            </div>
+          </div>
+        </div>
+        {/* Botão salvar */}
+        {dirty&&<div style={{display:"flex",justifyContent:"flex-end",borderTop:"1px solid "+C.b1+"66",paddingTop:12}}>
+          <button onClick={handleSave} disabled={saving}
+            style={{background:saving?"#94a3b8":"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit"}}>
+            {saving?"Salvando…":"Salvar planejamento"}
+          </button>
+        </div>}
+      </div>
+
+      {/* Comentários */}
+      <MonthlyPlanComments data={data} onAdd={addComment} clColor={cl&&cl.color||C.a}/>
+    </>}
+  </div>;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   PortalMonthlyPlan — visão do cliente
+   Read-only nos campos; cliente comenta + aprova ou solicita ajuste
+═══════════════════════════════════════════════════════════════════ */
+function PortalMonthlyPlan({cl, selUnit, isMob}){
+  const _now=new Date();
+  const [month,setMonth]=useState(_now.getMonth()+1);
+  const [year,setYear]=useState(_now.getFullYear());
+  const unit=_mpUnit(cl,selUnit);
+  const {data,loading,save}=useMonthlyPlan(cl.id,unit,year,month);
+
+  function aprovarPlano(){
+    save({status_cliente:"aprovado"}).then(function(){
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Planejamento aprovado!",3500);
+    });
+  }
+  function pedirAjuste(){
+    save({status_cliente:"em_ajuste"}).then(function(){
+      if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação registrada. Use os comentários abaixo pra detalhar.",4500);
+    });
+  }
+  function addComment(text){
+    if(!text.trim())return;
+    const novo={
+      id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+      author:"Cliente: "+cl.name,
+      author_type:"client",
+      text:text.trim(),
+      at:new Date().toISOString(),
+    };
+    save({comments:[].concat((data&&data.comments)||[],[novo])}).then(function(){
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Comentário enviado.",3000);
+    });
+  }
+
+  const stCliente=STATUS_CLIENTE_OPTS.find(function(s){return s.id===((data&&data.status_cliente)||"pendente");})||STATUS_CLIENTE_OPTS[0];
+  const podeAgir=(data&&data.status_interno==="aprovado_internamente");
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Planejamento mensal</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>O plano que a equipe Pixels preparou pra você esse mês.</div>
+      </div>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
+          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {_MP_MESES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
+        </select>
+        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
+          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y}>{y}</option>;})}
+        </select>
+      </div>
+    </div>
+
+    {/* Status pill */}
+    <div>
+      <span style={{background:stCliente.bg,color:stCliente.color,borderRadius:99,padding:"5px 14px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>
+        {stCliente.label}
+      </span>
+    </div>
+
+    {loading?<div style={{padding:30,textAlign:"center",color:"#94a3b8"}}>Carregando…</div>:!data?(
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"40px 30px",textAlign:"center"}}>
+        <Ico n="calendar" size={28} color="#94a3b8"/>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginTop:10}}>Ainda não há planejamento publicado pra esse mês.</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:5}}>A equipe Pixels está finalizando. Você será avisado em breve.</div>
+      </div>
+    ):(
+      <>
+        {/* Campos read-only */}
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+          {MP_CAMPOS.filter(function(c){return (data[c.k]||"").trim();}).map(function(c){
+            return <div key={c.k}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <Ico n={c.icon} size={13} color={cl.color}/>
+                <div style={{color:"#0f172a",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{c.label}</div>
+              </div>
+              <div style={{color:"#475569",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",background:"#fafbfc",borderRadius:8,padding:"10px 12px",border:"1px solid #f1f5f9"}}>
+                {data[c.k]}
+              </div>
+            </div>;
+          })}
+          {MP_CAMPOS.every(function(c){return !(data[c.k]||"").trim();})&&<div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic"}}>A equipe ainda não preencheu os detalhes desse plano.</div>}
+        </div>
+
+        {/* Botões aprovação (só se aprovado internamente) */}
+        {podeAgir&&data.status_cliente!=="aprovado"&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          <button onClick={aprovarPlano}
+            style={{background:"#059669",color:"#fff",border:"none",borderRadius:10,padding:"11px 22px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
+            <Ico n="check" size={14}/> Aprovar planejamento
+          </button>
+          {data.status_cliente!=="em_ajuste"&&<button onClick={pedirAjuste}
+            style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"11px 18px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
+            <Ico n="rotate" size={14}/> Solicitar ajuste
+          </button>}
+        </div>}
+
+        {/* Comentários (ambos lados) */}
+        <MonthlyPlanComments data={data} onAdd={addComment} clColor={cl.color}/>
+      </>
+    )}
+  </div>;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   MonthlyPlanComments — lista + input (usado nos 2 lados)
+═══════════════════════════════════════════════════════════════════ */
+function MonthlyPlanComments({data, onAdd, clColor}){
+  const [txt,setTxt]=useState("");
+  const comments=(data&&Array.isArray(data.comments))?data.comments:[];
+  // ordena: mais antigos primeiro (igual chat)
+  const ordenados=[].concat(comments).sort(function(a,b){
+    const da=new Date(a.at).getTime()||0;
+    const db=new Date(b.at).getTime()||0;
+    return da-db;
+  });
+  function enviar(){
+    if(!txt.trim())return;
+    onAdd(txt);
+    setTxt("");
+  }
+  const _ddmm=function(s){const d=new Date(s);if(isNaN(d.getTime()))return "";return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+    <div style={{display:"flex",alignItems:"center",gap:7}}>
+      <Ico n="message" size={14} color={clColor||"#475569"}/>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1}}>Comentários</div>
+      {ordenados.length>0&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"'tnum'"}}>· {ordenados.length}</span>}
+    </div>
+    {ordenados.length===0&&<div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic"}}>Nenhum comentário ainda.</div>}
+    {ordenados.map(function(c){
+      const isClient=c.author_type==="client";
+      const cor=isClient?"#16a34a":"#7c3aed";
+      return <div key={c.id} style={{background:isClient?"#f0fdf4":"#faf5ff",borderLeft:"3px solid "+cor,borderRadius:"0 8px 8px 0",padding:"9px 12px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+          <span style={{background:cor,color:"#fff",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Equipe"}</span>
+          <span style={{color:"#0f172a",fontSize:11,fontWeight:600}}>{String(c.author||"").replace(/^Cliente:\s*/i,"")}</span>
+          <span style={{color:"#94a3b8",fontSize:10,marginLeft:"auto",fontFeatureSettings:"'tnum'"}}>{_ddmm(c.at)}</span>
+        </div>
+        <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{c.text}</div>
+      </div>;
+    })}
+    {/* Input */}
+    <div style={{display:"flex",gap:8,marginTop:6}}>
+      <textarea value={txt} onChange={function(e){setTxt(e.target.value);}}
+        onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();enviar();}}}
+        placeholder="Adicionar comentário…" rows={2}
+        style={{flex:1,background:"#fafbfc",border:"1px solid #cbd5e1",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,outline:"none",resize:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+      <button onClick={enviar} disabled={!txt.trim()}
+        style={{background:txt.trim()?(clColor||"#0f172a"):"#cbd5e1",color:"#fff",border:"none",borderRadius:8,padding:"0 14px",fontSize:14,fontWeight:700,cursor:txt.trim()?"pointer":"not-allowed",fontFamily:"inherit"}}>↑</button>
     </div>
   </div>;
 }
