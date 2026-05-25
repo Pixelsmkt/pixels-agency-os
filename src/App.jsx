@@ -29086,8 +29086,7 @@ const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
-  {id:"demandas",    ico:"kanban",      label:"Demandas"},
-  {id:"solicitar",   ico:"zap",         label:"Solicitar"},
+  {id:"demandas",    ico:"zap",         label:"Demandas"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
   {id:"funil",       ico:"funnel",      label:"Funil comercial"},
@@ -29709,9 +29708,12 @@ function PortalFunil({cl, isMob}){
   return <div style={{display:"flex",flexDirection:"column",gap:18}}>
     {/* Header + period picker */}
     <div style={{background:"#fff",borderRadius:14,padding:"18px 20px",border:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:17,letterSpacing:-.3}}>📈 Funil comercial</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:3}}>Registre mensalmente quantas oportunidades passaram em cada etapa.</div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <Ico n="funnel" size={22} color={cl.color}/>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Funil comercial</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Registre mensalmente quantas oportunidades passaram em cada etapa.</div>
+        </div>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
         <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
@@ -29725,41 +29727,98 @@ function PortalFunil({cl, isMob}){
       </div>
     </div>
 
-    {/* Inputs por etapa */}
-    <div style={{background:"#fff",borderRadius:14,padding:20,border:"1px solid #e2e8f0"}}>
-      <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:14}}>Etapas do funil de {cl.name}</div>
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {stages.map(function(s,i){
-          const qty=form[s.id]||0;
-          const w=Math.max(8,(qty/maxQty)*100);
-          const convPair=conv.pairwise[i];
-          return <div key={s.id} style={{display:"flex",alignItems:"center",gap:12,flexWrap:isMob?"wrap":"nowrap"}}>
-            <div style={{minWidth:isMob?"100%":220,display:"flex",alignItems:"center",gap:8}}>
-              <span style={{width:24,height:24,borderRadius:6,background:"#f5f3ff",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0}}>{i+1}</span>
-              <span style={{color:"#0f172a",fontSize:13,fontWeight:600}}>{s.name}</span>
-            </div>
-            <div style={{flex:1,height:32,background:"#f1f5f9",borderRadius:8,position:"relative",overflow:"hidden",minWidth:120}}>
-              <div style={{position:"absolute",inset:0,width:w+"%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",borderRadius:8,transition:"width .3s"}}/>
-              {convPair!=null&&qty>0&&<span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",color:convPair>=70?"#16a34a":convPair>=40?"#ca8a04":"#dc2626",fontSize:10,fontWeight:700,background:"rgba(255,255,255,0.92)",padding:"1px 6px",borderRadius:99}}>↘ {convPair}%</span>}
-            </div>
-            <input type="number" min="0" value={qty} onChange={function(e){setQty(s.id,e.target.value);}}
-              style={{width:isMob?"100%":80,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px",color:"#0f172a",fontSize:14,fontWeight:700,outline:"none",textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif"}}/>
-          </div>;
-        })}
+    {/* Funil visual (SVG trapezoidal) + inputs ao lado */}
+    <div style={{background:"#fff",borderRadius:14,padding:24,border:"1px solid #e2e8f0",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 320px",gap:32,alignItems:"flex-start"}}>
+
+      {/* SVG Funil */}
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
+        <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:14,alignSelf:"flex-start"}}>Visão do funil — {_MES_NAMES[month-1]}/{year}</div>
+        {(function(){
+          // Cada etapa vira um trapezoide. Largura proporcional à quantidade
+          // (com mínimo de 25% pra ser sempre visível).
+          const SVG_W=520;
+          const STAGE_H=58;
+          const GAP=4;
+          const total=stages.length;
+          const SVG_H=total*STAGE_H+(total-1)*GAP+10;
+          // Largura de cada etapa (% da SVG_W)
+          const widths=stages.map(function(s,i){
+            const q=Number(form[s.id]||0);
+            if(maxQty===0)return 25; // todos zerados — mostra estrutura mínima
+            return Math.max(22,(q/maxQty)*100);
+          });
+          // Conversão entre etapas (qty[i+1] / qty[i])
+          const c1=parseInt(cl.color.slice(1,3),16)||124;
+          const c2=parseInt(cl.color.slice(3,5),16)||58;
+          const c3=parseInt(cl.color.slice(5,7),16)||237;
+          // Helper: cor mais escura conforme desce no funil
+          const colorFor=function(i){
+            const t=1-(i/Math.max(1,total-1))*0.45; // 1.0 no topo, 0.55 no fundo
+            const r=Math.round(c1*t),g=Math.round(c2*t),b=Math.round(c3*t);
+            return "rgb("+r+","+g+","+b+")";
+          };
+          return <svg viewBox={"0 0 "+SVG_W+" "+SVG_H} width="100%" style={{maxWidth:560,fontFamily:"'Inter',system-ui,sans-serif"}}>
+            {stages.map(function(s,i){
+              const w1=(widths[i]/100)*SVG_W;
+              const w2=(widths[i+1]!=null?widths[i+1]:widths[i]*0.85)/100*SVG_W;
+              const y=10+i*(STAGE_H+GAP);
+              const x1Top=(SVG_W-w1)/2;
+              const x2Top=x1Top+w1;
+              const x1Bot=(SVG_W-w2)/2;
+              const x2Bot=x1Bot+w2;
+              const qty=Number(form[s.id]||0);
+              const color=colorFor(i);
+              return <g key={s.id}>
+                {/* Trapezoide */}
+                <path d={"M "+x1Top+" "+y+" L "+x2Top+" "+y+" L "+x2Bot+" "+(y+STAGE_H)+" L "+x1Bot+" "+(y+STAGE_H)+" Z"}
+                  fill={color}
+                  opacity={qty>0?1:0.18}/>
+                {/* Numero da etapa + nome */}
+                <text x={SVG_W/2} y={y+STAGE_H/2-4} textAnchor="middle" fill="#fff" fontSize="13" fontWeight="700" letterSpacing="-.2">{s.name}</text>
+                {/* Quantidade */}
+                <text x={SVG_W/2} y={y+STAGE_H/2+13} textAnchor="middle" fill="#fff" fontSize="11" fontWeight="600" opacity="0.85">{qty} {qty===1?"oportunidade":"oportunidades"}</text>
+                {/* Taxa de conversão entre etapas (a partir da segunda) */}
+                {i>0&&conv.pairwise[i-1]!=null&&qty>=0&&Number(form[stages[i-1].id]||0)>0&&<g>
+                  <rect x={SVG_W-90} y={y-12} width={80} height={20} rx="10"
+                    fill={conv.pairwise[i-1]>=70?"#dcfce7":conv.pairwise[i-1]>=40?"#fef9c3":"#fee2e2"}
+                    stroke={conv.pairwise[i-1]>=70?"#86efac":conv.pairwise[i-1]>=40?"#fde047":"#fecaca"}/>
+                  <text x={SVG_W-50} y={y+2} textAnchor="middle" fontSize="10" fontWeight="700"
+                    fill={conv.pairwise[i-1]>=70?"#15803d":conv.pairwise[i-1]>=40?"#a16207":"#b91c1c"}>↓ {conv.pairwise[i-1]}%</text>
+                </g>}
+              </g>;
+            })}
+          </svg>;
+        })()}
+      </div>
+
+      {/* Inputs por etapa (lado direito) */}
+      <div>
+        <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:12}}>Quantidade por etapa</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {stages.map(function(s,i){
+            const qty=form[s.id]||0;
+            return <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
+              <span style={{width:22,height:22,borderRadius:6,background:cl.color+"15",color:cl.color,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{i+1}</span>
+              <span style={{flex:1,color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.3}}>{s.name}</span>
+              <input type="number" min="0" value={qty} onChange={function(e){setQty(s.id,e.target.value);}}
+                style={{width:64,background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 8px",color:"#0f172a",fontSize:13,fontWeight:700,outline:"none",textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif",fontFeatureSettings:"'tnum'"}}/>
+            </div>;
+          })}
+        </div>
       </div>
     </div>
 
     {/* Resumo + botão Salvar */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr auto",gap:14,alignItems:"start"}}>
-      <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:14,padding:"16px 20px",border:"1px solid #ddd6fe"}}>
+      <div style={{background:"linear-gradient(135deg,"+cl.color+"15,"+cl.color+"05)",borderRadius:14,padding:"16px 20px",border:"1px solid "+cl.color+"28"}}>
         <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Conversão total ({_MES_NAMES[month-1]}/{year})</div>
         <div style={{display:"flex",alignItems:"baseline",gap:10}}>
-          <span style={{color:"#7c3aed",fontWeight:800,fontSize:32,letterSpacing:-1}}>{conv.total}%</span>
+          <span style={{color:cl.color,fontWeight:800,fontSize:32,letterSpacing:-1,fontFeatureSettings:"'tnum'"}}>{conv.total}%</span>
           <span style={{color:"#64748b",fontSize:12}}>do topo do funil ao fechamento</span>
         </div>
       </div>
       <button onClick={handleSave} disabled={!dirty||saving}
-        style={{background:dirty&&!saving?"#7c3aed":"#cbd5e1",border:"none",borderRadius:12,padding:"14px 28px",color:"#fff",fontSize:14,fontWeight:700,cursor:dirty&&!saving?"pointer":"not-allowed",alignSelf:"stretch",minWidth:160,transition:"background .12s"}}>
+        style={{background:dirty&&!saving?cl.color:"#cbd5e1",border:"none",borderRadius:12,padding:"14px 28px",color:"#fff",fontSize:14,fontWeight:700,cursor:dirty&&!saving?"pointer":"not-allowed",alignSelf:"stretch",minWidth:160,transition:"background .12s"}}>
         {saving?"Salvando...":entry?"Atualizar":"Salvar funil"}
       </button>
     </div>
@@ -30246,9 +30305,67 @@ const TIPOS_DEMANDA_CLIENTE = [
 ];
 
 function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
-  const [novaDemandaOpen,setNovaDemandaOpen]=useState(false);
   const [ajusteModal,setAjusteModal]=useState(null);
   const [cfg,setCfg]=useState(null);
+
+  // ── Form de Nova Solicitação inline (substitui modal + tab Solicitar) ──
+  const [solTitulo,setSolTitulo]=useState("");
+  const [solTipo,setSolTipo]=useState("arte");
+  const [solDescricao,setSolDescricao]=useState("");
+  const [solDataDesejada,setSolDataDesejada]=useState("");
+  const [solPrioridade,setSolPrioridade]=useState("media");
+  const [solEnviando,setSolEnviando]=useState(false);
+
+  const enviarSolicitacao=async function(){
+    if(!solTitulo.trim()){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Informe o título da demanda.",3500);
+      return;
+    }
+    if(solTitulo.length>200){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título muito longo (máx 200).",3500);
+      return;
+    }
+    setSolEnviando(true);
+    const tipoCfg=TIPOS_DEMANDA_CLIENTE.find(function(x){return x.id===solTipo;})||TIPOS_DEMANDA_CLIENTE[5];
+    const id="portal-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+    const now=new Date().toISOString();
+    const status=tipoCfg.routesFluxo?"rascunhos":"interno_demanda";
+    const assignee=tipoCfg.routesFluxo?"ellen":"";
+    const contentType=tipoCfg.contentType||solTipo;
+
+    if(typeof window!=="undefined"&&window._sb){
+      try{
+        const payload={
+          id, title:solTitulo.trim(), status:status,
+          description:solDescricao.trim(),
+          priority:solPrioridade, client:cl.id,
+          origem:"portal", tipo_solicitacao:solTipo, content_type:contentType,
+          assignee:assignee, assignees:assignee?[assignee]:[],
+          checklist:[], timeline:[{
+            type:"created_by_client", from:"", to:status,
+            fromLabel:"", toLabel:tipoCfg.routesFluxo?"Rascunhos":"Demanda interna",
+            clientId:cl.id, clientName:cl.name,
+            at:now, atFmt:new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}),
+            user:"Cliente: "+cl.name,
+          }],
+          created_by:"portal_"+cl.id, created_at:now, col_entered_at:now,
+          tags:[], comments:[], files:[], watchers:[], cover:null,
+          ajustar:false, is_alteracao:false, score:null,
+          publish_date:null, publish_time:"09:00", bioter_unit:"",
+          deadline_time:"", deleted_at:null,
+          data_desejada:solDataDesejada||null,
+        };
+        const {error}=await window._sb.from("tasks").insert(payload);
+        if(error)throw error;
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! "+(tipoCfg.routesFluxo?"Foi pra equipe de design/vídeo.":"Sua solicitação está registrada."),4000);
+        // Reset
+        setSolTitulo("");setSolDescricao("");setSolDataDesejada("");setSolPrioridade("media");setSolTipo("arte");
+      }catch(e){
+        if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao enviar: "+(e.message||e),5000);
+      }
+    }
+    setSolEnviando(false);
+  };
 
   // Carrega sprint_config pra usar nos textos
   useEffect(function(){
@@ -30259,8 +30376,16 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
 
   const _nowIso=function(){return new Date().toISOString();};
   const _nowFmt=function(){const n=new Date();return n.toLocaleDateString("pt-BR")+" às "+n.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
-  const _ddmm=function(s){if(!s)return "—";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
-  const _ddmmFull=function(s){if(!s)return "—";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();};
+  // Parser robusto: aceita ISO, date-only, datetime, ou retorna null
+  const _parseDate=function(s){
+    if(!s)return null;
+    const str=String(s);
+    if(!str.trim())return null;
+    const d=new Date(str.length>10?str:str+"T12:00:00");
+    return isNaN(d.getTime())?null:d;
+  };
+  const _ddmm=function(s){const d=_parseDate(s);if(!d)return "";return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
+  const _ddmmFull=function(s){const d=_parseDate(s);if(!d)return "";return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();};
 
   // ── Tipo (label + cor) ──
   const tipoInfo=function(t){
@@ -30323,7 +30448,9 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
   };
 
   // ── Agrupamento por sprint ──
-  const validas=clTasks.filter(function(t){return !t.deletedAt;});
+  // SO mostra demandas que vieram do PORTAL (cliente solicitou).
+  // Producao mensal regular (origem interna da Pixels) NAO aparece aqui.
+  const validas=clTasks.filter(function(t){return !t.deletedAt&&t.origem==="portal";});
   const grupos={};
   validas.forEach(function(t){
     let k;
@@ -30368,18 +30495,85 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
 
   return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
 
-    {/* Header com botão Nova demanda */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:20,letterSpacing:-.4}}>Minhas demandas</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:3}}>Todas as solicitações que você fez à equipe Pixels, organizadas por sprint semanal.</div>
+    {/* Form de Nova Solicitação inline */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{display:"flex",alignItems:"center",gap:9}}>
+        <Ico n="zap" size={20} color={cl.color}/>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>Nova solicitação</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Descreva o que precisa. A equipe Pixels entrará em contato em breve.</div>
+        </div>
       </div>
-      <button onClick={function(){setNovaDemandaOpen(true);}}
-        style={{background:cl.color,color:"#fff",border:"none",borderRadius:11,padding:"11px 20px",fontWeight:700,fontSize:13.5,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 2px 10px "+cl.color+"33",transition:"all .12s"}}
-        onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 14px "+cl.color+"55";}}
-        onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 10px "+cl.color+"33";}}>
-        <span style={{fontSize:16,lineHeight:1,marginRight:-2}}>+</span> Nova demanda
-      </button>
+
+      {/* Linha 1: título */}
+      <div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>Título *</div>
+        <input value={solTitulo} onChange={function(e){setSolTitulo(e.target.value);}} maxLength={200}
+          placeholder="Ex: Banner promocional para Black Friday"
+          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",boxSizing:"border-box"}}/>
+      </div>
+
+      {/* Linha 2: descrição */}
+      <div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.5}}>Descrição</div>
+        <textarea value={solDescricao} onChange={function(e){setSolDescricao(e.target.value);}} maxLength={5000} rows={3}
+          placeholder="Detalhe o que precisa, referências, prazos, etc..."
+          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",background:"#fafbfc",resize:"vertical",boxSizing:"border-box"}}/>
+      </div>
+
+      {/* Linha 3: tipo */}
+      <div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Tipo</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {TIPOS_DEMANDA_CLIENTE.map(function(opt){
+            const active=solTipo===opt.id;
+            return <button key={opt.id} onClick={function(){setSolTipo(opt.id);}}
+              style={{background:active?cl.color+"15":"#fff",color:active?cl.color:"#64748b",border:"1px solid "+(active?cl.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s"}}>
+              {opt.label.replace(/\s\(.+\)/,"")}
+              {opt.routesFluxo&&<span style={{marginLeft:5,fontSize:9,opacity:.7}}>→ Hellen</span>}
+            </button>;
+          })}
+        </div>
+      </div>
+
+      {/* Linha 4: prioridade + data desejada */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr auto",gap:14,alignItems:"flex-end"}}>
+        <div>
+          <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Prioridade</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {[{id:"baixa",l:"Baixa",c:"#64748b"},{id:"media",l:"Média",c:"#f97316"},{id:"alta",l:"Alta",c:"#ef4444"},{id:"urgente",l:"Urgente",c:"#dc2626"}].map(function(p){
+              const active=solPrioridade===p.id;
+              return <button key={p.id} onClick={function(){setSolPrioridade(p.id);}}
+                style={{background:active?p.c+"15":"#fff",color:active?p.c:"#64748b",border:"1px solid "+(active?p.c:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s"}}>
+                {p.l}
+              </button>;
+            })}
+          </div>
+        </div>
+        <div>
+          <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Data desejada (referência)</div>
+          <input type="date" value={solDataDesejada} onChange={function(e){setSolDataDesejada(e.target.value);}}
+            style={{border:"1px solid #cbd5e1",borderRadius:8,padding:"7px 11px",fontSize:12.5,fontFamily:"inherit",outline:"none",background:"#fff"}}/>
+        </div>
+      </div>
+
+      {/* Botão enviar — alinhado à direita, tamanho normal */}
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:4}}>
+        <button onClick={enviarSolicitacao} disabled={solEnviando}
+          style={{background:solEnviando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"9px 22px",fontWeight:700,fontSize:13,cursor:solEnviando?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
+          onMouseEnter={function(e){if(!solEnviando)e.currentTarget.style.opacity=".92";}}
+          onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
+          {solEnviando?"Enviando...":<><Ico n="send" size={13}/> Enviar solicitação</>}
+        </button>
+      </div>
+    </div>
+
+    {/* Header de minhas demandas */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginTop:4}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Minhas demandas</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Solicitações que você enviou à equipe Pixels, agrupadas por sprint.</div>
+      </div>
     </div>
 
     {/* Empty state */}
@@ -30391,84 +30585,72 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
       <div style={{color:"#64748b",fontSize:13,marginTop:6,maxWidth:380,margin:"6px auto 0",lineHeight:1.55}}>Clique em <strong>+ Nova demanda</strong> pra enviar sua primeira solicitação pra equipe.</div>
     </div>}
 
-    {/* Seções por sprint */}
+    {/* Seções por sprint — visual compacto e clean */}
     {grupos_ordenados.map(function(g){
       const h=labelDoGrupo(g);
       const accent=h.isUrgent?"#9333ea":cl.color;
-      return <section key={g.key} style={{background:"#fff",border:"1px solid #e2e8f0",borderLeft:"4px solid "+accent,borderRadius:12,overflow:"hidden"}}>
+      return <section key={g.key} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
 
-        {/* Header da sprint */}
-        <header style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap",background:"linear-gradient(180deg,"+accent+"05,#fff)"}}>
-          <div style={{minWidth:0}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:2}}>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{h.titulo}</div>
-              <span style={{background:accent,color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{g.items.length} {g.items.length===1?"entrega":"entregas"}</span>
-            </div>
-            <div style={{color:"#64748b",fontSize:11.5}}>{h.periodo}{h.dias?" · "+h.dias+" dias úteis pra entrega":""}</div>
+        {/* Header compacto */}
+        <header style={{padding:"10px 16px",borderBottom:"1px solid #f3f4f6",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <div style={{width:6,height:18,borderRadius:3,background:accent,flexShrink:0}}/>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.1}}>{h.titulo}</div>
+            <span style={{color:"#64748b",fontSize:11,fontWeight:500}}>{h.periodo}{h.dias?" · "+h.dias+"d úteis":""}</span>
           </div>
+          <span style={{background:accent+"15",color:accent,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{g.items.length}</span>
         </header>
 
-        {/* Demanda cards (lista vertical limpa) */}
+        {/* Itens compactos — 1 linha por item */}
         <div>
           {g.items.map(function(t,idx){
             const tipo=tipoInfo(t);
             const st=statusInfo(t);
             const numComents=(t.comments||[]).length;
-            const dataReq=(t.createdAt||t.created_at||"").slice(0,10);
+            const dataReq=t.createdAt||t.created_at||"";
             const dataDesejada=t.data_desejada;
             const dataPrevista=t.data_prevista_entrega;
             const isAcionavel=t.status==="aprovado";
 
-            return <div key={t.id} style={{padding:"16px 20px",borderBottom:idx<g.items.length-1?"1px solid #f3f4f6":"none",display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap",transition:"background .12s"}}
+            return <div key={t.id} style={{padding:"10px 16px",borderBottom:idx<g.items.length-1?"1px solid #f5f6f8":"none",display:"flex",gap:12,alignItems:"center",transition:"background .12s"}}
               onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";}}
               onMouseLeave={function(e){e.currentTarget.style.background="";}}>
 
-              {/* Coluna esquerda: tipo (pill vertical com cor) */}
-              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:6,flexShrink:0,minWidth:64}}>
-                <span style={{background:tipo.color+"15",color:tipo.color,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"3px 9px",borderRadius:99}}>{tipo.label}</span>
-              </div>
+              {/* Tipo (mini pill) */}
+              <span style={{background:tipo.color+"15",color:tipo.color,fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"3px 8px",borderRadius:99,flexShrink:0,minWidth:55,textAlign:"center"}}>{tipo.label}</span>
 
-              {/* Coluna central: título + datas + comentários */}
-              <div style={{flex:1,minWidth:200}}>
-                <div style={{color:"#0f172a",fontSize:14,fontWeight:700,lineHeight:1.35,letterSpacing:-.2,marginBottom:6}}>{t.title||"(sem título)"}</div>
-                <div style={{display:"flex",alignItems:"center",gap:14,color:"#64748b",fontSize:11.5,flexWrap:"wrap"}}>
-                  {dataReq&&<span title="Solicitada em" style={{display:"inline-flex",alignItems:"center",gap:5}}>
-                    <Ico n="calendar" size={11.5}/> {_ddmmFull(dataReq)}
-                  </span>}
-                  {dataDesejada&&<span title="Data desejada (referência)" style={{display:"inline-flex",alignItems:"center",gap:5,opacity:.85}}>
-                    <span style={{color:"#94a3b8",fontWeight:600}}>desejada:</span> {_ddmm(dataDesejada)}
-                  </span>}
-                  {dataPrevista&&<span title="Previsão de entrega" style={{display:"inline-flex",alignItems:"center",gap:5,color:"#059669",fontWeight:700,fontFeatureSettings:"'tnum'"}}>
-                    <Ico n="check" size={11.5}/> previsão: {_ddmmFull(dataPrevista)}
-                  </span>}
-                  {numComents>0&&<span style={{display:"inline-flex",alignItems:"center",gap:5}}>
-                    <Ico n="message" size={11.5}/> {numComents}
-                  </span>}
+              {/* Titulo + meta inline (uma linha so se couber) */}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.3,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(sem título)"}</div>
+                <div style={{display:"flex",alignItems:"center",gap:10,color:"#94a3b8",fontSize:10.5,marginTop:2,flexWrap:"wrap"}}>
+                  {_ddmmFull(dataReq)&&<span>enviada {_ddmmFull(dataReq)}</span>}
+                  {_ddmm(dataDesejada)&&<span>· desejada {_ddmm(dataDesejada)}</span>}
+                  {_ddmm(dataPrevista)&&<span style={{color:"#059669",fontWeight:600}}>· previsão {_ddmm(dataPrevista)}</span>}
+                  {numComents>0&&<span style={{display:"inline-flex",alignItems:"center",gap:3}}>· <Ico n="message" size={10}/> {numComents}</span>}
                 </div>
               </div>
 
-              {/* Coluna direita: status badge + ações */}
-              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8,flexShrink:0}}>
-                <span style={{background:st.bg,color:st.color,borderRadius:99,padding:"4px 12px",fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{st.label}</span>
-                {isAcionavel&&<div style={{display:"flex",gap:6}}>
+              {/* Status + ações */}
+              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <span style={{background:st.bg,color:st.color,borderRadius:99,padding:"3px 10px",fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{st.label}</span>
+                {isAcionavel&&<>
                   <button onClick={function(){handleAprovar(t);}}
-                    style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,fontFamily:"inherit"}}>
-                    <Ico n="check" size={12}/> Aprovar
+                    title="Aprovar"
+                    style={{background:"#059669",color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,fontFamily:"inherit"}}>
+                    <Ico n="check" size={11}/> Aprovar
                   </button>
                   <button onClick={function(){setAjusteModal({task:t,text:""});}}
-                    style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:8,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,fontFamily:"inherit"}}>
-                    <Ico n="rotate" size={12}/> Ajuste
+                    title="Solicitar ajuste"
+                    style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:7,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,fontFamily:"inherit"}}>
+                    <Ico n="rotate" size={11}/> Ajuste
                   </button>
-                </div>}
+                </>}
               </div>
             </div>;
           })}
         </div>
       </section>;
     })}
-
-    {/* Modal: Nova demanda */}
-    {novaDemandaOpen&&<NovaDemandaModal cl={cl} onClose={function(){setNovaDemandaOpen(false);}}/>}
 
     {/* Modal: Solicitar ajuste */}
     {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
