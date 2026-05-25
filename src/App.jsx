@@ -11755,6 +11755,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de video short (vem do Drive, so aparecem no calendario)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(!isAdmin&&!isMyDomain(t))return false;
@@ -20722,36 +20723,56 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   };
 
   // ═══ DOWNLOAD HELPER — baixa arquivo de forma robusta
-  // Estratégia: tenta fetch+blob (força download mesmo cross-origin)
-  // se falhar (CORS), usa <a download> direto que pelo menos abre em nova aba.
-  const downloadFile=async(url,name)=>{
-    if(!url)return;
-    const filename=name||url.split("/").pop().split("?")[0]||"arquivo";
-    try{
-      const r=await fetch(url,{mode:"cors"});
-      if(!r.ok)throw new Error("HTTP "+r.status);
-      const b=await r.blob();
+  // Estrategia em 3 niveis:
+  //  1) Se temos storagePath E _sb -> usa SDK do Supabase (retorna Blob, sem CORS).
+  //  2) Senao tenta fetch(url, {mode:"cors"}) -> blob -> <a download>.
+  //  3) Fallback: <a download> direto (browser pode ignorar atributo em
+  //     cross-origin, mas pelo menos abre o arquivo pro user salvar).
+  const downloadFile=async(url,name,storagePath)=>{
+    if(!url&&!storagePath)return;
+    const filename=name||(url?url.split("/").pop().split("?")[0]:"arquivo")||"arquivo";
+    // Helper interno: dado um Blob, dispara o download via Object URL
+    const _saveBlob=(b)=>{
       const u=URL.createObjectURL(b);
       const a=document.createElement("a");
       a.href=u; a.download=filename; a.style.display="none";
       document.body.appendChild(a);
       a.click();
       setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(u);}catch(_){}},200);
-      pixelsToast.success("Imagem baixada: "+filename,3000);
-    }catch(err){
-      console.warn("[downloadFile] blob falhou, tentando link direto:",err?.message||err);
-      // Fallback: <a download> direto. Pode ignorar 'download' em cross-origin
-      // sem CORS, mas pelo menos abre o arquivo no navegador pra salvar com Ctrl+S.
+      pixelsToast.success("Arquivo baixado: "+filename,3000);
+    };
+    // 1) Tenta SDK do Supabase primeiro (mais confiavel — ignora CORS)
+    if(storagePath&&window._sb&&window._sb.storage){
+      try{
+        const {data,error}=await window._sb.storage.from("pixels-files").download(storagePath);
+        if(error)throw error;
+        if(data){_saveBlob(data);return;}
+      }catch(e){
+        console.warn("[downloadFile] SDK falhou, tentando fetch:",e?.message||e);
+      }
+    }
+    // 2) Tenta fetch+blob com CORS
+    if(url){
+      try{
+        const r=await fetch(url,{mode:"cors"});
+        if(!r.ok)throw new Error("HTTP "+r.status);
+        const b=await r.blob();
+        _saveBlob(b);
+        return;
+      }catch(err){
+        console.warn("[downloadFile] fetch falhou, tentando link direto:",err?.message||err);
+      }
+      // 3) Fallback: <a download> direto
       try{
         const a=document.createElement("a");
         a.href=url; a.download=filename; a.target="_blank"; a.rel="noopener";
         document.body.appendChild(a); a.click();
         setTimeout(()=>{try{document.body.removeChild(a);}catch(_){}},200);
         pixelsToast.info("Abrindo imagem em nova aba — use Ctrl+S pra salvar",5000);
-      }catch(e2){
-        pixelsToast.error("Não consegui baixar a imagem. Clique direito → Salvar imagem como.",6000);
-      }
+        return;
+      }catch(_){}
     }
+    pixelsToast.error("Nao consegui baixar a imagem. Clique direito -> Salvar imagem como.",6000);
   };
 
   // ═══ COPIAR LINK — gera URL com ?card=ID e copia ═══
@@ -20961,7 +20982,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         <img src={lightbox.url} alt={lightbox.name} style={{maxWidth:"100%",maxHeight:"80vh",objectFit:"contain",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.6)"}}/>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{lightbox.name}</div>
-          <button onClick={(e)=>{e.stopPropagation();e.preventDefault();downloadFile(lightbox.url,lightbox.name);}} title="Baixar imagem"
+          <button onClick={(e)=>{e.stopPropagation();e.preventDefault();downloadFile(lightbox.url,lightbox.name,lightbox.storagePath);}} title="Baixar imagem"
             style={{background:"rgba(255,255,255,0.12)",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.5)"}
             onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.12)"}>
@@ -21038,7 +21059,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       {(()=>{
         const last=[...attachments].reverse().find(a=>isImg(a)&&!a.isAnnotation&&!a.uploading&&a.url);
         if(!last)return null;
-        return <div onClick={()=>setLightbox({url:last.url,name:last.name||"capa"})} title="Clique pra expandir e baixar"
+        return <div onClick={()=>setLightbox({url:last.url,name:last.name||"capa",storagePath:last.storagePath})} title="Clique pra expandir e baixar"
           style={{background:"#f1f5f9",borderBottom:"1px solid #e2e8f0",maxHeight:280,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",cursor:"zoom-in"}}>
           <img src={last.url} alt={last.name||""} loading="lazy" style={{maxWidth:"100%",maxHeight:280,objectFit:"contain",display:"block"}}/>
         </div>;
@@ -21213,7 +21234,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       <div style={{fontSize:9,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:8}}>🖊 Imagens com marcações ({annotations.length})</div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(100px, 1fr))",gap:8}}>
                         {annotations.map((f,i)=>(
-                          <div key={f.id} onClick={()=>setLightbox({url:f.url,name:f.name||`Arte ${i+1}`})}
+                          <div key={f.id} onClick={()=>setLightbox({url:f.url,name:f.name||`Arte ${i+1}`,storagePath:f.storagePath})}
                             style={{position:"relative",cursor:"zoom-in",borderRadius:6,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
                             <img src={f.url} alt={`Arte ${i+1}`} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
                             <div style={{position:"absolute",bottom:0,left:0,right:0,background:"linear-gradient(to top, rgba(0,0,0,0.7), transparent)",padding:"14px 6px 4px",color:"#fff",fontSize:9,fontWeight:500}}>Arte {i+1}</div>
@@ -21534,7 +21555,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     {imgRef.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
                         <img src={thumbUrl(a.url)} alt={a.name} loading="lazy"
-                          onClick={()=>setLightbox({url:a.url,name:a.name})}
+                          onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
                           onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
                           style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
                         <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:4,padding:8,background:"#faf5ff",color:"#94a3b8",fontSize:9,textAlign:"center"}}>
@@ -21544,7 +21565,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         </div>
                         <div style={{position:"absolute",top:4,left:4,background:"#a140ff",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>ref #{i+1}</div>
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
-                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name);}} title="Baixar referência"
+                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar referência"
                             style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,padding:"2px 6px",display:"flex",alignItems:"center"}}
                             onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
                             onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>⬇</button>
@@ -21563,7 +21584,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           <div style={{color:"#1e293b",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                           {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
                         </div>
-                        <button onClick={()=>downloadFile(a.url,a.name)} title="Baixar vídeo"
+                        <button onClick={()=>downloadFile(a.url,a.name,a.storagePath)} title="Baixar vídeo"
                           style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:6,padding:"4px 10px",color:"#7c3aed",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0}}>⬇</button>
                         {canEditRef&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
                       </div>
@@ -21588,7 +21609,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     {imgFin.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
                         <img src={thumbUrl(a.url)} alt={a.name} loading="lazy"
-                          onClick={()=>setLightbox({url:a.url,name:a.name})}
+                          onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
                           onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
                           style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
                         <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:4,padding:8,background:"#f8fafc",color:"#94a3b8",fontSize:9,textAlign:"center"}}>
@@ -21598,7 +21619,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         </div>
                         <div style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>#{i+1}</div>
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
-                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name);}} title="Baixar imagem"
+                          <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar imagem"
                             style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,padding:"2px 6px",display:"flex",alignItems:"center"}}
                             onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
                             onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>⬇</button>
@@ -21616,7 +21637,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           <div style={{color:"#1e293b",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                           {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
                         </div>
-                        <button onClick={()=>downloadFile(a.url,a.name)} title="Baixar vídeo"
+                        <button onClick={()=>downloadFile(a.url,a.name,a.storagePath)} title="Baixar vídeo"
                           style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"4px 10px",color:"#64748b",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0}}
                           onMouseEnter={e=>{e.currentTarget.style.background="#ede9fe";e.currentTarget.style.color="#7c3aed";}}
                           onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>⬇</button>
@@ -21647,7 +21668,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       <div style={{color:"#334155",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
                       <div style={{color:"#94a3b8",fontSize:10}}>{a.addedBy} · {a.addedAt}</div>
                     </div>
-                    <a href={a.url} download={a.name} onClick={(e)=>{e.preventDefault();downloadFile(a.url,a.name);}} style={{background:"#f1f5f9",border:"none",borderRadius:7,padding:"5px 10px",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"none"}}>⬇</a>
+                    <a href={a.url} download={a.name} onClick={(e)=>{e.preventDefault();downloadFile(a.url,a.name,a.storagePath);}} style={{background:"#f1f5f9",border:"none",borderRadius:7,padding:"5px 10px",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",textDecoration:"none"}}>⬇</a>
                     {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
                   </div>
                 ))}
