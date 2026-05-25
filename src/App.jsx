@@ -1483,6 +1483,8 @@ function NavIcon({id,size=18,color}){
   if(id==="portal_faturamento") return <svg {...p}><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M6 15h4"/></svg>;
   if(id==="portal_chat")        return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
   // ── Submenus Gestão ──
+  if(id==="gestao_financeiro")  return <svg {...p}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(id==="planejamento_mensal")return <svg {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><path d="M9 12h6M9 16h4"/></svg>;
   if(id==="contratos_lista")    return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
   if(id==="contratos_ltv")      return <svg {...p}><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>;
   if(id==="contratos_projecao") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
@@ -16731,11 +16733,10 @@ const GF_CUSTO_FIXO = {
 
 // Custo de Servir — por área
 const GF_CUSTO_SERVIR = {
-  Estratégia:  [{label:"Hellen — estratégia",        valor:2500}],
-  Design:      [{label:"André — design",             valor:1000}],
-  Vídeo:       [{label:"Guilherme — edição de vídeo",valor:1170},
-                {label:"Kit gravação",               valor:280.42}],
-  "Mídia Paga":[{label:"Erick — gestão Google Ads",  valor:2400}],
+  "Estratégia":        [{label:"Hellen Benning",     valor:2500}],
+  "Design":            [{label:"André Leal",         valor:1000}],
+  "Edição de vídeo":   [{label:"Guilherme Ferreira", valor:1170}],
+  "Gestão de mídia":   [{label:"Erick Soares",       valor:2400}],
 };
 
 // Impostos
@@ -16777,7 +16778,6 @@ function PageGestaoFinanceiro({isMob}){
   const clientesAtivos=GF_CONTRATOS.length;
   const ticketCliente=clientesAtivos>0?mrr/clientesAtivos:0;
   const ticketUnidade=unidadesFaturadas>0?mrr/unidadesFaturadas:0;
-  const ltv=ticketCliente*12;
 
   // Custos
   const sumGroup=function(g){return Object.values(g).reduce(function(s,arr){return s+arr.reduce(function(t,it){return t+it.valor;},0);},0);};
@@ -16871,22 +16871,19 @@ function PageGestaoFinanceiro({isMob}){
           </span>
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(3,1fr)",gap:18,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(2,1fr)",gap:18,paddingTop:18,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
         <BigStat label="Clientes ativos" value={clientesAtivos}      size={22} color="#fff" style={{color:"#fff"}}/>
         <BigStat label="Ticket médio"    value={_brl(ticketCliente)} size={22} color="#fff" style={{color:"#fff"}}/>
-        <BigStat label="LTV (12m)"       value={_brl(ltv)}           size={22} color="#fff" style={{color:"#fff"}}/>
       </div>
     </div>
 
     {/* ════ 2. RECEITA E CARTEIRA ════ */}
     <Block>
       <BlockHeader ico="chart" color="#16a34a" title="Receita e carteira" subtitle="Recorrência, projeção e qualidade do faturamento"/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(3,1fr)",gap:14}}>
         <BigStat label="MRR atual"       value={_brl(mrr)}        color="#16a34a"/>
         <BigStat label="Receita do mês"  value={_brl(mrr)}        color="#0d9488"/>
         <BigStat label="Projeção 12m"    value={_brl(projecao12m)} color="#7c3aed"/>
-        <BigStat label="LTV"             value={_brl(ltv)}        color="#16a34a" hint="Ticket × 12 meses"/>
-        <BigStat label="Contas em aberto" value={_brl(0)}         color="#d97706"/>
       </div>
     </Block>
 
@@ -16939,9 +16936,9 @@ function PageGestaoFinanceiro({isMob}){
           const pct=custoServirTotal>0?(subtotal/custoServirTotal)*100:0;
           return <div key={area}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:4}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:8}}>
                 <span style={{color:"#0f172a",fontWeight:700,fontSize:12.5}}>{area}</span>
-                <span style={{color:"#94a3b8",fontSize:10.5}}>{items.map(function(i){return i.label;}).join(", ")}</span>
+                <span style={{color:"#64748b",fontSize:11.5}}>· {items.map(function(i){return i.label;}).join(", ")}</span>
               </div>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{_brlF(subtotal)} <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginLeft:4}}>· {_pct(pct)}</span></div>
             </div>
@@ -28012,8 +28009,8 @@ export default function AgencyOS(){
             {(!sideCollapsed||isMob)&&hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
               {n.children.filter(child=>canSee(child,effectivePerms)).map(child=>(
                 <button key={child.id} onClick={()=>nav(child.id)}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:400,fontSize:11,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
-                  <NavIcon id={child.id} size={14} color={page===child.id?C.a:C.ts}/><span style={{marginLeft:2}}>{child.label}</span>
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:500,fontSize:12,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
+                  <NavIcon id={child.id} size={16} color={page===child.id?C.a:C.ts}/><span style={{marginLeft:2}}>{child.label}</span>
                 </button>
               ))}
             </div>}
