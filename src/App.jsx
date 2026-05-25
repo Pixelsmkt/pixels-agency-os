@@ -29448,11 +29448,16 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
   // Clampa cardIdx caso a queue tenha encolhido (ex: depois de aprovar)
   const clampedIdx=aguardando.length>0?Math.min(cardIdx,aguardando.length-1):0;
   const current=aguardando[clampedIdx]||null;
-  // Imagens do card atual — cover + files com mime image/*
-  const allImgs=current?[].concat(
-    current.cover?[current.cover]:[],
-    (current.files||[]).filter(function(f){return f.type&&f.type.startsWith("image/");}).map(function(f){return f.url;})
-  ).filter(Boolean):[];
+  // ULTIMA imagem anexada ao card (mais recente) — nao mostramos todas (poluiria)
+  const lastImg=(function(){
+    if(!current)return null;
+    // 1) Preferencia: cover explicito
+    if(current.cover&&typeof current.cover==="string"&&!current.cover.startsWith("#"))return current.cover;
+    // 2) Senao, ultimo file que eh imagem
+    const imgs=(current.files||[]).filter(function(f){return f.type&&f.type.startsWith("image/")&&f.url;});
+    if(imgs.length===0)return null;
+    return imgs[imgs.length-1].url;
+  })();
 
   const goPrev=function(){setCardIdx(function(i){return Math.max(0,i-1);});setImgIdx(0);};
   const goNext=function(){setCardIdx(function(i){return Math.min(aguardando.length-1,i+1);});setImgIdx(0);};
@@ -29571,24 +29576,17 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
       {/* Grid: imagem grande à esquerda + sidebar à direita */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 360px",gap:18,alignItems:"flex-start"}}>
 
-        {/* Panel da imagem */}
+        {/* Panel da imagem — apenas a ultima imagem anexada, tamanho contido */}
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <div style={{background:"#f1f5f9",borderRadius:16,overflow:"hidden",minHeight:320,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #e2e8f0"}}>
-            {allImgs.length>0
-              ?<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="material" style={{width:"100%",maxHeight:"78vh",objectFit:"contain",display:"block"}}/>
+          <div style={{background:"#f1f5f9",borderRadius:14,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #e2e8f0",aspectRatio:"1/1",maxHeight:520}}>
+            {lastImg
+              ?<img src={lastImg} alt="material" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
               :<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,padding:60,color:"#94a3b8"}}>
                 <Ico n="image" size={36}/>
                 <div style={{fontSize:13}}>Nenhuma imagem anexada</div>
               </div>
             }
           </div>
-          {/* Thumbs (se mais de 1 imagem) */}
-          {allImgs.length>1&&<div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
-            {allImgs.map(function(src,i){
-              return <img key={i} src={src} onClick={function(){setImgIdx(i);}} alt={"img "+(i+1)}
-                style={{width:62,height:62,objectFit:"cover",borderRadius:10,cursor:"pointer",border:i===imgIdx?"2px solid "+cl.color:"2px solid transparent",opacity:i===imgIdx?1:.55,transition:"all .15s"}}/>;
-            })}
-          </div>}
         </div>
 
         {/* Sidebar — info do card + ações */}
@@ -29606,10 +29604,26 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
             <div style={{color:"#0f172a",fontWeight:800,fontSize:17,lineHeight:1.35,letterSpacing:-.3,wordBreak:"break-word"}}>
               {current.title||"(sem título)"}
             </div>
-            {/* Descrição (se houver) */}
-            {(current.desc||current.description)&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
-              {current.desc||current.description}
-            </div>}
+            {/* Descrição (renderiza HTML do prosemirror — strip de atributos de editor) */}
+            {(function(){
+              const raw=current.desc||current.description||"";
+              if(!raw)return null;
+              // Se vier HTML (prosemirror salva com tags), renderiza como HTML
+              // Strip dos atributos data-prosemirror-* (poluem o output)
+              const isHtml=/<[a-z][\s\S]*>/i.test(raw);
+              if(isHtml){
+                const clean=String(raw)
+                  .replace(/\sdata-prosemirror-[a-z-]+="[^"]*"/g,"")
+                  .replace(/\sdata-pm-[a-z-]+="[^"]*"/g,"")
+                  .replace(/\sdata-card-data="[^"]*"/g,"")
+                  .replace(/\sdata-inline-card[a-z-]*="[^"]*"/g,"")
+                  .replace(/\saria-busy="[^"]*"/g,"")
+                  .replace(/\sstyle="[^"]*"/g,"");  // remove inline styles tb (UX consistente)
+                return <div className="portal-desc-html" style={{color:"#475569",fontSize:12.5,lineHeight:1.6,wordBreak:"break-word"}}
+                  dangerouslySetInnerHTML={{__html:clean}}/>;
+              }
+              return <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{raw}</div>;
+            })()}
             {/* Caption (legenda do post) */}
             {current.caption&&<div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",borderLeft:"3px solid "+cl.color}}>
               <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Legenda</div>
@@ -29768,9 +29782,14 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
     {/* Client bar — refinada */}
     <div style={{background:"linear-gradient(135deg,"+cl.color+"15,"+cl.color+"05)",borderRadius:14,padding:"14px 18px",border:"1px solid "+cl.color+"28",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-      <div style={{width:46,height:46,borderRadius:12,background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:17,flexShrink:0,letterSpacing:-.3}}>
-        {cl.name.slice(0,2).toUpperCase()}
-      </div>
+      {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
+        ?<div style={{width:54,height:54,borderRadius:12,background:"#fff",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:6,boxSizing:"border-box"}}>
+          <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+        </div>
+        :<div style={{width:46,height:46,borderRadius:12,background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:17,flexShrink:0,letterSpacing:-.3}}>
+          {cl.name.slice(0,2).toUpperCase()}
+        </div>
+      }
       <div>
         <div style={{color:C.tx,fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>{cl.name}{isBioter&&selUnit!=="grupo"&&availableUnits.find(function(u){return u.id===selUnit;})?" · "+availableUnits.find(function(u){return u.id===selUnit;}).pickerLabel:""}</div>
         <div style={{color:C.td,fontSize:11,marginTop:1}}>{cl.sector}</div>
