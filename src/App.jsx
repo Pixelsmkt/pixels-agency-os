@@ -1906,9 +1906,11 @@ function calcularPrazoEntrega(sprint){
 
 // Status do prazo da demanda
 // Retorna: "no_prazo" | "atrasado" | "entregue" | "aguardando" | "urgencia_pendente" | "sem_sprint"
+// Aceita tanto camelCase (completedAt) quanto snake_case (completed_at).
 function statusPrazo(task){
   if(!task)return "sem_sprint";
-  if(task.completed_at||task.data_real_entrega)return "entregue";
+  const _entregueEm=task.completedAt||task.completed_at||task.data_real_entrega;
+  if(_entregueEm)return "entregue";
   if(task.urgente&&!task.data_prevista_entrega)return "urgencia_pendente";
   if(task.aguardando_info)return "aguardando";
   if(!task.sprint_id||!task.data_prevista_entrega)return "sem_sprint";
@@ -26362,6 +26364,14 @@ const rowToTask = (r) => ({
   caption:      r.caption      || "",
   desc:         r.description  || "",
   position:     r.position     ?? null,
+  // ── Sprint / previsão de entrega ──
+  sprint_id:            r.sprint_id            || null,
+  data_desejada:        r.data_desejada        || null,
+  data_entrada_sprint:  r.data_entrada_sprint  || null,
+  data_prevista_entrega:r.data_prevista_entrega|| null,
+  data_prevista_manual: !!r.data_prevista_manual,
+  urgente:              !!r.urgente,
+  aguardando_info:      !!r.aguardando_info,
 });
 
 const taskToRow = (t) => ({
@@ -26400,6 +26410,14 @@ const taskToRow = (t) => ({
   caption:        t.caption      || "",
   description:    t.desc         || "",
   position:       t.position     ?? null,
+  // ── Sprint / previsão de entrega ──
+  sprint_id:              t.sprint_id            || null,
+  data_desejada:          t.data_desejada        || null,
+  data_entrada_sprint:    t.data_entrada_sprint  || null,
+  data_prevista_entrega:  t.data_prevista_entrega|| null,
+  data_prevista_manual:   !!t.data_prevista_manual,
+  urgente:                !!t.urgente,
+  aguardando_info:        !!t.aguardando_info,
 });
 
 // ── Helpers de usuário ────────────────────────────────────────
@@ -30027,6 +30045,192 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
   </div>;
 }
 
+/* ─── PORTAL TIMELINE — linha do tempo de entregas (agrupada por sprint) ────
+   Mostra ao cliente: data solicitação, data desejada (ref), sprint vinculada,
+   previsão de entrega (auto-calculada) e status (no prazo / atrasado / etc).
+─────────────────────────────────────────────────────────────────────────── */
+function PortalTimeline({cl, clTasks, isMob}){
+  const [cfg,setCfg]=useState(null);
+
+  // Carrega sprint_config
+  useEffect(function(){
+    let active=true;
+    (async function(){
+      const c=await loadSprintConfig();
+      if(active)setCfg(c);
+    })();
+    return function(){active=false;};
+  },[]);
+
+  // Filtra: tudo que o cliente deve ver no fluxo de entregas
+  // (exclui rascunhos/copys/aprovacao_final/agendado/publicado — esses estao em outras visoes)
+  const STATUSES_TIMELINE=["interno_demanda","interno_execucao","interno_avaliacao","interno_executado","recebida","execucao","ajustes","avaliacao","aprovado"];
+  const tarefas=clTasks.filter(function(t){
+    if(t.deletedAt)return false;
+    return STATUSES_TIMELINE.indexOf(t.status)>=0;
+  });
+
+  // Agrupa por sprint_id; quem nao tem sprint vai no grupo "sem_sprint"
+  const grupos={};
+  tarefas.forEach(function(t){
+    const k=t.sprint_id||(t.urgente?"_urgente":"_sem_sprint");
+    if(!grupos[k])grupos[k]={key:k,items:[],sprint_id:t.sprint_id||null,urgente:t.urgente};
+    grupos[k].items.push(t);
+  });
+  // Ordena grupos: urgência > sprints (mais recentes primeiro) > sem sprint
+  const grupos_ordenados=Object.values(grupos).sort(function(a,b){
+    if(a.urgente&&!b.urgente)return -1;
+    if(b.urgente&&!a.urgente)return 1;
+    if(!a.sprint_id&&b.sprint_id)return 1;
+    if(a.sprint_id&&!b.sprint_id)return -1;
+    if(!a.sprint_id&&!b.sprint_id)return 0;
+    return (b.sprint_id||"").localeCompare(a.sprint_id||"");
+  });
+
+  // Helpers
+  const _ddmm=function(s){if(!s)return "—";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
+  const _ddmmFull=function(s){if(!s)return "—";const d=new Date(s+"T12:00:00");return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+d.getFullYear();};
+
+  // Status -> cor + label
+  const statusInfo=function(t){
+    const s=statusPrazo(t);
+    const map={
+      no_prazo:        {label:"No prazo",   color:"#059669",bg:"#d1fae5"},
+      atrasado:        {label:"Em atraso",  color:"#dc2626",bg:"#fee2e2"},
+      entregue:        {label:"Entregue",   color:"#0284c7",bg:"#dbeafe"},
+      aguardando:      {label:"Aguardando informações", color:"#d97706",bg:"#fef3c7"},
+      urgencia_pendente:{label:"Urgência em análise", color:"#9333ea",bg:"#f3e8ff"},
+      sem_sprint:      {label:"Aguardando sprint", color:"#64748b",bg:"#f1f5f9"},
+    };
+    return map[s]||map.sem_sprint;
+  };
+
+  // Header de cada grupo
+  const headerGrupo=function(g){
+    if(g.urgente)return {label:"Urgências em análise", color:"#9333ea", subtitulo:"Demandas urgentes aguardando análise da equipe"};
+    if(!g.sprint_id){
+      const t=g.items[0]||{};
+      const dataReq=t.created_at||t.createdAt;
+      return {label:"Demandas recém-recebidas", color:"#64748b", subtitulo:"Ainda não foram vinculadas a uma sprint"};
+    }
+    // Sprint
+    const t=g.items[0]||{};
+    const ini=t.data_entrada_sprint;
+    const fim=t.data_prevista_entrega;
+    return {
+      label:"Sprint "+g.sprint_id,
+      color:"#0f172a",
+      subtitulo:fim?("Entrega prevista até "+_ddmmFull(fim)):"Em planejamento",
+      ini:ini,
+      fim:fim,
+    };
+  };
+
+  // Mensagem pro cliente (configurada)
+  const mensagemSprint=function(t){
+    if(!cfg)return "";
+    if(t.urgente&&!t.data_prevista_entrega)return cfg.texto_urgente||"";
+    if(t.aguardando_info)return cfg.texto_aguardando||"";
+    if(t.sprint_id&&t.data_entrada_sprint&&t.data_prevista_entrega){
+      const sprint={data_inicio:t.data_entrada_sprint.slice(0,10),data_fim:t.data_prevista_entrega};
+      return textoSprintCliente(sprint,cfg);
+    }
+    return "";
+  };
+
+  if(tarefas.length===0){
+    return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"56px 36px",textAlign:"center"}}>
+      <div style={{width:64,height:64,borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
+        <Ico n="check" size={32} color="#16a34a"/>
+      </div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Sem demandas em andamento</div>
+      <div style={{color:"#64748b",fontSize:13,marginTop:6,maxWidth:420,margin:"6px auto 0",lineHeight:1.55}}>
+        Quando você abrir uma nova demanda na aba <strong>Solicitar</strong>, ela aparecerá aqui com a previsão de entrega.
+      </div>
+    </div>;
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18}}>
+
+    {/* Header geral */}
+    <div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Linha do tempo de entregas</div>
+      <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Suas demandas, agrupadas pela sprint em que foram vinculadas pela equipe Pixels.</div>
+    </div>
+
+    {/* Grupos */}
+    {grupos_ordenados.map(function(g){
+      const h=headerGrupo(g);
+      const colorMain=h.color;
+      return <div key={g.key} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+        {/* Header do grupo */}
+        <div style={{padding:"14px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",background:"linear-gradient(180deg,#fafbfc,#fff)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+            <div style={{width:10,height:10,borderRadius:"50%",background:colorMain,flexShrink:0,boxShadow:"0 0 0 3px "+colorMain+"22"}}/>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{h.label}</div>
+              <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>{h.subtitulo}</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {h.ini&&h.fim&&<div style={{color:"#0f172a",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",background:"#f1f5f9",borderRadius:8,padding:"4px 10px"}}>
+              {_ddmm(h.ini)} → {_ddmm(h.fim)}
+            </div>}
+            <span style={{background:colorMain+"18",color:colorMain,borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{g.items.length}</span>
+          </div>
+        </div>
+
+        {/* Items */}
+        <div>
+          {g.items.map(function(t,idx){
+            const stInfo=statusInfo(t);
+            const dataReq=t.created_at||t.createdAt||"";
+            const dataDesejada=t.data_desejada;
+            const dataPrevista=t.data_prevista_entrega;
+            const dataReal=t.completed_at||t.completedAt;
+            const msg=mensagemSprint(t);
+            return <div key={t.id} style={{padding:"14px 18px",borderBottom:idx<g.items.length-1?"1px solid #f3f4f6":"none",display:"flex",flexDirection:"column",gap:8}}>
+              {/* Titulo + status */}
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                <div style={{flex:1,minWidth:200}}>
+                  <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,lineHeight:1.35,letterSpacing:-.1}}>{t.title}</div>
+                  {t.contentType&&<div style={{color:"#7c3aed",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginTop:3}}>{
+                    ({arte:"Arte única",carrossel:"Carrossel",video:"Vídeo",foto:"Foto de obra",video_short:"Short"})[t.contentType]||t.contentType
+                  }</div>}
+                </div>
+                <span style={{background:stInfo.bg,color:stInfo.color,borderRadius:99,padding:"4px 11px",fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{stInfo.label}</span>
+              </div>
+
+              {/* Datas em grid */}
+              <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:8,background:"#f8fafc",borderRadius:10,padding:"10px 12px"}}>
+                <div>
+                  <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Solicitada</div>
+                  <div style={{color:"#0f172a",fontSize:12,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>{_ddmmFull(dataReq?dataReq.slice(0,10):"")}</div>
+                </div>
+                <div>
+                  <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Data desejada (ref)</div>
+                  <div style={{color:"#475569",fontSize:12,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>{dataDesejada?_ddmmFull(dataDesejada):"—"}</div>
+                </div>
+                <div>
+                  <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Previsão entrega</div>
+                  <div style={{color:dataPrevista?"#059669":"#94a3b8",fontSize:12,fontWeight:700,marginTop:2,fontFeatureSettings:"'tnum'"}}>{dataPrevista?_ddmmFull(dataPrevista):"a definir"}</div>
+                </div>
+                <div>
+                  <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Entregue em</div>
+                  <div style={{color:dataReal?"#0284c7":"#94a3b8",fontSize:12,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>{dataReal?_ddmmFull(String(dataReal).slice(0,10)):"—"}</div>
+                </div>
+              </div>
+
+              {/* Mensagem pro cliente (do sprint_config) */}
+              {msg&&<div style={{color:"#475569",fontSize:11.5,fontStyle:"italic",borderLeft:"2px solid "+stInfo.color,paddingLeft:10,marginTop:2}}>{msg}</div>}
+            </div>;
+          })}
+        </div>
+      </div>;
+    })}
+  </div>;
+}
+
 function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
   const TASKS=tasks||[];
   // Se lockedClientId foi passado (cliente logado no portal), trava a seleção.
@@ -30186,41 +30390,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
     {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
-    {tab==="demandas"&&(()=>{
-      const ativos=clTasks.filter(t=>!["publicado"].includes(t.status));
-      if(ativos.length===0)return(
-        <div style={{background:C.card,borderRadius:14,padding:"48px",textAlign:"center",border:"1px solid "+C.b1}}>
-          <div style={{fontSize:36,marginBottom:8}}>✅</div>
-          <div style={{color:C.tx,fontWeight:700}}>Tudo em dia!</div>
-          <div style={{color:C.td,fontSize:12,marginTop:4}}>Nenhuma demanda ativa no momento.</div>
-        </div>
-      );
-      const byStatus={};
-      ativos.forEach(t=>{if(!byStatus[t.status])byStatus[t.status]=[];byStatus[t.status].push(t);});
-      const STATUS_LABELS=PORTAL_STATUS_LABELS;
-      return(
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {Object.entries(byStatus).map(([status,tasks])=>(
-            <div key={status} style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-              <div style={{padding:"10px 16px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:8,background:(getPortalStatusColor(status))+"0a"}}>
-                <div style={{width:8,height:8,borderRadius:"50%",background:getPortalStatusColor(status)}}/>
-                <span style={{color:getPortalStatusColor(status),fontWeight:700,fontSize:12}}>{STATUS_LABELS[status]||status}</span>
-                <span style={{background:(getPortalStatusColor(status))+"22",color:getPortalStatusColor(status),borderRadius:99,padding:"0 7px",fontSize:10,fontWeight:700}}>{tasks.length}</span>
-              </div>
-              {tasks.map((t,i)=>(
-                <div key={t.id} style={{padding:"12px 16px",borderBottom:i<tasks.length-1?"1px solid "+C.b1+"33":"none"}}>
-                  <div style={{color:C.tx,fontWeight:600,fontSize:13}}>{t.title}</div>
-                  {t.publishDate&&<div style={{color:C.td,fontSize:10,marginTop:3}}>
-                    📅 Agendado: {new Date(t.publishDate+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"long"})}
-                    {t.publishTime&&" · "+t.publishTime}
-                  </div>}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      );
-    })()}
+    {tab==="demandas"&&<PortalTimeline cl={cl} clTasks={clTasks} isMob={isMob}/>}
 
     {/* ── CALENDÁRIO ── */}
     {tab==="solicitar"&&<PortalSolicitar tasks={tasks} selCl={selCl} cl={cl}/>}
