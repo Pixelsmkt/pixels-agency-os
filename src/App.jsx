@@ -1534,11 +1534,7 @@ const NAV=[
   {id:"portal",     icon:"◯", label:"Portal do cliente"},
   {type:"divider",label:"ADMIN"},
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
-    {id:"contratos_lista",      icon:"▤", label:"Contratos"},
-    {id:"contratos_ltv",        icon:"◈", label:"LTV"},
-    {id:"contratos_projecao",   icon:"▲", label:"Projeção"},
-    {id:"capacidade_alocacao",  icon:"◫", label:"Alocação"},
-    {id:"capacidade_onboarding",icon:"◇", label:"Onboarding"},
+    {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
@@ -16682,6 +16678,166 @@ function FinCobrancaModal({c,onClose,onSave}){
   </FinModal>;
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════
+   PAGE GESTÃO FINANCEIRO — dashboard financeiro da agência (Gestão > Financeiro)
+═══════════════════════════════════════════════════════════════════ */
+
+// Contratos atuais (Bioter agrupado por unidade)
+const GF_CONTRATOS = [
+  {
+    grupo:"Bioter", grupoEcon:true, cor:"#166534",
+    unidades:[
+      {nome:"Bioter Chapecó",            valor:3000, status:"ativo"},
+      {nome:"Bioter Toledo",             valor:2000, status:"ativo"},
+      {nome:"Bioter Castro",             valor:2500, status:"ativo"},
+      {nome:"Bioter Glória de Dourados", valor:500,  status:"ativo"},
+      {nome:"Bioter Uberlândia",         valor:500,  status:"ativo"},
+      {nome:"Bioter Paraguay",           valor:0,    status:"ativo"},
+    ],
+  },
+  {grupo:"Construschorr",        cor:"#dc2626", valor:4000, status:"ativo"},
+  {grupo:"Arabutã Pré-Moldados", cor:"#d97706", valor:4500, status:"ativo"},
+  {grupo:"Climaves",             cor:"#0284c7", valor:2500, status:"ativo"},
+];
+
+function PageGestaoFinanceiro({isMob}){
+  const _flat=GF_CONTRATOS.flatMap(function(c){
+    if(c.unidades)return c.unidades.map(function(u){return {nome:u.nome,grupo:c.grupo,valor:u.valor,status:u.status};});
+    return [{nome:c.grupo,grupo:c.grupo,valor:c.valor,status:c.status}];
+  });
+  const ativos=_flat.filter(function(x){return x.status==="ativo"&&x.valor>0;});
+  const mrr=ativos.reduce(function(s,x){return s+x.valor;},0);
+  const projecao12m=mrr*12;
+  const contratosAtivos=ativos.length;
+  const clientesAtivos=GF_CONTRATOS.filter(function(c){
+    if(c.unidades)return c.unidades.some(function(u){return u.status==="ativo"&&u.valor>0;});
+    return c.status==="ativo"&&c.valor>0;
+  }).length;
+  const ticketMedio=clientesAtivos>0?mrr/clientesAtivos:0;
+  const ltv=ticketMedio*12;
+  const margemPct=35;
+  const margem=mrr*(margemPct/100);
+  const receitaPontualMes=0;
+  const receitaTotalMes=mrr+receitaPontualMes;
+  const contasAberto=0;
+  const contasAtrasadas=0;
+
+  const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
+
+  const KPIS=[
+    {l:"MRR atual",                v:_brl(mrr),                c:"#16a34a", ico:"chart",      sub:"Receita recorrente mensal"},
+    {l:"Receita projetada 12 meses",v:_brl(projecao12m),       c:"#7c3aed", ico:"sparkles",   sub:"Estimativa anual atual"},
+    {l:"Receita pontual do mês",   v:_brl(receitaPontualMes),  c:"#0284c7", ico:"zap",        sub:"Projetos avulsos"},
+    {l:"Receita total do mês",     v:_brl(receitaTotalMes),    c:"#0d9488", ico:"wallet",     sub:"Recorrente + pontual"},
+    {l:"Contratos ativos",         v:contratosAtivos,          c:"#475569", ico:"fileText",   sub:"Unidades faturadas"},
+    {l:"Clientes ativos",          v:clientesAtivos,           c:"#0891b2", ico:"users",      sub:"Grupos econômicos"},
+    {l:"Ticket médio",             v:_brl(ticketMedio),        c:"#7c3aed", ico:"layers",     sub:"Por cliente"},
+    {l:"LTV",                      v:_brl(ltv),                c:"#16a34a", ico:"checkCircle",sub:"Estimativa 12 meses"},
+    {l:"Contas em aberto",         v:_brl(contasAberto),       c:"#d97706", ico:"clock",      sub:"A receber"},
+    {l:"Contas atrasadas",         v:_brl(contasAtrasadas),    c:"#dc2626", ico:"alert",      sub:"Em atraso"},
+    {l:"Margem estimada",          v:_brl(margem)+" ("+margemPct+"%)", c:"#0d9488", ico:"funnel", sub:"Lucro projetado"},
+  ];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    <div style={{display:"flex",alignItems:"center",gap:10}}>
+      <div style={{width:40,height:40,borderRadius:10,background:"#16a34a15",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <Ico n="wallet" size={22} color="#16a34a"/>
+      </div>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5}}>Financeiro</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:2}}>Painel de saúde financeira da Pixels — recorrência, projeções e contratos.</div>
+      </div>
+    </div>
+
+    <div style={{background:"linear-gradient(135deg,#16a34a,#15803d)",borderRadius:16,padding:"22px 26px",color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",gap:18,flexWrap:"wrap",boxShadow:"0 10px 30px rgba(22,163,74,0.25)"}}>
+      <div>
+        <div style={{fontSize:11,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",opacity:.9,marginBottom:4}}>MRR atual</div>
+        <div style={{fontSize:38,fontWeight:800,letterSpacing:-1.2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{_brl(mrr)}<span style={{fontSize:14,fontWeight:600,opacity:.9,marginLeft:8}}>/mês</span></div>
+        <div style={{fontSize:12.5,opacity:.95,marginTop:8}}>{contratosAtivos} contratos · {clientesAtivos} clientes · projetado <strong>{_brl(projecao12m)}</strong> em 12 meses</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:24}}>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:11,opacity:.9,fontWeight:600}}>Ticket médio</div>
+          <div style={{fontSize:22,fontWeight:800,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{_brl(ticketMedio)}</div>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:11,opacity:.9,fontWeight:600}}>Margem est.</div>
+          <div style={{fontSize:22,fontWeight:800,letterSpacing:-.4,fontFeatureSettings:"'tnum'"}}>{margemPct}%</div>
+        </div>
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:11}}>
+      {KPIS.map(function(k,i){
+        return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:6,transition:"all .15s"}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor=k.c+"55";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.06)";}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="";}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:30,height:30,borderRadius:8,background:k.c+"15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Ico n={k.ico} size={15} color={k.c}/>
+            </div>
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,lineHeight:1.2}}>{k.l}</div>
+          </div>
+          <div style={{color:k.c,fontWeight:800,fontSize:19,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.15}}>{k.v}</div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:500}}>{k.sub}</div>
+        </div>;
+      })}
+    </div>
+
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden"}}>
+      <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:9}}>
+        <Ico n="fileText" size={16} color="#475569"/>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Contratos ativos</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>{contratosAtivos} unidades · MRR consolidado {_brl(mrr)}</div>
+        </div>
+      </div>
+
+      {GF_CONTRATOS.map(function(c,idx){
+        if(c.grupoEcon&&c.unidades){
+          const totalGrupo=c.unidades.reduce(function(s,u){return s+u.valor;},0);
+          const ativosGrupo=c.unidades.filter(function(u){return u.status==="ativo"&&u.valor>0;}).length;
+          return <div key={idx} style={{borderBottom:idx<GF_CONTRATOS.length-1?"1px solid #f5f6f8":"none"}}>
+            <div style={{padding:"12px 20px",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+              <div style={{display:"flex",alignItems:"center",gap:9}}>
+                <div style={{width:8,height:24,borderRadius:3,background:c.cor}}/>
+                <div>
+                  <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>{c.grupo} <span style={{color:"#94a3b8",fontWeight:500,fontSize:11,marginLeft:4}}>(grupo econômico)</span></div>
+                  <div style={{color:"#64748b",fontSize:11,marginTop:1}}>{ativosGrupo} unidades ativas</div>
+                </div>
+              </div>
+              <div style={{color:c.cor,fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'"}}>{_brl(totalGrupo)}<span style={{fontSize:11,opacity:.75,marginLeft:4}}>/mês</span></div>
+            </div>
+            {c.unidades.map(function(u,j){
+              return <div key={j} style={{padding:"10px 20px 10px 38px",borderTop:"1px solid #f8f9fa",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                  <div style={{width:6,height:6,borderRadius:"50%",background:u.valor>0?c.cor:"#cbd5e1",flexShrink:0}}/>
+                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600}}>{u.nome}</span>
+                  {u.valor===0&&<span style={{background:"#f1f5f9",color:"#94a3b8",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Sem cobrança</span>}
+                </div>
+                <div style={{color:u.valor>0?"#0f172a":"#94a3b8",fontWeight:700,fontSize:13,fontFeatureSettings:"'tnum'"}}>{u.valor>0?_brl(u.valor)+"/mês":"—"}</div>
+              </div>;
+            })}
+          </div>;
+        }
+        return <div key={idx} style={{padding:"12px 20px",borderBottom:idx<GF_CONTRATOS.length-1?"1px solid #f5f6f8":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+            <div style={{width:8,height:24,borderRadius:3,background:c.cor}}/>
+            <span style={{color:"#0f172a",fontSize:13.5,fontWeight:700}}>{c.grupo}</span>
+          </div>
+          <div style={{color:c.cor,fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'"}}>{_brl(c.valor)}<span style={{fontSize:11,opacity:.75,marginLeft:4}}>/mês</span></div>
+        </div>;
+      })}
+    </div>
+
+    <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",fontStyle:"italic"}}>
+      Valores baseados nos contratos cadastrados. Cobranças pontuais e contas em aberto podem ser registradas em versões futuras.
+    </div>
+  </div>;
+}
+
 // ======= 09_acessos.jsx =======
 // Grupos de permissões organizados por módulo (abas)
 const PERM_TABS=[
@@ -27205,11 +27361,7 @@ export default function AgencyOS(){
       case "portal_chat":
       case "portal_criativos":     return p.verPortal||isSocio;
       case "gestao":
-      case "contratos_lista":
-      case "contratos_ltv":
-      case "contratos_projecao":
-      case "capacidade_alocacao":
-      case "capacidade_onboarding":return p.verFinanceiro||isSocio;
+      case "gestao_financeiro":    return p.verFinanceiro||isSocio;
       case "acessos":              return p.verAcessos||isSocio;
       case "interno":
       case "interno_calendario":
@@ -27274,7 +27426,7 @@ export default function AgencyOS(){
       case "analises_gargalos":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseGarg)||isSocio?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
       case "relatorios":            return (effectivePerms.verAnalises&&effectivePerms.verRelatorio)||isSocio?<PageRelatorio {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao":
-      case "contratos_lista":       return (effectivePerms.verFinanceiro||isSocio)?<PageContratos {...p}/>:<NoPerm/>;
+      case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p}/>:<NoPerm/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
       case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
