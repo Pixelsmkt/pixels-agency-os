@@ -1832,6 +1832,11 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
   if(n==="users")     return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(n==="building")  return <svg {...p}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>;
+  if(n==="home")      return <svg {...p}><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2h-4a2 2 0 01-2-2v-5h-2v5a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>;
+  if(n==="chart")     return <svg {...p}><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="3" y1="20" x2="21" y2="20"/></svg>;
+  if(n==="wallet")    return <svg {...p}><path d="M21 12V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2v-1"/><path d="M22 12h-4a2 2 0 100 4h4z"/></svg>;
+  if(n==="funnel")    return <svg {...p}><path d="M3 4h18l-7 9v7l-4-2v-5z"/></svg>;
+  if(n==="globe")     return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>;
   return null;
 }
 
@@ -28751,16 +28756,16 @@ const _nowTime=()=>new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:
 const PORTAL_MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const PORTAL_ALL_TABS=[
-  {id:"dashboard",   icon:"🎯", label:"Dashboard"},
-  {id:"aprovacoes",  icon:"◉",  label:"Aprovações"},
-  {id:"demandas",    icon:"◈",  label:"Demandas"},
-  {id:"solicitar",   icon:"⚡", label:"Solicitar"},
-  {id:"calendario",  icon:"📅", label:"Calendário"},
-  {id:"publicacoes", icon:"✅", label:"Publicadas"},
-  {id:"funil",       icon:"📈", label:"Funil comercial"},
-  {id:"analises",    icon:"📊", label:"Análises"},
-  {id:"faturamento", icon:"💰", label:"Faturamento"},
-  {id:"chat",        icon:"💬", label:"Chat"},
+  {id:"dashboard",   ico:"home",        label:"Dashboard"},
+  {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
+  {id:"demandas",    ico:"kanban",      label:"Demandas"},
+  {id:"solicitar",   ico:"zap",         label:"Solicitar"},
+  {id:"calendario",  ico:"calendar",    label:"Calendário"},
+  {id:"publicacoes", ico:"check",       label:"Publicadas"},
+  {id:"funil",       ico:"funnel",      label:"Funil comercial"},
+  {id:"analises",    ico:"chart",       label:"Análises"},
+  {id:"faturamento", ico:"wallet",      label:"Faturamento"},
+  {id:"chat",        ico:"message",     label:"Chat"},
 ];
 const INTERNAS_COLS_RADAR_P=[
   {id:"interno_demanda"},{id:"interno_execucao"},{id:"interno_avaliacao"},
@@ -29533,9 +29538,13 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     </div>;
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:12}}>
-    <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",color:"#92400e",fontSize:12,lineHeight:1.5}}>
-      <strong>Como funciona:</strong> aqui aparecem as demandas que a equipe Pixels já aprovou internamente e estão aguardando sua avaliação. Você pode <strong>Aprovar</strong> (vai pra Aprovação final, pronta pra agendar) ou <strong>Solicitar ajuste</strong> (volta pra equipe com sua observação).
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{background:"#f8fafc",borderLeft:"3px solid "+cl.color,borderRadius:"0 10px 10px 0",padding:"11px 16px",color:"#475569",fontSize:12,lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:10}}>
+      <Ico n="alert" size={16} color={cl.color}/>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:700,marginBottom:2,fontSize:12.5}}>Como funciona</div>
+        Aqui aparecem as demandas que a equipe Pixels já aprovou internamente e estão aguardando sua avaliação. Você pode <strong style={{color:"#0f172a"}}>Aprovar</strong> (vai pra Aprovação final, pronta pra agendar) ou <strong style={{color:"#0f172a"}}>Solicitar ajuste</strong> (volta pra equipe com sua observação).
+      </div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(0,1fr))",gap:12}}>
       <Coluna label="Aguardando sua aprovação" color="#0f172a" tasks={aguardando} actionable={true}/>
@@ -29603,7 +29612,27 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
   const cl=CLIENTS.find(c=>c.id===selCl);
   // Guard: só inclui tarefas se selCl é válido (evita match com client=="")
-  const clTasks=selCl?TASKS.filter(t=>t.client===selCl&&!t.deletedAt):[];
+  const clTasksAll=selCl?TASKS.filter(t=>t.client===selCl&&!t.deletedAt):[];
+
+  // ── Seletor de unidade (so pra Bioter) ──
+  // Default "grupo" = visao consolidada de todas as unidades.
+  // No futuro essa lista podera ser restrita por usuario (Edgar so ve paraguay, etc).
+  const isBioter=selCl==="bioter";
+  const [selUnit,setSelUnit]=useState("grupo");
+  // Lista de unidades disponiveis (futuramente filtrada por permissao do user logado)
+  const availableUnits=isBioter?(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]):[];
+  // Filtra tasks pela unidade selecionada (se for Bioter e nao for "grupo")
+  const clTasks=(function(){
+    if(!isBioter||selUnit==="grupo")return clTasksAll;
+    return clTasksAll.filter(function(t){
+      const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+      return units.indexOf(selUnit)!==-1||units.indexOf("grupo")!==-1;
+    });
+  })();
+  // Reset selUnit ao trocar de cliente (se cliente novo nao for bioter)
+  useEffect(function(){
+    if(!isBioter&&selUnit!=="grupo")setSelUnit("grupo");
+  },[selCl]);
 
   // Load client access config (modules enabled)
   const clientAccess=(()=>{
@@ -29632,11 +29661,14 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
 
-    {/* Header */}
+    {/* Header — sem emoji, tipografia limpa */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
       <div>
-        <div style={{color:C.tx,fontWeight:900,fontSize:20}}>🌐 Portal do Cliente</div>
-        <div style={{color:C.td,fontSize:11,marginTop:2}}>Visão exclusiva do cliente · sem informações internas</div>
+        <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4,display:"flex",alignItems:"center",gap:8}}>
+          <Ico n="globe" size={20} color={cl.color}/>
+          Portal do Cliente
+        </div>
+        <div style={{color:C.td,fontSize:11.5,marginTop:3,fontWeight:500}}>Visão exclusiva do cliente · sem informações internas</div>
       </div>
       {isSocio&&!lockedClientId&&<select value={selCl} onChange={e=>setSelCl(e.target.value)}
         style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 14px",color:C.tx,fontSize:13,fontWeight:700,outline:"none",cursor:"pointer"}}>
@@ -29644,37 +29676,56 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       </select>}
     </div>
 
-    {/* Client bar */}
-    <div style={{background:"linear-gradient(135deg,"+cl.color+"18,"+cl.color+"08)",borderRadius:16,padding:"16px 20px",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-      <div style={{width:48,height:48,borderRadius:14,background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:18,flexShrink:0}}>
+    {/* Client bar — refinada */}
+    <div style={{background:"linear-gradient(135deg,"+cl.color+"15,"+cl.color+"05)",borderRadius:14,padding:"14px 18px",border:"1px solid "+cl.color+"28",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+      <div style={{width:46,height:46,borderRadius:12,background:cl.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:17,flexShrink:0,letterSpacing:-.3}}>
         {cl.name.slice(0,2).toUpperCase()}
       </div>
       <div>
-        <div style={{color:C.tx,fontWeight:800,fontSize:16}}>{cl.name}</div>
-        <div style={{color:C.td,fontSize:11}}>{cl.sector}</div>
+        <div style={{color:C.tx,fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>{cl.name}{isBioter&&selUnit!=="grupo"&&availableUnits.find(function(u){return u.id===selUnit;})?" · "+availableUnits.find(function(u){return u.id===selUnit;}).pickerLabel:""}</div>
+        <div style={{color:C.td,fontSize:11,marginTop:1}}>{cl.sector}</div>
       </div>
-      <div style={{display:"flex",gap:20,marginLeft:"auto",flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:18,marginLeft:"auto",flexWrap:"wrap"}}>
         {[
-          {l:"Agendados",v:clTasks.filter(t=>t.status==="agendado").length,c:"#0284c7"},
-          {l:"Publicados",v:clTasks.filter(t=>t.status==="publicado").length,c:C.gr},
-          {l:"Em produção",v:clTasks.filter(t=>!["agendado","publicado","aprovado"].includes(t.status)).length,c:C.a},
-        ].map((k,i)=>(
-          <div key={i} style={{textAlign:"center"}}>
-            <div style={{color:k.c,fontWeight:900,fontSize:22}}>{k.v}</div>
-            <div style={{color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase"}}>{k.l}</div>
-          </div>
-        ))}
+          {l:"Agendados",v:clTasks.filter(function(t){return t.status==="agendado";}).length,c:"#0284c7"},
+          {l:"Publicados",v:clTasks.filter(function(t){return t.status==="publicado";}).length,c:C.gr},
+          {l:"Em produção",v:clTasks.filter(function(t){return ["agendado","publicado","aprovado","aprovacao_final"].indexOf(t.status)===-1;}).length,c:C.a},
+        ].map(function(k,i){
+          return <div key={i} style={{textAlign:"center"}}>
+            <div style={{color:k.c,fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.5}}>{k.v}</div>
+            <div style={{color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.3,marginTop:1}}>{k.l}</div>
+          </div>;
+        })}
       </div>
     </div>
 
-    {/* Tabs */}
-    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1}}>
-      {TABS.map(t=>(
-        <button key={t.id} onClick={()=>setTab(t.id)}
-          style={{background:"none",border:"none",borderBottom:tab===t.id?"2px solid "+cl.color:"2px solid transparent",padding:"10px 18px",color:tab===t.id?cl.color:C.ts,fontWeight:tab===t.id?700:400,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:5}}>
-          <span>{t.icon}</span>{t.label}
-        </button>
-      ))}
+    {/* Seletor de unidade (so pra Bioter) — pills horizontais com Grupo Bioter no fim */}
+    {isBioter&&availableUnits.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,padding:"2px 0"}}>
+      {availableUnits.map(function(u){
+        const active=selUnit===u.id;
+        return <button key={u.id} onClick={function(){setSelUnit(u.id);}}
+          style={{background:active?u.color:"#fff",color:active?"#fff":"#475569",border:"1px solid "+(active?u.color:"#e2e8f0"),borderRadius:8,padding:"7px 13px",fontSize:12,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+          {active&&<Ico n="check" size={12}/>}
+          {u.pickerLabel||u.label}
+        </button>;
+      })}
+      <button onClick={function(){setSelUnit("grupo");}}
+        style={{background:selUnit==="grupo"?"#0f172a":"#fff",color:selUnit==="grupo"?"#fff":"#0f172a",border:"1px solid "+(selUnit==="grupo"?"#0f172a":"#cbd5e1"),borderRadius:8,padding:"7px 13px",fontSize:12,fontWeight:selUnit==="grupo"?700:600,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+        <Ico n="layers" size={12}/>
+        Grupo Bioter
+      </button>
+    </div>}
+
+    {/* Tabs — Ico em vez de emoji, hover sutil */}
+    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,flexWrap:"wrap"}}>
+      {TABS.map(function(t){
+        const active=tab===t.id;
+        return <button key={t.id} onClick={function(){setTab(t.id);}}
+          style={{background:"none",border:"none",borderBottom:active?"2px solid "+cl.color:"2px solid transparent",padding:"10px 16px",color:active?cl.color:C.ts,fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",letterSpacing:-.1,transition:"color .12s"}}>
+          <Ico n={t.ico||"dot"} size={14}/>
+          {t.label}
+        </button>;
+      })}
     </div>
 
     {/* ── APROVAÇÕES ── Kanban simplificado: cliente aprova ou solicita ajuste */}
@@ -29769,15 +29820,15 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
           return(
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12}}>
           {[
-            {l:"Publicados",v:clTasks.filter(t=>t.status==="publicado").length,c:C.gr,icon:"✅"},
-            {l:"Agendados",v:clTasks.filter(t=>t.status==="agendado").length,c:"#0284c7",icon:"📅"},
-            {l:"Em Produção",v:clTasks.filter(t=>["recebida","execucao","avaliacao"].includes(t.status)).length,c:C.yw,icon:"⚙"},
-            {l:"Total do mês",v:clTasks.filter(t=>{if(!t.completedAt)return false;const d=new Date(t.completedAt);return d.getMonth()===_nm&&d.getFullYear()===_ny;}).length,c:C.a,icon:"📋"},
+            {l:"Publicados",v:clTasks.filter(t=>t.status==="publicado").length,c:C.gr,ico:"check"},
+            {l:"Agendados",v:clTasks.filter(t=>t.status==="agendado").length,c:"#0284c7",ico:"calendar"},
+            {l:"Em Produção",v:clTasks.filter(t=>["recebida","execucao","avaliacao"].includes(t.status)).length,c:C.yw,ico:"layers"},
+            {l:"Total do mês",v:clTasks.filter(t=>{if(!t.completedAt)return false;const d=new Date(t.completedAt);return d.getMonth()===_nm&&d.getFullYear()===_ny;}).length,c:C.a,ico:"fileText"},
           ].map((k,i)=>(
-            <div key={i} style={{background:"linear-gradient(135deg,"+k.c+"18,"+k.c+"08)",border:"1px solid "+k.c+"33",borderRadius:14,padding:"16px",textAlign:"center"}}>
-              <div style={{fontSize:24,marginBottom:4}}>{k.icon}</div>
-              <div style={{color:k.c,fontWeight:900,fontSize:28,letterSpacing:-1}}>{k.v}</div>
-              <div style={{color:C.td,fontSize:10,marginTop:3,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>{k.l}</div>
+            <div key={i} style={{background:"linear-gradient(135deg,"+k.c+"15,"+k.c+"05)",border:"1px solid "+k.c+"28",borderRadius:14,padding:"16px",textAlign:"center"}}>
+              <div style={{marginBottom:6,display:"flex",justifyContent:"center"}}><Ico n={k.ico} size={22} color={k.c}/></div>
+              <div style={{color:k.c,fontWeight:800,fontSize:26,letterSpacing:-.8,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
+              <div style={{color:C.td,fontSize:10,marginTop:3,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{k.l}</div>
             </div>
           ))}
         </div>
