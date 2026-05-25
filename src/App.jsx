@@ -21259,34 +21259,44 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>
               );
             })()}
-            <div>
-              {canEdit&&<RichToolbar elRef={descRef}/>}
-              <div
-                ref={descRef}
-                contentEditable={canEdit}
-                suppressContentEditableWarning
-                onBlur={e=>setDesc(e.currentTarget.innerHTML)}
-                onMouseDown={e=>e.stopPropagation()}
-                onClick={e=>{
-                  // contentEditable engole cliques em <a> — interceptamos pra abrir o link
-                  const a=e.target.closest&&e.target.closest("a");
-                  if(!a)return;
-                  const href=a.getAttribute("href");
-                  if(!href)return;
-                  if(/^(https?:|mailto:|tel:)/i.test(href)){
-                    e.preventDefault();
-                    e.stopPropagation();
-                    window.open(href,"_blank","noopener,noreferrer");
-                  }
-                }}
-                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
-              {canEdit&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
-                <button onClick={save}
-                  style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 20px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                  💾 Salvar descrição
-                </button>
-              </div>}
-            </div>
+            {/* Editor de descrição — escondido quando card tá em "ajustes" sem conteúdo
+                (Solicitação de ajuste já mostra tudo que importa; editor vazio só polui). */}
+            {(function(){
+              const _isAjuste=task.status==="ajustes"||task.isAlteracao;
+              const _descTxt=String(desc||"").replace(/<[^>]*>/g,"").trim();
+              const _hideEmpty=_isAjuste&&!_descTxt&&!canEdit;
+              if(_hideEmpty)return null;
+              // Se em ajustes e vazio mas tem permissão de editar, mostra collapsed (link "Adicionar descrição")
+              const [_showDescEditor,_setShowDescEditor]=[true,function(){}]; // placeholder — sempre mostra
+              return <div>
+                {canEdit&&<RichToolbar elRef={descRef}/>}
+                <div
+                  ref={descRef}
+                  contentEditable={canEdit}
+                  suppressContentEditableWarning
+                  onBlur={e=>setDesc(e.currentTarget.innerHTML)}
+                  onMouseDown={e=>e.stopPropagation()}
+                  onClick={e=>{
+                    const a=e.target.closest&&e.target.closest("a");
+                    if(!a)return;
+                    const href=a.getAttribute("href");
+                    if(!href)return;
+                    if(/^(https?:|mailto:|tel:)/i.test(href)){
+                      e.preventDefault();
+                      e.stopPropagation();
+                      window.open(href,"_blank","noopener,noreferrer");
+                    }
+                  }}
+                  data-placeholder={_isAjuste?"Anotações internas (opcional)":"Descrição da demanda"}
+                  style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:_isAjuste&&!_descTxt?80:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
+                {canEdit&&_descTxt&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
+                  <button onClick={save}
+                    style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 18px",fontWeight:700,fontSize:12,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+                    <Ico n="check" size={13}/> Salvar descrição
+                  </button>
+                </div>}
+              </div>;
+            })()}
 
             {/* ── BRIEFING DO CLIENTE ── */}
             {(()=>{
@@ -21399,10 +21409,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>)}
             </div>}
 
-            {!isAgendado&&<div>
+            {!isAgendado&&(function(){
+              // Filtra comentarios que ja aparecem no painel "Solicitacao de ajuste"
+              // (evita duplicacao quando o card esta em status ajustes/alteracao).
+              const _hasAjustePanel=task.status==="ajustes"||task.isAlteracao;
+              const _visibleComments=_hasAjustePanel
+                ?comments.filter(function(c){return c.type!=="feedback"&&c.type!=="audio"&&c.type!=="client_request";})
+                :comments;
+              return <div>
               <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>Comentários</div>
-              {comments.length===0&&<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"16px 0"}}>Sem comentários ainda</div>}
-              {comments.map(c=><div key={c.id} style={{display:"flex",gap:10,marginBottom:14}}>
+              {_visibleComments.length===0&&<div style={{color:"#cbd5e1",fontSize:12,textAlign:"center",padding:"16px 0"}}>Sem comentários ainda</div>}
+              {_visibleComments.map(c=><div key={c.id} style={{display:"flex",gap:10,marginBottom:14}}>
                 <div style={{width:30,height:30,borderRadius:"50%",background:c.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:800,fontSize:11,flexShrink:0}}>{c.av}</div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",gap:8,marginBottom:4,alignItems:"center"}}>
@@ -21432,7 +21449,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 </div>
                 <button onClick={()=>addComment(comment,"text")} style={{background:"#0f172a",border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,flexShrink:0}}>↑</button>
               </div>
-            </div>}
+            </div>;
+            })()}
           </div>}
 
           {/* FILES */}
