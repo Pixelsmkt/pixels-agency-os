@@ -1508,7 +1508,6 @@ const NAV=[
     {id:"demandas_cal_interno",icon:"▦", label:"Calendário interno"},
     {id:"demandas_internas",   icon:"◫", label:"Demandas internas"},
   ]},
-  {id:"estrategia", icon:"◬", label:"Estratégia"},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de conteúdo"},
@@ -1519,6 +1518,7 @@ const NAV=[
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
+  {id:"planejamento_mensal",icon:"◬", label:"Planejamento mensal"},
   {id:"analises",   icon:"◫", label:"Análises",children:[
     {id:"analises_producao", icon:"▲", label:"Produção"},
     {id:"analises_gargalos", icon:"◬", label:"Gargalos"},
@@ -27177,7 +27177,7 @@ export default function AgencyOS(){
       case "demandas_internas":    return p.verDemandasInternas||isSocio;
       case "demandas_cal_interno": return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
-      case "estrategia":           return isSocio||p.verDemandas;
+      case "planejamento_mensal":  return isSocio||p.verDemandas;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
@@ -27261,7 +27261,7 @@ export default function AgencyOS(){
       case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
-      case "estrategia":            return (effectivePerms.verDemandas||isSocio)?<PageMonthlyPlanInterno {...p}/>:<NoPerm/>;
+      case "planejamento_mensal":   return (effectivePerms.verDemandas||isSocio)?<PageMonthlyPlanInterno {...p}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
