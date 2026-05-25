@@ -29746,7 +29746,7 @@ function PortalFunil({cl, isMob}){
       <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:18}}>Visão do funil — {_MES_NAMES[month-1]}/{year}</div>
       {(function(){
         // Logos oficiais (inline SVG)
-        const LogoMeta=function(){return <svg viewBox="0 0 36 24" width="22" height="15" style={{flexShrink:0}}><path fill="#0668E1" d="M9.5 0C5 0 0 5 0 12s5 12 9.5 12c3 0 5-1.5 8.5-7 3.5 5.5 5.5 7 8.5 7C31 24 36 19 36 12S31 0 26.5 0C23.5 0 21.5 1.5 18 7 14.5 1.5 12.5 0 9.5 0z"/></svg>;};
+        const LogoMeta=function(){return <svg viewBox="0 0 24 24" width="16" height="16" style={{flexShrink:0}}><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>;};
         const LogoGoogle=function(){return <svg viewBox="0 0 24 24" width="16" height="16" style={{flexShrink:0}}>
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -29825,8 +29825,8 @@ function PortalFunil({cl, isMob}){
       {/* Cabeçalho da tabela */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 110px 110px",gap:10,padding:"6px 10px",alignItems:"center"}}>
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Etapa</div>
-        <div style={{color:"#0668E1",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,textAlign:"center",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
-          <svg viewBox="0 0 36 24" width="18" height="12"><path fill="#0668E1" d="M9.5 0C5 0 0 5 0 12s5 12 9.5 12c3 0 5-1.5 8.5-7 3.5 5.5 5.5 7 8.5 7C31 24 36 19 36 12S31 0 26.5 0C23.5 0 21.5 1.5 18 7 14.5 1.5 12.5 0 9.5 0z"/></svg>
+        <div style={{color:"#1877F2",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,textAlign:"center",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
+          <svg viewBox="0 0 24 24" width="13" height="13"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
           Meta Ads
         </div>
         <div style={{color:"#ea4335",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,textAlign:"center",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
@@ -30360,8 +30360,8 @@ function PortalTimeline({cl, clTasks, isMob}){
    Outros tipos (Banner, Material, Campanha, Outro): ficam só no portal.
 ─────────────────────────────────────────────────────────────────────── */
 const TIPOS_DEMANDA_CLIENTE = [
-  {id:"arte",      label:"Arte (única ou carrossel)", routesFluxo:true,  contentType:"arte"},
-  {id:"video",     label:"Vídeo",                     routesFluxo:true,  contentType:"video"},
+  {id:"arte",      label:"Arte para redes sociais",   routesFluxo:true,  contentType:"arte"},
+  {id:"video",     label:"Vídeo para redes sociais",  routesFluxo:true,  contentType:"video"},
   {id:"banner",    label:"Banner",                    routesFluxo:false},
   {id:"material",  label:"Material interno",          routesFluxo:false},
   {id:"campanha",  label:"Campanha",                  routesFluxo:false},
@@ -30563,10 +30563,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12}}>
       <div style={{display:"flex",alignItems:"center",gap:9}}>
         <Ico n="zap" size={20} color={cl.color}/>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>Nova solicitação</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Descreva o que precisa. A equipe Pixels entrará em contato em breve.</div>
-        </div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>Nova solicitação</div>
       </div>
 
       {/* Linha 1: título */}
@@ -30593,8 +30590,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
             const active=solTipo===opt.id;
             return <button key={opt.id} onClick={function(){setSolTipo(opt.id);}}
               style={{background:active?cl.color+"15":"#fff",color:active?cl.color:"#64748b",border:"1px solid "+(active?cl.color:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s"}}>
-              {opt.label.replace(/\s\(.+\)/,"")}
-              {opt.routesFluxo&&<span style={{marginLeft:5,fontSize:9,opacity:.7}}>→ Hellen</span>}
+              {opt.label}
             </button>;
           })}
         </div>
