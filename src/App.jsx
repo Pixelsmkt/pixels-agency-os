@@ -29428,14 +29428,34 @@ function PortalFunil({cl, isMob}){
 ─────────────────────────────────────────────────────────────────────── */
 function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
   const [ajusteModal,setAjusteModal]=useState(null); // {task, text}
-  const aguardando=clTasks.filter(function(t){return t.status==="aprovado";});
-  const aprovadas =clTasks.filter(function(t){return t.status==="aprovacao_final";});
-  const agendadas =clTasks.filter(function(t){return t.status==="agendado";});
-  const publicadas=clTasks.filter(function(t){return t.status==="publicado";}).slice(0,12); // últimas 12
+  const [cardIdx,setCardIdx]=useState(0);
+  const [imgIdx,setImgIdx]=useState(0);
+  // FIFO: cards mais antigos primeiro (mesma logica da aprovacao interna)
+  const sortStable=function(arr){return [].concat(arr).sort(function(a,b){
+    const ia=Number(a.id)||0,ib=Number(b.id)||0;
+    if(ia!==ib)return ia-ib;
+    return String(a.id).localeCompare(String(b.id));
+  });};
+  const aguardando=sortStable(clTasks.filter(function(t){return t.status==="aprovado";}));
+
+  // Reset cardIdx ao trocar de unidade/cliente (queue muda)
+  useEffect(function(){setCardIdx(0);setImgIdx(0);},[aguardando.length]);
 
   const _now=function(){return new Date();};
   const _nowIso=function(){return _now().toISOString();};
   const _nowFmt=function(){const n=_now();return n.toLocaleDateString("pt-BR")+" às "+n.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
+
+  // Clampa cardIdx caso a queue tenha encolhido (ex: depois de aprovar)
+  const clampedIdx=aguardando.length>0?Math.min(cardIdx,aguardando.length-1):0;
+  const current=aguardando[clampedIdx]||null;
+  // Imagens do card atual — cover + files com mime image/*
+  const allImgs=current?[].concat(
+    current.cover?[current.cover]:[],
+    (current.files||[]).filter(function(f){return f.type&&f.type.startsWith("image/");}).map(function(f){return f.url;})
+  ).filter(Boolean):[];
+
+  const goPrev=function(){setCardIdx(function(i){return Math.max(0,i-1);});setImgIdx(0);};
+  const goNext=function(){setCardIdx(function(i){return Math.min(aguardando.length-1,i+1);});setImgIdx(0);};
 
   const handleAprovar=function(task){
     setTasks(function(prev){return prev.map(function(t){
@@ -29503,112 +29523,125 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação de ajuste enviada para a equipe.",3500);
   };
 
-  // Renderiza um CARD identico ao kanban interno (cover image + badges + title + footer)
-  const Card=function(props){
-    const {task, actionable}=props;
-    const t=task;
-    const img=(t.files||[]).slice().reverse().find(function(f){return f.type&&f.type.startsWith("image/");});
-    const thumbUrl=t.cover||(img?img.url:null);
-    // Tipo de conteudo -> badge roxo (igual kanban interno)
-    const tipoBadge=(function(){
-      if(!t.contentType)return null;
-      const labels={arte:"Arte única",carrossel:"Carrossel",video:"Vídeo",foto:"Foto de obra",video_short:"Short"};
-      const label=labels[t.contentType]||t.contentType;
-      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>;
-    })();
-    // Sigla(s) da unidade Bioter
-    const unidadesBadges=(function(){
-      if(!t.bioterUnit)return null;
-      const ids=String(t.bioterUnit).split(",").filter(Boolean);
-      if(!ids.length)return null;
-      const labelMap={chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay",grupo:"GRUPO",brasil:"BRASIL"};
-      return ids.map(function(uid){
-        return <span key={uid} title={labelMap[uid]||uid} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>{labelMap[uid]||uid}</span>;
-      });
-    })();
-    return <div onClick={actionable?undefined:function(){}}
-      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden",userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease",flexShrink:0,display:"flex",flexDirection:"column",minHeight:thumbUrl?290:undefined}}
-      onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 0 0 1px "+cl.color+", 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor=cl.color;e.currentTarget.style.transform="translateY(-1px)";}}
-      onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
-
-      {/* Badges TOPO — tipo de conteúdo */}
-      {tipoBadge&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>{tipoBadge}</div>}
-
-      {/* THUMBNAIL — 200px altura, estilo Trello (contain + letterbox cinza) */}
-      {thumbUrl&&<div style={{height:200,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",marginTop:tipoBadge?0:0}}>
-        <img src={thumbUrl} alt="" loading="lazy" style={{display:"block",maxWidth:"100%",maxHeight:"100%",objectFit:"contain",pointerEvents:"none"}}/>
-      </div>}
-
-      <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"9px 11px 8px"}}>
-        {/* Título */}
-        <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:9})}}>
-          {t.title||"(sem título)"}
-        </div>
-
-        {/* Footer: siglas da unidade Bioter (se for Bioter) */}
-        {unidadesBadges&&<div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>{unidadesBadges}</div>}
-
-        {/* Botões de ação — só na coluna "Aguardando sua aprovação" */}
-        {actionable&&<div style={{display:"flex",gap:6,marginTop:4}}>
-          <button onClick={function(){handleAprovar(t);}}
-            style={{flex:1,background:"#059669",color:"#fff",border:"none",borderRadius:7,padding:"8px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,letterSpacing:-.1}}>
-            <Ico n="check" size={13}/> Aprovar
-          </button>
-          <button onClick={function(){setAjusteModal({task:t,text:""});}}
-            style={{flex:1,background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:7,padding:"8px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,letterSpacing:-.1}}>
-            <Ico n="rotate" size={13}/> Solicitar ajuste
-          </button>
-        </div>}
-      </div>
-    </div>;
+  // Tipos de conteúdo -> label
+  const tipoLabel=function(ct){
+    const m={arte:"Arte única",carrossel:"Carrossel",video:"Vídeo",foto:"Foto de obra",video_short:"Short"};
+    return m[ct]||ct||"";
   };
 
-  // Renderiza uma COLUNA do kanban (mesmo visual do interno)
-  const Coluna=function(props){
-    const {label, color, tasks, actionable}=props;
-    return <div style={{
-      background:"#d1d5db",
-      borderRadius:12,
-      padding:"5px 5px 6px",
-      maxHeight:"calc(100vh - 280px)",
-      overflow:"hidden",
-      display:"flex",
-      flexDirection:"column",
-      gap:0,
-    }}>
-      {/* Header colorido no topo */}
-      <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:color,borderRadius:"12px 12px 0 0",margin:"-5px -5px 6px -5px"}}>
-        <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
-          <span style={{color:"#fff",fontWeight:600,fontSize:12,letterSpacing:.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</span>
-          <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600,flexShrink:0}}>{tasks.length}</span>
-        </div>
-      </div>
-      {/* Lista de cards rolavel */}
-      <div style={{display:"flex",flexDirection:"column",gap:10,overflowY:"auto",paddingRight:2,flex:1}}>
-        {tasks.length===0
-          ?<div style={{color:"#475569",fontSize:11,fontStyle:"italic",padding:"24px 8px",textAlign:"center"}}>nenhuma demanda</div>
-          :tasks.map(function(t){return <Card key={t.id} task={t} actionable={actionable}/>;})
-        }
-      </div>
-    </div>;
-  };
-
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:1280,margin:"0 auto",width:"100%"}}>
+    {/* Alert "Como funciona" */}
     <div style={{background:"#f8fafc",borderLeft:"3px solid "+cl.color,borderRadius:"0 10px 10px 0",padding:"11px 16px",color:"#475569",fontSize:12,lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:10}}>
       <Ico n="alert" size={16} color={cl.color}/>
       <div>
         <div style={{color:"#0f172a",fontWeight:700,marginBottom:2,fontSize:12.5}}>Como funciona</div>
-        Aqui aparecem as demandas que a equipe Pixels já aprovou internamente e estão aguardando sua avaliação. Você pode <strong style={{color:"#0f172a"}}>Aprovar</strong> (vai pra Aprovação final, pronta pra agendar) ou <strong style={{color:"#0f172a"}}>Solicitar ajuste</strong> (volta pra equipe com sua observação).
+        Aqui aparecem as demandas que a equipe Pixels já aprovou internamente e estão aguardando sua avaliação. Você pode <strong style={{color:"#0f172a"}}>Aprovar</strong> (vai pra Aprovação final, pronta pra agendar) ou <strong style={{color:"#0f172a"}}>Solicitar ajuste</strong> (volta pra equipe com sua observação).<br/>
+        <span style={{fontSize:11,color:"#94a3b8"}}>Demandas <strong>agendadas</strong> e <strong>publicadas</strong> ficam visíveis na aba <strong>Calendário</strong>.</span>
       </div>
     </div>
 
-    {/* Kanban — mesmo visual do Fluxo de Demandas interno (dark slate fundo + colunas cinzas) */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(260px,1fr))",gap:13,overflowX:"auto",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
-      <Coluna label="Aguardando sua aprovação" color="#059669" tasks={aguardando} actionable={true}/>
-      <Coluna label="Aprovadas por você"      color="#0d9488" tasks={aprovadas}  actionable={false}/>
-      <Coluna label="Agendadas"               color="#7c3aed" tasks={agendadas}  actionable={false}/>
-      <Coluna label="Publicadas (últimas)"    color="#475569" tasks={publicadas} actionable={false}/>
-    </div>
+    {/* Empty state — nada aguardando aprovação */}
+    {aguardando.length===0&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 40px",gap:14,textAlign:"center",background:"#fff",borderRadius:16,border:"1px solid #e2e8f0"}}>
+      <div style={{width:64,height:64,borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <Ico n="check" size={32} color="#16a34a"/>
+      </div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Tudo em dia!</div>
+      <div style={{color:"#64748b",fontSize:13,maxWidth:380,lineHeight:1.5}}>Não há nenhuma demanda aguardando sua aprovação no momento. Quando a equipe Pixels concluir uma nova demanda, ela aparecerá aqui.</div>
+    </div>}
+
+    {/* Card view — single card carousel (igual aprovação interna) */}
+    {current&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+      {/* Navegação topo: ‹ contador › */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 4px"}}>
+        <button onClick={goPrev} disabled={clampedIdx===0}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,width:36,height:36,cursor:clampedIdx===0?"not-allowed":"pointer",color:"#0f172a",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx===0?.3:1,transition:"all .15s"}}>
+          ‹
+        </button>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{color:"#475569",fontSize:12,fontWeight:600,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{clampedIdx+1} de {aguardando.length}</span>
+          <span style={{color:"#94a3b8",fontSize:11}}>aguardando aprovação</span>
+        </div>
+        <button onClick={goNext} disabled={clampedIdx>=aguardando.length-1}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,width:36,height:36,cursor:clampedIdx>=aguardando.length-1?"not-allowed":"pointer",color:"#0f172a",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx>=aguardando.length-1?.3:1,transition:"all .15s"}}>
+          ›
+        </button>
+      </div>
+
+      {/* Grid: imagem grande à esquerda + sidebar à direita */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 360px",gap:18,alignItems:"flex-start"}}>
+
+        {/* Panel da imagem */}
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{background:"#f1f5f9",borderRadius:16,overflow:"hidden",minHeight:320,display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #e2e8f0"}}>
+            {allImgs.length>0
+              ?<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="material" style={{width:"100%",maxHeight:"78vh",objectFit:"contain",display:"block"}}/>
+              :<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,padding:60,color:"#94a3b8"}}>
+                <Ico n="image" size={36}/>
+                <div style={{fontSize:13}}>Nenhuma imagem anexada</div>
+              </div>
+            }
+          </div>
+          {/* Thumbs (se mais de 1 imagem) */}
+          {allImgs.length>1&&<div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+            {allImgs.map(function(src,i){
+              return <img key={i} src={src} onClick={function(){setImgIdx(i);}} alt={"img "+(i+1)}
+                style={{width:62,height:62,objectFit:"cover",borderRadius:10,cursor:"pointer",border:i===imgIdx?"2px solid "+cl.color:"2px solid transparent",opacity:i===imgIdx?1:.55,transition:"all .15s"}}/>;
+            })}
+          </div>}
+        </div>
+
+        {/* Sidebar — info do card + ações */}
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+          {/* Card info */}
+          <div style={{background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid #e2e8f0",display:"flex",flexDirection:"column",gap:12}}>
+            {/* Badges: tipo de conteúdo */}
+            {current.contentType&&<div>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"3px 11px",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>
+                {tipoLabel(current.contentType)}
+              </span>
+            </div>}
+            {/* Título */}
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:17,lineHeight:1.35,letterSpacing:-.3,wordBreak:"break-word"}}>
+              {current.title||"(sem título)"}
+            </div>
+            {/* Descrição (se houver) */}
+            {(current.desc||current.description)&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>
+              {current.desc||current.description}
+            </div>}
+            {/* Caption (legenda do post) */}
+            {current.caption&&<div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",borderLeft:"3px solid "+cl.color}}>
+              <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Legenda</div>
+              <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{current.caption}</div>
+            </div>}
+            {/* Siglas da unidade Bioter (se for Bioter) */}
+            {cl&&cl.id==="bioter"&&current.bioterUnit&&(function(){
+              const ids=String(current.bioterUnit).split(",").filter(Boolean);
+              if(!ids.length)return null;
+              const labelMap={chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay",grupo:"Grupo",brasil:"Brasil"};
+              return <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {ids.map(function(uid){
+                  return <span key={uid} style={{background:"#16653422",color:"#166534",borderRadius:6,padding:"3px 9px",fontSize:10,fontWeight:700,letterSpacing:.2}}>{labelMap[uid]||uid}</span>;
+                })}
+              </div>;
+            })()}
+          </div>
+
+          {/* Botões de ação (sticky no topo da sidebar) */}
+          <div style={{position:"sticky",top:8,zIndex:5,background:"#fff",borderRadius:14,padding:"14px",border:"1px solid #e2e8f0",boxShadow:"0 2px 12px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:8}}>
+            <button onClick={function(){handleAprovar(current);}}
+              style={{width:"100%",background:"#059669",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #05966933",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
+              <Ico n="check" size={16}/> Aprovar
+            </button>
+            <button onClick={function(){setAjusteModal({task:current,text:""});}}
+              style={{width:"100%",background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
+              <Ico n="rotate" size={16}/> Solicitar ajuste
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>}
 
     {/* Modal Solicitar Ajuste */}
     {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
