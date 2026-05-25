@@ -12478,7 +12478,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                             return <span key={uid} title={u.pickerLabel||u.label} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>{({chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay"})[u.id]||u.label.replace(/^Bioter\s+/i,"").split("/")[0]}</span>;
                           });
                         })()}
-                        {days!==null&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
+                        {days!==null&&t.status!=="avaliacao"&&t.status!=="aprovado"&&t.status!=="agendado"&&t.status!=="publicado"&&t.status!=="pausado"&&<span title={`Prazo ${days<0?Math.abs(days)+"d atrás":days===0?"hoje":"em "+days+"d"}`} style={{color:days<0?"#dc2626":"#94a3b8",fontWeight:days<0?700:500,fontSize:10,whiteSpace:"nowrap",flexShrink:0,display:"inline-flex",alignItems:"center",gap:3}}>
                           <Ico n="alarmClock" size={11}/>
                           {days<0?Math.abs(days)+"d":days===0?"hoje":days+"d"}
                         </span>}
