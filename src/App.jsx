@@ -1532,12 +1532,6 @@ const NAV=[
   {type:"divider",label:"PORTAL"},
   {id:"portal",     icon:"◯", label:"Portal Cliente",children:[
     {id:"portal_dashboard",  icon:"⊡", label:"Dashboard"},
-    {id:"portal_demandas",   icon:"◈", label:"Demandas"},
-    {id:"portal_calendario", icon:"▦", label:"Calendário"},
-    {id:"portal_publicacoes",icon:"▷", label:"Publicadas"},
-    {id:"portal_analises",   icon:"◫", label:"Análises"},
-    {id:"portal_faturamento",icon:"◫", label:"Faturamento"},
-    {id:"portal_chat",       icon:"◐", label:"Chat"},
   ]},
   {type:"divider",label:"ADMIN"},
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
@@ -28758,8 +28752,14 @@ const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
+  {id:"demandas",    ico:"kanban",      label:"Demandas"},
   {id:"solicitar",   ico:"zap",         label:"Solicitar"},
+  {id:"calendario",  ico:"calendar",    label:"Calendário"},
+  {id:"publicacoes", ico:"check",       label:"Publicadas"},
   {id:"funil",       ico:"funnel",      label:"Funil comercial"},
+  {id:"analises",    ico:"chart",       label:"Análises"},
+  {id:"faturamento", ico:"wallet",      label:"Faturamento"},
+  {id:"chat",        ico:"message",     label:"Chat"},
 ];
 const INTERNAS_COLS_RADAR_P=[
   {id:"interno_demanda"},{id:"interno_execucao"},{id:"interno_avaliacao"},
