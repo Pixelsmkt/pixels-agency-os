@@ -29760,10 +29760,12 @@ function PortalFunil({cl, isMob}){
           const GAP=3;
           const totalStages=sourceStages.length;
           const SVG_H=totalStages*STAGE_H+(totalStages-1)*GAP+10;
-          const maxQ=Math.max.apply(null,sourceStages.map(function(s){return s.quantity;}).concat([1]));
-          const widths=sourceStages.map(function(s){
-            if(maxQ===0)return 28;
-            return Math.max(22,(s.quantity/maxQ)*100);
+          // Funil simétrico: largura decresce LINEARMENTE de 100% (topo) a 22% (fundo).
+          // Quantidade NÃO altera largura — a forma é sempre um triângulo invertido.
+          const widths=sourceStages.map(function(s,i){
+            if(totalStages<=1)return 100;
+            const startW=100, endW=22;
+            return startW-((startW-endW)*(i/(totalStages-1)));
           });
           // Decompose color
           const c1=parseInt(brandColor.slice(1,3),16)||124;
