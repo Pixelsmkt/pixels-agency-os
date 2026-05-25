@@ -30392,7 +30392,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
   const [solEnviando,setSolEnviando]=useState(false);
 
   // Prazo padrão por prioridade (dias úteis)
-  const PRAZO_POR_PRIORIDADE={baixa:14,media:7,alta:3,urgente:1};
+  const PRAZO_POR_PRIORIDADE={baixa:30,media:14,alta:5,urgente:1};
   // Helper: data desejada = hoje + N dias úteis
   const _calcDataDesejada=function(prioridade){
     const dias=PRAZO_POR_PRIORIDADE[prioridade]||7;
@@ -30684,9 +30684,9 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
         <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Prioridade</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {[
-            {id:"baixa",   l:"Baixa",   c:"#64748b", dias:14},
-            {id:"media",   l:"Média",   c:"#f97316", dias:7},
-            {id:"alta",    l:"Alta",    c:"#ef4444", dias:3},
+            {id:"baixa",   l:"Baixa",   c:"#64748b", dias:30},
+            {id:"media",   l:"Média",   c:"#f97316", dias:14},
+            {id:"alta",    l:"Alta",    c:"#ef4444", dias:5},
             {id:"urgente", l:"Urgente", c:"#dc2626", dias:1},
           ].map(function(p){
             const active=solPrioridade===p.id;
