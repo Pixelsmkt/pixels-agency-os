@@ -28049,26 +28049,13 @@ export default function AgencyOS(){
         })}
       </nav>
       <div style={{padding:"10px 14px",borderTop:`1px solid ${C.b1}`,flexShrink:0}}>
-        {(!sideCollapsed||isMob)&&<div style={{display:"flex",gap:4,marginBottom:10}}>
-          {Object.entries(THEMES).map(([key,t])=>(
-            <button key={key} onClick={()=>{applyTheme(key);setThemeKey(key);}} title={t.name}
-              style={{flex:1,background:themeKey===key?C.a+"22":"none",border:`1px solid ${themeKey===key?C.a:C.b1}`,borderRadius:8,padding:"5px 0",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-              <span style={{fontSize:14,color:themeKey===key?C.a:C.td}}>{t.icon}</span>
-              <span style={{fontSize:8,color:themeKey===key?C.a:C.td,fontWeight:themeKey===key?700:400}}>{t.name}</span>
-            </button>
-          ))}
-        </div>}
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={()=>setNotifDrawer(v=>!v)} title="Notificações"
-            style={{position:"relative",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:15,padding:2,lineHeight:1,flexShrink:0}}
-            onMouseEnter={e=>e.currentTarget.style.color=C.a} onMouseLeave={e=>e.currentTarget.style.color=C.td}>
-            🔔
-            {unreadNotifs>0&&<div style={{position:"absolute",top:-4,right:-4,background:C.rd,color:"#fff",borderRadius:99,padding:"0 3px",fontSize:7,fontWeight:900,minWidth:12,textAlign:"center",lineHeight:"12px"}}>{unreadNotifs}</div>}
-          </button>
-          <button onClick={handleLogout} title="Sair"
-            style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:15,padding:2,lineHeight:1,flexShrink:0}}
-            onMouseEnter={e=>e.currentTarget.style.color=C.rd} onMouseLeave={e=>e.currentTarget.style.color=C.td}>⏻</button>
-        </div>
+        <button onClick={handleLogout} title="Sair"
+          style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8,background:"none",border:`1px solid ${C.b1}`,color:C.ts,cursor:"pointer",fontSize:12,fontWeight:600,padding:"8px 10px",borderRadius:9,transition:"all .15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.color=C.rd;e.currentTarget.style.borderColor=C.rd+"66";}}
+          onMouseLeave={e=>{e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </button>
       </div>
     </aside>
 
