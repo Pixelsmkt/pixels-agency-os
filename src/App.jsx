@@ -30377,9 +30377,23 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
   const [solTitulo,setSolTitulo]=useState("");
   const [solTipo,setSolTipo]=useState("arte");
   const [solDescricao,setSolDescricao]=useState("");
-  const [solDataDesejada,setSolDataDesejada]=useState("");
   const [solPrioridade,setSolPrioridade]=useState("media");
   const [solEnviando,setSolEnviando]=useState(false);
+
+  // Prazo padrão por prioridade (dias úteis)
+  const PRAZO_POR_PRIORIDADE={baixa:10,media:7,alta:3,urgente:1};
+  // Helper: data desejada = hoje + N dias úteis
+  const _calcDataDesejada=function(prioridade){
+    const dias=PRAZO_POR_PRIORIDADE[prioridade]||7;
+    let d=new Date();
+    let added=0;
+    while(added<dias){
+      d.setDate(d.getDate()+1);
+      const w=d.getDay();
+      if(w!==0&&w!==6)added++;
+    }
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  };
 
   const enviarSolicitacao=async function(){
     if(!solTitulo.trim()){
@@ -30418,13 +30432,13 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
           ajustar:false, is_alteracao:false, score:null,
           publish_date:null, publish_time:"09:00", bioter_unit:"",
           deadline_time:"", deleted_at:null,
-          data_desejada:solDataDesejada||null,
+          data_desejada:_calcDataDesejada(solPrioridade),
         };
         const {error}=await window._sb.from("tasks").insert(payload);
         if(error)throw error;
         if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda enviada! "+(tipoCfg.routesFluxo?"Foi pra equipe de design/vídeo.":"Sua solicitação está registrada."),4000);
         // Reset
-        setSolTitulo("");setSolDescricao("");setSolDataDesejada("");setSolPrioridade("media");setSolTipo("arte");
+        setSolTitulo("");setSolDescricao("");setSolPrioridade("media");setSolTipo("arte");
       }catch(e){
         if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao enviar: "+(e.message||e),5000);
       }
@@ -30597,44 +30611,36 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
         </div>
       </div>
 
-      {/* Linha 4: prioridade + data desejada */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr auto",gap:14,alignItems:"flex-end"}}>
-        <div>
-          <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Prioridade</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {[{id:"baixa",l:"Baixa",c:"#64748b"},{id:"media",l:"Média",c:"#f97316"},{id:"alta",l:"Alta",c:"#ef4444"},{id:"urgente",l:"Urgente",c:"#dc2626"}].map(function(p){
-              const active=solPrioridade===p.id;
-              return <button key={p.id} onClick={function(){setSolPrioridade(p.id);}}
-                style={{background:active?p.c+"15":"#fff",color:active?p.c:"#64748b",border:"1px solid "+(active?p.c:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,transition:"all .12s"}}>
-                {p.l}
-              </button>;
-            })}
-          </div>
-        </div>
-        <div>
-          <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Data desejada (referência)</div>
-          <input type="date" value={solDataDesejada} onChange={function(e){setSolDataDesejada(e.target.value);}}
-            style={{border:"1px solid #cbd5e1",borderRadius:8,padding:"7px 11px",fontSize:12.5,fontFamily:"inherit",outline:"none",background:"#fff"}}/>
+      {/* Linha 4: prioridade — prazo de entrega já indicado em cada opção */}
+      <div>
+        <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.5}}>Prioridade</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {[
+            {id:"baixa",   l:"Baixa",   c:"#64748b", dias:10},
+            {id:"media",   l:"Média",   c:"#f97316", dias:7},
+            {id:"alta",    l:"Alta",    c:"#ef4444", dias:3},
+            {id:"urgente", l:"Urgente", c:"#dc2626", dias:1},
+          ].map(function(p){
+            const active=solPrioridade===p.id;
+            return <button key={p.id} onClick={function(){setSolPrioridade(p.id);}}
+              style={{background:active?p.c+"15":"#fff",color:active?p.c:"#64748b",border:"1px solid "+(active?p.c:"#cbd5e1"),borderRadius:10,padding:"7px 13px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}>
+              {p.l}
+              <span style={{display:"inline-flex",alignItems:"center",gap:3,opacity:.85,fontSize:10.5}}>
+                <Ico n="clock" size={11}/> {p.dias} {p.dias===1?"dia útil":"dias úteis"}
+              </span>
+            </button>;
+          })}
         </div>
       </div>
 
-      {/* Botões: Enviar (esquerda) + Registrar entrega (direita, só admin) */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginTop:4,flexWrap:"wrap"}}>
+      {/* Botão Enviar — à esquerda, com mais respiro */}
+      <div style={{display:"flex",justifyContent:"flex-start",marginTop:14}}>
         <button onClick={enviarSolicitacao} disabled={solEnviando}
           style={{background:solEnviando?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:9,padding:"9px 22px",fontWeight:700,fontSize:13,cursor:solEnviando?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
           onMouseEnter={function(e){if(!solEnviando)e.currentTarget.style.opacity=".92";}}
           onMouseLeave={function(e){e.currentTarget.style.opacity="1";}}>
           {solEnviando?"Enviando...":<><Ico n="send" size={13}/> Enviar solicitação</>}
         </button>
-
-        {/* Registrar entrega — só visível pra equipe Pixels (admin/sócio) */}
-        {(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level<=2)&&<button
-          onClick={function(){setRegistrarEntregaOpen(true);}}
-          style={{background:"#fff",color:"#0f172a",border:"1px solid "+cl.color,borderRadius:9,padding:"8px 18px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,transition:"all .12s"}}
-          onMouseEnter={function(e){e.currentTarget.style.background=cl.color+"10";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
-          <Ico n="check" size={13} color={cl.color}/> Registrar entrega
-        </button>}
       </div>
     </div>
 
@@ -30723,7 +30729,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
     })}
 
     {/* Linha do tempo de entregas — visualização anual */}
-    <EntregasTimeline cl={cl} clTasks={clTasks}/>
+    <EntregasTimeline cl={cl} clTasks={clTasks} onRegistrarEntrega={function(){setRegistrarEntregaOpen(true);}}/>
 
     {/* Modal: Registrar entrega (só admin) */}
     {registrarEntregaOpen&&<RegistrarEntregaModal cl={cl} onClose={function(){setRegistrarEntregaOpen(false);}}/>}
@@ -30896,7 +30902,9 @@ function NovaDemandaModal({cl, onClose}){
 }
 
 /* ─── ENTREGAS TIMELINE — visualização anual de tudo que foi entregue ──── */
-function EntregasTimeline({cl, clTasks}){
+function EntregasTimeline({cl, clTasks, onRegistrarEntrega}){
+  // Botão "Registrar entrega" só aparece pra sócios (Vinicius/Gustavo), não pros colaboradores nem cliente.
+  const isAdmin=typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1;
   // Pega tudo que tem completed_at (publicado, agendado, ou registrado manual)
   const entregues=(clTasks||[]).filter(function(t){
     if(t.deletedAt)return false;
@@ -30906,8 +30914,6 @@ function EntregasTimeline({cl, clTasks}){
     const db=new Date(b.completedAt||b.completed_at).getTime()||0;
     return db-da; // mais recentes primeiro
   });
-
-  if(entregues.length===0)return null;
 
   const _ddmm=function(s){const d=new Date(s);if(isNaN(d.getTime()))return "";return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
   const _MES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -30936,7 +30942,7 @@ function EntregasTimeline({cl, clTasks}){
   };
 
   return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",marginTop:6}}>
-    <header style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",background:"linear-gradient(180deg,"+cl.color+"06,#fff)"}}>
+    <header style={{padding:"14px 20px",borderBottom:entregues.length>0?"1px solid #f1f5f9":"none",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",background:"linear-gradient(180deg,"+cl.color+"06,#fff)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <Ico n="clock" size={17} color={cl.color}/>
         <div>
@@ -30944,8 +30950,23 @@ function EntregasTimeline({cl, clTasks}){
           <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Tudo que a Pixels já entregou pra você, em ordem cronológica.</div>
         </div>
       </div>
-      <span style={{background:cl.color+"15",color:cl.color,borderRadius:99,padding:"3px 11px",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{entregues.length} {entregues.length===1?"entrega":"entregas"}</span>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        {entregues.length>0&&<span style={{background:cl.color+"15",color:cl.color,borderRadius:99,padding:"3px 11px",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{entregues.length} {entregues.length===1?"entrega":"entregas"}</span>}
+        {isAdmin&&onRegistrarEntrega&&<button onClick={onRegistrarEntrega}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid "+cl.color,borderRadius:9,padding:"7px 14px",fontWeight:700,fontSize:12,cursor:"pointer",fontFamily:"inherit",letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background=cl.color+"10";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+          <Ico n="check" size={12} color={cl.color}/> Registrar entrega
+        </button>}
+      </div>
     </header>
+
+    {/* Empty state quando nao tem entregas (mostra mesmo assim pro botao ficar disponivel) */}
+    {entregues.length===0&&<div style={{padding:"32px 20px",textAlign:"center"}}>
+      <div style={{color:"#64748b",fontSize:12.5,lineHeight:1.55,maxWidth:380,margin:"0 auto"}}>
+        Nenhuma entrega registrada ainda. {isAdmin?"Use o botão acima pra registrar uma entrega manual.":"Conforme a equipe Pixels for entregando, vai aparecendo aqui."}
+      </div>
+    </div>}
 
     {grupos_ordenados.map(function(g){
       return <div key={g.key} style={{borderBottom:"1px solid #f5f6f8"}}>
