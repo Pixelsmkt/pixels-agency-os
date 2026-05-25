@@ -11756,6 +11756,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de video short (vem do Drive, so aparecem no calendario)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(!isAdmin&&!isMyDomain(t))return false;
@@ -20977,12 +20978,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
     {/* ── UNSAVED CHANGES DIALOG ── */}
     {/* ── LIGHTBOX ── */}
-    {lightbox&&<div onClick={()=>setLightbox(null)} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{position:"relative",maxWidth:"90vw",maxHeight:"90vh",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+    {lightbox&&<div onClick={()=>setLightbox(null)} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,0.95)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"relative",maxWidth:"90vw",maxHeight:"90vh",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
         <img src={lightbox.url} alt={lightbox.name} style={{maxWidth:"100%",maxHeight:"80vh",objectFit:"contain",borderRadius:12,boxShadow:"0 8px 40px rgba(0,0,0,0.6)"}}/>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{color:"rgba(255,255,255,0.7)",fontSize:12}}>{lightbox.name}</div>
-          <button onClick={(e)=>{e.stopPropagation();e.preventDefault();downloadFile(lightbox.url,lightbox.name,lightbox.storagePath);}} title="Baixar imagem"
+          <button type="button" onMouseDown={e=>e.stopPropagation()} onClick={(e)=>{e.stopPropagation();e.preventDefault();downloadFile(lightbox.url,lightbox.name,lightbox.storagePath);}} title="Baixar imagem"
             style={{background:"rgba(255,255,255,0.12)",border:"0.5px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"5px 12px",color:"#fff",fontSize:11,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.5)"}
             onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.12)"}>
@@ -20990,7 +20991,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             Baixar
           </button>
         </div>
-        <button onClick={()=>setLightbox(null)} style={{position:"absolute",top:-12,right:-12,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        <button type="button" onMouseDown={e=>e.stopPropagation()} onClick={(e)=>{e.stopPropagation();setLightbox(null);}} style={{position:"absolute",top:-12,right:-12,width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
       </div>
     </div>}
 
