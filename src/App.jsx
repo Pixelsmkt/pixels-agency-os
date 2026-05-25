@@ -28758,14 +28758,8 @@ const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
-  {id:"demandas",    ico:"kanban",      label:"Demandas"},
   {id:"solicitar",   ico:"zap",         label:"Solicitar"},
-  {id:"calendario",  ico:"calendar",    label:"Calendário"},
-  {id:"publicacoes", ico:"check",       label:"Publicadas"},
   {id:"funil",       ico:"funnel",      label:"Funil comercial"},
-  {id:"analises",    ico:"chart",       label:"Análises"},
-  {id:"faturamento", ico:"wallet",      label:"Faturamento"},
-  {id:"chat",        ico:"message",     label:"Chat"},
 ];
 const INTERNAS_COLS_RADAR_P=[
   {id:"interno_demanda"},{id:"interno_execucao"},{id:"interno_avaliacao"},
@@ -28925,17 +28919,20 @@ function PortalChat({cl, isClientView}){
   );
 }
 
-/* ── Portal Calendar ── */
+/* ── Portal Calendar ── Visual identico ao PageCalendarioPublicacoes interno
+   Read-only: cliente nao arrasta cards, soh visualiza. */
 function PortalCalendario({cl, tasks, isMob}){
   const [calMonth,setCalMonth]=useState(new Date());
   const MONTHS=PORTAL_MONTHS;
   const WEEKDAYS=PORTAL_WEEKDAYS;
 
-  const agendados=(tasks||[]).filter(t=>
-    !t.deletedAt&&t.status==="agendado"&&t.publishDate&&t.client===cl.id
-  ).sort((a,b)=>(a.publishTime||"00:00").localeCompare(b.publishTime||"00:00"));
+  // Mostra: agendados + publicados + aprovacao_final (esses 3 estados ja foram aprovados pelo cliente)
+  const publicacoes=(tasks||[]).filter(function(t){
+    if(t.deletedAt||!t.publishDate||t.client!==cl.id)return false;
+    return t.status==="agendado"||t.status==="publicado"||t.status==="aprovacao_final";
+  }).sort(function(a,b){return (a.publishTime||"00:00").localeCompare(b.publishTime||"00:00");});
 
-  const calDays=()=>{
+  const calDays=function(){
     const year=calMonth.getFullYear(),month=calMonth.getMonth();
     const first=new Date(year,month,1).getDay();
     const days=[];
@@ -28943,87 +28940,129 @@ function PortalCalendario({cl, tasks, isMob}){
     for(let d=1;d<=new Date(year,month+1,0).getDate();d++)days.push(new Date(year,month,d));
     return days;
   };
-  const fmtDay=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-  const tasksByDay=d=>d?agendados.filter(t=>t.publishDate===fmtDay(d)):[];
-  const thisMonth=agendados.filter(t=>{const d=new Date(t.publishDate+"T12:00:00");return d.getFullYear()===calMonth.getFullYear()&&d.getMonth()===calMonth.getMonth();});
+  const fmtDay=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+  const tasksByDay=function(d){return d?publicacoes.filter(function(t){return t.publishDate===fmtDay(d);}):[];};
+  const thisMonth=publicacoes.filter(function(t){const d=new Date(t.publishDate+"T12:00:00");return d.getFullYear()===calMonth.getFullYear()&&d.getMonth()===calMonth.getMonth();});
 
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      {/* Nav */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-        <div>
-          <div style={{color:C.tx,fontWeight:800,fontSize:16}}>📅 Calendário de Publicações</div>
-          <div style={{color:C.td,fontSize:11,marginTop:2}}>{thisMonth.length} publicação{thisMonth.length!==1?"ões":""} agendada{thisMonth.length!==1?"s":""} em {MONTHS[calMonth.getMonth()]}</div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>←</button>
-          <div style={{color:C.tx,fontWeight:800,fontSize:15,minWidth:150,textAlign:"center"}}>{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</div>
-          <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} style={{background:C.b1,border:"none",borderRadius:8,padding:"7px 14px",color:C.ts,cursor:"pointer",fontWeight:700,fontSize:16}}>→</button>
-          <button onClick={()=>setCalMonth(new Date())} style={{background:cl.color+"18",color:cl.color,border:"1px solid "+cl.color+"44",borderRadius:8,padding:"7px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>Hoje</button>
-        </div>
+  // Cor do card por unidade Bioter (segue logica do interno)
+  const _BIOTER_PRINC=["chapeco","castro","toledo"];
+  const _BIOTER_FIL=["gloria","uberlandia","paraguay"];
+  const cardColorOf=function(t){
+    if(t.client==="bioter"){
+      const u=(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+      const hasFil=u.some(function(x){return _BIOTER_FIL.indexOf(x)>=0;});
+      const hasPrinc=u.some(function(x){return _BIOTER_PRINC.indexOf(x)>=0;});
+      return hasFil&&!hasPrinc?"#16a34a":"#166534";
+    }
+    return cl?cl.color:"#475569";
+  };
+  // Cor do badge de status
+  const statusColor={agendado:"#7c3aed",publicado:"#059669",aprovacao_final:"#14b8a6"};
+  const statusLabel={agendado:"Agendada",publicado:"Publicada",aprovacao_final:"Aprovada"};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header: titulo + seletor de mes (igual interno) */}
+    <div style={{display:"flex",alignItems:"flex-start",flexWrap:"wrap",gap:12,justifyContent:"space-between"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Calendário de Publicações</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{thisMonth.length} publicação{thisMonth.length!==1?"ões":""} em {MONTHS[calMonth.getMonth()]}</div>
       </div>
-
-      {/* Grid */}
-      <div style={{background:C.card,border:"1px solid "+C.b1,borderRadius:16,overflow:"hidden"}}>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"2px solid "+C.b1,background:C.s1}}>
-          {WEEKDAYS.map(d=><div key={d} style={{padding:"10px 0",textAlign:"center",color:C.ts,fontSize:11,fontWeight:700}}>{d}</div>)}
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
-          {calDays().map((day,i)=>{
-            const dayT=day?tasksByDay(day):[];
-            const isToday=day&&day.toDateString()===new Date().toDateString();
-            return(
-              <div key={i} style={{minHeight:isMob?70:100,borderRight:"1px solid "+C.b1,borderBottom:"1px solid "+C.b1,padding:"6px 5px",background:isToday?cl.color+"12":dayT.length>0?cl.color+"06":"transparent"}}>
-                {day&&<>
-                  <div style={{color:isToday?"#fff":C.ts,fontWeight:isToday?900:500,fontSize:12,marginBottom:4,width:isToday?22:undefined,height:isToday?22:undefined,background:isToday?cl.color:undefined,borderRadius:isToday?"50%":undefined,display:"flex",alignItems:"center",justifyContent:isToday?"center":undefined}}>
-                    {day.getDate()}
-                  </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                    {dayT.slice(0,isMob?1:2).map(t=>(
-                      <div key={t.id} style={{background:cl.color+"22",borderLeft:"3px solid "+cl.color,borderRadius:4,padding:"3px 5px"}}>
-                        {t.publishTime&&<div style={{color:cl.color,fontSize:7,fontWeight:800}}>🕐 {t.publishTime}</div>}
-                        <div style={{color:C.tx,fontSize:isMob?7:9,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
-                      </div>
-                    ))}
-                    {dayT.length>2&&<div style={{color:C.ts,fontSize:8,textAlign:"center"}}>+{dayT.length-2}</div>}
-                  </div>
-                </>}
-              </div>
-            );
-          })}
-        </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <button onClick={function(){setCalMonth(function(m){return new Date(m.getFullYear(),m.getMonth()-1,1);});}} aria-label="Mês anterior"
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14,minWidth:150,textAlign:"center"}}>{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</div>
+        <button onClick={function(){setCalMonth(function(m){return new Date(m.getFullYear(),m.getMonth()+1,1);});}} aria-label="Próximo mês"
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
+        <button onClick={function(){setCalMonth(new Date());}}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Hoje</button>
       </div>
-
-      {/* List view for the month */}
-      {thisMonth.length>0&&(
-        <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-          <div style={{padding:"10px 16px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:12}}>Publicações de {MONTHS[calMonth.getMonth()]}</div>
-          {thisMonth.map((t,i)=>(
-            <div key={t.id} style={{padding:"12px 16px",borderBottom:i<thisMonth.length-1?"1px solid "+C.b1+"33":"none",display:"flex",alignItems:"center",gap:12}}>
-              <div style={{background:cl.color+"18",borderRadius:10,padding:"8px 12px",textAlign:"center",flexShrink:0,minWidth:44}}>
-                <div style={{color:cl.color,fontWeight:900,fontSize:18,lineHeight:1}}>{new Date(t.publishDate+"T12:00:00").getDate()}</div>
-                <div style={{color:cl.color,fontSize:9,fontWeight:600}}>{MONTHS[new Date(t.publishDate+"T12:00:00").getMonth()].slice(0,3)}</div>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{t.title}</div>
-                {t.publishTime&&<div style={{color:C.td,fontSize:10,marginTop:2}}>🕐 {t.publishTime}</div>}
-                {t.caption&&<div style={{color:C.ts,fontSize:11,marginTop:4,lineHeight:1.5,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{t.caption}</div>}
-              </div>
-              <span style={{background:"#4db8ff18",color:"#0284c7",borderRadius:8,padding:"3px 10px",fontSize:10,fontWeight:700,flexShrink:0}}>Agendado</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {thisMonth.length===0&&(
-        <div style={{background:C.card,borderRadius:14,padding:"40px",textAlign:"center",border:"1px dashed "+C.b1}}>
-          <div style={{fontSize:32,marginBottom:8}}>📅</div>
-          <div style={{color:C.tx,fontWeight:700}}>Nenhuma publicação agendada</div>
-          <div style={{color:C.td,fontSize:12,marginTop:4}}>Ainda não há conteúdo agendado para {MONTHS[calMonth.getMonth()]}.</div>
-        </div>
-      )}
     </div>
-  );
+
+    {/* Grade do calendário — visual identico ao interno */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden"}}>
+      {/* Cabeçalho dos dias da semana */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",borderBottom:"2px solid #e2e8f0",background:"#f8fafc"}}>
+        {WEEKDAYS.map(function(d){return <div key={d} style={{padding:"12px 0",textAlign:"center",color:"#64748b",fontSize:12,fontWeight:700,letterSpacing:.5}}>{d}</div>;})}
+      </div>
+      {/* Células dos dias */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+        {calDays().map(function(day,i){
+          const dayTasks=day?tasksByDay(day):[];
+          const isToday=day&&day.toDateString()===new Date().toDateString();
+          const hasTasks=dayTasks.length>0;
+          return <div key={i} style={{
+            height:isMob?110:150,
+            borderRight:"1px solid #e2e8f0",
+            borderBottom:"1px solid #e2e8f0",
+            padding:"8px 6px 6px",
+            background:isToday?cl.color+"14":hasTasks?cl.color+"06":"transparent",
+            display:"flex",
+            flexDirection:"column",
+            overflow:"hidden",
+          }}>
+            {day&&<>
+              {/* Numero do dia */}
+              <div style={{
+                color:isToday?"#fff":"#64748b",
+                fontWeight:isToday?900:500,
+                fontSize:13,
+                marginBottom:5,
+                width:isToday?24:undefined,
+                height:isToday?24:undefined,
+                background:isToday?cl.color:undefined,
+                borderRadius:isToday?"50%":undefined,
+                display:"flex",alignItems:"center",
+                justifyContent:isToday?"center":undefined,
+              }}>{day.getDate()}</div>
+              {/* Cards do dia */}
+              <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden"}}>
+                {dayTasks.map(function(t){
+                  const bg=cardColorOf(t);
+                  const hasLogo=typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[t.client];
+                  return <div key={t.id}
+                    style={{
+                      background:bg,
+                      borderRadius:8,
+                      padding:"6px 8px 7px",
+                      boxShadow:"0 1px 3px rgba(0,0,0,0.14)",
+                      flexShrink:0,
+                      position:"relative",
+                      cursor:"default",
+                    }}>
+                    {/* Topo: chip da logo + badge de status */}
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:4}}>
+                      <div style={{display:"inline-flex",alignItems:"center",background:"#fff",borderRadius:4,padding:"1px 4px",height:15,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.10)"}}>
+                        {hasLogo
+                          ?<img src={CLIENT_LOGOS[t.client]} alt={cl?cl.name:""} style={{height:11,maxWidth:48,objectFit:"contain",display:"block"}}/>
+                          :<span style={{color:cl?cl.color:"#0f172a",fontWeight:800,fontSize:8.5,letterSpacing:.4,lineHeight:1}}>{cl&&cl.abbr?cl.abbr:"·"}</span>
+                        }
+                      </div>
+                      {t.publishTime&&<span style={{color:"#fff",fontSize:9,fontWeight:700,opacity:.85,fontFeatureSettings:"'tnum'"}}>{t.publishTime}</span>}
+                    </div>
+                    {/* Titulo */}
+                    <div style={{color:"#fff",fontSize:isMob?10:11,fontWeight:600,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{t.title}</div>
+                    {/* Badge de status na base */}
+                    <div style={{marginTop:4,display:"inline-flex",alignItems:"center",gap:3,background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:4,padding:"1px 6px",fontSize:8.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>
+                      {statusLabel[t.status]||t.status}
+                    </div>
+                  </div>;
+                })}
+              </div>
+            </>}
+          </div>;
+        })}
+      </div>
+    </div>
+
+    {/* Empty state */}
+    {thisMonth.length===0&&<div style={{background:"#fff",borderRadius:14,padding:"36px 28px",textAlign:"center",border:"1px dashed #cbd5e1"}}>
+      <div style={{width:54,height:54,borderRadius:"50%",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 10px"}}>
+        <Ico n="calendar" size={26} color="#94a3b8"/>
+      </div>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:14}}>Nenhuma publicação em {MONTHS[calMonth.getMonth()]}</div>
+      <div style={{color:"#64748b",fontSize:12,marginTop:4}}>Ainda não há conteúdo agendado para esse mês.</div>
+    </div>}
+  </div>;
 }
 
 /* ── Portal Card: clean view for client ── */
@@ -29535,16 +29574,6 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
   };
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:1280,margin:"0 auto",width:"100%"}}>
-    {/* Alert "Como funciona" */}
-    <div style={{background:"#f8fafc",borderLeft:"3px solid "+cl.color,borderRadius:"0 10px 10px 0",padding:"11px 16px",color:"#475569",fontSize:12,lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:10}}>
-      <Ico n="alert" size={16} color={cl.color}/>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:700,marginBottom:2,fontSize:12.5}}>Como funciona</div>
-        Aqui aparecem as demandas que a equipe Pixels já aprovou internamente e estão aguardando sua avaliação. Você pode <strong style={{color:"#0f172a"}}>Aprovar</strong> (vai pra Aprovação final, pronta pra agendar) ou <strong style={{color:"#0f172a"}}>Solicitar ajuste</strong> (volta pra equipe com sua observação).<br/>
-        <span style={{fontSize:11,color:"#94a3b8"}}>Demandas <strong>agendadas</strong> e <strong>publicadas</strong> ficam visíveis na aba <strong>Calendário</strong>.</span>
-      </div>
-    </div>
-
     {/* Empty state — nada aguardando aprovação */}
     {aguardando.length===0&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"60px 40px",gap:14,textAlign:"center",background:"#fff",borderRadius:16,border:"1px solid #e2e8f0"}}>
       <div style={{width:64,height:64,borderRadius:"50%",background:"#dcfce7",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -29796,8 +29825,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       </div>
       <div style={{display:"flex",gap:18,marginLeft:"auto",flexWrap:"wrap"}}>
         {[
-          {l:"Agendados",v:clTasks.filter(function(t){return t.status==="agendado";}).length,c:"#0284c7"},
-          {l:"Publicados",v:clTasks.filter(function(t){return t.status==="publicado";}).length,c:C.gr},
+          {l:"Agendadas",v:clTasks.filter(function(t){return t.status==="agendado";}).length,c:"#0284c7"},
+          {l:"Aguardando aprovação",v:clTasks.filter(function(t){return t.status==="aprovado";}).length,c:"#059669"},
           {l:"Em produção",v:clTasks.filter(function(t){return ["agendado","publicado","aprovado","aprovacao_final"].indexOf(t.status)===-1;}).length,c:C.a},
         ].map(function(k,i){
           return <div key={i} style={{textAlign:"center"}}>
@@ -29929,9 +29958,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
           return(
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:12}}>
           {[
-            {l:"Publicados",v:clTasks.filter(t=>t.status==="publicado").length,c:C.gr,ico:"check"},
-            {l:"Agendados",v:clTasks.filter(t=>t.status==="agendado").length,c:"#0284c7",ico:"calendar"},
+            {l:"Agendadas",v:clTasks.filter(t=>t.status==="agendado").length,c:"#0284c7",ico:"calendar"},
             {l:"Em Produção",v:clTasks.filter(t=>["recebida","execucao","avaliacao"].includes(t.status)).length,c:C.yw,ico:"layers"},
+            {l:"Aguardando sua aprovação",v:clTasks.filter(t=>t.status==="aprovado").length,c:"#059669",ico:"checkCircle"},
             {l:"Total do mês",v:clTasks.filter(t=>{if(!t.completedAt)return false;const d=new Date(t.completedAt);return d.getMonth()===_nm&&d.getFullYear()===_ny;}).length,c:C.a,ico:"fileText"},
           ].map((k,i)=>(
             <div key={i} style={{background:"linear-gradient(135deg,"+k.c+"15,"+k.c+"05)",border:"1px solid "+k.c+"28",borderRadius:14,padding:"16px",textAlign:"center"}}>
@@ -29945,7 +29974,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
         {/* Social media summary */}
         {cl.social&&<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"16px 20px"}}>
-          <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>📱 Redes Sociais</div>
+          <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12,display:"inline-flex",alignItems:"center",gap:6}}>
+            <Ico n="chart" size={13} color={C.ts}/> Redes Sociais
+          </div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
             {[
               {l:"Seguidores",v:(cl.social.followers||0).toLocaleString("pt-BR"),c:C.a},
@@ -29955,16 +29986,21 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
               {l:"Posts",v:cl.social.posts||0,c:"#8b5cf6"},
             ].map((k,i)=>(
               <div key={i} style={{background:C.s1,borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                <div style={{color:k.c,fontWeight:900,fontSize:18}}>{k.v}</div>
+                <div style={{color:k.c,fontWeight:900,fontSize:18,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
                 <div style={{color:C.td,fontSize:9,marginTop:2}}>{k.l}</div>
               </div>
             ))}
           </div>
         </div>}
 
+        {/* Calendário de Publicações — embutido no Dashboard */}
+        <PortalCalendario cl={cl} tasks={clTasks} isMob={isMob}/>
+
         {/* Recent activity */}
         <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:12}}>📋 Últimas atualizações</div>
+          <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:12,display:"inline-flex",alignItems:"center",gap:6}}>
+            <Ico n="clock" size={13} color={C.tx}/> Últimas atualizações
+          </div>
           {(()=>{const _slice=clTasks.slice(0,5);return _slice.map((t,i)=>(
             <div key={t.id} style={{padding:"10px 16px",borderBottom:i<_slice.length-1?"1px solid "+C.b1+"33":"none",display:"flex",alignItems:"center",gap:10}}>
               <div style={{width:7,height:7,borderRadius:"50%",background:CARD_STATUS_COLOR[t.status]||C.a,flexShrink:0}}/>
