@@ -29090,8 +29090,8 @@ const PORTAL_ALL_TABS=[
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
   {id:"funil",       ico:"funnel",      label:"Funil comercial"},
-  {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"faturamento", ico:"wallet",      label:"Faturamento"},
+  {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"chat",        ico:"message",     label:"Chat"},
 ];
 const INTERNAS_COLS_RADAR_P=[
@@ -31106,6 +31106,290 @@ function RegistrarEntregaModal({cl, onClose}){
   </div>;
 }
 
+/* ─── PORTAL FATURAMENTO ROI — Calculadora de retorno de marketing ───── */
+function PortalFaturamentoROI({cl, isMob}){
+  const _now=new Date();
+  const [year,setYear]=useState(_now.getFullYear());
+  const [month,setMonth]=useState(_now.getMonth()+1);
+  const [midia,setMidia]=useState(0);
+  const [pixelsServ,setPixelsServ]=useState(0);
+  const [sales,setSales]=useState([]); // [{id,lead_name,product,value,date,origin}]
+  const [loading,setLoading]=useState(true);
+  const [dirty,setDirty]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const [editVenda,setEditVenda]=useState(null); // {mode:"new"|"edit", data}
+
+  const MESES=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+  // Carrega dados do Supabase ao trocar mês/ano/cliente
+  useEffect(function(){
+    let active=true;
+    setLoading(true);
+    (async function(){
+      if(!window._sb){if(active){setLoading(false);}return;}
+      try{
+        const {data,error}=await window._sb.from("client_roi_monthly")
+          .select("*").eq("client_id",cl.id).eq("year",year).eq("month",month).maybeSingle();
+        if(!active)return;
+        if(data){
+          setMidia(Number(data.midia_spend||0));
+          setPixelsServ(Number(data.pixels_service||0));
+          setSales(Array.isArray(data.sales)?data.sales:[]);
+        }else{
+          setMidia(0);setPixelsServ(0);setSales([]);
+        }
+        setDirty(false);
+      }catch(e){console.warn("[ROI load]",e);}
+      if(active)setLoading(false);
+    })();
+    return function(){active=false;};
+  },[cl.id,year,month]);
+
+  // Cálculos
+  const totalVendido=sales.reduce(function(s,v){return s+Number(v.value||0);},0);
+  const totalInvestido=Number(midia||0)+Number(pixelsServ||0);
+  const lucro=totalVendido-totalInvestido;
+  const roiPct=totalInvestido>0?Math.round(((totalVendido-totalInvestido)/totalInvestido)*1000)/10:0;
+  const retornoPor1=totalInvestido>0?Math.round((totalVendido/totalInvestido)*100)/100:0;
+
+  // Formatadores
+  const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
+  const _ddmm=function(s){if(!s)return "";const d=new Date(s+"T12:00:00");if(isNaN(d.getTime()))return s;return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");};
+
+  // Mudanças marcam dirty
+  function setMidiaVal(v){setMidia(v);setDirty(true);}
+  function setPixelsServVal(v){setPixelsServ(v);setDirty(true);}
+
+  function abrirNovaVenda(){
+    setEditVenda({mode:"new",data:{id:"v-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),lead_name:"",product:"",value:0,date:year+"-"+String(month).padStart(2,"0")+"-15",origin:"meta"}});
+  }
+  function abrirEditarVenda(v){setEditVenda({mode:"edit",data:Object.assign({},v)});}
+  function salvarVenda(){
+    if(!editVenda)return;
+    const v=editVenda.data;
+    if(!v.lead_name.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Informe o nome do cliente/lead.",3500);return;}
+    if(editVenda.mode==="new"){
+      setSales(function(p){return [].concat(p,[v]);});
+    }else{
+      setSales(function(p){return p.map(function(x){return x.id===v.id?v:x;});});
+    }
+    setEditVenda(null);
+    setDirty(true);
+  }
+  function removerVenda(id){
+    setSales(function(p){return p.filter(function(v){return v.id!==id;});});
+    setDirty(true);
+  }
+
+  async function handleSave(){
+    if(!window._sb||saving)return;
+    setSaving(true);
+    try{
+      const payload={
+        client_id:cl.id, year:year, month:month,
+        midia_spend:Number(midia)||0,
+        pixels_service:Number(pixelsServ)||0,
+        sales:sales,
+        updated_at:new Date().toISOString(),
+        updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.name)||"Cliente: "+cl.name,
+      };
+      const {error}=await window._sb.from("client_roi_monthly")
+        .upsert(payload,{onConflict:"client_id,year,month"});
+      if(error)throw error;
+      setDirty(false);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Dados salvos.",3000);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar: "+(e.message||e),5000);
+    }
+    setSaving(false);
+  }
+
+  const ORIGEM_LABEL={meta:"Meta Ads",google:"Google Ads",organico:"Orgânico",indicacao:"Indicação",outro:"Outro"};
+  const ORIGEM_COLOR={meta:"#1877F2",google:"#ea4335",organico:"#16a34a",indicacao:"#7c3aed",outro:"#64748b"};
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* Header + filtros */}
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+        <Ico n="wallet" size={22} color={cl.color}/>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Calculadora de ROI de Marketing</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Quanto voltou em vendas a partir do que foi investido em marketing.</div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
+          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {MESES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
+        </select>
+        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
+          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y}>{y}</option>;})}
+        </select>
+      </div>
+    </div>
+
+    {/* Explicação simples */}
+    <div style={{background:"#f8fafc",borderLeft:"3px solid "+cl.color,borderRadius:"0 10px 10px 0",padding:"12px 16px",color:"#475569",fontSize:12.5,lineHeight:1.55}}>
+      Esta calculadora mostra <strong style={{color:"#0f172a"}}>quanto voltou em vendas a partir do investimento feito em marketing</strong>. Ela soma o valor investido no serviço da Pixels + o valor gasto em anúncios no mês, e compara com o total de vendas fechadas no período.
+    </div>
+
+    {/* Cards KPI */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(6,1fr)",gap:10}}>
+      {[
+        {l:"Total vendido",     v:_brl(totalVendido),     c:"#16a34a"},
+        {l:"Mídia/anúncios",    v:_brl(midia),            c:"#0284c7"},
+        {l:"Serviço Pixels",    v:_brl(pixelsServ),       c:cl.color},
+        {l:"Investimento total",v:_brl(totalInvestido),   c:"#475569"},
+        {l:"ROI",               v:roiPct+"%",             c:roiPct>=0?"#16a34a":"#dc2626"},
+        {l:"Retorno por R$ 1",  v:"R$ "+retornoPor1.toLocaleString("pt-BR",{minimumFractionDigits:2}), c:roiPct>=0?"#16a34a":"#dc2626"},
+      ].map(function(k,i){
+        return <div key={i} style={{background:"#fff",border:"1px solid "+k.c+"30",borderRadius:11,padding:"12px 14px"}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:5}}>{k.l}</div>
+          <div style={{color:k.c,fontWeight:800,fontSize:18,letterSpacing:-.4,fontFeatureSettings:"'tnum'",lineHeight:1.15}}>{k.v}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* Frase de interpretação automática */}
+    {totalInvestido>0&&<div style={{background:roiPct>=0?"#dcfce7":"#fee2e2",border:"1px solid "+(roiPct>=0?"#86efac":"#fecaca"),borderRadius:10,padding:"12px 16px",color:roiPct>=0?"#15803d":"#b91c1c",fontSize:13,lineHeight:1.55,display:"flex",alignItems:"flex-start",gap:10}}>
+      <Ico n={roiPct>=0?"checkCircle":"alert"} size={18}/>
+      <div>
+        {roiPct>=0
+          ?<><strong>Seu investimento em marketing gerou retorno acima do valor investido.</strong> Pra cada R$ 1 investido, voltaram {_brl(retornoPor1).replace("R$ ","R$ ")} em vendas.</>
+          :<><strong>Neste mês, o valor investido ainda não retornou em vendas suficientes.</strong> Pode ser necessário avaliar campanha, atendimento, orçamento ou prazo de decisão do cliente.</>
+        }
+      </div>
+    </div>}
+
+    {/* Investimento do mês */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 20px"}}>
+      <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:14,letterSpacing:-.1}}>Investimento do mês</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+        <div>
+          <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Mídia / anúncios</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"4px 12px"}}>
+            <span style={{color:"#64748b",fontSize:13,fontWeight:600}}>R$</span>
+            <input type="number" step="0.01" min="0" value={midia} onChange={function(e){setMidiaVal(parseFloat(e.target.value)||0);}}
+              style={{flex:1,border:"none",background:"transparent",padding:"8px 0",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'"}}/>
+          </div>
+        </div>
+        <div>
+          <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:6,textTransform:"uppercase",letterSpacing:.4}}>Serviço da Pixels</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"4px 12px"}}>
+            <span style={{color:"#64748b",fontSize:13,fontWeight:600}}>R$</span>
+            <input type="number" step="0.01" min="0" value={pixelsServ} onChange={function(e){setPixelsServVal(parseFloat(e.target.value)||0);}}
+              style={{flex:1,border:"none",background:"transparent",padding:"8px 0",fontSize:14,fontWeight:700,outline:"none",fontFamily:"inherit",fontFeatureSettings:"'tnum'"}}/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Vendas fechadas (tabela) */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
+      <div style={{padding:"14px 20px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1}}>Vendas fechadas</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>{sales.length} {sales.length===1?"venda":"vendas"} no mês · Total {_brl(totalVendido)}</div>
+        </div>
+        <button onClick={abrirNovaVenda}
+          style={{background:cl.color,color:"#fff",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:15,lineHeight:1,marginRight:-2}}>+</span> Nova venda
+        </button>
+      </div>
+      {/* Header */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1.4fr 90px 90px 110px 40px",gap:10,padding:"8px 20px",background:"#fafbfc",borderBottom:"1px solid #f1f5f9"}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Cliente / Lead</div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Produto / Serviço</div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"right"}}>Valor</div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"center"}}>Data</div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Origem</div>
+        <div></div>
+      </div>
+      {sales.length===0&&<div style={{padding:"30px 20px",textAlign:"center",color:"#94a3b8",fontSize:12.5}}>Nenhuma venda registrada neste mês.</div>}
+      {sales.map(function(v,idx){
+        const origCfg={label:ORIGEM_LABEL[v.origin]||"Outro",color:ORIGEM_COLOR[v.origin]||"#64748b"};
+        return <div key={v.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.4fr 1.4fr 90px 90px 110px 40px",gap:10,padding:"10px 20px",borderBottom:idx<sales.length-1?"1px solid #f5f6f8":"none",alignItems:"center"}}>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600}}>{v.lead_name}</div>
+          <div style={{color:"#64748b",fontSize:12}}>{v.product||"—"}</div>
+          <div style={{color:"#16a34a",fontSize:12.5,fontWeight:700,textAlign:"right",fontFeatureSettings:"'tnum'"}}>{_brl(v.value)}</div>
+          <div style={{color:"#64748b",fontSize:11.5,textAlign:"center",fontFeatureSettings:"'tnum'"}}>{_ddmm(v.date)}</div>
+          <div><span style={{background:origCfg.color+"15",color:origCfg.color,borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{origCfg.label}</span></div>
+          <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
+            <button onClick={function(){abrirEditarVenda(v);}} title="Editar"
+              style={{background:"transparent",border:"none",cursor:"pointer",padding:4,color:"#94a3b8"}}><Ico n="edit" size={14}/></button>
+            <button onClick={function(){removerVenda(v.id);}} title="Remover"
+              style={{background:"transparent",border:"none",cursor:"pointer",padding:4,color:"#dc2626"}}><Ico n="trash" size={14}/></button>
+          </div>
+        </div>;
+      })}
+    </div>
+
+    {/* Botão salvar (só aparece se houver mudanças) */}
+    {dirty&&<div style={{display:"flex",justifyContent:"flex-end"}}>
+      <button onClick={handleSave} disabled={saving}
+        style={{background:saving?"#94a3b8":cl.color,color:"#fff",border:"none",borderRadius:10,padding:"11px 24px",fontWeight:800,fontSize:13,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit",letterSpacing:-.1}}>
+        {saving?"Salvando...":"Salvar alterações"}
+      </button>
+    </div>}
+
+    {/* Modal nova/editar venda */}
+    {editVenda&&<div onClick={function(){setEditVenda(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(4px)"}}>
+      <div onClick={function(e){e.stopPropagation();}}
+        style={{background:"#fff",borderRadius:14,maxWidth:520,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.25)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",padding:"16px 22px",color:"#fff"}}>
+          <div style={{fontWeight:800,fontSize:16,letterSpacing:-.3}}>{editVenda.mode==="new"?"Nova venda fechada":"Editar venda"}</div>
+        </div>
+        <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:13}}>
+          <div>
+            <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Cliente / Lead *</div>
+            <input value={editVenda.data.lead_name} onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{lead_name:e.target.value})}));}}
+              style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+          <div>
+            <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Produto / Serviço</div>
+            <input value={editVenda.data.product} onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{product:e.target.value})}));}}
+              style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div>
+              <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Valor (R$)</div>
+              <input type="number" step="0.01" min="0" value={editVenda.data.value} onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{value:parseFloat(e.target.value)||0})}));}}
+                style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/>
+            </div>
+            <div>
+              <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Data</div>
+              <input type="date" value={editVenda.data.date} onChange={function(e){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{date:e.target.value})}));}}
+                style={{width:"100%",border:"1px solid #cbd5e1",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+          <div>
+            <div style={{color:"#475569",fontSize:10,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Origem</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {["meta","google","organico","indicacao","outro"].map(function(o){
+                const active=editVenda.data.origin===o;
+                return <button key={o} onClick={function(){setEditVenda(Object.assign({},editVenda,{data:Object.assign({},editVenda.data,{origin:o})}));}}
+                  style={{background:active?ORIGEM_COLOR[o]+"15":"#fff",color:active?ORIGEM_COLOR[o]:"#64748b",border:"1px solid "+(active?ORIGEM_COLOR[o]:"#cbd5e1"),borderRadius:99,padding:"5px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                  {ORIGEM_LABEL[o]}
+                </button>;
+              })}
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:6}}>
+            <button onClick={function(){setEditVenda(null);}}
+              style={{background:"#f1f5f9",border:"none",borderRadius:9,padding:"10px 20px",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={salvarVenda}
+              style={{background:cl.color,color:"#fff",border:"none",borderRadius:9,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:"pointer"}}>
+              {editVenda.mode==="new"?"Adicionar":"Salvar"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
 function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
   const TASKS=tasks||[];
   // Se lockedClientId foi passado (cliente logado no portal), trava a seleção.
@@ -31466,51 +31750,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       </div>);
     })()}
 
-    {/* ── FATURAMENTO ── */}
-    {tab==="faturamento"&&(
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {/* Contract summary */}
-        <div style={{background:"linear-gradient(135deg,"+cl.color+"18,"+cl.color+"08)",border:"1px solid "+cl.color+"33",borderRadius:16,padding:"20px"}}>
-          <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12}}>💰 Contrato Ativo</div>
-          <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:cl.color,fontWeight:900,fontSize:28,letterSpacing:-1}}>R$ {clContract.toLocaleString("pt-BR")}</div>
-              <div style={{color:C.td,fontSize:11,marginTop:3}}>Valor mensal · {cl.contractType||"mensal"}</div>
-            </div>
-            <div>
-              <span style={{background:clStatus==="pago"?C.gr+"18":C.yw+"18",color:clStatus==="pago"?C.gr:C.yw,border:"1px solid "+(clStatus==="pago"?C.gr+"44":C.yw+"44"),borderRadius:20,padding:"6px 16px",fontSize:12,fontWeight:700}}>
-                {clStatus==="pago"?"✅ Pago":"⏳ Pendente"}
-              </span>
-              {clPayDate&&<div style={{color:C.td,fontSize:10,marginTop:6,textAlign:"center"}}>Vencimento: {clPayDate}</div>}
-            </div>
-          </div>
-        </div>
-
-        {/* Contract details */}
-        <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:12}}>📄 Detalhes do Contrato</div>
-          <div style={{padding:"16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            {[
-              {l:"Cliente",v:cl.name},
-              {l:"Tipo de contrato",v:cl.contractType||"Mensal"},
-              {l:"Na Pixels desde",v:cl.since||"—"},
-              {l:"Gestor responsável",v:TEAM.find(u=>u.id===cl.manager)?.name||cl.manager||"—"},
-              {l:"Valor mensal",v:"R$ "+clContract.toLocaleString("pt-BR")},
-              {l:"Status do pagamento",v:clStatus==="pago"?"✅ Em dia":"⏳ Pendente"},
-            ].map((r,i)=>(
-              <div key={i} style={{background:C.s1,borderRadius:9,padding:"10px 12px"}}>
-                <div style={{color:C.td,fontSize:10,marginBottom:3}}>{r.l}</div>
-                <div style={{color:C.tx,fontWeight:600,fontSize:12}}>{r.v}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"10px 14px",fontSize:11,color:"#0369a1",lineHeight:1.6}}>
-          Para dúvidas sobre faturamento, entre em contato com a Pixels Agência pelo Chat ou pelo e-mail financeiro@agenciapixels.com.br
-        </div>
-      </div>
-    )}
+    {/* ── FATURAMENTO ── Calculadora de ROI de Marketing */}
+    {tab==="faturamento"&&<PortalFaturamentoROI cl={cl} isMob={isMob}/>}
 
   </div>);
 }
