@@ -457,6 +457,27 @@ function isBioterCollabCard(task){
   return ids.indexOf("grupo")>=0||ids.indexOf("brasil")>=0;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Meta MENSAL por cliente (fonte de verdade do widget de progresso)
+// Retorna {arte, video, collab, foto, short, publicacoes, produzir, drive}
+// ─────────────────────────────────────────────────────────────
+function getMonthlyMeta(clientId){
+  // Bioter principais (Chapecó, Toledo, Castro) — 12 publ/mês cada
+  //   4 collabs (compartilhados com grupo) + 4 fotos de obra + 4 shorts do Drive
+  //   Produzir local: só as 4 fotos. Collab é compartilhado (conta 1x no grupo).
+  if(["bioter_chapeco","bioter_castro","bioter_toledo"].indexOf(clientId)>=0){
+    return {arte:0, video:0, collab:4, foto:4, short:4, publicacoes:12, produzir:4, drive:4};
+  }
+  // Bioter filiais (Glória, Uberlândia, Paraguay) — 8 publ/mês cada
+  //   4 collabs (compartilhados) + 2 fotos + 2 shorts (alternam por semana)
+  if(["bioter_gloria","bioter_uberlandia","bioter_paraguay"].indexOf(clientId)>=0){
+    return {arte:0, video:0, collab:4, foto:2, short:2, publicacoes:8, produzir:2, drive:2};
+  }
+  // Cliente comum (Arabutã, Construschorr, Climaves, VetService): 4 publ/mês
+  //   2 artes + 2 vídeos, todas produzidas pela equipe
+  return {arte:2, video:2, collab:0, foto:0, short:0, publicacoes:4, produzir:4, drive:0};
+}
+
 function getPostsConfig(clientId){
   if(!clientId)return Object.assign({},POSTS_PADRAO);
   // 1. Tem override salvo no localStorage?
@@ -10705,11 +10726,12 @@ function ProgressoDoMes({visible,mode="produzir"}){
     return u.indexOf("grupo")>=0||u.indexOf("brasil")>=0;
   }
   const rows=[];
+  const _getMeta=(typeof getMonthlyMeta==="function")?getMonthlyMeta:function(){return {arte:2,video:2,collab:0,foto:0,short:0,publicacoes:4,produzir:4,drive:0};};
   CLIENTS.filter(c=>c.id!=="bioter"&&c.id!=="pixels"&&c.status!=="interno").forEach(c=>{
     const cm=visible.filter(t=>t.client===c.id&&STS.indexOf(t.status)>=0&&inMonth(t));
-    const cfg=(typeof getPostsConfig==="function")?getPostsConfig(c.id):{arte:1,video:1};
-    const metaArte=(cfg.arte||0)*weeks;
-    const metaVideo=(cfg.video||0)*weeks;
+    const m=_getMeta(c.id);
+    const metaArte=m.arte;
+    const metaVideo=m.video;
     const cArte=cm.filter(t=>tipo(t)==="arte").length;
     const cVideo=cm.filter(t=>tipo(t)==="video"||tipo(t)==="short").length;
     const totalDone=cArte+cVideo;
@@ -10718,8 +10740,8 @@ function ProgressoDoMes({visible,mode="produzir"}){
   });
   if(typeof BIOTER_UNITS!=="undefined"){
     BIOTER_UNITS.forEach(u=>{
-      const cfg=(typeof getPostsConfig==="function")?getPostsConfig("bioter_"+u.id):null;
-      if(!cfg)return;
+      const mu=_getMeta("bioter_"+u.id);
+      if(!mu||mu.publicacoes===0)return;
       const cardsUnit=visible.filter(t=>{
         if(t.client!=="bioter"||STS.indexOf(t.status)<0||!inMonth(t))return false;
         if(isCollabCard(t))return false;
@@ -10744,9 +10766,9 @@ function ProgressoDoMes({visible,mode="produzir"}){
       const cArteTotal=cArteIndiv+cArteCollab;
       const cVideoTotal=cVideoIndiv+cVideoCollab;
       const cCollab=cardsCollab.length;
-      const metaCollab=(cfg.collab||0)*weeks;
-      const metaFoto=(cfg.foto||0)*weeks + (cfg.fotoOrShortAlternado?Math.ceil(weeks/2):0);
-      const metaShort=(cfg.videoShort||0)*weeks + (cfg.fotoOrShortAlternado?Math.floor(weeks/2):0);
+      const metaCollab=mu.collab;
+      const metaFoto=mu.foto;
+      const metaShort=mu.short;
       const totalDone=cCollab+cFoto+cShort+cArteIndiv+cVideoIndiv;
       const totalMeta=metaCollab+metaFoto+metaShort;
       if(totalMeta>0||totalDone>0){
@@ -10774,11 +10796,19 @@ function ProgressoDoMes({visible,mode="produzir"}){
       }
     });
   }
-  // PUBLICACOES — somatorio de todas as unidades (cada collab conta por unidade)
+  // ─── TOTAIS AGREGADOS (fonte de verdade: getMonthlyMeta) ───
+  // PUBLICACOES — somatorio das publicações de cada cliente/unidade
+  //   Clientes comuns: 4×4=16. Bioter: principais 3×12=36 + filiais 3×8=24 = 60. Total 76.
+  let totalPublicarMeta=0;
+  CLIENTS.filter(c=>c.id!=="bioter"&&c.id!=="pixels"&&c.status!=="interno").forEach(c=>{
+    totalPublicarMeta += _getMeta(c.id).publicacoes;
+  });
+  if(typeof BIOTER_UNITS!=="undefined"){
+    BIOTER_UNITS.forEach(u=>{ totalPublicarMeta += _getMeta("bioter_"+u.id).publicacoes; });
+  }
   const totalPublicarDone=rows.reduce((s,r)=>s+r.totalDone,0);
-  const totalPublicarMeta=rows.reduce((s,r)=>s+r.totalMeta,0);
+
   // PRODUCAO — cards UNICOS a produzir (collabs contam 1x, shorts do Drive nao contam)
-  // Conta cards distintos que precisam ser criados pela equipe
   const uniqProduzir=new Set();
   visible.forEach(t=>{
     if(STS.indexOf(t.status)<0||!inMonth(t))return;
@@ -10788,25 +10818,29 @@ function ProgressoDoMes({visible,mode="produzir"}){
     uniqProduzir.add(t.id);
   });
   const totalProduzirDone=uniqProduzir.size;
-  // Meta producao: padrao (4 clientes × 8) + bioter collabs unicas (4/mes) + fotos bioter (12 princ + 6 filial)
-  let metaProduzirPadrao=0, metaProduzirCollab=0, metaProduzirFoto=0;
+  // Meta producao: clientes comuns (16) + collabs Bioter unicos (4) + fotos Bioter (18) = 38
+  let totalProduzirMeta=0;
   CLIENTS.filter(c=>c.id!=="bioter"&&c.id!=="pixels"&&c.status!=="interno").forEach(c=>{
-    const cfg=(typeof getPostsConfig==="function")?getPostsConfig(c.id):{arte:1,video:1};
-    metaProduzirPadrao += ((cfg.arte||0)+(cfg.video||0))*weeks;
+    totalProduzirMeta += _getMeta(c.id).produzir; // 4 por cliente comum
   });
-  // Collabs Bioter — meta unica do grupo (nao por unidade)
-  metaProduzirCollab = weeks; // 1 collab por semana × 4
-  // Fotos Bioter — soma de todas as unidades
+  totalProduzirMeta += 4; // Collabs Bioter — meta unica do grupo (1/sem × 4)
   if(typeof BIOTER_UNITS!=="undefined"){
-    BIOTER_UNITS.forEach(u=>{
-      const cfg=(typeof getPostsConfig==="function")?getPostsConfig("bioter_"+u.id):null;
-      if(!cfg)return;
-      metaProduzirFoto += (cfg.foto||0)*weeks + (cfg.fotoOrShortAlternado?Math.ceil(weeks/2):0);
-    });
+    BIOTER_UNITS.forEach(u=>{ totalProduzirMeta += _getMeta("bioter_"+u.id).produzir; }); // fotos
   }
-  const totalProduzirMeta=metaProduzirPadrao+metaProduzirCollab+metaProduzirFoto;
+
+  // DO DRIVE — shorts puxados (12 principais + 6 filiais = 18)
+  let totalDriveMeta=0;
+  if(typeof BIOTER_UNITS!=="undefined"){
+    BIOTER_UNITS.forEach(u=>{ totalDriveMeta += _getMeta("bioter_"+u.id).drive; });
+  }
+  const totalDriveDone=visible.filter(t=>{
+    if(STS.indexOf(t.status)<0||!inMonth(t))return false;
+    return tipo(t)==="short"||t.fromDrive;
+  }).length;
+
   const pctProduzir=totalProduzirMeta?Math.round(totalProduzirDone/totalProduzirMeta*100):0;
   const pctPublicar=totalPublicarMeta?Math.round(totalPublicarDone/totalPublicarMeta*100):0;
+  const pctDrive=totalDriveMeta?Math.round(totalDriveDone/totalDriveMeta*100):0;
   const isComplete=pctProduzir>=100&&totalProduzirMeta>0;
   const _pctRef=mode==="publicar"?pctPublicar:pctProduzir;
   const accentMain=_pctRef>=80?"#22c55e":(_pctRef>=50?"#fbbf24":"#ef4444");
@@ -10833,30 +10867,26 @@ function ProgressoDoMes({visible,mode="produzir"}){
             {offset!==0&&<button onClick={()=>setOffset(0)} style={{height:34,padding:"0 14px",borderRadius:10,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:.3,fontFamily:"inherit",marginLeft:4}}>Hoje</button>}
           </div>
         </div>
-        {/* Direita — total e anel (mode produzir OU publicar) */}
+        {/* Direita — 3 indicadores: Publicações / A produzir / Do Drive */}
         {(()=>{
-          const isProd=mode!=="publicar";
-          const done=isProd?totalProduzirDone:totalPublicarDone;
-          const meta=isProd?totalProduzirMeta:totalPublicarMeta;
-          const pctMode=isProd?pctProduzir:pctPublicar;
-          const label=isProd?"A produzir":"A publicar";
-          return <div style={{display:"flex",alignItems:"center",gap:20}}>
-            <div style={{textAlign:"right"}}>
-              <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
-                <span style={{color:accentMain,fontSize:46,fontWeight:900,letterSpacing:-2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{done}</span>
-                <span style={{color:"#64748b",fontSize:22,fontWeight:700,lineHeight:1}}>/{meta}</span>
-              </div>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>{label}</div>
-            </div>
-            <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
-              <svg width="72" height="72" viewBox="0 0 72 72" style={{transform:"rotate(-90deg)"}}>
-                <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6"/>
-                <circle cx="36" cy="36" r="30" fill="none" stroke={accentMain} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${2*Math.PI*30}`} strokeDashoffset={`${2*Math.PI*30*(1-Math.min(pctMode,100)/100)}`} style={{transition:"stroke-dashoffset .6s ease-out, stroke .3s"}}/>
-              </svg>
-              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
-                <span style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{pctMode}<span style={{fontSize:10,color:"#cbd5e1"}}>%</span></span>
-              </div>
-            </div>
+          const stats=[
+            {key:"publicar", label:"Publicações",  done:totalPublicarDone, meta:totalPublicarMeta, pct:pctPublicar},
+            {key:"produzir", label:"A produzir",   done:totalProduzirDone, meta:totalProduzirMeta, pct:pctProduzir},
+            {key:"drive",    label:"Do Drive",     done:totalDriveDone,    meta:totalDriveMeta,    pct:pctDrive},
+          ];
+          const _accent=function(p){return p>=80?"#22c55e":(p>=50?"#fbbf24":"#ef4444");};
+          return <div style={{display:"flex",alignItems:"stretch",gap:12,flexWrap:"wrap"}}>
+            {stats.map(function(s,i){
+              const isMain=s.key===(mode==="publicar"?"publicar":"produzir");
+              const acc=_accent(s.pct);
+              return <div key={s.key} style={{background:isMain?"rgba(255,255,255,0.06)":"transparent",border:"1px solid "+(isMain?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.06)"),borderRadius:12,padding:"10px 16px",display:"flex",flexDirection:"column",alignItems:"flex-end",minWidth:120}}>
+                <div style={{display:"flex",alignItems:"baseline",gap:3}}>
+                  <span style={{color:s.meta>0?acc:"#64748b",fontSize:30,fontWeight:900,letterSpacing:-1.4,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.done}</span>
+                  <span style={{color:"#64748b",fontSize:16,fontWeight:700,lineHeight:1}}>/{s.meta}</span>
+                </div>
+                <div style={{color:isMain?"#fff":"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginTop:5}}>{s.label}</div>
+              </div>;
+            })}
           </div>;
         })()}
       </div>
