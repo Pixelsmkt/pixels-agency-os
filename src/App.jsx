@@ -11757,6 +11757,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
+    if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     // Esconder cards-fantasma de video short (vem do Drive, so aparecem no calendario)
     if(t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short")return false;
     if(!isAdmin&&!isMyDomain(t))return false;
@@ -11864,6 +11865,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
 
   const moveTask=(id,toColId)=>{
+    // Normaliza toColId: status "publicado" eh coluna "agendado" (Publicadas).
+    // Drop em cima de card publicado vinha passando "publicado" e quebrava.
+    if(toColId==="publicado")toColId="agendado";
     // ── Validação ANTES do setTasks (evita toast duplicado em StrictMode) ──
     const t=tasks.find(x=>x.id===id);
     if(!t){setDrag(null);setOver(null);return;}
@@ -12379,8 +12383,11 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       reorderTask(drag,t.id,dragOverId?.before??true);
                     } else {
                       // FIX: Drop em card de OUTRA coluna agora muda o status (antes era silenciosamente ignorado).
-                      // Isso permite arrastar ex: Aprovado → Agendado mesmo soltando em cima de outro card.
-                      moveTask(drag,t.status);
+                      // Isso permite arrastar ex: Aprovado → Publicadas mesmo soltando em cima de outro card.
+                      // Normaliza: status "publicado" eh coluna "agendado" (Publicadas) — sem isso, drop em
+                      // cima de card ja publicado gerava "Coluna invalida".
+                      const _targetCol=t.status==="publicado"?"agendado":t.status;
+                      moveTask(drag,_targetCol);
                     }
                     setDragOverId(null);
                   }:undefined}
