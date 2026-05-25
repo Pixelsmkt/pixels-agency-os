@@ -29503,38 +29503,93 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação de ajuste enviada para a equipe.",3500);
   };
 
+  // Renderiza um CARD identico ao kanban interno (cover image + badges + title + footer)
+  const Card=function(props){
+    const {task, actionable}=props;
+    const t=task;
+    const img=(t.files||[]).slice().reverse().find(function(f){return f.type&&f.type.startsWith("image/");});
+    const thumbUrl=t.cover||(img?img.url:null);
+    // Tipo de conteudo -> badge roxo (igual kanban interno)
+    const tipoBadge=(function(){
+      if(!t.contentType)return null;
+      const labels={arte:"Arte única",carrossel:"Carrossel",video:"Vídeo",foto:"Foto de obra",video_short:"Short"};
+      const label=labels[t.contentType]||t.contentType;
+      return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>;
+    })();
+    // Sigla(s) da unidade Bioter
+    const unidadesBadges=(function(){
+      if(!t.bioterUnit)return null;
+      const ids=String(t.bioterUnit).split(",").filter(Boolean);
+      if(!ids.length)return null;
+      const labelMap={chapeco:"Chapecó",toledo:"Toledo",castro:"Castro",uberlandia:"Uberlândia",gloria:"Glória",paraguay:"Paraguay",grupo:"GRUPO",brasil:"BRASIL"};
+      return ids.map(function(uid){
+        return <span key={uid} title={labelMap[uid]||uid} style={{background:"#16653422",color:"#166534",borderRadius:4,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",flexShrink:0,whiteSpace:"nowrap"}}>{labelMap[uid]||uid}</span>;
+      });
+    })();
+    return <div onClick={actionable?undefined:function(){}}
+      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,overflow:"hidden",userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease",flexShrink:0,display:"flex",flexDirection:"column",minHeight:thumbUrl?290:undefined}}
+      onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 0 0 1px "+cl.color+", 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor=cl.color;e.currentTarget.style.transform="translateY(-1px)";}}
+      onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
+
+      {/* Badges TOPO — tipo de conteúdo */}
+      {tipoBadge&&<div style={{padding:"7px 11px 0",display:"flex",gap:4,flexWrap:"wrap"}}>{tipoBadge}</div>}
+
+      {/* THUMBNAIL — 200px altura, estilo Trello (contain + letterbox cinza) */}
+      {thumbUrl&&<div style={{height:200,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",marginTop:tipoBadge?0:0}}>
+        <img src={thumbUrl} alt="" loading="lazy" style={{display:"block",maxWidth:"100%",maxHeight:"100%",objectFit:"contain",pointerEvents:"none"}}/>
+      </div>}
+
+      <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"9px 11px 8px"}}>
+        {/* Título */}
+        <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:9})}}>
+          {t.title||"(sem título)"}
+        </div>
+
+        {/* Footer: siglas da unidade Bioter (se for Bioter) */}
+        {unidadesBadges&&<div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>{unidadesBadges}</div>}
+
+        {/* Botões de ação — só na coluna "Aguardando sua aprovação" */}
+        {actionable&&<div style={{display:"flex",gap:6,marginTop:4}}>
+          <button onClick={function(){handleAprovar(t);}}
+            style={{flex:1,background:"#059669",color:"#fff",border:"none",borderRadius:7,padding:"8px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,letterSpacing:-.1}}>
+            <Ico n="check" size={13}/> Aprovar
+          </button>
+          <button onClick={function(){setAjusteModal({task:t,text:""});}}
+            style={{flex:1,background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:7,padding:"8px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,letterSpacing:-.1}}>
+            <Ico n="rotate" size={13}/> Solicitar ajuste
+          </button>
+        </div>}
+      </div>
+    </div>;
+  };
+
+  // Renderiza uma COLUNA do kanban (mesmo visual do interno)
   const Coluna=function(props){
     const {label, color, tasks, actionable}=props;
-    return <div style={{background:"#f8fafc",borderRadius:12,padding:"10px 8px 12px",display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
-      <div style={{padding:"6px 10px",background:color,borderRadius:8,color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{fontWeight:800,fontSize:12,letterSpacing:.2}}>{label}</div>
-        <div style={{fontWeight:700,fontSize:11,opacity:.9}}>{tasks.length}</div>
+    return <div style={{
+      background:"#d1d5db",
+      borderRadius:12,
+      padding:"5px 5px 6px",
+      maxHeight:"calc(100vh - 280px)",
+      overflow:"hidden",
+      display:"flex",
+      flexDirection:"column",
+      gap:0,
+    }}>
+      {/* Header colorido no topo */}
+      <div style={{padding:"7px 11px",display:"flex",justifyContent:"space-between",alignItems:"center",background:color,borderRadius:"12px 12px 0 0",margin:"-5px -5px 6px -5px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+          <span style={{color:"#fff",fontWeight:600,fontSize:12,letterSpacing:.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{label}</span>
+          <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",borderRadius:99,padding:"0px 7px",fontSize:10,fontWeight:600,flexShrink:0}}>{tasks.length}</span>
+        </div>
       </div>
-      {tasks.length===0
-        ?<div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",padding:"14px 8px",textAlign:"center"}}>nenhuma demanda</div>
-        :tasks.map(function(t){
-          const img=(t.files||[]).slice().reverse().find(function(f){return f.type&&f.type.startsWith("image/");});
-          return <div key={t.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 4px rgba(15,23,42,0.06)"}}>
-            {img&&<div style={{height:120,background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <img src={img.url} alt={img.name||""} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-            </div>}
-            <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,lineHeight:1.3}}>{t.title||"(sem título)"}</div>
-              {t.contentType&&<div style={{color:"#7c3aed",fontSize:10,fontWeight:600,textTransform:"lowercase"}}>{t.contentType==="foto"?"foto de obra":t.contentType==="video_short"?"short":t.contentType}</div>}
-              {actionable&&<div style={{display:"flex",gap:6,marginTop:4}}>
-                <button onClick={function(){handleAprovar(t);}}
-                  style={{flex:1,background:"#059669",color:"#fff",border:"none",borderRadius:7,padding:"7px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                  Aprovar
-                </button>
-                <button onClick={function(){setAjusteModal({task:t,text:""});}}
-                  style={{flex:1,background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:7,padding:"7px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                  Solicitar ajuste
-                </button>
-              </div>}
-            </div>
-          </div>;
-        })
-      }
+      {/* Lista de cards rolavel */}
+      <div style={{display:"flex",flexDirection:"column",gap:10,overflowY:"auto",paddingRight:2,flex:1}}>
+        {tasks.length===0
+          ?<div style={{color:"#475569",fontSize:11,fontStyle:"italic",padding:"24px 8px",textAlign:"center"}}>nenhuma demanda</div>
+          :tasks.map(function(t){return <Card key={t.id} task={t} actionable={actionable}/>;})
+        }
+      </div>
     </div>;
   };
 
@@ -29546,11 +29601,13 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
         Aqui aparecem as demandas que a equipe Pixels já aprovou internamente e estão aguardando sua avaliação. Você pode <strong style={{color:"#0f172a"}}>Aprovar</strong> (vai pra Aprovação final, pronta pra agendar) ou <strong style={{color:"#0f172a"}}>Solicitar ajuste</strong> (volta pra equipe com sua observação).
       </div>
     </div>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(0,1fr))",gap:12}}>
-      <Coluna label="Aguardando sua aprovação" color="#0f172a" tasks={aguardando} actionable={true}/>
-      <Coluna label="Aprovadas por você" color="#14b8a6" tasks={aprovadas} actionable={false}/>
-      <Coluna label="Agendadas" color="#7c3aed" tasks={agendadas} actionable={false}/>
-      <Coluna label="Publicadas (últimas)" color="#475569" tasks={publicadas} actionable={false}/>
+
+    {/* Kanban — mesmo visual do Fluxo de Demandas interno (dark slate fundo + colunas cinzas) */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(260px,1fr))",gap:13,overflowX:"auto",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
+      <Coluna label="Aguardando sua aprovação" color="#059669" tasks={aguardando} actionable={true}/>
+      <Coluna label="Aprovadas por você"      color="#0d9488" tasks={aprovadas}  actionable={false}/>
+      <Coluna label="Agendadas"               color="#7c3aed" tasks={agendadas}  actionable={false}/>
+      <Coluna label="Publicadas (últimas)"    color="#475569" tasks={publicadas} actionable={false}/>
     </div>
 
     {/* Modal Solicitar Ajuste */}
