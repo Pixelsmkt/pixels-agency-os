@@ -29667,34 +29667,48 @@ function PortalFunil({cl, isMob}){
   const now=new Date();
   const [month,setMonth]=useState(now.getMonth()+1);
   const [year,setYear]=useState(now.getFullYear());
-  const stages=getFunnelForClient(cl.id);
+  // Adiciona "Leads" como topo virtual (não muda config dos clientes)
+  const baseStages=getFunnelForClient(cl.id);
+  const stages=[{id:"leads",name:"Leads"}].concat(baseStages);
   const {entry,loading,save}=useFunnelEntry(cl.id,month,year);
   const {rows:history}=useFunnelHistory(cl.id,12);
-  // Form state — espelha entry quando carrega/troca período
+  // Form state agora separa Meta Ads e Google Ads por etapa: {stageId:{meta,google}}
   const [form,setForm]=useState({});
   const [dirty,setDirty]=useState(false);
   const [saving,setSaving]=useState(false);
   useEffect(function(){
     const init={};
     if(entry&&Array.isArray(entry.stages)){
-      entry.stages.forEach(function(s){init[s.id]=s.quantity||0;});
+      entry.stages.forEach(function(s){
+        init[s.id]={
+          meta:Number(s.meta_quantity||(s.id==="leads"?0:s.quantity)||0),
+          google:Number(s.google_quantity||0),
+        };
+      });
     }
-    stages.forEach(function(s){if(init[s.id]===undefined)init[s.id]=0;});
+    stages.forEach(function(s){if(!init[s.id])init[s.id]={meta:0,google:0};});
     setForm(init);
     setDirty(false);
   },[entry,cl.id,month,year]);
-  // Recalcula conversões on-the-fly
-  const currentStages=stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:Number(form[s.id]||0)};});
-  const conv=calcFunnelConversions(currentStages);
-  function setQty(id,v){
+  // Quantidades por canal
+  const stagesMeta=stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:Number((form[s.id]&&form[s.id].meta)||0)};});
+  const stagesGoogle=stages.map(function(s,i){return {id:s.id,name:s.name,order:i+1,quantity:Number((form[s.id]&&form[s.id].google)||0)};});
+  const convMeta=calcFunnelConversions(stagesMeta);
+  const convGoogle=calcFunnelConversions(stagesGoogle);
+  function setQty(id,channel,v){
     const n=Math.max(0,parseInt(v,10)||0);
-    setForm(function(p){return Object.assign({},p,{[id]:n});});
+    setForm(function(p){const cur=p[id]||{meta:0,google:0};return Object.assign({},p,{[id]:Object.assign({},cur,{[channel]:n})});});
     setDirty(true);
   }
   function handleSave(){
     if(saving)return;
     setSaving(true);
-    save(currentStages).then(function(){
+    const payload=stages.map(function(s,i){
+      const m=Number((form[s.id]&&form[s.id].meta)||0);
+      const g=Number((form[s.id]&&form[s.id].google)||0);
+      return {id:s.id,name:s.name,order:i+1,quantity:m+g,meta_quantity:m,google_quantity:g};
+    });
+    save(payload).then(function(){
       setSaving(false);setDirty(false);
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Funil de "+_MES_NAMES[month-1]+"/"+year+" salvo.");
     }).catch(function(e){
@@ -29703,8 +29717,6 @@ function PortalFunil({cl, isMob}){
     });
   }
   const yearOpts=[year-1,year,year+1];
-  // Visual: barras decrescentes (max width = quantidade da etapa 1)
-  const maxQty=Math.max.apply(null,currentStages.map(function(s){return s.quantity;}).concat([1]));
   return <div style={{display:"flex",flexDirection:"column",gap:18}}>
     {/* Header + period picker */}
     <div style={{background:"#fff",borderRadius:14,padding:"18px 20px",border:"1px solid #e2e8f0",display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
@@ -29727,94 +29739,125 @@ function PortalFunil({cl, isMob}){
       </div>
     </div>
 
-    {/* Funil visual (SVG trapezoidal) + inputs ao lado */}
-    <div style={{background:"#fff",borderRadius:14,padding:24,border:"1px solid #e2e8f0",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 320px",gap:32,alignItems:"flex-start"}}>
-
-      {/* SVG Funil */}
-      <div style={{display:"flex",flexDirection:"column",alignItems:"center"}}>
-        <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:14,alignSelf:"flex-start"}}>Visão do funil — {_MES_NAMES[month-1]}/{year}</div>
-        {(function(){
-          // Cada etapa vira um trapezoide. Largura proporcional à quantidade
-          // (com mínimo de 25% pra ser sempre visível).
-          const SVG_W=520;
-          const STAGE_H=58;
-          const GAP=4;
-          const total=stages.length;
-          const SVG_H=total*STAGE_H+(total-1)*GAP+10;
-          // Largura de cada etapa (% da SVG_W)
-          const widths=stages.map(function(s,i){
-            const q=Number(form[s.id]||0);
-            if(maxQty===0)return 25; // todos zerados — mostra estrutura mínima
-            return Math.max(22,(q/maxQty)*100);
+    {/* Dois funis lado a lado: Meta Ads + Google Ads */}
+    <div style={{background:"#fff",borderRadius:14,padding:24,border:"1px solid #e2e8f0"}}>
+      <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:18}}>Visão do funil — {_MES_NAMES[month-1]}/{year}</div>
+      {(function(){
+        // Helper: renderiza UM funil SVG pra uma fonte de tráfego.
+        const renderFunnel=function(label,sourceStages,sourceConv,brandColor){
+          const SVG_W=380;
+          const STAGE_H=54;
+          const GAP=3;
+          const totalStages=sourceStages.length;
+          const SVG_H=totalStages*STAGE_H+(totalStages-1)*GAP+10;
+          const maxQ=Math.max.apply(null,sourceStages.map(function(s){return s.quantity;}).concat([1]));
+          const widths=sourceStages.map(function(s){
+            if(maxQ===0)return 28;
+            return Math.max(22,(s.quantity/maxQ)*100);
           });
-          // Conversão entre etapas (qty[i+1] / qty[i])
-          const c1=parseInt(cl.color.slice(1,3),16)||124;
-          const c2=parseInt(cl.color.slice(3,5),16)||58;
-          const c3=parseInt(cl.color.slice(5,7),16)||237;
-          // Helper: cor mais escura conforme desce no funil
+          // Decompose color
+          const c1=parseInt(brandColor.slice(1,3),16)||124;
+          const c2=parseInt(brandColor.slice(3,5),16)||58;
+          const c3=parseInt(brandColor.slice(5,7),16)||237;
           const colorFor=function(i){
-            const t=1-(i/Math.max(1,total-1))*0.45; // 1.0 no topo, 0.55 no fundo
-            const r=Math.round(c1*t),g=Math.round(c2*t),b=Math.round(c3*t);
-            return "rgb("+r+","+g+","+b+")";
+            const t=1-(i/Math.max(1,totalStages-1))*0.45;
+            return "rgb("+Math.round(c1*t)+","+Math.round(c2*t)+","+Math.round(c3*t)+")";
           };
-          return <svg viewBox={"0 0 "+SVG_W+" "+SVG_H} width="100%" style={{maxWidth:560,fontFamily:"'Inter',system-ui,sans-serif"}}>
-            {stages.map(function(s,i){
-              const w1=(widths[i]/100)*SVG_W;
-              const w2=(widths[i+1]!=null?widths[i+1]:widths[i]*0.85)/100*SVG_W;
-              const y=10+i*(STAGE_H+GAP);
-              const x1Top=(SVG_W-w1)/2;
-              const x2Top=x1Top+w1;
-              const x1Bot=(SVG_W-w2)/2;
-              const x2Bot=x1Bot+w2;
-              const qty=Number(form[s.id]||0);
-              const color=colorFor(i);
-              return <g key={s.id}>
-                {/* Trapezoide */}
-                <path d={"M "+x1Top+" "+y+" L "+x2Top+" "+y+" L "+x2Bot+" "+(y+STAGE_H)+" L "+x1Bot+" "+(y+STAGE_H)+" Z"}
-                  fill={color}
-                  opacity={qty>0?1:0.18}/>
-                {/* Numero da etapa + nome */}
-                <text x={SVG_W/2} y={y+STAGE_H/2-4} textAnchor="middle" fill="#fff" fontSize="13" fontWeight="700" letterSpacing="-.2">{s.name}</text>
-                {/* Quantidade */}
-                <text x={SVG_W/2} y={y+STAGE_H/2+13} textAnchor="middle" fill="#fff" fontSize="11" fontWeight="600" opacity="0.85">{qty} {qty===1?"oportunidade":"oportunidades"}</text>
-                {/* Taxa de conversão entre etapas (a partir da segunda) */}
-                {i>0&&conv.pairwise[i-1]!=null&&qty>=0&&Number(form[stages[i-1].id]||0)>0&&<g>
-                  <rect x={SVG_W-90} y={y-12} width={80} height={20} rx="10"
-                    fill={conv.pairwise[i-1]>=70?"#dcfce7":conv.pairwise[i-1]>=40?"#fef9c3":"#fee2e2"}
-                    stroke={conv.pairwise[i-1]>=70?"#86efac":conv.pairwise[i-1]>=40?"#fde047":"#fecaca"}/>
-                  <text x={SVG_W-50} y={y+2} textAnchor="middle" fontSize="10" fontWeight="700"
-                    fill={conv.pairwise[i-1]>=70?"#15803d":conv.pairwise[i-1]>=40?"#a16207":"#b91c1c"}>↓ {conv.pairwise[i-1]}%</text>
-                </g>}
-              </g>;
-            })}
-          </svg>;
-        })()}
-      </div>
+          return <div style={{display:"flex",flexDirection:"column",alignItems:"center",flex:1,minWidth:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:10,height:10,borderRadius:"50%",background:brandColor}}/>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>{label}</div>
+            </div>
+            <svg viewBox={"0 0 "+SVG_W+" "+SVG_H} width="100%" style={{maxWidth:420,fontFamily:"'Inter',system-ui,sans-serif"}}>
+              {sourceStages.map(function(s,i){
+                const w1=(widths[i]/100)*SVG_W;
+                const w2=(widths[i+1]!=null?widths[i+1]:widths[i]*0.85)/100*SVG_W;
+                const y=10+i*(STAGE_H+GAP);
+                const x1Top=(SVG_W-w1)/2;
+                const x2Top=x1Top+w1;
+                const x1Bot=(SVG_W-w2)/2;
+                const x2Bot=x1Bot+w2;
+                const qty=s.quantity;
+                const color=colorFor(i);
+                return <g key={s.id}>
+                  <path d={"M "+x1Top+" "+y+" L "+x2Top+" "+y+" L "+x2Bot+" "+(y+STAGE_H)+" L "+x1Bot+" "+(y+STAGE_H)+" Z"}
+                    fill={color} opacity={qty>0?1:0.15}/>
+                  <text x={SVG_W/2} y={y+STAGE_H/2-3} textAnchor="middle" fill="#fff" fontSize="11.5" fontWeight="700" letterSpacing="-.2">{s.name}</text>
+                  <text x={SVG_W/2} y={y+STAGE_H/2+12} textAnchor="middle" fill="#fff" fontSize="10" fontWeight="600" opacity="0.85">{qty}</text>
+                  {/* Conversão entre etapa atual e anterior */}
+                  {i>0&&sourceConv.pairwise[i-1]!=null&&sourceStages[i-1].quantity>0&&<g>
+                    <rect x={SVG_W-78} y={y-11} width={68} height={18} rx="9"
+                      fill={sourceConv.pairwise[i-1]>=70?"#dcfce7":sourceConv.pairwise[i-1]>=40?"#fef9c3":"#fee2e2"}
+                      stroke={sourceConv.pairwise[i-1]>=70?"#86efac":sourceConv.pairwise[i-1]>=40?"#fde047":"#fecaca"}/>
+                    <text x={SVG_W-44} y={y+1} textAnchor="middle" fontSize="9.5" fontWeight="700"
+                      fill={sourceConv.pairwise[i-1]>=70?"#15803d":sourceConv.pairwise[i-1]>=40?"#a16207":"#b91c1c"}>↓ {sourceConv.pairwise[i-1]}%</text>
+                  </g>}
+                </g>;
+              })}
+            </svg>
+            {/* Conversão total */}
+            <div style={{marginTop:10,padding:"8px 14px",background:brandColor+"12",borderRadius:8,display:"inline-flex",alignItems:"center",gap:7}}>
+              <span style={{color:"#64748b",fontSize:10.5,fontWeight:600}}>Conversão total:</span>
+              <span style={{color:brandColor,fontSize:15,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{sourceConv.total}%</span>
+            </div>
+          </div>;
+        };
+        return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:24,alignItems:"flex-start"}}>
+          {renderFunnel("Meta Ads",  stagesMeta,   convMeta,   "#1877f2")}
+          {renderFunnel("Google Ads",stagesGoogle, convGoogle, "#ea4335")}
+        </div>;
+      })()}
+    </div>
 
-      {/* Inputs por etapa (lado direito) */}
-      <div>
-        <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:12}}>Quantidade por etapa</div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {stages.map(function(s,i){
-            const qty=form[s.id]||0;
-            return <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
+    {/* Inputs por etapa — tabela com Meta + Google */}
+    <div style={{background:"#fff",borderRadius:14,padding:"18px 22px",border:"1px solid #e2e8f0"}}>
+      <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:14}}>Quantidade por etapa</div>
+      {/* Cabeçalho da tabela */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 110px 110px",gap:10,padding:"6px 10px",alignItems:"center"}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Etapa</div>
+        <div style={{color:"#1877f2",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,textAlign:"center"}}>Meta Ads</div>
+        <div style={{color:"#ea4335",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,textAlign:"center"}}>Google Ads</div>
+      </div>
+      {/* Linhas */}
+      <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:6}}>
+        {stages.map(function(s,i){
+          const m=(form[s.id]&&form[s.id].meta)||0;
+          const g=(form[s.id]&&form[s.id].google)||0;
+          return <div key={s.id} style={{display:"grid",gridTemplateColumns:"1fr 110px 110px",gap:10,alignItems:"center",padding:"8px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
               <span style={{width:22,height:22,borderRadius:6,background:cl.color+"15",color:cl.color,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{i+1}</span>
-              <span style={{flex:1,color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.3}}>{s.name}</span>
-              <input type="number" min="0" value={qty} onChange={function(e){setQty(s.id,e.target.value);}}
-                style={{width:64,background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 8px",color:"#0f172a",fontSize:13,fontWeight:700,outline:"none",textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif",fontFeatureSettings:"'tnum'"}}/>
-            </div>;
-          })}
-        </div>
+              <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</span>
+            </div>
+            <input type="number" min="0" value={m} onChange={function(e){setQty(s.id,"meta",e.target.value);}}
+              style={{width:"100%",background:"#fff",border:"1px solid #cbe1ff",borderRadius:7,padding:"6px 8px",color:"#0f172a",fontSize:13,fontWeight:700,outline:"none",textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif",fontFeatureSettings:"'tnum'",boxSizing:"border-box"}}/>
+            <input type="number" min="0" value={g} onChange={function(e){setQty(s.id,"google",e.target.value);}}
+              style={{width:"100%",background:"#fff",border:"1px solid #fed7cc",borderRadius:7,padding:"6px 8px",color:"#0f172a",fontSize:13,fontWeight:700,outline:"none",textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif",fontFeatureSettings:"'tnum'",boxSizing:"border-box"}}/>
+          </div>;
+        })}
       </div>
     </div>
 
-    {/* Resumo + botão Salvar */}
+    {/* Resumo combinado + botão Salvar */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr auto",gap:14,alignItems:"start"}}>
       <div style={{background:"linear-gradient(135deg,"+cl.color+"15,"+cl.color+"05)",borderRadius:14,padding:"16px 20px",border:"1px solid "+cl.color+"28"}}>
-        <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Conversão total ({_MES_NAMES[month-1]}/{year})</div>
-        <div style={{display:"flex",alignItems:"baseline",gap:10}}>
-          <span style={{color:cl.color,fontWeight:800,fontSize:32,letterSpacing:-1,fontFeatureSettings:"'tnum'"}}>{conv.total}%</span>
-          <span style={{color:"#64748b",fontSize:12}}>do topo do funil ao fechamento</span>
+        <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Conversão consolidada ({_MES_NAMES[month-1]}/{year})</div>
+        <div style={{display:"flex",alignItems:"baseline",gap:14,flexWrap:"wrap"}}>
+          {(function(){
+            // Conversão geral = (total fechado / total topo) — soma Meta + Google
+            const topoTotal=Number(stagesMeta[0].quantity)+Number(stagesGoogle[0].quantity);
+            const fimTotal=Number(stagesMeta[stagesMeta.length-1].quantity)+Number(stagesGoogle[stagesGoogle.length-1].quantity);
+            const pct=topoTotal>0?Math.round((fimTotal/topoTotal)*1000)/10:0;
+            return <>
+              <div>
+                <span style={{color:cl.color,fontWeight:800,fontSize:32,letterSpacing:-1,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
+                <span style={{color:"#64748b",fontSize:12,marginLeft:8}}>do topo ao fechamento</span>
+              </div>
+              <div style={{display:"flex",gap:14,fontSize:11,color:"#64748b"}}>
+                <span><strong style={{color:"#1877f2"}}>Meta:</strong> {convMeta.total}%</span>
+                <span><strong style={{color:"#ea4335"}}>Google:</strong> {convGoogle.total}%</span>
+              </div>
+            </>;
+          })()}
         </div>
       </div>
       <button onClick={handleSave} disabled={!dirty||saving}
