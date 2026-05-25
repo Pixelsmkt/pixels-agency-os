@@ -26364,6 +26364,9 @@ const rowToTask = (r) => ({
   caption:      r.caption      || "",
   desc:         r.description  || "",
   position:     r.position     ?? null,
+  // ── Origem (portal cliente vs interno) + tipo da solicitação ──
+  origem:           r.origem            || "",
+  tipo_solicitacao: r.tipo_solicitacao  || "",
   // ── Sprint / previsão de entrega ──
   sprint_id:            r.sprint_id            || null,
   data_desejada:        r.data_desejada        || null,
@@ -26410,6 +26413,9 @@ const taskToRow = (t) => ({
   caption:        t.caption      || "",
   description:    t.desc         || "",
   position:       t.position     ?? null,
+  // ── Origem + tipo solicitação ──
+  origem:           t.origem            || null,
+  tipo_solicitacao: t.tipo_solicitacao  || null,
   // ── Sprint / previsão de entrega ──
   sprint_id:              t.sprint_id            || null,
   data_desejada:          t.data_desejada        || null,
