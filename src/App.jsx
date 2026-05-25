@@ -29667,9 +29667,11 @@ function PortalFunil({cl, isMob}){
   const now=new Date();
   const [month,setMonth]=useState(now.getMonth()+1);
   const [year,setYear]=useState(now.getFullYear());
-  // Adiciona "Leads" como topo virtual (não muda config dos clientes)
+  // Garante que todo funil começa por "Lead": se o cliente já tem essa etapa na
+  // primeira posição, mantém. Senão, prepend uma virtual.
   const baseStages=getFunnelForClient(cl.id);
-  const stages=[{id:"leads",name:"Leads"}].concat(baseStages);
+  const _firstIsLead=baseStages.length>0&&/^lead/i.test(String(baseStages[0].name||"").trim());
+  const stages=_firstIsLead?baseStages:[{id:"leads",name:"Lead"}].concat(baseStages);
   const {entry,loading,save}=useFunnelEntry(cl.id,month,year);
   const {rows:history}=useFunnelHistory(cl.id,12);
   // Form state agora separa Meta Ads e Google Ads por etapa: {stageId:{meta,google}}
