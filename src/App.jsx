@@ -26947,7 +26947,7 @@ export default function AgencyOS(){
       case "portal_analises":
       case "portal_faturamento":
       case "portal_chat":
-      case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks}/>:<NoPerm/>;
+      case "portal_criativos":      return (effectivePerms.verPortal||isSocio)?<PagePortalCliente {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "interno":
       case "interno_calendario":    return (effectivePerms.verInterno||isSocio)?<PageInterno {...p} tasks={tasks}/>:<NoPerm/>;
       case "interno_radar":         return (effectivePerms.verInterno||isSocio)?<PageRadarEntrega {...p} tasks={tasks}/>:<NoPerm/>;
@@ -26972,6 +26972,7 @@ export default function AgencyOS(){
   if(authState==="portal"&&clientPortalData) return <PagePortalCliente
     isMob={isMob}
     tasks={tasks}
+    setTasks={setTasks}
     initTab="dashboard"
     lockedClientId={clientPortalData.primary_client||clientPortalData.client_id||clientPortalData.id}
   />;
@@ -28751,6 +28752,7 @@ const PORTAL_MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julh
 const PORTAL_WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 const PORTAL_ALL_TABS=[
   {id:"dashboard",   icon:"🎯", label:"Dashboard"},
+  {id:"aprovacoes",  icon:"◉",  label:"Aprovações"},
   {id:"demandas",    icon:"◈",  label:"Demandas"},
   {id:"solicitar",   icon:"⚡", label:"Solicitar"},
   {id:"calendario",  icon:"📅", label:"Calendário"},
@@ -29412,7 +29414,162 @@ function PortalFunil({cl, isMob}){
   </div>;
 }
 
-function PagePortalCliente({isMob, tasks, initTab, lockedClientId}){
+/* ─── PORTAL APROVAÇÕES — Kanban simplificado do cliente ─────────────
+   Mostra somente cards que JÁ passaram pela aprovação interna da Pixels.
+   Cliente vê 4 colunas: Aguardando aprovação → Aprovadas → Agendadas → Publicadas.
+   Cards em "Aguardando aprovação" tem botões Aprovar e Solicitar Ajuste.
+   Aprovar: status aprovado -> aprovacao_final.
+   Solicitar Ajuste: abre modal, salva comentário do cliente, status -> ajustes.
+─────────────────────────────────────────────────────────────────────── */
+function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
+  const [ajusteModal,setAjusteModal]=useState(null); // {task, text}
+  const aguardando=clTasks.filter(function(t){return t.status==="aprovado";});
+  const aprovadas =clTasks.filter(function(t){return t.status==="aprovacao_final";});
+  const agendadas =clTasks.filter(function(t){return t.status==="agendado";});
+  const publicadas=clTasks.filter(function(t){return t.status==="publicado";}).slice(0,12); // últimas 12
+
+  const _now=function(){return new Date();};
+  const _nowIso=function(){return _now().toISOString();};
+  const _nowFmt=function(){const n=_now();return n.toLocaleDateString("pt-BR")+" às "+n.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
+
+  const handleAprovar=function(task){
+    setTasks(function(prev){return prev.map(function(t){
+      if(t.id!==task.id)return t;
+      return Object.assign({},t,{
+        status:"aprovacao_final",
+        colEnteredAt:_nowIso(),
+        timeline:[].concat(t.timeline||[],[{
+          type:"client_approved",
+          fromLabel:"Aprovação interna",
+          toLabel:"Aprovação final",
+          from:"aprovado",
+          to:"aprovacao_final",
+          clientId:cl.id,
+          clientName:cl.name,
+          at:_nowIso(),
+          atFmt:_nowFmt(),
+          user:"Cliente: "+cl.name,
+        }]),
+      });
+    });});
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda aprovada! Seguiu para Aprovação final.",3500);
+  };
+
+  const handleConfirmarAjuste=function(){
+    if(!ajusteModal)return;
+    const t=ajusteModal.task;
+    const text=(ajusteModal.text||"").trim();
+    if(!text){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Descreva o ajuste solicitado antes de enviar.",3500);
+      return;
+    }
+    setTasks(function(prev){return prev.map(function(x){
+      if(x.id!==t.id)return x;
+      return Object.assign({},x,{
+        status:"ajustes",
+        ajustar:true,
+        isAlteracao:true,
+        colEnteredAt:_nowIso(),
+        comments:[].concat(x.comments||[],[{
+          id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+          type:"client_request",
+          text:text,
+          user:"Cliente: "+cl.name,
+          clientId:cl.id,
+          at:_nowIso(),
+          atFmt:_nowFmt(),
+        }]),
+        timeline:[].concat(x.timeline||[],[{
+          type:"client_rejected",
+          fromLabel:"Aprovação interna",
+          toLabel:"Ajustes",
+          from:"aprovado",
+          to:"ajustes",
+          clientId:cl.id,
+          clientName:cl.name,
+          text:text,
+          at:_nowIso(),
+          atFmt:_nowFmt(),
+          user:"Cliente: "+cl.name,
+        }]),
+      });
+    });});
+    setAjusteModal(null);
+    if(typeof pixelsToast!=="undefined")pixelsToast.info("Solicitação de ajuste enviada para a equipe.",3500);
+  };
+
+  const Coluna=function(props){
+    const {label, color, tasks, actionable}=props;
+    return <div style={{background:"#f8fafc",borderRadius:12,padding:"10px 8px 12px",display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
+      <div style={{padding:"6px 10px",background:color,borderRadius:8,color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{fontWeight:800,fontSize:12,letterSpacing:.2}}>{label}</div>
+        <div style={{fontWeight:700,fontSize:11,opacity:.9}}>{tasks.length}</div>
+      </div>
+      {tasks.length===0
+        ?<div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",padding:"14px 8px",textAlign:"center"}}>nenhuma demanda</div>
+        :tasks.map(function(t){
+          const img=(t.files||[]).slice().reverse().find(function(f){return f.type&&f.type.startsWith("image/");});
+          return <div key={t.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",boxShadow:"0 2px 4px rgba(15,23,42,0.06)"}}>
+            {img&&<div style={{height:120,background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <img src={img.url} alt={img.name||""} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+            </div>}
+            <div style={{padding:"10px 12px",display:"flex",flexDirection:"column",gap:6}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,lineHeight:1.3}}>{t.title||"(sem título)"}</div>
+              {t.contentType&&<div style={{color:"#7c3aed",fontSize:10,fontWeight:600,textTransform:"lowercase"}}>{t.contentType==="foto"?"foto de obra":t.contentType==="video_short"?"short":t.contentType}</div>}
+              {actionable&&<div style={{display:"flex",gap:6,marginTop:4}}>
+                <button onClick={function(){handleAprovar(t);}}
+                  style={{flex:1,background:"#059669",color:"#fff",border:"none",borderRadius:7,padding:"7px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                  Aprovar
+                </button>
+                <button onClick={function(){setAjusteModal({task:t,text:""});}}
+                  style={{flex:1,background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:7,padding:"7px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                  Solicitar ajuste
+                </button>
+              </div>}
+            </div>
+          </div>;
+        })
+      }
+    </div>;
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+    <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",color:"#92400e",fontSize:12,lineHeight:1.5}}>
+      <strong>Como funciona:</strong> aqui aparecem as demandas que a equipe Pixels já aprovou internamente e estão aguardando sua avaliação. Você pode <strong>Aprovar</strong> (vai pra Aprovação final, pronta pra agendar) ou <strong>Solicitar ajuste</strong> (volta pra equipe com sua observação).
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,minmax(0,1fr))",gap:12}}>
+      <Coluna label="Aguardando sua aprovação" color="#0f172a" tasks={aguardando} actionable={true}/>
+      <Coluna label="Aprovadas por você" color="#14b8a6" tasks={aprovadas} actionable={false}/>
+      <Coluna label="Agendadas" color="#7c3aed" tasks={agendadas} actionable={false}/>
+      <Coluna label="Publicadas (últimas)" color="#475569" tasks={publicadas} actionable={false}/>
+    </div>
+
+    {/* Modal Solicitar Ajuste */}
+    {ajusteModal&&<div onClick={function(){setAjusteModal(null);}} style={{position:"fixed",inset:0,zIndex:300,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,padding:"22px 24px",maxWidth:520,width:"100%",boxShadow:"0 24px 64px rgba(0,0,0,0.2)"}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:6}}>Solicitar ajuste</div>
+        <div style={{color:"#64748b",fontSize:12,marginBottom:14}}>Demanda: <strong style={{color:"#0f172a"}}>{ajusteModal.task.title||"(sem título)"}</strong></div>
+        <div style={{color:"#475569",fontSize:12,marginBottom:6,fontWeight:600}}>O que precisa ser ajustado?</div>
+        <textarea value={ajusteModal.text} onChange={function(e){setAjusteModal(Object.assign({},ajusteModal,{text:e.target.value}));}}
+          placeholder="Ex: deixar a cor da logo mais escura, trocar a foto principal, ajustar o texto da legenda..."
+          autoFocus
+          style={{width:"100%",minHeight:110,padding:"10px 12px",border:"1px solid #cbd5e1",borderRadius:8,fontSize:13,fontFamily:"inherit",color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:14}}>
+          <button onClick={function(){setAjusteModal(null);}}
+            style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"9px 18px",color:"#64748b",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+            Cancelar
+          </button>
+          <button onClick={handleConfirmarAjuste}
+            style={{background:"#dc2626",border:"none",borderRadius:8,padding:"9px 20px",color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer"}}>
+            Enviar solicitação
+          </button>
+        </div>
+      </div>
+    </div>}
+  </div>;
+}
+
+function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
   const TASKS=tasks||[];
   // Se lockedClientId foi passado (cliente logado no portal), trava a seleção.
   // Só sócio pode navegar entre clientes livremente.
@@ -29519,6 +29676,9 @@ function PagePortalCliente({isMob, tasks, initTab, lockedClientId}){
         </button>
       ))}
     </div>
+
+    {/* ── APROVAÇÕES ── Kanban simplificado: cliente aprova ou solicita ajuste */}
+    {tab==="aprovacoes"&&<PortalAprovacoes cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&(()=>{
