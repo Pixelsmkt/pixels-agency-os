@@ -16835,7 +16835,7 @@ function PageGestaoFinanceiro({isMob}){
     </div>;
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif",maxWidth:1280}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif",width:"100%"}}>
 
     {/* Header simples */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
