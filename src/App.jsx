@@ -10867,26 +10867,30 @@ function ProgressoDoMes({visible,mode="produzir"}){
             {offset!==0&&<button onClick={()=>setOffset(0)} style={{height:34,padding:"0 14px",borderRadius:10,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:.3,fontFamily:"inherit",marginLeft:4}}>Hoje</button>}
           </div>
         </div>
-        {/* Direita — 3 indicadores: Publicações / A produzir / Do Drive */}
+        {/* Direita — indicador único (depende do mode) + anel de % */}
         {(()=>{
-          const stats=[
-            {key:"publicar", label:"Publicações",  done:totalPublicarDone, meta:totalPublicarMeta, pct:pctPublicar},
-            {key:"produzir", label:"A produzir",   done:totalProduzirDone, meta:totalProduzirMeta, pct:pctProduzir},
-            {key:"drive",    label:"Do Drive",     done:totalDriveDone,    meta:totalDriveMeta,    pct:pctDrive},
-          ];
-          const _accent=function(p){return p>=80?"#22c55e":(p>=50?"#fbbf24":"#ef4444");};
-          return <div style={{display:"flex",alignItems:"stretch",gap:12,flexWrap:"wrap"}}>
-            {stats.map(function(s,i){
-              const isMain=s.key===(mode==="publicar"?"publicar":"produzir");
-              const acc=_accent(s.pct);
-              return <div key={s.key} style={{background:isMain?"rgba(255,255,255,0.06)":"transparent",border:"1px solid "+(isMain?"rgba(255,255,255,0.10)":"rgba(255,255,255,0.06)"),borderRadius:12,padding:"10px 16px",display:"flex",flexDirection:"column",alignItems:"flex-end",minWidth:120}}>
-                <div style={{display:"flex",alignItems:"baseline",gap:3}}>
-                  <span style={{color:s.meta>0?acc:"#64748b",fontSize:30,fontWeight:900,letterSpacing:-1.4,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.done}</span>
-                  <span style={{color:"#64748b",fontSize:16,fontWeight:700,lineHeight:1}}>/{s.meta}</span>
-                </div>
-                <div style={{color:isMain?"#fff":"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",marginTop:5}}>{s.label}</div>
-              </div>;
-            })}
+          const isProd=mode!=="publicar";
+          const done=isProd?totalProduzirDone:totalPublicarDone;
+          const meta=isProd?totalProduzirMeta:totalPublicarMeta;
+          const pctMode=isProd?pctProduzir:pctPublicar;
+          const label=isProd?"A produzir":"Publicações";
+          return <div style={{display:"flex",alignItems:"center",gap:20}}>
+            <div style={{textAlign:"right"}}>
+              <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
+                <span style={{color:accentMain,fontSize:46,fontWeight:900,letterSpacing:-2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{done}</span>
+                <span style={{color:"#64748b",fontSize:22,fontWeight:700,lineHeight:1}}>/{meta}</span>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>{label}</div>
+            </div>
+            <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
+              <svg width="72" height="72" viewBox="0 0 72 72" style={{transform:"rotate(-90deg)"}}>
+                <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6"/>
+                <circle cx="36" cy="36" r="30" fill="none" stroke={accentMain} strokeWidth="6" strokeLinecap="round" strokeDasharray={`${2*Math.PI*30}`} strokeDashoffset={`${2*Math.PI*30*(1-Math.min(pctMode,100)/100)}`} style={{transition:"stroke-dashoffset .6s ease-out, stroke .3s"}}/>
+              </svg>
+              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
+                <span style={{color:"#fff",fontSize:16,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{pctMode}<span style={{fontSize:10,color:"#cbd5e1"}}>%</span></span>
+              </div>
+            </div>
           </div>;
         })()}
       </div>
@@ -12739,6 +12743,1125 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       </div>}
     </div>
   </>;
+}
+
+// ======= 04_demandas_internas.jsx =======
+
+const INTERNO_COLS = [
+  { id:"interno_demanda",   label:"Demandas",                color:"#6366f1" },
+  { id:"interno_execucao",  label:"Em execução",                color:"#f97316" },
+  { id:"interno_avaliacao", label:"Concluídas para avaliação",  color:"#eab308" },
+  { id:"interno_aprovado",  label:"Aprovadas",                  color:"#22c55e" },
+  { id:"interno_executado", label:"Executadas",                 color:"#8b5cf6" },
+];
+
+const PRIO_CFG = {
+  baixa:   { label:"Baixa",   color:"#64748b", bg:"#64748b15" },
+  media:   { label:"Média",   color:"#f97316", bg:"#f9731615" },
+  alta:    { label:"Alta",    color:"#ef4444", bg:"#ef444415" },
+  urgente: { label:"Urgente", color:"#dc2626", bg:"#dc262620" },
+};
+
+const nowFmtInt = () => { const n=new Date(); return n.toLocaleDateString("pt-BR")+" "+n.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); };
+const dlInt = (d) => {
+  if (!d) return null;
+  return Math.ceil((new Date(d+"T00:00:00") - new Date()) / 86400000);
+};
+
+/* ── Card Modal ─────────────────────────────────── */
+function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
+  const [title,     setTitle]     = useState(card.title     || "");
+  const [desc,      setDesc]      = useState(card.desc      || "");
+  const [priority,  setPriority]  = useState(card.priority  || "media");
+  const [deadline,     setDeadline]     = useState(card.deadline     || "");
+  const [deadlineTime, setDeadlineTime] = useState(card.deadlineTime || "");
+  const [clientId,     setClientId]     = useState(card.client && card.client!=="interno" ? card.client : "");
+  const [bioterUnit,   setBioterUnit]   = useState(card.bioterUnit || "");
+  const [origem,       setOrigem]       = useState(card.origem || "interno");
+  const [assignees,    setAssignees]    = useState(card.assignees || []);
+  const [checklist, setChecklist] = useState(card.checklist || []);
+  const [newCheck,  setNewCheck]  = useState("");
+
+  const eligible = TEAM.filter(u => u.level === 1 || ACCESS_STORE?.[u.id]?.verDemandasInternas);
+  const toggleA  = (uid) => setAssignees(p => p.includes(uid) ? p.filter(x=>x!==uid) : [...p, uid]);
+  const addCheck = () => { if (!newCheck.trim()) return; setChecklist(p=>[...p,{id:Date.now()+"-"+Math.random().toString(36).slice(2,5),text:newCheck.trim(),done:false}]); setNewCheck(""); };
+  const save = () => onSave({ ...card, title, desc, priority, deadline, deadlineTime, client: clientId||"interno", bioterUnit: clientId==="bioter" ? bioterUnit : "", origem, assignees, checklist });
+  const col  = INTERNO_COLS.find(c => c.id === card.status) || INTERNO_COLS[0];
+  const pc   = PRIO_CFG[priority] || PRIO_CFG.media;
+  const done = checklist.filter(c=>c.done).length;
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:C.card,borderRadius:18,width:"100%",maxWidth:560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.3)"}}>
+        <div style={{padding:"20px 24px 0",display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
+          <div style={{display:"flex",gap:6}}>
+            <div style={{background:col.color+"20",borderRadius:8,padding:"3px 10px"}}><span style={{color:col.color,fontSize:11,fontWeight:700}}>{col.label}</span></div>
+            <div style={{background:pc.bg,borderRadius:8,padding:"3px 10px"}}><span style={{color:pc.color,fontSize:11,fontWeight:700}}>{pc.label}</span></div>
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            {isSocio&&card.id&&<button onClick={()=>onDelete(card.id)} style={{background:"#ef444415",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>Excluir</button>}
+            <button onClick={onClose} style={{background:C.s1,border:"none",borderRadius:8,padding:"6px 12px",color:C.td,fontSize:13,cursor:"pointer"}}>✕</button>
+          </div>
+        </div>
+        <div style={{padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:14}}>
+          <textarea value={title} onChange={e=>setTitle(e.target.value)} placeholder="Título da demanda interna..."
+            style={{background:"transparent",border:"none",outline:"none",color:C.tx,fontSize:17,fontWeight:700,resize:"none",width:"100%",fontFamily:"inherit",lineHeight:1.4}} rows={2}/>
+
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Descrição</div>
+            <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descreva a demanda..."
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:13,resize:"vertical",width:"100%",fontFamily:"inherit",minHeight:70,outline:"none",boxSizing:"border-box"}}/>
+          </div>
+
+          {/* Prioridade */}
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prioridade</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              {Object.entries(PRIO_CFG).map(([k,conf])=>(
+                <button key={k} onClick={()=>setPriority(k)}
+                  style={{background:priority===k?conf.bg:"transparent",border:`1px solid ${priority===k?conf.color:C.b1}`,borderRadius:8,padding:"4px 8px",color:priority===k?conf.color:C.td,fontSize:10,fontWeight:priority===k?700:400,cursor:"pointer"}}>
+                  {conf.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Prazo + Horário */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prazo</div>
+              <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
+                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Horário</div>
+              <input type="time" value={deadlineTime} onChange={e=>setDeadlineTime(e.target.value)}
+                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+
+          {/* Cliente */}
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Cliente</div>
+            <select value={clientId} onChange={e=>{setClientId(e.target.value);setBioterUnit("");}}
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:clientId?C.tx:C.td,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",cursor:"pointer"}}>
+              <option value="">— Sem cliente (interno) —</option>
+              {CLIENTS.map(c=>(
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Unidade Bioter — aparece só quando Bioter selecionado */}
+          {clientId==="bioter"&&(
+            <div>
+              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Unidade Bioter</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {BIOTER_UNITS.map(u=>(
+                  <button key={u.id} onClick={()=>setBioterUnit(u.id)}
+                    style={{background:bioterUnit===u.id?u.color+"22":"transparent",border:`1px solid ${bioterUnit===u.id?u.color:C.b1}`,borderRadius:8,padding:"5px 12px",color:bioterUnit===u.id?u.color:C.td,fontSize:11,fontWeight:bioterUnit===u.id?700:400,cursor:"pointer"}}>
+                    {u.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Origem da demanda */}
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Origem</div>
+            <div style={{display:"flex",gap:6}}>
+              {[
+                {id:"interno",            label:"🔵 Interna",           desc:"Equipe Pixels"},
+                {id:"solicitacao_cliente",label:"🟡 Solicitação",       desc:"Cliente pediu"},
+                {id:"portal",             label:"🟢 Portal",            desc:"Via portal"},
+              ].map(o=>(
+                <button key={o.id} onClick={()=>setOrigem(o.id)}
+                  style={{flex:1,background:origem===o.id?C.a+"18":"transparent",border:`1px solid ${origem===o.id?C.a:C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",textAlign:"center"}}>
+                  <div style={{fontSize:12,fontWeight:origem===o.id?700:500,color:origem===o.id?C.a:C.ts}}>{o.label}</div>
+                  <div style={{fontSize:10,color:C.td,marginTop:2}}>{o.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Responsáveis</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {eligible.map(u=>{
+                const sel=assignees.includes(u.id);
+                return(
+                  <button key={u.id} onClick={()=>toggleA(u.id)}
+                    style={{background:sel?u.color+"20":"transparent",border:`1px solid ${sel?u.color:C.b1}`,borderRadius:20,padding:"5px 12px",display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
+                    <div style={{width:18,height:18,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,color:"#fff"}}>{u.av}</div>
+                    <span style={{color:sel?u.color:C.ts,fontSize:11,fontWeight:sel?700:400}}>{u.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>
+              Checklist {checklist.length>0&&`(${done}/${checklist.length})`}
+            </div>
+            {checklist.length>0&&(
+              <div style={{marginBottom:8}}>
+                <div style={{height:4,background:C.b1,borderRadius:99,overflow:"hidden",marginBottom:6}}>
+                  <div style={{height:"100%",width:`${checklist.length?Math.round(done/checklist.length*100):0}%`,background:C.gr,borderRadius:99}}/>
+                </div>
+                {checklist.map(item=>(
+                  <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                    <button onClick={()=>setChecklist(p=>p.map(c=>c.id===item.id?{...c,done:!c.done}:c))}
+                      style={{width:17,height:17,borderRadius:4,border:`2px solid ${item.done?C.gr:C.b1}`,background:item.done?C.gr:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#fff",fontSize:9,fontWeight:900}}>
+                      {item.done?"✓":""}
+                    </button>
+                    <span style={{color:item.done?C.td:C.ts,fontSize:12,textDecoration:item.done?"line-through":"none",flex:1}}>{item.text}</span>
+                    <button onClick={()=>setChecklist(p=>p.filter(c=>c.id!==item.id))}
+                      style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:10}}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{display:"flex",gap:8}}>
+              <input value={newCheck} onChange={e=>setNewCheck(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCheck()}
+                placeholder="Adicionar item..." style={{flex:1,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"7px 10px",color:C.ts,fontSize:12,outline:"none"}}/>
+              <button onClick={addCheck} style={{background:C.a,border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+</button>
+            </div>
+          </div>
+
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:8,borderTop:`1px solid ${C.b1}`}}>
+            <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 20px",color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={save}    style={{background:C.a,border:"none",borderRadius:10,padding:"9px 24px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Scanner ────────────────────────────────────── */
+function ScannerInterno({ tasks }) {
+  const now = new Date();
+  const atrasadas  = tasks.filter(t=>t.status!=="interno_executado"&&dlInt(t.deadline)!==null&&dlInt(t.deadline)<0);
+  const aguardando = tasks.filter(t=>{
+    if(t.status!=="interno_avaliacao"||!t.colEnteredAt)return false;
+    return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=2;
+  });
+  const paradas = tasks.filter(t=>{
+    // Aprovado aguardando execução manual é estado esperado — não conta como parado
+    if(["interno_executado","interno_aprovado"].includes(t.status)||!t.colEnteredAt)return false;
+    return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=3;
+  });
+  const executados = tasks.filter(t=>t.status==="interno_executado").length;
+  const taxa = tasks.length>0?Math.round(executados/tasks.length*100):0;
+
+  const Row = ({task})=>{
+    const pc=PRIO_CFG[task.priority]||PRIO_CFG.media;
+    const col=INTERNO_COLS.find(c=>c.id===task.status);
+    const dl=dlInt(task.deadline);
+    const aus=TEAM.filter(u=>(task.assignees||[]).includes(u.id));
+    return(
+      <div style={{background:C.s1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <div style={{flex:1,minWidth:100}}>
+          <div style={{color:C.tx,fontSize:12,fontWeight:700,marginBottom:4}}>{task.title}</div>
+          <div style={{display:"flex",gap:5}}>
+            {col&&<span style={{background:col.color+"20",color:col.color,borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:700}}>{col.label}</span>}
+            <span style={{background:pc.bg,color:pc.color,borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:700}}>{pc.label}</span>
+          </div>
+        </div>
+        {aus.length>0&&<div style={{display:"flex",gap:2}}>{aus.map(u=><div key={u.id} title={u.name} style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff"}}>{u.av}</div>)}</div>}
+        {dl!==null&&<span style={{color:dl<0?C.rd:dl<=2?C.yw:C.td,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
+      </div>
+    );
+  };
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+        {INTERNO_COLS.map(col=>(
+          <div key={col.id} style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"12px 14px"}}>
+            <div style={{color:col.color,fontWeight:900,fontSize:22,lineHeight:1,marginBottom:4}}>{tasks.filter(t=>t.status===col.id).length}</div>
+            <div style={{color:C.td,fontSize:10,fontWeight:700}}>{col.label}</div>
+          </div>
+        ))}
+        <div style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"12px 14px"}}>
+          <div style={{color:C.gr,fontWeight:900,fontSize:22,lineHeight:1,marginBottom:4}}>{taxa}%</div>
+          <div style={{color:C.td,fontSize:10,fontWeight:700}}>Taxa conclusão</div>
+        </div>
+      </div>
+
+      {atrasadas.length>0&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:C.rd}}/><span style={{color:C.rd,fontSize:12,fontWeight:800}}>Atrasadas ({atrasadas.length})</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{atrasadas.map(t=><Row key={t.id} task={t}/>)}</div>
+        </div>
+      )}
+      {aguardando.length>0&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#f97316"}}/><span style={{color:"#f97316",fontSize:12,fontWeight:800}}>Aguardando aprovação +2 dias ({aguardando.length})</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{aguardando.map(t=><Row key={t.id} task={t}/>)}</div>
+        </div>
+      )}
+      {paradas.length>0&&(
+        <div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:C.yw}}/><span style={{color:C.yw,fontSize:12,fontWeight:800}}>Paradas +3 dias ({paradas.length})</span></div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>{paradas.map(t=><Row key={t.id} task={t}/>)}</div>
+        </div>
+      )}
+      {atrasadas.length===0&&aguardando.length===0&&paradas.length===0&&(
+        <div style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"30px",textAlign:"center"}}>
+          <div style={{fontSize:28,marginBottom:8}}>✅</div>
+          <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Tudo em dia!</div>
+          <div style={{color:C.td,fontSize:12,marginTop:4}}>Nenhuma demanda interna precisa de atenção.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Card Kanban ────────────────────────────────── */
+function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
+  const pc  = PRIO_CFG[task.priority] || PRIO_CFG.media;
+  const dl  = dlInt(task.deadline);
+  const dlC = dl===null?null:dl<0?C.rd:dl<=2?C.yw:C.td;
+  const aus = TEAM.filter(u=>(task.assignees||[]).includes(u.id));
+  const ck  = task.checklist||[];
+  return(
+    <div draggable onDragStart={e=>onDragStart(e,task.id)} onDragEnd={onDragEnd} onClick={()=>onOpen(task)}
+      style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",userSelect:"none"}}
+      onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.12)"}
+      onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+        <div style={{background:pc.bg,borderRadius:6,padding:"2px 8px"}}><span style={{color:pc.color,fontSize:10,fontWeight:700}}>{pc.label}</span></div>
+        {dl!==null&&<span style={{color:dlC,fontSize:10,fontWeight:700}}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
+      </div>
+      {task.client&&task.client!=="interno"&&(()=>{const cl=CLIENTS.find(c=>c.id===task.client);return cl?<div style={{background:cl.color+"18",border:`1px solid ${cl.color}33`,borderRadius:6,padding:"2px 8px",display:"inline-flex",alignItems:"center",marginBottom:5}}><span style={{color:cl.color,fontSize:9,fontWeight:700}}>{cl.abbr}</span></div>:null;})()}
+      <div style={{color:C.tx,fontSize:13,fontWeight:600,lineHeight:1.4,marginBottom:8}}>{task.title}</div>
+      {ck.length>0&&(
+        <div style={{marginBottom:8}}>
+          <div style={{height:3,background:C.b1,borderRadius:99,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${Math.round(ck.filter(c=>c.done).length/ck.length*100)}%`,background:C.gr,borderRadius:99}}/>
+          </div>
+          <div style={{color:C.td,fontSize:10,marginTop:2}}>{ck.filter(c=>c.done).length}/{ck.length} itens</div>
+        </div>
+      )}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex"}}>
+          {aus.slice(0,3).map(u=>(
+            <div key={u.id} title={u.name}
+              style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:-4}}>
+              {u.av}
+            </div>
+          ))}
+        </div>
+        {task.deadline&&<span style={{color:C.td,fontSize:10}}>{new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}{task.deadlineTime?" "+task.deadlineTime:""}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ── PageDemandasInternas ───────────────────────── */
+function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms, viewingAs }) {
+  // FIX BUG-AUDIT: respeita "Ver como" — usa effectiveUser pra todos os filtros e ações
+  const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs) || CURRENT_USER) : CURRENT_USER;
+  const isSocio  = effectiveUser.level === 1;
+  const myPermsRaw = perms || { ...DEFAULT_PERMS, ...(ACCESS_STORE?.[effectiveUser.id] || {}) };
+  const myPerms = withPartnerOverride(myPermsRaw, effectiveUser.id); // sócios sempre tudo true
+  const canCreate = isSocio || myPerms.criarDemandaInterna;
+  const canSeeAll = isSocio || myPerms.verTodosInternos;
+
+  const [view,     setView]     = useState("kanban");
+  const [openCard, setOpenCard] = useState(null);
+  const [dragId,   setDragId]   = useState(null);
+  const [dragOver, setDragOver] = useState(null);
+
+
+  const allInternas = (tasks||[]).filter(t=>!t.deletedAt&&INTERNO_COLS.find(c=>c.id===t.status));
+  const visible = canSeeAll ? allInternas
+    : allInternas.filter(t=>(t.assignees||[]).includes(effectiveUser.id)||t.createdBy===effectiveUser.id);
+
+  // Verifica cards parados e notifica Vinicius+Gustavo a cada hora
+  // Usa ref para sempre ler a lista mais atualizada sem precisar recriar o interval
+  const allInternasRef=useRef(allInternas);
+  useEffect(()=>{allInternasRef.current=allInternas;},[allInternas]);
+  useEffect(()=>{
+    const check=()=>{
+      if(!setNotifs||!isSocio) return;
+      const now=new Date();
+      const current=allInternasRef.current||[];
+      const paradas=current.filter(t=>{
+        if(t.status==="interno_executado"||t.status==="interno_aprovado"||!t.colEnteredAt)return false;
+        const dias=Math.floor((now-new Date(t.colEnteredAt))/86400000);
+        return dias>=2;
+      });
+      const aguardando=current.filter(t=>{
+        if(t.status!=="interno_avaliacao"||!t.colEnteredAt)return false;
+        return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=2;
+      });
+      if(paradas.length>0){
+        setNotifs(p=>{
+          const jaNotif=p.some(n=>n.type==="radar_paradas"&&n.at===now.toLocaleDateString("pt-BR"));
+          if(jaNotif)return p;
+          return [{id:"rp_"+Date.now(),read:false,type:"radar_paradas",icon:"⏳",
+            title:`${paradas.length} demanda${paradas.length>1?"s":""} interna${paradas.length>1?"s":""} parada${paradas.length>1?"s":""}`,
+            body:`Cards sem movimentação há 2+ dias: ${paradas.slice(0,3).map(t=>t.title).join(", ")}${paradas.length>3?"...":""}`,
+            user:"Sistema",at:"Agora",category:"radar",targetUsers:["vinicius","gustavo"]},...p];
+        });
+      }
+      if(aguardando.length>0){
+        setNotifs(p=>{
+          const jaNotif=p.some(n=>n.type==="radar_aprovacao"&&n.at===now.toLocaleDateString("pt-BR"));
+          if(jaNotif)return p;
+          return [{id:"ra_"+Date.now(),read:false,type:"radar_aprovacao",icon:"◫",
+            title:`${aguardando.length} demanda${aguardando.length>1?"s":""} aguardando aprovação`,
+            body:`Aguardando há 2+ dias: ${aguardando.slice(0,3).map(t=>t.title).join(", ")}${aguardando.length>3?"...":""}`,
+            user:"Sistema",at:"Agora",category:"radar",targetUsers:["vinicius","gustavo"]},...p];
+        });
+      }
+    };
+    check();
+    const iv=setInterval(check,60*60*1000); // a cada hora
+    return()=>clearInterval(iv);
+  },[isSocio,setNotifs]);
+
+  const handleDragStart = (e,id) => { setDragId(id); e.dataTransfer.effectAllowed="move"; };
+  const handleDragEnd   = () => { setDragId(null); setDragOver(null); }; // FIX: limpa estado quando drag é cancelado/abortado
+  const handleDragOver  = (e,colId) => { e.preventDefault(); setDragOver(colId); };
+  const handleDrop      = (e,colId) => {
+    e.preventDefault(); setDragOver(null);
+    if(!dragId) return;
+    const task=(tasks||[]).find(t=>t.id===dragId);
+    if(!task) return;
+    if(task.status===colId){setDragId(null);return;} // mesma coluna — ignora
+    if(colId==="interno_aprovado"&&!isSocio&&!myPerms.aprovarDemandaInterna){
+      pixelsToast.warning("Apenas aprovadores podem mover para Aprovado.");
+      setDragId(null); // FIX: reset dragId pra não travar próximos drags
+      return;
+    }
+    const now=new Date().toISOString();
+    const fromCol=INTERNO_COLS.find(c=>c.id===task.status);
+    const toCol=INTERNO_COLS.find(c=>c.id===colId);
+    const tl=[...(task.timeline||[]),{type:"status",from:task.status,to:colId,fromLabel:fromCol?.label||task.status,toLabel:toCol?.label||colId,at:now,atFmt:nowFmtInt(),user:effectiveUser.name}];
+    const updated={...task,status:colId,colEnteredAt:now,timeline:tl};
+    if(colId==="interno_avaliacao"&&setNotifs){
+      setNotifs(p=>[{id:"ni_"+Date.now(),read:false,type:"interno_avaliacao",icon:"◫",title:"Demanda interna aguarda aprovação",body:`"${task.title}" foi enviada para avaliação.`,user:effectiveUser.name,at:"Agora",category:"interno"},...p]);
+    }
+    if(setTasks) setTasks(p=>p.map(t=>t.id===dragId?updated:t));
+    if(window._sb){
+      window._sb.from("tasks").update({
+        status:colId,
+        col_entered_at:now,
+        timeline:tl,
+      }).eq("id",dragId).then(()=>{}).catch(err=>console.error("handleDrop supabase:",err));
+    }
+    setDragId(null);
+  };
+
+  const createCard = () => {
+    // Cria objeto do card mas NÃO adiciona ao state ainda — só na saveCard
+    // Isso evita cards "fantasma" no state se o usuário fechar o modal sem salvar
+    const t={
+      id:"int-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),title:"Nova Demanda Interna",status:"interno_demanda",
+      priority:"media",deadline:"",assignees:[effectiveUser.id],checklist:[],desc:"",
+      createdBy:effectiveUser.id,createdAt:new Date().toISOString(),
+      colEnteredAt:new Date().toISOString(),timeline:[],
+      assignee:effectiveUser.id,sector:"",client:"interno",tags:[],comments:[],files:[],
+      watchers:[],deletedAt:null,cover:null,ajustar:false,isAlteracao:false,
+      score:null,publishDate:"",publishTime:"09:00",bioterUnit:"",
+      _isNew:true,
+    };
+    setOpenCard(t);
+  };
+
+  const saveCard = (updated) => {
+    const isNew=!!updated._isNew;
+    const card={...updated}; delete card._isNew;
+    if(setTasks){
+      if(isNew) setTasks(p=>[...p,card]);
+      else setTasks(p=>p.map(t=>t.id===card.id?card:t));
+    }
+    if(window._sb){
+      window._sb.from("tasks").upsert({
+        id:card.id,title:card.title,status:card.status,
+        assignee:card.assignees?.[0]||"",assignees:card.assignees||[],
+        priority:card.priority,deadline:card.deadline||null,deadline_time:card.deadlineTime||null,
+        description:card.desc||"",checklist:card.checklist||[],
+        timeline:card.timeline||[],client:card.client||"interno",origem:card.origem||"interno",sector:"",
+        created_by:card.createdBy||effectiveUser.id,
+        col_entered_at:card.colEnteredAt||null,
+        tags:[],comments:[],files:[],watchers:[],cover:null,
+        ajustar:false,is_alteracao:false,score:null,
+        publish_date:null,publish_time:"09:00",bioter_unit:card.bioterUnit||"",
+      },{onConflict:"id"}).then(()=>{}).catch(err=>console.error("saveCard supabase:",err));
+    }
+    // Notifica Vinicius e Gustavo quando demanda vem de cliente
+    if(isNew&&(card.origem==="solicitacao_cliente"||card.origem==="portal")&&setNotifs){
+      const clientName=card.client&&card.client!=="interno"?CLIENTS.find(c=>c.id===card.client)?.name||card.client:"sem cliente";
+      const origemLabel=card.origem==="portal"?"🟢 Portal":"🟡 Solicitação";
+      setNotifs(p=>[{
+        id:"radar_"+Date.now(),read:false,
+        type:"radar_demanda",icon:"⚡",
+        title:`Nova demanda extra — ${clientName}`,
+        body:`${origemLabel} · "${card.title}" foi registrada por ${effectiveUser.name}`,
+        user:effectiveUser.name,at:"Agora",category:"radar",
+        targetUsers:["vinicius","gustavo"],
+      },...p]);
+    }
+    setOpenCard(null);
+  };
+
+  const deleteCard = async (id) => {
+    if(!await pixelsConfirm("Excluir esta demanda interna?",{okText:"Excluir",danger:true})) return;
+    const now=new Date().toISOString();
+    if(setTasks) setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:now}:t));
+    if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(()=>{}).catch(err=>console.error("deleteCard supabase:",err));
+    setOpenCard(null);
+  };
+
+  const alerts = visible.filter(t=>{
+    if(t.status==="interno_executado") return false;
+    const dl=dlInt(t.deadline);
+    if(dl!==null&&dl<0) return true;
+    if(t.colEnteredAt&&Math.floor((new Date()-new Date(t.colEnteredAt))/86400000)>=3) return true;
+    return false;
+  }).length;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+        <div>
+          <div style={{color:C.tx,fontWeight:800,fontSize:17}}>Demandas Internas</div>
+          <div style={{color:C.td,fontSize:12}}>{visible.length} demanda{visible.length!==1?"s":""} ativa{visible.length!==1?"s":""}</div>
+        </div>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <div style={{display:"flex",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,overflow:"hidden"}}>
+            {[["kanban","◈ Kanban"],["scanner","📡 Scanner"]].map(([v,l])=>(
+              <button key={v} onClick={()=>setView(v)}
+                style={{background:view===v?C.a:"transparent",border:"none",padding:"7px 14px",color:view===v?"#fff":C.ts,fontSize:12,fontWeight:view===v?700:400,cursor:"pointer",position:"relative"}}>
+                {l}{v==="scanner"&&alerts>0&&<span style={{position:"absolute",top:3,right:3,background:"#ef4444",borderRadius:99,width:6,height:6,display:"block"}}/>}
+              </button>
+            ))}
+          </div>
+          {canCreate&&(
+            <button onClick={createCard}
+              style={{background:C.a,border:"none",borderRadius:10,padding:"8px 18px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>
+              + Nova Demanda
+            </button>
+          )}
+        </div>
+      </div>
+
+      {view==="scanner"&&<ScannerInterno tasks={visible}/>}
+
+      {view==="kanban"&&(
+        <div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
+          {INTERNO_COLS.map(col=>{
+            const colTasks=visible.filter(t=>t.status===col.id)
+              .sort((a,b)=>({urgente:0,alta:1,media:2,baixa:3}[a.priority]??2)-({urgente:0,alta:1,media:2,baixa:3}[b.priority]??2));
+            const isTarget=dragOver===col.id;
+            return(
+              <div key={col.id}
+                onDragOver={e=>handleDragOver(e,col.id)}
+                onDrop={e=>handleDrop(e,col.id)}
+                onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
+                style={{
+                  minWidth:240,width:240,flexShrink:0,
+                  background:isTarget?"#f0f4ff":C.s1,
+                  border:`1px solid ${isTarget?col.color+"66":C.b1}`,
+                  borderTop:`3px solid ${col.color}`,
+                  borderRadius:12,padding:"8px 8px 8px",
+                  display:"flex",flexDirection:"column",gap:0,
+                  transition:"all .15s",
+                }}>
+                {/* Header colorido — mesmo padrão do Fluxo de Demandas */}
+                <div style={{padding:"8px 10px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"8px 8px 0 0",margin:"-8px -8px 10px -8px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7}}>
+                    <span style={{color:"#fff",fontWeight:700,fontSize:12,textShadow:"0 1px 2px rgba(0,0,0,0.2)"}}>{col.label}</span>
+                    <span style={{background:"rgba(0,0,0,0.18)",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
+                  </div>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,padding:"0 2px"}}>
+                  {colTasks.map(t=>(
+                    <CardKanbanInterno key={t.id} task={t} onOpen={setOpenCard} onDragStart={handleDragStart} onDragEnd={handleDragEnd}/>
+                  ))}
+                  {colTasks.length===0&&<div style={{color:C.td,fontSize:11,textAlign:"center",padding:"20px 0",opacity:.5}}>Nenhuma demanda</div>}
+                </div>
+                {col.id==="interno_demanda"&&canCreate&&(
+                  <div style={{paddingTop:6}}>
+                    <button onClick={createCard}
+                      style={{width:"100%",background:"transparent",border:`1px dashed ${C.b1}`,borderRadius:10,padding:"8px",color:C.td,fontSize:12,cursor:"pointer"}}
+                      onMouseEnter={e=>e.currentTarget.style.borderColor=C.a}
+                      onMouseLeave={e=>e.currentTarget.style.borderColor=C.b1}>
+                      + Adicionar
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {openCard&&(
+        <CardModalInterno card={openCard} onClose={()=>setOpenCard(null)}
+          onSave={saveCard} onDelete={deleteCard} isSocio={isSocio}/>
+      )}
+    </div>
+  );
+}
+
+// ======= 04_lista_view.jsx =======
+// Componente ListaView — compartilhado por 02_clientes e 04_demandas
+// Depende de: 00_globals (C, KANBAN_COLS, CLIENTS, TEAM)
+// Posição no bundle: após 02_clientes, antes de 04_demandas
+
+function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask,reorderTask,canDrag}){
+  // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
+  const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado"];
+  const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
+  const STAT_COLORS={rascunhos:C.td,demanda:C.kDemanda,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.kAgendado,publicado:C.kAgendado,pausado:C.td};
+  const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
+  // isAdminViewer = pode ver coluna Tag na lista + faixas de tag. Permissão: gerenciarEtiquetas.
+  const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
+
+  // ── COLUNAS REDIMENSIONÁVEIS (Excel-like) ──
+  // Demanda fica flex (2fr) — o resto são px e o usuário ajusta arrastando o handle do header.
+  // Larguras persistidas em localStorage. Mínimo 50px pra não sumir.
+  const DEFAULT_COL_WIDTHS={status:110,prior:80,responsavel:130,prazo:90,parado:70,dataPub:130,dataConc:130,tag:130,actions:70};
+  const [colWidths,setColWidths]=useState(function(){
+    try{
+      const raw=localStorage.getItem("pixels-lista-col-widths-v1");
+      if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return Object.assign({},DEFAULT_COL_WIDTHS,p);}
+    }catch(e){}
+    return DEFAULT_COL_WIDTHS;
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-lista-col-widths-v1",JSON.stringify(colWidths));}catch(e){}},[colWidths]);
+  const startResize=function(e,colKey){
+    e.preventDefault();e.stopPropagation();
+    const startX=e.clientX;
+    const startWidth=colWidths[colKey]||DEFAULT_COL_WIDTHS[colKey];
+    const onMove=function(ev){
+      const delta=ev.clientX-startX;
+      const newW=Math.max(50,Math.min(600,startWidth+delta));
+      setColWidths(function(prev){return Object.assign({},prev,{[colKey]:newW});});
+    };
+    const onUp=function(){
+      window.removeEventListener("mousemove",onMove);
+      window.removeEventListener("mouseup",onUp);
+      document.body.style.cursor="";document.body.style.userSelect="";
+    };
+    document.body.style.cursor="col-resize";document.body.style.userSelect="none";
+    window.addEventListener("mousemove",onMove);
+    window.addEventListener("mouseup",onUp);
+  };
+
+  // GRID e HEADERS dinâmicos com base em colWidths
+  const cw=colWidths;
+  const GRID=isAdminViewer
+    ?`2fr ${cw.status}px ${cw.prior}px ${cw.responsavel}px ${cw.prazo}px ${cw.parado}px ${cw.dataPub}px ${cw.dataConc}px ${cw.tag}px ${cw.actions}px`
+    :`2fr ${cw.status}px ${cw.prior}px ${cw.responsavel}px ${cw.prazo}px ${cw.parado}px ${cw.dataPub}px ${cw.dataConc}px ${cw.actions}px`;
+  // Cada header: { label, key } — key=null pra colunas não-redimensionáveis (Demanda flex e a última, Actions)
+  const HEADERS_BASE=[
+    {label:"Demandas",key:null,filterKey:null},
+    {label:"Status",key:"status",filterKey:"status"},
+    {label:"Prior.",key:"prior",filterKey:"prior"},
+    {label:"Responsavel",key:"responsavel",filterKey:"responsavel"},
+    {label:"Prazo",key:"prazo",filterKey:"prazo"},
+    {label:"Parado",key:"parado",filterKey:"parado"},
+    {label:"Data Publicação",key:"dataPub",filterKey:"dataPub"},
+    {label:"Data Conclusão",key:"dataConc",filterKey:"dataConc"},
+  ];
+  if(isAdminViewer)HEADERS_BASE.push({label:"Tag",key:"tag",filterKey:"tag"});
+  HEADERS_BASE.push({label:"",key:null,filterKey:null});
+  const HEADERS=HEADERS_BASE;
+  // Helper de formatação de data curta — "15/05" ou "—"
+  const fmtShort=function(v){
+    if(!v)return"—";
+    try{
+      const d=new Date(typeof v==="string"&&v.length===10?v+"T00:00:00":v);
+      if(isNaN(d.getTime()))return"—";
+      return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"});
+    }catch(e){return"—";}
+  };
+
+  // ─── COLAPSAR seções (persistido em localStorage por usuário) ──
+  const [collapsed,setCollapsed]=useState(function(){
+    try{
+      const raw=localStorage.getItem("pixels-lista-collapsed-v1");
+      if(!raw)return{};
+      const p=JSON.parse(raw);
+      return p&&typeof p==="object"?p:{};
+    }catch(e){return{};}
+  });
+  useEffect(function(){
+    try{localStorage.setItem("pixels-lista-collapsed-v1",JSON.stringify(collapsed));}catch(e){}
+  },[collapsed]);
+  const toggleCollapse=function(colId){
+    setCollapsed(function(prev){return Object.assign({},prev,{[colId]:!prev[colId]});});
+  };
+
+  // ─── FILTROS POR COLUNA (Excel-style) ──
+  // Popover aberto pra qual coluna; null = nenhum. colFilters = { prior:["alta"], responsavel:["andre"], ... }
+  const [openFilter,setOpenFilter]=useState(null);
+  const [colFilters,setColFilters]=useState(function(){
+    try{const raw=localStorage.getItem("pixels-lista-col-filters-v1");if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return p;}}catch(e){}
+    return{};
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-lista-col-filters-v1",JSON.stringify(colFilters));}catch(e){}},[colFilters]);
+  const toggleColFilter=function(col,val){
+    setColFilters(function(prev){
+      const cur=Array.isArray(prev[col])?prev[col]:[];
+      const next=cur.indexOf(val)===-1?cur.concat([val]):cur.filter(function(x){return x!==val;});
+      const out=Object.assign({},prev);
+      if(next.length===0)delete out[col]; else out[col]=next;
+      return out;
+    });
+  };
+  const clearColFilter=function(col){
+    setColFilters(function(prev){const o=Object.assign({},prev);delete o[col];return o;});
+  };
+  // Extrai valores únicos de cada coluna a partir do visible (pre-filtro)
+  const uniqueValues=useMemo(function(){
+    const out={status:new Set(),prior:new Set(),responsavel:new Set(),tag:new Set()};
+    (visible||[]).forEach(function(t){
+      if(t.status)out.status.add(t.status);
+      out.prior.add(t.priority||"");
+      const ass=Array.isArray(t.assignees)&&t.assignees.length>0?t.assignees:(t.assignee?[t.assignee]:[]);
+      ass.forEach(function(a){if(a)out.responsavel.add(a);});
+      if(t.adminTag&&t.adminTag.trim())out.tag.add(t.adminTag.trim());
+      (Array.isArray(t.tags)?t.tags:[]).forEach(function(x){const v=(x||"").trim();if(v)out.tag.add(v);});
+    });
+    return{status:Array.from(out.status),prior:Array.from(out.prior),responsavel:Array.from(out.responsavel),tag:Array.from(out.tag).sort()};
+  },[visible]);
+  // Label humanizado de cada valor
+  const labelFor=function(col,val){
+    if(col==="status"){const c=KANBAN_COLS.find(x=>x.id===val);return c?c.label:val;}
+    if(col==="prior"){return val==="alta"?"🔴 Alta":val==="media"?"🟡 Média":val==="baixa"?"🟢 Baixa":"— Sem prioridade";}
+    if(col==="responsavel"){const u=TEAM.find(x=>x.id===val);return u?u.name:val;}
+    if(col==="tag"){return"#"+val;}
+    return String(val);
+  };
+
+  // ─── FILTROS DE RANGE (data/dias) ──
+  // Predicates trabalham em "now" — cada render usa data atual fresca.
+  const daysUntil=function(dateStr){
+    if(!dateStr)return null;
+    try{
+      const d=new Date(typeof dateStr==="string"&&dateStr.length===10?dateStr+"T00:00:00":dateStr);
+      if(isNaN(d.getTime()))return null;
+      const today=new Date();today.setHours(0,0,0,0);
+      return Math.ceil((d-today)/(1000*60*60*24));
+    }catch(e){return null;}
+  };
+  const isThisMonth=function(dateStr){
+    if(!dateStr)return false;
+    try{
+      const d=new Date(typeof dateStr==="string"&&dateStr.length===10?dateStr+"T00:00:00":dateStr);
+      if(isNaN(d.getTime()))return false;
+      const now=new Date();
+      return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();
+    }catch(e){return false;}
+  };
+  const isNextMonth=function(dateStr){
+    if(!dateStr)return false;
+    try{
+      const d=new Date(typeof dateStr==="string"&&dateStr.length===10?dateStr+"T00:00:00":dateStr);
+      if(isNaN(d.getTime()))return false;
+      const now=new Date();
+      const next=new Date(now.getFullYear(),now.getMonth()+1,1);
+      return d.getMonth()===next.getMonth()&&d.getFullYear()===next.getFullYear();
+    }catch(e){return false;}
+  };
+  // Opções de filtro pra cada coluna de range — predicate `t` recebe o valor
+  // (data string pras de data, número de dias pra parado).
+  const RANGE_OPTS={
+    prazo:[
+      {v:"atrasado",l:"🔴 Atrasado",t:function(d){const x=daysUntil(d);return x!==null&&x<0;}},
+      {v:"hoje",l:"🟠 Hoje",t:function(d){return daysUntil(d)===0;}},
+      {v:"7d",l:"🟡 Próximos 7 dias",t:function(d){const x=daysUntil(d);return x!==null&&x>0&&x<=7;}},
+      {v:"30d",l:"🟢 Próximos 30 dias",t:function(d){const x=daysUntil(d);return x!==null&&x>7&&x<=30;}},
+      {v:"futuro",l:"🔵 Mais de 30 dias",t:function(d){const x=daysUntil(d);return x!==null&&x>30;}},
+      {v:"vazio",l:"⚪ Sem prazo",t:function(d){return!d;}},
+    ],
+    parado:[
+      {v:"recente",l:"🟢 0–2 dias",t:function(n){return n>=0&&n<=2;}},
+      {v:"medio",l:"🟡 3–5 dias",t:function(n){return n>=3&&n<=5;}},
+      {v:"alto",l:"🟠 6–10 dias",t:function(n){return n>=6&&n<=10;}},
+      {v:"critico",l:"🔴 11+ dias",t:function(n){return n>=11;}},
+    ],
+    dataPub:[
+      {v:"hoje",l:"Hoje",t:function(d){return daysUntil(d)===0;}},
+      {v:"semana",l:"Esta semana",t:function(d){const x=daysUntil(d);return x!==null&&x>=0&&x<=7;}},
+      {v:"mes",l:"Este mês",t:function(d){return isThisMonth(d);}},
+      {v:"prox",l:"Próximo mês",t:function(d){return isNextMonth(d);}},
+      {v:"passado",l:"Já publicado (passado)",t:function(d){const x=daysUntil(d);return x!==null&&x<0;}},
+      {v:"vazio",l:"Sem data",t:function(d){return!d;}},
+    ],
+    dataConc:[
+      {v:"atrasado",l:"🔴 Atrasado",t:function(d){const x=daysUntil(d);return x!==null&&x<0;}},
+      {v:"hoje",l:"🟠 Hoje",t:function(d){return daysUntil(d)===0;}},
+      {v:"semana",l:"🟡 Esta semana",t:function(d){const x=daysUntil(d);return x!==null&&x>0&&x<=7;}},
+      {v:"mes",l:"🟢 Este mês",t:function(d){return isThisMonth(d);}},
+      {v:"prox",l:"🔵 Próximo mês",t:function(d){return isNextMonth(d);}},
+      {v:"vazio",l:"⚪ Sem prazo",t:function(d){return!d;}},
+    ],
+  };
+  // Retorna as opções pra um filterKey — range ou enum
+  const getFilterOptions=function(fk){
+    if(RANGE_OPTS[fk])return RANGE_OPTS[fk].map(function(o){return{v:o.v,l:o.l};});
+    return(uniqueValues[fk]||[]).map(function(v){return{v:v,l:labelFor(fk,v)};});
+  };
+
+  // ─── ORDENAÇÃO POR COLUNA (asc/desc) — só pras colunas de data ──
+  const [colSort,setColSort]=useState(function(){
+    try{const raw=localStorage.getItem("pixels-lista-col-sort-v1");if(raw){const p=JSON.parse(raw);if(p&&typeof p==="object")return p;}}catch(e){}
+    return{key:null,dir:null};
+  });
+  useEffect(function(){try{localStorage.setItem("pixels-lista-col-sort-v1",JSON.stringify(colSort));}catch(e){}},[colSort]);
+  const applySort=function(fk,dir){
+    setColSort(function(prev){
+      // Click novamente na mesma opção = limpar
+      if(prev.key===fk&&prev.dir===dir)return{key:null,dir:null};
+      return{key:fk,dir:dir};
+    });
+  };
+  const isSortableCol=function(fk){return fk==="prazo"||fk==="dataPub"||fk==="dataConc";};
+  const sortTasks=function(arr){
+    if(!colSort.key||!colSort.dir)return arr;
+    const k=colSort.key;
+    const getVal=function(t){
+      if(k==="prazo"||k==="dataConc")return t.deadline;
+      if(k==="dataPub")return t.publishDate;
+      return null;
+    };
+    const dir=colSort.dir==="asc"?1:-1;
+    return[...arr].sort(function(a,b){
+      const va=getVal(a),vb=getVal(b);
+      // Vazios sempre no fim, independente da direção
+      if(!va&&!vb)return 0;
+      if(!va)return 1;
+      if(!vb)return -1;
+      const da=new Date(va.length===10?va+"T00:00:00":va);
+      const db=new Date(vb.length===10?vb+"T00:00:00":vb);
+      if(isNaN(da.getTime()))return 1;
+      if(isNaN(db.getTime()))return -1;
+      return(da-db)*dir;
+    });
+  };
+  // Aplica filtros por coluna ao visible
+  const filteredVisible=useMemo(function(){
+    const keys=Object.keys(colFilters);
+    if(keys.length===0)return visible;
+    return(visible||[]).filter(function(t){
+      for(let i=0;i<keys.length;i++){
+        const k=keys[i];const sel=colFilters[k];
+        if(!Array.isArray(sel)||sel.length===0)continue;
+        // Range filters (data/dias)
+        if(RANGE_OPTS[k]){
+          // Determina o valor a testar segundo a coluna
+          let testVal;
+          if(k==="prazo"||k==="dataConc")testVal=t.deadline;
+          else if(k==="dataPub")testVal=t.publishDate;
+          else if(k==="parado")testVal=t.colEnteredAt?Math.floor((Date.now()-new Date(t.colEnteredAt).getTime())/86400000):0;
+          const matched=sel.some(function(v){const opt=RANGE_OPTS[k].find(function(o){return o.v===v;});return opt&&opt.t(testVal);});
+          if(!matched)return false;
+          continue;
+        }
+        // Enum filters (string-match)
+        if(k==="status"){if(sel.indexOf(t.status)===-1)return false;}
+        else if(k==="prior"){if(sel.indexOf(t.priority||"")===-1)return false;}
+        else if(k==="responsavel"){
+          const ass=Array.isArray(t.assignees)&&t.assignees.length>0?t.assignees:(t.assignee?[t.assignee]:[]);
+          if(!sel.some(function(u){return ass.indexOf(u)!==-1;}))return false;
+        }
+        else if(k==="tag"){
+          const at=(t.adminTag||"").trim();
+          const arr=Array.isArray(t.tags)?t.tags.map(x=>(x||"").trim()).filter(Boolean):[];
+          const all=at?[at].concat(arr):arr;
+          if(!sel.some(function(v){return all.indexOf(v)!==-1;}))return false;
+        }
+      }
+      return true;
+    });
+  },[visible,colFilters]);
+
+  // ─── DRAG & DROP — arrastar linha → soltar em outra coluna OU reordenar dentro da mesma ──
+  const [dragId,setDragId]=useState(null);
+  const [dragOverCol,setDragOverCol]=useState(null);
+  const [dragOverRow,setDragOverRow]=useState(null); // {id, before}
+  const handleDragStart=(id)=>{if(canDrag)setDragId(id);};
+  const handleDragEnd=()=>{setDragId(null);setDragOverCol(null);setDragOverRow(null);};
+  const handleDropOnCol=(colId)=>{
+    if(!dragId||!moveTask){setDragId(null);setDragOverCol(null);setDragOverRow(null);return;}
+    moveTask(dragId,colId);
+    setDragId(null);setDragOverCol(null);setDragOverRow(null);
+    if(collapsed[colId])setCollapsed(function(prev){return Object.assign({},prev,{[colId]:false});});
+  };
+
+  return(<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:14,overflow:"hidden"}}>
+    {/* Header com handles de resize + filtros estilo Excel */}
+    <div style={{display:"grid",gridTemplateColumns:GRID,background:C.s1,borderBottom:`1px solid ${C.b1}`,position:"relative",zIndex:10}}>
+      {HEADERS.map(function(h,i){
+        const fk=h.filterKey;
+        const hasActiveFilter=fk&&Array.isArray(colFilters[fk])&&colFilters[fk].length>0;
+        const isOpen=openFilter===fk;
+        return <div key={i} style={{position:"relative",padding:"9px 12px",color:hasActiveFilter?C.a:C.td,fontSize:10,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",borderRight:i<HEADERS.length-1?`1px solid ${C.b1}`:"none",background:hasActiveFilter?C.a+"10":"transparent"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,overflow:"hidden"}}>
+            <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{h.label}</span>
+            {/* Indicador de ordenação ativa */}
+            {fk&&colSort.key===fk&&colSort.dir&&<span title={colSort.dir==="asc"?"Ordenado: crescente":"Ordenado: decrescente"} style={{color:C.a,fontSize:10,fontWeight:700,flexShrink:0}}>{colSort.dir==="asc"?"↑":"↓"}</span>}
+            {fk&&<button
+              onClick={function(e){e.stopPropagation();setOpenFilter(isOpen?null:fk);}}
+              title="Filtrar / Ordenar"
+              style={{background:hasActiveFilter?C.a+"22":"transparent",border:"none",color:hasActiveFilter?C.a:C.td,cursor:"pointer",fontSize:9,padding:"2px 4px",borderRadius:3,lineHeight:1,flexShrink:0}}
+              onMouseEnter={function(e){e.currentTarget.style.background=hasActiveFilter?C.a+"33":C.b1;}}
+              onMouseLeave={function(e){e.currentTarget.style.background=hasActiveFilter?C.a+"22":"transparent";}}>
+              {hasActiveFilter?"▼ "+colFilters[fk].length:"▾"}
+            </button>}
+          </div>
+          {/* Popover do filtro */}
+          {isOpen&&fk&&<>
+            <div style={{position:"fixed",inset:0,zIndex:99}} onClick={function(){setOpenFilter(null);}}/>
+            <div style={{position:"absolute",top:"100%",left:0,marginTop:2,background:C.card,border:"1px solid "+C.b1,borderRadius:8,zIndex:100,minWidth:220,maxWidth:280,boxShadow:"0 8px 24px rgba(0,0,0,0.15)",overflow:"hidden",textTransform:"none",letterSpacing:0,fontWeight:400}}>
+              <div style={{padding:"8px 12px",borderBottom:"1px solid "+C.b1,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{color:C.tx,fontSize:11,fontWeight:600}}>Filtrar por {h.label}</span>
+                {hasActiveFilter&&<button onClick={function(){clearColFilter(fk);}} style={{background:"none",border:"none",color:C.rd,fontSize:10,fontWeight:600,cursor:"pointer",padding:"2px 6px"}}>limpar</button>}
+              </div>
+              {/* Seção de ordenação — só pras colunas de data */}
+              {isSortableCol(fk)&&(function(){
+                const ascActive=colSort.key===fk&&colSort.dir==="asc";
+                const descActive=colSort.key===fk&&colSort.dir==="desc";
+                const labelAsc=fk==="prazo"?"Prazo mais curto":fk==="dataPub"?"Data de publicação mais perto":"Conclusão mais perto";
+                const labelDesc=fk==="prazo"?"Prazo mais longo":fk==="dataPub"?"Data de publicação mais longe":"Conclusão mais longe";
+                return <div style={{borderBottom:"1px solid "+C.b1,padding:"4px 0"}}>
+                  <div style={{padding:"3px 12px",color:C.td,fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Ordenar</div>
+                  <button onClick={function(){applySort(fk,"asc");}}
+                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"6px 12px",background:ascActive?C.ag:"transparent",border:"none",color:ascActive?C.a:C.tx,fontSize:12,fontWeight:ascActive?600:400,cursor:"pointer",textAlign:"left"}}
+                    onMouseEnter={function(e){if(!ascActive)e.currentTarget.style.background="#f8fafc";}}
+                    onMouseLeave={function(e){if(!ascActive)e.currentTarget.style.background="transparent";}}>
+                    <span style={{fontSize:11,width:14,textAlign:"center"}}>↑</span>
+                    <span style={{flex:1}}>{labelAsc}</span>
+                    {ascActive&&<span style={{color:C.a,fontSize:10}}>✓</span>}
+                  </button>
+                  <button onClick={function(){applySort(fk,"desc");}}
+                    style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"6px 12px",background:descActive?C.ag:"transparent",border:"none",color:descActive?C.a:C.tx,fontSize:12,fontWeight:descActive?600:400,cursor:"pointer",textAlign:"left"}}
+                    onMouseEnter={function(e){if(!descActive)e.currentTarget.style.background="#f8fafc";}}
+                    onMouseLeave={function(e){if(!descActive)e.currentTarget.style.background="transparent";}}>
+                    <span style={{fontSize:11,width:14,textAlign:"center"}}>↓</span>
+                    <span style={{flex:1}}>{labelDesc}</span>
+                    {descActive&&<span style={{color:C.a,fontSize:10}}>✓</span>}
+                  </button>
+                </div>;
+              })()}
+              <div style={{maxHeight:240,overflowY:"auto"}}>
+                {(function(){
+                  const opts=getFilterOptions(fk);
+                  if(opts.length===0)return<div style={{padding:"12px",color:C.td,fontSize:11,fontStyle:"italic",textAlign:"center"}}>Sem valores pra filtrar</div>;
+                  return opts.map(function(opt){
+                    const val=opt.v;
+                    const checked=Array.isArray(colFilters[fk])&&colFilters[fk].indexOf(val)!==-1;
+                    return <button key={String(val)} onClick={function(){toggleColFilter(fk,val);}}
+                      style={{display:"flex",alignItems:"center",gap:8,width:"100%",padding:"7px 12px",background:checked?C.ag:"transparent",border:"none",color:C.tx,fontSize:12,fontWeight:checked?600:400,cursor:"pointer",textAlign:"left"}}
+                      onMouseEnter={function(e){if(!checked)e.currentTarget.style.background="#f8fafc";}}
+                      onMouseLeave={function(e){if(!checked)e.currentTarget.style.background="transparent";}}>
+                      <span style={{width:14,height:14,borderRadius:3,border:"1.5px solid "+(checked?C.a:"#cbd5e1"),background:checked?C.a:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        {checked&&<span style={{color:"#fff",fontSize:9,fontWeight:900,lineHeight:1}}>✓</span>}
+                      </span>
+                      <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{opt.l}</span>
+                    </button>;
+                  });
+                })()}
+              </div>
+            </div>
+          </>}
+          {/* Handle de redimensionamento */}
+          {h.key&&<div
+            onMouseDown={function(e){startResize(e,h.key);}}
+            title="Arraste pra redimensionar"
+            style={{position:"absolute",top:0,bottom:0,right:-3,width:7,cursor:"col-resize",zIndex:5,background:"transparent"}}
+            onMouseEnter={function(e){e.currentTarget.style.background=C.a+"55";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}
+          />}
+        </div>;
+      })}
+    </div>
+
+    {orderedCols.map(col=>{
+      // Coluna "agendado" (Publicações) agrega status="agendado" + status="publicado"
+      const colTasks=sortTasks(filteredVisible.filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id));
+      // Mantém grupo visível mesmo sem cards SE há drag em andamento (vira drop zone)
+      if(colTasks.length===0&&!dragId)return null;
+      const isDropTarget=dragId&&dragOverCol===col.id;
+      const isCollapsed=!!collapsed[col.id];
+      // Grupo INTEIRO (header + linhas) é drop target — drop em qualquer linha vai pra essa coluna.
+      // Sempre chama preventDefault no dragOver (sem condicionar a dragId) pra o browser não marcar
+      // a área como "não permite drop" — isso era o bug que travava o D&D.
+      return(<div key={col.id}
+        onDragOver={canDrag?e=>{e.preventDefault();if(dragId)setDragOverCol(col.id);}:undefined}
+        onDragLeave={canDrag?e=>{
+          // Só limpa se realmente saiu da área do grupo (não só transitou entre filhos)
+          const rt=e.relatedTarget;
+          if(!rt||!e.currentTarget.contains(rt))setDragOverCol(prev=>prev===col.id?null:prev);
+        }:undefined}
+        onDrop={canDrag?e=>{e.preventDefault();handleDropOnCol(col.id);}:undefined}
+        style={{outline:isDropTarget?`2px solid ${col.color}`:"none",outlineOffset:-2,borderRadius:isDropTarget?4:0,transition:"outline .1s"}}>
+        {/* Group header — fundo sólido na cor da coluna pra bater o olho */}
+        <div
+          onClick={()=>toggleCollapse(col.id)}
+          title={isCollapsed?"Clique pra expandir":"Clique pra minimizar"}
+          style={{padding:"8px 14px",background:col.color,borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8,cursor:"pointer",transition:"filter .12s",userSelect:"none"}}
+          onMouseEnter={e=>{e.currentTarget.style.filter="brightness(1.08)";}}
+          onMouseLeave={e=>{e.currentTarget.style.filter="brightness(1)";}}>
+          <span style={{color:"#fff",fontSize:11,fontWeight:700,width:12,display:"inline-flex",justifyContent:"center",transition:"transform .15s",transform:isCollapsed?"rotate(-90deg)":"none"}}>▾</span>
+          <span style={{color:"#fff",fontWeight:700,fontSize:11,textTransform:"uppercase",letterSpacing:.6}}>{col.label}</span>
+          <span style={{background:"rgba(255,255,255,0.28)",color:"#fff",borderRadius:99,padding:"0 8px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
+          {isDropTarget&&<span style={{color:"#fff",fontSize:10,fontWeight:700,marginLeft:"auto"}}>↓ Soltar aqui</span>}
+          {!isDropTarget&&isCollapsed&&<span style={{color:"rgba(255,255,255,0.85)",fontSize:9,fontWeight:600,marginLeft:"auto"}}>minimizado</span>}
+        </div>
+
+        {/* Drop zone vazio quando coluna sem cards mas com drag ativo */}
+        {!isCollapsed&&colTasks.length===0&&dragId&&<div
+          style={{padding:"20px 14px",textAlign:"center",color:C.td,fontSize:11,fontStyle:"italic",background:isDropTarget?col.color+"10":"transparent"}}>
+          Solte aqui pra mover pra {col.label}
+        </div>}
+
+        {!isCollapsed&&colTasks.map((t,i)=>{
+          const cl=CLIENTS.find(c=>c.id===t.client);
+          const u=TEAM.find(u=>u.id===t.assignee);
+          const days=t.deadline?Math.ceil((new Date(t.deadline)-new Date())/(1000*60*60*24)):null;
+          const late=days!==null&&days<0&&t.status!=="aprovado";
+          const stopped=t.colEnteredAt?Math.floor((new Date()-new Date(t.colEnteredAt))/86400000):0;
+          const isBeingDragged=dragId===t.id;
+          const isRowDragOver=dragOverRow&&dragOverRow.id===t.id;
+          return(<div key={t.id}
+            draggable={!!canDrag}
+            onDragStart={()=>handleDragStart(t.id)}
+            onDragEnd={handleDragEnd}
+            onDragOver={canDrag?function(e){
+              e.preventDefault();
+              e.stopPropagation();
+              if(!dragId||String(dragId)===String(t.id))return;
+              // Detecta se cursor está na metade superior ou inferior
+              const r=e.currentTarget.getBoundingClientRect();
+              const before=(e.clientY-r.top)<r.height/2;
+              setDragOverRow({id:t.id,before:before});
+            }:undefined}
+            onDrop={canDrag?function(e){
+              e.preventDefault();
+              e.stopPropagation();
+              if(!dragId){setDragOverRow(null);return;}
+              const draggedTask=visible.find(x=>String(x.id)===String(dragId));
+              if(!draggedTask){setDragId(null);setDragOverRow(null);return;}
+              if(String(draggedTask.id)===String(t.id)){setDragId(null);setDragOverRow(null);return;}
+              // Mesma coluna: reorder; outra coluna: moveTask
+              if(draggedTask.status===t.status&&reorderTask){
+                reorderTask(dragId,t.id,dragOverRow?.before??true);
+              }else if(moveTask){
+                moveTask(dragId,t.status);
+              }
+              setDragId(null);setDragOverRow(null);setDragOverCol(null);
+            }:undefined}
+            onClick={()=>{if(!isBeingDragged)setOpenCard(t);}}
+            style={{display:"grid",gridTemplateColumns:GRID,
+              borderBottom:i<colTasks.length-1?`1px solid ${C.b1}22`:"none",
+              borderTop:isRowDragOver&&dragOverRow.before?`2px solid ${col.color}`:"none",
+              cursor:canDrag?"grab":"pointer",transition:"background .1s, opacity .15s",
+              opacity:isBeingDragged?.4:1,
+              background:isBeingDragged?C.s1:"transparent",
+              boxShadow:isRowDragOver&&!dragOverRow.before?`inset 0 -2px 0 ${col.color}`:"none"}}
+            onMouseEnter={e=>{if(!isBeingDragged)e.currentTarget.style.background=C.s1;}}
+            onMouseLeave={e=>{if(!isBeingDragged)e.currentTarget.style.background="transparent";}}>
+
+            {/* Title — com handle de drag visual à esquerda */}
+            <div style={{padding:"10px 14px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+              {canDrag&&<span title="Arraste pra mover" style={{color:C.td,fontSize:10,letterSpacing:-1,cursor:"grab",userSelect:"none",flexShrink:0,opacity:.5}}>⋮⋮</span>}
+              {cl&&<div style={{width:3,height:28,borderRadius:99,background:cl.color,flexShrink:0}}/>}
+              <div style={{minWidth:0}}>
+                <div style={{color:late?C.rd:C.tx,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</div>
+                <div style={{color:C.td,fontSize:10,marginTop:1}}>{cl?.name||"—"}</div>
+              </div>
+            </div>
+
+            {/* Status */}
+            <div style={{padding:"10px 14px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
+              <span style={{background:(STAT_COLORS[t.status]||C.td)+"18",color:STAT_COLORS[t.status]||C.td,borderRadius:6,padding:"3px 8px",fontSize:10,fontWeight:700}}>{col.label}</span>
+            </div>
+
+            {/* Priority */}
+            <div style={{padding:"10px 14px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
+              <span style={{color:PRIO_COLORS[t.priority]||C.td,fontWeight:700,fontSize:11}}>{t.priority||"—"}</span>
+            </div>
+
+            {/* Assignee */}
+            <div style={{padding:"10px 14px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center",gap:7}}>
+              {u&&<UserAvatar user={u} size={22} border={false}/>}
+              <span style={{color:C.tx,fontSize:11}}>{u?.name||"—"}</span>
+            </div>
+
+            {/* Deadline */}
+            <div style={{padding:"10px 14px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
+              <span style={{color:late?C.rd:days===0?"#f97316":days!==null&&days<=2?C.yw:C.td,fontWeight:late?700:400,fontSize:11}}>
+                {days===null?"—":late?Math.abs(days)+"d atras":days===0?"Hoje":days+"d"}
+              </span>
+            </div>
+
+            {/* Stopped */}
+            <div style={{padding:"10px 14px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
+              <span style={{color:stopped>5?C.rd:stopped>2?C.yw:C.td,fontSize:11}}>{stopped}d</span>
+            </div>
+
+            {/* Data de publicação */}
+            <div style={{padding:"10px 12px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
+              <span style={{color:t.publishDate?C.tx:C.td,fontSize:11}}>{fmtShort(t.publishDate)}</span>
+            </div>
+
+            {/* Data de conclusão — atrelada ao prazo (deadline) */}
+            <div style={{padding:"10px 12px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center"}}>
+              <span style={{color:!t.deadline?C.td:late?C.rd:days===0?"#f97316":t.completedAt?C.gr:C.tx,fontSize:11,fontWeight:late||t.completedAt?600:400}}>{fmtShort(t.deadline)}</span>
+            </div>
+
+            {/* Tag (etiqueta interna + tags) — só admin vê esta coluna */}
+            {isAdminViewer&&<div style={{padding:"8px 10px",borderRight:`1px solid ${C.b1}22`,display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",minWidth:0}}>
+              {(function(){
+                const at=(t.adminTag||"").trim();
+                const arr=Array.isArray(t.tags)?t.tags.map(x=>(x||"").trim()).filter(Boolean):[];
+                if(!at&&arr.length===0)return <span style={{color:C.td,fontSize:11}}>—</span>;
+                const chips=[];
+                if(at)chips.push(<span key="at" title={"Etiqueta: "+at} style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:600,whiteSpace:"nowrap",maxWidth:80,overflow:"hidden",textOverflow:"ellipsis",display:"inline-block",lineHeight:"14px"}}>{at}</span>);
+                arr.slice(0,2).forEach(function(tag){
+                  const tc=(typeof tagColor==="function")?tagColor(tag):{fg:"#64748b"};
+                  chips.push(<span key={"t-"+tag} title={"#"+tag} style={{background:tc.fg+"18",color:tc.fg,border:"1px solid "+tc.fg+"33",borderRadius:4,padding:"1px 5px",fontSize:9,fontWeight:600,whiteSpace:"nowrap",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",display:"inline-block",lineHeight:"14px"}}>#{tag}</span>);
+                });
+                if(arr.length>2)chips.push(<span key="more" title={arr.slice(2).map(x=>"#"+x).join(", ")} style={{color:C.td,fontSize:9,fontWeight:600}}>+{arr.length-2}</span>);
+                return chips;
+              })()}
+            </div>}
+
+            {/* Actions — Chat + Excluir */}
+            <div style={{padding:"10px 4px",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+              <button onClick={e=>{
+                e.stopPropagation();
+                // Abre o canal do cliente desse cartão; sem cliente, vai pro #geral
+                const channelId=t.client?("cliente_"+t.client):"geral";
+                window.dispatchEvent(new CustomEvent("pixels:goto-chat",{detail:{channelId:channelId}}));
+              }}
+                title={t.client?("Conversar no canal do cliente"):"Abrir chat geral"}
+                style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"2px 4px",lineHeight:1,borderRadius:4,transition:"all .12s"}}
+                onMouseEnter={e=>{e.currentTarget.style.color=C.a;e.currentTarget.style.background=C.ag;}}
+                onMouseLeave={e=>{e.currentTarget.style.color=C.td;e.currentTarget.style.background="transparent";}}>💬</button>
+              {canDelete&&<button onClick={e=>{e.stopPropagation();handleDelete(t.id);}}
+                style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,padding:"2px 4px",lineHeight:1}}
+                onMouseEnter={e=>e.currentTarget.style.color=C.rd}
+                onMouseLeave={e=>e.currentTarget.style.color=C.td}>×</button>}
+            </div>
+          </div>);
+        })}
+      </div>);
+    })}
+  </div>);
 }
 
 // ======= 04_demandas_internas.jsx =======
