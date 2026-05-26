@@ -2145,6 +2145,11 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
   if(n==="settings")  return <svg {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>;
   if(n==="file-text") return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
+  if(n==="lock")      return <svg {...p}><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>;
+  if(n==="paw")       return <svg {...p}><circle cx="6" cy="11" r="2"/><circle cx="18" cy="11" r="2"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="6" r="2"/><path d="M8 18c0-2.5 2-4.5 4-4.5s4 2 4 4.5c0 1.5-1 2.5-2.5 2.5h-3C9 20.5 8 19.5 8 18z"/></svg>;
+  if(n==="gamepad")   return <svg {...p}><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><path d="M17.32 5H6.68a4 4 0 00-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 003 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 019.828 16h4.344a2 2 0 011.414.586L17 18c.5.5 1 1 2 1a3 3 0 003-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0017.32 5z"/></svg>;
+  if(n==="heart")     return <svg {...p}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>;
+  if(n==="info")      return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
   return null;
 }
 
@@ -18238,25 +18243,25 @@ function CollabProfileModal({user,onClose,livePerms,setLivePerms,tasks:propTasks
 
 /* ─── Constantes estáticas de CollabProfilePage ─── */
 const COLLAB_TABS=[
-  {id:"dados",icon:"📋",label:"Dados"},
-  {id:"pessoal",icon:"🏠",label:"Pessoal"},
-  {id:"lazer",icon:"🎮",label:"Lazer"},
-  {id:"pets",icon:"🐾",label:"Pets"},
-  {id:"curiosidades",icon:"✨",label:"Curiosidades"},
-  {id:"bio",icon:"📝",label:"Bio"},
-  {id:"seguranca",icon:"🔐",label:"Segurança",selfOnly:true},
+  {id:"dados",       ico:"user",     label:"Dados"},
+  {id:"pessoal",     ico:"home",     label:"Pessoal"},
+  {id:"lazer",       ico:"gamepad",  label:"Lazer"},
+  {id:"pets",        ico:"paw",      label:"Pets"},
+  {id:"curiosidades",ico:"sparkles", label:"Curiosidades"},
+  {id:"bio",         ico:"file-text",label:"Bio"},
+  {id:"seguranca",   ico:"lock",     label:"Segurança",selfOnly:true},
 ];
 
 /* ─── LBL — fora do componente para evitar remount a cada render ─── */
 function LBL({t}){
-  return <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:5}}>{t}</div>;
+  return <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6,fontFamily:"\'Inter\',system-ui,sans-serif"}}>{t}</div>;
 }
 
 /* ─── COLLAB PROFILE EDIT MODAL ─────────────── */
 function CollabProfilePage({user,profile,onSave,onClose}){
   const [activeTab,setActiveTab]=useState("dados");
   const p=profile||{};
-  const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  const inp={background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",color:"#0f172a",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"\'Inter\',system-ui,sans-serif",transition:"all .15s"};
   const fileRef=useRef(null);
 
   const [nome,setNome]=useState(p.nome||user.name);
@@ -18395,7 +18400,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
       // 2) Atualiza a senha
       const{error:updErr}=await sb.auth.updateUser({password:newPw});
       if(updErr)throw new Error(updErr.message||"Falha ao atualizar a senha.");
-      setPwMsg({type:"success",text:"✓ Senha alterada com sucesso! Use a nova senha no próximo login."});
+      setPwMsg({type:"success",text:"Senha alterada com sucesso! Use a nova senha no próximo login."});
       setCurrentPw("");setNewPw("");setConfirmPw("");
     }catch(e){
       setPwMsg({type:"error",text:e.message||"Erro ao trocar senha."});
@@ -18405,35 +18410,54 @@ function CollabProfilePage({user,profile,onSave,onClose}){
   };
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:22,width:"100%",maxWidth:700,marginTop:8,border:"2px solid "+user.color,boxShadow:"0 0 60px "+user.color+"30"}}>
+    <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.65)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto",fontFamily:"'Inter',system-ui,sans-serif"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:760,marginTop:8,border:"1px solid #e2e8f0",boxShadow:"0 30px 80px rgba(15,15,25,0.35)",overflow:"hidden"}}>
 
-        <div style={{background:"linear-gradient(135deg,"+user.color+","+user.color+"88)",padding:"20px 24px",borderRadius:"20px 20px 0 0",display:"flex",alignItems:"center",gap:16,position:"sticky",top:0,zIndex:5}}>
-          <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{width:64,height:64,borderRadius:18,background:"rgba(255,255,255,0.2)",border:"2px solid rgba(255,255,255,0.5)",overflow:"hidden",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
-            {uploadingPhoto?<span style={{color:"#fff",fontSize:20}}>⏳</span>:photo?(<img src={photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>):(<span style={{color:"#fff",fontWeight:900,fontSize:26}}>{user.av}</span>)}
-            <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.4)",padding:"3px",textAlign:"center",fontSize:9,color:"#fff"}}>📷</div>
-          </div>
-          <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} style={{display:"none"}}/>
-          <div style={{flex:1}}>
-            <div style={{color:"#fff",fontWeight:900,fontSize:20}}>{nome}</div>
-            <div style={{color:"rgba(255,255,255,0.8)",fontSize:12,marginTop:2}}>{funcao}</div>
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <button onClick={save} style={{background:"rgba(255,255,255,0.2)",border:"2px solid rgba(255,255,255,0.4)",borderRadius:10,padding:"8px 18px",color:"#fff",fontWeight:800,cursor:"pointer",fontSize:12,whiteSpace:"nowrap"}}>
-              Salvar
-            </button>
-            <button onClick={onClose} style={{background:"rgba(0,0,0,0.3)",border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",cursor:"pointer",fontWeight:700,fontSize:16}}>✕</button>
+        {/* ── Header premium ── */}
+        <div style={{background:"linear-gradient(135deg,"+user.color+","+user.color+"cc 60%,"+user.color+"99)",padding:"22px 26px",position:"relative",overflow:"hidden"}}>
+          {/* Decoração sutil */}
+          <div style={{position:"absolute",top:-30,right:-30,width:160,height:160,borderRadius:"50%",background:"rgba(255,255,255,0.08)"}}/>
+          <div style={{position:"absolute",bottom:-60,left:120,width:140,height:140,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/>
+          <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+            <div onClick={()=>fileRef.current&&fileRef.current.click()} style={{width:68,height:68,borderRadius:18,background:"rgba(255,255,255,0.16)",border:"2px solid rgba(255,255,255,0.55)",overflow:"hidden",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative",transition:"all .15s",backdropFilter:"blur(6px)"}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.04)";e.currentTarget.style.borderColor="#fff";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.borderColor="rgba(255,255,255,0.55)";}}>
+              {uploadingPhoto?<Ico n="refresh" size={22} color="#fff"/>:photo?(<img src={photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>):(<span style={{color:"#fff",fontWeight:900,fontSize:26,letterSpacing:-.5}}>{user.av}</span>)}
+              <div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.45)",padding:"3px 0",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <Ico n="camera" size={11} color="#fff"/>
+              </div>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhoto} style={{display:"none"}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#fff",fontWeight:800,fontSize:22,letterSpacing:-.5,overflow:"hidden",textOverflow:"ellipsis"}}>{nome||"Sem nome"}</div>
+              <div style={{color:"rgba(255,255,255,0.85)",fontSize:12.5,marginTop:3,fontWeight:500}}>{funcao||"—"}</div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <button onClick={save} style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.45)",borderRadius:10,padding:"9px 20px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12.5,whiteSpace:"nowrap",fontFamily:"inherit",backdropFilter:"blur(6px)",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.28)"}
+                onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.18)"}>
+                <Ico n="check" size={13} color="#fff"/> Salvar
+              </button>
+              <button onClick={onClose} style={{background:"rgba(0,0,0,0.25)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,padding:"9px 12px",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",fontFamily:"inherit",transition:"all .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(0,0,0,0.4)"}
+                onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.25)"}>
+                <Ico n="x" size={14} color="#fff"/>
+              </button>
+            </div>
           </div>
         </div>
 
-        <div style={{display:"flex",gap:2,background:C.s1,padding:4,flexWrap:"wrap"}}>
-          {COLLAB_TABS.filter(t=>!t.selfOnly||user.id===CURRENT_USER.id).map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)}
-              style={{flex:1,minWidth:80,background:activeTab===t.id?"linear-gradient(135deg,"+user.color+","+user.color+"cc)":"transparent",border:"none",padding:"10px 6px",color:activeTab===t.id?"#fff":C.ts,fontWeight:activeTab===t.id?800:500,fontSize:11,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,borderRadius:8}}>
-              <span style={{fontSize:14}}>{t.icon}</span>
+        {/* ── Tabs ── */}
+        <div style={{display:"flex",gap:3,background:"#fafafa",padding:6,borderBottom:"1px solid #f1f5f9",overflowX:"auto"}}>
+          {COLLAB_TABS.filter(t=>!t.selfOnly||user.id===CURRENT_USER.id).map(t=>{
+            const active=activeTab===t.id;
+            return <button key={t.id} onClick={()=>setActiveTab(t.id)}
+              style={{flex:"1 1 0",minWidth:84,background:active?"#fff":"transparent",border:active?"1px solid #e2e8f0":"1px solid transparent",padding:"9px 6px",color:active?user.color:"#64748b",fontWeight:active?700:600,fontSize:11,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4,borderRadius:10,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s",position:"relative",boxShadow:active?"0 2px 8px rgba(15,23,42,0.06)":"none"}}>
+              <Ico n={t.ico} size={15} color={active?user.color:"#64748b"}/>
               <span>{t.label}</span>
-            </button>
-          ))}
+              {active&&<div style={{position:"absolute",bottom:-7,left:"30%",right:"30%",height:2,background:user.color,borderRadius:2}}/>}
+            </button>;
+          })}
         </div>
 
         <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
@@ -18544,7 +18568,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
           {/* ═══ ABA SEGURANÇA — trocar senha (só no próprio perfil) ═══ */}
           {activeTab==="seguranca"&&user.id===CURRENT_USER.id&&(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:500}}>
             <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:12,padding:"14px 16px",display:"flex",gap:12,alignItems:"flex-start"}}>
-              <div style={{width:36,height:36,borderRadius:10,background:"#2563eb",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>🔐</div>
+              <div style={{width:38,height:38,borderRadius:11,background:"#2563eb",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="lock" size={17} color="#fff"/></div>
               <div>
                 <div style={{color:"#1e40af",fontWeight:800,fontSize:13,marginBottom:3}}>Trocar sua senha</div>
                 <div style={{color:"#1e40af",fontSize:11,lineHeight:1.5}}>
@@ -18575,7 +18599,7 @@ function CollabProfilePage({user,profile,onSave,onClose}){
               <input type={showPws?"text":"password"} value={confirmPw} onChange={e=>setConfirmPw(e.target.value)}
                 style={inp} placeholder="Digite a nova senha de novo"/>
               {confirmPw&&newPw&&confirmPw!==newPw&&(
-                <div style={{color:"#dc2626",fontSize:10,fontWeight:700,marginTop:4}}>⚠ As senhas não batem</div>
+                <div style={{color:"#dc2626",fontSize:10.5,fontWeight:700,marginTop:5,display:"inline-flex",alignItems:"center",gap:4}}><Ico n="alert" size={10} color="#dc2626"/> As senhas não batem</div>
               )}
             </div>
 
@@ -18593,18 +18617,29 @@ function CollabProfilePage({user,profile,onSave,onClose}){
             </div>}
 
             <button onClick={handleChangePassword} disabled={pwLoading||!currentPw||!newPw||!confirmPw}
-              style={{background:pwLoading||!currentPw||!newPw||!confirmPw?"#cbd5e1":"#2563eb",
-                color:"#fff",border:"none",borderRadius:10,padding:"12px 0",
-                fontWeight:800,fontSize:13,cursor:pwLoading||!currentPw||!newPw||!confirmPw?"not-allowed":"pointer",
-                display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-              {pwLoading?"Alterando...":"🔐 Trocar senha"}
+              style={{background:pwLoading||!currentPw||!newPw||!confirmPw?"#cbd5e1":"linear-gradient(135deg,#2563eb,#1d4ed8)",
+                color:"#fff",border:"none",borderRadius:11,padding:"12px 0",
+                fontWeight:700,fontSize:13,cursor:pwLoading||!currentPw||!newPw||!confirmPw?"not-allowed":"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:7,
+                fontFamily:"'Inter',system-ui,sans-serif",
+                boxShadow:pwLoading||!currentPw||!newPw||!confirmPw?"none":"0 6px 18px rgba(37,99,235,.32)",
+                transition:"transform .12s"}}>
+              {pwLoading?"Alterando...":<><Ico n="lock" size={13} color="#fff"/> Trocar senha</>}
             </button>
           </div>)}
 
-          <div style={{display:"flex",gap:10,marginTop:4,paddingTop:14,borderTop:"1px solid "+C.b1}}>
-            <button onClick={onClose} style={{flex:1,background:C.b1,border:"none",borderRadius:12,padding:"11px 0",color:C.ts,fontWeight:700,cursor:"pointer",fontSize:13}}>Cancelar</button>
-            <button onClick={save} style={{flex:3,background:"linear-gradient(135deg,"+user.color+","+user.color+"88)",color:"#fff",border:"none",borderRadius:12,padding:"12px 0",fontWeight:900,cursor:"pointer",fontSize:14}}>
-              Salvar Perfil Completo
+          <div style={{display:"flex",gap:10,marginTop:6,paddingTop:16,borderTop:"1px solid #f1f5f9"}}>
+            <button onClick={onClose}
+              style={{flex:"0 0 auto",background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 22px",color:"#475569",fontWeight:600,cursor:"pointer",fontSize:13,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#f8fafc";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}>
+              Cancelar
+            </button>
+            <button onClick={save}
+              style={{flex:1,background:"linear-gradient(135deg,"+user.color+","+user.color+"cc)",color:"#fff",border:"none",borderRadius:11,padding:"12px 0",fontWeight:700,cursor:"pointer",fontSize:13.5,fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 6px 18px "+user.color+"40",transition:"transform .12s"}}
+              onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
+              onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+              <Ico n="check" size={14} color="#fff"/> Salvar perfil completo
             </button>
           </div>
         </div>
