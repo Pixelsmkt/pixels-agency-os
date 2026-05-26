@@ -36769,37 +36769,49 @@ function OnboardingChecklist(props){
 }
 
 // ======= 22_portfolio.jsx =======
-// Gestão > Portfólio Comercial
-// Apresentação interna do portfólio Pixels — pra consulta em reuniões comerciais.
-// Acesso: só sócios.
+// Gestão > Portfólio Comercial — versão clean
+// Header reduzido, tabs internas, cards enxutos, detalhes em modal.
+// Identidade: roxo #9F43F6, Inter, ícones modernos.
 
-/* ─── DADOS (fácil de editar) ─────────────────────────────── */
+/* ─── DADOS (fácil de editar) ─────────────────────────────────
+   Cada item tem: id, icon, title, short (frase curta de 1-2 linhas),
+   long (descrição completa pro modal), valor, unidade, entregas (array
+   pro modal), bonus, resumo (texto pra copiar no WhatsApp).
+─────────────────────────────────────────────────────────────── */
 const PORTF_RECORRENTES = [
   {
     id:"social", icon:"users",
     title:"Gestão de Redes Sociais",
-    desc:"Presença estratégica, autoridade e consistência digital. Conteúdo que posiciona e conecta sua marca ao público certo.",
+    short:"Presença estratégica e consistência digital.",
+    long:"Presença estratégica, autoridade e consistência digital. Conteúdo que posiciona e conecta sua marca ao público certo.",
+    entregas:["Planejamento mensal de conteúdo","Roteiros, copys e edição","Publicação e aprovação","Relatório mensal de performance"],
     valor:"R$ 3.000", unidade:"/mês",
     resumo:"Gestão de Redes Sociais — R$ 3.000/mês. Presença estratégica, autoridade e consistência digital. Conteúdo que posiciona e conecta sua marca ao público certo.",
   },
   {
     id:"meta", icon:"chart",
     title:"Gestão de Mídia em Meta Ads",
-    desc:"Campanhas para alcance, geração de oportunidades e crescimento. Investimento com retorno mensurável.",
+    short:"Campanhas pra alcance e geração de oportunidades.",
+    long:"Campanhas para alcance, geração de oportunidades e crescimento. Investimento com retorno mensurável.",
+    entregas:["Estruturação de campanhas","Públicos personalizados e lookalikes","Acompanhamento diário","Relatório mensal de performance"],
     valor:"R$ 2.000", unidade:"/mês",
-    resumo:"Gestão de Mídia em Meta Ads — R$ 2.000/mês. Campanhas para alcance, geração de oportunidades e crescimento. Investimento com retorno mensurável.",
+    resumo:"Gestão de Mídia em Meta Ads — R$ 2.000/mês. Campanhas para alcance, geração de oportunidades e crescimento.",
   },
   {
     id:"google", icon:"globe",
     title:"Gestão de Mídia em Google Ads",
-    desc:"Captação de demanda qualificada e intenção de compra. Posicionamento onde o cliente busca.",
+    short:"Captação de demanda qualificada e intenção de compra.",
+    long:"Captação de demanda qualificada e intenção de compra. Posicionamento onde o cliente busca.",
+    entregas:["Search, Performance Max e remarketing","Pesquisa e curadoria de palavras-chave","Otimização contínua","Relatório mensal de performance"],
     valor:"R$ 2.000", unidade:"/mês",
     resumo:"Gestão de Mídia em Google Ads — R$ 2.000/mês. Captação de demanda qualificada e intenção de compra.",
   },
   {
     id:"pacote", icon:"sparkles", destaque:true,
     title:"Pacote Completo",
-    desc:"Solução integrada com redes sociais, Meta Ads e Google Ads. Captação trimestral de conteúdo. Presença, alcance e demanda em uma única estratégia.",
+    short:"Redes sociais + Meta + Google numa estratégia única.",
+    long:"Solução integrada com redes sociais, Meta Ads e Google Ads. Captação trimestral de conteúdo. Presença, alcance e demanda em uma única estratégia.",
+    entregas:["Gestão de Redes Sociais","Gestão de Meta Ads","Gestão de Google Ads","Captação trimestral de conteúdo","Bônus: Kit de Gravação"],
     bonus:"Kit de Gravação",
     valor:"R$ 6.000", unidade:"/mês",
     resumo:"Pacote Completo Pixels — R$ 6.000/mês. Redes sociais + Meta Ads + Google Ads. Captação trimestral de conteúdo. Bônus: Kit de Gravação.",
@@ -36811,8 +36823,10 @@ const PORTF_PROJETOS = [
     id:"starter", icon:"layers", destaque:true,
     title:"Projeto Starter",
     prazo:"90 dias",
-    desc:"Posicionamento, construção de presença e início de escala. Diagnóstico, mídia, redes sociais e acompanhamento.",
-    valor:"R$ 9.000", unidade:"",
+    short:"Posicionamento e início de escala em 90 dias.",
+    long:"Posicionamento, construção de presença e início de escala. Diagnóstico, mídia, redes sociais e acompanhamento.",
+    entregas:["Diagnóstico e estratégia","Gestão de Meta Ads","Gestão de Redes Sociais","Suporte e acompanhamento"],
+    valor:"R$ 9.000",
     parcelas:"3x de R$ 3.000",
     resumo:"Projeto Starter — 90 dias por R$ 9.000 (ou 3x de R$ 3.000). Posicionamento, construção de presença e início de escala.",
   },
@@ -36820,24 +36834,30 @@ const PORTF_PROJETOS = [
     id:"landing", icon:"globe",
     title:"Landing Page",
     prazo:"Entrega única",
-    desc:"Página estratégica de alta conversão para captar leads e apresentar sua marca.",
-    valor:"R$ 1.500", unidade:"",
+    short:"Página de alta conversão pra captar leads.",
+    long:"Página estratégica de alta conversão para captar leads e apresentar sua marca.",
+    entregas:["Estrutura estratégica","Copy comercial","Design responsivo","Integração com WhatsApp e pixels"],
+    valor:"R$ 1.500",
     resumo:"Landing Page — R$ 1.500. Página estratégica de alta conversão para captar leads.",
   },
   {
     id:"gmb", icon:"building",
     title:"Google Perfil de Empresa",
     prazo:"Entrega única",
-    desc:"Otimização completa do perfil para visibilidade local e credibilidade.",
-    valor:"R$ 1.000", unidade:"",
+    short:"Otimização completa pra visibilidade local.",
+    long:"Otimização completa do perfil para visibilidade local e credibilidade.",
+    entregas:["Cadastro e verificação","Categorias e atributos","Fotos e publicações iniciais","Otimização SEO local"],
+    valor:"R$ 1.000",
     resumo:"Google Perfil de Empresa — R$ 1.000. Otimização completa pra visibilidade local e credibilidade.",
   },
   {
     id:"identidade", icon:"sparkles",
     title:"Logo e Identidade Visual",
     prazo:"Entrega única",
-    desc:"Design estratégico que traduz o posicionamento da marca em linguagem visual.",
-    valor:"R$ 2.000", unidade:"",
+    short:"Design que traduz o posicionamento da marca.",
+    long:"Design estratégico que traduz o posicionamento da marca em linguagem visual.",
+    entregas:["Briefing estratégico","Logo principal e variações","Paleta e tipografia","Manual de marca"],
+    valor:"R$ 2.000",
     resumo:"Logo e Identidade Visual — R$ 2.000. Design estratégico que traduz o posicionamento da marca em linguagem visual.",
   },
 ];
@@ -36860,13 +36880,9 @@ const PORTF_IA = [
     id:"app", icon:"layers",
     categoria:"Sistemas sob medida",
     title:"Aplicativos e Sistemas Personalizados",
-    desc:"Painéis, sistemas internos e áreas do cliente que organizam processos, dados e operação — saindo das planilhas soltas para uma estrutura própria.",
-    itens:[
-      "Gestão interna e painéis de demandas",
-      "Área do cliente e controle de produção",
-      "Dashboards comerciais e indicadores",
-      "Automações e integração com IA",
-    ],
+    short:"Painéis, áreas do cliente e dashboards próprios.",
+    long:"Painéis, sistemas internos e áreas do cliente que organizam processos, dados e operação — saindo das planilhas soltas para uma estrutura própria.",
+    entregas:["Gestão interna e painéis de demandas","Área do cliente e controle de produção","Dashboards comerciais e indicadores","Automações e integração com IA"],
     valor:"A partir de R$ 7.000",
     resumo:"Aplicativos e Sistemas Personalizados — A partir de R$ 7.000. Painéis, sistemas internos, área do cliente, dashboards e automações com IA.",
   },
@@ -36874,13 +36890,9 @@ const PORTF_IA = [
     id:"site", icon:"globe",
     categoria:"Presença digital",
     title:"Sites Profissionais e Landing Pages",
-    desc:"Páginas institucionais e comerciais com foco em posicionamento, autoridade e conversão. Estrutura, copy e design pensados para vender.",
-    itens:[
-      "Estrutura estratégica de conversão",
-      "Copy comercial e design responsivo",
-      "Integração com WhatsApp",
-      "Pixels, tags e campanhas",
-    ],
+    short:"Páginas com foco em posicionamento e conversão.",
+    long:"Páginas institucionais e comerciais com foco em posicionamento, autoridade e conversão. Estrutura, copy e design pensados para vender.",
+    entregas:["Estrutura estratégica de conversão","Copy comercial e design responsivo","Integração com WhatsApp","Pixels, tags e campanhas"],
     valor:"A partir de R$ 2.500",
     resumo:"Sites Profissionais e Landing Pages — A partir de R$ 2.500. Estrutura estratégica de conversão, copy comercial, integração com WhatsApp.",
   },
@@ -36888,200 +36900,357 @@ const PORTF_IA = [
     id:"bot", icon:"message",
     categoria:"Atendimento inteligente",
     title:"Chatbots e Automações com IA",
-    desc:"Atendimento automatizado, qualificação de leads e fluxos inteligentes que reduzem trabalho manual e aceleram o comercial.",
-    itens:[
-      "Chatbot para WhatsApp",
-      "Qualificação automática de leads",
-      "Integração com formulários",
-      "Fluxos personalizados ao negócio",
-    ],
+    short:"Atendimento automatizado e qualificação de leads.",
+    long:"Atendimento automatizado, qualificação de leads e fluxos inteligentes que reduzem trabalho manual e aceleram o comercial.",
+    entregas:["Chatbot para WhatsApp","Qualificação automática de leads","Integração com formulários","Fluxos personalizados ao negócio"],
     valor:"A partir de R$ 2.500",
     resumo:"Chatbots e Automações com IA — A partir de R$ 2.500. Chatbot WhatsApp, qualificação automática de leads, fluxos personalizados.",
   },
 ];
 
 /* ─── HELPERS ─────────────────────────────────────────────── */
+const _PORTF_FF = "'Inter',system-ui,-apple-system,sans-serif";
+
 function _portfCopiar(texto){
   try{
     navigator.clipboard.writeText(texto);
-    if(typeof pixelsToast!=="undefined") pixelsToast.success("Resumo copiado pra área de transferência.", 2500);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Resumo copiado.", 2500);
   }catch(e){
     if(typeof pixelsToast!=="undefined") pixelsToast.error("Não foi possível copiar.", 2500);
   }
 }
 
-/* ─── SUB-COMPONENTES ─────────────────────────────────────── */
-function _PortfBtnCopiar({texto}){
-  return <button onClick={function(e){e.stopPropagation();_portfCopiar(texto);}}
-    title="Copiar resumo pra WhatsApp"
-    style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 10px",fontSize:10.5,fontWeight:700,color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit",transition:"all .15s"}}
-    onMouseEnter={function(e){e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.color="#9F43F6";}}
-    onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}>
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-    Copiar resumo
-  </button>;
+/* ─── CARD ENXUTO (reutilizável) ──────────────────────────── */
+function _PortfCard(props){
+  const { item, onClick, dark, accent } = props;
+  const ac = accent || "#9F43F6";
+  const isDark = !!dark;
+  return <div onClick={onClick}
+    style={{
+      background: isDark ? "#0f172a" : "#fff",
+      border: "1px solid " + (isDark ? "#1e293b" : "#e2e8f0"),
+      borderRadius: 14,
+      padding: "20px 20px 18px",
+      cursor: "pointer",
+      transition: "all .18s ease",
+      display: "flex", flexDirection: "column", gap: 12,
+      fontFamily: _PORTF_FF,
+      color: isDark ? "#fff" : "#0f172a",
+      position: "relative", overflow: "hidden",
+    }}
+    onMouseEnter={function(e){ e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = isDark?"0 14px 32px rgba(15,23,42,0.40)":"0 12px 28px rgba(15,23,42,0.10)"; e.currentTarget.style.borderColor = ac+"55"; }}
+    onMouseLeave={function(e){ e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ""; e.currentTarget.style.borderColor = isDark?"#1e293b":"#e2e8f0"; }}>
+
+    {/* Ícone + título */}
+    <div style={{display:"flex",alignItems:"center",gap:10}}>
+      <div style={{
+        width:36, height:36, borderRadius:9,
+        background: isDark ? "rgba(159,67,246,0.18)" : "#f5f0fe",
+        border: "1px solid " + (isDark ? "rgba(159,67,246,0.30)" : "#ede9fe"),
+        display:"flex", alignItems:"center", justifyContent:"center",
+      }}>
+        <Ico n={item.icon} size={17} color={isDark ? "#c4b5fd" : ac}/>
+      </div>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{fontWeight:700, fontSize:14.5, letterSpacing:-.2, lineHeight:1.25, fontFamily:_PORTF_FF}}>{item.title}</div>
+        {item.prazo && <div style={{color: isDark ? "#94a3b8" : "#94a3b8", fontSize:10.5, fontWeight:700, letterSpacing:.5, textTransform:"uppercase", marginTop:2, fontFamily:_PORTF_FF}}>{item.prazo}</div>}
+      </div>
+    </div>
+
+    {/* Frase curta */}
+    <div style={{
+      color: isDark ? "#cbd5e1" : "#64748b",
+      fontSize: 12.5, lineHeight: 1.5,
+      fontFamily: _PORTF_FF,
+      minHeight: 36,
+    }}>{item.short}</div>
+
+    {/* Footer: valor + ações discretas */}
+    <div style={{
+      marginTop:"auto", paddingTop:12,
+      borderTop: "1px solid " + (isDark ? "#1e293b" : "#f1f5f9"),
+      display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:6,
+    }}>
+      <div>
+        <div style={{fontWeight:800, fontSize:18, letterSpacing:-.5, fontFeatureSettings:"'tnum'", lineHeight:1, fontFamily:_PORTF_FF, color: isDark ? "#fff" : "#0f172a"}}>
+          {item.valor}<span style={{fontSize:11, fontWeight:600, opacity:.65, marginLeft:3}}>{item.unidade||""}</span>
+        </div>
+        {item.parcelas && <div style={{color: isDark?"#94a3b8":"#94a3b8", fontSize:10.5, fontWeight:600, marginTop:3, fontFamily:_PORTF_FF}}>ou {item.parcelas}</div>}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <button onClick={function(e){e.stopPropagation();_portfCopiar(item.resumo);}}
+          title="Copiar resumo"
+          style={{background:"transparent", border:"none", color: isDark?"#64748b":"#94a3b8", cursor:"pointer", padding:6, borderRadius:7, display:"inline-flex", alignItems:"center", justifyContent:"center", fontFamily:_PORTF_FF, transition:"all .15s"}}
+          onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.color=ac;e.currentTarget.style.background=isDark?"rgba(159,67,246,0.10)":"#f5f0fe";}}
+          onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.color=isDark?"#64748b":"#94a3b8";e.currentTarget.style.background="transparent";}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+        </button>
+        <span style={{color:ac, fontSize:12, fontWeight:700, display:"inline-flex", alignItems:"center", gap:3, fontFamily:_PORTF_FF}}>
+          Detalhes
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </span>
+      </div>
+    </div>
+  </div>;
 }
 
-function _PortfBtnCopiarDark({texto}){
-  return <button onClick={function(e){e.stopPropagation();_portfCopiar(texto);}}
-    title="Copiar resumo pra WhatsApp"
-    style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:8,padding:"5px 10px",fontSize:10.5,fontWeight:700,color:"#cbd5e1",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit"}}>
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-    Copiar
-  </button>;
+/* ─── DRAWER DE DETALHES ──────────────────────────────────── */
+function _PortfDrawer(props){
+  const { item, onClose, isMob } = props;
+  if(!item) return null;
+  return <div onMouseDown={onClose}
+    style={{position:"fixed",inset:0,zIndex:1500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"stretch",justifyContent:"flex-end",fontFamily:_PORTF_FF}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{
+        background:"#fff", width:isMob?"100%":"min(520px,95%)", height:"100%",
+        boxShadow:"-20px 0 50px rgba(15,23,42,0.20)",
+        display:"flex", flexDirection:"column",
+        animation:"_pdrawer .25s ease-out",
+        fontFamily:_PORTF_FF,
+      }}>
+      {/* Header do drawer */}
+      <div style={{padding:"22px 26px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"flex-start",gap:12}}>
+        <div style={{width:42,height:42,borderRadius:10,background:"#f5f0fe",border:"1px solid #ede9fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Ico n={item.icon} size={20} color="#9F43F6"/>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          {item.categoria && <div style={{color:"#9F43F6",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:3,fontFamily:_PORTF_FF}}>{item.categoria}</div>}
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:19,letterSpacing:-.4,lineHeight:1.2,fontFamily:_PORTF_FF}}>{item.title}</div>
+          {item.prazo && <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,marginTop:4,fontFamily:_PORTF_FF}}>{item.prazo}</div>}
+        </div>
+        <button onClick={onClose} title="Fechar"
+          style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,borderRadius:8,fontFamily:_PORTF_FF}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      {/* Conteúdo */}
+      <div style={{flex:1,overflowY:"auto",padding:"22px 26px",display:"flex",flexDirection:"column",gap:20}}>
+        {/* Descrição completa */}
+        <div style={{color:"#475569",fontSize:13.5,lineHeight:1.6,fontFamily:_PORTF_FF}}>{item.long}</div>
+
+        {/* Entregas */}
+        {item.entregas && item.entregas.length>0 && <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:10,fontFamily:_PORTF_FF}}>O que está incluso</div>
+          <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:9}}>
+            {item.entregas.map(function(en,i){
+              return <li key={i} style={{display:"flex",alignItems:"flex-start",gap:9,fontFamily:_PORTF_FF}}>
+                <svg style={{flexShrink:0,marginTop:4}} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9F43F6" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <span style={{color:"#0f172a",fontSize:13,fontWeight:500,lineHeight:1.5,fontFamily:_PORTF_FF}}>{en}</span>
+              </li>;
+            })}
+          </ul>
+        </div>}
+
+        {/* Bônus */}
+        {item.bonus && <div style={{background:"#fefce8",border:"1px solid #fde047",borderRadius:11,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:30,height:30,borderRadius:8,background:"#facc15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="sparkles" size={15} color="#fff"/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#a16207",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Bônus</div>
+            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginTop:2,fontFamily:_PORTF_FF}}>{item.bonus}</div>
+          </div>
+        </div>}
+      </div>
+
+      {/* Footer: valor + botão copiar */}
+      <div style={{padding:"18px 26px",borderTop:"1px solid #e2e8f0",background:"#fafbfc",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Investimento</div>
+          <div style={{color:"#0f172a",fontWeight:900,fontSize:22,letterSpacing:-.7,fontFeatureSettings:"'tnum'",lineHeight:1.1,fontFamily:_PORTF_FF}}>
+            {item.valor}<span style={{fontSize:13,fontWeight:600,opacity:.65,marginLeft:3}}>{item.unidade||""}</span>
+          </div>
+          {item.parcelas && <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,marginTop:3,fontFamily:_PORTF_FF}}>ou {item.parcelas}</div>}
+        </div>
+        <button onClick={function(){_portfCopiar(item.resumo);}}
+          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"11px 20px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)",display:"inline-flex",alignItems:"center",gap:7}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar resumo
+        </button>
+      </div>
+    </div>
+  </div>;
 }
 
 /* ─── PÁGINA PRINCIPAL ────────────────────────────────────── */
 function PagePortfolio(props){
   const isMob = props.isMob;
-  const [filtro, setFiltro] = useState("todos"); // todos | recorrentes | projetos
+  const [view, setView] = useState("overview"); // overview | recorrentes | projetos | ia | starter
+  const [modalItem, setModalItem] = useState(null);
 
-  const showRec = filtro==="todos"||filtro==="recorrentes";
-  const showProj = filtro==="todos"||filtro==="projetos";
+  const TABS = [
+    {id:"overview",    label:"Visão geral"},
+    {id:"recorrentes", label:"Recorrentes"},
+    {id:"projetos",    label:"Projetos"},
+    {id:"ia",          label:"Soluções IA"},
+    {id:"starter",     label:"Starter 90 dias"},
+  ];
 
-  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif",width:"100%"}}>
+  /* ───── Visão geral: 4 cards de categoria ───── */
+  function _OverviewCard({icon, ac, title, sub, tabId, count, footer}){
+    return <div onClick={function(){setView(tabId);}}
+      style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 22px 20px",cursor:"pointer",display:"flex",flexDirection:"column",gap:12,transition:"all .18s",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}
+      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 16px 36px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=ac+"55";}}
+      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+        <div style={{width:44,height:44,borderRadius:11,background:ac+"15",border:"1px solid "+ac+"30",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n={icon} size={21} color={ac}/>
+        </div>
+        {count!=null && <span style={{background:"#f1f5f9",color:"#475569",fontSize:11,fontWeight:700,padding:"3px 9px",borderRadius:99,fontFamily:_PORTF_FF}}>{count}</span>}
+      </div>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2,fontFamily:_PORTF_FF}}>{title}</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:5,lineHeight:1.5,fontFamily:_PORTF_FF}}>{sub}</div>
+      </div>
+      <div style={{marginTop:"auto",paddingTop:10,borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFamily:_PORTF_FF}}>{footer}</span>
+        <span style={{color:ac,fontSize:12,fontWeight:800,display:"inline-flex",alignItems:"center",gap:3,fontFamily:_PORTF_FF}}>
+          Explorar
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </span>
+      </div>
+    </div>;
+  }
 
-    {/* ════ 1. CABEÇALHO ════ */}
-    <section style={{background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 60%,#3b1764 100%)",borderRadius:18,padding:"28px 32px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 16px 40px rgba(15,23,42,0.30)"}}>
-      <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.35),transparent 70%)",pointerEvents:"none"}}/>
-      <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
-        <div style={{flex:1,minWidth:280}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-            <div style={{width:38,height:38,borderRadius:10,background:"rgba(159,67,246,0.18)",border:"1px solid rgba(159,67,246,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
-            </div>
-            <span style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Portfólio Pixels</span>
+  /* ───── Renderização ───── */
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_PORTF_FF,width:"100%"}}>
+
+    {/* ════ HEADER LIMPO ════ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 26px",fontFamily:_PORTF_FF}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:13}}>
+          <div style={{width:42,height:42,borderRadius:11,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(159,67,246,0.30)"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
           </div>
-          <div style={{fontSize:isMob?26:32,fontWeight:900,letterSpacing:-1,lineHeight:1.1}}>Portfólio Comercial</div>
-          <div style={{fontSize:13.5,opacity:.82,marginTop:8,maxWidth:680,lineHeight:1.5}}>Soluções recorrentes e projetos estruturados para posicionamento, crescimento e performance.</div>
+          <div>
+            <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Portfólio Pixels</div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,lineHeight:1.2,marginTop:2,fontFamily:_PORTF_FF}}>Portfólio Comercial</div>
+            <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Soluções recorrentes e projetos para posicionamento, crescimento e performance.</div>
+          </div>
         </div>
         <button onClick={function(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Em breve: gerador de proposta automática.",3500);}}
-          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:11,padding:"11px 22px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 18px rgba(159,67,246,0.4)",display:"inline-flex",alignItems:"center",gap:7,flexShrink:0}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:11,padding:"10px 20px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)",display:"inline-flex",alignItems:"center",gap:7,flexShrink:0,alignSelf:"flex-start"}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           Gerar proposta
         </button>
       </div>
-      {/* Filtros */}
-      <div style={{position:"relative",display:"flex",gap:8,marginTop:22,flexWrap:"wrap"}}>
-        {[
-          {id:"todos",       label:"Tudo"},
-          {id:"recorrentes", label:"Serviços Recorrentes"},
-          {id:"projetos",    label:"Projetos"},
-        ].map(function(t){
-          const a=filtro===t.id;
-          return <button key={t.id} onClick={function(){setFiltro(t.id);}}
-            style={{background:a?"#fff":"rgba(255,255,255,0.05)",color:a?"#0f172a":"#cbd5e1",border:"1px solid "+(a?"#fff":"rgba(255,255,255,0.15)"),borderRadius:99,padding:"7px 16px",fontSize:11.5,fontWeight:a?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
-            {t.label}
-          </button>;
-        })}
-      </div>
     </section>
 
-    {/* ════ 2. SERVIÇOS RECORRENTES ════ */}
-    {showRec&&<section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"22px 24px",display:"flex",flexDirection:"column",gap:16}}>
+    {/* ════ TABS INTERNAS (segmented control) ════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:4,display:"inline-flex",gap:2,flexWrap:"wrap",alignSelf:"flex-start",fontFamily:_PORTF_FF}}>
+      {TABS.map(function(t){
+        const a=view===t.id;
+        return <button key={t.id} onClick={function(){setView(t.id);}}
+          style={{background:a?"#9F43F6":"transparent",color:a?"#fff":"#475569",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:a?700:600,cursor:"pointer",fontFamily:_PORTF_FF,transition:"all .15s",letterSpacing:-.1}}>
+          {t.label}
+        </button>;
+      })}
+    </div>
+
+    {/* ════ VISÃO GERAL ════ */}
+    {view==="overview" && <section style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:14,fontFamily:_PORTF_FF}}>
+      <_OverviewCard icon="rotate"   ac="#9F43F6" title="Serviços Recorrentes" sub="Mensalidades pra construir presença, demanda e crescimento previsível." tabId="recorrentes" count={PORTF_RECORRENTES.length} footer="A partir de R$ 2.000/mês"/>
+      <_OverviewCard icon="layers"   ac="#7c3aed" title="Projetos"             sub="Entregas estruturadas com começo, meio e fim — pra estruturar e acelerar resultados." tabId="projetos"    count={PORTF_PROJETOS.length}    footer="A partir de R$ 1.000"/>
+      <_OverviewCard icon="play"     ac="#0f172a" title="Projeto Starter"      sub="Solução completa em 90 dias pra posicionamento e início de escala."                  tabId="starter"     count="90 dias"                  footer="R$ 9.000 ou 3x"/>
+      <_OverviewCard icon="sparkles" ac="#6366f1" title="Soluções IA"          sub="Sistemas, sites e chatbots sob medida pra destravar gargalos e escalar."             tabId="ia"          count={PORTF_IA.length}          footer="A partir de R$ 2.500"/>
+    </section>}
+
+    {/* ════ RECORRENTES ════ */}
+    {view==="recorrentes" && <section style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_PORTF_FF}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Serviços Recorrentes</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Mensalidades que constroem presença, demanda e crescimento previsível.</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:_PORTF_FF}}>Serviços Recorrentes</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Mensalidades que constroem presença, demanda e crescimento previsível.</div>
         </div>
-        <span style={{background:"#ede9fe",color:"#6d28d9",border:"1px solid #c4b5fd",fontSize:10.5,fontWeight:800,padding:"4px 12px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Contrato Trimestral</span>
+        <span style={{background:"#f5f0fe",color:"#9F43F6",border:"1px solid #ede9fe",fontSize:10.5,fontWeight:800,padding:"4px 12px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Contrato Trimestral</span>
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
         {PORTF_RECORRENTES.map(function(s){
-          const isDest=s.destaque;
-          return <div key={s.id} style={{background:isDest?"linear-gradient(135deg,#9F43F6,#7c3aed)":"#fafbfc",border:"1px solid "+(isDest?"#7c3aed":"#f1f5f9"),borderRadius:13,padding:"18px 18px 16px",display:"flex",flexDirection:"column",gap:10,color:isDest?"#fff":"#0f172a",boxShadow:isDest?"0 10px 28px rgba(124,58,237,0.30)":"none",position:"relative"}}>
-            <div style={{display:"flex",alignItems:"center",gap:9}}>
-              <div style={{width:34,height:34,borderRadius:9,background:isDest?"rgba(255,255,255,0.20)":"#ede9fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <Ico n={s.icon} size={17} color={isDest?"#fff":"#7c3aed"}/>
-              </div>
-              <div style={{fontWeight:800,fontSize:14,letterSpacing:-.2,lineHeight:1.2}}>{s.title}</div>
-            </div>
-            <div style={{fontSize:12,lineHeight:1.55,opacity:isDest?.92:1,color:isDest?"#fff":"#475569"}}>{s.desc}</div>
-            {s.bonus&&<div style={{display:"inline-flex",alignSelf:"flex-start",background:isDest?"rgba(253,224,71,0.20)":"#fef9c3",color:isDest?"#fde047":"#a16207",fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+(isDest?"rgba(253,224,71,0.30)":"#fde047")}}>
-              Bônus: {s.bonus}
-            </div>}
-            <div style={{marginTop:"auto",paddingTop:8,borderTop:"1px solid "+(isDest?"rgba(255,255,255,0.18)":"#e2e8f0"),display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:6,flexWrap:"wrap"}}>
-              <div>
-                <div style={{fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{s.valor}<span style={{fontSize:12,fontWeight:600,opacity:.75,marginLeft:3}}>{s.unidade}</span></div>
-              </div>
-              {isDest?<_PortfBtnCopiarDark texto={s.resumo}/>:<_PortfBtnCopiar texto={s.resumo}/>}
-            </div>
-          </div>;
+          return <_PortfCard key={s.id} item={s} dark={!!s.destaque} accent="#9F43F6" onClick={function(){setModalItem(s);}}/>;
         })}
       </div>
     </section>}
 
-    {/* ════ 3. PROJETOS ════ */}
-    {showProj&&<section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"22px 24px",display:"flex",flexDirection:"column",gap:16}}>
+    {/* ════ PROJETOS ════ */}
+    {view==="projetos" && <section style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_PORTF_FF}}>
       <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Projetos</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Entregas estruturadas com começo, meio e fim — pra organizar e acelerar resultados.</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:_PORTF_FF}}>Projetos</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Entregas estruturadas com começo, meio e fim — pra estruturar e acelerar resultados.</div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:14}}>
         {PORTF_PROJETOS.map(function(p){
-          const isDest=p.destaque;
-          return <div key={p.id} style={{background:isDest?"#0f172a":"#fafbfc",color:isDest?"#fff":"#0f172a",border:"1px solid "+(isDest?"#1e293b":"#f1f5f9"),borderRadius:13,padding:"18px 18px 16px",display:"flex",flexDirection:"column",gap:10,position:"relative",overflow:"hidden",boxShadow:isDest?"0 10px 28px rgba(15,23,42,0.30)":"none"}}>
-            {isDest&&<div style={{position:"absolute",top:-30,right:-30,width:130,height:130,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.35),transparent 70%)",pointerEvents:"none"}}/>}
-            <div style={{position:"relative",display:"flex",alignItems:"center",gap:9}}>
-              <div style={{width:34,height:34,borderRadius:9,background:isDest?"rgba(159,67,246,0.22)":"#ede9fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <Ico n={p.icon} size={17} color={isDest?"#c4b5fd":"#7c3aed"}/>
-              </div>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{fontWeight:800,fontSize:14,letterSpacing:-.2,lineHeight:1.2}}>{p.title}</div>
-                <div style={{color:isDest?"#94a3b8":"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:2}}>{p.prazo}</div>
-              </div>
-            </div>
-            <div style={{position:"relative",fontSize:12,lineHeight:1.55,opacity:isDest?.85:1,color:isDest?"#cbd5e1":"#475569"}}>{p.desc}</div>
-            <div style={{position:"relative",marginTop:"auto",paddingTop:8,borderTop:"1px solid "+(isDest?"#1e293b":"#e2e8f0"),display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:6,flexWrap:"wrap"}}>
-              <div>
-                <div style={{fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{p.valor}</div>
-                {p.parcelas&&<div style={{color:isDest?"#94a3b8":"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:3}}>ou {p.parcelas}</div>}
-              </div>
-              {isDest?<_PortfBtnCopiarDark texto={p.resumo}/>:<_PortfBtnCopiar texto={p.resumo}/>}
-            </div>
-          </div>;
+          return <_PortfCard key={p.id} item={p} dark={!!p.destaque} accent="#7c3aed" onClick={function(){
+            if(p.id==="starter") setView("starter");
+            else setModalItem(p);
+          }}/>;
         })}
       </div>
     </section>}
 
-    {/* ════ 4. DETALHAMENTO STARTER ════ */}
-    {showProj&&<section style={{background:"linear-gradient(135deg,#0f172a,#1e1b4b)",borderRadius:18,padding:"26px 30px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 14px 36px rgba(15,23,42,0.30)"}}>
-      <div style={{position:"absolute",top:-50,left:-50,width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.30),transparent 70%)",pointerEvents:"none"}}/>
-      <div style={{position:"relative"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <span style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Proposta detalhada</span>
-        </div>
-        <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15}}>Projeto Starter — 90 dias</div>
-        <div style={{fontSize:13,opacity:.82,marginTop:6,maxWidth:680,lineHeight:1.5}}>Solução estruturada para posicionamento, construção de presença e início de escala.</div>
+    {/* ════ SOLUÇÕES IA ════ */}
+    {view==="ia" && <section style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_PORTF_FF}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:_PORTF_FF}}>Soluções com IA</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Sistemas, sites, automações e chatbots sob medida — conectando marketing, tecnologia, operação e vendas.</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+        {PORTF_IA.map(function(p){
+          return <_PortfCard key={p.id} item={p} accent="#6366f1" onClick={function(){setModalItem(p);}}/>;
+        })}
+      </div>
+    </section>}
 
-        {/* Cards de entrega */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:12,marginTop:20}}>
+    {/* ════ STARTER 90 DIAS — seção dedicada ════ */}
+    {view==="starter" && <section style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PORTF_FF}}>
+      {/* Header dark elegante */}
+      <div style={{background:"linear-gradient(135deg,#0f172a,#1e1b4b)",borderRadius:16,padding:"28px 30px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 14px 36px rgba(15,23,42,0.30)",fontFamily:_PORTF_FF}}>
+        <div style={{position:"absolute",top:-50,right:-50,width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.30),transparent 70%)",pointerEvents:"none"}}/>
+        <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+          <div>
+            <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Proposta detalhada</div>
+            <div style={{fontSize:isMob?22:26,fontWeight:900,letterSpacing:-.8,lineHeight:1.15,marginTop:5,fontFamily:_PORTF_FF}}>Projeto Starter — 90 dias</div>
+            <div style={{fontSize:13,opacity:.82,marginTop:6,maxWidth:600,lineHeight:1.5,fontFamily:_PORTF_FF}}>Solução estruturada para posicionamento, construção de presença e início de escala.</div>
+          </div>
+          <div style={{textAlign:"right",fontFamily:_PORTF_FF}}>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Investimento</div>
+            <div style={{color:"#fff",fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3,fontFamily:_PORTF_FF}}>R$ 9.000</div>
+            <div style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,marginTop:2,fontFamily:_PORTF_FF}}>ou 3x de R$ 3.000</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Entregas principais */}
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:10,fontFamily:_PORTF_FF}}>Entregas principais</div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:12}}>
           {PORTF_STARTER_ENTREGAS.map(function(e,i){
-            return <div key={i} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:12,padding:"14px 16px",display:"flex",gap:11,alignItems:"flex-start"}}>
-              <div style={{width:34,height:34,borderRadius:9,background:"rgba(159,67,246,0.20)",border:"1px solid rgba(159,67,246,0.35)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <Ico n={e.icon} size={16} color="#c4b5fd"/>
+            return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",display:"flex",gap:11,alignItems:"flex-start",fontFamily:_PORTF_FF}}>
+              <div style={{width:34,height:34,borderRadius:9,background:"#f5f0fe",border:"1px solid #ede9fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Ico n={e.icon} size={16} color="#9F43F6"/>
               </div>
               <div style={{minWidth:0}}>
-                <div style={{color:"#fff",fontWeight:800,fontSize:13,letterSpacing:-.2}}>{e.title}</div>
-                <div style={{color:"#cbd5e1",fontSize:11.5,marginTop:3,lineHeight:1.5}}>{e.desc}</div>
+                <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.2,fontFamily:_PORTF_FF}}>{e.title}</div>
+                <div style={{color:"#64748b",fontSize:12,marginTop:3,lineHeight:1.5,fontFamily:_PORTF_FF}}>{e.desc}</div>
               </div>
             </div>;
           })}
         </div>
+      </div>
 
-        {/* Timeline 3 meses */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12,marginTop:18}}>
+      {/* Linha do tempo 3 meses */}
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:10,fontFamily:_PORTF_FF}}>Linha do tempo</div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
           {PORTF_STARTER_TIMELINE.map(function(t,i){
-            return <div key={i} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:12,padding:"14px 16px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <div style={{background:"#9F43F6",color:"#fff",fontSize:9.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{t.mes}</div>
-              </div>
-              <div style={{color:"#fff",fontWeight:800,fontSize:13,letterSpacing:-.2,marginBottom:8}}>{t.titulo}</div>
-              <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:5}}>
-                {t.itens.map(function(item,j){
-                  return <li key={j} style={{color:"#cbd5e1",fontSize:11.5,paddingLeft:12,position:"relative",lineHeight:1.4}}>
-                    <span style={{position:"absolute",left:0,top:6,width:4,height:4,borderRadius:"50%",background:"#9F43F6"}}/>
-                    {item}
+            return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",fontFamily:_PORTF_FF}}>
+              <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#9F43F6",color:"#fff",fontSize:10,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",marginBottom:9,fontFamily:_PORTF_FF}}>{t.mes}</div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,marginBottom:9,fontFamily:_PORTF_FF}}>{t.titulo}</div>
+              <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:5,fontFamily:_PORTF_FF}}>
+                {t.itens.map(function(it,j){
+                  return <li key={j} style={{color:"#475569",fontSize:12,paddingLeft:13,position:"relative",lineHeight:1.5,fontFamily:_PORTF_FF}}>
+                    <span style={{position:"absolute",left:0,top:6,width:5,height:5,borderRadius:"50%",background:"#9F43F6"}}/>
+                    {it}
                   </li>;
                 })}
               </ul>
@@ -37089,86 +37258,19 @@ function PagePortfolio(props){
           })}
         </div>
       </div>
+
+      {/* CTA copiar resumo */}
+      <div style={{display:"flex",justifyContent:"flex-end",fontFamily:_PORTF_FF}}>
+        <button onClick={function(){_portfCopiar(PORTF_PROJETOS[0].resumo);}}
+          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)",display:"inline-flex",alignItems:"center",gap:7}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+          Copiar resumo do Starter
+        </button>
+      </div>
     </section>}
 
-    {/* ════ 5. SOLUÇÕES DIGITAIS & IA ════ */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"22px 24px",display:"flex",flexDirection:"column",gap:16}}>
-      <div>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-          <div style={{width:30,height:30,borderRadius:8,background:"#ede9fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Ico n="sparkles" size={15} color="#7c3aed"/>
-          </div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Soluções com IA para destravar gargalos e aumentar o faturamento</div>
-        </div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:5,lineHeight:1.5,maxWidth:780}}>Sistemas, sites, automações e chatbots sob medida — conectando marketing, tecnologia, operação e vendas em uma estrutura mais clara, moderna e eficiente.</div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
-        {PORTF_IA.map(function(p){
-          return <div key={p.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:13,padding:"18px",display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{display:"flex",alignItems:"center",gap:9}}>
-              <div style={{width:34,height:34,borderRadius:9,background:"#ede9fe",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <Ico n={p.icon} size={17} color="#7c3aed"/>
-              </div>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:2}}>{p.categoria}</div>
-                <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,lineHeight:1.2}}>{p.title}</div>
-              </div>
-            </div>
-            <div style={{color:"#475569",fontSize:12,lineHeight:1.55}}>{p.desc}</div>
-            <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:5}}>
-              {p.itens.map(function(it,k){
-                return <li key={k} style={{color:"#0f172a",fontSize:11.5,paddingLeft:18,position:"relative",lineHeight:1.45,fontWeight:500}}>
-                  <svg style={{position:"absolute",left:0,top:2}} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                  {it}
-                </li>;
-              })}
-            </ul>
-            <div style={{marginTop:"auto",paddingTop:10,borderTop:"1px solid #e2e8f0",display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:6,flexWrap:"wrap"}}>
-              <div style={{color:"#7c3aed",fontWeight:800,fontSize:13.5}}>{p.valor}</div>
-              <_PortfBtnCopiar texto={p.resumo}/>
-            </div>
-          </div>;
-        })}
-      </div>
-    </section>
-
-    {/* ════ 6. PRÓXIMO PASSO ════ */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"26px 30px",display:"flex",flexDirection:"column",gap:18}}>
-      <div style={{textAlign:"center"}}>
-        <div style={{color:"#0f172a",fontWeight:900,fontSize:isMob?22:26,letterSpacing:-.7,lineHeight:1.2}}>Escolha o formato ideal para o seu momento.</div>
-        <div style={{color:"#64748b",fontSize:13,marginTop:8,maxWidth:600,marginLeft:"auto",marginRight:"auto",lineHeight:1.55}}>Algumas marcas precisam de constância. Outras precisam de estruturação. As melhores escolhem os dois — no momento certo.</div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
-        <div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #e9d5ff",borderRadius:13,padding:"22px",display:"flex",flexDirection:"column",gap:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:9}}>
-            <div style={{width:34,height:34,borderRadius:9,background:"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <Ico n="rotate" size={17} color="#fff"/>
-            </div>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3}}>Serviços Recorrentes</div>
-          </div>
-          <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55}}>Acompanhamento contínuo para construir presença, gerar demanda e escalar resultados de forma previsível.</div>
-          <button onClick={function(){setFiltro("recorrentes");window.scrollTo({top:0,behavior:"smooth"});}}
-            style={{marginTop:"auto",background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"10px 16px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 4px 14px rgba(159,67,246,0.30)"}}>
-            A partir de R$ 2.000/mês
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </button>
-        </div>
-        <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",border:"1px solid #1e293b",borderRadius:13,padding:"22px",display:"flex",flexDirection:"column",gap:10,color:"#fff"}}>
-          <div style={{display:"flex",alignItems:"center",gap:9}}>
-            <div style={{width:34,height:34,borderRadius:9,background:"rgba(159,67,246,0.22)",border:"1px solid rgba(159,67,246,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <Ico n="layers" size={17} color="#c4b5fd"/>
-            </div>
-            <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.3}}>Projetos</div>
-          </div>
-          <div style={{color:"#cbd5e1",fontSize:12.5,lineHeight:1.55}}>Entregas estruturadas com começo, meio e fim. Construção, organização e aceleração de resultados.</div>
-          <button onClick={function(){setFiltro("projetos");window.scrollTo({top:0,behavior:"smooth"});}}
-            style={{marginTop:"auto",background:"#fff",color:"#0f172a",border:"none",borderRadius:10,padding:"10px 16px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
-            A partir de R$ 1.000
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </button>
-        </div>
-      </div>
-    </section>
+    {/* DRAWER */}
+    {modalItem && <_PortfDrawer item={modalItem} onClose={function(){setModalItem(null);}} isMob={isMob}/>}
 
   </div>;
 }
