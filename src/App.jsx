@@ -2138,6 +2138,13 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="wallet")    return <svg {...p}><path d="M21 12V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2v-1"/><path d="M22 12h-4a2 2 0 100 4h4z"/></svg>;
   if(n==="funnel")    return <svg {...p}><path d="M3 4h18l-7 9v7l-4-2v-5z"/></svg>;
   if(n==="globe")     return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>;
+  if(n==="plus")      return <svg {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+  if(n==="chevron-right"||n==="chevronRight") return <svg {...p}><polyline points="9 18 15 12 9 6"/></svg>;
+  if(n==="chevron-left"||n==="chevronLeft")   return <svg {...p}><polyline points="15 18 9 12 15 6"/></svg>;
+  if(n==="trending-up"||n==="trendingUp")     return <svg {...p}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>;
+  if(n==="dollar")    return <svg {...p}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(n==="settings")  return <svg {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>;
+  if(n==="file-text") return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
   return null;
 }
 
@@ -26139,10 +26146,12 @@ function MindMapEditor({clientId,onBack}){
 
 /* ─── CONSTANTES ─────────────────────────────────────── */
 const MEDIA_STATUS_OPTS=[
-  {id:"em_dia",         label:"Em dia",         color:"#16a34a", bg:"#dcfce7"},
-  {id:"atencao",        label:"Atenção",        color:"#eab308", bg:"#fef9c3"},
-  {id:"critico",        label:"Crítico",        color:"#dc2626", bg:"#fee2e2"},
-  {id:"em_estruturacao",label:"Em estruturação",color:"#64748b", bg:"#f1f5f9"},
+  {id:"ativa",          label:"Ativa",            color:"#16a34a", bg:"#dcfce7"},
+  {id:"em_dia",         label:"Em dia",           color:"#16a34a", bg:"#dcfce7"},
+  {id:"atencao",        label:"Atenção",          color:"#eab308", bg:"#fef9c3"},
+  {id:"critico",        label:"Crítico",          color:"#dc2626", bg:"#fee2e2"},
+  {id:"em_estruturacao",label:"Em estruturação",  color:"#64748b", bg:"#f1f5f9"},
+  {id:"pausado",        label:"Pausado",          color:"#94a3b8", bg:"#f1f5f9"},
 ];
 const MEDIA_PLATFORMS=[
   {id:"meta",         label:"Meta Ads"},
@@ -26158,10 +26167,25 @@ const MEDIA_TASK_STATUS=[
   {id:"relatorio",        label:"Relatório",               color:"#4db8ff"},
   {id:"concluido",        label:"Concluído",               color:"#16a34a"},
 ];
-const MEDIA_CLIENTS_SEED=["construschorr","bioter","arabuta","vetservice"];
+// Seed V2: clientes de mídia paga reais com investimentos cadastrados.
+// Bioter aparece por UNIDADE (não como cliente único genérico).
+const MEDIA_CLIENTS_SEED_V2=[
+  // ─ Grupo Bioter (cada unidade tem investimento próprio) ─
+  {client_id:"bioter_chapeco",   parent_client:"bioter", bioter_unit:"chapeco",    name:"Bioter Chapecó",              plataforma:"meta_google", investimento_mensal:10000, investimento_meta:5000, investimento_google:5000, status:"em_estruturacao"},
+  {client_id:"bioter_toledo",    parent_client:"bioter", bioter_unit:"toledo",     name:"Bioter Toledo",               plataforma:"meta",        investimento_mensal:300,   investimento_meta:300,  investimento_google:0,    status:"em_estruturacao"},
+  {client_id:"bioter_castro",    parent_client:"bioter", bioter_unit:"castro",     name:"Bioter Castro",               plataforma:"meta",        investimento_mensal:1000,  investimento_meta:1000, investimento_google:0,    status:"em_estruturacao"},
+  {client_id:"bioter_gloria",    parent_client:"bioter", bioter_unit:"gloria",     name:"Bioter Glória de Dourados",   plataforma:"meta",        investimento_mensal:300,   investimento_meta:300,  investimento_google:0,    status:"em_estruturacao"},
+  {client_id:"bioter_uberlandia",parent_client:"bioter", bioter_unit:"uberlandia", name:"Bioter Uberlândia",           plataforma:"meta",        investimento_mensal:700,   investimento_meta:700,  investimento_google:0,    status:"em_estruturacao"},
+  {client_id:"bioter_paraguay",  parent_client:"bioter", bioter_unit:"paraguay",   name:"Bioter Paraguay / Obligado",  plataforma:"meta",        investimento_mensal:700,   investimento_meta:700,  investimento_google:0,    status:"em_estruturacao"},
+  // ─ Demais clientes ─
+  {client_id:"construschorr",    parent_client:"construschorr", name:"Construschorr",          plataforma:"meta_google", investimento_mensal:2400, investimento_meta:1400, investimento_google:1000, status:"em_estruturacao"},
+  {client_id:"arabuta",          parent_client:"arabuta",       name:"Arabutã Pré-Moldados",   plataforma:"meta_google", investimento_mensal:1700, investimento_meta:700,  investimento_google:1000, status:"em_estruturacao"},
+  {client_id:"vetservice",       parent_client:"vetservice",    name:"VetService",             plataforma:"meta",        investimento_mensal:750,  investimento_meta:750,  investimento_google:0,    status:"em_estruturacao"},
+];
 
-/* ─── HELPERS DE STORAGE (localStorage por enquanto, Supabase quando tabelas estiverem prontas) ─── */
-const MEDIA_LS_KEY="pixels-media-v1";
+/* ─── HELPERS DE STORAGE ─── */
+const MEDIA_LS_KEY="pixels-media-v2";
+const MEDIA_LS_KEY_OLD="pixels-media-v1";
 function loadMediaStore(){
   try{const raw=localStorage.getItem(MEDIA_LS_KEY); if(!raw)return null; return JSON.parse(raw);}
   catch(e){return null;}
@@ -26171,25 +26195,48 @@ function saveMediaStore(store){
 }
 function initMediaStore(){
   const ex=loadMediaStore();
-  if(ex)return ex;
-  // Seed inicial: 4 clientes que o usuário definiu
+  if(ex){
+    // Migração leve: garante que todos os clientes do seed V2 existem no store.
+    // Não sobrescreve investimentos/resultados que o usuário já personalizou.
+    const seedIds=new Set(MEDIA_CLIENTS_SEED_V2.map(c=>c.client_id));
+    const existingIds=new Set((ex.clients||[]).map(c=>c.client_id));
+    const missing=MEDIA_CLIENTS_SEED_V2.filter(c=>!existingIds.has(c.client_id));
+    if(missing.length>0){
+      const enriched=missing.map(c=>Object.assign({
+        meta_principal:"", resultado_mes:"", responsavel:"erick",
+        ultima_atualizacao:new Date().toISOString(), proxima_acao:"",
+      },c));
+      ex.clients=[...(ex.clients||[]),...enriched];
+      saveMediaStore(ex);
+    }
+    // Atualiza investimentos zerados pros valores do seed (uma vez só).
+    let changed=false;
+    ex.clients=(ex.clients||[]).map(c=>{
+      const sd=MEDIA_CLIENTS_SEED_V2.find(s=>s.client_id===c.client_id);
+      if(!sd)return c;
+      const out={...c};
+      if((!c.investimento_mensal||Number(c.investimento_mensal)===0)&&sd.investimento_mensal){out.investimento_mensal=sd.investimento_mensal;changed=true;}
+      if((!c.investimento_meta||Number(c.investimento_meta)===0)&&sd.investimento_meta){out.investimento_meta=sd.investimento_meta;changed=true;}
+      if((!c.investimento_google||Number(c.investimento_google)===0)&&sd.investimento_google){out.investimento_google=sd.investimento_google;changed=true;}
+      if(!c.parent_client&&sd.parent_client){out.parent_client=sd.parent_client;changed=true;}
+      if(!c.bioter_unit&&sd.bioter_unit){out.bioter_unit=sd.bioter_unit;changed=true;}
+      return out;
+    });
+    if(changed)saveMediaStore(ex);
+    return ex;
+  }
+  // Tenta importar do V1 (caso usuário tenha customizado)
+  let oldStore=null;
+  try{const raw=localStorage.getItem(MEDIA_LS_KEY_OLD); if(raw)oldStore=JSON.parse(raw);}catch(e){}
+  const baseClients=MEDIA_CLIENTS_SEED_V2.map(c=>Object.assign({
+    meta_principal:"", resultado_mes:"", responsavel:"erick",
+    ultima_atualizacao:new Date().toISOString(), proxima_acao:"",
+  },c));
   const seed={
-    clients:MEDIA_CLIENTS_SEED.map(cid=>{
-      const c=CLIENTS.find(x=>x.id===cid);
-      return {
-        client_id:cid,
-        name:c?.name||cid,
-        plataforma:"meta",
-        investimento_mensal:0,
-        meta_principal:"",
-        resultado_mes:"",
-        status:"em_estruturacao",
-        responsavel:"erick",
-        ultima_atualizacao:new Date().toISOString(),
-        proxima_acao:"",
-      };
-    }),
-    briefings:{}, goals:{}, campaigns:{}, tasks:{}, results:{}, reports:{}, access:{}, history:{}
+    clients:baseClients,
+    briefings:oldStore?.briefings||{}, goals:oldStore?.goals||{}, campaigns:oldStore?.campaigns||{},
+    tasks:oldStore?.tasks||{}, results:oldStore?.results||{}, reports:oldStore?.reports||{},
+    access:oldStore?.access||{}, history:oldStore?.history||{},
   };
   saveMediaStore(seed);
   return seed;
@@ -26243,15 +26290,17 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const [openClient,setOpenClient]=useState(null);
   const [showNovoCliente,setShowNovoCliente]=useState(false);
   const [showNovaDemanda,setShowNovaDemanda]=useState(false);
+  const [showRelatorio,setShowRelatorio]=useState(false);
   // Filtros
   const [fClient,setFClient]=useState("todos");
   const [fPlat,setFPlat]=useState("todos");
   const [fStatus,setFStatus]=useState("todos");
   const [fResp,setFResp]=useState("todos");
   const [fMonth,setFMonth]=useState("");
+  const [fChip,setFChip]=useState("todos"); // todos | com_alerta | sem_invest | em_estruturacao | ativos
 
   const isSocio=currentUser?.level===1;
-  const canManageClients=isSocio; // só sócios criam/excluem clientes
+  const canManageClients=isSocio;
 
   if(openClient){
     return <MediaClientPanel
@@ -26267,40 +26316,139 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
     if(fPlat!=="todos"&&c.plataforma!==fPlat)return false;
     if(fStatus!=="todos"&&c.status!==fStatus)return false;
     if(fResp!=="todos"&&c.responsavel!==fResp)return false;
+    // Chips
+    if(fChip==="com_alerta"&&!(c.status==="atencao"||c.status==="critico"))return false;
+    if(fChip==="sem_invest"&&!(!c.investimento_mensal||Number(c.investimento_mensal)===0))return false;
+    if(fChip==="em_estruturacao"&&c.status!=="em_estruturacao")return false;
+    if(fChip==="ativos"&&c.status!=="ativa"&&c.status!=="em_dia")return false;
     return true;
   });
 
-  const totalInvest=visibleClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
+  // KPIs do topo
+  const allClients=store.clients||[];
+  const totalInvest=allClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
+  const totalInvestVisivel=visibleClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
+  const ativosCount=allClients.filter(c=>c.status==="ativa"||c.status==="em_dia").length;
+  const estruturacaoCount=allClients.filter(c=>c.status==="em_estruturacao").length;
+  const alertaCount=allClients.filter(c=>c.status==="atencao"||c.status==="critico").length;
+  const semInvestCount=allClients.filter(c=>!c.investimento_mensal||Number(c.investimento_mensal)===0).length;
+  const lastUpdate=allClients.reduce((latest,c)=>{
+    if(!c.ultima_atualizacao)return latest;
+    const ts=new Date(c.ultima_atualizacao).getTime();
+    return ts>latest?ts:latest;
+  },0);
+  const lastUpdateLabel=lastUpdate?_mFmtRelative(new Date(lastUpdate).toISOString()):"—";
+
+  // Leads/CPL — placeholders (sem mock; só mostra se houver `results` populados)
+  let totalLeads=0, totalConv=0, totalSpent=0;
+  Object.values(store.results||{}).forEach(arr=>{
+    if(!Array.isArray(arr))return;
+    arr.forEach(r=>{
+      totalLeads+=Number(r.leads)||0;
+      totalConv+=Number(r.conversoes)||0;
+      totalSpent+=Number(r.gasto)||0;
+    });
+  });
+  const cpl=totalLeads>0?totalSpent/totalLeads:null;
+
+  const KpiCard=({label,value,sub,icon,color="#0f172a",bg="#f8fafc",muted})=>(
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{position:"absolute",top:0,right:0,width:36,height:36,background:bg,borderBottomLeftRadius:14,display:"flex",alignItems:"center",justifyContent:"center",color}}>
+        <Ico n={icon} size={15} color={color}/>
+      </div>
+      <div style={{color:muted?"#94a3b8":color,fontSize:muted?13:22,fontWeight:800,lineHeight:1.1,letterSpacing:-.5,marginBottom:4,paddingRight:36}}>{value}</div>
+      <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+      {sub&&<div style={{color:"#64748b",fontSize:10.5,marginTop:3,fontWeight:500}}>{sub}</div>}
+    </div>
+  );
+
+  const chipDefs=[
+    {id:"todos",            label:"Todos",                count:allClients.length},
+    {id:"ativos",           label:"Ativos",               count:ativosCount,         color:"#16a34a"},
+    {id:"em_estruturacao",  label:"Em estruturação",      count:estruturacaoCount,   color:"#64748b"},
+    {id:"com_alerta",       label:"Com alerta",           count:alertaCount,         color:"#ef4444"},
+    {id:"sem_invest",       label:"Sem investimento",     count:semInvestCount,      color:"#94a3b8"},
+  ];
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
 
-    {/* ── Header ── */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Gestão de mídia</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
-          {visibleClients.length} cliente{visibleClients.length!==1?"s":""} de tráfego pago
-          <span style={{color:"#cbd5e1",margin:"0 6px"}}>·</span>
-          Investimento total {_mFmtBRL(totalInvest)}/mês
+    {/* ── Header premium ── */}
+    <div style={{background:"linear-gradient(135deg, #9F43F608 0%, transparent 60%)",borderRadius:16,padding:"18px 20px",border:"1px solid #9F43F622",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 22px rgba(159,67,246,.35)",flexShrink:0}}>
+          <Ico n="trending-up" size={20} color="#fff"/>
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:22,letterSpacing:-.4}}>Gestão de mídia</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:2,fontWeight:500,maxWidth:560}}>
+            Acompanhamento de contas, investimentos, resultados e prioridades de tráfego pago.
+          </div>
         </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={()=>pixelsToast.info("Em breve — em desenvolvimento.",4000)}
-          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
-          Relatório geral
+        <button onClick={()=>setShowRelatorio(true)}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+          <Ico n="file-text" size={13}/> Relatório geral
         </button>
         <button onClick={()=>setShowNovaDemanda(true)}
-          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-          <Ico n="plus" size={13}/> Nova demanda de mídia
+          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+          <Ico n="plus" size={13}/> Nova demanda
         </button>
         {canManageClients&&<button onClick={()=>setShowNovoCliente(true)}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 2px 8px rgba(15,23,42,0.15)"}}>
-          <Ico n="plus" size={13}/> Novo cliente de mídia
+          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px rgba(159,67,246,0.35)"}}>
+          <Ico n="plus" size={13} color="#fff"/> Novo cliente
         </button>}
       </div>
     </div>
 
-    {/* ── Demandas de tráfego do portal ── */}
+    {/* ── KPIs resumo ── */}
+    <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"170px"},1fr))`,gap:10}}>
+      <KpiCard label="Investimento total/mês" value={_mFmtBRL(totalInvest)} icon="dollar"  color="#9F43F6" bg="#9F43F614"/>
+      <KpiCard label="Clientes com mídia ativa" value={ativosCount+estruturacaoCount} sub={`${ativosCount} ativos · ${estruturacaoCount} em estruturação`} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
+      <KpiCard label="Em estruturação" value={estruturacaoCount} icon="settings" color="#64748b" bg="#f1f5f9"/>
+      <KpiCard label="Contas com alerta" value={alertaCount} icon="alert" color={alertaCount>0?"#ef4444":"#94a3b8"} bg={alertaCount>0?"#fef2f2":"#f8fafc"}/>
+      <KpiCard label="Leads gerados no período" value={totalLeads>0?totalLeads.toLocaleString("pt-BR"):"—"} sub={totalLeads===0?"Aguardando dados":""} icon="trending-up" color={totalLeads>0?"#16a34a":"#94a3b8"} bg={totalLeads>0?"#dcfce7":"#f8fafc"} muted={totalLeads===0}/>
+      <KpiCard label="Custo médio por lead" value={cpl?_mFmtBRL(cpl):"—"} sub={!cpl?"Aguardando dados":""} icon="zap" color={cpl?"#0f172a":"#94a3b8"} bg="#f8fafc" muted={!cpl}/>
+    </div>
+
+    <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:-4}}>
+      Última atualização geral: {lastUpdateLabel} · {visibleClients.length} cliente{visibleClients.length!==1?"s":""} visível{visibleClients.length!==1?"is":""}{fChip!=="todos"||fClient!=="todos"||fPlat!=="todos"||fStatus!=="todos"||fResp!=="todos"?` · investimento filtrado ${_mFmtBRL(totalInvestVisivel)}/mês`:""}
+    </div>
+
+    {/* ── Chips de filtro rápido ── */}
+    <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+      {chipDefs.map(ch=>{
+        const active=fChip===ch.id;
+        const col=ch.color||"#9F43F6";
+        return <button key={ch.id} onClick={()=>setFChip(ch.id)}
+          style={{background:active?col:"#fff",border:`1px solid ${active?col:"#e2e8f0"}`,borderRadius:99,padding:"6px 13px",color:active?"#fff":"#475569",fontSize:12,fontWeight:active?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .12s"}}>
+          {ch.label}
+          <span style={{background:active?"rgba(255,255,255,.25)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:700,minWidth:18,textAlign:"center"}}>{ch.count}</span>
+        </button>;
+      })}
+    </div>
+
+    {/* ── Filtros detalhados ── */}
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+      <MidiaFilterSelect label="Cliente"     value={fClient} onChange={setFClient}
+        options={[{id:"todos",label:"Todos"},...store.clients.map(c=>({id:c.client_id,label:c.name}))]}/>
+      <MidiaFilterSelect label="Plataforma"  value={fPlat} onChange={setFPlat}
+        options={[{id:"todos",label:"Todas"},...MEDIA_PLATFORMS]}/>
+      <MidiaFilterSelect label="Status"      value={fStatus} onChange={setFStatus}
+        options={[{id:"todos",label:"Todos"},...MEDIA_STATUS_OPTS]}/>
+      <MidiaFilterSelect label="Responsável" value={fResp} onChange={setFResp}
+        options={[{id:"todos",label:"Todos"},...TEAM.filter(u=>u.id==="erick"||u.level===1).map(u=>({id:u.id,label:u.name}))]}/>
+      <input type="month" value={fMonth} onChange={e=>setFMonth(e.target.value)}
+        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 10px",fontSize:11.5,fontWeight:500,color:"#0f172a",outline:"none",fontFamily:"inherit",cursor:"pointer"}}/>
+      {(fClient!=="todos"||fPlat!=="todos"||fStatus!=="todos"||fResp!=="todos"||fMonth||fChip!=="todos")&&
+        <button onClick={()=>{setFClient("todos");setFPlat("todos");setFStatus("todos");setFResp("todos");setFMonth("");setFChip("todos");}}
+          style={{background:"none",border:"none",color:"#dc2626",fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8,fontFamily:"inherit"}}>
+          × Limpar filtros
+        </button>
+      }
+    </div>
+
+    {/* ── Demandas de tráfego do portal (mantém seção existente) ── */}
     {(()=>{
       const trafegoDemands=(tasks||[]).filter(function(t){
         if(t.deletedAt)return false;
@@ -26349,7 +26497,6 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
               style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",cursor:onNavTo?"pointer":"default",transition:"all .15s",display:"flex",flexDirection:"column",gap:9}}
               onMouseEnter={function(e){e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.boxShadow="0 4px 14px rgba(159,67,246,0.10)";}}
               onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
-              {/* Header: logo cliente + nome + badge prioridade */}
               <div style={{display:"flex",alignItems:"center",gap:9,justifyContent:"space-between"}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
                   {cl?<ClientLogo clientId={cl.id} size="sm"/>:<div style={{width:28,height:28,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11,fontWeight:700}}>?</div>}
@@ -26360,9 +26507,7 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
                 </div>
                 <span style={{background:pc.bg,color:pc.c,borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{pc.l}</span>
               </div>
-              {/* Título */}
               <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{t.title}</div>
-              {/* Footer: status + prazo */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:7,paddingTop:7,borderTop:"1px solid #f1f5f9"}}>
                 <span style={{background:st.c+"18",color:st.c,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{st.l}</span>
                 {t.deadline&&<span style={{color:dlC,fontSize:10.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
@@ -26376,39 +26521,22 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
       </div>;
     })()}
 
-    {/* ── Filtros ── */}
-    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-      <MidiaFilterSelect label="Cliente"     value={fClient} onChange={setFClient}
-        options={[{id:"todos",label:"Todos"},...store.clients.map(c=>({id:c.client_id,label:c.name}))]}/>
-      <MidiaFilterSelect label="Plataforma"  value={fPlat} onChange={setFPlat}
-        options={[{id:"todos",label:"Todas"},...MEDIA_PLATFORMS]}/>
-      <MidiaFilterSelect label="Status"      value={fStatus} onChange={setFStatus}
-        options={[{id:"todos",label:"Todos"},...MEDIA_STATUS_OPTS]}/>
-      <MidiaFilterSelect label="Responsável" value={fResp} onChange={setFResp}
-        options={[{id:"todos",label:"Todos"},...TEAM.filter(u=>u.id==="erick"||u.level===1).map(u=>({id:u.id,label:u.name}))]}/>
-      <input type="month" value={fMonth} onChange={e=>setFMonth(e.target.value)}
-        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 10px",fontSize:11.5,fontWeight:500,color:"#0f172a",outline:"none",fontFamily:"inherit",cursor:"pointer"}}/>
-      {(fClient!=="todos"||fPlat!=="todos"||fStatus!=="todos"||fResp!=="todos"||fMonth)&&
-        <button onClick={()=>{setFClient("todos");setFPlat("todos");setFStatus("todos");setFResp("todos");setFMonth("");}}
-          style={{background:"none",border:"none",color:"#dc2626",fontSize:11,fontWeight:600,cursor:"pointer",padding:"6px 8px",borderRadius:8,fontFamily:"inherit"}}>
-          × Limpar filtros
-        </button>
-      }
-    </div>
-
-    {/* ── Grid de cards ── */}
+    {/* ── Lista de clientes (cards verticais grandes) ── */}
     {visibleClients.length===0
-      ? <div style={{background:"#fff",borderRadius:12,padding:"40px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:48,height:48,borderRadius:12,background:"#f1f5f9",color:"#94a3b8",marginBottom:12}}>
+      ? <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:52,height:52,borderRadius:13,background:"#9F43F614",color:"#9F43F6",marginBottom:12}}>
             <Ico n="folder" size={24}/>
           </div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:4}}>Nenhum cliente encontrado</div>
           <div style={{color:"#64748b",fontSize:12,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>
-            {store.clients.length===0?"Cadastre o primeiro cliente de mídia clicando em \"Novo cliente de mídia\".":"Ajuste os filtros para ver clientes."}
+            {store.clients.length===0?"Cadastre o primeiro cliente de mídia clicando em \"Novo cliente\".":"Ajuste os filtros para ver clientes."}
           </div>
         </div>
-      : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
-          {visibleClients.map(c=><MediaClientCard key={c.client_id} client={c} onOpen={()=>setOpenClient(c.client_id)}/>)}
+      : <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {visibleClients.map(c=><MediaClientCard key={c.client_id} client={c}
+            onOpen={()=>setOpenClient(c.client_id)}
+            onNovaDemanda={()=>{setShowNovaDemanda(c.client_id);}}
+            isMob={isMob}/>)}
         </div>
     }
 
@@ -26418,75 +26546,234 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
       onClose={()=>setShowNovoCliente(false)}/>}
     {showNovaDemanda&&<MediaNovaDemandaModal
       store={store} update={update} addHistory={addHistory}
+      preselectClient={typeof showNovaDemanda==="string"?showNovaDemanda:null}
       onClose={()=>setShowNovaDemanda(false)}/>}
+    {showRelatorio&&<MediaRelatorioGeral
+      store={store} onClose={()=>setShowRelatorio(false)}/>}
+  </div>;
+}
+
+/* ─── Relatorio geral ─── */
+function MediaRelatorioGeral({store,onClose}){
+  const clients=store.clients||[];
+  const totalInvest=clients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
+  const totalMeta=clients.reduce((s,c)=>s+(Number(c.investimento_meta)||0),0);
+  const totalGoogle=clients.reduce((s,c)=>s+(Number(c.investimento_google)||0),0);
+  const ativos=clients.filter(c=>c.status==="ativa"||c.status==="em_dia");
+  const alertas=clients.filter(c=>c.status==="atencao"||c.status==="critico");
+  const semDados=clients.filter(c=>!c.resultado_mes);
+  return <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}} onClick={e=>e.target===e.currentTarget&&onClose()}>
+    <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:820,maxHeight:"90vh",overflow:"auto",boxShadow:"0 30px 80px rgba(0,0,0,0.3)"}}>
+      <div style={{padding:"18px 24px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,background:"#fff",zIndex:2}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="file-text" size={15} color="#fff"/>
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Relatório geral</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>Visão consolidada de tráfego pago</div>
+          </div>
+        </div>
+        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"6px 10px",color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center"}}><Ico n="x" size={14}/></button>
+      </div>
+      <div style={{padding:"22px 24px",display:"flex",flexDirection:"column",gap:18}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+          <div style={{background:"#fafaff",border:"1px solid #ede9fe",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{color:"#7c3aed",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{_mFmtBRL(totalInvest)}</div>
+            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>Investimento total</div>
+          </div>
+          <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{color:"#1d4ed8",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{_mFmtBRL(totalMeta)}</div>
+            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>Meta Ads</div>
+          </div>
+          <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{color:"#ea580c",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{_mFmtBRL(totalGoogle)}</div>
+            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>Google Ads</div>
+          </div>
+          <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:12,padding:"12px 14px"}}>
+            <div style={{color:"#16a34a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{ativos.length}</div>
+            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:3}}>Clientes ativos</div>
+          </div>
+        </div>
+
+        <div>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:8}}>Investimento por cliente</div>
+          <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden"}}>
+            {clients.slice().sort((a,b)=>(Number(b.investimento_mensal)||0)-(Number(a.investimento_mensal)||0)).map((c,i)=>{
+              const pct=totalInvest>0?Math.round((Number(c.investimento_mensal)||0)/totalInvest*100):0;
+              const pcl=c.parent_client||c.client_id;
+              return <div key={c.client_id} style={{padding:"10px 14px",borderBottom:i<clients.length-1?"1px solid #f1f5f9":"none",display:"flex",alignItems:"center",gap:10}}>
+                <ClientLogo clientId={pcl} size="sm"/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600}}>{c.name}</div>
+                  <div style={{height:4,background:"#f1f5f9",borderRadius:99,marginTop:5,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:pct+"%",background:"#9F43F6",borderRadius:99}}/>
+                  </div>
+                </div>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,minWidth:90,textAlign:"right"}}>{_mFmtBRL(c.investimento_mensal)}</div>
+                <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,minWidth:30,textAlign:"right"}}>{pct}%</div>
+              </div>;
+            })}
+          </div>
+        </div>
+
+        {alertas.length>0&&<div>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+            <Ico n="alert" size={13} color="#ef4444"/> Principais alertas ({alertas.length})
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {alertas.map(c=><div key={c.client_id} style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#7f1d1d"}}>
+              <strong>{c.name}</strong> — {MEDIA_STATUS_OPTS.find(s=>s.id===c.status)?.label||c.status}
+              {c.proxima_acao&&<span style={{color:"#991b1b",fontWeight:500}}> · {c.proxima_acao}</span>}
+            </div>)}
+          </div>
+        </div>}
+
+        {semDados.length>0&&<div>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:8}}>Clientes sem dados de performance</div>
+          <div style={{color:"#64748b",fontSize:12,lineHeight:1.6}}>
+            {semDados.map(c=>c.name).join(" · ")}
+          </div>
+        </div>}
+      </div>
+    </div>
   </div>;
 }
 
 /* ─── Card de cliente ──────────────────────────────────── */
-function MediaClientCard({client,onOpen}){
-  const cl=CLIENTS.find(c=>c.id===client.client_id);
-  const status=MEDIA_STATUS_OPTS.find(s=>s.id===client.status)||MEDIA_STATUS_OPTS[3];
+function MediaClientCard({client,onOpen,onNovaDemanda,isMob}){
+  const parentId=client.parent_client||client.client_id;
+  const cl=CLIENTS.find(c=>c.id===parentId);
+  const status=MEDIA_STATUS_OPTS.find(s=>s.id===client.status)||MEDIA_STATUS_OPTS[4];
   const plat=MEDIA_PLATFORMS.find(p=>p.id===client.plataforma)||MEDIA_PLATFORMS[0];
   const resp=TEAM.find(u=>u.id===client.responsavel);
+  const investMeta=Number(client.investimento_meta)||0;
+  const investGoogle=Number(client.investimento_google)||0;
+  const investTotal=Number(client.investimento_mensal)||0;
+  const semInvest=investTotal===0;
+  const hasAlert=client.status==="atencao"||client.status==="critico";
+  const semResultado=!client.resultado_mes;
 
-  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12,transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif"}}
-    onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.06)";}}
-    onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
-    {/* Header: logo + nome + status */}
-    <div style={{display:"flex",alignItems:"flex-start",gap:10,justifyContent:"space-between"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:1}}>
-        {cl&&<ClientLogo clientId={cl.id} size="md"/>}
-        <div style={{minWidth:0}}>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.name}</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{plat.label}</div>
+  // Alertas
+  const alerts=[];
+  if(semInvest)alerts.push("Sem investimento cadastrado");
+  if(semResultado)alerts.push("Sem resultado informado");
+  if(client.status==="pausado")alerts.push("Conta pausada");
+  if(client.status==="atencao")alerts.push("Performance em atenção");
+  if(client.status==="critico")alerts.push("Performance crítica");
+  const lastUpdate=client.ultima_atualizacao?new Date(client.ultima_atualizacao):null;
+  if(lastUpdate){
+    const days=Math.floor((new Date()-lastUpdate)/86400000);
+    if(days>=14)alerts.push("Sem atualização há "+days+" dias");
+  }
+
+  // Performance (placeholder — só mostra se houver dados reais salvos)
+  const leads=Number(client.leads_mes)||0;
+  const cpl=Number(client.cpl)||0;
+  const conv=Number(client.conversoes)||0;
+  const hasPerformance=leads>0||cpl>0||conv>0;
+
+  return <div style={{background:"#fff",border:`1px solid ${hasAlert?"#fecaca":"#e2e8f0"}`,borderRadius:14,padding:isMob?"14px":"16px 18px",transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif",display:"flex",flexDirection:"column",gap:14,position:"relative",overflow:"hidden"}}
+    onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 22px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=hasAlert?"#ef4444":"#cbd5e1";}}
+    onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor=hasAlert?"#fecaca":"#e2e8f0";}}>
+
+    {/* Faixa lateral de status (cor sutil) */}
+    <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:status.color,opacity:.7}}/>
+
+    {/* Conteúdo em colunas */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(220px,1.2fr) minmax(180px,1fr) minmax(180px,1fr) minmax(200px,1.2fr) auto",gap:isMob?14:18,alignItems:"stretch"}}>
+
+      {/* Col 1 — Identidade */}
+      <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:0,paddingLeft:6}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+          <div style={{flexShrink:0}}><ClientLogo clientId={parentId} size="md"/></div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.name}</div>
+            <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>{plat.label}</div>
+          </div>
+        </div>
+        {/* Responsável + última atualização */}
+        <div style={{display:"flex",alignItems:"center",gap:7,marginTop:4}}>
+          {resp&&<UserAvatar user={resp} size={22}/>}
+          <div style={{minWidth:0}}>
+            <div style={{color:"#475569",fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resp?.name||"—"}</div>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:500}}>Atualizado {_mFmtRelative(client.ultima_atualizacao)}</div>
+          </div>
         </div>
       </div>
-      <span style={{background:status.bg,color:status.color,borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{status.label}</span>
-    </div>
 
-    {/* Métricas principais */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-      <div style={{background:"#f8fafc",borderRadius:10,padding:"8px 10px"}}>
-        <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Investimento</div>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginTop:2}}>{_mFmtBRL(client.investimento_mensal)}<span style={{color:"#94a3b8",fontSize:10,fontWeight:500}}> /mês</span></div>
-      </div>
-      <div style={{background:"#f8fafc",borderRadius:10,padding:"8px 10px"}}>
-        <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Resultado</div>
-        <div style={{color:"#0f172a",fontWeight:600,fontSize:12,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.resultado_mes||"—"}</div>
-      </div>
-    </div>
-
-    {/* Meta principal */}
-    {client.meta_principal&&<div>
-      <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:3}}>Meta principal</div>
-      <div style={{color:"#0f172a",fontSize:12,lineHeight:1.5}}>{client.meta_principal}</div>
-    </div>}
-
-    {/* Próxima ação */}
-    {client.proxima_acao&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"7px 10px"}}>
-      <div style={{color:"#92400e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,display:"flex",alignItems:"center",gap:4}}><Ico n="alert" size={10}/> Próxima ação</div>
-      <div style={{color:"#78350f",fontSize:12,marginTop:2,lineHeight:1.4}}>{client.proxima_acao}</div>
-    </div>}
-
-    {/* Footer: responsável + última atualização + botão */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginTop:2,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
-      <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
-        {resp&&<UserAvatar user={resp} size={22}/>}
-        <div style={{minWidth:0}}>
-          <div style={{color:"#475569",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resp?.name||"—"}</div>
-          <div style={{color:"#94a3b8",fontSize:9}}>Atualizado {_mFmtRelative(client.ultima_atualizacao)}</div>
+      {/* Col 2 — Investimento */}
+      <div style={{background:"#fafaff",border:"1px solid #ede9fe",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:5}}>
+        <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Investimento mensal</div>
+        <div style={{color:semInvest?"#94a3b8":"#0f172a",fontSize:18,fontWeight:800,lineHeight:1.1,letterSpacing:-.3}}>
+          {semInvest?"—":_mFmtBRL(investTotal)}
         </div>
+        {!semInvest&&(investMeta>0||investGoogle>0)&&<div style={{display:"flex",gap:8,marginTop:3,flexWrap:"wrap"}}>
+          {investMeta>0&&<span style={{color:"#1d4ed8",fontSize:10.5,fontWeight:600}}>Meta {_mFmtBRL(investMeta)}</span>}
+          {investGoogle>0&&<span style={{color:"#ea580c",fontSize:10.5,fontWeight:600}}>Google {_mFmtBRL(investGoogle)}</span>}
+        </div>}
+        {semInvest&&<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,fontStyle:"italic"}}>Aguardando cadastro</div>}
       </div>
-      <button onClick={onOpen}
-        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"7px 14px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",transition:"background .12s"}}
-        onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
-        onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
-        Abrir painel →
-      </button>
+
+      {/* Col 3 — Performance */}
+      <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:5}}>
+        <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Performance</div>
+        {hasPerformance?<>
+          <div style={{display:"flex",gap:14,marginTop:2}}>
+            <div>
+              <div style={{color:"#0f172a",fontSize:14,fontWeight:800,lineHeight:1}}>{leads.toLocaleString("pt-BR")}</div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,marginTop:2}}>Leads</div>
+            </div>
+            {cpl>0&&<div>
+              <div style={{color:"#0f172a",fontSize:14,fontWeight:800,lineHeight:1}}>{_mFmtBRL(cpl)}</div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,marginTop:2}}>CPL</div>
+            </div>}
+            {conv>0&&<div>
+              <div style={{color:"#0f172a",fontSize:14,fontWeight:800,lineHeight:1}}>{conv}</div>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,marginTop:2}}>Conv.</div>
+            </div>}
+          </div>
+          {client.resultado_mes&&<div style={{color:"#475569",fontSize:11,marginTop:2,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{client.resultado_mes}</div>}
+        </>:<div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,fontStyle:"italic",lineHeight:1.4}}>
+          Aguardando dados de performance
+        </div>}
+      </div>
+
+      {/* Col 4 — Status / Alertas / Próxima ação */}
+      <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{background:status.bg,color:status.color,borderRadius:6,padding:"3px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{status.label}</span>
+        </div>
+        {alerts.length>0&&<div style={{display:"flex",flexDirection:"column",gap:3}}>
+          {alerts.slice(0,2).map((a,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5,color:"#dc2626",fontSize:10.5,fontWeight:600}}>
+            <Ico n="alert" size={10} color="#dc2626"/> {a}
+          </div>)}
+          {alerts.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>+ {alerts.length-2} alerta{alerts.length-2!==1?"s":""}</div>}
+        </div>}
+        {client.proxima_acao&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"6px 9px",marginTop:4}}>
+          <div style={{color:"#92400e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Próxima ação</div>
+          <div style={{color:"#78350f",fontSize:11.5,lineHeight:1.35,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{client.proxima_acao}</div>
+        </div>}
+      </div>
+
+      {/* Col 5 — Ações */}
+      <div style={{display:"flex",flexDirection:"column",gap:6,justifyContent:"center",alignItems:"stretch",minWidth:isMob?"auto":140}}>
+        <button onClick={onOpen}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"background .12s",whiteSpace:"nowrap"}}
+          onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
+          onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
+          Abrir painel <Ico n="chevron-right" size={11} color="#fff"/>
+        </button>
+        {onNovaDemanda&&<button onClick={onNovaDemanda}
+          style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.color="#9F43F6";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
+          <Ico n="plus" size={11}/> Nova demanda
+        </button>}
+      </div>
     </div>
   </div>;
 }
-
 /* ─── Filtro inline ──────────────────────────────────── */
 function MidiaFilterSelect({label,value,onChange,options}){
   const active=value!=="todos"&&value!=="";
