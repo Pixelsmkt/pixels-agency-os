@@ -22748,11 +22748,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               const feedbackComments=(task.comments||[])
                 .filter(c=>c.type==="feedback"||c.type==="audio"||c.type==="client_request");
 
+              // _parseTs — FIX: nao usa new Date(s) com formatos BR (ambiguidade DD/MM vs MM/DD).
+              // So aceita ISO ("2026-05-26T...") direto. Pra BR usa regex sempre.
               const _parseTs=function(s){
                 if(!s)return 0;
-                const iso=new Date(s).getTime();
-                if(!isNaN(iso)&&iso>0)return iso;
-                const m=String(s).match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+                const str=String(s);
+                if(/^\d{4}-\d{2}-\d{2}T/.test(str)){
+                  const iso=new Date(str).getTime();
+                  if(!isNaN(iso)&&iso>0)return iso;
+                }
+                const m=str.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
                 if(m){
                   const yyyy=m[3],mm=m[2],dd=m[1],hh=(m[4]||"00").padStart(2,"0"),min=m[5]||"00";
                   const t=new Date(yyyy+"-"+mm+"-"+dd+"T"+hh+":"+min+":00").getTime();
@@ -22763,10 +22768,12 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               const _commentTs=function(c){return _parseTs(c.at)||_parseTs(c.atFmt)||_parseTs(c.time)||0;};
               const _fileTs=function(f){return _parseTs(f.addedAtIso)||_parseTs(f.addedAt)||0;};
 
+              // FIX: itens com batchId agrupam juntos (lote do submit novo).
+              // Itens SEM batchId ficam cada um no proprio round (evita agrupar
+              // imagens antigas com comentarios recentes erroneamente).
               const _keyFor=function(item,ts){
                 if(item.batchId)return item.batchId;
-                if(!ts)return "_legacy-"+(item.id||Math.random());
-                return "_legacy-"+Math.round(ts/(5*60*1000));
+                return "_orphan-"+(item.id||Math.random());
               };
 
               const byBatch=new Map();
