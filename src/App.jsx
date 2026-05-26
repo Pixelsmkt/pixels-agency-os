@@ -604,6 +604,92 @@ function generateMonthPlanDates(year, month, postsConfig){
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
 import * as recharts from "recharts";
 
+/* ─── SYNC LOCALSTORAGE -> SUPABASE (tabela app_data) ───────────────
+   Replica chaves que precisam sincronizar entre PCs/portal pra Supabase.
+   Funciona como interceptor de localStorage.setItem/removeItem.
+─────────────────────────────────────────────────────────────────── */
+const SYNC_KEY_PATTERNS = [
+  /^pixels-contacts-/, /^pixels-links-/, /^pixels-links-intern$/,
+  /^pixels-goals-/, /^pixels-checklist-/, /^pixels-notes-/,
+  /^pixels-drive-/, /^pixels-roi-sims-/, /^pixels-covercolor-/,
+  /^pixels-creds$/, /^pixels-mapa-vendas$/, /^pixels-biblioteca$/,
+  /^pixels-playbooks$/, /^pixels-checkins$/, /^pixels-careers$/,
+  /^pixels-capacidades$/, /^pixels-360-reviews$/, /^pixels-bday-team-/,
+  /^pixels-onboarding$/, /^pixels-contratos$/, /^pixels-onb-steps$/,
+  /^pixels-meta-appid$/, /^pixels-google-clientid$/, /^pixels-ga4-/,
+];
+function _appDataShouldSync(key){
+  if(!key||typeof key!=="string")return false;
+  for(let i=0;i<SYNC_KEY_PATTERNS.length;i++){
+    if(SYNC_KEY_PATTERNS[i].test(key))return true;
+  }
+  return false;
+}
+function appDataHydrateFromSupabase(){
+  if(typeof window==="undefined"||!window._sb)return Promise.resolve();
+  return window._sb.from("app_data").select("key,value").then(function(r){
+    if(r.error||!r.data)return;
+    let touched=false;
+    r.data.forEach(function(row){
+      try{
+        const valStr=typeof row.value==="string"?row.value:JSON.stringify(row.value);
+        if(localStorage.getItem(row.key)!==valStr){
+          if(window._lsOrigSet){window._lsOrigSet(row.key,valStr);}
+          else{localStorage.setItem(row.key,valStr);}
+          touched=true;
+        }
+      }catch(e){}
+    });
+    if(touched){window.dispatchEvent(new CustomEvent("pixels:appdata-hydrated"));}
+  });
+}
+function appDataPushLocalStorage(){
+  if(typeof window==="undefined"||!window._sb)return;
+  for(let i=0;i<localStorage.length;i++){
+    const key=localStorage.key(i);
+    if(!_appDataShouldSync(key))continue;
+    try{
+      const raw=localStorage.getItem(key);
+      let val; try{val=JSON.parse(raw);}catch(e){val=raw;}
+      window._sb.from("app_data").upsert({key:key,value:val},{onConflict:"key"});
+    }catch(e){}
+  }
+}
+function installAppDataInterceptor(){
+  if(typeof window==="undefined"||window._lsInterceptorInstalled)return;
+  window._lsInterceptorInstalled=true;
+  window._lsOrigSet=localStorage.setItem.bind(localStorage);
+  window._lsOrigRemove=localStorage.removeItem.bind(localStorage);
+  localStorage.setItem=function(key,value){
+    window._lsOrigSet(key,value);
+    if(_appDataShouldSync(key)&&window._sb){
+      let parsed; try{parsed=JSON.parse(value);}catch(e){parsed=value;}
+      window._sb.from("app_data").upsert({key:key,value:parsed,updated_by:(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||null},{onConflict:"key"});
+    }
+  };
+  localStorage.removeItem=function(key){
+    window._lsOrigRemove(key);
+    if(_appDataShouldSync(key)&&window._sb){
+      window._sb.from("app_data").delete().eq("key",key);
+    }
+  };
+}
+if(typeof window!=="undefined"){
+  installAppDataInterceptor();
+  function _appDataBoot(){
+    if(window._sb){
+      appDataHydrateFromSupabase().then(function(){
+        setTimeout(appDataPushLocalStorage, 1000);
+      });
+    }else{
+      setTimeout(_appDataBoot, 500);
+    }
+  }
+  _appDataBoot();
+  setInterval(function(){if(window._sb)appDataHydrateFromSupabase();}, 60000);
+}
+
+
 // Global mobile styles
 const MOBILE_CSS=`
   *{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
