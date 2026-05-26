@@ -15863,9 +15863,12 @@ function PublicacaoEditModal({task, onClose, onReject}){
 
     const nowStr=new Date().toLocaleDateString("pt-BR");
     const nowFull=nowStr+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-    const audioFiles=audioURL?[{id:Date.now()+999,name:"Audio_feedback.webm",type:"audio/webm",url:audioURL,size:0,addedAt:nowStr,addedBy:CURRENT_USER.name}]:[];
-    const newComment=feedback.trim()?{id:Date.now(),user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"AJUSTE NECESSARIO: "+feedback.trim(),time:nowFull,type:"feedback"}:null;
-    const audioComment=audioURL?{id:Date.now()+1,user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"",type:"audio",audioUrl:audioURL,time:nowFull}:null;
+    const nowIso=new Date().toISOString();
+    // batchId: linka este lote de feedback (comentario + audio + imagens marcadas).
+    const batchId="adj-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+    const audioFiles=audioURL?[{id:Date.now()+999,name:"Audio_feedback.webm",type:"audio/webm",url:audioURL,size:0,addedAt:nowStr,addedBy:CURRENT_USER.name,batchId}]:[];
+    const newComment=feedback.trim()?{id:Date.now(),user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"AJUSTE NECESSARIO: "+feedback.trim(),time:nowFull,at:nowIso,atFmt:nowFull,type:"feedback",batchId}:null;
+    const audioComment=audioURL?{id:Date.now()+1,user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"",type:"audio",audioUrl:audioURL,time:nowFull,at:nowIso,atFmt:nowFull,batchId}:null;
     const comments=[newComment,audioComment].filter(Boolean);
 
     // Collect entries that have a drawing
@@ -15901,7 +15904,9 @@ function PublicacaoEditModal({task, onClose, onReject}){
             id:Date.now()+pos,
             name:fname,
             type:"image/png",url,storagePath,size:0,
-            addedAt:nowStr,addedBy:CURRENT_USER.name,isAnnotation:true,
+            addedAt:nowStr,addedAtIso:nowIso,addedBy:CURRENT_USER.name,isAnnotation:true,
+            batchId,
+            sourceIdx:e.i,
           };
         }
         if(++done===entries.length){setIsSubmitting(false);onReject(task,feedback,result.filter(Boolean),audioFiles,comments);}
@@ -21507,6 +21512,8 @@ function PageRadarEntrega({ tasks, isMob }) {
   );
 }
 
+// ======= 11_cardmodal.jsx =======
+
 function RichToolbar({elRef}){
   const exec=(cmd,val)=>{
     if(elRef.current){elRef.current.focus();}
@@ -22662,16 +22669,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <Ico n="trash" size={16}/>
             </button>}
             {/* Cor de Capa removida — botão de paleta sumiu do header */}
-            {/* Salvar + Concluir p/ avaliação + Enviar p/ Aprovação + Drive empilhados */}
+            {/* Salvar + Enviar p/ Aprovação + Drive empilhados (Demanda Concluída e Lixeira removidos — usar drag-and-drop e × do card no kanban) */}
             <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"stretch"}}>
               {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap",minWidth:170,textAlign:"center",letterSpacing:.1}}>Salvar</button>}
-              {/* Concluir p/ avaliação — aparece em cards "execucao" ou "ajustes" (move pra coluna Avaliação e entra no fluxo de Aprovações) */}
-              {canEdit&&(task.status==="execucao"||task.status==="ajustes")&&<button
-                onClick={()=>setConclusionStep(1)}
-                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(22,163,74,0.28)",minWidth:170,textAlign:"center",letterSpacing:.1,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,fontFamily:"inherit"}}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Concluir p/ avaliação
-              </button>}
               {/* Enviar para Aprovação — só pra cards de copy marcados como "ajustar" */}
               {canEdit&&task.ajustar===true&&task.status==="demanda"&&<button
                 onClick={()=>{setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:false,timeline:[...(t.timeline||[]),{type:"edit",label:"Reenviada para aprovação por "+user.name,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name}]}:t));onClose();}}
@@ -22742,76 +22742,121 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>
             </div>}
 
-            {/* ══ AJUSTES SOLICITADOS — aparece sempre que há anotações ou flag isAlteracao ══ */}
+            {/* AJUSTES SOLICITADOS — agrupados por lote (comentario + imagens daquele round) */}
             {(task.isAlteracao||task.status==="alteracao"||task.status==="ajustes"||(task.files||[]).some(f=>f.isAnnotation))&&(()=>{
-              const annotations=(task.files||[]).filter(f=>f.isAnnotation);
-              // Inclui client_request (vindo do portal do cliente) na lista de ajustes.
-              // Ordenacao: mais recente PRIMEIRO (cliente acabou de pedir aparece no topo).
+              const allAnnotations=(task.files||[]).filter(f=>f.isAnnotation);
               const feedbackComments=(task.comments||[])
-                .filter(c=>c.type==="feedback"||c.type==="audio"||c.type==="client_request")
-                .slice()
-                .sort((a,b)=>{
-                  const da=a.at?new Date(a.at).getTime():0;
-                  const db=b.at?new Date(b.at).getTime():0;
-                  return db-da;
-                });
-              const audioComment=feedbackComments.find(c=>c.type==="audio");
-              const textComments=feedbackComments.filter(c=>c.type!=="audio");
-              if(annotations.length===0&&feedbackComments.length===0&&!task.isAlteracao&&task.status!=="ajustes")return null;
+                .filter(c=>c.type==="feedback"||c.type==="audio"||c.type==="client_request");
 
-              // Quem solicitou (ultimo evento de ajuste no timeline)
-              const lastAdjust=(task.timeline||[]).slice().reverse().find(t=>t.to==="ajustes"||t.to==="execucao"||(t.label||"").toLowerCase().includes("ajuste"));
-              const reqUserName=lastAdjust?.user||"Revisor";
+              const _parseTs=function(s){
+                if(!s)return 0;
+                const iso=new Date(s).getTime();
+                if(!isNaN(iso)&&iso>0)return iso;
+                const m=String(s).match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+                if(m){
+                  const yyyy=m[3],mm=m[2],dd=m[1],hh=(m[4]||"00").padStart(2,"0"),min=m[5]||"00";
+                  const t=new Date(yyyy+"-"+mm+"-"+dd+"T"+hh+":"+min+":00").getTime();
+                  if(!isNaN(t))return t;
+                }
+                return 0;
+              };
+              const _commentTs=function(c){return _parseTs(c.at)||_parseTs(c.atFmt)||_parseTs(c.time)||0;};
+              const _fileTs=function(f){return _parseTs(f.addedAtIso)||_parseTs(f.addedAt)||0;};
+
+              const _keyFor=function(item,ts){
+                if(item.batchId)return item.batchId;
+                if(!ts)return "_legacy-"+(item.id||Math.random());
+                return "_legacy-"+Math.round(ts/(5*60*1000));
+              };
+
+              const byBatch=new Map();
+              feedbackComments.forEach(function(c){
+                const ts=_commentTs(c);
+                const key=_keyFor(c,ts);
+                if(!byBatch.has(key))byBatch.set(key,{key:key,ts:ts,comments:[],audio:null,images:[],user:c.user});
+                const r=byBatch.get(key);
+                if(c.type==="audio")r.audio=c; else r.comments.push(c);
+                if(ts>r.ts)r.ts=ts;
+                if(!r.user&&c.user)r.user=c.user;
+              });
+              allAnnotations.forEach(function(f){
+                const ts=_fileTs(f);
+                const key=_keyFor(f,ts);
+                if(!byBatch.has(key))byBatch.set(key,{key:key,ts:ts,comments:[],audio:null,images:[],user:f.addedBy});
+                const r=byBatch.get(key);
+                r.images.push(f);
+                if(ts>r.ts)r.ts=ts;
+                if(!r.user&&f.addedBy)r.user=f.addedBy;
+              });
+
+              const rounds=Array.from(byBatch.values())
+                .filter(function(r){return r.comments.length>0||r.audio||r.images.length>0;})
+                .sort(function(a,b){return b.ts-a.ts;});
+
+              if(rounds.length===0&&!task.isAlteracao&&task.status!=="ajustes")return null;
 
               return(
                 <div style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:12,overflow:"hidden"}}>
-
-                  {/* Header minimalista — quem pediu + badge */}
                   <div style={{padding:"12px 16px",borderBottom:"1px solid #f3e8ff",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                    <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1}}>Solicitação de ajuste</div>
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1,display:"flex",alignItems:"center",gap:8}}>
+                      <span>Solicitação de ajuste</span>
+                      {rounds.length>1&&<span style={{background:"#f3e8ff",color:"#7c3aed",fontSize:9.5,padding:"2px 9px",borderRadius:99,fontWeight:700,letterSpacing:.3}}>{rounds.length} rounds</span>}
+                    </div>
                     <span style={{background:"#fef3c7",color:"#92400e",fontSize:9,padding:"3px 10px",borderRadius:99,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Pendente</span>
                   </div>
 
-                  {/* Audio inline (se houver) */}
-                  {audioComment&&audioComment.audioUrl&&<div style={{padding:"10px 16px",borderBottom:"1px solid #f3e8ff"}}>
-                    <audio src={audioComment.audioUrl} controls style={{width:"100%",height:32}}/>
-                  </div>}
+                  {rounds.length===0&&<div style={{padding:"16px",color:"#94a3b8",fontSize:12,textAlign:"center",fontStyle:"italic"}}>Ajuste solicitado — verifique os arquivos do card.</div>}
 
-                  {/* Comentarios — ordenados newest first, com badge CLIENTE/REVISOR */}
-                  {textComments.length>0&&<div style={{padding:"12px 16px",borderBottom:annotations.length>0?"1px solid #f3e8ff":"none"}}>
-                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                      {textComments.map(function(c){
-                        const isClient=c.type==="client_request"||String(c.user||"").toLowerCase().indexOf("cliente:")===0;
-                        const when=c.atFmt||c.time||"";
-                        const userName=String(c.user||"").replace(/^Cliente:\s*/i,"");
-                        return <div key={c.id} style={{background:isClient?"#f0fdf4":"#faf5ff",borderLeft:"3px solid "+(isClient?"#16a34a":"#7c3aed"),borderRadius:"0 8px 8px 0",padding:"9px 12px"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
-                            <span style={{background:isClient?"#16a34a":"#7c3aed",color:"#fff",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
-                            <span style={{color:"#0f172a",fontSize:11,fontWeight:600}}>{userName}</span>
-                            {when&&<span style={{color:"#94a3b8",fontSize:10,marginLeft:"auto"}}>{when}</span>}
+                  <div style={{display:"flex",flexDirection:"column"}}>
+                    {rounds.map(function(r,ri){
+                      const isLatest=ri===0;
+                      const firstC=r.comments[0]||r.audio||{};
+                      const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
+                      const accent=isClient?"#16a34a":"#7c3aed";
+                      const tintBg=isClient?"#f0fdf4":"#faf5ff";
+                      const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
+                      const when=firstC.atFmt||firstC.time||(firstC.at?new Date(firstC.at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):(r.images[0]?(r.images[0].addedAt||""):""));
+                      return(
+                        <div key={r.key} style={{padding:"14px 16px",borderTop:ri>0?"1px solid #f3e8ff":"none",background:isLatest?"#fafaff":"#fff"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10,flexWrap:"wrap"}}>
+                            <span style={{background:accent,color:"#fff",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2.5px 8px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
+                            <span style={{color:"#0f172a",fontSize:11.5,fontWeight:700}}>{userName}</span>
+                            {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"2px 7px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>+ recente</span>}
+                            {when&&<span style={{color:"#94a3b8",fontSize:10.5,marginLeft:"auto"}}>{when}</span>}
                           </div>
-                          <div style={{color:"#0f172a",fontSize:12,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{String(c.text||"").replace("AJUSTE NECESSARIO: ","")}</div>
-                        </div>;
-                      })}
-                    </div>
-                  </div>}
 
-                  {/* Imagens com marcacoes — grid compacto, sem header poluido */}
-                  {annotations.length>0&&<div style={{padding:"12px 16px"}}>
-                    <div style={{fontSize:9.5,color:"#7c3aed",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>Imagens com marcações</div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(88px, 1fr))",gap:6}}>
-                      {annotations.map(function(f,i){
-                        return <div key={f.id} onClick={function(){setLightbox({url:f.url,name:f.name||("Arte "+(i+1)),storagePath:f.storagePath});}}
-                          style={{position:"relative",cursor:"zoom-in",borderRadius:6,overflow:"hidden",border:"1px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
-                          <img src={f.url} alt={"Arte "+(i+1)} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                        </div>;
-                      })}
-                    </div>
-                  </div>}
+                          {r.audio&&r.audio.audioUrl&&<div style={{marginBottom:10}}>
+                            <audio src={r.audio.audioUrl} controls style={{width:"100%",height:32}}/>
+                          </div>}
 
-                  {annotations.length===0&&feedbackComments.length===0&&<div style={{padding:"16px",color:"#94a3b8",fontSize:12,textAlign:"center",fontStyle:"italic"}}>
-                    Ajuste solicitado — verifique os arquivos do card.
-                  </div>}
+                          {r.comments.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:r.images.length>0?12:0}}>
+                            {r.comments.map(function(c){
+                              return <div key={c.id} style={{background:tintBg,borderLeft:"3px solid "+accent,borderRadius:"0 8px 8px 0",padding:"9px 12px"}}>
+                                <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{String(c.text||"").replace("AJUSTE NECESSARIO: ","")}</div>
+                              </div>;
+                            })}
+                          </div>}
+
+                          {r.images.length>0&&<div>
+                            <div style={{fontSize:9.5,color:accent,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>
+                              {r.images.length===1?"1 imagem marcada":(r.images.length+" imagens marcadas")}
+                            </div>
+                            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))",gap:7}}>
+                              {r.images.map(function(f,i){
+                                return <div key={f.id} onClick={function(){setLightbox({url:f.url,name:f.name||("Arte "+(i+1)),storagePath:f.storagePath});}}
+                                  style={{position:"relative",cursor:"zoom-in",borderRadius:8,overflow:"hidden",border:"1px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff",transition:"all .15s"}}
+                                  onMouseEnter={function(e){e.currentTarget.style.borderColor=accent;}}
+                                  onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";}}>
+                                  <img src={f.url} alt={"Arte "+(i+1)} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                                  {(f.sourceIdx!==undefined&&f.sourceIdx!==null)&&<div style={{position:"absolute",top:5,left:5,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,letterSpacing:.3}}>Arte {f.sourceIdx+1}</div>}
+                                </div>;
+                              })}
+                            </div>
+                          </div>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })()}
