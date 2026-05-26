@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 32/32 | Nao editar diretamente
+// Modulos: 33/33 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -547,7 +547,6 @@ function generateMonthPlanDates(year, month, postsConfig){
   return result.sort(function(a,b){return a.date.localeCompare(b.date);});
 }
 
-// ======= 00_globals.jsx =======
 // Módulo de framework: temas, perms, componentes base, navegação
 // Não contém dados de negócio — ver 00_clientes_data.jsx e 00_mindmap_data.jsx
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
@@ -1505,6 +1504,7 @@ function NavIcon({id,size=18,color}){
   if(id==="portal_chat")        return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
   // ── Submenus Gestão ──
   if(id==="gestao_financeiro")  return <svg {...p}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
   if(id==="planejamento_mensal")return <svg {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><path d="M9 12h6M9 16h4"/></svg>;
   if(id==="contratos_lista")    return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
   if(id==="contratos_ltv")      return <svg {...p}><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>;
@@ -1558,6 +1558,7 @@ const NAV=[
   {type:"divider",label:"ADMIN"},
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
+    {id:"gestao_operacional",   icon:"◈", label:"Operacional"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
@@ -26841,7 +26842,6 @@ function ModalShell({title, children, onClose, maxWidth}){
   </div>;
 }
 
-// ======= 12_estrutura.jsx =======
 // v5 — reescrita completa, arquitetura limpa, sem patches
 
 // noOpLock: workaround oficial bug deadlock Supabase JS (issues #762 #1594 #2013 #2111)
@@ -27761,6 +27761,7 @@ export default function AgencyOS(){
       case "portal_criativos":     return p.verPortal||isSocio;
       case "gestao":
       case "gestao_financeiro":    return p.verFinanceiro||isSocio;
+      case "gestao_operacional":   return isSocio;
       case "acessos":              return p.verAcessos||isSocio;
       case "interno":
       case "interno_calendario":
@@ -27826,6 +27827,7 @@ export default function AgencyOS(){
       case "relatorios":            return (effectivePerms.verAnalises&&effectivePerms.verRelatorio)||isSocio?<PageRelatorio {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao":
       case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p}/>:<NoPerm/>;
+      case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
       case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
@@ -35672,5 +35674,438 @@ function MonthlyPlanComments({data, onAdd, clColor}){
       <button onClick={enviar} disabled={!txt.trim()}
         style={{background:txt.trim()?(clColor||"#0f172a"):"#cbd5e1",color:"#fff",border:"none",borderRadius:8,padding:"0 14px",fontSize:14,fontWeight:700,cursor:txt.trim()?"pointer":"not-allowed",fontFamily:"inherit"}}>↑</button>
     </div>
+  </div>;
+}
+
+// ======= 20_operacional.jsx =======
+// Gestão > Operacional — dashboard interno da operação Pixels.
+// Exibe: indicadores do mês, quebra semanal, KPIs por colaborador, rotina.
+// Acesso: só sócios (Vinicius/Gustavo).
+
+/* ─── Metas fixas (escopo definido pelo time) ─────────────────── */
+const OP_METAS_MES = { publicacoes:76, itensBase:56, produzidos:38, drive:18 };
+const OP_METAS_SEMANAIS = [
+  { sem:1, publ:19, base:14, prod:11, drive:3 },
+  { sem:2, publ:19, base:14, prod:8,  drive:6 },
+  { sem:3, publ:19, base:14, prod:11, drive:3 },
+  { sem:4, publ:19, base:14, prod:8,  drive:6 },
+];
+
+/* ─── Helpers ─────────────────────────────────────────────────── */
+function _opTipo(t){
+  const ct=String(t.contentType||t.tipo||"").toLowerCase();
+  if(ct==="arte"||ct==="carrossel")return "arte";
+  if(ct==="video"||ct==="vídeo"||ct==="corte")return "video";
+  if(ct==="foto")return "foto";
+  if(ct==="video_short")return "short";
+  return "outro";
+}
+function _opIsCollab(t){
+  if(t.client!=="bioter")return false;
+  const u=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();});
+  return u.indexOf("grupo")>=0||u.indexOf("brasil")>=0;
+}
+function _opIsDrive(t){
+  return _opTipo(t)==="short"||t.fromDrive===true;
+}
+function _opInMonth(t,year,month){
+  // Prioridade: publishDate > referenceMonth > createdAt
+  if(t.publishDate){
+    const d=new Date(t.publishDate);
+    return d.getFullYear()===year&&d.getMonth()===month;
+  }
+  if(t.referenceMonth){
+    const ms=year+"-"+String(month+1).padStart(2,"0");
+    return t.referenceMonth===ms;
+  }
+  return false;
+}
+function _opWeekOfMonth(date){
+  // Retorna 1-4 (limita em 4)
+  const day=date.getDate();
+  return Math.min(4,Math.ceil(day/7));
+}
+function _opStatusBadge(pct){
+  if(pct>=90)return {label:"Saudável", color:"#15803d", bg:"#dcfce7", border:"#86efac"};
+  if(pct>=70)return {label:"Atenção",  color:"#a16207", bg:"#fef3c7", border:"#fde047"};
+  return         {label:"Crítica",  color:"#b91c1c", bg:"#fee2e2", border:"#fca5a5"};
+}
+
+/* ─── Componente KPI Card ─────────────────────────────────────── */
+function OpKpiCard(props){
+  const { label, value, meta, accent, hint, big } = props;
+  const pct = meta>0?Math.min(100,Math.round(value/meta*100)):0;
+  const col = accent||"#7c3aed";
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:big?"16px 18px":"13px 15px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+    <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
+    <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+      <span style={{color:"#0f172a",fontSize:big?28:22,fontWeight:800,letterSpacing:-.7,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{value}</span>
+      {meta!=null&&<span style={{color:"#94a3b8",fontSize:big?15:13,fontWeight:700}}>/{meta}</span>}
+    </div>
+    {meta>0&&<div style={{background:"#f1f5f9",borderRadius:99,height:4,overflow:"hidden"}}>
+      <div style={{width:pct+"%",height:"100%",background:col,borderRadius:99,transition:"width .3s"}}/>
+    </div>}
+    {hint&&<div style={{color:"#64748b",fontSize:10.5}}>{hint}</div>}
+  </div>;
+}
+
+/* ─── PAGE: PageOperacional ──────────────────────────────────── */
+function PageOperacional(props){
+  const tasks = props.tasks||[];
+  const isMob = props.isMob;
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const monthLabel = now.toLocaleDateString("pt-BR",{month:"long"});
+  const semanaAtual = _opWeekOfMonth(now);
+  const STS = ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"];
+
+  /* ── Filtra cards do mês ── */
+  const visible = tasks.filter(function(t){return !t.deletedAt;});
+  const monthTasks = visible.filter(function(t){return STS.indexOf(t.status)>=0 && _opInMonth(t,year,month);});
+
+  /* ── Cálculos do mês ── */
+  // Publicações REALIZADAS: cards publicados. Collab multiplica por 6 (1 por unidade Bioter).
+  let publFeitas = 0;
+  monthTasks.forEach(function(t){
+    if(t.status!=="publicado")return;
+    if(_opIsCollab(t)) publFeitas += 6;
+    else publFeitas += 1;
+  });
+  // Itens-base = cards únicos (collab conta 1x). Aqui contamos os já publicados.
+  const itensBaseFeitos = monthTasks.filter(function(t){return t.status==="publicado";}).length;
+  // Materiais produzidos = publicados não-drive
+  const produzidosFeitos = monthTasks.filter(function(t){return t.status==="publicado" && !_opIsDrive(t);}).length;
+  // Drive
+  const driveFeitos = monthTasks.filter(function(t){return t.status==="publicado" && _opIsDrive(t);}).length;
+
+  // Concluídos (já no fluxo final): aprovado/agendado/publicado
+  const concluidos = monthTasks.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+
+  // Atrasados: deadline ou publishDate < hoje e status != publicado
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+  const atrasados = monthTasks.filter(function(t){
+    if(t.status==="publicado")return false;
+    const ref = t.publishDate||t.deadline;
+    if(!ref)return false;
+    const d = new Date(ref+"T00:00:00");
+    return d < today0;
+  }).length;
+
+  // Aprovações paradas: status demanda/avaliacao/aprovacao_final há mais de 48h
+  const aprovacoesParadas = monthTasks.filter(function(t){
+    if(["demanda","avaliacao","aprovacao_final"].indexOf(t.status)<0)return false;
+    if(!t.col_entered_at)return false;
+    const d = new Date(t.col_entered_at);
+    const h = (Date.now() - d.getTime()) / 3600000;
+    return h > 48;
+  }).length;
+
+  /* ── Status do mês ── */
+  const pctMes = OP_METAS_MES.publicacoes>0
+    ? Math.round((publFeitas/OP_METAS_MES.publicacoes)*100)
+    : 0;
+  const stMes = _opStatusBadge(pctMes);
+
+  /* ── Quebra semanal (4 semanas) ── */
+  // Pra cada semana: pega cards cuja publishDate cai naquela semana
+  const semanas = OP_METAS_SEMANAIS.map(function(m){
+    const cardsSem = monthTasks.filter(function(t){
+      if(!t.publishDate)return false;
+      const d = new Date(t.publishDate+"T00:00:00");
+      if(d.getMonth()!==month||d.getFullYear()!==year)return false;
+      return _opWeekOfMonth(d) === m.sem;
+    });
+    let publ = 0;
+    cardsSem.forEach(function(t){ publ += _opIsCollab(t)?6:1; });
+    const base = cardsSem.length;
+    const prod = cardsSem.filter(function(t){return !_opIsDrive(t);}).length;
+    const driveS = cardsSem.filter(function(t){return _opIsDrive(t);}).length;
+    const concl = cardsSem.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+    const atras = cardsSem.filter(function(t){
+      if(t.status==="publicado")return false;
+      const ref = t.publishDate||t.deadline;
+      if(!ref)return false;
+      return new Date(ref+"T00:00:00") < today0;
+    }).length;
+    const aprov = cardsSem.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length;
+    const pctS = m.publ>0?Math.round((publ/m.publ)*100):0;
+    const stS = _opStatusBadge(pctS);
+    return { meta:m, publ:publ, base:base, prod:prod, drive:driveS, concl:concl, atras:atras, aprov:aprov, pct:pctS, status:stS };
+  });
+  const semanaAtualData = semanas[semanaAtual-1] || semanas[0];
+
+  /* ── KPIs por colaborador ── */
+  // Cada colaborador tem: id, role, kpis dinâmicos, meta semanal (texto descritivo)
+  const colabs = [
+    {
+      id:"ellen", name:"Hellen", role:"Estrategista", color:"#ec4899",
+      metaSemanal:"14 itens-base · copys/briefings até quarta · agendamentos até sexta",
+      kpis:(function(){
+        const my = monthTasks.filter(function(t){
+          if(t.assignee==="ellen")return true;
+          if(Array.isArray(t.assignees)&&t.assignees.indexOf("ellen")>=0)return true;
+          return false;
+        });
+        const rascunhos = monthTasks.filter(function(t){return t.status==="rascunhos"&&(t.assignee==="ellen"||(Array.isArray(t.assignees)&&t.assignees.indexOf("ellen")>=0));}).length;
+        const copys = my.filter(function(t){return ["demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+        const agendadas = my.filter(function(t){return ["agendado","publicado"].indexOf(t.status)>=0;}).length;
+        return [
+          {l:"Itens-base no mês", v:my.length, m:56},
+          {l:"Rascunhos", v:rascunhos, m:null},
+          {l:"Copys finalizadas", v:copys, m:null},
+          {l:"Publicações agendadas", v:agendadas, m:null},
+        ];
+      })(),
+    },
+    {
+      id:"vinicius", name:"Vinicius", role:"Gestor de Projetos", color:"#0891b2",
+      metaSemanal:"Nenhuma demanda sem dono/prazo · aprovações destravadas · checkpoint qua/sex",
+      kpis:(function(){
+        const semDono = monthTasks.filter(function(t){return !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length;
+        const semPrazo = monthTasks.filter(function(t){return !t.publishDate && !t.deadline;}).length;
+        const aprovCopy = monthTasks.filter(function(t){return ["recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+        const paradas48 = monthTasks.filter(function(t){
+          if(!t.col_entered_at)return false;
+          return (Date.now() - new Date(t.col_entered_at).getTime())/3600000 > 48;
+        }).length;
+        return [
+          {l:"Sem dono", v:semDono, m:0, invert:true},
+          {l:"Sem prazo", v:semPrazo, m:0, invert:true},
+          {l:"Aprovadas de copy", v:aprovCopy, m:null},
+          {l:"Paradas +48h", v:paradas48, m:0, invert:true},
+        ];
+      })(),
+    },
+    {
+      id:"andre", name:"André", role:"Designer", color:"#f59e0b",
+      metaSemanal:"S1/S3: até 8 artes ou fotos · S2/S4: até 5 artes ou fotos",
+      kpis:(function(){
+        const my = monthTasks.filter(function(t){
+          if(t.assignee==="andre")return true;
+          if(Array.isArray(t.assignees)&&t.assignees.indexOf("andre")>=0)return true;
+          return false;
+        });
+        const artesFotos = my.filter(function(t){const x=_opTipo(t);return x==="arte"||x==="foto";});
+        const concl = artesFotos.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+        const ajustes = artesFotos.filter(function(t){return t.status==="ajustes";}).length;
+        const atrasados2 = artesFotos.filter(function(t){
+          if(t.status==="publicado")return false;
+          const r=t.publishDate||t.deadline;if(!r)return false;
+          return new Date(r+"T00:00:00")<today0;
+        }).length;
+        return [
+          {l:"Artes/fotos previstas", v:artesFotos.length, m:26},
+          {l:"Concluídas", v:concl, m:null},
+          {l:"Em ajustes", v:ajustes, m:null},
+          {l:"Atrasadas", v:atrasados2, m:0, invert:true},
+        ];
+      })(),
+    },
+    {
+      id:"guilherme", name:"Guilherme", role:"Editor de Vídeo", color:"#7c3aed",
+      metaSemanal:"2 vídeos clientes comuns · +1 se collab Bioter for vídeo · Drive não conta",
+      kpis:(function(){
+        const my = monthTasks.filter(function(t){
+          if(t.assignee==="guilherme")return true;
+          if(Array.isArray(t.assignees)&&t.assignees.indexOf("guilherme")>=0)return true;
+          return false;
+        });
+        const videos = my.filter(function(t){return _opTipo(t)==="video";});
+        const concl = videos.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+        const ajustes = videos.filter(function(t){return t.status==="ajustes";}).length;
+        return [
+          {l:"Vídeos previstos", v:videos.length, m:8},
+          {l:"Concluídos", v:concl, m:null},
+          {l:"Em ajustes", v:ajustes, m:null},
+          {l:"Drive (não produz)", v:driveFeitos, m:null},
+        ];
+      })(),
+    },
+    {
+      id:"gustavo", name:"Gustavo", role:"Gestor de Performance", color:"#16a34a",
+      metaSemanal:"Avaliar design/vídeo final · revisar clientes críticos · acompanhar gargalos",
+      kpis:(function(){
+        const aguardando = monthTasks.filter(function(t){return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length;
+        const aprovados = monthTasks.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+        const devolvidos = monthTasks.filter(function(t){return t.status==="ajustes";}).length;
+        return [
+          {l:"Aguardando avaliação", v:aguardando, m:null},
+          {l:"Aprovados no mês", v:aprovados, m:null},
+          {l:"Devolvidos p/ ajuste", v:devolvidos, m:null},
+          {l:"Status do mês", v:pctMes+"%", m:null, raw:true},
+        ];
+      })(),
+    },
+    {
+      id:"erick", name:"Erick", role:"Gestor de Mídia", color:"#dc2626",
+      metaSemanal:"Revisar contas seg · otimizar ter/qua · leitura de perf sex · sinalizar críticas",
+      kpis:[
+        {l:"Contas revisadas", v:"—", m:null, raw:true},
+        {l:"Campanhas com alerta", v:"—", m:null, raw:true},
+        {l:"CPL acompanhado", v:"—", m:null, raw:true},
+        {l:"Próximas ações", v:"—", m:null, raw:true},
+      ],
+    },
+  ];
+
+  /* ── Rotina semanal ── */
+  const ROTINA = [
+    { dia:"Segunda",  abrev:"SEG", num:1, tit:"Abertura",            itens:["Revisar metas da semana","Revisar publicações previstas","Revisar materiais a produzir","Revisar materiais do Drive","Revisar demandas atrasadas e bloqueios","Revisar aprovações paradas","Definir prioridades"] },
+    { dia:"Terça",    abrev:"TER", num:2, tit:"Produção",            itens:["Hellen — avançar copys e briefings","André — produzir artes/fotos","Guilherme — produzir vídeos","Erick — otimizar campanhas","Vinicius — remover bloqueios","Gustavo — acompanhar críticos"] },
+    { dia:"Quarta",   abrev:"QUA", num:3, tit:"Checkpoint",          itens:["Revisar o que travou","Revisar copys pendentes","Revisar aprovações do Vinicius","Revisar materiais em execução","Revisar aguardando Gustavo","Revisar campanhas críticas","Ajustar prioridades"] },
+    { dia:"Quinta",   abrev:"QUI", num:4, tit:"Produção / Revisão",  itens:["Finalizar materiais","Gustavo avaliar design/vídeo","Resolver ajustes","Preparar publicações"] },
+    { dia:"Sexta",    abrev:"SEX", num:5, tit:"Fechamento",          itens:["Medir publicações feitas","Medir materiais concluídos","Medir atrasos","Medir aprovações pendentes","Registrar gargalos","Definir prioridades da próxima semana"] },
+  ];
+  const diaHoje = now.getDay(); // 0=dom, 1=seg...
+
+  /* ─── RENDER ─────────────────────────────────────────────── */
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif",width:"100%"}}>
+
+    {/* HEADER */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:42,height:42,borderRadius:11,background:"#7c3aed15",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5}}>Operacional</div>
+          <div style={{color:"#64748b",fontSize:13,marginTop:2,textTransform:"capitalize"}}>{monthLabel} {year} · Semana {semanaAtual}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{background:stMes.bg,color:stMes.color,border:"1px solid "+stMes.border,padding:"6px 14px",borderRadius:99,fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{stMes.label} · {pctMes}%</span>
+      </div>
+    </div>
+
+    {/* INDICADORES PRINCIPAIS — 4 cards grandes (publicações / itens-base / produção / drive) */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
+      <OpKpiCard big label="Publicações" value={publFeitas} meta={OP_METAS_MES.publicacoes} accent="#16a34a" hint="Posts que vão ao ar"/>
+      <OpKpiCard big label="Itens-base editoriais" value={itensBaseFeitos} meta={OP_METAS_MES.itensBase} accent="#0891b2" hint="Conteúdos únicos a planejar"/>
+      <OpKpiCard big label="Materiais produzidos" value={produzidosFeitos} meta={OP_METAS_MES.produzidos} accent="#7c3aed" hint="Design/edição da equipe"/>
+      <OpKpiCard big label="Do Drive" value={driveFeitos} meta={OP_METAS_MES.drive} accent="#f59e0b" hint="Shorts puxados, não produz"/>
+    </div>
+
+    {/* INDICADORES SECUNDÁRIOS — operacionais */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
+      <OpKpiCard label="Concluídos" value={concluidos} meta={null} accent="#16a34a" hint="Aprovado/agendado/publicado"/>
+      <OpKpiCard label="Atrasados" value={atrasados} meta={null} accent="#dc2626" hint="Passou da data prevista"/>
+      <OpKpiCard label="Aprovações paradas" value={aprovacoesParadas} meta={null} accent="#a16207" hint="+48h em copy/avaliação"/>
+      <OpKpiCard label="Status da semana" value={semanaAtualData.pct+"%"} meta={null} accent={semanaAtualData.status.color} hint={semanaAtualData.status.label}/>
+    </div>
+
+    {/* QUEBRA SEMANAL */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Quebra semanal</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Meta de cada semana e o que foi entregue</div>
+        </div>
+      </div>
+      <div style={{overflowX:"auto"}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontFamily:"inherit",minWidth:600}}>
+          <thead>
+            <tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+              <th style={{textAlign:"left",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Semana</th>
+              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Publ.</th>
+              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Itens-base</th>
+              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Produzir</th>
+              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Drive</th>
+              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Atrasos</th>
+              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Aprovações</th>
+              <th style={{textAlign:"center",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {semanas.map(function(s,i){
+              const ehAtual = (i+1)===semanaAtual;
+              return <tr key={s.meta.sem} style={{borderBottom:"1px solid #f1f5f9",background:ehAtual?"#faf5ff":"transparent"}}>
+                <td style={{padding:"11px 12px",fontSize:12.5,fontWeight:ehAtual?800:700,color:"#0f172a"}}>
+                  Semana {s.meta.sem}
+                  {ehAtual&&<span style={{background:"#7c3aed",color:"#fff",fontSize:8.5,fontWeight:800,padding:"2px 6px",borderRadius:99,marginLeft:6,letterSpacing:.3,textTransform:"uppercase"}}>atual</span>}
+                </td>
+                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:"#0f172a",fontFeatureSettings:"'tnum'"}}><strong>{s.publ}</strong><span style={{color:"#94a3b8",fontWeight:500}}>/{s.meta.publ}</span></td>
+                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:"#0f172a",fontFeatureSettings:"'tnum'"}}><strong>{s.base}</strong><span style={{color:"#94a3b8",fontWeight:500}}>/{s.meta.base}</span></td>
+                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:"#0f172a",fontFeatureSettings:"'tnum'"}}><strong>{s.prod}</strong><span style={{color:"#94a3b8",fontWeight:500}}>/{s.meta.prod}</span></td>
+                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:"#0f172a",fontFeatureSettings:"'tnum'"}}><strong>{s.drive}</strong><span style={{color:"#94a3b8",fontWeight:500}}>/{s.meta.drive}</span></td>
+                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:s.atras>0?"#dc2626":"#94a3b8",fontWeight:s.atras>0?700:500,fontFeatureSettings:"'tnum'"}}>{s.atras}</td>
+                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:s.aprov>0?"#a16207":"#94a3b8",fontWeight:s.aprov>0?700:500,fontFeatureSettings:"'tnum'"}}>{s.aprov}</td>
+                <td style={{padding:"11px 12px",textAlign:"center"}}>
+                  <span style={{background:s.status.bg,color:s.status.color,border:"1px solid "+s.status.border,padding:"3px 10px",borderRadius:99,fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",fontFeatureSettings:"'tnum'"}}>{s.status.label} · {s.pct}%</span>
+                </td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {/* KPIs POR COLABORADOR */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>KPIs por colaborador</div>
+        <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Indicadores e meta semanal de cada um</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+        {colabs.map(function(c){
+          return <div key={c.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:8,height:34,borderRadius:3,background:c.color,flexShrink:0}}/>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</div>
+                <div style={{color:c.color,fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",marginTop:1}}>{c.role}</div>
+              </div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {c.kpis.map(function(k,j){
+                const danger = k.invert && k.v>0;
+                const ok = k.invert && k.v===0;
+                const valCol = danger?"#dc2626":(ok?"#16a34a":"#0f172a");
+                return <div key={j} style={{background:"#fff",border:"1px solid #f1f5f9",borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k.l}</div>
+                  <div style={{color:valCol,fontWeight:800,fontSize:16,fontFeatureSettings:"'tnum'",marginTop:2,letterSpacing:-.3}}>
+                    {k.v}{k.m!=null&&!k.raw&&<span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>/{k.m}</span>}
+                  </div>
+                </div>;
+              })}
+            </div>
+            <div style={{background:c.color+"10",border:"1px solid "+c.color+"25",borderRadius:8,padding:"7px 10px",fontSize:10.5,color:"#475569",lineHeight:1.4}}>
+              <strong style={{color:c.color}}>Meta semanal:</strong> {c.metaSemanal}
+            </div>
+          </div>;
+        })}
+      </div>
+    </section>
+
+    {/* ROTINA SEMANAL — card único com dia atual destacado */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Rotina da semana</div>
+        <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>O que cada dia tem prioridade</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,1fr)",gap:10}}>
+        {ROTINA.map(function(r){
+          const ehHoje = diaHoje === r.num;
+          return <div key={r.num} style={{background:ehHoje?"linear-gradient(180deg,#faf5ff,#fff)":"#fafbfc",border:"1px solid "+(ehHoje?"#e9d5ff":"#f1f5f9"),borderRadius:10,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,boxShadow:ehHoje?"0 4px 12px rgba(124,58,237,0.10)":"none"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+              <div>
+                <div style={{color:ehHoje?"#7c3aed":"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>{r.abrev}</div>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,marginTop:1}}>{r.tit}</div>
+              </div>
+              {ehHoje&&<span style={{background:"#7c3aed",color:"#fff",fontSize:8.5,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",flexShrink:0}}>Hoje</span>}
+            </div>
+            <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:5}}>
+              {r.itens.map(function(it,k){
+                return <li key={k} style={{color:"#475569",fontSize:11.5,lineHeight:1.45,paddingLeft:12,position:"relative"}}>
+                  <span style={{position:"absolute",left:0,top:6,width:4,height:4,borderRadius:"50%",background:ehHoje?"#7c3aed":"#cbd5e1"}}/>
+                  {it}
+                </li>;
+              })}
+            </ul>
+          </div>;
+        })}
+      </div>
+    </section>
+
   </div>;
 }
