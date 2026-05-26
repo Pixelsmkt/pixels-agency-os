@@ -26354,6 +26354,8 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const [fResp,setFResp]=useState("todos");
   const [fMonth,setFMonth]=useState("");
   const [fChip,setFChip]=useState("todos");
+  const [topTab,setTopTab]=useState("visao"); // visao | demandas | clientes | relatorios
+  const [demFilter,setDemFilter]=useState("todas"); // chips da aba demandas
 
   const isSocio=currentUser?.level===1;
   const canManageClients=isSocio;
@@ -26446,52 +26448,60 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
     {id:"sem_funil",        label:"Sem Funil Digital",      count:semFunilCount,       color:"#f97316"},
   ];
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  // ── Aba Demandas: agrega demandas de mídia (internas + via portal) ──
+  const allMediaDemands=[];
+  (tasks||[]).forEach(function(t){
+    if(t.deletedAt)return;
+    const tipo=t.internoTipo||t.interno_tipo||t.tipo_solicitacao||t.contentType||t.content_type;
+    if(tipo!=="trafego")return;
+    allMediaDemands.push({
+      id:t.id,source:"portal",
+      client_id:t.client,title:t.title,
+      tipo:"trafego",priority:t.priority,status:t.status,
+      deadline:t.deadline,responsavel:(t.assignees||[])[0]||t.assignee,
+      created_at:t.createdAt||t.created_at,
+    });
+  });
+  Object.entries(store.tasks||{}).forEach(function(kv){
+    const cid=kv[0],list=kv[1];
+    (list||[]).forEach(function(d){
+      allMediaDemands.push({
+        id:d.id,source:"interna",
+        client_id:cid,title:d.titulo||d.title,
+        tipo:d.tipo,priority:d.priority||"media",status:d.status,
+        deadline:d.prazo||d.deadline,responsavel:d.responsavel,
+        created_at:d.created_at,descricao:d.descricao,
+      });
+    });
+  });
+  // Classifica em buckets pros KPIs da aba Demandas
+  const _isAtrasada=function(d){if(!d.deadline||d.status==="concluido"||d.status==="interno_executado")return false;return new Date(d.deadline+"T00:00:00")<new Date();};
+  const demNovas=allMediaDemands.filter(function(d){return d.status==="planejamento"||d.status==="interno_demanda";}).length;
+  const demAndamento=allMediaDemands.filter(function(d){return d.status==="configuracao"||d.status==="otimizacao"||d.status==="interno_execucao"||d.status==="interno_triagem";}).length;
+  const demAguardando=allMediaDemands.filter(function(d){return d.status==="aguard_cliente"||d.status==="aguard_aprovacao"||d.status==="interno_aguardando"||d.status==="interno_avaliacao";}).length;
+  const demConcluidas=allMediaDemands.filter(function(d){return d.status==="concluido"||d.status==="interno_executado"||d.status==="interno_aprovado";}).length;
+  const demAtrasadas=allMediaDemands.filter(_isAtrasada).length;
 
-    {/* ── Header premium ── */}
-    <div style={{background:"linear-gradient(135deg, #9F43F608 0%, transparent 60%)",borderRadius:16,padding:"18px 20px",border:"1px solid #9F43F622",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
-      <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 22px rgba(159,67,246,.35)",flexShrink:0}}>
-          <Ico n="trending-up" size={20} color="#fff"/>
-        </div>
-        <div style={{minWidth:0}}>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:22,letterSpacing:-.4}}>Gestão de mídia</div>
-          <div style={{color:"#64748b",fontSize:12.5,marginTop:2,fontWeight:500,maxWidth:560}}>
-            Acompanhamento de contas, investimentos, resultados e prioridades de tráfego pago.
-          </div>
-        </div>
+  const TABS_TOP=[
+    {id:"visao",     label:"Visão geral", icon:"chart"},
+    {id:"demandas",  label:"Demandas",    icon:"zap",      badge:demNovas+demAndamento+demAguardando},
+    {id:"clientes",  label:"Clientes",    icon:"users",    badge:allClients.length},
+    {id:"relatorios",label:"Relatórios",  icon:"file-text"},
+  ];
+
+  // Helper: renderiza cabeçalho de seção dentro das abas
+  const SectionTitle=({title,sub,right})=>(
+    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{title}</div>
+        {sub&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,fontWeight:500}}>{sub}</div>}
       </div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={()=>setShowRelatorio(true)}
-          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-          <Ico n="file-text" size={13}/> Relatório geral
-        </button>
-        <button onClick={()=>setShowNovaDemanda(true)}
-          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 14px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-          <Ico n="plus" size={13}/> Nova demanda
-        </button>
-        {canManageClients&&<button onClick={()=>setShowNovoCliente(true)}
-          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px rgba(159,67,246,0.35)"}}>
-          <Ico n="plus" size={13} color="#fff"/> Novo cliente
-        </button>}
-      </div>
+      {right}
     </div>
+  );
 
-    {/* ── KPIs resumo — estratégicos (orçamento, retorno, ROI) ── */}
-    <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"170px"},1fr))`,gap:10}}>
-      <KpiCard label="Orçamento gerido/mês"  value={_mFmtBRL(totalInvest)} sub={`${allClients.length} cliente${allClients.length!==1?"s":""}`} icon="dollar" color="#9F43F6" bg="#9F43F614"/>
-      <KpiCard label="Retorno do mês"        value={totalRetorno>0?_mFmtBRL(totalRetorno):"—"} sub={totalRetorno===0?"Aguardando Funil Digital":""} icon="trending-up" color={totalRetorno>0?"#16a34a":"#94a3b8"} bg={totalRetorno>0?"#dcfce7":"#f8fafc"} muted={totalRetorno===0}/>
-      <KpiCard label="ROI geral do mês"      value={roiGeral!==null?(roiGeral>=0?"+":"")+roiGeral.toFixed(1)+"%":"—"} sub={roiGeral===null?"Aguardando dados":(roiGeral>=0?"Retorno positivo":"Retorno negativo")} icon="chart" color={roiGeral===null?"#94a3b8":roiGeral>=0?"#16a34a":"#ef4444"} bg={roiGeral===null?"#f8fafc":roiGeral>=0?"#dcfce7":"#fef2f2"} muted={roiGeral===null}/>
-      <KpiCard label="Clientes ativos"       value={ativosCount+estruturacaoCount} sub={`${ativosCount} ativos · ${estruturacaoCount} em estruturação`} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
-      <KpiCard label="Sem Funil Digital"     value={semFunilCount} sub={semFunilCount>0?"Aguardando preenchimento":"Todos preenchidos"} icon="alert" color={semFunilCount>0?"#f97316":"#94a3b8"} bg={semFunilCount>0?"#fff7ed":"#f8fafc"}/>
-      <KpiCard label="Contas em atenção"     value={alertaCount} icon="alert" color={alertaCount>0?"#ef4444":"#94a3b8"} bg={alertaCount>0?"#fef2f2":"#f8fafc"}/>
-    </div>
-
-    <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:-4}}>
-      Última atualização geral: {lastUpdateLabel} · {visibleClients.length} cliente{visibleClients.length!==1?"s":""} visível{visibleClients.length!==1?"is":""}{fChip!=="todos"||fClient!=="todos"||fPlat!=="todos"||fStatus!=="todos"||fResp!=="todos"?` · investimento filtrado ${_mFmtBRL(totalInvestVisivel)}/mês`:""}
-    </div>
-
-    {/* ── Chips de filtro rápido ── */}
+  // Filtros visíveis (chips + selects) — extraídos pra reaproveitar entre abas
+  const FilterChips=()=>(
     <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
       {chipDefs.map(ch=>{
         const active=fChip===ch.id;
@@ -26503,8 +26513,8 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
         </button>;
       })}
     </div>
-
-    {/* ── Filtros detalhados ── */}
+  );
+  const FilterSelects=()=>(
     <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
       <MidiaFilterSelect label="Cliente"     value={fClient} onChange={setFClient}
         options={[{id:"todos",label:"Todos"},...store.clients.map(c=>({id:c.client_id,label:c.name}))]}/>
@@ -26523,102 +26533,258 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
         </button>
       }
     </div>
+  );
 
-    {/* ── Demandas de tráfego do portal (mantém seção existente) ── */}
-    {(()=>{
-      const trafegoDemands=(tasks||[]).filter(function(t){
-        if(t.deletedAt)return false;
-        const tipo=t.internoTipo||t.interno_tipo||t.tipo_solicitacao||t.contentType||t.content_type;
-        if(tipo!=="trafego")return false;
-        if(t.status==="interno_executado"||t.status==="publicado")return false;
-        return true;
-      });
-      if(trafegoDemands.length===0)return null;
-      const PRIO_TRAF={baixa:{l:"Baixa",c:"#64748b",bg:"#f1f5f9"},media:{l:"Média",c:"#f97316",bg:"#fff7ed"},alta:{l:"Alta",c:"#ef4444",bg:"#fef2f2"},urgente:{l:"Urgente",c:"#dc2626",bg:"#fee2e2"}};
-      const STAT_TRAF={interno_demanda:{l:"Entrada",c:"#9F43F6"},interno_triagem:{l:"Em triagem",c:"#6366f1"},interno_execucao:{l:"Em execução",c:"#f97316"},interno_aguardando:{l:"Aguardando cliente",c:"#0ea5e9"},interno_avaliacao:{l:"Concluída p/ avaliação",c:"#eab308"},interno_aprovado:{l:"Aprovada",c:"#22c55e"}};
-      const _dl=function(d){if(!d)return null;return Math.ceil((new Date(d+"T00:00:00")-new Date())/86400000);};
-      trafegoDemands.sort(function(a,b){
-        const m={urgente:0,alta:1,media:2,baixa:3};
-        const pa=m[a.priority]==null?2:m[a.priority], pb=m[b.priority]==null?2:m[b.priority];
-        if(pa!==pb)return pa-pb;
-        if(a.deadline&&b.deadline)return new Date(a.deadline)-new Date(b.deadline);
-        if(a.deadline)return -1;
-        if(b.deadline)return 1;
-        return 0;
-      });
-      return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <div style={{width:32,height:32,borderRadius:10,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <Ico n="zap" size={15} color="#fff"/>
-            </div>
-            <div>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Demandas de tráfego pendentes</div>
-              <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{trafegoDemands.length} {trafegoDemands.length===1?"demanda chegou":"demandas chegaram"} via Portal do Cliente</div>
-            </div>
-          </div>
-          {onNavTo&&<button onClick={function(){onNavTo("demandas_internas");}}
-            style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
-            Ver todas <Ico n="chevron-right" size={11}/>
-          </button>}
+  // Card de demanda (aba Demandas)
+  const DemandaCard=({d})=>{
+    const cl=d.client_id?CLIENTS.find(c=>c.id===(d.client_id.startsWith("bioter_")?"bioter":d.client_id)):null;
+    const isPortal=d.source==="portal";
+    const PRIO={baixa:{l:"Baixa",c:"#64748b",bg:"#f1f5f9"},media:{l:"Média",c:"#f97316",bg:"#fff7ed"},alta:{l:"Alta",c:"#ef4444",bg:"#fef2f2"},urgente:{l:"Urgente",c:"#dc2626",bg:"#fee2e2"}}[d.priority]||{l:"—",c:"#94a3b8",bg:"#f1f5f9"};
+    const STAT_MAP={
+      planejamento:{l:"Planejamento",c:"#64748b"},configuracao:{l:"Configuração",c:"#0284c7"},otimizacao:{l:"Em otimização",c:"#7c3aed"},aguard_cliente:{l:"Aguardando cliente",c:"#ea580c"},aguard_aprovacao:{l:"Aguardando aprovação",c:"#eab308"},relatorio:{l:"Relatório",c:"#4db8ff"},concluido:{l:"Concluído",c:"#16a34a"},
+      interno_demanda:{l:"Entrada",c:"#9F43F6"},interno_triagem:{l:"Em triagem",c:"#6366f1"},interno_execucao:{l:"Em execução",c:"#f97316"},interno_aguardando:{l:"Aguardando cliente",c:"#0ea5e9"},interno_avaliacao:{l:"Avaliação",c:"#eab308"},interno_aprovado:{l:"Aprovada",c:"#22c55e"},interno_executado:{l:"Executada",c:"#8b5cf6"},
+    };
+    const ST=STAT_MAP[d.status]||{l:d.status||"—",c:"#64748b"};
+    const dl=d.deadline?Math.ceil((new Date(d.deadline+"T00:00:00")-new Date())/86400000):null;
+    const dlC=dl===null?"#94a3b8":dl<0?"#ef4444":dl<=2?"#f97316":"#64748b";
+    const resp=d.responsavel?TEAM.find(u=>u.id===d.responsavel):null;
+    return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"13px 15px",transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}
+      onMouseEnter={e=>{e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.boxShadow="0 6px 18px rgba(159,67,246,0.08)";}}
+      onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+      {/* Logo + cliente */}
+      <div style={{display:"flex",alignItems:"center",gap:9,minWidth:200,flex:"0 0 200px"}}>
+        {cl?<ClientLogo clientId={cl.id} size="sm"/>:<div style={{width:28,height:28,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11,fontWeight:700}}>?</div>}
+        <div style={{minWidth:0}}>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.name:"Sem cliente"}</div>
+          {isPortal&&<div style={{color:"#9F43F6",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:3,marginTop:1}}><Ico n="zap" size={9} color="#9F43F6"/>Via Portal</div>}
         </div>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10}}>
-          {trafegoDemands.map(function(t){
-            const cl=t.client&&t.client!=="interno"?CLIENTS.find(function(c){return c.id===t.client;}):null;
-            const pc=PRIO_TRAF[t.priority]||PRIO_TRAF.media;
-            const st=STAT_TRAF[t.status]||{l:t.status,c:"#64748b"};
-            const dl=_dl(t.deadline);
-            const dlC=dl===null?"#94a3b8":dl<0?"#ef4444":dl<=2?"#f97316":"#64748b";
-            return <div key={t.id} onClick={function(){if(onNavTo)onNavTo("demandas_internas");}}
-              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",cursor:onNavTo?"pointer":"default",transition:"all .15s",display:"flex",flexDirection:"column",gap:9}}
-              onMouseEnter={function(e){e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.boxShadow="0 4px 14px rgba(159,67,246,0.10)";}}
-              onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
-              <div style={{display:"flex",alignItems:"center",gap:9,justifyContent:"space-between"}}>
-                <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
-                  {cl?<ClientLogo clientId={cl.id} size="sm"/>:<div style={{width:28,height:28,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11,fontWeight:700}}>?</div>}
-                  <div style={{minWidth:0}}>
-                    <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.name:"Sem cliente"}</div>
-                    <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginTop:1}}>Tráfego pago</div>
-                  </div>
-                </div>
-                <span style={{background:pc.bg,color:pc.c,borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{pc.l}</span>
-              </div>
-              <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{t.title}</div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:7,paddingTop:7,borderTop:"1px solid #f1f5f9"}}>
-                <span style={{background:st.c+"18",color:st.c,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{st.l}</span>
-                {t.deadline&&<span style={{color:dlC,fontSize:10.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
-                  <Ico n="calendar" size={10}/>
-                  {dl!==null&&dl<0?(Math.abs(dl)+"d atraso"):dl===0?"Hoje":dl===1?"Amanhã":new Date(t.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}
-                </span>}
-              </div>
-            </div>;
-          })}
-        </div>
-      </div>;
-    })()}
+      </div>
+      {/* Título + tipo */}
+      <div style={{flex:"1 1 240px",minWidth:0}}>
+        <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{d.title||"(sem título)"}</div>
+        {d.tipo&&d.tipo!=="trafego"&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600}}>{d.tipo.replace(/_/g," ")}</div>}
+      </div>
+      {/* Badges */}
+      <div style={{display:"flex",gap:5,alignItems:"center",flexWrap:"wrap"}}>
+        <span style={{background:PRIO.bg,color:PRIO.c,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{PRIO.l}</span>
+        <span style={{background:ST.c+"18",color:ST.c,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{ST.l}</span>
+      </div>
+      {/* Responsável + prazo */}
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:140}}>
+        {resp?<div style={{display:"flex",alignItems:"center",gap:6}}><UserAvatar user={resp} size={20}/><span style={{color:"#475569",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{resp.name.split(" ")[0]}</span></div>:<span style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>—</span>}
+        {d.deadline&&<span style={{color:dlC,fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
+          <Ico n="calendar" size={11}/>
+          {dl!==null&&dl<0?(Math.abs(dl)+"d atraso"):dl===0?"Hoje":dl===1?"Amanhã":new Date(d.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}
+        </span>}
+      </div>
+    </div>;
+  };
 
-    {/* ── Lista de clientes (cards verticais grandes) ── */}
-    {visibleClients.length===0
-      ? <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:52,height:52,borderRadius:13,background:"#9F43F614",color:"#9F43F6",marginBottom:12}}>
-            <Ico n="folder" size={24}/>
-          </div>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:4}}>Nenhum cliente encontrado</div>
-          <div style={{color:"#64748b",fontSize:12,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>
-            {store.clients.length===0?"Cadastre o primeiro cliente de mídia clicando em \"Novo cliente\".":"Ajuste os filtros para ver clientes."}
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* ══ Header premium ══ */}
+    <div style={{background:"linear-gradient(135deg, #9F43F608 0%, transparent 60%)",borderRadius:16,padding:"18px 22px",border:"1px solid #9F43F622",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+        <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 28px rgba(159,67,246,.38)",flexShrink:0}}>
+          <Ico n="trending-up" size={21} color="#fff"/>
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?19:23,letterSpacing:-.5}}>Gestão de mídia</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontWeight:500,maxWidth:560,lineHeight:1.5}}>
+            Acompanhamento de contas, investimentos, resultados e prioridades de tráfego pago.
           </div>
         </div>
-      : <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {visibleClients.filter(c=>{
-            if(fChip!=="sem_funil")return true;
-            return clientFunilData[c.client_id]?.funilStatus==="pendente";
-          }).map(c=><MediaClientCard key={c.client_id} client={c}
-            funilData={clientFunilData[c.client_id]}
-            onOpen={()=>setOpenClient(c.client_id)}
-            onNovaDemanda={()=>{setShowNovaDemanda(c.client_id);}}
-            isMob={isMob}/>)}
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={()=>setShowRelatorio(true)}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 15px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7}}>
+          <Ico n="file-text" size={13}/> Relatório geral
+        </button>
+        <button onClick={()=>setShowNovaDemanda(true)}
+          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 15px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7}}>
+          <Ico n="plus" size={13}/> Nova demanda
+        </button>
+        {canManageClients&&<button onClick={()=>setShowNovoCliente(true)}
+          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"9px 17px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(159,67,246,0.38)"}}>
+          <Ico n="plus" size={13} color="#fff"/> Novo cliente
+        </button>}
+      </div>
+    </div>
+
+    {/* ══ Navegação por abas (TopTabs) ══ */}
+    <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:5,overflowX:"auto"}}>
+      {TABS_TOP.map(t=>{
+        const active=topTab===t.id;
+        return <button key={t.id} onClick={()=>setTopTab(t.id)}
+          style={{flex:isMob?"0 0 auto":1,background:active?"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)":"transparent",color:active?"#fff":"#475569",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:active?"0 4px 14px rgba(159,67,246,0.3)":"none",whiteSpace:"nowrap"}}>
+          <Ico n={t.icon} size={13} color={active?"#fff":"currentColor"}/>
+          {t.label}
+          {typeof t.badge==="number"&&t.badge>0&&<span style={{background:active?"rgba(255,255,255,.25)":"#9F43F614",color:active?"#fff":"#9F43F6",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800,minWidth:18,textAlign:"center"}}>{t.badge}</span>}
+        </button>;
+      })}
+    </div>
+
+    {/* ══ Conteúdo por aba ══ */}
+
+    {/* ───── ABA 1: VISÃO GERAL ───── */}
+    {topTab==="visao"&&<>
+      {/* KPIs principais */}
+      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"150px":"180px"},1fr))`,gap:10}}>
+        <KpiCard label="Orçamento gerido/mês"  value={_mFmtBRL(totalInvest)} sub={`${allClients.length} cliente${allClients.length!==1?"s":""}`} icon="dollar" color="#9F43F6" bg="#9F43F614"/>
+        <KpiCard label="Retorno do mês"        value={totalRetorno>0?_mFmtBRL(totalRetorno):"—"} sub={totalRetorno===0?"Aguardando Funil Digital":""} icon="trending-up" color={totalRetorno>0?"#16a34a":"#94a3b8"} bg={totalRetorno>0?"#dcfce7":"#f8fafc"} muted={totalRetorno===0}/>
+        <KpiCard label="ROI geral do mês"      value={roiGeral!==null?(roiGeral>=0?"+":"")+roiGeral.toFixed(1)+"%":"—"} sub={roiGeral===null?"Aguardando dados":(roiGeral>=0?"Retorno positivo":"Retorno negativo")} icon="chart" color={roiGeral===null?"#94a3b8":roiGeral>=0?"#16a34a":"#ef4444"} bg={roiGeral===null?"#f8fafc":roiGeral>=0?"#dcfce7":"#fef2f2"} muted={roiGeral===null}/>
+        <KpiCard label="Clientes ativos"       value={ativosCount+estruturacaoCount} sub={`${ativosCount} ativos · ${estruturacaoCount} em estruturação`} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
+        <KpiCard label="Sem Funil Digital"     value={semFunilCount} sub={semFunilCount>0?"Aguardando preenchimento":"Todos preenchidos"} icon="alert" color={semFunilCount>0?"#f97316":"#94a3b8"} bg={semFunilCount>0?"#fff7ed":"#f8fafc"}/>
+        <KpiCard label="Contas em atenção"     value={alertaCount} icon="alert" color={alertaCount>0?"#ef4444":"#94a3b8"} bg={alertaCount>0?"#fef2f2":"#f8fafc"}/>
+      </div>
+
+      {/* Demandas de tráfego do portal (resumo) */}
+      {(()=>{
+        const trafegoDemands=(tasks||[]).filter(function(t){
+          if(t.deletedAt)return false;
+          const tipo=t.internoTipo||t.interno_tipo||t.tipo_solicitacao||t.contentType||t.content_type;
+          if(tipo!=="trafego")return false;
+          if(t.status==="interno_executado"||t.status==="publicado")return false;
+          return true;
+        });
+        if(trafegoDemands.length===0)return null;
+        return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+          <SectionTitle title="Demandas de tráfego pendentes" sub={trafegoDemands.length+" "+(trafegoDemands.length===1?"demanda chegou":"demandas chegaram")+" via Portal do Cliente"}
+            right={<button onClick={()=>setTopTab("demandas")} style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>Ver na aba Demandas <Ico n="chevron-right" size={11}/></button>}/>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {trafegoDemands.slice(0,3).map(t=>{
+              const fakeDem={id:t.id,source:"portal",client_id:t.client,title:t.title,tipo:"trafego",priority:t.priority,status:t.status,deadline:t.deadline,responsavel:(t.assignees||[])[0]||t.assignee,created_at:t.createdAt};
+              return <DemandaCard key={t.id} d={fakeDem}/>;
+            })}
+          </div>
+        </div>;
+      })()}
+
+      {/* Lista resumida (top 5 clientes) */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+        <SectionTitle title="Clientes em destaque" sub={`Veja os ${Math.min(5,allClients.length)} principais por investimento`}
+          right={<button onClick={()=>setTopTab("clientes")} style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>Ver todos <Ico n="chevron-right" size={11}/></button>}/>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {[...allClients].sort((a,b)=>(Number(b.investimento_mensal)||0)-(Number(a.investimento_mensal)||0)).slice(0,5).map(c=>(
+            <MediaClientCard key={c.client_id} client={c}
+              funilData={clientFunilData[c.client_id]}
+              onOpen={()=>setOpenClient(c.client_id)}
+              onNovaDemanda={()=>setShowNovaDemanda(c.client_id)}
+              isMob={isMob}/>
+          ))}
         </div>
-    }
+      </div>
+    </>}
+
+    {/* ───── ABA 2: DEMANDAS ───── */}
+    {topTab==="demandas"&&<>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"170px"},1fr))`,gap:10}}>
+        <KpiCard label="Novas"                value={demNovas}      icon="zap"       color="#9F43F6" bg="#9F43F614"/>
+        <KpiCard label="Em andamento"         value={demAndamento}  icon="settings"  color="#f97316" bg="#fff7ed"/>
+        <KpiCard label="Aguardando aprovação" value={demAguardando} icon="clock"     color="#eab308" bg="#fef9c3"/>
+        <KpiCard label="Concluídas"           value={demConcluidas} icon="check"     color="#16a34a" bg="#dcfce7"/>
+        <KpiCard label="Atrasadas"            value={demAtrasadas}  icon="alert"     color={demAtrasadas>0?"#ef4444":"#94a3b8"} bg={demAtrasadas>0?"#fef2f2":"#f8fafc"}/>
+      </div>
+
+      {/* Chips de filtro de demandas */}
+      <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+        {[
+          {id:"todas",       label:"Todas",                  count:allMediaDemands.length,                                                color:"#9F43F6"},
+          {id:"novas",       label:"Novas",                  count:demNovas,                                                              color:"#9F43F6"},
+          {id:"andamento",   label:"Em andamento",           count:demAndamento,                                                          color:"#f97316"},
+          {id:"aguardando",  label:"Aguardando aprovação",   count:demAguardando,                                                         color:"#eab308"},
+          {id:"concluidas",  label:"Concluídas",             count:demConcluidas,                                                         color:"#16a34a"},
+          {id:"atrasadas",   label:"Atrasadas",              count:demAtrasadas,                                                          color:"#ef4444"},
+          {id:"portal",      label:"Via Portal",             count:allMediaDemands.filter(d=>d.source==="portal").length,                color:"#7c3aed"},
+        ].map(ch=>{
+          const active=demFilter===ch.id;
+          return <button key={ch.id} onClick={()=>setDemFilter(ch.id)}
+            style={{background:active?ch.color:"#fff",border:`1px solid ${active?ch.color:"#e2e8f0"}`,borderRadius:99,padding:"6px 13px",color:active?"#fff":"#475569",fontSize:12,fontWeight:active?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
+            {ch.label}
+            <span style={{background:active?"rgba(255,255,255,.25)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:700,minWidth:18,textAlign:"center"}}>{ch.count}</span>
+          </button>;
+        })}
+      </div>
+
+      {/* Lista de demandas */}
+      {(()=>{
+        const filtered=allMediaDemands.filter(d=>{
+          if(demFilter==="todas")return true;
+          if(demFilter==="novas")return d.status==="planejamento"||d.status==="interno_demanda";
+          if(demFilter==="andamento")return d.status==="configuracao"||d.status==="otimizacao"||d.status==="interno_execucao"||d.status==="interno_triagem";
+          if(demFilter==="aguardando")return d.status==="aguard_cliente"||d.status==="aguard_aprovacao"||d.status==="interno_aguardando"||d.status==="interno_avaliacao";
+          if(demFilter==="concluidas")return d.status==="concluido"||d.status==="interno_executado"||d.status==="interno_aprovado";
+          if(demFilter==="atrasadas")return _isAtrasada(d);
+          if(demFilter==="portal")return d.source==="portal";
+          return true;
+        }).sort((a,b)=>{
+          // Atrasadas primeiro, depois por prioridade, depois por prazo
+          const aAt=_isAtrasada(a),bAt=_isAtrasada(b);
+          if(aAt&&!bAt)return -1;
+          if(!aAt&&bAt)return 1;
+          const m={urgente:0,alta:1,media:2,baixa:3};
+          const pa=m[a.priority]==null?2:m[a.priority], pb=m[b.priority]==null?2:m[b.priority];
+          if(pa!==pb)return pa-pb;
+          if(a.deadline&&b.deadline)return new Date(a.deadline)-new Date(b.deadline);
+          return 0;
+        });
+        if(filtered.length===0)return <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+          <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:52,height:52,borderRadius:13,background:"#9F43F614",color:"#9F43F6",marginBottom:12}}><Ico n="zap" size={24}/></div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:4}}>Nenhuma demanda</div>
+          <div style={{color:"#64748b",fontSize:12,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>{allMediaDemands.length===0?"Crie a primeira demanda clicando em \"Nova demanda\" no topo.":"Nenhuma demanda nesse filtro."}</div>
+        </div>;
+        return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {filtered.map(d=><DemandaCard key={d.id+"-"+d.source} d={d}/>)}
+        </div>;
+      })()}
+    </>}
+
+    {/* ───── ABA 3: CLIENTES ───── */}
+    {topTab==="clientes"&&<>
+      <div style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>
+        Última atualização geral: {lastUpdateLabel} · {visibleClients.length} cliente{visibleClients.length!==1?"s":""} visível{visibleClients.length!==1?"is":""}{fChip!=="todos"||fClient!=="todos"||fPlat!=="todos"||fStatus!=="todos"||fResp!=="todos"?` · investimento filtrado ${_mFmtBRL(totalInvestVisivel)}/mês`:""}
+      </div>
+      <FilterChips/>
+      <FilterSelects/>
+      {visibleClients.length===0
+        ? <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+            <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:52,height:52,borderRadius:13,background:"#9F43F614",color:"#9F43F6",marginBottom:12}}>
+              <Ico n="folder" size={24}/>
+            </div>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:4}}>Nenhum cliente encontrado</div>
+            <div style={{color:"#64748b",fontSize:12,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>
+              {store.clients.length===0?"Cadastre o primeiro cliente de mídia clicando em \"Novo cliente\".":"Ajuste os filtros para ver clientes."}
+            </div>
+          </div>
+        : <div style={{display:"flex",flexDirection:"column",gap:12}}>
+            {visibleClients.filter(c=>{
+              if(fChip!=="sem_funil")return true;
+              return clientFunilData[c.client_id]?.funilStatus==="pendente";
+            }).map(c=><MediaClientCard key={c.client_id} client={c}
+              funilData={clientFunilData[c.client_id]}
+              onOpen={()=>setOpenClient(c.client_id)}
+              onNovaDemanda={()=>setShowNovaDemanda(c.client_id)}
+              isMob={isMob}/>)}
+          </div>
+      }
+    </>}
+
+    {/* ───── ABA 4: RELATÓRIOS ───── */}
+    {topTab==="relatorios"&&<>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"26px 22px",textAlign:"center"}}>
+        <div style={{display:"inline-flex",width:54,height:54,borderRadius:13,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",alignItems:"center",justifyContent:"center",marginBottom:12,boxShadow:"0 8px 22px rgba(159,67,246,.35)"}}>
+          <Ico n="file-text" size={22} color="#fff"/>
+        </div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.2,marginBottom:5}}>Relatório geral de mídia</div>
+        <div style={{color:"#64748b",fontSize:12.5,maxWidth:480,margin:"0 auto 16px",lineHeight:1.5}}>
+          Visão consolidada do orçamento gerido, investimento por cliente e plataforma, retorno total, ROI geral, ranking por ROI, alertas e clientes em atenção.
+        </div>
+        <button onClick={()=>setShowRelatorio(true)}
+          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit",boxShadow:"0 6px 18px rgba(159,67,246,.38)"}}>
+          <Ico n="file-text" size={13} color="#fff"/> Abrir relatório
+        </button>
+      </div>
+    </>}
 
     {/* ── Modais ── */}
     {showNovoCliente&&<MediaNovoClienteModal
