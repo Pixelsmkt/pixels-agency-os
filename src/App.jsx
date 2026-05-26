@@ -12901,13 +12901,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
 }
 
 // ======= 04_demandas_internas.jsx =======
+// Repaginação completa — 2026-05-26
+// Demandas Internas: pedidos do Portal do Cliente que NÃO são Arte/Vídeo para redes
+// + demandas internas criadas manualmente pela equipe.
 
 const INTERNO_COLS = [
-  { id:"interno_demanda",   label:"Demandas",                color:"#6366f1" },
-  { id:"interno_execucao",  label:"Em execução",                color:"#f97316" },
-  { id:"interno_avaliacao", label:"Concluídas para avaliação",  color:"#eab308" },
-  { id:"interno_aprovado",  label:"Aprovadas",                  color:"#22c55e" },
-  { id:"interno_executado", label:"Executadas",                 color:"#8b5cf6" },
+  { id:"interno_demanda",    label:"Entrada",                    color:"#9F43F6", hint:"Recém-chegadas do Portal" },
+  { id:"interno_triagem",    label:"Em triagem",                 color:"#6366f1", hint:"Sócio define responsável e prazo" },
+  { id:"interno_execucao",   label:"Em execução",                color:"#f97316", hint:"Equipe trabalhando" },
+  { id:"interno_aguardando", label:"Aguardando cliente",         color:"#0ea5e9", hint:"Falta info do cliente" },
+  { id:"interno_avaliacao",  label:"Concluídas p/ avaliação",    color:"#eab308", hint:"Cliente revisar" },
+  { id:"interno_aprovado",   label:"Aprovadas",                  color:"#22c55e", hint:"Pronta pra executar" },
+  { id:"interno_executado",  label:"Executadas",                 color:"#8b5cf6", hint:"Entregue / publicado" },
 ];
 
 const PRIO_CFG = {
@@ -12917,90 +12922,189 @@ const PRIO_CFG = {
   urgente: { label:"Urgente", color:"#dc2626", bg:"#dc262620" },
 };
 
+// Tipos de demanda interna — substituem o conceito de "tipo_solicitacao" do portal
+const INTERNO_TIPOS = [
+  { id:"folder",        label:"Folder",              icon:"folder" },
+  { id:"banner",        label:"Banner",              icon:"image" },
+  { id:"feira",         label:"Material de feira",   icon:"flag" },
+  { id:"apresentacao",  label:"Apresentação",        icon:"presentation" },
+  { id:"landing",       label:"Landing page",        icon:"layout" },
+  { id:"site_ajuste",   label:"Ajuste em site",      icon:"code" },
+  { id:"comercial",     label:"Material comercial",  icon:"briefcase" },
+  { id:"documento",     label:"Documento",           icon:"file-text" },
+  { id:"institucional", label:"Peça institucional",  icon:"building" },
+  { id:"outro",         label:"Outro",               icon:"box" },
+];
+
+const PIXELS_PURPLE = "#9F43F6";
+const INTERNO_INTER = "'Inter', system-ui, -apple-system, sans-serif";
+
 const nowFmtInt = () => { const n=new Date(); return n.toLocaleDateString("pt-BR")+" "+n.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); };
 const dlInt = (d) => {
   if (!d) return null;
   return Math.ceil((new Date(d+"T00:00:00") - new Date()) / 86400000);
 };
+const _tipoInternoLabel = (id) => (INTERNO_TIPOS.find(x=>x.id===id)?.label) || (id?id.charAt(0).toUpperCase()+id.slice(1):"");
+const _isDemandaInterna = (t) => {
+  if (!t || t.deletedAt) return false;
+  // Status precisa estar em alguma coluna interno
+  if (!INTERNO_COLS.find(c=>c.id===t.status)) return false;
+  // Se veio do portal e o tipo é Arte/Vídeo de redes — exclui (essas vão pro fluxo normal)
+  const ct = t.contentType || t.content_type || t.tipo_solicitacao;
+  if (ct==="arte" || ct==="video") return false;
+  return true;
+};
 
-/* ── Card Modal ─────────────────────────────────── */
+/* ── Ícones (Lucide-style inline SVG, traço fino) ─────────────────── */
+function IconI({ name, size=14, color="currentColor", style }) {
+  const s = size;
+  const sp = { width:s, height:s, viewBox:"0 0 24 24", fill:"none", stroke:color, strokeWidth:1.8, strokeLinecap:"round", strokeLinejoin:"round", style };
+  switch(name){
+    case "folder":        return <svg {...sp}><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>;
+    case "image":         return <svg {...sp}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
+    case "flag":          return <svg {...sp}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
+    case "presentation":  return <svg {...sp}><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>;
+    case "layout":        return <svg {...sp}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>;
+    case "code":          return <svg {...sp}><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>;
+    case "briefcase":     return <svg {...sp}><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>;
+    case "file-text":     return <svg {...sp}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
+    case "building":      return <svg {...sp}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>;
+    case "box":           return <svg {...sp}><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
+    case "plus":          return <svg {...sp}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    case "x":             return <svg {...sp}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    case "search":        return <svg {...sp}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
+    case "filter":        return <svg {...sp}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>;
+    case "kanban":        return <svg {...sp}><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 7v10"/><path d="M16 7v6"/><path d="M12 7v4"/></svg>;
+    case "list":          return <svg {...sp}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+    case "user":          return <svg {...sp}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    case "calendar":      return <svg {...sp}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+    case "clock":         return <svg {...sp}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+    case "paperclip":     return <svg {...sp}><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66L9.41 17.41a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>;
+    case "message":       return <svg {...sp}><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>;
+    case "alert":         return <svg {...sp}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+    case "check":         return <svg {...sp}><polyline points="20 6 9 17 4 12"/></svg>;
+    case "trash":         return <svg {...sp}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+    case "edit":          return <svg {...sp}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+    case "chevron-down":  return <svg {...sp}><polyline points="6 9 12 15 18 9"/></svg>;
+    case "chevron-right": return <svg {...sp}><polyline points="9 18 15 12 9 6"/></svg>;
+    case "inbox":         return <svg {...sp}><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>;
+    case "zap":           return <svg {...sp}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>;
+    case "external":      return <svg {...sp}><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>;
+    case "more":          return <svg {...sp}><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>;
+    default: return null;
+  }
+}
+
+/* ── Card Modal (edição completa — mantido para nova/editar) ─────── */
 function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
-  const [title,     setTitle]     = useState(card.title     || "");
-  const [desc,      setDesc]      = useState(card.desc      || "");
-  const [priority,  setPriority]  = useState(card.priority  || "media");
+  const [title,        setTitle]        = useState(card.title     || "");
+  const [desc,         setDesc]         = useState(card.desc      || card.description || "");
+  const [priority,     setPriority]     = useState(card.priority  || "media");
   const [deadline,     setDeadline]     = useState(card.deadline     || "");
   const [deadlineTime, setDeadlineTime] = useState(card.deadlineTime || "");
   const [clientId,     setClientId]     = useState(card.client && card.client!=="interno" ? card.client : "");
   const [bioterUnit,   setBioterUnit]   = useState(card.bioterUnit || "");
   const [origem,       setOrigem]       = useState(card.origem || "interno");
+  const [internoTipo,  setInternoTipo]  = useState(card.internoTipo || card.interno_tipo || "outro");
   const [assignees,    setAssignees]    = useState(card.assignees || []);
-  const [checklist, setChecklist] = useState(card.checklist || []);
-  const [newCheck,  setNewCheck]  = useState("");
+  const [checklist,    setChecklist]    = useState(card.checklist || []);
+  const [newCheck,     setNewCheck]     = useState("");
+  const [sprint,       setSprint]       = useState(card.sprintBucket || (priority==="urgente"?"atual":"proxima"));
 
   const eligible = TEAM.filter(u => u.level === 1 || ACCESS_STORE?.[u.id]?.verDemandasInternas);
   const toggleA  = (uid) => setAssignees(p => p.includes(uid) ? p.filter(x=>x!==uid) : [...p, uid]);
   const addCheck = () => { if (!newCheck.trim()) return; setChecklist(p=>[...p,{id:Date.now()+"-"+Math.random().toString(36).slice(2,5),text:newCheck.trim(),done:false}]); setNewCheck(""); };
-  const save = () => onSave({ ...card, title, desc, priority, deadline, deadlineTime, client: clientId||"interno", bioterUnit: clientId==="bioter" ? bioterUnit : "", origem, assignees, checklist });
+  const save = () => onSave({ ...card, title, desc, priority, deadline, deadlineTime, client: clientId||"interno", bioterUnit: clientId==="bioter" ? bioterUnit : "", origem, internoTipo, sprintBucket: sprint, assignees, checklist });
   const col  = INTERNO_COLS.find(c => c.id === card.status) || INTERNO_COLS[0];
   const pc   = PRIO_CFG[priority] || PRIO_CFG.media;
   const done = checklist.filter(c=>c.done).length;
 
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16}}
+    <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16,fontFamily:INTERNO_INTER}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:C.card,borderRadius:18,width:"100%",maxWidth:560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 24px 80px rgba(0,0,0,0.3)"}}>
-        <div style={{padding:"20px 24px 0",display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
-          <div style={{display:"flex",gap:6}}>
-            <div style={{background:col.color+"20",borderRadius:8,padding:"3px 10px"}}><span style={{color:col.color,fontSize:11,fontWeight:700}}>{col.label}</span></div>
-            <div style={{background:pc.bg,borderRadius:8,padding:"3px 10px"}}><span style={{color:pc.color,fontSize:11,fontWeight:700}}>{pc.label}</span></div>
+      <div style={{background:C.card,borderRadius:20,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"auto",boxShadow:"0 32px 80px rgba(0,0,0,0.4)"}}>
+        <div style={{padding:"22px 26px 0",display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <div style={{background:col.color+"20",borderRadius:8,padding:"4px 11px"}}><span style={{color:col.color,fontSize:11,fontWeight:700,letterSpacing:.2}}>{col.label}</span></div>
+            <div style={{background:pc.bg,borderRadius:8,padding:"4px 11px"}}><span style={{color:pc.color,fontSize:11,fontWeight:700,letterSpacing:.2}}>{pc.label}</span></div>
+            {card.origem==="portal"&&<div style={{background:"#0ea5e918",borderRadius:8,padding:"4px 11px",display:"flex",alignItems:"center",gap:5}}><IconI name="external" size={11} color="#0ea5e9"/><span style={{color:"#0ea5e9",fontSize:11,fontWeight:700,letterSpacing:.2}}>Portal</span></div>}
           </div>
           <div style={{display:"flex",gap:6}}>
-            {isSocio&&card.id&&<button onClick={()=>onDelete(card.id)} style={{background:"#ef444415",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer"}}>Excluir</button>}
-            <button onClick={onClose} style={{background:C.s1,border:"none",borderRadius:8,padding:"6px 12px",color:C.td,fontSize:13,cursor:"pointer"}}>✕</button>
+            {isSocio&&card.id&&!card._isNew&&<button onClick={()=>onDelete(card.id)} style={{background:"#ef444415",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><IconI name="trash" size={12}/>Excluir</button>}
+            <button onClick={onClose} style={{background:C.s1,border:"none",borderRadius:8,padding:"6px 10px",color:C.td,cursor:"pointer",display:"flex",alignItems:"center"}}><IconI name="x" size={14}/></button>
           </div>
         </div>
-        <div style={{padding:"16px 24px 24px",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{padding:"16px 26px 26px",display:"flex",flexDirection:"column",gap:16}}>
           <textarea value={title} onChange={e=>setTitle(e.target.value)} placeholder="Título da demanda interna..."
-            style={{background:"transparent",border:"none",outline:"none",color:C.tx,fontSize:17,fontWeight:700,resize:"none",width:"100%",fontFamily:"inherit",lineHeight:1.4}} rows={2}/>
+            style={{background:"transparent",border:"none",outline:"none",color:C.tx,fontSize:18,fontWeight:700,resize:"none",width:"100%",fontFamily:"inherit",lineHeight:1.35}} rows={2}/>
 
           <div>
-            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Descrição</div>
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Descrição</div>
             <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descreva a demanda..."
-              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 12px",color:C.ts,fontSize:13,resize:"vertical",width:"100%",fontFamily:"inherit",minHeight:70,outline:"none",boxSizing:"border-box"}}/>
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"11px 13px",color:C.ts,fontSize:13,resize:"vertical",width:"100%",fontFamily:"inherit",minHeight:80,outline:"none",boxSizing:"border-box",lineHeight:1.5}}/>
           </div>
 
-          {/* Prioridade */}
+          {/* Tipo de demanda */}
           <div>
-            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prioridade</div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-              {Object.entries(PRIO_CFG).map(([k,conf])=>(
-                <button key={k} onClick={()=>setPriority(k)}
-                  style={{background:priority===k?conf.bg:"transparent",border:`1px solid ${priority===k?conf.color:C.b1}`,borderRadius:8,padding:"4px 8px",color:priority===k?conf.color:C.td,fontSize:10,fontWeight:priority===k?700:400,cursor:"pointer"}}>
-                  {conf.label}
-                </button>
-              ))}
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Tipo</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {INTERNO_TIPOS.map(t=>{
+                const sel=internoTipo===t.id;
+                return(
+                  <button key={t.id} onClick={()=>setInternoTipo(t.id)}
+                    style={{background:sel?PIXELS_PURPLE+"18":"transparent",border:`1px solid ${sel?PIXELS_PURPLE:C.b1}`,borderRadius:10,padding:"6px 11px",color:sel?PIXELS_PURPLE:C.ts,fontSize:11.5,fontWeight:sel?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
+                    <IconI name={t.icon} size={13}/>{t.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Prioridade + Sprint */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            <div>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Prioridade</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {Object.entries(PRIO_CFG).map(([k,conf])=>(
+                  <button key={k} onClick={()=>{setPriority(k); if(k==="urgente")setSprint("atual");}}
+                    style={{background:priority===k?conf.bg:"transparent",border:`1px solid ${priority===k?conf.color:C.b1}`,borderRadius:8,padding:"5px 10px",color:priority===k?conf.color:C.td,fontSize:11,fontWeight:priority===k?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                    {conf.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Sprint</div>
+              <div style={{display:"flex",gap:5}}>
+                {[["atual","Atual"],["proxima","Próxima"],["futuro","Futuro"]].map(([k,l])=>(
+                  <button key={k} onClick={()=>setSprint(k)}
+                    style={{flex:1,background:sprint===k?PIXELS_PURPLE+"18":"transparent",border:`1px solid ${sprint===k?PIXELS_PURPLE:C.b1}`,borderRadius:8,padding:"5px 8px",color:sprint===k?PIXELS_PURPLE:C.td,fontSize:11,fontWeight:sprint===k?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* Prazo + Horário */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
             <div>
-              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Prazo</div>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Prazo</div>
               <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
-                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"}}/>
             </div>
             <div>
-              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Horário</div>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Horário</div>
               <input type="time" value={deadlineTime} onChange={e=>setDeadlineTime(e.target.value)}
-                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"}}/>
             </div>
           </div>
 
           {/* Cliente */}
           <div>
-            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Cliente</div>
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Cliente</div>
             <select value={clientId} onChange={e=>{setClientId(e.target.value);setBioterUnit("");}}
-              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 12px",color:clientId?C.tx:C.td,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",cursor:"pointer"}}>
+              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:clientId?C.tx:C.td,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",cursor:"pointer",fontFamily:"inherit"}}>
               <option value="">— Sem cliente (interno) —</option>
               {CLIENTS.map(c=>(
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -13008,14 +13112,13 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
             </select>
           </div>
 
-          {/* Unidade Bioter — aparece só quando Bioter selecionado */}
           {clientId==="bioter"&&(
             <div>
-              <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Unidade Bioter</div>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Unidade Bioter</div>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {BIOTER_UNITS.map(u=>(
                   <button key={u.id} onClick={()=>setBioterUnit(u.id)}
-                    style={{background:bioterUnit===u.id?u.color+"22":"transparent",border:`1px solid ${bioterUnit===u.id?u.color:C.b1}`,borderRadius:8,padding:"5px 12px",color:bioterUnit===u.id?u.color:C.td,fontSize:11,fontWeight:bioterUnit===u.id?700:400,cursor:"pointer"}}>
+                    style={{background:bioterUnit===u.id?u.color+"22":"transparent",border:`1px solid ${bioterUnit===u.id?u.color:C.b1}`,borderRadius:8,padding:"5px 12px",color:bioterUnit===u.id?u.color:C.td,fontSize:11,fontWeight:bioterUnit===u.id?700:500,cursor:"pointer",fontFamily:"inherit"}}>
                     {u.label}
                   </button>
                 ))}
@@ -13023,72 +13126,73 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
             </div>
           )}
 
-          {/* Origem da demanda */}
+          {/* Origem */}
           <div>
-            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Origem</div>
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Origem</div>
             <div style={{display:"flex",gap:6}}>
               {[
-                {id:"interno",            label:"🔵 Interna",           desc:"Equipe Pixels"},
-                {id:"solicitacao_cliente",label:"🟡 Solicitação",       desc:"Cliente pediu"},
-                {id:"portal",             label:"🟢 Portal",            desc:"Via portal"},
+                {id:"interno",            label:"Interna"},
+                {id:"solicitacao_cliente",label:"Solicitação"},
+                {id:"portal",             label:"Portal"},
               ].map(o=>(
                 <button key={o.id} onClick={()=>setOrigem(o.id)}
-                  style={{flex:1,background:origem===o.id?C.a+"18":"transparent",border:`1px solid ${origem===o.id?C.a:C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",textAlign:"center"}}>
-                  <div style={{fontSize:12,fontWeight:origem===o.id?700:500,color:origem===o.id?C.a:C.ts}}>{o.label}</div>
-                  <div style={{fontSize:10,color:C.td,marginTop:2}}>{o.desc}</div>
+                  style={{flex:1,background:origem===o.id?PIXELS_PURPLE+"18":"transparent",border:`1px solid ${origem===o.id?PIXELS_PURPLE:C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
+                  <div style={{fontSize:12,fontWeight:origem===o.id?700:500,color:origem===o.id?PIXELS_PURPLE:C.ts}}>{o.label}</div>
                 </button>
               ))}
             </div>
           </div>
 
+          {/* Responsáveis */}
           <div>
-            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Responsáveis</div>
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Responsáveis</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {eligible.map(u=>{
                 const sel=assignees.includes(u.id);
                 return(
                   <button key={u.id} onClick={()=>toggleA(u.id)}
-                    style={{background:sel?u.color+"20":"transparent",border:`1px solid ${sel?u.color:C.b1}`,borderRadius:20,padding:"5px 12px",display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}>
-                    <div style={{width:18,height:18,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8,fontWeight:900,color:"#fff"}}>{u.av}</div>
-                    <span style={{color:sel?u.color:C.ts,fontSize:11,fontWeight:sel?700:400}}>{u.name}</span>
+                    style={{background:sel?u.color+"20":"transparent",border:`1px solid ${sel?u.color:C.b1}`,borderRadius:99,padding:"4px 11px 4px 4px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontFamily:"inherit"}}>
+                    <div style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff"}}>{u.av}</div>
+                    <span style={{color:sel?u.color:C.ts,fontSize:11.5,fontWeight:sel?700:500}}>{u.name}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
+          {/* Checklist */}
           <div>
-            <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>
               Checklist {checklist.length>0&&`(${done}/${checklist.length})`}
             </div>
             {checklist.length>0&&(
               <div style={{marginBottom:8}}>
-                <div style={{height:4,background:C.b1,borderRadius:99,overflow:"hidden",marginBottom:6}}>
-                  <div style={{height:"100%",width:`${checklist.length?Math.round(done/checklist.length*100):0}%`,background:C.gr,borderRadius:99}}/>
+                <div style={{height:5,background:C.b1,borderRadius:99,overflow:"hidden",marginBottom:8}}>
+                  <div style={{height:"100%",width:`${checklist.length?Math.round(done/checklist.length*100):0}%`,background:PIXELS_PURPLE,borderRadius:99,transition:"width .2s"}}/>
                 </div>
                 {checklist.map(item=>(
-                  <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                  <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
                     <button onClick={()=>setChecklist(p=>p.map(c=>c.id===item.id?{...c,done:!c.done}:c))}
-                      style={{width:17,height:17,borderRadius:4,border:`2px solid ${item.done?C.gr:C.b1}`,background:item.done?C.gr:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#fff",fontSize:9,fontWeight:900}}>
-                      {item.done?"✓":""}
+                      style={{width:18,height:18,borderRadius:5,border:`2px solid ${item.done?PIXELS_PURPLE:C.b1}`,background:item.done?PIXELS_PURPLE:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#fff"}}>
+                      {item.done&&<IconI name="check" size={11} color="#fff"/>}
                     </button>
-                    <span style={{color:item.done?C.td:C.ts,fontSize:12,textDecoration:item.done?"line-through":"none",flex:1}}>{item.text}</span>
+                    <span style={{color:item.done?C.td:C.ts,fontSize:12.5,textDecoration:item.done?"line-through":"none",flex:1}}>{item.text}</span>
                     <button onClick={()=>setChecklist(p=>p.filter(c=>c.id!==item.id))}
-                      style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:10}}>✕</button>
+                      style={{background:"none",border:"none",color:C.td,cursor:"pointer",display:"flex"}}><IconI name="x" size={11}/></button>
                   </div>
                 ))}
               </div>
             )}
             <div style={{display:"flex",gap:8}}>
               <input value={newCheck} onChange={e=>setNewCheck(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCheck()}
-                placeholder="Adicionar item..." style={{flex:1,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"7px 10px",color:C.ts,fontSize:12,outline:"none"}}/>
-              <button onClick={addCheck} style={{background:C.a,border:"none",borderRadius:8,padding:"7px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>+</button>
+                placeholder="Adicionar item..." style={{flex:1,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 11px",color:C.ts,fontSize:12,outline:"none",fontFamily:"inherit"}}/>
+              <button onClick={addCheck} style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center"}}><IconI name="plus" size={13} color="#fff"/></button>
             </div>
           </div>
 
-          <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:8,borderTop:`1px solid ${C.b1}`}}>
-            <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 20px",color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
-            <button onClick={save}    style={{background:C.a,border:"none",borderRadius:10,padding:"9px 24px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer"}}>Salvar</button>
+          <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:10,borderTop:`1px solid ${C.b1}`}}>
+            <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 22px",color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+            <button onClick={save}    style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"10px 26px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(159,67,246,.32)"}}>Salvar</button>
           </div>
         </div>
       </div>
@@ -13096,7 +13200,295 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
   );
 }
 
-/* ── Scanner ────────────────────────────────────── */
+/* ── Drawer de detalhe (clique no card abre aqui) ────────────────── */
+function DrawerInterno({ task, onClose, onEdit, onDelete, onMove, isSocio, canMoveApproved }) {
+  if (!task) return null;
+  const col  = INTERNO_COLS.find(c=>c.id===task.status) || INTERNO_COLS[0];
+  const pc   = PRIO_CFG[task.priority] || PRIO_CFG.media;
+  const dl   = dlInt(task.deadline);
+  const aus  = TEAM.filter(u=>(task.assignees||[]).includes(u.id));
+  const ck   = task.checklist||[];
+  const done = ck.filter(c=>c.done).length;
+  const cl   = task.client&&task.client!=="interno" ? CLIENTS.find(c=>c.id===task.client) : null;
+  const tipoId = task.internoTipo || task.interno_tipo || "outro";
+  const tipo = INTERNO_TIPOS.find(t=>t.id===tipoId) || INTERNO_TIPOS[INTERNO_TIPOS.length-1];
+  const tl   = (task.timeline||[]).slice(-6).reverse();
+  const cmt  = task.comments||[];
+  const fls  = task.files||[];
+  const sprint = task.sprintBucket || (task.priority==="urgente"?"atual":"proxima");
+  const sprintLabel = sprint==="atual"?"Sprint atual":sprint==="proxima"?"Próxima sprint":"Backlog futuro";
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.45)",display:"flex",justifyContent:"flex-end",zIndex:9998,fontFamily:INTERNO_INTER}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:C.card,width:"100%",maxWidth:520,height:"100vh",overflow:"auto",boxShadow:"-24px 0 60px rgba(0,0,0,0.3)",display:"flex",flexDirection:"column"}}>
+        {/* Header */}
+        <div style={{padding:"22px 24px 18px",borderBottom:`1px solid ${C.b1}`,position:"sticky",top:0,background:C.card,zIndex:2}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:"space-between",marginBottom:12}}>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <div style={{background:col.color+"20",borderRadius:8,padding:"4px 11px"}}><span style={{color:col.color,fontSize:11,fontWeight:700,letterSpacing:.2}}>{col.label}</span></div>
+              <div style={{background:pc.bg,borderRadius:8,padding:"4px 11px"}}><span style={{color:pc.color,fontSize:11,fontWeight:700,letterSpacing:.2}}>{pc.label}</span></div>
+              {task.origem==="portal"&&<div style={{background:"#0ea5e918",borderRadius:8,padding:"4px 11px",display:"flex",alignItems:"center",gap:5}}><IconI name="external" size={11} color="#0ea5e9"/><span style={{color:"#0ea5e9",fontSize:11,fontWeight:700}}>Portal</span></div>}
+              {task.origem==="solicitacao_cliente"&&<div style={{background:"#eab30818",borderRadius:8,padding:"4px 11px"}}><span style={{color:"#eab308",fontSize:11,fontWeight:700}}>Solicitação</span></div>}
+            </div>
+            <button onClick={onClose} style={{background:C.s1,border:"none",borderRadius:8,padding:"6px 10px",color:C.td,cursor:"pointer",display:"flex"}}><IconI name="x" size={14}/></button>
+          </div>
+          <h2 style={{color:C.tx,fontWeight:800,fontSize:19,margin:0,lineHeight:1.3,letterSpacing:-.2}}>{task.title}</h2>
+        </div>
+
+        {/* Corpo */}
+        <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:18,flex:1}}>
+          {/* Cards-resumo: Cliente, Tipo, Sprint */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <div style={{background:C.s1,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.b1}`}}>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:5}}>Cliente</div>
+              {cl?<div style={{display:"flex",alignItems:"center",gap:7}}><div style={{width:8,height:8,borderRadius:"50%",background:cl.color}}/><span style={{color:C.tx,fontSize:13,fontWeight:700}}>{cl.name}</span></div>:<span style={{color:C.td,fontSize:13,fontWeight:600}}>Sem cliente (interno)</span>}
+            </div>
+            <div style={{background:C.s1,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.b1}`}}>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:5}}>Tipo</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,color:PIXELS_PURPLE}}><IconI name={tipo.icon} size={14}/><span style={{color:C.tx,fontSize:13,fontWeight:700}}>{tipo.label}</span></div>
+            </div>
+            <div style={{background:C.s1,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.b1}`}}>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:5}}>Sprint</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,color:sprint==="atual"?"#dc2626":sprint==="proxima"?PIXELS_PURPLE:C.td}}>
+                <IconI name="zap" size={13}/><span style={{color:C.tx,fontSize:13,fontWeight:700}}>{sprintLabel}</span>
+              </div>
+            </div>
+            <div style={{background:C.s1,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.b1}`}}>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:5}}>Prazo</div>
+              {task.deadline?<div style={{display:"flex",alignItems:"center",gap:6,color:dl<0?"#ef4444":dl<=2?"#f97316":C.tx}}>
+                <IconI name="calendar" size={13}/>
+                <span style={{fontSize:13,fontWeight:700}}>{new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})}{task.deadlineTime?" "+task.deadlineTime:""}</span>
+                {dl!==null&&<span style={{fontSize:10.5,fontWeight:700,opacity:.85}}>{dl<0?`(${Math.abs(dl)}d atraso)`:dl===0?"(hoje)":dl===1?"(amanhã)":`(${dl}d)`}</span>}
+              </div>:<span style={{color:C.td,fontSize:13,fontWeight:600}}>Sem prazo</span>}
+            </div>
+          </div>
+
+          {/* Responsáveis */}
+          <div>
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Responsáveis</div>
+            {aus.length>0?<div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{aus.map(u=>(
+              <div key={u.id} style={{background:u.color+"15",borderRadius:99,padding:"4px 12px 4px 4px",display:"flex",alignItems:"center",gap:7,border:`1px solid ${u.color}33`}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff"}}>{u.av}</div>
+                <span style={{color:u.color,fontSize:12,fontWeight:700}}>{u.name}</span>
+              </div>
+            ))}</div>:<div style={{color:C.td,fontSize:12,fontStyle:"italic"}}>Sem responsável atribuído</div>}
+          </div>
+
+          {/* Descrição */}
+          {(task.desc||task.description)&&(
+            <div>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Descrição</div>
+              <div style={{background:C.s1,borderRadius:12,padding:"12px 14px",border:`1px solid ${C.b1}`,color:C.ts,fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{task.desc||task.description}</div>
+            </div>
+          )}
+
+          {/* Checklist */}
+          {ck.length>0&&(
+            <div>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span>Checklist</span>
+                <span style={{color:PIXELS_PURPLE,fontWeight:800}}>{done}/{ck.length}</span>
+              </div>
+              <div style={{height:5,background:C.b1,borderRadius:99,overflow:"hidden",marginBottom:10}}>
+                <div style={{height:"100%",width:`${Math.round(done/ck.length*100)}%`,background:PIXELS_PURPLE,borderRadius:99,transition:"width .2s"}}/>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                {ck.map(it=>(
+                  <div key={it.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0"}}>
+                    <div style={{width:16,height:16,borderRadius:5,border:`2px solid ${it.done?PIXELS_PURPLE:C.b1}`,background:it.done?PIXELS_PURPLE:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {it.done&&<IconI name="check" size={9} color="#fff"/>}
+                    </div>
+                    <span style={{color:it.done?C.td:C.ts,fontSize:12.5,textDecoration:it.done?"line-through":"none"}}>{it.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Mover de coluna */}
+          <div>
+            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Mover para</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {INTERNO_COLS.filter(c=>c.id!==task.status).map(c=>{
+                const disabled = c.id==="interno_aprovado" && !canMoveApproved;
+                return(
+                  <button key={c.id} onClick={()=>!disabled&&onMove(task.id,c.id)} disabled={disabled}
+                    title={disabled?"Apenas sócios podem mover para Aprovadas":""}
+                    style={{background:disabled?C.s1:c.color+"15",border:`1px solid ${disabled?C.b1:c.color+"55"}`,borderRadius:8,padding:"5px 10px",color:disabled?C.td:c.color,fontSize:11,fontWeight:700,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.55:1,fontFamily:"inherit"}}>
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Timeline resumida */}
+          {tl.length>0&&(
+            <div>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Linha do tempo</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {tl.map((ev,i)=>(
+                  <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                    <div style={{width:6,height:6,borderRadius:"50%",background:PIXELS_PURPLE,marginTop:5,flexShrink:0}}/>
+                    <div style={{flex:1}}>
+                      <div style={{color:C.ts,fontSize:12,lineHeight:1.45}}>
+                        {ev.type==="status"?`Movido de ${ev.fromLabel||ev.from} → ${ev.toLabel||ev.to}`:ev.type==="created_by_client"?`Criado via Portal (${ev.clientName||"cliente"})`:ev.label||ev.type}
+                      </div>
+                      <div style={{color:C.td,fontSize:10.5,marginTop:1}}>{ev.user||"Sistema"} · {ev.atFmt||(ev.at?new Date(ev.at).toLocaleDateString("pt-BR"):"")}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer ações */}
+        <div style={{padding:"14px 24px",borderTop:`1px solid ${C.b1}`,display:"flex",gap:8,position:"sticky",bottom:0,background:C.card}}>
+          {isSocio&&<button onClick={()=>{if(window.confirm("Excluir esta demanda interna?"))onDelete(task.id);}} style={{background:"#ef444415",border:"none",borderRadius:10,padding:"9px 14px",color:"#ef4444",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit"}}><IconI name="trash" size={13}/>Excluir</button>}
+          <div style={{flex:1}}/>
+          <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Fechar</button>
+          <button onClick={onEdit} style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",boxShadow:"0 4px 14px rgba(159,67,246,.32)"}}><IconI name="edit" size={13} color="#fff"/>Editar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Card Kanban (premium) ───────────────────────────────────────── */
+function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
+  const pc  = PRIO_CFG[task.priority] || PRIO_CFG.media;
+  const dl  = dlInt(task.deadline);
+  const dlC = dl===null?C.td:dl<0?"#ef4444":dl<=2?"#f97316":C.td;
+  const aus = TEAM.filter(u=>(task.assignees||[]).includes(u.id));
+  const ck  = task.checklist||[];
+  const cmt = (task.comments||[]).length;
+  const fls = (task.files||[]).length;
+  const cl  = task.client&&task.client!=="interno" ? CLIENTS.find(c=>c.id===task.client) : null;
+  const tipoId = task.internoTipo || task.interno_tipo || "outro";
+  const tipo = INTERNO_TIPOS.find(t=>t.id===tipoId);
+  return(
+    <div draggable onDragStart={e=>onDragStart(e,task.id)} onDragEnd={onDragEnd} onClick={()=>onOpen(task)}
+      style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"11px 12px",cursor:"pointer",userSelect:"none",transition:"all .15s",fontFamily:INTERNO_INTER}}
+      onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 18px rgba(159,67,246,.12)";e.currentTarget.style.borderColor=PIXELS_PURPLE+"55";}}
+      onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor=C.b1;}}>
+      <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8,flexWrap:"wrap"}}>
+        {cl&&<div style={{background:cl.color+"18",border:`1px solid ${cl.color}33`,borderRadius:6,padding:"2px 7px",display:"inline-flex",alignItems:"center"}}><span style={{color:cl.color,fontSize:9.5,fontWeight:700,letterSpacing:.2}}>{cl.abbr}</span></div>}
+        <div style={{background:pc.bg,borderRadius:6,padding:"2px 7px"}}><span style={{color:pc.color,fontSize:9.5,fontWeight:700,letterSpacing:.2}}>{pc.label}</span></div>
+        {task.origem==="portal"&&<div title="Via Portal do Cliente" style={{background:"#0ea5e918",borderRadius:6,padding:"2px 5px",display:"inline-flex",alignItems:"center"}}><IconI name="external" size={9} color="#0ea5e9"/></div>}
+      </div>
+      {tipo&&<div style={{display:"flex",alignItems:"center",gap:5,color:PIXELS_PURPLE,marginBottom:5}}>
+        <IconI name={tipo.icon} size={11} color={PIXELS_PURPLE}/>
+        <span style={{fontSize:10,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{tipo.label}</span>
+      </div>}
+      <div style={{color:C.tx,fontSize:13,fontWeight:600,lineHeight:1.35,marginBottom:9,letterSpacing:-.1,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{task.title}</div>
+      {ck.length>0&&(
+        <div style={{marginBottom:8}}>
+          <div style={{height:3,background:C.b1,borderRadius:99,overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${Math.round(ck.filter(c=>c.done).length/ck.length*100)}%`,background:PIXELS_PURPLE,borderRadius:99}}/>
+          </div>
+        </div>
+      )}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+        <div style={{display:"flex"}}>
+          {aus.slice(0,3).map((u,i)=>(
+            <div key={u.id} title={u.name}
+              style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:i===0?0:-6,zIndex:3-i}}>
+              {u.av}
+            </div>
+          ))}
+          {aus.length>3&&<div style={{width:22,height:22,borderRadius:"50%",background:C.s1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:C.td,border:`2px solid ${C.card}`,marginLeft:-6}}>+{aus.length-3}</div>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:7,color:C.td,fontSize:10.5,fontWeight:600}}>
+          {fls>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="paperclip" size={10}/>{fls}</span>}
+          {cmt>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="message" size={10}/>{cmt}</span>}
+          {ck.length>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="check" size={10}/>{ck.filter(c=>c.done).length}/{ck.length}</span>}
+          {task.deadline&&<span style={{display:"flex",alignItems:"center",gap:3,color:dlC,fontWeight:700}}>
+            <IconI name="calendar" size={10} color={dlC}/>
+            {dl<0?`${Math.abs(dl)}d atraso`:dl===0?"hoje":dl===1?"amanhã":new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}
+          </span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Lista (view alternativa) ────────────────────────────────────── */
+function ListaInterno({ tasks, onOpen }) {
+  const [sortBy,setSortBy]=useState("deadline");
+  const sorted = [...tasks].sort((a,b)=>{
+    if(sortBy==="deadline"){
+      if(!a.deadline&&!b.deadline)return 0;
+      if(!a.deadline)return 1;
+      if(!b.deadline)return -1;
+      return new Date(a.deadline)-new Date(b.deadline);
+    }
+    if(sortBy==="priority"){
+      const m={urgente:0,alta:1,media:2,baixa:3};
+      return (m[a.priority]??2)-(m[b.priority]??2);
+    }
+    if(sortBy==="status"){
+      const order=INTERNO_COLS.map(c=>c.id);
+      return order.indexOf(a.status)-order.indexOf(b.status);
+    }
+    return 0;
+  });
+
+  return(
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden",fontFamily:INTERNO_INTER}}>
+      <div style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 130px 120px 110px 100px 130px 36px",gap:0,padding:"10px 14px",background:C.s1,borderBottom:`1px solid ${C.b1}`,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,color:C.td}}>
+        <div/>
+        <div style={{cursor:"pointer"}} onClick={()=>setSortBy("priority")}>Demanda</div>
+        <div>Cliente</div>
+        <div style={{cursor:"pointer"}} onClick={()=>setSortBy("status")}>Status</div>
+        <div>Tipo</div>
+        <div>Resp.</div>
+        <div style={{cursor:"pointer"}} onClick={()=>setSortBy("deadline")}>Prazo</div>
+        <div/>
+      </div>
+      {sorted.length===0&&<div style={{padding:"50px 20px",textAlign:"center",color:C.td,fontSize:13}}>Nenhuma demanda encontrada com esses filtros.</div>}
+      {sorted.map(t=>{
+        const pc=PRIO_CFG[t.priority]||PRIO_CFG.media;
+        const col=INTERNO_COLS.find(c=>c.id===t.status)||INTERNO_COLS[0];
+        const cl=t.client&&t.client!=="interno"?CLIENTS.find(c=>c.id===t.client):null;
+        const tipoId=t.internoTipo||t.interno_tipo||"outro";
+        const tipo=INTERNO_TIPOS.find(x=>x.id===tipoId);
+        const aus=TEAM.filter(u=>(t.assignees||[]).includes(u.id));
+        const dl=dlInt(t.deadline);
+        const dlC=dl===null?C.td:dl<0?"#ef4444":dl<=2?"#f97316":C.ts;
+        return(
+          <div key={t.id} onClick={()=>onOpen(t)}
+            style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 130px 120px 110px 100px 130px 36px",gap:0,padding:"11px 14px",borderBottom:`1px solid ${C.b1}`,cursor:"pointer",alignItems:"center",fontSize:12.5,transition:"background .12s"}}
+            onMouseEnter={e=>e.currentTarget.style.background=C.s1}
+            onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            <div><div style={{width:8,height:8,borderRadius:"50%",background:pc.color}}/></div>
+            <div>
+              <div style={{color:C.tx,fontWeight:600,lineHeight:1.35,marginBottom:2}}>{t.title}</div>
+              {t.origem==="portal"&&<div style={{display:"inline-flex",alignItems:"center",gap:3,color:"#0ea5e9",fontSize:10,fontWeight:700}}><IconI name="external" size={9} color="#0ea5e9"/>Via Portal</div>}
+            </div>
+            <div>{cl?<div style={{display:"inline-flex",alignItems:"center",gap:5}}><div style={{width:7,height:7,borderRadius:"50%",background:cl.color}}/><span style={{color:C.ts,fontSize:11.5,fontWeight:600}}>{cl.abbr||cl.name}</span></div>:<span style={{color:C.td,fontSize:11.5,fontStyle:"italic"}}>—</span>}</div>
+            <div><span style={{background:col.color+"18",color:col.color,borderRadius:6,padding:"2px 8px",fontSize:10.5,fontWeight:700}}>{col.label}</span></div>
+            <div style={{color:C.ts,fontSize:11.5,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>{tipo&&<IconI name={tipo.icon} size={11} color={PIXELS_PURPLE}/>}{tipo?.label||"—"}</div>
+            <div style={{display:"flex"}}>
+              {aus.slice(0,2).map((u,i)=>(
+                <div key={u.id} title={u.name} style={{width:20,height:20,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8.5,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:i===0?0:-5}}>{u.av}</div>
+              ))}
+              {aus.length>2&&<div style={{width:20,height:20,borderRadius:"50%",background:C.s1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8.5,fontWeight:700,color:C.td,border:`2px solid ${C.card}`,marginLeft:-5}}>+{aus.length-2}</div>}
+              {aus.length===0&&<span style={{color:C.td,fontSize:11,fontStyle:"italic"}}>—</span>}
+            </div>
+            <div style={{color:dlC,fontSize:11.5,fontWeight:dl!==null&&dl<=2?700:600}}>
+              {t.deadline?<>{new Date(t.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}{dl!==null&&dl<0&&<span style={{color:"#ef4444",marginLeft:4,fontSize:10,fontWeight:800}}>+{Math.abs(dl)}d</span>}</>:<span style={{color:C.td,fontStyle:"italic"}}>—</span>}
+            </div>
+            <div style={{color:C.td,display:"flex",justifyContent:"flex-end"}}><IconI name="chevron-right" size={14}/></div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Scanner — versão modernizada ────────────────────────────────── */
 function ScannerInterno({ tasks }) {
   const now = new Date();
   const atrasadas  = tasks.filter(t=>t.status!=="interno_executado"&&dlInt(t.deadline)!==null&&dlInt(t.deadline)<0);
@@ -13105,140 +13497,129 @@ function ScannerInterno({ tasks }) {
     return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=2;
   });
   const paradas = tasks.filter(t=>{
-    // Aprovado aguardando execução manual é estado esperado — não conta como parado
     if(["interno_executado","interno_aprovado"].includes(t.status)||!t.colEnteredAt)return false;
     return Math.floor((now-new Date(t.colEnteredAt))/86400000)>=3;
   });
-  const executados = tasks.filter(t=>t.status==="interno_executado").length;
-  const taxa = tasks.length>0?Math.round(executados/tasks.length*100):0;
+  const semResp = tasks.filter(t=>t.status!=="interno_executado"&&(t.assignees||[]).length===0);
 
-  const Row = ({task})=>{
+  const Row = ({task,accentColor})=>{
     const pc=PRIO_CFG[task.priority]||PRIO_CFG.media;
     const col=INTERNO_COLS.find(c=>c.id===task.status);
     const dl=dlInt(task.deadline);
     const aus=TEAM.filter(u=>(task.assignees||[]).includes(u.id));
     return(
-      <div style={{background:C.s1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-        <div style={{flex:1,minWidth:100}}>
-          <div style={{color:C.tx,fontSize:12,fontWeight:700,marginBottom:4}}>{task.title}</div>
-          <div style={{display:"flex",gap:5}}>
-            {col&&<span style={{background:col.color+"20",color:col.color,borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:700}}>{col.label}</span>}
-            <span style={{background:pc.bg,color:pc.color,borderRadius:6,padding:"1px 7px",fontSize:10,fontWeight:700}}>{pc.label}</span>
+      <div style={{background:C.card,borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",border:`1px solid ${C.b1}`,borderLeft:`3px solid ${accentColor}`,fontFamily:INTERNO_INTER}}>
+        <div style={{flex:1,minWidth:120}}>
+          <div style={{color:C.tx,fontSize:12.5,fontWeight:700,marginBottom:5}}>{task.title}</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {col&&<span style={{background:col.color+"18",color:col.color,borderRadius:6,padding:"1px 8px",fontSize:10,fontWeight:700}}>{col.label}</span>}
+            <span style={{background:pc.bg,color:pc.color,borderRadius:6,padding:"1px 8px",fontSize:10,fontWeight:700}}>{pc.label}</span>
           </div>
         </div>
-        {aus.length>0&&<div style={{display:"flex",gap:2}}>{aus.map(u=><div key={u.id} title={u.name} style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff"}}>{u.av}</div>)}</div>}
-        {dl!==null&&<span style={{color:dl<0?C.rd:dl<=2?C.yw:C.td,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
+        {aus.length>0&&<div style={{display:"flex"}}>{aus.slice(0,3).map((u,i)=><div key={u.id} title={u.name} style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:i===0?0:-6}}>{u.av}</div>)}</div>}
+        {dl!==null&&<span style={{color:dl<0?"#ef4444":dl<=2?"#f97316":C.td,fontSize:11,fontWeight:700,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:4}}><IconI name="calendar" size={11}/>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
       </div>
     );
   };
 
-  return(
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
-        {INTERNO_COLS.map(col=>(
-          <div key={col.id} style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"12px 14px"}}>
-            <div style={{color:col.color,fontWeight:900,fontSize:22,lineHeight:1,marginBottom:4}}>{tasks.filter(t=>t.status===col.id).length}</div>
-            <div style={{color:C.td,fontSize:10,fontWeight:700}}>{col.label}</div>
-          </div>
-        ))}
-        <div style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"12px 14px"}}>
-          <div style={{color:C.gr,fontWeight:900,fontSize:22,lineHeight:1,marginBottom:4}}>{taxa}%</div>
-          <div style={{color:C.td,fontSize:10,fontWeight:700}}>Taxa conclusão</div>
-        </div>
+  const Section = ({color,icon,title,items}) => items.length===0?null:(
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10,color}}>
+        <IconI name={icon} size={14} color={color}/>
+        <span style={{fontSize:13,fontWeight:800,letterSpacing:-.1}}>{title} <span style={{opacity:.7,fontWeight:600}}>({items.length})</span></span>
       </div>
+      <div style={{display:"flex",flexDirection:"column",gap:7}}>{items.map(t=><Row key={t.id} task={t} accentColor={color}/>)}</div>
+    </div>
+  );
 
-      {atrasadas.length>0&&(
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:C.rd}}/><span style={{color:C.rd,fontSize:12,fontWeight:800}}>Atrasadas ({atrasadas.length})</span></div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>{atrasadas.map(t=><Row key={t.id} task={t}/>)}</div>
+  if(atrasadas.length===0&&aguardando.length===0&&paradas.length===0&&semResp.length===0){
+    return(
+      <div style={{background:C.card,borderRadius:16,border:`1px solid ${C.b1}`,padding:"50px",textAlign:"center",fontFamily:INTERNO_INTER}}>
+        <div style={{display:"inline-flex",width:56,height:56,borderRadius:14,background:"#22c55e15",alignItems:"center",justifyContent:"center",marginBottom:14,color:"#22c55e"}}>
+          <IconI name="check" size={26} color="#22c55e"/>
         </div>
-      )}
-      {aguardando.length>0&&(
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:"#f97316"}}/><span style={{color:"#f97316",fontSize:12,fontWeight:800}}>Aguardando aprovação +2 dias ({aguardando.length})</span></div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>{aguardando.map(t=><Row key={t.id} task={t}/>)}</div>
-        </div>
-      )}
-      {paradas.length>0&&(
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><div style={{width:8,height:8,borderRadius:"50%",background:C.yw}}/><span style={{color:C.yw,fontSize:12,fontWeight:800}}>Paradas +3 dias ({paradas.length})</span></div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>{paradas.map(t=><Row key={t.id} task={t}/>)}</div>
-        </div>
-      )}
-      {atrasadas.length===0&&aguardando.length===0&&paradas.length===0&&(
-        <div style={{background:C.card,borderRadius:12,border:`1px solid ${C.b1}`,padding:"30px",textAlign:"center"}}>
-          <div style={{fontSize:28,marginBottom:8}}>✅</div>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Tudo em dia!</div>
-          <div style={{color:C.td,fontSize:12,marginTop:4}}>Nenhuma demanda interna precisa de atenção.</div>
-        </div>
-      )}
+        <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:5}}>Tudo em dia!</div>
+        <div style={{color:C.td,fontSize:12.5}}>Nenhuma demanda interna precisa de atenção agora.</div>
+      </div>
+    );
+  }
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:INTERNO_INTER}}>
+      <Section color="#ef4444" icon="alert"  title="Atrasadas"                 items={atrasadas}/>
+      <Section color="#f97316" icon="clock"  title="Aguardando aprovação +2d"  items={aguardando}/>
+      <Section color="#eab308" icon="clock"  title="Paradas +3 dias"           items={paradas}/>
+      <Section color="#0ea5e9" icon="user"   title="Sem responsável"           items={semResp}/>
     </div>
   );
 }
 
-/* ── Card Kanban ────────────────────────────────── */
-function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
-  const pc  = PRIO_CFG[task.priority] || PRIO_CFG.media;
-  const dl  = dlInt(task.deadline);
-  const dlC = dl===null?null:dl<0?C.rd:dl<=2?C.yw:C.td;
-  const aus = TEAM.filter(u=>(task.assignees||[]).includes(u.id));
-  const ck  = task.checklist||[];
-  return(
-    <div draggable onDragStart={e=>onDragStart(e,task.id)} onDragEnd={onDragEnd} onClick={()=>onOpen(task)}
-      style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"12px 14px",cursor:"pointer",userSelect:"none"}}
-      onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(0,0,0,0.12)"}
-      onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-        <div style={{background:pc.bg,borderRadius:6,padding:"2px 8px"}}><span style={{color:pc.color,fontSize:10,fontWeight:700}}>{pc.label}</span></div>
-        {dl!==null&&<span style={{color:dlC,fontSize:10,fontWeight:700}}>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
-      </div>
-      {task.client&&task.client!=="interno"&&(()=>{const cl=CLIENTS.find(c=>c.id===task.client);return cl?<div style={{background:cl.color+"18",border:`1px solid ${cl.color}33`,borderRadius:6,padding:"2px 8px",display:"inline-flex",alignItems:"center",marginBottom:5}}><span style={{color:cl.color,fontSize:9,fontWeight:700}}>{cl.abbr}</span></div>:null;})()}
-      <div style={{color:C.tx,fontSize:13,fontWeight:600,lineHeight:1.4,marginBottom:8}}>{task.title}</div>
-      {ck.length>0&&(
-        <div style={{marginBottom:8}}>
-          <div style={{height:3,background:C.b1,borderRadius:99,overflow:"hidden"}}>
-            <div style={{height:"100%",width:`${Math.round(ck.filter(c=>c.done).length/ck.length*100)}%`,background:C.gr,borderRadius:99}}/>
-          </div>
-          <div style={{color:C.td,fontSize:10,marginTop:2}}>{ck.filter(c=>c.done).length}/{ck.length} itens</div>
-        </div>
-      )}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{display:"flex"}}>
-          {aus.slice(0,3).map(u=>(
-            <div key={u.id} title={u.name}
-              style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:-4}}>
-              {u.av}
-            </div>
-          ))}
-        </div>
-        {task.deadline&&<span style={{color:C.td,fontSize:10}}>{new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}{task.deadlineTime?" "+task.deadlineTime:""}</span>}
-      </div>
-    </div>
-  );
-}
-
-/* ── PageDemandasInternas ───────────────────────── */
+/* ── Página principal ────────────────────────────────────────────── */
 function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms, viewingAs }) {
-  // FIX BUG-AUDIT: respeita "Ver como" — usa effectiveUser pra todos os filtros e ações
+  // FIX BUG-AUDIT: respeita "Ver como"
   const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs) || CURRENT_USER) : CURRENT_USER;
   const isSocio  = effectiveUser.level === 1;
   const myPermsRaw = perms || { ...DEFAULT_PERMS, ...(ACCESS_STORE?.[effectiveUser.id] || {}) };
-  const myPerms = withPartnerOverride(myPermsRaw, effectiveUser.id); // sócios sempre tudo true
+  const myPerms = withPartnerOverride(myPermsRaw, effectiveUser.id);
   const canCreate = isSocio || myPerms.criarDemandaInterna;
   const canSeeAll = isSocio || myPerms.verTodosInternos;
+  const canApprove = isSocio || myPerms.aprovarDemandaInterna;
 
-  const [view,     setView]     = useState("kanban");
+  const [view,     setView]     = useState(()=>{ try{return localStorage.getItem("pixels-interno-view")||"kanban";}catch{return "kanban";} });
   const [openCard, setOpenCard] = useState(null);
+  const [drawer,   setDrawer]   = useState(null);
   const [dragId,   setDragId]   = useState(null);
   const [dragOver, setDragOver] = useState(null);
+  const [chip,     setChip]     = useState("todos");
+  const [showExecAntigas, setShowExecAntigas] = useState(false);
+  const [filtros,  setFiltros]  = useState({cliente:"",responsavel:"",prioridade:"",tipo:"",origem:""});
+  const [showFilters,setShowFilters]=useState(false);
+  const [search,   setSearch]   = useState("");
 
+  useEffect(()=>{try{localStorage.setItem("pixels-interno-view",view);}catch{}},[view]);
 
-  const allInternas = (tasks||[]).filter(t=>!t.deletedAt&&INTERNO_COLS.find(c=>c.id===t.status));
-  const visible = canSeeAll ? allInternas
+  const allInternas = (tasks||[]).filter(_isDemandaInterna);
+  const visibleByPerm = canSeeAll ? allInternas
     : allInternas.filter(t=>(t.assignees||[]).includes(effectiveUser.id)||t.createdBy===effectiveUser.id);
 
-  // Verifica cards parados e notifica Vinicius+Gustavo a cada hora
-  // Usa ref para sempre ler a lista mais atualizada sem precisar recriar o interval
+  const today0 = (()=>{const d=new Date();d.setHours(0,0,0,0);return d;})();
+  const filtered = visibleByPerm.filter(t=>{
+    if(search){
+      const s=search.toLowerCase();
+      const hay=`${t.title||""} ${t.desc||""} ${t.description||""}`.toLowerCase();
+      if(!hay.includes(s)) return false;
+    }
+    if(filtros.cliente && t.client!==filtros.cliente) return false;
+    if(filtros.responsavel && !(t.assignees||[]).includes(filtros.responsavel)) return false;
+    if(filtros.prioridade && t.priority!==filtros.prioridade) return false;
+    if(filtros.tipo && (t.internoTipo||t.interno_tipo||"outro")!==filtros.tipo) return false;
+    if(filtros.origem && t.origem!==filtros.origem) return false;
+    const dl=dlInt(t.deadline);
+    if(chip==="urgentes" && t.priority!=="urgente") return false;
+    if(chip==="atrasadas" && !(dl!==null && dl<0 && t.status!=="interno_executado")) return false;
+    if(chip==="sem_resp" && (t.assignees||[]).length>0) return false;
+    if(chip==="aguardando_cliente" && t.status!=="interno_aguardando") return false;
+    if(chip==="aguardando_aprovacao" && t.status!=="interno_avaliacao") return false;
+    if(chip==="concluidas" && t.status!=="interno_executado") return false;
+    return true;
+  });
+
+  const monthRef = today0.getFullYear()+"-"+String(today0.getMonth()+1).padStart(2,"0");
+  const _completedThisMonth = (t)=>{
+    if(t.status!=="interno_executado") return false;
+    const c = t.completedAt || t.completed_at || (t.timeline||[]).slice().reverse().find(e=>e.to==="interno_executado")?.at;
+    if(!c) return false;
+    return c.startsWith(monthRef);
+  };
+  const kpis = {
+    abertas: visibleByPerm.filter(t=>t.status!=="interno_executado").length,
+    execucao: visibleByPerm.filter(t=>t.status==="interno_execucao").length,
+    aguardandoCliente: visibleByPerm.filter(t=>t.status==="interno_aguardando").length,
+    aguardandoAprovacao: visibleByPerm.filter(t=>t.status==="interno_avaliacao").length,
+    atrasadas: visibleByPerm.filter(t=>{const d=dlInt(t.deadline);return d!==null&&d<0&&t.status!=="interno_executado";}).length,
+    concluidasMes: visibleByPerm.filter(_completedThisMonth).length,
+  };
+
+  // Notificador de cards parados
   const allInternasRef=useRef(allInternas);
   useEffect(()=>{allInternasRef.current=allInternas;},[allInternas]);
   useEffect(()=>{
@@ -13277,22 +13658,26 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
       }
     };
     check();
-    const iv=setInterval(check,60*60*1000); // a cada hora
+    const iv=setInterval(check,60*60*1000);
     return()=>clearInterval(iv);
   },[isSocio,setNotifs]);
 
   const handleDragStart = (e,id) => { setDragId(id); e.dataTransfer.effectAllowed="move"; };
-  const handleDragEnd   = () => { setDragId(null); setDragOver(null); }; // FIX: limpa estado quando drag é cancelado/abortado
+  const handleDragEnd   = () => { setDragId(null); setDragOver(null); };
   const handleDragOver  = (e,colId) => { e.preventDefault(); setDragOver(colId); };
   const handleDrop      = (e,colId) => {
     e.preventDefault(); setDragOver(null);
     if(!dragId) return;
-    const task=(tasks||[]).find(t=>t.id===dragId);
+    moveTaskTo(dragId,colId);
+    setDragId(null);
+  };
+
+  const moveTaskTo = (taskId,colId) => {
+    const task=(tasks||[]).find(t=>t.id===taskId);
     if(!task) return;
-    if(task.status===colId){setDragId(null);return;} // mesma coluna — ignora
-    if(colId==="interno_aprovado"&&!isSocio&&!myPerms.aprovarDemandaInterna){
-      pixelsToast.warning("Apenas aprovadores podem mover para Aprovado.");
-      setDragId(null); // FIX: reset dragId pra não travar próximos drags
+    if(task.status===colId) return;
+    if(colId==="interno_aprovado"&&!canApprove){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Apenas aprovadores podem mover para Aprovadas.");
       return;
     }
     const now=new Date().toISOString();
@@ -13300,31 +13685,29 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
     const toCol=INTERNO_COLS.find(c=>c.id===colId);
     const tl=[...(task.timeline||[]),{type:"status",from:task.status,to:colId,fromLabel:fromCol?.label||task.status,toLabel:toCol?.label||colId,at:now,atFmt:nowFmtInt(),user:effectiveUser.name}];
     const updated={...task,status:colId,colEnteredAt:now,timeline:tl};
+    if(colId==="interno_executado") updated.completedAt = now;
     if(colId==="interno_avaliacao"&&setNotifs){
       setNotifs(p=>[{id:"ni_"+Date.now(),read:false,type:"interno_avaliacao",icon:"◫",title:"Demanda interna aguarda aprovação",body:`"${task.title}" foi enviada para avaliação.`,user:effectiveUser.name,at:"Agora",category:"interno"},...p]);
     }
-    if(setTasks) setTasks(p=>p.map(t=>t.id===dragId?updated:t));
+    if(setTasks) setTasks(p=>p.map(t=>t.id===taskId?updated:t));
+    if(drawer&&drawer.id===taskId) setDrawer(updated);
     if(window._sb){
-      window._sb.from("tasks").update({
-        status:colId,
-        col_entered_at:now,
-        timeline:tl,
-      }).eq("id",dragId).then(()=>{}).catch(err=>console.error("handleDrop supabase:",err));
+      const payload = {status:colId,col_entered_at:now,timeline:tl};
+      if(colId==="interno_executado") payload.completed_at = now;
+      window._sb.from("tasks").update(payload).eq("id",taskId).then(()=>{}).catch(err=>console.error("moveTaskTo supabase:",err));
     }
-    setDragId(null);
   };
 
   const createCard = () => {
-    // Cria objeto do card mas NÃO adiciona ao state ainda — só na saveCard
-    // Isso evita cards "fantasma" no state se o usuário fechar o modal sem salvar
     const t={
       id:"int-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),title:"Nova Demanda Interna",status:"interno_demanda",
-      priority:"media",deadline:"",assignees:[effectiveUser.id],checklist:[],desc:"",
+      priority:"media",deadline:"",assignees:[],checklist:[],desc:"",
       createdBy:effectiveUser.id,createdAt:new Date().toISOString(),
       colEnteredAt:new Date().toISOString(),timeline:[],
-      assignee:effectiveUser.id,sector:"",client:"interno",tags:[],comments:[],files:[],
+      assignee:"",sector:"",client:"interno",tags:[],comments:[],files:[],
       watchers:[],deletedAt:null,cover:null,ajustar:false,isAlteracao:false,
       score:null,publishDate:"",publishTime:"09:00",bioterUnit:"",
+      origem:"interno",internoTipo:"outro",sprintBucket:"proxima",
       _isNew:true,
     };
     setOpenCard(t);
@@ -13349,12 +13732,13 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
         tags:[],comments:[],files:[],watchers:[],cover:null,
         ajustar:false,is_alteracao:false,score:null,
         publish_date:null,publish_time:"09:00",bioter_unit:card.bioterUnit||"",
+        interno_tipo:card.internoTipo||"outro",
+        sprint_bucket:card.sprintBucket||"proxima",
       },{onConflict:"id"}).then(()=>{}).catch(err=>console.error("saveCard supabase:",err));
     }
-    // Notifica Vinicius e Gustavo quando demanda vem de cliente
     if(isNew&&(card.origem==="solicitacao_cliente"||card.origem==="portal")&&setNotifs){
       const clientName=card.client&&card.client!=="interno"?CLIENTS.find(c=>c.id===card.client)?.name||card.client:"sem cliente";
-      const origemLabel=card.origem==="portal"?"🟢 Portal":"🟡 Solicitação";
+      const origemLabel=card.origem==="portal"?"Portal":"Solicitação";
       setNotifs(p=>[{
         id:"radar_"+Date.now(),read:false,
         type:"radar_demanda",icon:"⚡",
@@ -13365,92 +13749,195 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
       },...p]);
     }
     setOpenCard(null);
+    if(drawer&&drawer.id===card.id) setDrawer(card);
   };
 
   const deleteCard = async (id) => {
-    if(!await pixelsConfirm("Excluir esta demanda interna?",{okText:"Excluir",danger:true})) return;
+    if(typeof pixelsConfirm==="function"){
+      if(!await pixelsConfirm("Excluir esta demanda interna?",{okText:"Excluir",danger:true})) return;
+    }else{
+      if(!window.confirm("Excluir esta demanda interna?")) return;
+    }
     const now=new Date().toISOString();
     if(setTasks) setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:now}:t));
     if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(()=>{}).catch(err=>console.error("deleteCard supabase:",err));
     setOpenCard(null);
+    setDrawer(null);
   };
 
-  const alerts = visible.filter(t=>{
-    if(t.status==="interno_executado") return false;
-    const dl=dlInt(t.deadline);
-    if(dl!==null&&dl<0) return true;
-    if(t.colEnteredAt&&Math.floor((new Date()-new Date(t.colEnteredAt))/86400000)>=3) return true;
-    return false;
-  }).length;
+  const chipDefs = [
+    { id:"todos",                 label:"Todos",                  count:visibleByPerm.length },
+    { id:"urgentes",              label:"Urgentes",               count:visibleByPerm.filter(t=>t.priority==="urgente").length, color:"#dc2626" },
+    { id:"atrasadas",             label:"Atrasadas",              count:kpis.atrasadas, color:"#ef4444" },
+    { id:"sem_resp",              label:"Sem responsável",        count:visibleByPerm.filter(t=>(t.assignees||[]).length===0).length },
+    { id:"aguardando_cliente",    label:"Aguardando cliente",     count:kpis.aguardandoCliente, color:"#0ea5e9" },
+    { id:"aguardando_aprovacao",  label:"Aguardando aprovação",   count:kpis.aguardandoAprovacao, color:"#eab308" },
+    { id:"concluidas",            label:"Concluídas",             count:visibleByPerm.filter(t=>t.status==="interno_executado").length, color:"#22c55e" },
+  ];
+
+  const KpiCard = ({label,value,color,icon}) => (
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"14px 16px",fontFamily:INTERNO_INTER,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,right:0,width:42,height:42,background:color+"12",borderBottomLeftRadius:14,display:"flex",alignItems:"center",justifyContent:"center",color}}>
+        <IconI name={icon} size={16} color={color}/>
+      </div>
+      <div style={{color,fontSize:24,fontWeight:800,lineHeight:1,letterSpacing:-.5,marginBottom:4}}>{value}</div>
+      <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+    </div>
+  );
+
+  const LIMIT_EXECUTADAS = 8;
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-        <div>
-          <div style={{color:C.tx,fontWeight:800,fontSize:17}}>Demandas Internas</div>
-          <div style={{color:C.td,fontSize:12}}>{visible.length} demanda{visible.length!==1?"s":""} ativa{visible.length!==1?"s":""}</div>
-        </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-          <div style={{display:"flex",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,overflow:"hidden"}}>
-            {[["kanban","◈ Kanban"],["scanner","📡 Scanner"]].map(([v,l])=>(
-              <button key={v} onClick={()=>setView(v)}
-                style={{background:view===v?C.a:"transparent",border:"none",padding:"7px 14px",color:view===v?"#fff":C.ts,fontSize:12,fontWeight:view===v?700:400,cursor:"pointer",position:"relative"}}>
-                {l}{v==="scanner"&&alerts>0&&<span style={{position:"absolute",top:3,right:3,background:"#ef4444",borderRadius:99,width:6,height:6,display:"block"}}/>}
-              </button>
-            ))}
+    <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:INTERNO_INTER}}>
+      <div style={{background:`linear-gradient(135deg, ${PIXELS_PURPLE}08 0%, transparent 60%)`,borderRadius:16,padding:"18px 20px",border:`1px solid ${PIXELS_PURPLE}22`}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <div style={{width:42,height:42,borderRadius:12,background:`linear-gradient(135deg, ${PIXELS_PURPLE} 0%, #7c3aed 100%)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 8px 22px ${PIXELS_PURPLE}45`}}>
+              <IconI name="inbox" size={20} color="#fff"/>
+            </div>
+            <div>
+              <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.3,marginBottom:2}}>Demandas Internas</div>
+              <div style={{color:C.td,fontSize:12.5,fontWeight:500}}>Folders, banners, materiais comerciais e demais pedidos extras — sem incluir artes/vídeos de redes sociais.</div>
+            </div>
           </div>
-          {canCreate&&(
-            <button onClick={createCard}
-              style={{background:C.a,border:"none",borderRadius:10,padding:"8px 18px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer"}}>
-              + Nova Demanda
-            </button>
-          )}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <div style={{display:"flex",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,overflow:"hidden"}}>
+              {[["kanban","Kanban","kanban"],["lista","Lista","list"],["scanner","Radar","alert"]].map(([v,l,ic])=>(
+                <button key={v} onClick={()=>setView(v)}
+                  style={{background:view===v?PIXELS_PURPLE:"transparent",border:"none",padding:"8px 14px",color:view===v?"#fff":C.ts,fontSize:12,fontWeight:view===v?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .15s"}}>
+                  <IconI name={ic} size={13} color={view===v?"#fff":"currentColor"}/>{l}
+                </button>
+              ))}
+            </div>
+            {canCreate&&(
+              <button onClick={createCard}
+                style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"inherit",boxShadow:`0 4px 14px ${PIXELS_PURPLE}45`,transition:"transform .12s"}}
+                onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
+                onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+                <IconI name="plus" size={14} color="#fff"/>Nova demanda
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {view==="scanner"&&<ScannerInterno tasks={visible}/>}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+        <KpiCard label="Abertas"               value={kpis.abertas}             color={PIXELS_PURPLE}   icon="inbox"/>
+        <KpiCard label="Em execução"           value={kpis.execucao}            color="#f97316"         icon="zap"/>
+        <KpiCard label="Aguard. cliente"       value={kpis.aguardandoCliente}   color="#0ea5e9"         icon="user"/>
+        <KpiCard label="Aguard. aprovação"     value={kpis.aguardandoAprovacao} color="#eab308"         icon="clock"/>
+        <KpiCard label="Atrasadas"             value={kpis.atrasadas}           color="#ef4444"         icon="alert"/>
+        <KpiCard label="Concluídas no mês"     value={kpis.concluidasMes}       color="#22c55e"         icon="check"/>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          {chipDefs.map(c=>{
+            const active = chip===c.id;
+            const color = c.color || PIXELS_PURPLE;
+            return(
+              <button key={c.id} onClick={()=>setChip(c.id)}
+                style={{background:active?color:C.card,border:`1px solid ${active?color:C.b1}`,borderRadius:99,padding:"6px 13px",color:active?"#fff":C.ts,fontSize:12,fontWeight:active?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .12s"}}>
+                {c.label}
+                <span style={{background:active?"rgba(255,255,255,.25)":C.s1,color:active?"#fff":C.td,borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:700,minWidth:18,textAlign:"center"}}>{c.count}</span>
+              </button>
+            );
+          })}
+          <div style={{flex:1}}/>
+          <div style={{display:"flex",alignItems:"center",gap:6,background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 11px",minWidth:200}}>
+            <IconI name="search" size={13} color={C.td}/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar demanda..."
+              style={{background:"transparent",border:"none",outline:"none",color:C.ts,fontSize:12,flex:1,fontFamily:"inherit"}}/>
+          </div>
+          <button onClick={()=>setShowFilters(s=>!s)}
+            style={{background:showFilters?PIXELS_PURPLE+"18":C.card,border:`1px solid ${showFilters?PIXELS_PURPLE:C.b1}`,borderRadius:10,padding:"7px 13px",color:showFilters?PIXELS_PURPLE:C.ts,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
+            <IconI name="filter" size={12}/>Filtros
+            {Object.values(filtros).filter(Boolean).length>0&&<span style={{background:PIXELS_PURPLE,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:800}}>{Object.values(filtros).filter(Boolean).length}</span>}
+          </button>
+        </div>
+
+        {showFilters&&(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:10,background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:14}}>
+            {[
+              ["cliente","Cliente",[{value:"",label:"Todos os clientes"},...CLIENTS.map(c=>({value:c.id,label:c.name}))]],
+              ["responsavel","Responsável",[{value:"",label:"Todos"},...TEAM.map(u=>({value:u.id,label:u.name}))]],
+              ["prioridade","Prioridade",[{value:"",label:"Todas"},...Object.entries(PRIO_CFG).map(([k,v])=>({value:k,label:v.label}))]],
+              ["tipo","Tipo",[{value:"",label:"Todos"},...INTERNO_TIPOS.map(t=>({value:t.id,label:t.label}))]],
+              ["origem","Origem",[{value:"",label:"Todas"},{value:"interno",label:"Interna"},{value:"solicitacao_cliente",label:"Solicitação"},{value:"portal",label:"Portal"}]],
+            ].map(([key,label,opts])=>(
+              <div key={key}>
+                <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>{label}</div>
+                <select value={filtros[key]} onChange={e=>setFiltros(f=>({...f,[key]:e.target.value}))}
+                  style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:8,padding:"7px 10px",color:filtros[key]?C.tx:C.td,fontSize:12,outline:"none",width:"100%",cursor:"pointer",fontFamily:"inherit"}}>
+                  {opts.map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            ))}
+            <div style={{display:"flex",alignItems:"flex-end"}}>
+              <button onClick={()=>setFiltros({cliente:"",responsavel:"",prioridade:"",tipo:"",origem:""})}
+                style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:8,padding:"7px 14px",color:C.ts,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Limpar filtros</button>
+            </div>
+          </div>
+        )}
+      </div>
 
       {view==="kanban"&&(
-        <div style={{display:"flex",gap:12,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
+        <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
           {INTERNO_COLS.map(col=>{
-            const colTasks=visible.filter(t=>t.status===col.id)
-              .sort((a,b)=>({urgente:0,alta:1,media:2,baixa:3}[a.priority]??2)-({urgente:0,alta:1,media:2,baixa:3}[b.priority]??2));
+            let colTasks=filtered.filter(t=>t.status===col.id);
+            colTasks.sort((a,b)=>({urgente:0,alta:1,media:2,baixa:3}[a.priority]??2)-({urgente:0,alta:1,media:2,baixa:3}[b.priority]??2));
             const isTarget=dragOver===col.id;
+            const limitExec = col.id==="interno_executado" && !showExecAntigas;
+            const allColCount = colTasks.length;
+            if (limitExec) colTasks = colTasks.slice(0, LIMIT_EXECUTADAS);
             return(
               <div key={col.id}
                 onDragOver={e=>handleDragOver(e,col.id)}
                 onDrop={e=>handleDrop(e,col.id)}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
                 style={{
-                  minWidth:240,width:240,flexShrink:0,
-                  background:isTarget?"#f0f4ff":C.s1,
-                  border:`1px solid ${isTarget?col.color+"66":C.b1}`,
-                  borderTop:`3px solid ${col.color}`,
-                  borderRadius:12,padding:"8px 8px 8px",
+                  minWidth:260,width:260,flexShrink:0,
+                  background:isTarget?col.color+"08":C.s1,
+                  border:`1px solid ${isTarget?col.color+"88":C.b1}`,
+                  borderRadius:14,padding:8,
                   display:"flex",flexDirection:"column",gap:0,
                   transition:"all .15s",
                 }}>
-                {/* Header colorido — mesmo padrão do Fluxo de Demandas */}
-                <div style={{padding:"8px 10px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"8px 8px 0 0",margin:"-8px -8px 10px -8px"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7}}>
-                    <span style={{color:"#fff",fontWeight:700,fontSize:12,textShadow:"0 1px 2px rgba(0,0,0,0.2)"}}>{col.label}</span>
-                    <span style={{background:"rgba(0,0,0,0.18)",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{colTasks.length}</span>
+                <div style={{padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"10px 10px 0 0",margin:"-8px -8px 10px -8px",position:"relative",overflow:"hidden"}}>
+                  <div style={{position:"absolute",inset:0,background:`linear-gradient(135deg, ${col.color} 0%, ${col.color}cc 100%)`,opacity:.95}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:7,position:"relative",zIndex:1}}>
+                    <span style={{color:"#fff",fontWeight:700,fontSize:12,textShadow:"0 1px 2px rgba(0,0,0,0.25)",letterSpacing:.1}}>{col.label}</span>
+                    <span style={{background:"rgba(0,0,0,0.22)",color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:10.5,fontWeight:700}}>{allColCount}</span>
                   </div>
+                  <div title={col.hint} style={{position:"relative",zIndex:1,color:"#ffffff99",fontSize:10,fontWeight:500,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
                 </div>
-                <div style={{display:"flex",flexDirection:"column",gap:7,overflowY:"auto",flex:1,padding:"0 2px"}}>
+                <div style={{display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flex:1,padding:"0 2px",minHeight:60,maxHeight:"calc(100vh - 340px)"}}>
                   {colTasks.map(t=>(
-                    <CardKanbanInterno key={t.id} task={t} onOpen={setOpenCard} onDragStart={handleDragStart} onDragEnd={handleDragEnd}/>
+                    <CardKanbanInterno key={t.id} task={t} onOpen={setDrawer} onDragStart={handleDragStart} onDragEnd={handleDragEnd}/>
                   ))}
-                  {colTasks.length===0&&<div style={{color:C.td,fontSize:11,textAlign:"center",padding:"20px 0",opacity:.5}}>Nenhuma demanda</div>}
+                  {colTasks.length===0&&(
+                    <div style={{color:C.td,fontSize:11.5,textAlign:"center",padding:"24px 8px",opacity:.6,fontStyle:"italic"}}>
+                      {col.id==="interno_executado"?"Nada executado ainda":"Sem demandas"}
+                    </div>
+                  )}
+                  {limitExec && allColCount>LIMIT_EXECUTADAS && (
+                    <button onClick={()=>setShowExecAntigas(true)}
+                      style={{background:"transparent",border:`1px dashed ${C.b1}`,borderRadius:10,padding:"8px",color:PIXELS_PURPLE,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>
+                      Ver executadas antigas ({allColCount-LIMIT_EXECUTADAS} mais)
+                    </button>
+                  )}
+                  {col.id==="interno_executado" && showExecAntigas && allColCount>LIMIT_EXECUTADAS && (
+                    <button onClick={()=>setShowExecAntigas(false)}
+                      style={{background:"transparent",border:`1px dashed ${C.b1}`,borderRadius:10,padding:"6px",color:C.td,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginTop:4}}>Recolher</button>
+                  )}
                 </div>
                 {col.id==="interno_demanda"&&canCreate&&(
-                  <div style={{paddingTop:6}}>
+                  <div style={{paddingTop:8}}>
                     <button onClick={createCard}
-                      style={{width:"100%",background:"transparent",border:`1px dashed ${C.b1}`,borderRadius:10,padding:"8px",color:C.td,fontSize:12,cursor:"pointer"}}
-                      onMouseEnter={e=>e.currentTarget.style.borderColor=C.a}
-                      onMouseLeave={e=>e.currentTarget.style.borderColor=C.b1}>
-                      + Adicionar
+                      style={{width:"100%",background:"transparent",border:`1px dashed ${C.b1}`,borderRadius:10,padding:"9px",color:C.td,fontSize:12,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=PIXELS_PURPLE;e.currentTarget.style.color=PIXELS_PURPLE;}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.color=C.td;}}>
+                      <IconI name="plus" size={12}/>Adicionar
                     </button>
                   </div>
                 )}
@@ -13458,6 +13945,33 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
             );
           })}
         </div>
+      )}
+
+      {view==="lista"&&<ListaInterno tasks={filtered} onOpen={setDrawer}/>}
+
+      {view==="scanner"&&<ScannerInterno tasks={filtered}/>}
+
+      {visibleByPerm.length===0&&(
+        <div style={{background:C.card,borderRadius:16,border:`1px dashed ${C.b1}`,padding:"50px 20px",textAlign:"center"}}>
+          <div style={{display:"inline-flex",width:56,height:56,borderRadius:14,background:PIXELS_PURPLE+"12",alignItems:"center",justifyContent:"center",marginBottom:14,color:PIXELS_PURPLE}}>
+            <IconI name="inbox" size={26} color={PIXELS_PURPLE}/>
+          </div>
+          <div style={{color:C.tx,fontSize:15,fontWeight:700,marginBottom:5}}>Nenhuma demanda interna ainda</div>
+          <div style={{color:C.td,fontSize:12.5,marginBottom:16,maxWidth:380,margin:"0 auto 16px"}}>
+            Pedidos do Portal do Cliente (banner, folder, material…) caem aqui automaticamente. Ou você pode criar uma manualmente.
+          </div>
+          {canCreate&&<button onClick={createCard}
+            style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"10px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit",boxShadow:`0 4px 14px ${PIXELS_PURPLE}45`}}>
+            <IconI name="plus" size={13} color="#fff"/>Criar primeira demanda
+          </button>}
+        </div>
+      )}
+
+      {drawer&&(
+        <DrawerInterno task={drawer} onClose={()=>setDrawer(null)}
+          onEdit={()=>{setOpenCard({...drawer,_isNew:false});setDrawer(null);}}
+          onDelete={deleteCard} onMove={moveTaskTo}
+          isSocio={isSocio} canMoveApproved={canApprove}/>
       )}
 
       {openCard&&(
