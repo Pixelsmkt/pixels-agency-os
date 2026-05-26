@@ -1693,7 +1693,7 @@ const NAV=[
   {type:"divider",label:"ADMIN"},
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
-    {id:"gestao_operacional",   icon:"◈", label:"Operacional"},
+    {id:"gestao_operacional",   icon:"◈", label:"Operação"},
     {id:"gestao_portfolio",     icon:"◇", label:"Portfólio"},
     {id:"gestao_enps",          icon:"◐", label:"ENPS"},
   ]},
@@ -35847,435 +35847,760 @@ function MonthlyPlanComments({data, onAdd, clColor}){
 }
 
 // ======= 20_operacional.jsx =======
-// Gestão > Operacional — dashboard interno da operação Pixels.
-// Exibe: indicadores do mês, quebra semanal, KPIs por colaborador, rotina.
-// Acesso: só sócios (Vinicius/Gustavo).
+// Gestão > Operação — painel de comando diário da agência.
+// Renomeado internamente de "Operacional" pra "Operação".
 
-/* ─── Metas fixas (escopo definido pelo time) ─────────────────── */
-const OP_METAS_MES = { publicacoes:76, itensBase:56, produzidos:38, drive:18 };
-const OP_METAS_SEMANAIS = [
+const _OP_FF = "'Inter',system-ui,-apple-system,sans-serif";
+
+/* ─── METAS FIXAS ─────────────────────────────────────────── */
+const OP_METAS_MES_V2 = { publicacoes:76, itensBase:56, produzidos:38, drive:18 };
+const OP_METAS_SEMANAIS_V2 = [
   { sem:1, publ:19, base:14, prod:11, drive:3 },
   { sem:2, publ:19, base:14, prod:8,  drive:6 },
   { sem:3, publ:19, base:14, prod:11, drive:3 },
   { sem:4, publ:19, base:14, prod:8,  drive:6 },
 ];
 
-/* ─── Helpers ─────────────────────────────────────────────────── */
-function _opTipo(t){
-  const ct=String(t.contentType||t.tipo||"").toLowerCase();
-  if(ct==="arte"||ct==="carrossel")return "arte";
-  if(ct==="video"||ct==="vídeo"||ct==="corte")return "video";
-  if(ct==="foto")return "foto";
-  if(ct==="video_short")return "short";
+/* ─── ROTINA SEMANAL — itens fixos por dia ────────────────── */
+const OP_ROTINA_DIAS = [
+  { id:"seg", num:1, dia:"Segunda", titulo:"Planejamento e destravamento", itens:[
+    {id:"seg_reuniao",      label:"Fazer reunião semanal da equipe"},
+    {id:"seg_atrasos_ant",  label:"Revisar atrasados da semana anterior"},
+    {id:"seg_sem_dono",     label:"Verificar cards sem responsável"},
+    {id:"seg_sem_prazo",    label:"Verificar cards sem prazo"},
+    {id:"seg_prioridades",  label:"Definir prioridades da semana por colaborador"},
+    {id:"seg_criticas",     label:"Confirmar demandas críticas dos clientes"},
+  ]},
+  { id:"ter", num:2, dia:"Terça", titulo:"Produção e andamento", itens:[
+    {id:"ter_copys",        label:"Conferir andamento das copys"},
+    {id:"ter_artes",        label:"Conferir andamento das artes"},
+    {id:"ter_videos",       label:"Conferir andamento dos vídeos"},
+    {id:"ter_drive",        label:"Verificar materiais pendentes no Drive"},
+    {id:"ter_cobrar",       label:"Cobrar pendências internas travadas"},
+  ]},
+  { id:"qua", num:3, dia:"Quarta", titulo:"Aprovações e ajustes", itens:[
+    {id:"qua_aprov48",      label:"Revisar aprovações paradas há mais de 48h"},
+    {id:"qua_ajustes",      label:"Conferir materiais em ajuste"},
+    {id:"qua_gargalos",     label:"Alinhar gargalos com designer/editor"},
+    {id:"qua_cronograma",   label:"Conferir cronograma das publicações da semana"},
+  ]},
+  { id:"qui", num:4, dia:"Quinta", titulo:"Organização e agendamento", itens:[
+    {id:"qui_agendadas",    label:"Conferir publicações agendadas"},
+    {id:"qui_legendas",     label:"Validar legendas e criativos finais"},
+    {id:"qui_calendario",   label:"Revisar calendário dos clientes"},
+    {id:"qui_proxima",      label:"Organizar demandas da próxima semana"},
+  ]},
+  { id:"sex", num:5, dia:"Sexta", titulo:"Fechamento da semana", itens:[
+    {id:"sex_concluidos",   label:"Conferir o que foi concluído"},
+    {id:"sex_criticos",     label:"Atualizar status dos clientes críticos"},
+    {id:"sex_gargalos_reg", label:"Registrar gargalos da semana"},
+    {id:"sex_pendentes",    label:"Verificar pendências que ficam para segunda"},
+    {id:"sex_indicadores",  label:"Revisar indicadores da semana"},
+  ]},
+];
+
+/* ─── COLABORADORES — cores e configs fixas ──────────────── */
+const OP_COLABS_DEF = [
+  {id:"ellen",     name:"Hellen Benning",       role:"Estrategista",          color:"#ec4899", priority:"Itens-base e copys"},
+  {id:"vinicius",  name:"Vinicius",             role:"Gestor de Projetos",    color:"#0891b2", priority:"Destravar aprovações"},
+  {id:"andre",     name:"André Leal",           role:"Designer",              color:"#f59e0b", priority:"Artes da semana"},
+  {id:"guilherme", name:"Guilherme Ferreira",   role:"Editor de Vídeo",       color:"#7c3aed", priority:"Vídeos previstos"},
+  {id:"gustavo",   name:"Gustavo",              role:"Gestor de Performance", color:"#16a34a", priority:"Aprovação final + clientes críticos"},
+];
+
+/* ─── HELPERS ─────────────────────────────────────────────── */
+function _opWeekKey(date){
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((d-yearStart)/86400000)+1)/7);
+  return d.getUTCFullYear()+"-"+String(weekNo).padStart(2,"0");
+}
+function _opWeekOfMonthV2(date){
+  return Math.min(4, Math.ceil(date.getDate()/7));
+}
+function _opTipoV2(t){
+  const ct = String(t.contentType||t.tipo||"").toLowerCase();
+  if(ct==="arte"||ct==="carrossel") return "arte";
+  if(ct==="video"||ct==="vídeo"||ct==="corte") return "video";
+  if(ct==="foto") return "foto";
+  if(ct==="video_short") return "short";
   return "outro";
 }
-function _opIsCollab(t){
-  if(t.client!=="bioter")return false;
-  const u=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();});
-  return u.indexOf("grupo")>=0||u.indexOf("brasil")>=0;
-}
-function _opIsDrive(t){
-  return _opTipo(t)==="short"||t.fromDrive===true;
-}
-function _opInMonth(t,year,month){
-  // Prioridade: publishDate > referenceMonth > createdAt
-  if(t.publishDate){
-    const d=new Date(t.publishDate);
-    return d.getFullYear()===year&&d.getMonth()===month;
-  }
-  if(t.referenceMonth){
-    const ms=year+"-"+String(month+1).padStart(2,"0");
-    return t.referenceMonth===ms;
-  }
-  return false;
-}
-function _opWeekOfMonth(date){
-  // Retorna 1-4 (limita em 4)
-  const day=date.getDate();
-  return Math.min(4,Math.ceil(day/7));
+function _opIsDriveV2(t){ return _opTipoV2(t)==="short" || t.fromDrive===true; }
+function _opIsCollabV2(t){
+  if(t.client!=="bioter") return false;
+  const u = String(t.bioterUnit||"").split(",").map(function(s){return s.trim();});
+  return u.indexOf("grupo")>=0 || u.indexOf("brasil")>=0;
 }
 function _opStatusBadge(pct){
-  if(pct>=90)return {label:"Saudável", color:"#15803d", bg:"#dcfce7", border:"#86efac"};
-  if(pct>=70)return {label:"Atenção",  color:"#a16207", bg:"#fef3c7", border:"#fde047"};
-  return         {label:"Crítica",  color:"#b91c1c", bg:"#fee2e2", border:"#fca5a5"};
+  if(pct>=80) return {label:"Saudável", color:"#15803d", bg:"#dcfce7", border:"#86efac"};
+  if(pct>=60) return {label:"Atenção",  color:"#a16207", bg:"#fef3c7", border:"#fde047"};
+  return       {label:"Crítica",  color:"#b91c1c", bg:"#fee2e2", border:"#fca5a5"};
+}
+function _opIsAssignee(task, userId){
+  if(task.assignee===userId) return true;
+  if(Array.isArray(task.assignees) && task.assignees.indexOf(userId)>=0) return true;
+  return false;
+}
+function _opHorasParado(task){
+  if(!task.col_entered_at) return 0;
+  return (Date.now() - new Date(task.col_entered_at).getTime())/3600000;
 }
 
-/* ─── Componente KPI Card ─────────────────────────────────────── */
-function OpKpiCard(props){
-  const { label, value, meta, accent, hint, big } = props;
-  const pct = meta>0?Math.min(100,Math.round(value/meta*100)):0;
-  const col = accent||"#7c3aed";
-  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:big?"16px 18px":"13px 15px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
-    <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
-    <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-      <span style={{color:"#0f172a",fontSize:big?28:22,fontWeight:800,letterSpacing:-.7,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{value}</span>
-      {meta!=null&&<span style={{color:"#94a3b8",fontSize:big?15:13,fontWeight:700}}>/{meta}</span>}
-    </div>
-    {meta>0&&<div style={{background:"#f1f5f9",borderRadius:99,height:4,overflow:"hidden"}}>
-      <div style={{width:pct+"%",height:"100%",background:col,borderRadius:99,transition:"width .3s"}}/>
-    </div>}
-    {hint&&<div style={{color:"#64748b",fontSize:10.5}}>{hint}</div>}
-  </div>;
+/* ─── HOOK: useOpRotinaChecks (rotina semanal Supabase) ──── */
+function useOpRotinaChecks(weekKey){
+  const [checks, setChecks] = useState({});
+  const [loading, setLoading] = useState(true);
+  useEffect(function(){
+    if(!weekKey||!window._sb){setLoading(false);return;}
+    window._sb.from("op_rotina_checks").select("*").eq("week_key", weekKey).then(function(r){
+      const map = {};
+      (r.data||[]).forEach(function(row){ map[row.item_id] = row; });
+      setChecks(map);
+      setLoading(false);
+    });
+  }, [weekKey]);
+
+  function toggle(itemId){
+    const cur = checks[itemId];
+    if(cur && cur.completed){
+      if(!window.confirm("Desmarcar este item? A data de conclusão será removida.")) return;
+      const next = Object.assign({}, checks); delete next[itemId];
+      setChecks(next);
+      if(window._sb){
+        window._sb.from("op_rotina_checks").delete().eq("week_key", weekKey).eq("item_id", itemId);
+      }
+    } else {
+      const row = {
+        id: weekKey+"-"+itemId,
+        week_key: weekKey,
+        item_id: itemId,
+        completed: true,
+        completed_at: new Date().toISOString(),
+        completed_by: (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"",
+      };
+      setChecks(function(p){return Object.assign({},p,{[itemId]:row});});
+      if(window._sb){
+        window._sb.from("op_rotina_checks").upsert(row,{onConflict:"week_key,item_id"});
+      }
+    }
+  }
+
+  return { checks, toggle, loading };
 }
 
-/* ─── PAGE: PageOperacional ──────────────────────────────────── */
+/* ─── COMPONENTE: Avatar colaborador (usa foto se existir) */
+function _OpAvatar(props){
+  const { colab, size } = props;
+  const sz = size||44;
+  const u = (typeof TEAM!=="undefined") ? TEAM.find(function(x){return x.id===colab.id;}) : null;
+  const photo = (u && u.profile_data && u.profile_data.photo) ||
+                (typeof localStorage!=="undefined" && localStorage.getItem("pixels-selfprofile-"+colab.id) ?
+                  (function(){try{return JSON.parse(localStorage.getItem("pixels-selfprofile-"+colab.id)).photo;}catch(e){return null;}})()
+                  : null);
+  if(photo){
+    return <img src={photo} alt={colab.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",border:"2px solid "+colab.color,flexShrink:0}}/>;
+  }
+  const iniciais = (colab.name||"?").split(" ").map(function(p){return p[0];}).slice(0,2).join("").toUpperCase();
+  return <div style={{width:sz,height:sz,borderRadius:"50%",background:colab.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.36),fontFamily:_OP_FF,flexShrink:0,border:"2px solid "+colab.color}}>{iniciais}</div>;
+}
+
+/* ─── HELPER: calcular KPIs de cada colaborador ──────────── */
+function _opKpisColab(colab, monthTasks, today0){
+  const my = monthTasks.filter(function(t){return _opIsAssignee(t, colab.id);});
+  const atras = function(arr){
+    return arr.filter(function(t){
+      if(t.status==="publicado") return false;
+      const r = t.publishDate||t.deadline;
+      if(!r) return false;
+      return new Date(r+"T00:00:00") < today0;
+    }).length;
+  };
+  if(colab.id==="ellen"){
+    return [
+      {l:"Itens-base", v: my.length, m:56},
+      {l:"Copys finalizadas", v: my.filter(function(t){return ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Rascunhos", v: my.filter(function(t){return t.status==="rascunhos";}).length, m:null},
+      {l:"Agendadas", v: my.filter(function(t){return ["agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Atrasos", v: atras(my), m:0, invert:true},
+    ];
+  }
+  if(colab.id==="vinicius"){
+    return [
+      {l:"Sem dono", v: monthTasks.filter(function(t){return !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length, m:0, invert:true},
+      {l:"Sem prazo", v: monthTasks.filter(function(t){return !t.publishDate && !t.deadline;}).length, m:0, invert:true},
+      {l:"Aprovações", v: monthTasks.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Paradas +48h", v: monthTasks.filter(function(t){return _opHorasParado(t)>48;}).length, m:0, invert:true},
+      {l:"Atrasos totais", v: atras(monthTasks), m:0, invert:true},
+    ];
+  }
+  if(colab.id==="andre"){
+    const artes = my.filter(function(t){const x=_opTipoV2(t);return x==="arte"||x==="foto";});
+    return [
+      {l:"Artes previstas", v: artes.length, m:26},
+      {l:"Concluídas", v: artes.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Em ajustes", v: artes.filter(function(t){return t.status==="ajustes";}).length, m:null},
+      {l:"Atrasadas", v: atras(artes), m:0, invert:true},
+      {l:"Aguardando aprovação", v: artes.filter(function(t){return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length, m:null},
+    ];
+  }
+  if(colab.id==="guilherme"){
+    const videos = my.filter(function(t){return _opTipoV2(t)==="video";});
+    return [
+      {l:"Vídeos previstos", v: videos.length, m:8},
+      {l:"Concluídos", v: videos.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Em ajustes", v: videos.filter(function(t){return t.status==="ajustes";}).length, m:null},
+      {l:"Atrasados", v: atras(videos), m:0, invert:true},
+      {l:"Drive pendentes", v: monthTasks.filter(function(t){return _opIsDriveV2(t) && t.status!=="publicado" && (!t.files||t.files.length===0);}).length, m:null},
+    ];
+  }
+  if(colab.id==="gustavo"){
+    return [
+      {l:"Aguardando avaliação", v: monthTasks.filter(function(t){return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Aprovados no mês", v: monthTasks.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Devolvidos p/ ajuste", v: monthTasks.filter(function(t){return t.status==="ajustes";}).length, m:null},
+      {l:"Clientes c/ atraso", v: (function(){
+        const set=new Set();
+        monthTasks.forEach(function(t){
+          if(t.status==="publicado")return;
+          const r=t.publishDate||t.deadline; if(!r)return;
+          if(new Date(r+"T00:00:00") < today0) set.add(t.client);
+        });
+        return set.size;
+      })(), m:0, invert:true},
+      {l:"Reuniões próximas", v:"—", m:null, raw:true},
+    ];
+  }
+  return [];
+}
+
+/* ─── HELPER: calcular gargalos do dia ───────────────────── */
+function _opGargalos(monthTasks, today0){
+  const list = [];
+  // Atrasados
+  monthTasks.forEach(function(t){
+    if(t.status==="publicado")return;
+    const r=t.publishDate||t.deadline; if(!r)return;
+    const d=new Date(r+"T00:00:00");
+    if(d<today0){
+      const dias=Math.floor((today0.getTime()-d.getTime())/86400000);
+      list.push({type:"atraso", task:t, label:"Demanda atrasada", tempo:dias+"d", suggestion:"Repriorizar demanda"});
+    }
+  });
+  // Sem responsável
+  monthTasks.forEach(function(t){
+    if(t.status==="publicado")return;
+    if(!t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0)){
+      list.push({type:"sem_dono", task:t, label:"Sem responsável", tempo:"—", suggestion:"Definir responsável"});
+    }
+  });
+  // Sem prazo
+  monthTasks.forEach(function(t){
+    if(t.status==="publicado")return;
+    if(!t.publishDate && !t.deadline){
+      list.push({type:"sem_prazo", task:t, label:"Sem prazo", tempo:"—", suggestion:"Definir prazo"});
+    }
+  });
+  // Aprovações +48h por tipo
+  monthTasks.forEach(function(t){
+    if(["demanda","avaliacao","aprovacao_final"].indexOf(t.status)<0)return;
+    const h=_opHorasParado(t);
+    if(h<=48)return;
+    const tp=_opTipoV2(t);
+    const tipoLabel = t.status==="demanda" ? "copy" : (tp==="video"||tp==="short" ? "vídeo" : "design");
+    list.push({type:"aprov_"+tipoLabel, task:t, label:"Aprovação de "+tipoLabel+" parada", tempo:Math.floor(h/24)+"d", suggestion:"Cobrar aprovação"});
+  });
+  // Drive aguardando arquivo
+  monthTasks.forEach(function(t){
+    if(t.status==="publicado")return;
+    if(_opIsDriveV2(t) && (!t.files||t.files.length===0)){
+      list.push({type:"drive", task:t, label:"Aguardando arquivo do Drive", tempo:"—", suggestion:"Solicitar arquivo"});
+    }
+  });
+  return list.slice(0, 30);
+}
+
+/* ─── PÁGINA PRINCIPAL ────────────────────────────────────── */
 function PageOperacional(props){
   const tasks = props.tasks||[];
   const isMob = props.isMob;
+  const onNav = props.nav;
+
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
   const monthLabel = now.toLocaleDateString("pt-BR",{month:"long"});
-  const semanaAtual = _opWeekOfMonth(now);
-  const STS = ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"];
-
-  /* ── Filtra cards do mês ── */
-  const visible = tasks.filter(function(t){return !t.deletedAt;});
-  const monthTasks = visible.filter(function(t){return STS.indexOf(t.status)>=0 && _opInMonth(t,year,month);});
-
-  /* ── Cálculos do mês ── */
-  // Publicações REALIZADAS: cards publicados. Collab multiplica por 6 (1 por unidade Bioter).
-  let publFeitas = 0;
-  monthTasks.forEach(function(t){
-    if(t.status!=="publicado")return;
-    if(_opIsCollab(t)) publFeitas += 6;
-    else publFeitas += 1;
-  });
-  // Itens-base = cards únicos (collab conta 1x). Aqui contamos os já publicados.
-  const itensBaseFeitos = monthTasks.filter(function(t){return t.status==="publicado";}).length;
-  // Materiais produzidos = publicados não-drive
-  const produzidosFeitos = monthTasks.filter(function(t){return t.status==="publicado" && !_opIsDrive(t);}).length;
-  // Drive
-  const driveFeitos = monthTasks.filter(function(t){return t.status==="publicado" && _opIsDrive(t);}).length;
-
-  // Concluídos (já no fluxo final): aprovado/agendado/publicado
-  const concluidos = monthTasks.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
-
-  // Atrasados: deadline ou publishDate < hoje e status != publicado
+  const semanaAtual = _opWeekOfMonthV2(now);
+  const weekKey = _opWeekKey(now);
   const today0 = new Date(); today0.setHours(0,0,0,0);
-  const atrasados = monthTasks.filter(function(t){
+
+  const STS = ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"];
+  const visible = tasks.filter(function(t){return !t.deletedAt;});
+  function inMonth(t){
+    if(t.publishDate){const d=new Date(t.publishDate);return d.getFullYear()===year&&d.getMonth()===month;}
+    if(t.referenceMonth){return t.referenceMonth===(year+"-"+String(month+1).padStart(2,"0"));}
+    return false;
+  }
+  const monthTasks = visible.filter(function(t){return STS.indexOf(t.status)>=0 && inMonth(t);});
+
+  // Filtros
+  const [filtroPeriodo, setFiltroPeriodo] = useState("semana"); // hoje | semana | mes
+  const [filtroCliente, setFiltroCliente] = useState("todos");
+  const [drawerColab, setDrawerColab] = useState(null);
+
+  // Rotina semanal — Supabase
+  const { checks, toggle: toggleCheck, loading: loadingRotina } = useOpRotinaChecks(weekKey);
+  const [rotinaFiltro, setRotinaFiltro] = useState("todas"); // todas | pendentes | concluidas
+
+  /* ───── Cálculos: aprovações por tipo (sincronizado com aba Aprovações) ───── */
+  const aprovacoesAll = visible.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0;});
+  function _tipoAprov(t){
+    if(t.status==="demanda") return "copy";
+    const tp=_opTipoV2(t);
+    if(tp==="video"||tp==="short") return "video";
+    return "design";
+  }
+  const aprovCopy = aprovacoesAll.filter(function(t){return _tipoAprov(t)==="copy";});
+  const aprovDesign = aprovacoesAll.filter(function(t){return _tipoAprov(t)==="design";});
+  const aprovVideo = aprovacoesAll.filter(function(t){return _tipoAprov(t)==="video";});
+  function _paradas48(arr){return arr.filter(function(t){return _opHorasParado(t)>48;});}
+  function _criticaCliente(arr){
+    const counts={};
+    arr.forEach(function(t){if(!counts[t.client])counts[t.client]=0;counts[t.client]++;});
+    let max=null,maxN=0;
+    Object.keys(counts).forEach(function(k){if(counts[k]>maxN){maxN=counts[k];max=k;}});
+    if(!max||typeof CLIENTS==="undefined")return null;
+    const c=CLIENTS.find(function(x){return x.id===max;});
+    return c?c.name:max;
+  }
+
+  /* ───── Status mês ───── */
+  const publicadasMes = monthTasks.filter(function(t){return t.status==="publicado";}).length;
+  const concluidosMes = monthTasks.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+  const atrasadosMes = monthTasks.filter(function(t){
     if(t.status==="publicado")return false;
-    const ref = t.publishDate||t.deadline;
-    if(!ref)return false;
-    const d = new Date(ref+"T00:00:00");
-    return d < today0;
+    const r=t.publishDate||t.deadline;if(!r)return false;
+    return new Date(r+"T00:00:00")<today0;
   }).length;
-
-  // Aprovações paradas: status demanda/avaliacao/aprovacao_final há mais de 48h
-  const aprovacoesParadas = monthTasks.filter(function(t){
-    if(["demanda","avaliacao","aprovacao_final"].indexOf(t.status)<0)return false;
-    if(!t.col_entered_at)return false;
-    const d = new Date(t.col_entered_at);
-    const h = (Date.now() - d.getTime()) / 3600000;
-    return h > 48;
-  }).length;
-
-  /* ── Status do mês ── */
-  const pctMes = OP_METAS_MES.publicacoes>0
-    ? Math.round((publFeitas/OP_METAS_MES.publicacoes)*100)
-    : 0;
+  const pctMes = OP_METAS_MES_V2.publicacoes>0 ? Math.round(publicadasMes/OP_METAS_MES_V2.publicacoes*100) : 0;
   const stMes = _opStatusBadge(pctMes);
 
-  /* ── Quebra semanal (4 semanas) ── */
-  // Pra cada semana: pega cards cuja publishDate cai naquela semana
-  const semanas = OP_METAS_SEMANAIS.map(function(m){
-    const cardsSem = monthTasks.filter(function(t){
-      if(!t.publishDate)return false;
-      const d = new Date(t.publishDate+"T00:00:00");
-      if(d.getMonth()!==month||d.getFullYear()!==year)return false;
-      return _opWeekOfMonth(d) === m.sem;
-    });
-    let publ = 0;
-    cardsSem.forEach(function(t){ publ += _opIsCollab(t)?6:1; });
-    const base = cardsSem.length;
-    const prod = cardsSem.filter(function(t){return !_opIsDrive(t);}).length;
-    const driveS = cardsSem.filter(function(t){return _opIsDrive(t);}).length;
-    const concl = cardsSem.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
-    const atras = cardsSem.filter(function(t){
-      if(t.status==="publicado")return false;
-      const ref = t.publishDate||t.deadline;
-      if(!ref)return false;
-      return new Date(ref+"T00:00:00") < today0;
-    }).length;
-    const aprov = cardsSem.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length;
-    const pctS = m.publ>0?Math.round((publ/m.publ)*100):0;
-    const stS = _opStatusBadge(pctS);
-    return { meta:m, publ:publ, base:base, prod:prod, drive:driveS, concl:concl, atras:atras, aprov:aprov, pct:pctS, status:stS };
+  /* ───── Status semana ───── */
+  const cardsSem = monthTasks.filter(function(t){
+    if(!t.publishDate)return false;
+    const d=new Date(t.publishDate+"T00:00:00");
+    return _opWeekOfMonthV2(d)===semanaAtual && d.getMonth()===month;
   });
-  const semanaAtualData = semanas[semanaAtual-1] || semanas[0];
+  const publSem = cardsSem.filter(function(t){return t.status==="publicado";}).length;
+  const metaSemana = OP_METAS_SEMANAIS_V2[semanaAtual-1] || OP_METAS_SEMANAIS_V2[0];
+  const pctSem = metaSemana.publ>0 ? Math.round(publSem/metaSemana.publ*100) : 0;
+  const stSem = _opStatusBadge(pctSem);
 
-  /* ── KPIs por colaborador ── */
-  // Cada colaborador tem: id, role, kpis dinâmicos, meta semanal (texto descritivo)
-  const colabs = [
-    {
-      id:"ellen", name:"Hellen", role:"Estrategista", color:"#ec4899",
-      metaSemanal:"14 itens-base · copys/briefings até quarta · agendamentos até sexta",
-      kpis:(function(){
-        const my = monthTasks.filter(function(t){
-          if(t.assignee==="ellen")return true;
-          if(Array.isArray(t.assignees)&&t.assignees.indexOf("ellen")>=0)return true;
-          return false;
-        });
-        const rascunhos = monthTasks.filter(function(t){return t.status==="rascunhos"&&(t.assignee==="ellen"||(Array.isArray(t.assignees)&&t.assignees.indexOf("ellen")>=0));}).length;
-        const copys = my.filter(function(t){return ["demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
-        const agendadas = my.filter(function(t){return ["agendado","publicado"].indexOf(t.status)>=0;}).length;
-        return [
-          {l:"Itens-base no mês", v:my.length, m:56},
-          {l:"Rascunhos", v:rascunhos, m:null},
-          {l:"Copys finalizadas", v:copys, m:null},
-          {l:"Publicações agendadas", v:agendadas, m:null},
-        ];
-      })(),
-    },
-    {
-      id:"vinicius", name:"Vinicius", role:"Gestor de Projetos", color:"#0891b2",
-      metaSemanal:"Nenhuma demanda sem dono/prazo · aprovações destravadas · checkpoint qua/sex",
-      kpis:(function(){
-        const semDono = monthTasks.filter(function(t){return !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length;
-        const semPrazo = monthTasks.filter(function(t){return !t.publishDate && !t.deadline;}).length;
-        const aprovCopy = monthTasks.filter(function(t){return ["recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
-        const paradas48 = monthTasks.filter(function(t){
-          if(!t.col_entered_at)return false;
-          return (Date.now() - new Date(t.col_entered_at).getTime())/3600000 > 48;
-        }).length;
-        return [
-          {l:"Sem dono", v:semDono, m:0, invert:true},
-          {l:"Sem prazo", v:semPrazo, m:0, invert:true},
-          {l:"Aprovadas de copy", v:aprovCopy, m:null},
-          {l:"Paradas +48h", v:paradas48, m:0, invert:true},
-        ];
-      })(),
-    },
-    {
-      id:"andre", name:"André", role:"Designer", color:"#f59e0b",
-      metaSemanal:"S1/S3: até 8 artes ou fotos · S2/S4: até 5 artes ou fotos",
-      kpis:(function(){
-        const my = monthTasks.filter(function(t){
-          if(t.assignee==="andre")return true;
-          if(Array.isArray(t.assignees)&&t.assignees.indexOf("andre")>=0)return true;
-          return false;
-        });
-        const artesFotos = my.filter(function(t){const x=_opTipo(t);return x==="arte"||x==="foto";});
-        const concl = artesFotos.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
-        const ajustes = artesFotos.filter(function(t){return t.status==="ajustes";}).length;
-        const atrasados2 = artesFotos.filter(function(t){
-          if(t.status==="publicado")return false;
-          const r=t.publishDate||t.deadline;if(!r)return false;
-          return new Date(r+"T00:00:00")<today0;
-        }).length;
-        return [
-          {l:"Artes/fotos previstas", v:artesFotos.length, m:26},
-          {l:"Concluídas", v:concl, m:null},
-          {l:"Em ajustes", v:ajustes, m:null},
-          {l:"Atrasadas", v:atrasados2, m:0, invert:true},
-        ];
-      })(),
-    },
-    {
-      id:"guilherme", name:"Guilherme", role:"Editor de Vídeo", color:"#7c3aed",
-      metaSemanal:"2 vídeos clientes comuns · +1 se collab Bioter for vídeo · Drive não conta",
-      kpis:(function(){
-        const my = monthTasks.filter(function(t){
-          if(t.assignee==="guilherme")return true;
-          if(Array.isArray(t.assignees)&&t.assignees.indexOf("guilherme")>=0)return true;
-          return false;
-        });
-        const videos = my.filter(function(t){return _opTipo(t)==="video";});
-        const concl = videos.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
-        const ajustes = videos.filter(function(t){return t.status==="ajustes";}).length;
-        return [
-          {l:"Vídeos previstos", v:videos.length, m:8},
-          {l:"Concluídos", v:concl, m:null},
-          {l:"Em ajustes", v:ajustes, m:null},
-          {l:"Drive (não produz)", v:driveFeitos, m:null},
-        ];
-      })(),
-    },
-    {
-      id:"gustavo", name:"Gustavo", role:"Gestor de Performance", color:"#16a34a",
-      metaSemanal:"Avaliar design/vídeo final · revisar clientes críticos · acompanhar gargalos",
-      kpis:(function(){
-        const aguardando = monthTasks.filter(function(t){return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length;
-        const aprovados = monthTasks.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
-        const devolvidos = monthTasks.filter(function(t){return t.status==="ajustes";}).length;
-        return [
-          {l:"Aguardando avaliação", v:aguardando, m:null},
-          {l:"Aprovados no mês", v:aprovados, m:null},
-          {l:"Devolvidos p/ ajuste", v:devolvidos, m:null},
-          {l:"Status do mês", v:pctMes+"%", m:null, raw:true},
-        ];
-      })(),
-    },
-    {
-      id:"erick", name:"Erick", role:"Gestor de Mídia", color:"#dc2626",
-      metaSemanal:"Revisar contas seg · otimizar ter/qua · leitura de perf sex · sinalizar críticas",
-      kpis:[
-        {l:"Contas revisadas", v:"—", m:null, raw:true},
-        {l:"Campanhas com alerta", v:"—", m:null, raw:true},
-        {l:"CPL acompanhado", v:"—", m:null, raw:true},
-        {l:"Próximas ações", v:"—", m:null, raw:true},
-      ],
-    },
-  ];
+  /* ───── Gargalos ───── */
+  const gargalos = _opGargalos(monthTasks, today0);
 
-  /* ── Rotina semanal ── */
-  const ROTINA = [
-    { dia:"Segunda",  abrev:"SEG", num:1, tit:"Abertura",            itens:["Revisar metas da semana","Revisar publicações previstas","Revisar materiais a produzir","Revisar materiais do Drive","Revisar demandas atrasadas e bloqueios","Revisar aprovações paradas","Definir prioridades"] },
-    { dia:"Terça",    abrev:"TER", num:2, tit:"Produção",            itens:["Hellen — avançar copys e briefings","André — produzir artes/fotos","Guilherme — produzir vídeos","Erick — otimizar campanhas","Vinicius — remover bloqueios","Gustavo — acompanhar críticos"] },
-    { dia:"Quarta",   abrev:"QUA", num:3, tit:"Checkpoint",          itens:["Revisar o que travou","Revisar copys pendentes","Revisar aprovações do Vinicius","Revisar materiais em execução","Revisar aguardando Gustavo","Revisar campanhas críticas","Ajustar prioridades"] },
-    { dia:"Quinta",   abrev:"QUI", num:4, tit:"Produção / Revisão",  itens:["Finalizar materiais","Gustavo avaliar design/vídeo","Resolver ajustes","Preparar publicações"] },
-    { dia:"Sexta",    abrev:"SEX", num:5, tit:"Fechamento",          itens:["Medir publicações feitas","Medir materiais concluídos","Medir atrasos","Medir aprovações pendentes","Registrar gargalos","Definir prioridades da próxima semana"] },
-  ];
-  const diaHoje = now.getDay(); // 0=dom, 1=seg...
+  /* ───── Rotina progresso ───── */
+  const allRotinaItems = OP_ROTINA_DIAS.reduce(function(a,d){return a.concat(d.itens);},[]);
+  const totalRotina = allRotinaItems.length;
+  const feitosRotina = allRotinaItems.filter(function(it){return checks[it.id]&&checks[it.id].completed;}).length;
+  const pctRotina = totalRotina>0 ? Math.round(feitosRotina/totalRotina*100) : 0;
 
-  /* ─── RENDER ─────────────────────────────────────────────── */
-  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif",width:"100%"}}>
+  /* ───── Helpers de navegação ───── */
+  function goAprovacoes(){
+    if(onNav) onNav("aprovacoes");
+    else if(typeof window!=="undefined" && window.dispatchEvent){
+      window.dispatchEvent(new CustomEvent("pixels:navigate",{detail:{page:"aprovacoes"}}));
+    }
+  }
 
-    {/* HEADER */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+  /* ───── Lista de clientes para filtro ───── */
+  const clientesAtivos = (typeof CLIENTS!=="undefined") ? CLIENTS.filter(function(c){return c.status!=="interno";}) : [];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_OP_FF,width:"100%"}}>
+
+    {/* 1. CABEÇALHO COMPACTO */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontFamily:_OP_FF}}>
       <div style={{display:"flex",alignItems:"center",gap:11}}>
-        <div style={{width:42,height:42,borderRadius:11,background:"#7c3aed15",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        <div style={{width:42,height:42,borderRadius:11,background:"#9F43F615",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9F43F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5}}>Operacional</div>
-          <div style={{color:"#64748b",fontSize:13,marginTop:2,textTransform:"capitalize"}}>{monthLabel} {year} · Semana {semanaAtual}</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFamily:_OP_FF}}>Operação</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:2,textTransform:"capitalize",fontFamily:_OP_FF}}>{monthLabel} {year} · Semana {semanaAtual}</div>
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <span style={{background:stMes.bg,color:stMes.color,border:"1px solid "+stMes.border,padding:"6px 14px",borderRadius:99,fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{stMes.label} · {pctMes}%</span>
-      </div>
-    </div>
-
-    {/* INDICADORES PRINCIPAIS — 4 cards grandes (publicações / itens-base / produção / drive) */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
-      <OpKpiCard big label="Publicações" value={publFeitas} meta={OP_METAS_MES.publicacoes} accent="#16a34a" hint="Posts que vão ao ar"/>
-      <OpKpiCard big label="Itens-base editoriais" value={itensBaseFeitos} meta={OP_METAS_MES.itensBase} accent="#0891b2" hint="Conteúdos únicos a planejar"/>
-      <OpKpiCard big label="Materiais produzidos" value={produzidosFeitos} meta={OP_METAS_MES.produzidos} accent="#7c3aed" hint="Design/edição da equipe"/>
-      <OpKpiCard big label="Do Drive" value={driveFeitos} meta={OP_METAS_MES.drive} accent="#f59e0b" hint="Shorts puxados, não produz"/>
-    </div>
-
-    {/* INDICADORES SECUNDÁRIOS — operacionais */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
-      <OpKpiCard label="Concluídos" value={concluidos} meta={null} accent="#16a34a" hint="Aprovado/agendado/publicado"/>
-      <OpKpiCard label="Atrasados" value={atrasados} meta={null} accent="#dc2626" hint="Passou da data prevista"/>
-      <OpKpiCard label="Aprovações paradas" value={aprovacoesParadas} meta={null} accent="#a16207" hint="+48h em copy/avaliação"/>
-      <OpKpiCard label="Status da semana" value={semanaAtualData.pct+"%"} meta={null} accent={semanaAtualData.status.color} hint={semanaAtualData.status.label}/>
-    </div>
-
-    {/* QUEBRA SEMANAL */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Quebra semanal</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Meta de cada semana e o que foi entregue</div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        {/* Filtro período */}
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:3,display:"inline-flex",gap:2}}>
+          {["hoje","semana","mes"].map(function(p){
+            const a=filtroPeriodo===p;
+            return <button key={p} onClick={function(){setFiltroPeriodo(p);}}
+              style={{background:a?"#9F43F6":"transparent",color:a?"#fff":"#475569",border:"none",borderRadius:7,padding:"6px 12px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:_OP_FF,textTransform:"capitalize"}}>
+              {p==="mes"?"Mês":p}
+            </button>;
+          })}
         </div>
+        {clientesAtivos.length>0 && <select value={filtroCliente} onChange={function(e){setFiltroCliente(e.target.value);}}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",color:"#0f172a",fontSize:12,fontWeight:600,outline:"none",cursor:"pointer",fontFamily:_OP_FF}}>
+          <option value="todos">Todos os clientes</option>
+          {clientesAtivos.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+        </select>}
+        <span style={{background:stMes.bg,color:stMes.color,border:"1px solid "+stMes.border,padding:"6px 12px",borderRadius:99,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",fontFamily:_OP_FF}}>{stMes.label}</span>
       </div>
-      <div style={{overflowX:"auto"}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontFamily:"inherit",minWidth:600}}>
-          <thead>
-            <tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
-              <th style={{textAlign:"left",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Semana</th>
-              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Publ.</th>
-              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Itens-base</th>
-              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Produzir</th>
-              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Drive</th>
-              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Atrasos</th>
-              <th style={{textAlign:"right",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Aprovações</th>
-              <th style={{textAlign:"center",padding:"10px 12px",fontSize:10.5,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5}}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {semanas.map(function(s,i){
-              const ehAtual = (i+1)===semanaAtual;
-              return <tr key={s.meta.sem} style={{borderBottom:"1px solid #f1f5f9",background:ehAtual?"#faf5ff":"transparent"}}>
-                <td style={{padding:"11px 12px",fontSize:12.5,fontWeight:ehAtual?800:700,color:"#0f172a"}}>
-                  Semana {s.meta.sem}
-                  {ehAtual&&<span style={{background:"#7c3aed",color:"#fff",fontSize:8.5,fontWeight:800,padding:"2px 6px",borderRadius:99,marginLeft:6,letterSpacing:.3,textTransform:"uppercase"}}>atual</span>}
-                </td>
-                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:"#0f172a",fontFeatureSettings:"'tnum'"}}><strong>{s.publ}</strong><span style={{color:"#94a3b8",fontWeight:500}}>/{s.meta.publ}</span></td>
-                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:"#0f172a",fontFeatureSettings:"'tnum'"}}><strong>{s.base}</strong><span style={{color:"#94a3b8",fontWeight:500}}>/{s.meta.base}</span></td>
-                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:"#0f172a",fontFeatureSettings:"'tnum'"}}><strong>{s.prod}</strong><span style={{color:"#94a3b8",fontWeight:500}}>/{s.meta.prod}</span></td>
-                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:"#0f172a",fontFeatureSettings:"'tnum'"}}><strong>{s.drive}</strong><span style={{color:"#94a3b8",fontWeight:500}}>/{s.meta.drive}</span></td>
-                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:s.atras>0?"#dc2626":"#94a3b8",fontWeight:s.atras>0?700:500,fontFeatureSettings:"'tnum'"}}>{s.atras}</td>
-                <td style={{padding:"11px 12px",textAlign:"right",fontSize:12.5,color:s.aprov>0?"#a16207":"#94a3b8",fontWeight:s.aprov>0?700:500,fontFeatureSettings:"'tnum'"}}>{s.aprov}</td>
-                <td style={{padding:"11px 12px",textAlign:"center"}}>
-                  <span style={{background:s.status.bg,color:s.status.color,border:"1px solid "+s.status.border,padding:"3px 10px",borderRadius:99,fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",fontFeatureSettings:"'tnum'"}}>{s.status.label} · {s.pct}%</span>
-                </td>
-              </tr>;
-            })}
-          </tbody>
-        </table>
+    </div>
+
+    {/* 2. EQUIPE DA SEMANA */}
+    <section style={{display:"flex",flexDirection:"column",gap:12,fontFamily:_OP_FF}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2,fontFamily:_OP_FF}}>Equipe da semana</div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+        {OP_COLABS_DEF.map(function(c){
+          const kpis = _opKpisColab(c, monthTasks, today0);
+          const atrasos = (kpis.find(function(k){return k.l==="Atrasos"||k.l==="Atrasos totais"||k.l==="Atrasadas"||k.l==="Atrasados"||k.l==="Clientes c/ atraso";})||{}).v||0;
+          const stCol = atrasos>3 ? _opStatusBadge(30) : (atrasos>0 ? _opStatusBadge(70) : _opStatusBadge(95));
+          // Tenta detectar gargalo principal (primeiro KPI invert que tem v>0)
+          const gargalo = kpis.find(function(k){return k.invert&&k.v>0;});
+          return <div key={c.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,position:"relative",overflow:"hidden",fontFamily:_OP_FF}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:c.color}}/>
+            <div style={{display:"flex",alignItems:"center",gap:11,marginTop:2}}>
+              <_OpAvatar colab={c} size={48}/>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_OP_FF}}>{c.name}</div>
+                <div style={{color:c.color,fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:2,fontFamily:_OP_FF}}>{c.role}</div>
+              </div>
+              <span style={{background:stCol.bg,color:stCol.color,border:"1px solid "+stCol.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",flexShrink:0,fontFamily:_OP_FF}}>{stCol.label}</span>
+            </div>
+            <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"8px 11px",fontFamily:_OP_FF}}>
+              <div style={{color:c.color,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",fontFamily:_OP_FF}}>Prioridade da semana</div>
+              <div style={{color:"#0f172a",fontSize:12,fontWeight:600,marginTop:2,fontFamily:_OP_FF}}>{c.priority}</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              {kpis.slice(0,4).map(function(k,i){
+                const danger = k.invert && k.v>0;
+                const ok = k.invert && k.v===0;
+                const col = danger?"#dc2626":(ok?"#16a34a":"#0f172a");
+                return <div key={i} style={{background:"#fff",border:"1px solid #f1f5f9",borderRadius:8,padding:"7px 9px",fontFamily:_OP_FF}}>
+                  <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_OP_FF}}>{k.l}</div>
+                  <div style={{color:col,fontWeight:800,fontSize:15,marginTop:2,fontFeatureSettings:"'tnum'",fontFamily:_OP_FF}}>{k.v}{k.m!=null&&!k.raw&&<span style={{color:"#cbd5e1",fontSize:11,fontWeight:600}}>/{k.m}</span>}</div>
+                </div>;
+              })}
+            </div>
+            {gargalo && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"7px 10px",fontSize:11,color:"#b91c1c",fontFamily:_OP_FF}}>
+              <strong>Gargalo:</strong> {gargalo.l} ({gargalo.v})
+            </div>}
+            <button onClick={function(){setDrawerColab(c);}}
+              style={{background:"transparent",border:"1px solid #e2e8f0",color:"#0f172a",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_OP_FF,marginTop:"auto"}}>
+              Ver detalhes
+            </button>
+          </div>;
+        })}
       </div>
     </section>
 
-    {/* KPIs POR COLABORADOR */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>KPIs por colaborador</div>
-        <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Indicadores e meta semanal de cada um</div>
+    {/* 3. APROVAÇÕES PARADAS */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14,fontFamily:_OP_FF}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_OP_FF}}>Aprovações paradas</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontFamily:_OP_FF}}>Sincronizado com a aba Aprovações da sidebar. Total: <strong style={{color:"#0f172a"}}>{aprovacoesAll.length}</strong>.</div>
+        </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-        {colabs.map(function(c){
-          return <div key={c.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:8,height:34,borderRadius:3,background:c.color,flexShrink:0}}/>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.name}</div>
-                <div style={{color:c.color,fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",marginTop:1}}>{c.role}</div>
-              </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
+        {[
+          {l:"Copy",   arr:aprovCopy,   color:"#ec4899"},
+          {l:"Design", arr:aprovDesign, color:"#f59e0b"},
+          {l:"Vídeo",  arr:aprovVideo,  color:"#7c3aed"},
+          {l:"Total",  arr:aprovacoesAll, color:"#0f172a"},
+        ].map(function(b,i){
+          const par48 = _paradas48(b.arr);
+          const crit = _criticaCliente(b.arr);
+          return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"13px 14px",display:"flex",flexDirection:"column",gap:8,fontFamily:_OP_FF}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+              <span style={{color:b.color,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_OP_FF}}>{b.l}</span>
+              <span style={{color:b.color,fontSize:22,fontWeight:900,letterSpacing:-.5,fontFeatureSettings:"'tnum'",fontFamily:_OP_FF}}>{b.arr.length}</span>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {c.kpis.map(function(k,j){
-                const danger = k.invert && k.v>0;
-                const ok = k.invert && k.v===0;
-                const valCol = danger?"#dc2626":(ok?"#16a34a":"#0f172a");
-                return <div key={j} style={{background:"#fff",border:"1px solid #f1f5f9",borderRadius:8,padding:"8px 10px"}}>
-                  <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{k.l}</div>
-                  <div style={{color:valCol,fontWeight:800,fontSize:16,fontFeatureSettings:"'tnum'",marginTop:2,letterSpacing:-.3}}>
-                    {k.v}{k.m!=null&&!k.raw&&<span style={{color:"#cbd5e1",fontSize:11,fontWeight:700}}>/{k.m}</span>}
+            <div style={{color:par48.length>0?"#b91c1c":"#94a3b8",fontSize:11,fontWeight:600,fontFamily:_OP_FF}}>{par48.length} parada{par48.length===1?"":"s"} +48h</div>
+            {crit && <div style={{color:"#475569",fontSize:11,fontFamily:_OP_FF,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Mais crítico: <strong style={{color:"#0f172a"}}>{crit}</strong></div>}
+            <button onClick={goAprovacoes}
+              style={{background:"transparent",border:"1px solid "+b.color+"55",color:b.color,borderRadius:8,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:_OP_FF,marginTop:"auto"}}>Ver aprovações</button>
+          </div>;
+        })}
+      </div>
+    </section>
+
+    {/* 4. STATUS SEMANA + STATUS MÊS */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,fontFamily:_OP_FF}}>
+      {[
+        {tit:"Status da semana", pct:pctSem, st:stSem, det:"Semana "+semanaAtual+" · "+publSem+"/"+metaSemana.publ+" publicações"},
+        {tit:"Status do mês",    pct:pctMes, st:stMes, det:publicadasMes+"/"+OP_METAS_MES_V2.publicacoes+" publicações · "+atrasadosMes+" atrasos"},
+      ].map(function(s,i){
+        return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_OP_FF}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}}>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_OP_FF}}>{s.tit}</div>
+            <span style={{background:s.st.bg,color:s.st.color,border:"1px solid "+s.st.border,fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_OP_FF}}>{s.st.label}</span>
+          </div>
+          <div style={{color:s.st.color,fontSize:42,fontWeight:900,letterSpacing:-1.5,lineHeight:1,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}>{s.pct}<span style={{fontSize:20,opacity:.6}}>%</span></div>
+          <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden",marginTop:10}}>
+            <div style={{width:Math.min(100,s.pct)+"%",height:"100%",background:s.st.color,borderRadius:99,transition:"width .3s"}}/>
+          </div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:8,fontFamily:_OP_FF}}>{s.det}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* 5. ROTINA DA SEMANA */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14,fontFamily:_OP_FF}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_OP_FF}}>Rotina da semana</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontFamily:_OP_FF}}>{feitosRotina} de {totalRotina} tarefas concluídas · Semana {weekKey}</div>
+        </div>
+        <div style={{display:"inline-flex",gap:6,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:3}}>
+          {["todas","pendentes","concluidas"].map(function(f){
+            const a=rotinaFiltro===f;
+            return <button key={f} onClick={function(){setRotinaFiltro(f);}}
+              style={{background:a?"#9F43F6":"transparent",color:a?"#fff":"#475569",border:"none",borderRadius:7,padding:"5px 11px",fontSize:11,fontWeight:a?700:600,cursor:"pointer",fontFamily:_OP_FF,textTransform:"capitalize"}}>{f}</button>;
+          })}
+        </div>
+      </div>
+      <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
+        <div style={{width:pctRotina+"%",height:"100%",background:"linear-gradient(90deg,#9F43F6,#7c3aed)",borderRadius:99,transition:"width .3s"}}/>
+      </div>
+      {loadingRotina ? <div style={{padding:20,textAlign:"center",color:"#94a3b8",fontFamily:_OP_FF}}>Carregando rotina...</div> :
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        {OP_ROTINA_DIAS.map(function(d){
+          const itensFiltrados = d.itens.filter(function(it){
+            const done = !!(checks[it.id]&&checks[it.id].completed);
+            if(rotinaFiltro==="pendentes") return !done;
+            if(rotinaFiltro==="concluidas") return done;
+            return true;
+          });
+          if(itensFiltrados.length===0)return null;
+          const feitosDia = d.itens.filter(function(it){return checks[it.id]&&checks[it.id].completed;}).length;
+          return <div key={d.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"12px 14px",fontFamily:_OP_FF}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:8}}>
+              <div>
+                <div style={{color:"#9F43F6",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_OP_FF}}>{d.dia}</div>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,marginTop:1,fontFamily:_OP_FF}}>{d.titulo}</div>
+              </div>
+              <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFamily:_OP_FF}}>{feitosDia}/{d.itens.length}</span>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+              {itensFiltrados.map(function(it){
+                const ck = checks[it.id];
+                const done = !!(ck&&ck.completed);
+                return <div key={it.id} onClick={function(){toggleCheck(it.id);}}
+                  style={{display:"flex",alignItems:"center",gap:9,padding:"7px 8px",borderRadius:7,cursor:"pointer",transition:"background .12s",fontFamily:_OP_FF}}
+                  onMouseEnter={function(e){e.currentTarget.style.background="#fff";}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+(done?"#9F43F6":"#cbd5e1"),background:done?"#9F43F6":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                    {done && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:done?"#94a3b8":"#0f172a",fontSize:12.5,fontWeight:done?500:600,textDecoration:done?"line-through":"none",fontFamily:_OP_FF}}>{it.label}</div>
+                    {done && ck.completed_at && <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:600,marginTop:2,fontFamily:_OP_FF}}>{new Date(ck.completed_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} {ck.completed_by?"· "+ck.completed_by:""}</div>}
                   </div>
                 </div>;
               })}
             </div>
-            <div style={{background:c.color+"10",border:"1px solid "+c.color+"25",borderRadius:8,padding:"7px 10px",fontSize:10.5,color:"#475569",lineHeight:1.4}}>
-              <strong style={{color:c.color}}>Meta semanal:</strong> {c.metaSemanal}
-            </div>
           </div>;
         })}
-      </div>
+      </div>}
     </section>
 
-    {/* ROTINA SEMANAL — card único com dia atual destacado */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Rotina da semana</div>
-        <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>O que cada dia tem prioridade</div>
+    {/* 6. RESUMO GERAL — cards pequenos auxiliares */}
+    <section style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10,fontFamily:_OP_FF}}>
+      {[
+        {l:"Publicações semana",   v:publSem+"/"+metaSemana.publ, c:"#16a34a"},
+        {l:"Em produção",          v:monthTasks.filter(function(t){return ["execucao","ajustes"].indexOf(t.status)>=0;}).length, c:"#0891b2"},
+        {l:"Atrasados",            v:atrasadosMes, c:atrasadosMes>0?"#dc2626":"#94a3b8"},
+        {l:"Aprov. paradas +48h",  v:_paradas48(aprovacoesAll).length, c:"#a16207"},
+      ].map(function(k,i){
+        return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"13px 15px",fontFamily:_OP_FF}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_OP_FF}}>{k.l}</div>
+          <div style={{color:k.c,fontWeight:800,fontSize:22,marginTop:4,letterSpacing:-.6,fontFeatureSettings:"'tnum'",fontFamily:_OP_FF}}>{k.v}</div>
+        </div>;
+      })}
+    </section>
+
+    {/* 7. GARGALOS DO DIA */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_OP_FF}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_OP_FF}}>Gargalos do dia</div>
+        <span style={{color:"#94a3b8",fontSize:11,fontFamily:_OP_FF,marginLeft:"auto"}}>{gargalos.length} {gargalos.length===1?"item":"itens"}</span>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,1fr)",gap:10}}>
-        {ROTINA.map(function(r){
-          const ehHoje = diaHoje === r.num;
-          return <div key={r.num} style={{background:ehHoje?"linear-gradient(180deg,#faf5ff,#fff)":"#fafbfc",border:"1px solid "+(ehHoje?"#e9d5ff":"#f1f5f9"),borderRadius:10,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,boxShadow:ehHoje?"0 4px 12px rgba(124,58,237,0.10)":"none"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
-              <div>
-                <div style={{color:ehHoje?"#7c3aed":"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>{r.abrev}</div>
-                <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,marginTop:1}}>{r.tit}</div>
-              </div>
-              {ehHoje&&<span style={{background:"#7c3aed",color:"#fff",fontSize:8.5,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",flexShrink:0}}>Hoje</span>}
+      {gargalos.length===0 ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_OP_FF}}>Nenhum gargalo identificado agora.</div> :
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {gargalos.slice(0,12).map(function(g,i){
+          const cl = (typeof CLIENTS!=="undefined") ? CLIENTS.find(function(x){return x.id===g.task.client;}) : null;
+          const ass = (typeof TEAM!=="undefined" && g.task.assignee) ? TEAM.find(function(u){return u.id===g.task.assignee;}) : null;
+          return <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 11px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,fontFamily:_OP_FF,flexWrap:"wrap"}}>
+            <div style={{width:32,height:32,borderRadius:7,background:"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             </div>
-            <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:5}}>
-              {r.itens.map(function(it,k){
-                return <li key={k} style={{color:"#475569",fontSize:11.5,lineHeight:1.45,paddingLeft:12,position:"relative"}}>
-                  <span style={{position:"absolute",left:0,top:6,width:4,height:4,borderRadius:"50%",background:ehHoje?"#7c3aed":"#cbd5e1"}}/>
-                  {it}
-                </li>;
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFamily:_OP_FF}}>{g.task.title||"(Sem título)"}</div>
+              <div style={{color:"#64748b",fontSize:10.5,marginTop:1,fontFamily:_OP_FF}}>{cl?cl.name:g.task.client} · {g.label} · {ass?ass.name:"sem dono"}</div>
+            </div>
+            <span style={{background:"#fef3c7",color:"#a16207",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,fontFamily:_OP_FF,whiteSpace:"nowrap"}}>{g.tempo}</span>
+            <span style={{color:"#9F43F6",fontSize:11,fontWeight:700,fontFamily:_OP_FF}}>{g.suggestion}</span>
+          </div>;
+        })}
+      </div>}
+    </section>
+
+    {/* 8. METAS DA SEMANA + 9. QUEBRA MENSAL accordion */}
+    <_OpMetasSemanais isMob={isMob} monthTasks={monthTasks} year={year} month={month} today0={today0}/>
+
+    {/* DRAWER COLABORADOR */}
+    {drawerColab && <_OpDrawer colab={drawerColab} monthTasks={monthTasks} today0={today0} onClose={function(){setDrawerColab(null);}} isMob={isMob}/>}
+
+  </div>;
+}
+
+/* ─── COMPONENTE: Metas semanais + accordion mensal ──────── */
+function _OpMetasSemanais(props){
+  const { isMob, monthTasks, year, month, today0 } = props;
+  const [expand, setExpand] = useState(false);
+  const semAtual = _opWeekOfMonthV2(new Date());
+  const metaSem = OP_METAS_SEMANAIS_V2[semAtual-1] || OP_METAS_SEMANAIS_V2[0];
+
+  function _calcSem(s){
+    const cardsSem = monthTasks.filter(function(t){
+      if(!t.publishDate)return false;
+      const d=new Date(t.publishDate+"T00:00:00");
+      return _opWeekOfMonthV2(d)===s.sem && d.getMonth()===month && d.getFullYear()===year;
+    });
+    let publ=0; cardsSem.forEach(function(t){publ += _opIsCollabV2(t)?6:1;});
+    const base = cardsSem.length;
+    const prod = cardsSem.filter(function(t){return !_opIsDriveV2(t);}).length;
+    const driveS = cardsSem.filter(function(t){return _opIsDriveV2(t);}).length;
+    const atras = cardsSem.filter(function(t){
+      if(t.status==="publicado")return false;
+      const r=t.publishDate||t.deadline; if(!r)return false;
+      return new Date(r+"T00:00:00")<today0;
+    }).length;
+    const aprov = cardsSem.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length;
+    const pctS = s.publ>0 ? Math.round(publ/s.publ*100) : 0;
+    return { s, publ, base, prod, driveS, atras, aprov, pctS, stS:_opStatusBadge(pctS) };
+  }
+
+  const datSem = _calcSem(metaSem);
+
+  return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:12,fontFamily:_OP_FF}}>
+    <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_OP_FF}}>Metas da semana atual</div>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:10}}>
+      {[
+        {l:"Publicações", v:datSem.publ, m:metaSem.publ, c:"#16a34a"},
+        {l:"Itens-base",  v:datSem.base, m:metaSem.base, c:"#0891b2"},
+        {l:"Produzir",    v:datSem.prod, m:metaSem.prod, c:"#7c3aed"},
+        {l:"Do Drive",    v:datSem.driveS,m:metaSem.drive,c:"#f59e0b"},
+      ].map(function(k,i){
+        return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"11px 13px",fontFamily:_OP_FF}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_OP_FF}}>{k.l}</div>
+          <div style={{color:k.c,fontWeight:800,fontSize:20,marginTop:3,fontFeatureSettings:"'tnum'",fontFamily:_OP_FF}}>{k.v}<span style={{color:"#cbd5e1",fontSize:13,fontWeight:600}}>/{k.m}</span></div>
+        </div>;
+      })}
+    </div>
+    <button onClick={function(){setExpand(function(p){return !p;});}}
+      style={{background:"transparent",border:"1px solid #e2e8f0",color:"#475569",borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:_OP_FF,display:"inline-flex",alignItems:"center",gap:6,alignSelf:"flex-start"}}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:expand?"rotate(90deg)":"rotate(0)",transition:"transform .2s"}}><polyline points="9 18 15 12 9 6"/></svg>
+      {expand?"Ocultar quebra mensal":"Ver quebra mensal"}
+    </button>
+    {expand && <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontFamily:_OP_FF,minWidth:560}}>
+        <thead><tr style={{background:"#f8fafc",borderBottom:"1px solid #e2e8f0"}}>
+          {["Semana","Publ.","Base","Produzir","Drive","Atrasos","Aprovações","Status"].map(function(h,i){
+            return <th key={i} style={{textAlign:i===0?"left":(i===7?"center":"right"),padding:"9px 11px",fontSize:10,fontWeight:800,color:"#64748b",textTransform:"uppercase",letterSpacing:.5,fontFamily:_OP_FF}}>{h}</th>;
+          })}
+        </tr></thead>
+        <tbody>
+          {OP_METAS_SEMANAIS_V2.map(function(s,i){
+            const d = _calcSem(s);
+            const a = (i+1)===semAtual;
+            return <tr key={i} style={{borderBottom:"1px solid #f1f5f9",background:a?"#faf5ff":"transparent"}}>
+              <td style={{padding:"10px 11px",fontSize:12,fontWeight:a?800:700,color:"#0f172a",fontFamily:_OP_FF}}>Semana {s.sem}{a && <span style={{background:"#9F43F6",color:"#fff",fontSize:8.5,fontWeight:800,padding:"1px 6px",borderRadius:99,marginLeft:6,letterSpacing:.3,textTransform:"uppercase"}}>Atual</span>}</td>
+              <td style={{padding:"10px 11px",textAlign:"right",fontSize:12,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}><strong>{d.publ}</strong><span style={{color:"#94a3b8"}}>/{s.publ}</span></td>
+              <td style={{padding:"10px 11px",textAlign:"right",fontSize:12,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}><strong>{d.base}</strong><span style={{color:"#94a3b8"}}>/{s.base}</span></td>
+              <td style={{padding:"10px 11px",textAlign:"right",fontSize:12,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}><strong>{d.prod}</strong><span style={{color:"#94a3b8"}}>/{s.prod}</span></td>
+              <td style={{padding:"10px 11px",textAlign:"right",fontSize:12,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}><strong>{d.driveS}</strong><span style={{color:"#94a3b8"}}>/{s.drive}</span></td>
+              <td style={{padding:"10px 11px",textAlign:"right",fontSize:12,color:d.atras>0?"#dc2626":"#94a3b8",fontWeight:d.atras>0?700:500,fontFamily:_OP_FF}}>{d.atras}</td>
+              <td style={{padding:"10px 11px",textAlign:"right",fontSize:12,color:d.aprov>0?"#a16207":"#94a3b8",fontWeight:d.aprov>0?700:500,fontFamily:_OP_FF}}>{d.aprov}</td>
+              <td style={{padding:"10px 11px",textAlign:"center",fontFamily:_OP_FF}}>
+                <span style={{background:d.stS.bg,color:d.stS.color,border:"1px solid "+d.stS.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,fontFamily:_OP_FF}}>{d.pctS}%</span>
+              </td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>}
+  </section>;
+}
+
+/* ─── DRAWER: detalhes do colaborador ──────────────────── */
+function _OpDrawer(props){
+  const { colab, monthTasks, today0, onClose, isMob } = props;
+  const my = monthTasks.filter(function(t){return _opIsAssignee(t, colab.id);});
+  const atrasadas = my.filter(function(t){
+    if(t.status==="publicado")return false;
+    const r=t.publishDate||t.deadline; if(!r)return false;
+    return new Date(r+"T00:00:00")<today0;
+  });
+  const producao = my.filter(function(t){return ["execucao","ajustes"].indexOf(t.status)>=0;});
+  const aguardando = my.filter(function(t){return ["avaliacao","aprovacao_final","demanda"].indexOf(t.status)>=0;});
+  const kpis = _opKpisColab(colab, monthTasks, today0);
+
+  return <div onMouseDown={onClose} style={{position:"fixed",inset:0,zIndex:1500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"stretch",justifyContent:"flex-end",fontFamily:_OP_FF}}>
+    <div onMouseDown={function(e){e.stopPropagation();}} style={{background:"#fff",width:isMob?"100%":"min(520px,95%)",height:"100%",display:"flex",flexDirection:"column",fontFamily:_OP_FF,boxShadow:"-20px 0 50px rgba(15,23,42,0.20)"}}>
+      <div style={{padding:"20px 24px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:12,fontFamily:_OP_FF}}>
+        <_OpAvatar colab={colab} size={52}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:_OP_FF}}>{colab.name}</div>
+          <div style={{color:colab.color,fontSize:11.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:2,fontFamily:_OP_FF}}>{colab.role}</div>
+        </div>
+        <button onClick={onClose} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,fontFamily:_OP_FF}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div style={{flex:1,overflowY:"auto",padding:"18px 24px",display:"flex",flexDirection:"column",gap:16,fontFamily:_OP_FF}}>
+        <div style={{background:colab.color+"10",border:"1px solid "+colab.color+"30",borderRadius:10,padding:"12px 14px",fontFamily:_OP_FF}}>
+          <div style={{color:colab.color,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_OP_FF}}>Prioridade da semana</div>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginTop:3,fontFamily:_OP_FF}}>{colab.priority}</div>
+        </div>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8,fontFamily:_OP_FF}}>Indicadores</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            {kpis.map(function(k,i){
+              const danger = k.invert && k.v>0;
+              const ok = k.invert && k.v===0;
+              const col = danger?"#dc2626":(ok?"#16a34a":"#0f172a");
+              return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"10px 12px",fontFamily:_OP_FF}}>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,fontFamily:_OP_FF}}>{k.l}</div>
+                <div style={{color:col,fontWeight:800,fontSize:18,marginTop:3,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}>{k.v}{k.m!=null&&!k.raw&&<span style={{color:"#cbd5e1",fontSize:12,fontWeight:600}}>/{k.m}</span>}</div>
+              </div>;
+            })}
+          </div>
+        </div>
+        {[{tit:"Atrasadas", arr:atrasadas, c:"#dc2626"},
+          {tit:"Em produção", arr:producao, c:"#0891b2"},
+          {tit:"Aguardando aprovação", arr:aguardando, c:"#a16207"}].map(function(grp,i){
+          if(grp.arr.length===0)return null;
+          return <div key={i}>
+            <div style={{color:grp.c,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8,fontFamily:_OP_FF}}>{grp.tit} ({grp.arr.length})</div>
+            <div style={{display:"flex",flexDirection:"column",gap:5}}>
+              {grp.arr.slice(0,8).map(function(t){
+                const cl = (typeof CLIENTS!=="undefined") ? CLIENTS.find(function(x){return x.id===t.client;}) : null;
+                return <div key={t.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:8,padding:"8px 11px",fontFamily:_OP_FF}}>
+                  <div style={{color:"#0f172a",fontSize:12,fontWeight:600,fontFamily:_OP_FF}}>{t.title||"(Sem título)"}</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontFamily:_OP_FF}}>{cl?cl.name:t.client} · {t.status}</div>
+                </div>;
               })}
-            </ul>
+            </div>
           </div>;
         })}
       </div>
-    </section>
-
+    </div>
   </div>;
 }
 
