@@ -387,9 +387,13 @@ function getMarcoTypeConfig(typeId){
   return MARCO_TYPES.find(function(t){return t.id===typeId;})||MARCO_TYPES[MARCO_TYPES.length-1];
 }
 
-// Carrega marcos de um cliente (localStorage)
+// Carrega marcos de um cliente (cache localStorage pra resposta instantânea)
+// Sempre dispara fetchMarcosFromSupabase em background pra atualizar com o Supabase.
 function loadMarcos(clientId){
   if(!clientId)return [];
+  // Dispara fetch do Supabase em background (atualiza cache + dispara evento)
+  try{ fetchMarcosFromSupabase(clientId); }catch(e){}
+  // Retorna cache imediato
   try{
     const raw=localStorage.getItem("pixels-marcos-"+clientId);
     if(!raw)return [];
@@ -399,13 +403,61 @@ function loadMarcos(clientId){
   }catch(e){return [];}
 }
 
-// Salva marcos no localStorage. Dispara evento pra outros componentes recarregarem.
+// Busca marcos do Supabase, atualiza cache local e dispara evento pra UI re-renderizar.
+function fetchMarcosFromSupabase(clientId){
+  if(!clientId||!window._sb)return;
+  window._sb.from("client_marcos").select("*").eq("client_id",clientId).order("date",{ascending:false}).then(function(r){
+    if(r.error)return;
+    const remote=(r.data||[]).map(function(row){
+      return {
+        id:row.id, type:row.type||"outro", title:row.title||"",
+        description:row.description||"", date:row.date||"",
+        author:row.author||"", createdAt:row.created_at,
+      };
+    });
+    try{
+      const local=localStorage.getItem("pixels-marcos-"+clientId);
+      const localStr=JSON.stringify(remote);
+      if(local!==localStr){
+        localStorage.setItem("pixels-marcos-"+clientId,localStr);
+        window.dispatchEvent(new CustomEvent("pixels:marcos-updated",{detail:{clientId:clientId}}));
+      }
+    }catch(e){}
+  });
+}
+
+// Salva no Supabase + cache localStorage. Dispara evento pra outros componentes recarregarem.
 function saveMarcos(clientId, marcos){
   if(!clientId)return;
+  const arr=marcos||[];
+  // Cache local (resposta instantânea)
   try{
-    localStorage.setItem("pixels-marcos-"+clientId,JSON.stringify(marcos||[]));
+    localStorage.setItem("pixels-marcos-"+clientId,JSON.stringify(arr));
     window.dispatchEvent(new CustomEvent("pixels:marcos-updated",{detail:{clientId:clientId}}));
-  }catch(e){console.warn("[marcos] save:",e?.message||e);}
+  }catch(e){console.warn("[marcos] cache:",e&&e.message||e);}
+  // Sincroniza com Supabase — full replace (simples e seguro pra tabelas pequenas)
+  if(!window._sb)return;
+  // 1) Pega IDs atuais do remote pra calcular o que deletar
+  window._sb.from("client_marcos").select("id").eq("client_id",clientId).then(function(r){
+    if(r.error)return;
+    const remoteIds=(r.data||[]).map(function(x){return x.id;});
+    const localIds=arr.map(function(x){return x.id;});
+    const toDelete=remoteIds.filter(function(id){return localIds.indexOf(id)<0;});
+    if(toDelete.length>0){
+      window._sb.from("client_marcos").delete().in("id",toDelete);
+    }
+    // 2) Upsert tudo que está local
+    if(arr.length>0){
+      const rows=arr.map(function(m){
+        return {
+          id:m.id, client_id:clientId, type:m.type||"outro",
+          title:m.title||"", description:m.description||"",
+          date:m.date||null, author:m.author||null,
+        };
+      });
+      window._sb.from("client_marcos").upsert(rows,{onConflict:"id"});
+    }
+  });
 }
 
 // Cria novo marco — gera id único.
@@ -29626,7 +29678,6 @@ function PageCarreira(){
   </div>);
 }
 
-// ======= 14_portal.jsx =======
 /* ─────────────────────────────────────────────────────────
    PORTAL DO CLIENTE — Features:
    • Chat exclusivo por cliente (sync com chat interno via localStorage)
@@ -31364,8 +31415,10 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
       </section>;
     })}
 
-    {/* Linha do tempo de entregas — visualização anual */}
-    <EntregasTimeline cl={cl} clTasks={clTasks} onRegistrarEntrega={function(){setRegistrarEntregaOpen(true);}}/>
+    {/* Timeline de marcos — sincronizada com a aba interna do cliente (read-only no portal) */}
+    {typeof CClienteTimeline==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px"}}>
+      <CClienteTimeline cl={cl} canEdit={false}/>
+    </div>}
 
     {/* Modal: Registrar entrega (só admin) */}
     {registrarEntregaOpen&&<RegistrarEntregaModal cl={cl} onClose={function(){setRegistrarEntregaOpen(false);}}/>}
