@@ -29781,6 +29781,7 @@ const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
   {id:"demandas",    ico:"zap",         label:"Demandas"},
+  {id:"marcos",      ico:"flame",       label:"Marcos"},
   {id:"planejamento",ico:"layers",      label:"Planejamento mensal"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
@@ -31501,10 +31502,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
       </section>;
     })}
 
-    {/* Timeline de marcos — sincronizada com a aba interna do cliente (read-only no portal) */}
-    {typeof CClienteTimeline==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px"}}>
-      <CClienteTimeline cl={cl} canEdit={false}/>
-    </div>}
+
 
     {/* Modal: Registrar entrega (só admin) */}
     {registrarEntregaOpen&&<RegistrarEntregaModal cl={cl} onClose={function(){setRegistrarEntregaOpen(false);}}/>}
@@ -32588,6 +32586,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
+    {tab==="marcos"&&typeof CClienteTimeline==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px"}}>
+      <CClienteTimeline cl={cl} canEdit={true}/>
+    </div>}
 
     {/* ── PLANEJAMENTO MENSAL ── plano do mês compartilhado entre Pixels e cliente */}
     {tab==="planejamento"&&<PortalMonthlyPlan cl={cl} selUnit={selUnit} isMob={isMob}/>}
@@ -35678,7 +35679,29 @@ function PortalMonthlyPlan({cl, selUnit, isMob}){
   const [month,setMonth]=useState(_now.getMonth()+1);
   const [year,setYear]=useState(_now.getFullYear());
   const unit=_mpUnit(cl,selUnit);
-  const {data,loading,save}=useMonthlyPlan(cl.id,unit,year,month);
+  const {data,loading,saving,save}=useMonthlyPlan(cl.id,unit,year,month);
+
+  // Form local — mesma estrutura do interno (cliente também edita)
+  const [form,setForm]=useState({});
+  const [dirty,setDirty]=useState(false);
+  useEffect(function(){
+    const init={};
+    MP_CAMPOS.forEach(function(c){init[c.k]=(data&&data[c.k])||"";});
+    init.status_cliente=(data&&data.status_cliente)||"pendente";
+    setForm(init);
+    setDirty(false);
+  },[data,cl.id,unit,year,month]);
+
+  function _set(k,v){setForm(function(p){return Object.assign({},p,{[k]:v});});setDirty(true);}
+
+  function handleSave(){
+    const patch={};
+    MP_CAMPOS.forEach(function(c){patch[c.k]=form[c.k]||"";});
+    save(patch).then(function(){
+      setDirty(false);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Planejamento salvo.",3000);
+    });
+  }
 
   function aprovarPlano(){
     save({status_cliente:"aprovado"}).then(function(){
@@ -35705,14 +35728,13 @@ function PortalMonthlyPlan({cl, selUnit, isMob}){
   }
 
   const stCliente=STATUS_CLIENTE_OPTS.find(function(s){return s.id===((data&&data.status_cliente)||"pendente");})||STATUS_CLIENTE_OPTS[0];
-  const podeAgir=(data&&data.status_interno==="aprovado_internamente");
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Header */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
       <div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Planejamento mensal</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>O plano que a equipe Pixels preparou pra você esse mês.</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Plano construído junto com a equipe Pixels. Você também pode editar e comentar.</div>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center"}}>
         <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
@@ -35733,46 +35755,43 @@ function PortalMonthlyPlan({cl, selUnit, isMob}){
       </span>
     </div>
 
-    {loading?<div style={{padding:30,textAlign:"center",color:"#94a3b8"}}>Carregando…</div>:!data?(
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"40px 30px",textAlign:"center"}}>
-        <Ico n="calendar" size={28} color="#94a3b8"/>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginTop:10}}>Ainda não há planejamento publicado pra esse mês.</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:5}}>A equipe Pixels está finalizando. Você será avisado em breve.</div>
-      </div>
-    ):(
-      <>
-        {/* Campos read-only */}
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
-          {MP_CAMPOS.filter(function(c){return (data[c.k]||"").trim();}).map(function(c){
-            return <div key={c.k}>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                <Ico n={c.icon} size={13} color={cl.color}/>
-                <div style={{color:"#0f172a",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{c.label}</div>
-              </div>
-              <div style={{color:"#475569",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word",background:"#fafbfc",borderRadius:8,padding:"10px 12px",border:"1px solid #f1f5f9"}}>
-                {data[c.k]}
-              </div>
-            </div>;
-          })}
-          {MP_CAMPOS.every(function(c){return !(data[c.k]||"").trim();})&&<div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic"}}>A equipe ainda não preencheu os detalhes desse plano.</div>}
-        </div>
-
-        {/* Botões aprovação (só se aprovado internamente) */}
-        {podeAgir&&data.status_cliente!=="aprovado"&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          <button onClick={aprovarPlano}
-            style={{background:"#059669",color:"#fff",border:"none",borderRadius:10,padding:"11px 22px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
-            <Ico n="check" size={14}/> Aprovar planejamento
+    {loading?<div style={{padding:30,textAlign:"center",color:"#94a3b8"}}>Carregando…</div>:<>
+      {/* Campos editáveis (sincronizados em tempo real com a equipe Pixels) */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+        {MP_CAMPOS.map(function(c){
+          return <div key={c.k}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+              <Ico n={c.icon} size={13} color={cl.color}/>
+              <div style={{color:"#0f172a",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{c.label}</div>
+            </div>
+            <textarea value={form[c.k]||""} onChange={function(e){_set(c.k,e.target.value);}}
+              placeholder={c.placeholder} rows={2}
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+          </div>;
+        })}
+        {dirty&&<div style={{display:"flex",justifyContent:"flex-end",borderTop:"1px solid #e2e8f0",paddingTop:12}}>
+          <button onClick={handleSave} disabled={saving}
+            style={{background:saving?"#94a3b8":"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit"}}>
+            {saving?"Salvando…":"Salvar planejamento"}
           </button>
-          {data.status_cliente!=="em_ajuste"&&<button onClick={pedirAjuste}
-            style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"11px 18px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
-            <Ico n="rotate" size={14}/> Solicitar ajuste
-          </button>}
         </div>}
+      </div>
 
-        {/* Comentários (ambos lados) */}
-        <MonthlyPlanComments data={data} onAdd={addComment} clColor={cl.color}/>
-      </>
-    )}
+      {/* Aprovação / Solicitar ajuste — sempre disponíveis pro cliente */}
+      {data&&data.status_cliente!=="aprovado"&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        <button onClick={aprovarPlano}
+          style={{background:"#059669",color:"#fff",border:"none",borderRadius:10,padding:"11px 22px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
+          <Ico n="check" size={14}/> Aprovar planejamento
+        </button>
+        {data.status_cliente!=="em_ajuste"&&<button onClick={pedirAjuste}
+          style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"11px 18px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
+          <Ico n="rotate" size={14}/> Solicitar ajuste
+        </button>}
+      </div>}
+
+      {/* Comentários (ambos lados) */}
+      <MonthlyPlanComments data={data} onAdd={addComment} clColor={cl.color}/>
+    </>}
   </div>;
 }
 
