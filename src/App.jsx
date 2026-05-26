@@ -35871,7 +35871,162 @@ const OP_METAS_SEMANAIS_V2 = [
   { sem:4, publ:19, base:14, prod:8,  drive:6 },
 ];
 
-/* ─── ROTINA SEMANAL — itens fixos por dia ────────────────── */
+/* ─── ROTINA SEMANAL — itens personalizados por colaborador ────
+   Cada colaborador tem rotina específica do seu cargo.
+   Se o user não tiver rotina específica, cai no fallback OP_ROTINA_DIAS.
+─────────────────────────────────────────────────────────────── */
+const OP_ROTINAS_POR_USER = {
+  ellen: [
+    { id:"seg", num:1, dia:"Segunda", titulo:"Planejamento", itens:[
+      {id:"ellen_seg_planmes",   label:"Revisar planejamento mensal dos clientes"},
+      {id:"ellen_seg_prioridades",label:"Definir prioridades de copy da semana"},
+      {id:"ellen_seg_pendentes", label:"Revisar conteúdos pendentes"},
+    ]},
+    { id:"ter", num:2, dia:"Terça", titulo:"Produção de copy", itens:[
+      {id:"ellen_ter_copys",     label:"Produzir copys da semana"},
+      {id:"ellen_ter_legendas",  label:"Atualizar legendas dos cards prontos"},
+      {id:"ellen_ter_briefings", label:"Enviar briefings pra equipe"},
+    ]},
+    { id:"qua", num:3, dia:"Quarta", titulo:"Conteúdo e agendamento", itens:[
+      {id:"ellen_qua_validar",   label:"Validar copys aprovadas"},
+      {id:"ellen_qua_rascunhos", label:"Conferir rascunhos abertos"},
+      {id:"ellen_qua_calendario",label:"Conferir calendário de publicações"},
+    ]},
+    { id:"qui", num:4, dia:"Quinta", titulo:"Finalização", itens:[
+      {id:"ellen_qui_finalizar", label:"Finalizar conteúdos da semana"},
+      {id:"ellen_qui_validar",   label:"Validar agendamento"},
+    ]},
+    { id:"sex", num:5, dia:"Sexta", titulo:"Fechamento da semana", itens:[
+      {id:"ellen_sex_fechamento",label:"Fechamento das publicações da semana"},
+      {id:"ellen_sex_proxima",   label:"Preparar próxima semana"},
+    ]},
+  ],
+  vinicius: [
+    { id:"seg", num:1, dia:"Segunda", titulo:"Abertura da semana", itens:[
+      {id:"vini_seg_reuniao",    label:"Conduzir reunião semanal"},
+      {id:"vini_seg_atrasos",    label:"Revisar atrasados da semana anterior"},
+      {id:"vini_seg_sem_dono",   label:"Cards sem responsável"},
+      {id:"vini_seg_sem_prazo",  label:"Cards sem prazo"},
+      {id:"vini_seg_prioridades",label:"Definir prioridades por colaborador"},
+    ]},
+    { id:"ter", num:2, dia:"Terça", titulo:"Acompanhamento", itens:[
+      {id:"vini_ter_andamento",  label:"Acompanhar andamento da produção"},
+      {id:"vini_ter_destravar",  label:"Destravar pendências internas"},
+    ]},
+    { id:"qua", num:3, dia:"Quarta", titulo:"Aprovações", itens:[
+      {id:"vini_qua_aprov_copy",  label:"Aprovar copys pendentes"},
+      {id:"vini_qua_aprov_design",label:"Aprovar artes/design pendentes"},
+      {id:"vini_qua_aprov_video", label:"Aprovar vídeos pendentes"},
+      {id:"vini_qua_gargalos",    label:"Alinhar gargalos com a equipe"},
+    ]},
+    { id:"qui", num:4, dia:"Quinta", titulo:"Organização", itens:[
+      {id:"vini_qui_cronograma", label:"Conferir cronograma de publicações"},
+      {id:"vini_qui_proxima",    label:"Organizar próxima semana"},
+    ]},
+    { id:"sex", num:5, dia:"Sexta", titulo:"Fechamento", itens:[
+      {id:"vini_sex_concluidos", label:"Conferir entregas da semana"},
+      {id:"vini_sex_gargalos",   label:"Registrar gargalos da semana"},
+      {id:"vini_sex_11",         label:"1:1 com colaboradores se necessário"},
+    ]},
+  ],
+  andre: [
+    { id:"seg", num:1, dia:"Segunda", titulo:"Briefing da semana", itens:[
+      {id:"andre_seg_demandas",  label:"Revisar demandas atribuídas"},
+      {id:"andre_seg_briefings", label:"Ler briefings recebidos"},
+      {id:"andre_seg_priorizar", label:"Priorizar entregas da semana"},
+    ]},
+    { id:"ter", num:2, dia:"Terça", titulo:"Produção", itens:[
+      {id:"andre_ter_artes",     label:"Produzir artes do dia"},
+      {id:"andre_ter_templates", label:"Conferir templates de cada cliente"},
+    ]},
+    { id:"qua", num:3, dia:"Quarta", titulo:"Ajustes e envios", itens:[
+      {id:"andre_qua_ajustes",   label:"Resolver ajustes pendentes"},
+      {id:"andre_qua_concluir",  label:"Concluir para avaliação"},
+    ]},
+    { id:"qui", num:4, dia:"Quinta", titulo:"Finalização", itens:[
+      {id:"andre_qui_finalizar", label:"Finalizar entregas da semana"},
+      {id:"andre_qui_feedback",  label:"Revisar feedbacks"},
+    ]},
+    { id:"sex", num:5, dia:"Sexta", titulo:"Fechamento", itens:[
+      {id:"andre_sex_pagaveis",  label:"Conferir entregas que entram no pagamento"},
+      {id:"andre_sex_arquivos",  label:"Organizar pasta de arquivos"},
+    ]},
+  ],
+  guilherme: [
+    { id:"seg", num:1, dia:"Segunda", titulo:"Briefing da semana", itens:[
+      {id:"gui_seg_demandas",    label:"Revisar demandas de vídeo"},
+      {id:"gui_seg_brutos",      label:"Verificar materiais brutos disponíveis"},
+      {id:"gui_seg_priorizar",   label:"Priorizar entregas da semana"},
+    ]},
+    { id:"ter", num:2, dia:"Terça", titulo:"Edição", itens:[
+      {id:"gui_ter_editar",      label:"Editar vídeos do dia"},
+      {id:"gui_ter_legendas",    label:"Inserir legendas e CTAs"},
+    ]},
+    { id:"qua", num:3, dia:"Quarta", titulo:"Ajustes e envios", itens:[
+      {id:"gui_qua_ajustes",     label:"Resolver ajustes pendentes"},
+      {id:"gui_qua_concluir",    label:"Concluir vídeos para avaliação"},
+    ]},
+    { id:"qui", num:4, dia:"Quinta", titulo:"Finalização", itens:[
+      {id:"gui_qui_finalizar",   label:"Finalizar entregas da semana"},
+      {id:"gui_qui_feedback",    label:"Revisar feedbacks recebidos"},
+    ]},
+    { id:"sex", num:5, dia:"Sexta", titulo:"Fechamento", itens:[
+      {id:"gui_sex_pagaveis",    label:"Conferir entregas que entram no pagamento"},
+      {id:"gui_sex_arquivos",    label:"Organizar pasta de arquivos"},
+    ]},
+  ],
+  gustavo: [
+    { id:"seg", num:1, dia:"Segunda", titulo:"Performance e clientes", itens:[
+      {id:"gus_seg_criticos",    label:"Revisar clientes críticos"},
+      {id:"gus_seg_campanhas",   label:"Listar campanhas em atenção"},
+      {id:"gus_seg_reunioes",    label:"Confirmar reuniões da semana"},
+    ]},
+    { id:"ter", num:2, dia:"Terça", titulo:"Análise", itens:[
+      {id:"gus_ter_perform",     label:"Analisar performance dos clientes"},
+      {id:"gus_ter_otimizar",    label:"Recomendar otimizações de campanha"},
+    ]},
+    { id:"qua", num:3, dia:"Quarta", titulo:"Aprovações finais", itens:[
+      {id:"gus_qua_design",      label:"Aprovar design final"},
+      {id:"gus_qua_gargalos",    label:"Alinhar gargalos com Vinicius"},
+    ]},
+    { id:"qui", num:4, dia:"Quinta", titulo:"Reuniões", itens:[
+      {id:"gus_qui_relatorios",  label:"Preparar relatórios pra cliente"},
+      {id:"gus_qui_call",        label:"Calls com clientes críticos"},
+    ]},
+    { id:"sex", num:5, dia:"Sexta", titulo:"Fechamento", itens:[
+      {id:"gus_sex_perform",     label:"Revisar performance da semana"},
+      {id:"gus_sex_status",      label:"Atualizar status dos clientes"},
+    ]},
+  ],
+  erick: [
+    { id:"seg", num:1, dia:"Segunda", titulo:"Revisão de contas", itens:[
+      {id:"erick_seg_contas",    label:"Revisar contas ativas"},
+      {id:"erick_seg_criticas",  label:"Identificar campanhas críticas"},
+    ]},
+    { id:"ter", num:2, dia:"Terça", titulo:"Otimização Meta", itens:[
+      {id:"erick_ter_meta",      label:"Otimizar campanhas Meta Ads"},
+    ]},
+    { id:"qua", num:3, dia:"Quarta", titulo:"Otimização Google", itens:[
+      {id:"erick_qua_google",    label:"Otimizar campanhas Google Ads"},
+      {id:"erick_qua_cpl",       label:"Acompanhar CPL e verba"},
+    ]},
+    { id:"qui", num:4, dia:"Quinta", titulo:"Ajustes finos", itens:[
+      {id:"erick_qui_segment",   label:"Ajustar segmentações"},
+      {id:"erick_qui_criativos", label:"Subir novos criativos"},
+    ]},
+    { id:"sex", num:5, dia:"Sexta", titulo:"Leitura de performance", itens:[
+      {id:"erick_sex_leitura",   label:"Leitura de performance da semana"},
+      {id:"erick_sex_acoes",     label:"Registrar próximas ações"},
+    ]},
+  ],
+};
+
+function _opRotinaDiasFor(userId){
+  if(userId && OP_ROTINAS_POR_USER[userId]) return OP_ROTINAS_POR_USER[userId];
+  return OP_ROTINA_DIAS; // fallback compartilhado
+}
+
+/* ─── ROTINA SEMANAL — fallback genérico (compartilhada) ────── */
 const OP_ROTINA_DIAS = [
   { id:"seg", num:1, dia:"Segunda", titulo:"Planejamento e destravamento", itens:[
     {id:"seg_reuniao",      label:"Fazer reunião semanal da equipe"},
@@ -35960,18 +36115,19 @@ function _opHorasParado(task){
 }
 
 /* ─── HOOK: useOpRotinaChecks (rotina semanal Supabase) ──── */
-function useOpRotinaChecks(weekKey){
+function useOpRotinaChecks(weekKey, userId){
   const [checks, setChecks] = useState({});
   const [loading, setLoading] = useState(true);
+  const uid = userId || (typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.id) || "shared";
   useEffect(function(){
     if(!weekKey||!window._sb){setLoading(false);return;}
-    window._sb.from("op_rotina_checks").select("*").eq("week_key", weekKey).then(function(r){
+    window._sb.from("op_rotina_checks").select("*").eq("week_key", weekKey).eq("user_id", uid).then(function(r){
       const map = {};
       (r.data||[]).forEach(function(row){ map[row.item_id] = row; });
       setChecks(map);
       setLoading(false);
     });
-  }, [weekKey]);
+  }, [weekKey, uid]);
 
   function toggle(itemId){
     const cur = checks[itemId];
@@ -35980,12 +36136,13 @@ function useOpRotinaChecks(weekKey){
       const next = Object.assign({}, checks); delete next[itemId];
       setChecks(next);
       if(window._sb){
-        window._sb.from("op_rotina_checks").delete().eq("week_key", weekKey).eq("item_id", itemId);
+        window._sb.from("op_rotina_checks").delete().eq("week_key", weekKey).eq("user_id", uid).eq("item_id", itemId);
       }
     } else {
       const row = {
-        id: weekKey+"-"+itemId,
+        id: weekKey+"-"+uid+"-"+itemId,
         week_key: weekKey,
+        user_id: uid,
         item_id: itemId,
         completed: true,
         completed_at: new Date().toISOString(),
@@ -35993,12 +36150,108 @@ function useOpRotinaChecks(weekKey){
       };
       setChecks(function(p){return Object.assign({},p,{[itemId]:row});});
       if(window._sb){
-        window._sb.from("op_rotina_checks").upsert(row,{onConflict:"week_key,item_id"});
+        window._sb.from("op_rotina_checks").upsert(row,{onConflict:"week_key,user_id,item_id"});
       }
     }
   }
 
   return { checks, toggle, loading };
+}
+
+/* ─── HOOK: useOpRotinaAllChecks (todos os users da semana) ─── */
+function useOpRotinaAllChecks(weekKey){
+  const [all, setAll] = useState({});
+  const [loading, setLoading] = useState(true);
+  useEffect(function(){
+    if(!weekKey||!window._sb){setLoading(false);return;}
+    window._sb.from("op_rotina_checks").select("*").eq("week_key", weekKey).then(function(r){
+      const byUser = {};
+      (r.data||[]).forEach(function(row){
+        const u = row.user_id||"shared";
+        if(!byUser[u]) byUser[u] = {};
+        byUser[u][row.item_id] = row;
+      });
+      setAll(byUser);
+      setLoading(false);
+    });
+  }, [weekKey]);
+  return { all, loading };
+}
+
+/* ─── COMPONENTE: OpRotinaWidget (checklist reutilizável) ──── */
+function OpRotinaWidget(props){
+  const { userId, accentColor, isMob, compact } = props;
+  const now = new Date();
+  const weekKey = _opWeekKey(now);
+  const dias = _opRotinaDiasFor(userId);
+  const { checks, toggle, loading } = useOpRotinaChecks(weekKey, userId);
+  const [filtro, setFiltro] = useState("todas");
+  const ac = accentColor || "#9F43F6";
+
+  const allItems = dias.reduce(function(a,d){return a.concat(d.itens);},[]);
+  const total = allItems.length;
+  const feitos = allItems.filter(function(it){return checks[it.id]&&checks[it.id].completed;}).length;
+  const pct = total>0 ? Math.round(feitos/total*100) : 0;
+
+  if(loading) return <div style={{padding:20,textAlign:"center",color:"#94a3b8",fontFamily:_OP_FF}}>Carregando rotina...</div>;
+
+  return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:compact?"14px 18px":"18px 22px",display:"flex",flexDirection:"column",gap:12,fontFamily:_OP_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_OP_FF}}>Rotina da semana</div>
+        <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontFamily:_OP_FF}}>{feitos} de {total} concluídas · Semana {weekKey}</div>
+      </div>
+      <div style={{display:"inline-flex",gap:4,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:3}}>
+        {["todas","pendentes","concluidas"].map(function(f){
+          const a=filtro===f;
+          return <button key={f} onClick={function(){setFiltro(f);}}
+            style={{background:a?ac:"transparent",color:a?"#fff":"#475569",border:"none",borderRadius:7,padding:"4px 10px",fontSize:10.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:_OP_FF,textTransform:"capitalize"}}>{f}</button>;
+        })}
+      </div>
+    </div>
+    <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
+      <div style={{width:pct+"%",height:"100%",background:"linear-gradient(90deg,"+ac+","+ac+")",borderRadius:99,transition:"width .3s"}}/>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {dias.map(function(d){
+        const itensFiltrados = d.itens.filter(function(it){
+          const done = !!(checks[it.id]&&checks[it.id].completed);
+          if(filtro==="pendentes") return !done;
+          if(filtro==="concluidas") return done;
+          return true;
+        });
+        if(itensFiltrados.length===0) return null;
+        const feitosDia = d.itens.filter(function(it){return checks[it.id]&&checks[it.id].completed;}).length;
+        return <div key={d.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 12px",fontFamily:_OP_FF}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:6}}>
+            <div>
+              <div style={{color:ac,fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_OP_FF}}>{d.dia}</div>
+              <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2,marginTop:1,fontFamily:_OP_FF}}>{d.titulo}</div>
+            </div>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFamily:_OP_FF}}>{feitosDia}/{d.itens.length}</span>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {itensFiltrados.map(function(it){
+              const ck = checks[it.id];
+              const done = !!(ck&&ck.completed);
+              return <div key={it.id} onClick={function(){toggle(it.id);}}
+                style={{display:"flex",alignItems:"center",gap:9,padding:"6px 8px",borderRadius:7,cursor:"pointer",transition:"background .12s",fontFamily:_OP_FF}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#fff";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                <div style={{width:17,height:17,borderRadius:"50%",border:"2px solid "+(done?ac:"#cbd5e1"),background:done?ac:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                  {done && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:done?"#94a3b8":"#0f172a",fontSize:12,fontWeight:done?500:600,textDecoration:done?"line-through":"none",fontFamily:_OP_FF}}>{it.label}</div>
+                  {done && ck.completed_at && <div style={{color:ac,fontSize:9.5,fontWeight:600,marginTop:1,fontFamily:_OP_FF}}>{new Date(ck.completed_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</div>}
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>;
+      })}
+    </div>
+  </section>;
 }
 
 /* ─── COMPONENTE: Avatar colaborador (usa foto se existir) */
@@ -36184,8 +36437,11 @@ function PageOperacional(props){
   const [filtroCliente, setFiltroCliente] = useState("todos");
   const [drawerColab, setDrawerColab] = useState(null);
 
-  // Rotina semanal — Supabase
-  const { checks, toggle: toggleCheck, loading: loadingRotina } = useOpRotinaChecks(weekKey);
+  // Rotina semanal — Supabase (rotina do user logado)
+  const currentUserId = (typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id)||"shared";
+  const { checks, toggle: toggleCheck, loading: loadingRotina } = useOpRotinaChecks(weekKey, currentUserId);
+  // E todos os checks da semana (pra mini-barras de cada colaborador)
+  const { all: allChecks } = useOpRotinaAllChecks(weekKey);
   const [rotinaFiltro, setRotinaFiltro] = useState("todas"); // todas | pendentes | concluidas
 
   /* ───── Cálculos: aprovações por tipo (sincronizado com aba Aprovações) ───── */
@@ -36330,11 +36586,12 @@ function PageOperacional(props){
                 </div>;
               })}
             </div>
-            {/* Mini progresso de rotina do colaborador */}
+            {/* Mini progresso de rotina específica deste colaborador */}
             {(function(){
-              const totalRot = OP_ROTINA_DIAS.reduce(function(a,d){return a+d.itens.length;},0);
-              // Por enquanto a rotina é global; quando virar personalizada por user_id, filtrar aqui
-              const feitosRot = Object.values(checks).filter(function(x){return x&&x.completed;}).length;
+              const diasC = _opRotinaDiasFor(c.id);
+              const totalRot = diasC.reduce(function(a,d){return a+d.itens.length;},0);
+              const ckUser = allChecks[c.id] || {};
+              const feitosRot = Object.values(ckUser).filter(function(x){return x&&x.completed;}).length;
               const pctR = totalRot>0?Math.round(feitosRot/totalRot*100):0;
               return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"9px 12px",fontFamily:_OP_FF}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:5}}>
@@ -38610,6 +38867,9 @@ function DashColabV2(props){
           </div>
       }
     </section>
+
+    {/* ═══ 7. ROTINA DA SEMANA — checklist personalizado do colaborador ═══ */}
+    {typeof OpRotinaWidget==="function" && <OpRotinaWidget userId={user.id} accentColor={user.color||"#9F43F6"} isMob={isMob}/>}
 
   </div>;
 }
