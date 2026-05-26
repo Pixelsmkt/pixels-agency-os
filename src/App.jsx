@@ -20988,8 +20988,6 @@ function PageRadarEntrega({ tasks, isMob }) {
   );
 }
 
-// ======= 11_cardmodal.jsx =======
-
 function RichToolbar({elRef}){
   const exec=(cmd,val)=>{
     if(elRef.current){elRef.current.focus();}
@@ -22145,9 +22143,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <Ico n="trash" size={16}/>
             </button>}
             {/* Cor de Capa removida — botão de paleta sumiu do header */}
-            {/* Salvar + Enviar p/ Aprovação + Drive empilhados (Demanda Concluída e Lixeira removidos — usar drag-and-drop e × do card no kanban) */}
+            {/* Salvar + Concluir p/ avaliação + Enviar p/ Aprovação + Drive empilhados */}
             <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"stretch"}}>
               {canEdit&&<button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",boxShadow:"0 2px 8px rgba(0,0,0,0.15)",whiteSpace:"nowrap",minWidth:170,textAlign:"center",letterSpacing:.1}}>Salvar</button>}
+              {/* Concluir p/ avaliação — aparece em cards "execucao" ou "ajustes" (move pra coluna Avaliação e entra no fluxo de Aprovações) */}
+              {canEdit&&(task.status==="execucao"||task.status==="ajustes")&&<button
+                onClick={()=>setConclusionStep(1)}
+                style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(22,163,74,0.28)",minWidth:170,textAlign:"center",letterSpacing:.1,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,fontFamily:"inherit"}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Concluir p/ avaliação
+              </button>}
               {/* Enviar para Aprovação — só pra cards de copy marcados como "ajustar" */}
               {canEdit&&task.ajustar===true&&task.status==="demanda"&&<button
                 onClick={()=>{setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:false,timeline:[...(t.timeline||[]),{type:"edit",label:"Reenviada para aprovação por "+user.name,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name}]}:t));onClose();}}
@@ -37678,24 +37683,38 @@ function _enpsCanSeeAll(){
 /* ─── COMPONENTE: NotaScale (escala 0-10 clicável) ───────── */
 function _NotaScale(props){
   const { value, onChange, disabled } = props;
-  return <div style={{display:"flex",gap:6,flexWrap:"wrap",fontFamily:_NPS_FF}}>
-    {[0,1,2,3,4,5,6,7,8,9,10].map(function(n){
-      const sel = value===n;
-      const cl = _npsClassify(n);
-      return <button key={n} onClick={function(){if(!disabled&&onChange)onChange(n);}}
-        disabled={disabled}
-        style={{
-          width:38, height:38, borderRadius:9,
-          border:"1px solid "+(sel?cl.color:"#e2e8f0"),
-          background: sel?cl.color:"#fff",
-          color: sel?"#fff":"#475569",
-          fontSize:13, fontWeight:800, cursor:disabled?"default":"pointer",
-          fontFamily:_NPS_FF, transition:"all .12s",
-          opacity:disabled?.7:1,
-        }}>
-        {n}
-      </button>;
-    })}
+  const [hover, setHover] = useState(null);
+  return <div style={{fontFamily:_NPS_FF}}>
+    <div style={{display:"flex",gap:6,flexWrap:"wrap",fontFamily:_NPS_FF}}>
+      {[0,1,2,3,4,5,6,7,8,9,10].map(function(n){
+        const sel = value===n;
+        const isHover = hover===n;
+        const cl = _npsClassify(n);
+        const active = sel || (isHover && !disabled);
+        return <button key={n} onClick={function(){if(!disabled&&onChange)onChange(n);}}
+          onMouseEnter={function(){if(!disabled)setHover(n);}}
+          onMouseLeave={function(){setHover(null);}}
+          disabled={disabled}
+          style={{
+            width:42, height:42, borderRadius:10,
+            border:"1px solid "+(sel?cl.color:(isHover&&!disabled?cl.color:"#e2e8f0")),
+            background: sel?cl.color:(isHover&&!disabled?cl.color+"15":"#fff"),
+            color: sel?"#fff":(isHover&&!disabled?cl.color:"#0f172a"),
+            fontSize:14, fontWeight:700, cursor:disabled?"default":"pointer",
+            fontFamily:_NPS_FF, transition:"all .15s",
+            opacity:disabled?.7:1,
+            boxShadow: sel ? "0 4px 14px "+cl.color+"45" : "none",
+          }}>
+          {n}
+        </button>;
+      })}
+    </div>
+    {/* Legenda discreta */}
+    <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:10.5,color:"#94a3b8",fontWeight:600,fontFamily:_NPS_FF}}>
+      <span><span style={{color:"#dc2626"}}>●</span> 0–6 detrator</span>
+      <span><span style={{color:"#a16207"}}>●</span> 7–8 neutro</span>
+      <span><span style={{color:"#16a34a"}}>●</span> 9–10 promotor</span>
+    </div>
   </div>;
 }
 
@@ -37740,7 +37759,6 @@ function PageGestaoENPS(props){
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Resposta do usuário atual no ciclo
   const myRow = rows.find(function(r){return r.user_id===CURRENT_USER.id && r.cycle_month===cycle;});
   const respondidoEsseMes = !!myRow;
 
@@ -37752,14 +37770,12 @@ function PageGestaoENPS(props){
       score:score,
       suggestion:comment.trim(),
     }).then(function(){
-      setSaving(false);
-      setScore(null);
-      setComment("");
+      setSaving(false); setScore(null); setComment("");
       if(typeof pixelsToast!=="undefined") pixelsToast.success("ENPS enviado. Obrigado!",3500);
     });
   }
 
-  // Cálculos do mês (só sócios/coord)
+  // Cálculos do mês
   const rowsThisMonth = rows.filter(function(r){return r.cycle_month===cycle;});
   const promotores = rowsThisMonth.filter(function(r){return r.score>=9;}).length;
   const neutros    = rowsThisMonth.filter(function(r){return r.score>=7&&r.score<=8;}).length;
@@ -37772,160 +37788,222 @@ function PageGestaoENPS(props){
   const respondidos = rowsThisMonth.map(function(r){return r.user_id;});
   const pendentes = team.filter(function(u){return respondidos.indexOf(u.id)<0;});
 
-  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,width:"100%"}}>
+  // Helper avatar inline (foto ou iniciais)
+  function _avUser(u, size){
+    const sz = size||38;
+    const photo = (u && u.profile_data && u.profile_data.photo) ||
+                  (typeof localStorage!=="undefined" && localStorage.getItem("pixels-selfprofile-"+u.id) ?
+                    (function(){try{return JSON.parse(localStorage.getItem("pixels-selfprofile-"+u.id)).photo;}catch(e){return null;}})()
+                    : null);
+    if(photo){
+      return <img src={photo} alt={u.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",flexShrink:0,border:"2px solid #fff",boxShadow:"0 0 0 1px #e2e8f0"}}/>;
+    }
+    const ini = (u.name||"?").split(" ").map(function(x){return x[0];}).slice(0,2).join("").toUpperCase();
+    return <div style={{width:sz,height:sz,borderRadius:"50%",background:u.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:Math.floor(sz*0.36),fontFamily:_NPS_FF,flexShrink:0}}>{ini}</div>;
+  }
 
-    {/* HEADER */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontFamily:_NPS_FF}}>
-      <div style={{display:"flex",alignItems:"center",gap:11}}>
-        <div style={{width:42,height:42,borderRadius:11,background:"#9F43F615",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9F43F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+  return <div style={{display:"flex",flexDirection:"column",gap:20,fontFamily:_NPS_FF,width:"100%"}}>
+
+    {/* ═══ HEADER ═══ */}
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontFamily:_NPS_FF}}>
+      <div style={{display:"flex",alignItems:"center",gap:13}}>
+        <div style={{width:46,height:46,borderRadius:12,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 20px rgba(159,67,246,0.25)"}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFamily:_NPS_FF}}>ENPS</div>
-          <div style={{color:"#64748b",fontSize:13,marginTop:2,fontFamily:_NPS_FF}}>Pesquisa mensal de satisfação da equipe Pixels. Ciclo atual: {cycle}</div>
+          <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",fontFamily:_NPS_FF}}>Pesquisa mensal</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:24,letterSpacing:-.6,lineHeight:1.1,marginTop:2,fontFamily:_NPS_FF}}>ENPS</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:4,fontFamily:_NPS_FF}}>Pesquisa mensal de satisfação da equipe Pixels</div>
         </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 12px",fontFamily:_NPS_FF}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_NPS_FF}}>Ciclo atual</div>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{cycle}</div>
+        </div>
+        <span style={{background:respondidoEsseMes?"#dcfce7":"#ede9fe",color:respondidoEsseMes?"#15803d":"#7c3aed",fontSize:10.5,fontWeight:800,padding:"6px 12px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_NPS_FF}}>
+          {respondidoEsseMes?"Respondido":"Aberto"}
+        </span>
       </div>
     </div>
 
-    {/* FORMULÁRIO DE RESPOSTA (sempre visível, mesmo se já respondeu) */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF}}>
+    {/* ═══ CARD PRINCIPAL DE RESPOSTA ═══ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"28px 32px",display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.03)"}}>
       <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_NPS_FF}}>De 0 a 10, o quanto você recomendaria a Pixels como lugar pra trabalhar?</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:4,fontFamily:_NPS_FF}}>Sua resposta é privada — só sócios e a coordenação têm acesso.</div>
+        <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",fontFamily:_NPS_FF}}>Pergunta do mês</div>
+        <div style={{color:"#0f172a",fontSize:isMob?17:20,fontWeight:700,letterSpacing:-.4,lineHeight:1.3,marginTop:6,fontFamily:_NPS_FF,maxWidth:760}}>De 0 a 10, o quanto você recomendaria a Pixels como lugar para trabalhar?</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:8,display:"flex",alignItems:"center",gap:6,fontFamily:_NPS_FF}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Sua resposta é privada — somente sócios e coordenação têm acesso.
+        </div>
       </div>
+
       {respondidoEsseMes
-        ? <div style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:11,padding:"14px 16px",display:"flex",alignItems:"center",gap:11,fontFamily:_NPS_FF}}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <div>
-              <div style={{color:"#15803d",fontWeight:800,fontSize:13.5,fontFamily:_NPS_FF}}>Você já respondeu o ENPS deste mês</div>
-              <div style={{color:"#15803d",fontSize:12,marginTop:2,fontFamily:_NPS_FF}}>Próximo preenchimento previsto pra {_npsFmtDate(myRow.next_due_date)}.</div>
+        ? <div style={{background:"linear-gradient(135deg,#dcfce7,#bbf7d0)",border:"1px solid #86efac",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
+            <div style={{width:44,height:44,borderRadius:11,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px rgba(22,163,74,0.30)"}}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#14532d",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_NPS_FF}}>Você já respondeu o ENPS deste mês</div>
+              <div style={{color:"#15803d",fontSize:12.5,marginTop:3,fontFamily:_NPS_FF}}>Próximo preenchimento previsto pra {_npsFmtDate(myRow.next_due_date)}.</div>
             </div>
           </div>
         : <>
             <_NotaScale value={score} onChange={setScore}/>
-            <div>
-              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar na Pixels? (opcional)</div>
-              <textarea value={comment} onChange={function(e){setComment(e.target.value);}} rows={3} placeholder="Comentários, sugestões, ideias..."
-                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+            <div style={{marginTop:6}}>
+              <div style={{color:"#475569",fontSize:12.5,fontWeight:600,marginBottom:8,fontFamily:_NPS_FF}}>O que podemos melhorar na Pixels? <span style={{color:"#94a3b8",fontWeight:500}}>(opcional)</span></div>
+              <textarea value={comment} onChange={function(e){setComment(e.target.value);}} rows={3}
+                placeholder="Escreva sugestões, percepções ou ideias que possam melhorar a empresa."
+                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:11,padding:"12px 14px",fontSize:13.5,fontFamily:_NPS_FF,color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc",lineHeight:1.5,transition:"border-color .15s, background .15s"}}
+                onFocus={function(e){e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.background="#fff";}}
+                onBlur={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}/>
             </div>
-            <div style={{display:"flex",justifyContent:"flex-end"}}>
+            <div style={{display:"flex",justifyContent:"flex-end",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              {score!=null && <span style={{color:"#64748b",fontSize:12,fontWeight:600,fontFamily:_NPS_FF}}>Nota selecionada: <span style={{color:_npsClassify(score).color,fontWeight:800}}>{score} · {_npsClassify(score).label}</span></span>}
               <button onClick={handleSubmit} disabled={score==null||saving}
-                style={{background:score!=null&&!saving?"#9F43F6":"#cbd5e1",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:score!=null&&!saving?"pointer":"not-allowed",fontFamily:_NPS_FF,boxShadow:score!=null?"0 6px 16px rgba(159,67,246,0.30)":"none"}}>
+                style={{background:score!=null&&!saving?"linear-gradient(135deg,#9F43F6,#7c3aed)":"#cbd5e1",color:"#fff",border:"none",borderRadius:11,padding:"11px 24px",fontWeight:800,fontSize:13,cursor:score!=null&&!saving?"pointer":"not-allowed",fontFamily:_NPS_FF,boxShadow:score!=null&&!saving?"0 8px 20px rgba(159,67,246,0.35)":"none",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:7}}>
                 {saving?"Enviando...":"Enviar resposta"}
+                {!saving && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>}
               </button>
             </div>
           </>
       }
     </section>
 
-    {loading?<div style={{padding:20,color:"#94a3b8",textAlign:"center",fontFamily:_NPS_FF}}>Carregando...</div>:null}
+    {loading && <div style={{padding:20,color:"#94a3b8",textAlign:"center",fontFamily:_NPS_FF}}>Carregando...</div>}
 
-    {/* PAINEL SÓCIOS/COORDENAÇÃO */}
+    {/* ═══ PAINEL SÓCIOS/COORDENAÇÃO ═══ */}
     {canAll && !loading && <>
-      {/* KPIs */}
+      {/* KPIs premium */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12,fontFamily:_NPS_FF}}>
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>ENPS do mês</div>
-          <div style={{color:enpsScore==null?"#94a3b8":(enpsScore>=50?"#16a34a":(enpsScore>=0?"#a16207":"#dc2626")),fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{enpsScore==null?"—":enpsScore}</div>
-          <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>{totalResp} resposta{totalResp===1?"":"s"}</div>
-        </div>
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Nota média</div>
-          <div style={{color:"#0f172a",fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{mediaNota==null?"—":mediaNota.toFixed(1)}</div>
-          <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>de 0 a 10</div>
-        </div>
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Respondidos</div>
-          <div style={{color:"#16a34a",fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{respondidos.length}<span style={{color:"#cbd5e1",fontSize:16,fontWeight:700}}>/{team.length}</span></div>
-          <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>do time</div>
-        </div>
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Pendentes</div>
-          <div style={{color:pendentes.length>0?"#dc2626":"#16a34a",fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{pendentes.length}</div>
-          <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>colaboradores</div>
-        </div>
+        {(function(){
+          const enpsCor = enpsScore==null?"#94a3b8":(enpsScore>=50?"#16a34a":(enpsScore>=0?"#a16207":"#dc2626"));
+          return [
+            {l:"ENPS do mês",  v:enpsScore==null?"—":enpsScore, hint:totalResp+" resposta"+(totalResp===1?"":"s"), c:enpsCor},
+            {l:"Nota média",   v:mediaNota==null?"—":mediaNota.toFixed(1), hint:"de 0 a 10", c:"#0f172a"},
+            {l:"Respondidos",  v:respondidos.length+"/"+team.length, hint:"do time", c:"#16a34a"},
+            {l:"Pendentes",    v:pendentes.length, hint:"colaboradores", c:pendentes.length>0?"#dc2626":"#16a34a"},
+          ];
+        })().map(function(k,i){
+          return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+            <div style={{color:"#64748b",fontSize:11,fontWeight:600,letterSpacing:.2,fontFamily:_NPS_FF}}>{k.l}</div>
+            <div style={{color:k.c,fontSize:32,fontWeight:800,letterSpacing:-1,marginTop:6,fontFeatureSettings:"'tnum'",fontFamily:_NPS_FF,lineHeight:1}}>{k.v}</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:5,fontFamily:_NPS_FF}}>{k.hint}</div>
+          </div>;
+        })}
       </div>
 
-      {/* Distribuição */}
-      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,fontFamily:_NPS_FF}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Distribuição do mês</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
-          {[{l:"Promotores", n:promotores, c:"#16a34a", bg:"#dcfce7"},
-            {l:"Neutros",    n:neutros,    c:"#a16207", bg:"#fef3c7"},
-            {l:"Detratores", n:detratores, c:"#dc2626", bg:"#fee2e2"}].map(function(d){
-            const pct = totalResp>0?Math.round(d.n/totalResp*100):0;
-            return <div key={d.l} style={{background:d.bg,borderRadius:10,padding:"10px 12px",fontFamily:_NPS_FF}}>
-              <div style={{color:d.c,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,fontFamily:_NPS_FF}}>{d.l}</div>
-              <div style={{color:d.c,fontSize:22,fontWeight:900,letterSpacing:-.5,marginTop:3,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{d.n}<span style={{fontSize:12,fontWeight:600,opacity:.7,marginLeft:4}}>· {pct}%</span></div>
-            </div>;
-          })}
+      {/* Distribuição com barra segmentada elegante */}
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,fontFamily:_NPS_FF}}>Distribuição do mês</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_NPS_FF}}>Promotores, neutros e detratores no ciclo atual.</div>
         </div>
+        {totalResp>0 ? <>
+          {/* Barra segmentada */}
+          <div style={{display:"flex",height:14,borderRadius:99,overflow:"hidden",background:"#f1f5f9"}}>
+            <div style={{width:(promotores/totalResp*100)+"%",background:"#22c55e",transition:"width .3s"}}/>
+            <div style={{width:(neutros/totalResp*100)+"%",background:"#eab308",transition:"width .3s"}}/>
+            <div style={{width:(detratores/totalResp*100)+"%",background:"#ef4444",transition:"width .3s"}}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+            {[{l:"Promotores", n:promotores, c:"#16a34a", bg:"#dcfce7"},
+              {l:"Neutros",    n:neutros,    c:"#a16207", bg:"#fef3c7"},
+              {l:"Detratores", n:detratores, c:"#dc2626", bg:"#fee2e2"}].map(function(d){
+              const pct = totalResp>0?Math.round(d.n/totalResp*100):0;
+              return <div key={d.l} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"12px 14px",fontFamily:_NPS_FF,display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:34,height:34,borderRadius:9,background:d.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <span style={{color:d.c,fontSize:14,fontWeight:800,fontFamily:_NPS_FF}}>{d.n}</span>
+                </div>
+                <div style={{minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12,fontWeight:700,fontFamily:_NPS_FF}}>{d.l}</div>
+                  <div style={{color:d.c,fontSize:11,fontWeight:700,marginTop:2,fontFamily:_NPS_FF}}>{pct}% do time</div>
+                </div>
+              </div>;
+            })}
+          </div>
+        </> : <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_NPS_FF}}>Sem respostas no ciclo atual ainda.</div>}
       </section>
 
-      {/* Lista de colaboradores com status */}
-      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,fontFamily:_NPS_FF}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Equipe — status do ciclo</div>
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {/* Equipe com avatares */}
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,fontFamily:_NPS_FF}}>Equipe — status do ciclo</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_NPS_FF}}>{respondidos.length} de {team.length} responderam.</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
           {team.map(function(u){
             const r = rowsThisMonth.find(function(x){return x.user_id===u.id;});
             const cl = r ? _npsClassify(r.score) : null;
-            return <div key={u.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"9px 10px",borderRadius:9,background:r?"#fafbfc":"#fef3c7",border:"1px solid "+(r?"#f1f5f9":"#fde047"),fontFamily:_NPS_FF}}>
-              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0,flex:1}}>
-                <div style={{width:30,height:30,borderRadius:"50%",background:u.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:11,fontFamily:_NPS_FF,flexShrink:0}}>{u.av||(u.name||"?").charAt(0)}</div>
-                <div style={{minWidth:0,flex:1}}>
-                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF}}>{u.name}</div>
-                  <div style={{color:"#64748b",fontSize:11,fontFamily:_NPS_FF}}>{u.role||""}</div>
-                </div>
+            return <div key={u.id} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderRadius:11,background:r?"#fafbfc":"#fff7ed",border:"1px solid "+(r?"#f1f5f9":"#fed7aa"),fontFamily:_NPS_FF}}>
+              {_avUser(u, 42)}
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.name}</div>
+                <div style={{color:"#64748b",fontSize:11,marginTop:1,fontFamily:_NPS_FF,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.role||""}</div>
+                {r && r.created_at && <div style={{color:"#94a3b8",fontSize:10,marginTop:2,fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)}</div>}
               </div>
               {r
-                ? <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                    <span style={{background:cl.bg,color:cl.color,fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF}}>{r.score} · {cl.label}</span>
-                  </div>
-                : <span style={{color:"#a16207",fontSize:11,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",fontFamily:_NPS_FF}}>Pendente</span>
+                ? <span style={{background:cl.bg,color:cl.color,fontSize:11,fontWeight:800,padding:"4px 10px",borderRadius:99,letterSpacing:.3,flexShrink:0,fontFamily:_NPS_FF}}>{r.score}</span>
+                : <span style={{background:"#fed7aa",color:"#9a3412",fontSize:9.5,fontWeight:700,padding:"4px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",flexShrink:0,fontFamily:_NPS_FF}}>Pendente</span>
               }
             </div>;
           })}
         </div>
       </section>
 
-      {/* Sugestões */}
-      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,fontFamily:_NPS_FF}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Sugestões recebidas</div>
+      {/* Sugestões da equipe */}
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:12,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,fontFamily:_NPS_FF}}>Sugestões da equipe</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_NPS_FF}}>Comentários enviados pelos colaboradores no histórico.</div>
+        </div>
         {rows.filter(function(r){return (r.suggestion||"").trim();}).length===0
-          ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",fontFamily:_NPS_FF}}>Nenhuma sugestão registrada ainda.</div>
-          : rows.filter(function(r){return (r.suggestion||"").trim();}).map(function(r){
+          ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"28px 20px",textAlign:"center",fontFamily:_NPS_FF}}>
+              <div style={{color:"#94a3b8",fontSize:12.5,fontFamily:_NPS_FF}}>Nenhuma sugestão registrada ainda.</div>
+              <div style={{color:"#cbd5e1",fontSize:11,marginTop:4,fontFamily:_NPS_FF}}>As percepções dos colaboradores aparecem aqui.</div>
+            </div>
+          : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {rows.filter(function(r){return (r.suggestion||"").trim();}).map(function(r){
               const u = TEAM.find(function(x){return x.id===r.user_id;});
               const cl = _npsClassify(r.score);
-              return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"10px 12px",fontFamily:_NPS_FF}}>
-                <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:5}}>
-                  <span style={{color:"#0f172a",fontSize:12,fontWeight:700,fontFamily:_NPS_FF}}>{u?u.name:r.user_id}</span>
-                  <span style={{background:cl.bg,color:cl.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF}}>{r.score} · {cl.label}</span>
-                  <span style={{color:"#94a3b8",fontSize:10.5,marginLeft:"auto",fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)} · {r.cycle_month}</span>
+              return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"14px 16px",fontFamily:_NPS_FF,display:"flex",gap:12}}>
+                {u && _avUser(u, 38)}
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                    <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFamily:_NPS_FF}}>{u?u.name:r.user_id}</span>
+                    <span style={{background:cl.bg,color:cl.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF}}>{r.score} · {cl.label}</span>
+                    <span style={{color:"#94a3b8",fontSize:10.5,marginLeft:"auto",fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)} · {r.cycle_month}</span>
+                  </div>
+                  <div style={{color:"#475569",fontSize:12.5,marginTop:8,whiteSpace:"pre-wrap",lineHeight:1.55,fontFamily:_NPS_FF}}>{r.suggestion}</div>
                 </div>
-                <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",fontFamily:_NPS_FF}}>{r.suggestion}</div>
               </div>;
-            })
+            })}
+          </div>
         }
       </section>
     </>}
 
-    {/* Histórico individual (não-sócio) */}
-    {!canAll && !loading && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",fontFamily:_NPS_FF}}>
-      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,marginBottom:10,fontFamily:_NPS_FF}}>Seu histórico</div>
+    {/* ═══ HISTÓRICO PESSOAL — colaborador comum ═══ */}
+    {!canAll && !loading && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,marginBottom:4,fontFamily:_NPS_FF}}>Seu histórico</div>
+      <div style={{color:"#64748b",fontSize:12,marginBottom:12,fontFamily:_NPS_FF}}>Suas respostas ficam privadas. Apenas sócios e coordenação acessam o consolidado.</div>
       {rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).length===0
-        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",fontFamily:_NPS_FF}}>Você ainda não respondeu nenhum ENPS.</div>
-        : <div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).map(function(r){
-            const cl = _npsClassify(r.score);
-            return <div key={r.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"9px 10px",borderRadius:9,background:"#fafbfc",border:"1px solid #f1f5f9",fontFamily:_NPS_FF}}>
-              <div>
-                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFamily:_NPS_FF}}>{r.cycle_month}</div>
-                <div style={{color:"#64748b",fontSize:11,fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)}</div>
-              </div>
-              <span style={{background:cl.bg,color:cl.color,fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF}}>{r.score} · {cl.label}</span>
-            </div>;
-          })}
-        </div>
+        ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"28px 20px",textAlign:"center",fontFamily:_NPS_FF}}>
+            <div style={{color:"#94a3b8",fontSize:12.5,fontFamily:_NPS_FF}}>Você ainda não respondeu nenhum ENPS.</div>
+          </div>
+        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).map(function(r){
+              const cl = _npsClassify(r.score);
+              return <div key={r.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"12px 14px",borderRadius:11,background:"#fafbfc",border:"1px solid #f1f5f9",fontFamily:_NPS_FF}}>
+                <div>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF}}>Ciclo {r.cycle_month}</div>
+                  <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)}</div>
+                  {r.suggestion && <div style={{color:"#475569",fontSize:11.5,marginTop:6,lineHeight:1.5,fontFamily:_NPS_FF,whiteSpace:"pre-wrap"}}>{r.suggestion}</div>}
+                </div>
+                <span style={{background:cl.bg,color:cl.color,fontSize:12,fontWeight:800,padding:"5px 11px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF,flexShrink:0}}>{r.score} · {cl.label}</span>
+              </div>;
+            })}
+          </div>
       }
     </section>}
 
