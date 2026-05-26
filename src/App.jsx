@@ -26238,7 +26238,7 @@ const _mFmtRelative=iso=>{
 /* ═══════════════════════════════════════════════════════════════
    PAGE GESTÃO DE MÍDIA — lista de clientes + filtros + ações
    ═══════════════════════════════════════════════════════════════ */
-function PageGestaoMidia({isMob, currentUser}){
+function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const {store,update,addHistory}=useMediaStore();
   const [openClient,setOpenClient]=useState(null);
   const [showNovoCliente,setShowNovoCliente]=useState(false);
@@ -26299,6 +26299,82 @@ function PageGestaoMidia({isMob, currentUser}){
         </button>}
       </div>
     </div>
+
+    {/* ── Demandas de tráfego do portal ── */}
+    {(()=>{
+      const trafegoDemands=(tasks||[]).filter(function(t){
+        if(t.deletedAt)return false;
+        const tipo=t.internoTipo||t.interno_tipo||t.tipo_solicitacao||t.contentType||t.content_type;
+        if(tipo!=="trafego")return false;
+        if(t.status==="interno_executado"||t.status==="publicado")return false;
+        return true;
+      });
+      if(trafegoDemands.length===0)return null;
+      const PRIO_TRAF={baixa:{l:"Baixa",c:"#64748b",bg:"#f1f5f9"},media:{l:"Média",c:"#f97316",bg:"#fff7ed"},alta:{l:"Alta",c:"#ef4444",bg:"#fef2f2"},urgente:{l:"Urgente",c:"#dc2626",bg:"#fee2e2"}};
+      const STAT_TRAF={interno_demanda:{l:"Entrada",c:"#9F43F6"},interno_triagem:{l:"Em triagem",c:"#6366f1"},interno_execucao:{l:"Em execução",c:"#f97316"},interno_aguardando:{l:"Aguardando cliente",c:"#0ea5e9"},interno_avaliacao:{l:"Concluída p/ avaliação",c:"#eab308"},interno_aprovado:{l:"Aprovada",c:"#22c55e"}};
+      const _dl=function(d){if(!d)return null;return Math.ceil((new Date(d+"T00:00:00")-new Date())/86400000);};
+      trafegoDemands.sort(function(a,b){
+        const m={urgente:0,alta:1,media:2,baixa:3};
+        const pa=m[a.priority]==null?2:m[a.priority], pb=m[b.priority]==null?2:m[b.priority];
+        if(pa!==pb)return pa-pb;
+        if(a.deadline&&b.deadline)return new Date(a.deadline)-new Date(b.deadline);
+        if(a.deadline)return -1;
+        if(b.deadline)return 1;
+        return 0;
+      });
+      return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,flexWrap:"wrap",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:32,height:32,borderRadius:10,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ico n="zap" size={15} color="#fff"/>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Demandas de tráfego pendentes</div>
+              <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>{trafegoDemands.length} {trafegoDemands.length===1?"demanda chegou":"demandas chegaram"} via Portal do Cliente</div>
+            </div>
+          </div>
+          {onNavTo&&<button onClick={function(){onNavTo("demandas_internas");}}
+            style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+            Ver todas <Ico n="chevron-right" size={11}/>
+          </button>}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:10}}>
+          {trafegoDemands.map(function(t){
+            const cl=t.client&&t.client!=="interno"?CLIENTS.find(function(c){return c.id===t.client;}):null;
+            const pc=PRIO_TRAF[t.priority]||PRIO_TRAF.media;
+            const st=STAT_TRAF[t.status]||{l:t.status,c:"#64748b"};
+            const dl=_dl(t.deadline);
+            const dlC=dl===null?"#94a3b8":dl<0?"#ef4444":dl<=2?"#f97316":"#64748b";
+            return <div key={t.id} onClick={function(){if(onNavTo)onNavTo("demandas_internas");}}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",cursor:onNavTo?"pointer":"default",transition:"all .15s",display:"flex",flexDirection:"column",gap:9}}
+              onMouseEnter={function(e){e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.boxShadow="0 4px 14px rgba(159,67,246,0.10)";}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+              {/* Header: logo cliente + nome + badge prioridade */}
+              <div style={{display:"flex",alignItems:"center",gap:9,justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
+                  {cl?<ClientLogo clientId={cl.id} size="sm"/>:<div style={{width:28,height:28,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11,fontWeight:700}}>?</div>}
+                  <div style={{minWidth:0}}>
+                    <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.name:"Sem cliente"}</div>
+                    <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginTop:1}}>Tráfego pago</div>
+                  </div>
+                </div>
+                <span style={{background:pc.bg,color:pc.c,borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>{pc.l}</span>
+              </div>
+              {/* Título */}
+              <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{t.title}</div>
+              {/* Footer: status + prazo */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:7,paddingTop:7,borderTop:"1px solid #f1f5f9"}}>
+                <span style={{background:st.c+"18",color:st.c,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{st.l}</span>
+                {t.deadline&&<span style={{color:dlC,fontSize:10.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
+                  <Ico n="calendar" size={10}/>
+                  {dl!==null&&dl<0?(Math.abs(dl)+"d atraso"):dl===0?"Hoje":dl===1?"Amanhã":new Date(t.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}
+                </span>}
+              </div>
+            </div>;
+          })}
+        </div>
+      </div>;
+    })()}
 
     {/* ── Filtros ── */}
     <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
@@ -28658,7 +28734,7 @@ export default function AgencyOS(){
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
       case "aprovacoes_internas":  return (effectivePerms.aprovarDemandaInterna||isSocio)?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="internas"/>:<NoPerm/>;
-      case "gestaomidia":          return (effectivePerms.verGestaoMidia||isSocio)?<PageGestaoMidia {...p} currentUser={CURRENT_USER}/>:<NoPerm/>;
+      case "gestaomidia":          return (effectivePerms.verGestaoMidia||isSocio)?<PageGestaoMidia {...p} currentUser={CURRENT_USER} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
       case "gestao":
