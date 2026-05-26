@@ -35911,6 +35911,7 @@ const OP_COLABS_DEF = [
   {id:"andre",     name:"André Leal",           role:"Designer",              color:"#f59e0b", priority:"Artes da semana"},
   {id:"guilherme", name:"Guilherme Ferreira",   role:"Editor de Vídeo",       color:"#7c3aed", priority:"Vídeos previstos"},
   {id:"gustavo",   name:"Gustavo",              role:"Gestor de Performance", color:"#16a34a", priority:"Aprovação final + clientes críticos"},
+  {id:"erick",     name:"Erick Soares",         role:"Gestor de Mídia",       color:"#dc2626", priority:"Otimizar campanhas e CPL"},
 ];
 
 /* ─── HELPERS ─────────────────────────────────────────────── */
@@ -36069,6 +36070,16 @@ function _opKpisColab(colab, monthTasks, today0, visible){
       {l:"Em ajustes", v: videos.filter(function(t){return t.status==="ajustes";}).length, m:null},
       {l:"Atrasados", v: atras(videos), m:0, invert:true},
       {l:"Drive pendentes", v: monthTasks.filter(function(t){return _opIsDriveV2(t) && t.status!=="publicado" && (!t.files||t.files.length===0);}).length, m:null},
+    ];
+  }
+  if(colab.id==="erick"){
+    // Erick — Gestor de Mídia: indicadores manuais (dados ainda não vêm de campanha)
+    return [
+      {l:"Contas revisadas",     v:"—", m:null, raw:true},
+      {l:"Campanhas em alerta",  v:"—", m:null, raw:true},
+      {l:"CPL acompanhado",      v:"—", m:null, raw:true},
+      {l:"Próximas ações",       v:"—", m:null, raw:true},
+      {l:"Verba acompanhada",    v:"—", m:null, raw:true},
     ];
   }
   if(colab.id==="gustavo"){
@@ -36275,7 +36286,7 @@ function PageOperacional(props){
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,fontFamily:_OP_FF}}>Equipe da semana</div>
         <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_OP_FF}}>Indicadores do mês em curso. Atualizado automaticamente.</div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:14}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
         {OP_COLABS_DEF.map(function(c){
           const kpis = _opKpisColab(c, monthTasks, today0, visible);
           const atrasos = (kpis.find(function(k){return ["Atrasos","Atrasos totais","Atrasadas","Atrasados","Clientes críticos","Clientes c/ atraso"].indexOf(k.l)>=0;})||{}).v||0;
@@ -36314,6 +36325,22 @@ function PageOperacional(props){
                 </div>;
               })}
             </div>
+            {/* Mini progresso de rotina do colaborador */}
+            {(function(){
+              const totalRot = OP_ROTINA_DIAS.reduce(function(a,d){return a+d.itens.length;},0);
+              // Por enquanto a rotina é global; quando virar personalizada por user_id, filtrar aqui
+              const feitosRot = Object.values(checks).filter(function(x){return x&&x.completed;}).length;
+              const pctR = totalRot>0?Math.round(feitosRot/totalRot*100):0;
+              return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"9px 12px",fontFamily:_OP_FF}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:5}}>
+                  <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_OP_FF}}>Rotina da semana</span>
+                  <span style={{color:"#0f172a",fontSize:11,fontWeight:700,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}>{feitosRot}/{totalRot}</span>
+                </div>
+                <div style={{background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden"}}>
+                  <div style={{width:pctR+"%",height:"100%",background:c.color,borderRadius:99,transition:"width .3s"}}/>
+                </div>
+              </div>;
+            })()}
             {/* Rodapé */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,paddingTop:6,borderTop:"1px solid #f1f5f9",marginTop:2,fontFamily:_OP_FF}}>
               <span style={{color:"#94a3b8",fontSize:10.5,fontFamily:_OP_FF}}>Atualizado automaticamente</span>
