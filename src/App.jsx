@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 35/35 | Nao editar diretamente
+// Modulos: 36/36 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -1644,6 +1644,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_financeiro")  return <svg {...p}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
   if(id==="gestao_portfolio")   return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
+  if(id==="gestao_enps")        return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
   if(id==="planejamento_mensal")return <svg {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><path d="M9 12h6M9 16h4"/></svg>;
   if(id==="contratos_lista")    return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
   if(id==="contratos_ltv")      return <svg {...p}><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>;
@@ -1681,11 +1682,6 @@ const NAV=[
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
   {id:"planejamento_mensal",icon:"◬", label:"Planejamento mensal"},
-  {id:"analises",   icon:"◫", label:"Análises",children:[
-    {id:"analises_producao", icon:"▲", label:"Produção"},
-    {id:"analises_gargalos", icon:"◬", label:"Gargalos"},
-    {id:"relatorios",        icon:"▤", label:"Relatórios"},
-  ]},
   {id:"ia",         icon:"◎", label:"Pixels IA",children:[
     {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
     {id:"ia_churn",      icon:"◬", label:"Alerta Churn"},
@@ -1699,6 +1695,7 @@ const NAV=[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
     {id:"gestao_operacional",   icon:"◈", label:"Operacional"},
     {id:"gestao_portfolio",     icon:"◇", label:"Portfólio"},
+    {id:"gestao_enps",          icon:"◐", label:"ENPS"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
@@ -9352,6 +9349,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   let TABS=[
     {id:"analises",    label:"Visão geral"},
     {id:"onboarding",  label:"Onboarding"},
+    {id:"nps",         label:"NPS"},
     {id:"evolucao",    label:"Evolução"},
     {id:"briefing",    label:"Briefing"},
     {id:"timeline",    label:"Timeline"},
@@ -9519,6 +9517,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {/* CONTEÚDO */}
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
+    {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
     {tab==="timeline"&&<CClienteTimeline cl={cl} canEdit={isSocio||myPerms.editarBriefing||myPerms.editarEvolucao}/>}
     {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
@@ -27892,9 +27891,6 @@ export default function AgencyOS(){
       case "chat":                 return p.verChat;
       case "clientes":             return p.verClientes;
       case "analises":
-      case "analises_producao":    return (p.verAnalises&&p.verAnaliseProd)||isSocio;
-      case "analises_gargalos":    return (p.verAnalises&&p.verAnaliseGarg)||isSocio;
-      case "relatorios":           return (p.verAnalises&&p.verRelatorio)||isSocio;
       case "ia":
       case "ia_diagnostico":
       case "ia_churn":
@@ -27913,6 +27909,7 @@ export default function AgencyOS(){
       case "gestao_financeiro":    return p.verFinanceiro||isSocio;
       case "gestao_operacional":   return isSocio;
       case "gestao_portfolio":     return isSocio;
+      case "gestao_enps":          return true;  // todos veem (filtragem dentro)
       case "acessos":              return p.verAcessos||isSocio;
       case "interno":
       case "interno_calendario":
@@ -27973,13 +27970,11 @@ export default function AgencyOS(){
       case "gestaomidia":          return (effectivePerms.verGestaoMidia||isSocio)?<PageGestaoMidia {...p} currentUser={CURRENT_USER}/>:<NoPerm/>;
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
-      case "analises_producao":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseProd)||isSocio?<PageAnalitico {...p} tasks={tasks}/>:<NoPerm/>;
-      case "analises_gargalos":     return (effectivePerms.verAnalises&&effectivePerms.verAnaliseGarg)||isSocio?<PageSprint {...p} tasks={tasks}/>:<NoPerm/>;
-      case "relatorios":            return (effectivePerms.verAnalises&&effectivePerms.verRelatorio)||isSocio?<PageRelatorio {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao":
       case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p}/>:<NoPerm/>;
       case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
+      case "gestao_enps":           return <PageGestaoENPS {...p}/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
       case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
@@ -29792,6 +29787,7 @@ const PORTAL_ALL_TABS=[
   {id:"funil",       ico:"funnel",      label:"Funil comercial"},
   {id:"faturamento", ico:"wallet",      label:"Faturamento"},
   {id:"analises",    ico:"chart",       label:"Análises"},
+  {id:"nps",         ico:"sparkles",    label:"NPS"},
   {id:"chat",        ico:"message",     label:"Chat"},
 ];
 const INTERNAS_COLS_RADAR_P=[
@@ -32593,6 +32589,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
     {tab==="marcos"&&typeof CClienteTimeline==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px"}}>
       <CClienteTimeline cl={cl} canEdit={true}/>
     </div>}
+    {tab==="nps"&&typeof PortalNPS==="function"&&<PortalNPS cl={cl} isMob={isMob}/>}
 
     {/* ── PLANEJAMENTO MENSAL ── plano do mês compartilhado entre Pixels e cliente */}
     {tab==="planejamento"&&<PortalMonthlyPlan cl={cl} selUnit={selUnit} isMob={isMob}/>}
@@ -37272,5 +37269,560 @@ function PagePortfolio(props){
     {/* DRAWER */}
     {modalItem && <_PortfDrawer item={modalItem} onClose={function(){setModalItem(null);}} isMob={isMob}/>}
 
+  </div>;
+}
+
+// ======= 23_nps_enps.jsx =======
+// ENPS (colaboradores) + NPS (clientes) — Pixels Agency OS
+
+const _NPS_FF = "'Inter',system-ui,-apple-system,sans-serif";
+
+/* ─── HELPERS GERAIS ──────────────────────────────────────── */
+function _npsCurrentCycle(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+}
+function _npsNextMonth(){
+  const d = new Date(); d.setMonth(d.getMonth()+1); d.setDate(1);
+  return d.toISOString().slice(0,10);
+}
+function _npsAddMonths(months){
+  const d = new Date(); d.setMonth(d.getMonth()+months);
+  return d.toISOString().slice(0,10);
+}
+function _npsClassify(score){
+  if(score>=9) return {tipo:"promotor", label:"Promotor", color:"#16a34a", bg:"#dcfce7"};
+  if(score>=7) return {tipo:"neutro",   label:"Neutro",   color:"#a16207", bg:"#fef3c7"};
+  return       {tipo:"detrator", label:"Detrator", color:"#dc2626", bg:"#fee2e2"};
+}
+function _npsFmtData(iso){
+  if(!iso) return "—";
+  try{
+    const d = new Date(iso);
+    return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  }catch(e){return iso;}
+}
+function _npsFmtDate(s){
+  if(!s) return "—";
+  try{return new Date(s+"T00:00:00").toLocaleDateString("pt-BR");}catch(e){return s;}
+}
+function _npsDaysUntil(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+"T00:00:00");
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.floor((d.getTime()-today.getTime())/86400000);
+}
+// Quem pode ver ENPS dos outros: sócios + Hellen
+function _enpsCanSeeAll(){
+  if(typeof CURRENT_USER==="undefined"||!CURRENT_USER) return false;
+  if(CURRENT_USER.level===1) return true;
+  if(CURRENT_USER.id==="ellen"||CURRENT_USER.id==="hellen") return true;
+  return false;
+}
+
+/* ─── COMPONENTE: NotaScale (escala 0-10 clicável) ───────── */
+function _NotaScale(props){
+  const { value, onChange, disabled } = props;
+  return <div style={{display:"flex",gap:6,flexWrap:"wrap",fontFamily:_NPS_FF}}>
+    {[0,1,2,3,4,5,6,7,8,9,10].map(function(n){
+      const sel = value===n;
+      const cl = _npsClassify(n);
+      return <button key={n} onClick={function(){if(!disabled&&onChange)onChange(n);}}
+        disabled={disabled}
+        style={{
+          width:38, height:38, borderRadius:9,
+          border:"1px solid "+(sel?cl.color:"#e2e8f0"),
+          background: sel?cl.color:"#fff",
+          color: sel?"#fff":"#475569",
+          fontSize:13, fontWeight:800, cursor:disabled?"default":"pointer",
+          fontFamily:_NPS_FF, transition:"all .12s",
+          opacity:disabled?.7:1,
+        }}>
+        {n}
+      </button>;
+    })}
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ENPS — Gestão (sócios+coord) + auto-resposta colaborador
+═══════════════════════════════════════════════════════════ */
+
+function useENPS(){
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(function(){
+    if(!window._sb){setLoading(false);return;}
+    window._sb.from("enps_responses").select("*").order("created_at",{ascending:false}).then(function(r){
+      if(!r.error) setRows(r.data||[]);
+      setLoading(false);
+    });
+  },[]);
+  function add(input){
+    const row = Object.assign({
+      id:"enps-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),
+      cycle_month:_npsCurrentCycle(),
+      next_due_date:_npsAddMonths(1),
+      status:"preenchido",
+      created_at:new Date().toISOString(),
+    }, input);
+    setRows(function(p){return [row].concat(p);});
+    if(window._sb){
+      return window._sb.from("enps_responses").upsert(row,{onConflict:"user_id,cycle_month"});
+    }
+    return Promise.resolve();
+  }
+  return { rows, add, loading };
+}
+
+function PageGestaoENPS(props){
+  const isMob = props.isMob;
+  const canAll = _enpsCanSeeAll();
+  const { rows, add, loading } = useENPS();
+  const cycle = _npsCurrentCycle();
+
+  const [score, setScore] = useState(null);
+  const [comment, setComment] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // Resposta do usuário atual no ciclo
+  const myRow = rows.find(function(r){return r.user_id===CURRENT_USER.id && r.cycle_month===cycle;});
+  const respondidoEsseMes = !!myRow;
+
+  function handleSubmit(){
+    if(score==null) return;
+    setSaving(true);
+    add({
+      user_id:CURRENT_USER.id,
+      score:score,
+      suggestion:comment.trim(),
+    }).then(function(){
+      setSaving(false);
+      setScore(null);
+      setComment("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("ENPS enviado. Obrigado!",3500);
+    });
+  }
+
+  // Cálculos do mês (só sócios/coord)
+  const rowsThisMonth = rows.filter(function(r){return r.cycle_month===cycle;});
+  const promotores = rowsThisMonth.filter(function(r){return r.score>=9;}).length;
+  const neutros    = rowsThisMonth.filter(function(r){return r.score>=7&&r.score<=8;}).length;
+  const detratores = rowsThisMonth.filter(function(r){return r.score<=6;}).length;
+  const totalResp  = rowsThisMonth.length;
+  const enpsScore  = totalResp>0 ? Math.round(((promotores-detratores)/totalResp)*100) : null;
+  const mediaNota  = totalResp>0 ? (rowsThisMonth.reduce(function(s,r){return s+r.score;},0)/totalResp) : null;
+
+  const team = (typeof TEAM!=="undefined") ? TEAM.filter(function(u){return u.status!=="inativo";}) : [];
+  const respondidos = rowsThisMonth.map(function(r){return r.user_id;});
+  const pendentes = team.filter(function(u){return respondidos.indexOf(u.id)<0;});
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,width:"100%"}}>
+
+    {/* HEADER */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontFamily:_NPS_FF}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:42,height:42,borderRadius:11,background:"#9F43F615",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9F43F6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFamily:_NPS_FF}}>ENPS</div>
+          <div style={{color:"#64748b",fontSize:13,marginTop:2,fontFamily:_NPS_FF}}>Pesquisa mensal de satisfação da equipe Pixels. Ciclo atual: {cycle}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* FORMULÁRIO DE RESPOSTA (sempre visível, mesmo se já respondeu) */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_NPS_FF}}>De 0 a 10, o quanto você recomendaria a Pixels como lugar pra trabalhar?</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:4,fontFamily:_NPS_FF}}>Sua resposta é privada — só sócios e a coordenação têm acesso.</div>
+      </div>
+      {respondidoEsseMes
+        ? <div style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:11,padding:"14px 16px",display:"flex",alignItems:"center",gap:11,fontFamily:_NPS_FF}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <div>
+              <div style={{color:"#15803d",fontWeight:800,fontSize:13.5,fontFamily:_NPS_FF}}>Você já respondeu o ENPS deste mês</div>
+              <div style={{color:"#15803d",fontSize:12,marginTop:2,fontFamily:_NPS_FF}}>Próximo preenchimento previsto pra {_npsFmtDate(myRow.next_due_date)}.</div>
+            </div>
+          </div>
+        : <>
+            <_NotaScale value={score} onChange={setScore}/>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar na Pixels? (opcional)</div>
+              <textarea value={comment} onChange={function(e){setComment(e.target.value);}} rows={3} placeholder="Comentários, sugestões, ideias..."
+                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+            </div>
+            <div style={{display:"flex",justifyContent:"flex-end"}}>
+              <button onClick={handleSubmit} disabled={score==null||saving}
+                style={{background:score!=null&&!saving?"#9F43F6":"#cbd5e1",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:score!=null&&!saving?"pointer":"not-allowed",fontFamily:_NPS_FF,boxShadow:score!=null?"0 6px 16px rgba(159,67,246,0.30)":"none"}}>
+                {saving?"Enviando...":"Enviar resposta"}
+              </button>
+            </div>
+          </>
+      }
+    </section>
+
+    {loading?<div style={{padding:20,color:"#94a3b8",textAlign:"center",fontFamily:_NPS_FF}}>Carregando...</div>:null}
+
+    {/* PAINEL SÓCIOS/COORDENAÇÃO */}
+    {canAll && !loading && <>
+      {/* KPIs */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12,fontFamily:_NPS_FF}}>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>ENPS do mês</div>
+          <div style={{color:enpsScore==null?"#94a3b8":(enpsScore>=50?"#16a34a":(enpsScore>=0?"#a16207":"#dc2626")),fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{enpsScore==null?"—":enpsScore}</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>{totalResp} resposta{totalResp===1?"":"s"}</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Nota média</div>
+          <div style={{color:"#0f172a",fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{mediaNota==null?"—":mediaNota.toFixed(1)}</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>de 0 a 10</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Respondidos</div>
+          <div style={{color:"#16a34a",fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{respondidos.length}<span style={{color:"#cbd5e1",fontSize:16,fontWeight:700}}>/{team.length}</span></div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>do time</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Pendentes</div>
+          <div style={{color:pendentes.length>0?"#dc2626":"#16a34a",fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{pendentes.length}</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>colaboradores</div>
+        </div>
+      </div>
+
+      {/* Distribuição */}
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,fontFamily:_NPS_FF}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Distribuição do mês</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+          {[{l:"Promotores", n:promotores, c:"#16a34a", bg:"#dcfce7"},
+            {l:"Neutros",    n:neutros,    c:"#a16207", bg:"#fef3c7"},
+            {l:"Detratores", n:detratores, c:"#dc2626", bg:"#fee2e2"}].map(function(d){
+            const pct = totalResp>0?Math.round(d.n/totalResp*100):0;
+            return <div key={d.l} style={{background:d.bg,borderRadius:10,padding:"10px 12px",fontFamily:_NPS_FF}}>
+              <div style={{color:d.c,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,fontFamily:_NPS_FF}}>{d.l}</div>
+              <div style={{color:d.c,fontSize:22,fontWeight:900,letterSpacing:-.5,marginTop:3,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{d.n}<span style={{fontSize:12,fontWeight:600,opacity:.7,marginLeft:4}}>· {pct}%</span></div>
+            </div>;
+          })}
+        </div>
+      </section>
+
+      {/* Lista de colaboradores com status */}
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,fontFamily:_NPS_FF}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Equipe — status do ciclo</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {team.map(function(u){
+            const r = rowsThisMonth.find(function(x){return x.user_id===u.id;});
+            const cl = r ? _npsClassify(r.score) : null;
+            return <div key={u.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"9px 10px",borderRadius:9,background:r?"#fafbfc":"#fef3c7",border:"1px solid "+(r?"#f1f5f9":"#fde047"),fontFamily:_NPS_FF}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0,flex:1}}>
+                <div style={{width:30,height:30,borderRadius:"50%",background:u.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:11,fontFamily:_NPS_FF,flexShrink:0}}>{u.av||(u.name||"?").charAt(0)}</div>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF}}>{u.name}</div>
+                  <div style={{color:"#64748b",fontSize:11,fontFamily:_NPS_FF}}>{u.role||""}</div>
+                </div>
+              </div>
+              {r
+                ? <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                    <span style={{background:cl.bg,color:cl.color,fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF}}>{r.score} · {cl.label}</span>
+                  </div>
+                : <span style={{color:"#a16207",fontSize:11,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",fontFamily:_NPS_FF}}>Pendente</span>
+              }
+            </div>;
+          })}
+        </div>
+      </section>
+
+      {/* Sugestões */}
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,fontFamily:_NPS_FF}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Sugestões recebidas</div>
+        {rows.filter(function(r){return (r.suggestion||"").trim();}).length===0
+          ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",fontFamily:_NPS_FF}}>Nenhuma sugestão registrada ainda.</div>
+          : rows.filter(function(r){return (r.suggestion||"").trim();}).map(function(r){
+              const u = TEAM.find(function(x){return x.id===r.user_id;});
+              const cl = _npsClassify(r.score);
+              return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"10px 12px",fontFamily:_NPS_FF}}>
+                <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:5}}>
+                  <span style={{color:"#0f172a",fontSize:12,fontWeight:700,fontFamily:_NPS_FF}}>{u?u.name:r.user_id}</span>
+                  <span style={{background:cl.bg,color:cl.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF}}>{r.score} · {cl.label}</span>
+                  <span style={{color:"#94a3b8",fontSize:10.5,marginLeft:"auto",fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)} · {r.cycle_month}</span>
+                </div>
+                <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",fontFamily:_NPS_FF}}>{r.suggestion}</div>
+              </div>;
+            })
+        }
+      </section>
+    </>}
+
+    {/* Histórico individual (não-sócio) */}
+    {!canAll && !loading && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",fontFamily:_NPS_FF}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,marginBottom:10,fontFamily:_NPS_FF}}>Seu histórico</div>
+      {rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).length===0
+        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",fontFamily:_NPS_FF}}>Você ainda não respondeu nenhum ENPS.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).map(function(r){
+            const cl = _npsClassify(r.score);
+            return <div key={r.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"9px 10px",borderRadius:9,background:"#fafbfc",border:"1px solid #f1f5f9",fontFamily:_NPS_FF}}>
+              <div>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFamily:_NPS_FF}}>{r.cycle_month}</div>
+                <div style={{color:"#64748b",fontSize:11,fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)}</div>
+              </div>
+              <span style={{background:cl.bg,color:cl.color,fontSize:11,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF}}>{r.score} · {cl.label}</span>
+            </div>;
+          })}
+        </div>
+      }
+    </section>}
+
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NPS DO CLIENTE — aba interna + portal
+═══════════════════════════════════════════════════════════ */
+
+function useClientNPS(clientId){
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(function(){
+    if(!clientId||!window._sb){setLoading(false);return;}
+    window._sb.from("nps_responses").select("*").eq("client_id",clientId).order("created_at",{ascending:false}).then(function(r){
+      if(!r.error) setRows(r.data||[]);
+      setLoading(false);
+    });
+  },[clientId]);
+  function add(input){
+    const row = Object.assign({
+      id:"nps-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),
+      client_id:clientId,
+      next_due_date:_npsAddMonths(2),
+      status:"preenchido",
+      source:"interno",
+      created_at:new Date().toISOString(),
+    }, input);
+    setRows(function(p){return [row].concat(p);});
+    if(window._sb){
+      return window._sb.from("nps_responses").insert(row);
+    }
+    return Promise.resolve();
+  }
+  return { rows, add, loading };
+}
+
+// Componente: aba "NPS" dentro do ClienteDetail
+function CClienteNPS(props){
+  const { cl, isMob } = props;
+  const { rows, add, loading } = useClientNPS(cl.id);
+  const [score, setScore] = useState(null);
+  const [reason, setReason] = useState("");
+  const [improvement, setImprovement] = useState("");
+  const [respName, setRespName] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const last = rows[0]||null;
+  const cl_ = last ? _npsClassify(last.score) : null;
+  const media = rows.length>0 ? (rows.reduce(function(s,r){return s+r.score;},0)/rows.length) : null;
+  const dias = last ? _npsDaysUntil(last.next_due_date) : null;
+  const statusLabel = !last ? {label:"Sem registros", color:"#64748b", bg:"#f1f5f9"}
+                    : dias==null ? {label:"Sem prazo", color:"#64748b", bg:"#f1f5f9"}
+                    : dias<0 ? {label:"Atrasado", color:"#dc2626", bg:"#fee2e2"}
+                    : dias<=7 ? {label:"Próximo do vencimento", color:"#a16207", bg:"#fef3c7"}
+                    : {label:"Dentro do prazo", color:"#16a34a", bg:"#dcfce7"};
+
+  function handleSubmit(){
+    if(score==null) return;
+    add({
+      score:score,
+      reason:reason.trim(),
+      improvement_suggestion:improvement.trim(),
+      respondent_name:respName.trim(),
+      respondent_user_id:CURRENT_USER.id,
+      source:"interno",
+    }).then(function(){
+      setScore(null); setReason(""); setImprovement(""); setRespName("");
+      setShowForm(false);
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("NPS registrado.",3000);
+    });
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_NPS_FF}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",fontFamily:_NPS_FF}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3,fontFamily:_NPS_FF}}>NPS do cliente</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:2,fontFamily:_NPS_FF}}>Histórico de satisfação. Mínimo bimestral. Cliente pode responder pelo portal.</div>
+      </div>
+      <button onClick={function(){setShowForm(function(p){return !p;});}}
+        style={{background:showForm?"#f1f5f9":"#9F43F6",color:showForm?"#475569":"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_NPS_FF,boxShadow:showForm?"none":"0 6px 16px rgba(159,67,246,0.30)"}}>
+        {showForm?"Cancelar":"Solicitar / registrar NPS"}
+      </button>
+    </div>
+
+    {loading?<div style={{padding:20,color:"#94a3b8",textAlign:"center",fontFamily:_NPS_FF}}>Carregando...</div>:<>
+
+    {/* KPIs */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12,fontFamily:_NPS_FF}}>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Última nota</div>
+        <div style={{color:last?cl_.color:"#94a3b8",fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{last?last.score:"—"}</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>{last?cl_.label:"Sem registros"}</div>
+      </div>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Média histórica</div>
+        <div style={{color:"#0f172a",fontSize:28,fontWeight:900,letterSpacing:-.7,marginTop:4,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{media==null?"—":media.toFixed(1)}</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>{rows.length} resposta{rows.length===1?"":"s"}</div>
+      </div>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Próximo NPS</div>
+        <div style={{color:"#0f172a",fontSize:17,fontWeight:800,marginTop:4,fontFamily:_NPS_FF}}>{last?_npsFmtDate(last.next_due_date):"—"}</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>{dias==null?"—":(dias<0?"há "+(-dias)+"d":(dias===0?"hoje":"em "+dias+"d"))}</div>
+      </div>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Status</div>
+        <div style={{marginTop:6}}>
+          <span style={{background:statusLabel.bg,color:statusLabel.color,fontSize:11,fontWeight:800,padding:"4px 11px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",fontFamily:_NPS_FF}}>{statusLabel.label}</span>
+        </div>
+      </div>
+    </div>
+
+    {/* Formulário */}
+    {showForm && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"18px 20px",display:"flex",flexDirection:"column",gap:12,fontFamily:_NPS_FF}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Registrar NPS do cliente</div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>Quem respondeu? (opcional)</div>
+        <input value={respName} onChange={function(e){setRespName(e.target.value);}} placeholder="Nome do contato no cliente"
+          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",boxSizing:"border-box",background:"#fafbfc"}}/>
+      </div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>De 0 a 10, o quanto indicaria a Pixels?</div>
+        <_NotaScale value={score} onChange={setScore}/>
+      </div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que motivou a nota? (opcional)</div>
+        <textarea value={reason} onChange={function(e){setReason(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+      </div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar? (opcional)</div>
+        <textarea value={improvement} onChange={function(e){setImprovement(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}>
+        <button onClick={handleSubmit} disabled={score==null}
+          style={{background:score!=null?"#9F43F6":"#cbd5e1",color:"#fff",border:"none",borderRadius:10,padding:"9px 20px",fontWeight:800,fontSize:13,cursor:score!=null?"pointer":"not-allowed",fontFamily:_NPS_FF}}>Salvar NPS</button>
+      </div>
+    </section>}
+
+    {/* Histórico */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,fontFamily:_NPS_FF}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Histórico</div>
+      {rows.length===0
+        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",fontFamily:_NPS_FF}}>Nenhum NPS registrado ainda.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {rows.map(function(r){
+            const cl_r = _npsClassify(r.score);
+            return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"11px 13px",fontFamily:_NPS_FF}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:5,flexWrap:"wrap"}}>
+                <span style={{background:cl_r.bg,color:cl_r.color,fontSize:11,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.3,fontFamily:_NPS_FF}}>{r.score} · {cl_r.label}</span>
+                {r.respondent_name && <span style={{color:"#0f172a",fontSize:12,fontWeight:600,fontFamily:_NPS_FF}}>{r.respondent_name}</span>}
+                <span style={{background:r.source==="portal"?"#e0f2fe":"#f1f5f9",color:r.source==="portal"?"#0369a1":"#64748b",fontSize:9.5,fontWeight:700,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_NPS_FF}}>{r.source==="portal"?"Portal":"Interno"}</span>
+                <span style={{color:"#94a3b8",fontSize:10.5,marginLeft:"auto",fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)}</span>
+              </div>
+              {r.reason && <div style={{color:"#475569",fontSize:12.5,marginTop:5,lineHeight:1.5,fontFamily:_NPS_FF}}><strong style={{color:"#0f172a"}}>Motivo:</strong> {r.reason}</div>}
+              {r.improvement_suggestion && <div style={{color:"#475569",fontSize:12.5,marginTop:5,lineHeight:1.5,fontFamily:_NPS_FF}}><strong style={{color:"#0f172a"}}>Melhorar:</strong> {r.improvement_suggestion}</div>}
+            </div>;
+          })}
+        </div>
+      }
+    </section>
+    </>}
+  </div>;
+}
+
+// Componente: tab "NPS" no Portal Cliente — cliente preenche
+function PortalNPS(props){
+  const { cl, isMob } = props;
+  const { rows, add, loading } = useClientNPS(cl.id);
+  const [score, setScore] = useState(null);
+  const [reason, setReason] = useState("");
+  const [improvement, setImprovement] = useState("");
+
+  const last = rows[0]||null;
+  const dias = last ? _npsDaysUntil(last.next_due_date) : null;
+  const podeResponder = !last || dias==null || dias<=0;
+
+  function handleSubmit(){
+    if(score==null) return;
+    add({
+      score:score,
+      reason:reason.trim(),
+      improvement_suggestion:improvement.trim(),
+      respondent_name:cl.name,
+      respondent_user_id:"",
+      source:"portal",
+    }).then(function(){
+      setScore(null); setReason(""); setImprovement("");
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Resposta enviada. Obrigado!",4000);
+    });
+  }
+
+  if(loading) return <div style={{padding:30,textAlign:"center",color:"#94a3b8",fontFamily:_NPS_FF}}>Carregando...</div>;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_NPS_FF}}>
+    <div style={{fontFamily:_NPS_FF}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3,fontFamily:_NPS_FF}}>Avalie a Pixels</div>
+      <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_NPS_FF}}>Sua opinião nos ajuda a evoluir. Solicitada a cada 2 meses.</div>
+    </div>
+
+    {podeResponder
+      ? <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF}}>
+          <div style={{color:"#0f172a",fontSize:15,fontWeight:700,lineHeight:1.4,fontFamily:_NPS_FF}}>De 0 a 10, o quanto você indicaria a Pixels para outra empresa?</div>
+          <_NotaScale value={score} onChange={setScore}/>
+          <div>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que motivou sua nota? (opcional)</div>
+            <textarea value={reason} onChange={function(e){setReason(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+          </div>
+          <div>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar? (opcional)</div>
+            <textarea value={improvement} onChange={function(e){setImprovement(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+          </div>
+          <div style={{display:"flex",justifyContent:"flex-end"}}>
+            <button onClick={handleSubmit} disabled={score==null}
+              style={{background:score!=null?"#9F43F6":"#cbd5e1",color:"#fff",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:800,fontSize:13,cursor:score!=null?"pointer":"not-allowed",fontFamily:_NPS_FF}}>Enviar avaliação</button>
+          </div>
+        </section>
+      : <section style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:14,padding:"22px 26px",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
+          <div style={{width:42,height:42,borderRadius:11,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#15803d",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_NPS_FF}}>Obrigado pela sua avaliação!</div>
+            <div style={{color:"#15803d",fontSize:12.5,marginTop:3,fontFamily:_NPS_FF}}>Última resposta em {_npsFmtData(last.created_at)}. Próxima avaliação em {_npsFmtDate(last.next_due_date)}.</div>
+          </div>
+        </section>
+    }
+  </div>;
+}
+
+/* ─── Widget: aviso ENPS pendente no dashboard ──────────── */
+function ENPSPendenteAviso(props){
+  const { onResponder } = props;
+  const [pending, setPending] = useState(false);
+  useEffect(function(){
+    if(!window._sb||typeof CURRENT_USER==="undefined") return;
+    const cycle = _npsCurrentCycle();
+    window._sb.from("enps_responses").select("id").eq("user_id",CURRENT_USER.id).eq("cycle_month",cycle).limit(1).then(function(r){
+      if(!r.data||r.data.length===0) setPending(true);
+    });
+  },[]);
+  if(!pending) return null;
+  return <div style={{background:"linear-gradient(135deg,#9F43F6,#7c3aed)",borderRadius:12,padding:"14px 18px",color:"#fff",display:"flex",alignItems:"center",gap:12,fontFamily:_NPS_FF,boxShadow:"0 8px 20px rgba(159,67,246,0.25)"}}>
+    <div style={{width:36,height:36,borderRadius:9,background:"rgba(255,255,255,0.18)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+    </div>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_NPS_FF}}>Seu ENPS mensal está pendente</div>
+      <div style={{fontSize:11.5,opacity:.9,marginTop:2,fontFamily:_NPS_FF}}>Leva 30 segundos. Suas respostas são privadas.</div>
+    </div>
+    <button onClick={onResponder}
+      style={{background:"#fff",color:"#9F43F6",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:_NPS_FF,flexShrink:0}}>Responder agora</button>
   </div>;
 }
