@@ -22822,7 +22822,18 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       const accent=isClient?"#16a34a":"#7c3aed";
                       const tintBg=isClient?"#f0fdf4":"#faf5ff";
                       const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
-                      const when=firstC.atFmt||firstC.time||(firstC.at?new Date(firstC.at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}):(r.images[0]?(r.images[0].addedAt||""):""));
+                      // Format helper: tenta extrair "DD/MM/YYYY HH:MM" do melhor campo disponivel
+                      const _fmtDateTime=function(ts){
+                        if(!ts)return "";
+                        const d=new Date(ts);
+                        if(isNaN(d.getTime()))return "";
+                        return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+                      };
+                      // Pega timestamp preciso da imagem mais recente do round
+                      let whenTs=r.ts;
+                      r.images.forEach(function(f){const fts=_fileTs(f); if(fts>whenTs)whenTs=fts;});
+                      r.comments.forEach(function(c){const cts=_commentTs(c); if(cts>whenTs)whenTs=cts;});
+                      const when=firstC.atFmt||firstC.time||(whenTs?_fmtDateTime(whenTs):"");
                       return(
                         <div key={r.key} style={{padding:"14px 16px",borderTop:ri>0?"1px solid #f3e8ff":"none",background:isLatest?"#fafaff":"#fff"}}>
                           <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10,flexWrap:"wrap"}}>
@@ -22838,8 +22849,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
                           {r.comments.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:r.images.length>0?12:0}}>
                             {r.comments.map(function(c){
+                              const cts=_commentTs(c);
+                              const cwhen=cts?_fmtDateTime(cts):(c.atFmt||c.time||"");
                               return <div key={c.id} style={{background:tintBg,borderLeft:"3px solid "+accent,borderRadius:"0 8px 8px 0",padding:"9px 12px"}}>
                                 <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{String(c.text||"").replace("AJUSTE NECESSARIO: ","")}</div>
+                                {cwhen&&<div style={{color:"#94a3b8",fontSize:10,marginTop:5,fontWeight:500}}>{cwhen}</div>}
                               </div>;
                             })}
                           </div>}
@@ -22850,12 +22864,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             </div>
                             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))",gap:7}}>
                               {r.images.map(function(f,i){
-                                return <div key={f.id} onClick={function(){setLightbox({url:f.url,name:f.name||("Arte "+(i+1)),storagePath:f.storagePath});}}
-                                  style={{position:"relative",cursor:"zoom-in",borderRadius:8,overflow:"hidden",border:"1px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff",transition:"all .15s"}}
-                                  onMouseEnter={function(e){e.currentTarget.style.borderColor=accent;}}
-                                  onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";}}>
-                                  <img src={f.url} alt={"Arte "+(i+1)} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                                  {(f.sourceIdx!==undefined&&f.sourceIdx!==null)&&<div style={{position:"absolute",top:5,left:5,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,letterSpacing:.3}}>Arte {f.sourceIdx+1}</div>}
+                                const fts=_fileTs(f);
+                                const fwhen=fts?_fmtDateTime(fts):(f.addedAt||"");
+                                return <div key={f.id} style={{display:"flex",flexDirection:"column",gap:4}}>
+                                  <div onClick={function(){setLightbox({url:f.url,name:f.name||("Arte "+(i+1)),storagePath:f.storagePath});}}
+                                    style={{position:"relative",cursor:"zoom-in",borderRadius:8,overflow:"hidden",border:"1px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff",transition:"all .15s"}}
+                                    onMouseEnter={function(e){e.currentTarget.style.borderColor=accent;}}
+                                    onMouseLeave={function(e){e.currentTarget.style.borderColor="#e9d5ff";}}>
+                                    <img src={f.url} alt={"Arte "+(i+1)} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                                    {(f.sourceIdx!==undefined&&f.sourceIdx!==null)&&<div style={{position:"absolute",top:5,left:5,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 6px",borderRadius:4,letterSpacing:.3}}>Arte {f.sourceIdx+1}</div>}
+                                  </div>
+                                  {fwhen&&<div style={{color:"#94a3b8",fontSize:9.5,textAlign:"center",fontWeight:500,letterSpacing:.1}}>{fwhen}</div>}
                                 </div>;
                               })}
                             </div>
