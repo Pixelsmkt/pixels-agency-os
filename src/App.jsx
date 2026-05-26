@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 33/33 | Nao editar diretamente
+// Modulos: 34/34 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -367,7 +367,7 @@ function getStatusConfig(statusId){
   return CLIENTE_STATUS_OPTS.find(function(s){return s.id===statusId;})||CLIENTE_STATUS_OPTS[1];
 }
 
-/* ─── TIMELINE DE MARCOS — estilo Asana ──────────────────
+/* ─── TIMELINE DE MARCOS — estilo Aplicativo da Pixels ──────────────────
    Linha do tempo de eventos por cliente: visitas, materiais
    de feira, reuniões, campanhas, contratos, etc.
    Armazenado em localStorage["pixels-marcos-<clientId>"] —
@@ -8814,20 +8814,22 @@ function PageClientes({isMob, tasks}){
   </div>);
 }
 
-// ======= 03_cliente_detalhe.jsx =======
-
 /* ── CAnalises — Dashboard Reportei embedado + cards resumidos ──
    Estratégia simplificada (2026-04-20): em vez de extrair 200+ reference_keys
    manualmente, embutimos o dashboard da Reportei via iframe. Mantemos os 2-3
    cards principais em cima (leads + CPL) usando dados do Supabase cache.
    Assim o cliente enxerga TUDO que a Reportei mostra, sempre atualizado. */
-function CAnalises({cl,isMob}){
+function CAnalises({cl,isMob,tasks}){
   let sb=window._sb;
   let [rows,setRows]=useState(null);
   let [loading,setLoading]=useState(true);
   let [bioterUnit,setBioterUnit]=useState("chapeco");
   let [iframeLoaded,setIframeLoaded]=useState(false);
   let [iframeFailed,setIframeFailed]=useState(false);
+  // Visao geral — meta editavel (status, MRR, score, NPS, datas)
+  let metaHook = (typeof useClientMeta==="function")?useClientMeta(cl.id):{meta:null,save:function(){}};
+  let clientMeta = metaHook.meta;
+  let saveClientMeta = metaHook.save;
 
   let isBioter=cl.id==="bioter";
   let cacheIds=isBioter?["bioter_chapeco","bioter_toledo","bioter_castro"]:[cl.id];
@@ -8874,6 +8876,12 @@ function CAnalises({cl,isMob}){
   let iframeHeight=isMob?900:1400;
 
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
+    {/* Visão geral: métricas + datas + alertas */}
+    {typeof ClientMetricsCards==="function"&&<ClientMetricsCards cl={cl} meta={clientMeta} save={saveClientMeta} isMob={isMob}/>}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"2fr 1fr",gap:12}}>
+      {typeof ClientDatesPanel==="function"&&<ClientDatesPanel meta={clientMeta} save={saveClientMeta} isMob={isMob}/>}
+      {typeof ClientAlertsPanel==="function"&&<ClientAlertsPanel cl={cl} tasks={tasks||[]}/>}
+    </div>
 
     {/* Sub-tabs Bioter */}
     {isBioter&&(<div style={{display:"flex",gap:6}}>
@@ -8963,7 +8971,7 @@ function CAnalises({cl,isMob}){
   </div>);
 }
 
-/* ─── CClienteTimeline — Marcos estilo Asana ──────────────
+/* ─── CClienteTimeline — Marcos estilo Aplicativo da Pixels ──────────────
    Lista vertical com linha contínua, dots coloridos por tipo,
    add-form inline. Persistência via localStorage.
 ─────────────────────────────────────────────────────── */
@@ -9202,10 +9210,11 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   })();
 
   let TABS=[
-    {id:"analises",    label:"Análises"},
-    {id:"timeline",    label:"Timeline"},
+    {id:"analises",    label:"Visão geral"},
+    {id:"onboarding",  label:"Onboarding"},
     {id:"evolucao",    label:"Evolução"},
     {id:"briefing",    label:"Briefing"},
+    {id:"timeline",    label:"Timeline"},
     {id:"ferramentas", label:"Ferramentas"},
     {id:"info",        label:"Informações"},
     ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
@@ -9368,7 +9377,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     </div>
 
     {/* CONTEÚDO */}
-    {tab==="analises"&&<CAnalises cl={cl} isMob={isMob}/>}
+    {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks}/>}
+    {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
     {tab==="timeline"&&<CClienteTimeline cl={cl} canEdit={isSocio||myPerms.editarBriefing||myPerms.editarEvolucao}/>}
     {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
@@ -36107,5 +36117,491 @@ function PageOperacional(props){
       </div>
     </section>
 
+  </div>;
+}
+
+// ======= 21_cliente_onboarding.jsx =======
+// Visão Geral modernizada + Onboarding do cliente.
+// Persiste em Supabase nas tabelas client_meta e client_onboarding.
+
+/* ─── CHECKLIST DO ONBOARDING ───────────────────────────────────
+   Cada item: { id, label, sub?:[{id,label}] }
+   Cada bloco: { id, title, subtitle?, items:[...] }
+─────────────────────────────────────────────────────────────── */
+const ONBOARDING_BLOCKS = [
+  {
+    id:"inicial", title:"Bloco inicial", subtitle:"Antes do dia 1",
+    items:[
+      {id:"inicial_7d", label:"Início do projeto em até 7 dias: templates, gravação de materiais e edições"},
+    ],
+  },
+  {
+    id:"dia1", title:"Dia 1", subtitle:"Contratação e setup",
+    items:[
+      {id:"d1_contrato_redigir", label:"Redigir contrato no Autentique"},
+      {id:"d1_contrato_assinar", label:"Assinatura do contrato"},
+      {id:"d1_pagamento", label:"Pagamento", sub:[
+        {id:"d1_pagamento_nfse", label:"Emitir NFSe"},
+      ]},
+      {id:"d1_asaas", label:"Criar cliente e automação de pagamento no Asaas"},
+      {id:"d1_brief", label:"Brief", sub:[
+        {id:"d1_brief_template", label:"Personalização do brief no Google Forms após copiar template"},
+        {id:"d1_brief_link", label:"Envio do link do brief para cliente"},
+        {id:"d1_brief_resposta", label:"Preenchimento do brief pelo cliente"},
+        {id:"d1_brief_subir", label:"Remover dados sensíveis e subir no projeto do cliente no Aplicativo da Pixels"},
+        {id:"d1_brief_gpt", label:"Upload do brief no agente do GPT"},
+      ]},
+      {id:"d1_reuniao_op", label:"Reunião com equipe operacional sobre o projeto"},
+      {id:"d1_concorrencia", label:"Análise de concorrência"},
+      {id:"d1_whatsapp_grupo", label:"Criação do grupo de WhatsApp com todos os envolvidos no projeto"},
+      {id:"d1_reuniao_onboarding", label:"Reunião de onboarding"},
+      {id:"d1_apresentar_equipe", label:"Apresentação da equipe"},
+      {id:"d1_data_kickoff", label:"Confirmar data da reunião de kickoff"},
+      {id:"d1_templates", label:"Produção dos templates"},
+      {id:"d1_gpt_agente", label:"Criação do agente personalizado no ChatGPT com materiais"},
+      {id:"d1_fluxos_app", label:"Criação dos fluxos do cliente no Aplicativo da Pixels: Calendário, Design e Edição de vídeo"},
+      {id:"d1_drive_compartilhada", label:"Criação da pasta compartilhada no Drive"},
+      {id:"d1_drive_operacional", label:"Criação da pasta Operacional do Drive"},
+      {id:"d1_wpp_status", label:"Envio de mensagem de atualização de status no WhatsApp"},
+      {id:"d1_wpp_boasvindas_fin", label:"Envio de mensagem de boas-vindas para responsável financeiro no WhatsApp"},
+      {id:"d1_gestao_midia", label:"Criação da seção no projeto \"Gestão de mídia\""},
+    ],
+  },
+  {
+    id:"dia2", title:"Dia 2", subtitle:"Estudo do brief",
+    items:[
+      {id:"d2_estudo", label:"Estudo do brief", sub:[
+        {id:"d2_estudo_gpt", label:"Destrinchar produtos e serviços com GPT"},
+        {id:"d2_estudo_validar", label:"Validar/corrigir as informações com cliente"},
+        {id:"d2_estudo_estrategista", label:"Enviar estudo do brief para estrategista"},
+        {id:"d2_estudo_gpt_upload", label:"Upload do estudo do brief no GPT"},
+        {id:"d2_estudo_materiais", label:"Subir estudo do brief nos materiais do projeto do cliente no Aplicativo da Pixels"},
+      ]},
+      {id:"d2_dados_projetos", label:"Passar dados do briefing para os projetos do cliente no Aplicativo da Pixels"},
+    ],
+  },
+  {
+    id:"dia3", title:"Dia 3", subtitle:"Kickoff com o cliente",
+    items:[
+      {id:"d3_reuniao_kickoff", label:"Reunião de kickoff", sub:[
+        {id:"d3_kickoff_apresentacao", label:"Preparar apresentação"},
+        {id:"d3_kickoff_indicacoes", label:"Pedir indicações"},
+        {id:"d3_kickoff_crosssell", label:"Fazer sugestões de cross-sell"},
+      ]},
+      {id:"d3_apresentar_plano", label:"Apresentar plano de projeto", sub:[
+        {id:"d3_apresentar_templates", label:"Apresentar templates"},
+      ]},
+      {id:"d3_apresentar_cronograma", label:"Apresentar cronograma"},
+      {id:"d3_apresentar_orcamento", label:"Apresentar orçamento de anúncios"},
+      {id:"d3_apresentar_funil", label:"Apresentar modelo de funil"},
+      {id:"d3_alinhamento", label:"Alinhamento de expectativas"},
+      {id:"d3_limites", label:"Explicar limites do escopo do projeto"},
+      {id:"d3_proximos", label:"Apresentar próximos passos"},
+    ],
+  },
+  {
+    id:"dia3_7", title:"Dia 3 a 7", subtitle:"Planejamento estratégico",
+    items:[
+      {id:"d37_reuniao_estrategica", label:"Reunião estratégica interna"},
+      {id:"d37_brief_estrategista", label:"Brief dos diretores para estrategista"},
+      {id:"d37_brief_editores", label:"Brief da estrategista para editores"},
+      {id:"d37_brief_midia", label:"Brief do head de tráfego pago para gestora de mídia"},
+      {id:"d37_calendario", label:"Produção do calendário editorial"},
+      {id:"d37_estrategia_ads", label:"Produção da estratégia de anúncios"},
+      {id:"d37_aprovar_calendario", label:"Apresentar e aprovar calendário editorial"},
+      {id:"d37_aprovar_ads", label:"Apresentar e aprovar estratégia de anúncios"},
+    ],
+  },
+  {
+    id:"dia7", title:"Dia 7", subtitle:"Go-live",
+    items:[
+      {id:"d7_publicacoes", label:"Início das publicações de social media"},
+      {id:"d7_campanhas", label:"Início das campanhas de tráfego pago"},
+      {id:"d7_wpp_status", label:"Envio de mensagem de atualização de status do projeto no WhatsApp"},
+    ],
+  },
+  {
+    id:"dia14", title:"Dia 14", subtitle:"Primeiro relatório",
+    items:[
+      {id:"d14_relatorio_ads", label:"Primeiro relatório de tráfego pago"},
+    ],
+  },
+  {
+    id:"dia31", title:"Dia 31", subtitle:"Fechamento do onboarding",
+    items:[
+      {id:"d31_reuniao", label:"Reunião de alinhamento"},
+      {id:"d31_relatorio", label:"Relatório"},
+      {id:"d31_resultados", label:"Demonstração de resultados"},
+      {id:"d31_indicacoes", label:"Pedido de indicações"},
+      {id:"d31_ongoing", label:"Copiar tarefas do template de Ongoing para o Gantt do projeto"},
+    ],
+  },
+];
+
+// Total de items (incluindo subs) — pra contagem do progresso
+function _onbCountAllItems(){
+  let n=0;
+  ONBOARDING_BLOCKS.forEach(function(b){
+    b.items.forEach(function(it){
+      n++;
+      if(it.sub) n += it.sub.length;
+    });
+  });
+  return n;
+}
+const ONBOARDING_TOTAL = _onbCountAllItems();
+
+/* ─── HOOK: useClientMeta ─────────────────────────────────────── */
+function useClientMeta(clientId){
+  const [meta, setMeta] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(function(){
+    if(!clientId||!window._sb){setLoading(false);return;}
+    setLoading(true);
+    window._sb.from("client_meta").select("*").eq("client_id",clientId).maybeSingle().then(function(r){
+      if(r.data){ setMeta(r.data); }
+      else { setMeta({client_id:clientId, status:"ativo", saude:"verde", mrr:0, score:0, alertas:[]}); }
+      setLoading(false);
+    });
+  }, [clientId]);
+
+  function save(patch){
+    const next = Object.assign({}, meta||{client_id:clientId}, patch);
+    setMeta(next);
+    if(!window._sb)return Promise.resolve();
+    return window._sb.from("client_meta").upsert(next, {onConflict:"client_id"});
+  }
+  return { meta, setMeta, save, loading };
+}
+
+/* ─── HOOK: useClientOnboarding ──────────────────────────────── */
+function useClientOnboarding(clientId){
+  const [items, setItems] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(function(){
+    if(!clientId||!window._sb){setLoading(false);return;}
+    setLoading(true);
+    window._sb.from("client_onboarding").select("*").eq("client_id",clientId).maybeSingle().then(function(r){
+      if(r.data&&r.data.items) setItems(r.data.items);
+      else setItems({});
+      setLoading(false);
+    });
+  }, [clientId]);
+
+  function toggle(itemId, currentUserId){
+    const cur = items[itemId];
+    const isDone = cur&&cur.done;
+    let next;
+    if(isDone){
+      // Desmarcar (com confirmação)
+      if(!window.confirm("Desmarcar este item do onboarding? A data de conclusão será removida."))return;
+      next = Object.assign({}, items);
+      delete next[itemId];
+    }else{
+      next = Object.assign({}, items, {
+        [itemId]:{ done:true, completed_at:new Date().toISOString(), completed_by:currentUserId||"" }
+      });
+    }
+    setItems(next);
+    if(window._sb){
+      window._sb.from("client_onboarding").upsert({client_id:clientId, items:next}, {onConflict:"client_id"});
+    }
+  }
+
+  const doneCount = Object.values(items).filter(function(x){return x&&x.done;}).length;
+  return { items, toggle, doneCount, loading };
+}
+
+/* ─── COMPONENTE: ClientMetricsCards (visão geral) ───────────── */
+function ClientMetricsCards(props){
+  const { cl, meta, save, isMob } = props;
+  const _STATUS = {
+    ativo:        { label:"Ativo",       color:"#15803d", bg:"#dcfce7", border:"#86efac" },
+    onboarding:   { label:"Onboarding",  color:"#7c3aed", bg:"#ede9fe", border:"#c4b5fd" },
+    em_risco:     { label:"Em risco",    color:"#a16207", bg:"#fef3c7", border:"#fde047" },
+    pausado:      { label:"Pausado",     color:"#64748b", bg:"#f1f5f9", border:"#cbd5e1" },
+    churn:        { label:"Churn",       color:"#b91c1c", bg:"#fee2e2", border:"#fca5a5" },
+  };
+  const _SAUDE = {
+    verde:    { label:"Saudável", color:"#16a34a", bg:"#dcfce7", dot:"#22c55e" },
+    amarelo:  { label:"Atenção",  color:"#a16207", bg:"#fef3c7", dot:"#eab308" },
+    vermelho: { label:"Crítico",  color:"#b91c1c", bg:"#fee2e2", dot:"#ef4444" },
+  };
+  const m = meta||{};
+  const st = _STATUS[m.status||"ativo"]||_STATUS.ativo;
+  const saude = _SAUDE[m.saude||"verde"]||_SAUDE.verde;
+
+  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:10}}>
+    {/* Status */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"12px 14px"}}>
+      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Status</div>
+      <select value={m.status||"ativo"} onChange={function(e){save({status:e.target.value});}}
+        style={{width:"100%",background:st.bg,color:st.color,border:"1px solid "+st.border,borderRadius:8,padding:"6px 8px",fontSize:12,fontWeight:700,outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
+        {Object.keys(_STATUS).map(function(k){return <option key={k} value={k}>{_STATUS[k].label}</option>;})}
+      </select>
+    </div>
+    {/* Saúde */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"12px 14px"}}>
+      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Saúde do cliente</div>
+      <select value={m.saude||"verde"} onChange={function(e){save({saude:e.target.value});}}
+        style={{width:"100%",background:saude.bg,color:saude.color,border:"1px solid "+saude.color+"44",borderRadius:8,padding:"6px 8px",fontSize:12,fontWeight:700,outline:"none",cursor:"pointer",fontFamily:"inherit"}}>
+        {Object.keys(_SAUDE).map(function(k){return <option key={k} value={k}>{_SAUDE[k].label}</option>;})}
+      </select>
+    </div>
+    {/* MRR */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"12px 14px"}}>
+      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>MRR</div>
+      <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+        <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>R$</span>
+        <input type="number" value={m.mrr||0} onChange={function(e){save({mrr:parseFloat(e.target.value)||0});}}
+          style={{flex:1,minWidth:0,background:"transparent",border:"none",color:"#0f172a",fontWeight:800,fontSize:16,padding:0,outline:"none",fontFeatureSettings:"'tnum'",fontFamily:"inherit"}}/>
+      </div>
+    </div>
+    {/* Score */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"12px 14px"}}>
+      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Score</div>
+      <div style={{display:"flex",alignItems:"baseline",gap:3}}>
+        <input type="number" value={m.score||0} min="0" max="100" onChange={function(e){save({score:Math.min(100,Math.max(0,parseFloat(e.target.value)||0))});}}
+          style={{flex:1,minWidth:0,background:"transparent",border:"none",color:"#0f172a",fontWeight:800,fontSize:16,padding:0,outline:"none",fontFamily:"inherit"}}/>
+        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>/100</span>
+      </div>
+    </div>
+    {/* NPS */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"12px 14px"}}>
+      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>NPS</div>
+      <div style={{display:"flex",alignItems:"baseline",gap:3}}>
+        <input type="number" value={m.nps==null?"":m.nps} min="0" max="10" step="0.1" placeholder="—" onChange={function(e){const v=e.target.value;save({nps:v===""?null:parseFloat(v)});}}
+          style={{flex:1,minWidth:0,background:"transparent",border:"none",color:"#0f172a",fontWeight:800,fontSize:16,padding:0,outline:"none",fontFamily:"inherit"}}/>
+        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>/10</span>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ─── COMPONENTE: ClientDatesPanel ─────────────────────────────── */
+function ClientDatesPanel(props){
+  const { meta, save, isMob } = props;
+  const m = meta||{};
+  const fields = [
+    {k:"ultima_reuniao_perf",      label:"Última reunião de performance", icon:"clock"},
+    {k:"proxima_reuniao_perf",     label:"Próxima reunião de performance", icon:"calendar"},
+    {k:"proximo_relatorio",        label:"Próximo relatório previsto",     icon:"chart"},
+    {k:"proximo_pedido_indicacao", label:"Próximo pedido de indicação",    icon:"users"},
+  ];
+  function _diffDias(dateStr){
+    if(!dateStr)return null;
+    const d = new Date(dateStr+"T00:00:00");
+    const today = new Date(); today.setHours(0,0,0,0);
+    return Math.floor((d.getTime()-today.getTime())/86400000);
+  }
+  function _label(dias){
+    if(dias==null)return "—";
+    if(dias===0)return "hoje";
+    if(dias===1)return "amanhã";
+    if(dias===-1)return "ontem";
+    if(dias>0)return "em "+dias+"d";
+    return "há "+(-dias)+"d";
+  }
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Datas importantes</div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
+      {fields.map(function(f){
+        const v = m[f.k]||"";
+        const dias = _diffDias(v);
+        const tagCol = dias==null?"#94a3b8":(dias<0?"#dc2626":(dias<=3?"#a16207":"#16a34a"));
+        return <div key={f.k} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:"#475569",fontSize:11.5,fontWeight:600,marginBottom:4}}>{f.label}</div>
+            <input type="date" value={v} onChange={function(e){save({[f.k]:e.target.value||null});}}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",color:"#0f172a",fontSize:12,fontWeight:600,outline:"none",fontFamily:"inherit"}}/>
+          </div>
+          {v&&<span style={{color:tagCol,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",background:tagCol+"15",padding:"3px 9px",borderRadius:99,flexShrink:0}}>{_label(dias)}</span>}
+        </div>;
+      })}
+    </div>
+    {/* Próxima ação */}
+    <div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #e9d5ff",borderRadius:9,padding:"10px 12px",marginTop:10,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{width:32,height:32,borderRadius:8,background:"#7c3aed15",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#7c3aed",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Próxima ação importante</div>
+        <input type="text" placeholder="Ex: reunião com diretor, ligação de follow-up..." value={m.proxima_acao_titulo||""} onChange={function(e){save({proxima_acao_titulo:e.target.value});}}
+          style={{width:"100%",background:"transparent",border:"none",color:"#0f172a",fontWeight:700,fontSize:13,padding:0,outline:"none",fontFamily:"inherit"}}/>
+      </div>
+      <input type="date" value={m.proxima_acao_data||""} onChange={function(e){save({proxima_acao_data:e.target.value||null});}}
+        style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:7,padding:"5px 8px",color:"#7c3aed",fontSize:12,fontWeight:700,outline:"none",fontFamily:"inherit",flexShrink:0}}/>
+    </div>
+  </div>;
+}
+
+/* ─── COMPONENTE: ClientAlertsPanel ──────────────────────────── */
+function ClientAlertsPanel(props){
+  const { cl, tasks } = props;
+  const cTasks = (tasks||[]).filter(function(t){return t.client===cl.id&&!t.deletedAt;});
+  const today = new Date(); today.setHours(0,0,0,0);
+  const atrasadas = cTasks.filter(function(t){
+    if(t.status==="publicado")return false;
+    const r = t.publishDate||t.deadline;
+    if(!r)return false;
+    return new Date(r+"T00:00:00") < today;
+  });
+  const copiesPendentes = cTasks.filter(function(t){return t.status==="demanda"||t.status==="rascunhos";});
+  const aprovacaoPendente = cTasks.filter(function(t){return t.status==="avaliacao"||t.status==="aprovacao_final";});
+  const alerts = [
+    {k:"atras", label:"Demandas atrasadas",   n:atrasadas.length,        col:"#dc2626"},
+    {k:"copy",  label:"Copies pendentes",     n:copiesPendentes.length,  col:"#a16207"},
+    {k:"aprov", label:"Aguardando aprovação", n:aprovacaoPendente.length,col:"#7c3aed"},
+  ];
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Alertas</div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+      {alerts.map(function(a){
+        return <div key={a.k} style={{background:a.n>0?a.col+"08":"#fafbfc",border:"1px solid "+(a.n>0?a.col+"33":"#f1f5f9"),borderRadius:9,padding:"10px 12px"}}>
+          <div style={{color:a.n>0?a.col:"#94a3b8",fontSize:24,fontWeight:800,letterSpacing:-1,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{a.n}</div>
+          <div style={{color:a.n>0?"#0f172a":"#94a3b8",fontSize:11,fontWeight:600,marginTop:4}}>{a.label}</div>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
+/* ─── COMPONENTE: OnboardingItem (linha do checklist) ────────── */
+function OnboardingItem(props){
+  const { item, items, toggle, level, currentUserId } = props;
+  const st = items[item.id];
+  const done = st&&st.done;
+  const hasSub = item.sub&&item.sub.length>0;
+  const [expanded, setExpanded] = useState(hasSub);
+
+  // Se tem subitens, marca o pai automaticamente se todos os filhos estiverem concluídos
+  const allSubDone = hasSub && item.sub.every(function(s){return items[s.id]&&items[s.id].done;});
+  const someSubDone = hasSub && item.sub.some(function(s){return items[s.id]&&items[s.id].done;});
+  const isChecked = done || (hasSub && allSubDone);
+  const isPartial = hasSub && someSubDone && !allSubDone;
+
+  function fmtDate(iso){
+    if(!iso)return "";
+    const d=new Date(iso);
+    return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+  }
+
+  return <div style={{paddingLeft:level>0?20:0,position:"relative"}}>
+    {level>0&&<div style={{position:"absolute",left:8,top:0,bottom:0,width:1,background:"#e9d5ff"}}/>}
+    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 4px",borderRadius:8,transition:"background .15s",cursor:hasSub?"default":"pointer"}}
+      onMouseEnter={function(e){if(!hasSub)e.currentTarget.style.background="#faf5ff";}}
+      onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}
+      onClick={hasSub?null:function(){toggle(item.id, currentUserId);}}>
+      {/* Check circular */}
+      <div onClick={function(e){e.stopPropagation();if(!hasSub)toggle(item.id, currentUserId);}}
+        style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+(isChecked?"#7c3aed":(isPartial?"#a855f7":"#cbd5e1")),background:isChecked?"#7c3aed":(isPartial?"#a855f733":"transparent"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,cursor:"pointer",transition:"all .15s"}}>
+        {isChecked&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+        {isPartial&&!isChecked&&<div style={{width:8,height:8,borderRadius:"50%",background:"#a855f7"}}/>}
+      </div>
+      {/* Label + sub */}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+          <div style={{color:isChecked?"#94a3b8":"#0f172a",fontSize:12.5,fontWeight:isChecked?500:600,textDecoration:isChecked&&!hasSub?"line-through":"none",lineHeight:1.4,flex:1,minWidth:0}}>{item.label}</div>
+          {hasSub&&<button onClick={function(e){e.stopPropagation();setExpanded(function(p){return !p;});}}
+            style={{background:"none",border:"none",color:"#94a3b8",fontSize:14,cursor:"pointer",padding:"0 4px",flexShrink:0,transform:expanded?"rotate(90deg)":"rotate(0)",transition:"transform .2s"}}>›</button>}
+        </div>
+        {/* Data de conclusão */}
+        {done&&st.completed_at&&<div style={{color:"#7c3aed",fontSize:10,fontWeight:600,marginTop:3,display:"flex",alignItems:"center",gap:4}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          {fmtDate(st.completed_at)} {st.completed_by&&"· por "+st.completed_by}
+        </div>}
+        {/* Sub-items */}
+        {hasSub&&expanded&&<div style={{marginTop:4,display:"flex",flexDirection:"column",gap:0}}>
+          {item.sub.map(function(s){
+            return <OnboardingItem key={s.id} item={s} items={items} toggle={toggle} level={level+1} currentUserId={currentUserId}/>;
+          })}
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
+/* ─── COMPONENTE: OnboardingSection (bloco) ──────────────────── */
+function OnboardingSection(props){
+  const { block, items, toggle, currentUserId } = props;
+  // Conta items + subs feitos
+  let total=0, feitos=0;
+  block.items.forEach(function(it){
+    total++;
+    if(items[it.id]&&items[it.id].done)feitos++;
+    if(it.sub){
+      it.sub.forEach(function(s){
+        total++;
+        if(items[s.id]&&items[s.id].done)feitos++;
+      });
+    }
+  });
+  const pct = total>0?Math.round(feitos/total*100):0;
+  const allDone = total>0&&feitos===total;
+
+  return <section style={{background:"#fff",border:"1px solid "+(allDone?"#bbf7d0":"#e2e8f0"),borderRadius:12,padding:"14px 18px",display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:34,height:34,borderRadius:9,background:allDone?"#dcfce7":"#faf5ff",display:"flex",alignItems:"center",justifyContent:"center",color:allDone?"#16a34a":"#7c3aed",fontWeight:800,fontSize:12,letterSpacing:-.3}}>
+          {allDone?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>:feitos+"/"+total}
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{block.title}</div>
+          {block.subtitle&&<div style={{color:"#64748b",fontSize:11,marginTop:1}}>{block.subtitle}</div>}
+        </div>
+      </div>
+      <div style={{minWidth:80,textAlign:"right"}}>
+        <div style={{color:allDone?"#16a34a":"#7c3aed",fontWeight:800,fontSize:14,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
+        <div style={{background:"#f1f5f9",borderRadius:99,height:4,marginTop:3,overflow:"hidden",width:80}}>
+          <div style={{width:pct+"%",height:"100%",background:allDone?"#22c55e":"linear-gradient(90deg,#a855f7,#7c3aed)",borderRadius:99,transition:"width .3s"}}/>
+        </div>
+      </div>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:0,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
+      {block.items.map(function(it){
+        return <OnboardingItem key={it.id} item={it} items={items} toggle={toggle} level={0} currentUserId={currentUserId}/>;
+      })}
+    </div>
+  </section>;
+}
+
+/* ─── COMPONENTE: OnboardingChecklist (raiz da aba) ──────────── */
+function OnboardingChecklist(props){
+  const { cl, currentUserId } = props;
+  const { items, toggle, doneCount, loading } = useClientOnboarding(cl.id);
+  const total = ONBOARDING_TOTAL;
+  const pct = total>0?Math.round(doneCount/total*100):0;
+
+  if(loading)return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando onboarding...</div>;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header com progresso geral */}
+    <div style={{background:"linear-gradient(135deg,#7c3aed,#a855f7)",borderRadius:14,padding:"18px 22px",color:"#fff",boxShadow:"0 8px 24px rgba(124,58,237,0.20)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.85}}>Onboarding</div>
+          <div style={{fontSize:20,fontWeight:800,letterSpacing:-.5,marginTop:3}}>{doneCount} de {total} etapas concluídas</div>
+          <div style={{fontSize:12,opacity:.85,marginTop:3}}>Checklist do projeto de {cl.name}</div>
+        </div>
+        <div style={{textAlign:"right",minWidth:90}}>
+          <div style={{fontSize:36,fontWeight:900,letterSpacing:-1.4,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{pct}<span style={{fontSize:18,opacity:.75}}>%</span></div>
+        </div>
+      </div>
+      <div style={{background:"rgba(255,255,255,0.18)",borderRadius:99,height:8,marginTop:14,overflow:"hidden"}}>
+        <div style={{width:pct+"%",height:"100%",background:"linear-gradient(90deg,#fde047,#facc15)",borderRadius:99,transition:"width .5s"}}/>
+      </div>
+    </div>
+    {/* Blocos */}
+    {ONBOARDING_BLOCKS.map(function(b){
+      return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} currentUserId={currentUserId}/>;
+    })}
   </div>;
 }
