@@ -26268,6 +26268,62 @@ function useMediaStore(){
   return {store,update,addHistory};
 }
 
+/* ─── HOOK: dados consolidados de Funil Digital + ROI por cliente ─── */
+/* Busca media_funnel_entries (counts) + client_roi_monthly (valor faturado)
+   pra todos os clientes do store no mês de referência (default: mês atual).
+   Retorna { funnels: {clientId: entry}, roi: {clientId: row}, loading } */
+function useMediaConsolidated(clients,refYear,refMonth){
+  const [funnels,setFunnels]=useState({});
+  const [roi,setRoi]=useState({});
+  const [loading,setLoading]=useState(true);
+  const clientIds=(clients||[]).map(function(c){return c.client_id;}).join(",");
+  useEffect(function(){
+    let active=true;
+    if(!window._sb||!clients||clients.length===0){setLoading(false);return;}
+    setLoading(true);
+    const ids=clients.map(function(c){return c.client_id;});
+    Promise.all([
+      window._sb.from("media_funnel_entries").select("*").in("client_id",ids).eq("year",refYear).eq("month",refMonth),
+      window._sb.from("client_roi_monthly").select("*").in("client_id",ids).eq("year",refYear).eq("month",refMonth),
+    ]).then(function(results){
+      if(!active)return;
+      const fnMap={}; (results[0].data||[]).forEach(function(r){fnMap[r.client_id]=r;});
+      const roMap={}; (results[1].data||[]).forEach(function(r){roMap[r.client_id]=r;});
+      setFunnels(fnMap); setRoi(roMap); setLoading(false);
+    }).catch(function(e){console.warn("[mediaConsolidated]",e?.message||e);setLoading(false);});
+    return function(){active=false;};
+  },[clientIds,refYear,refMonth]);
+  return {funnels,roi,loading};
+}
+
+/* ─── HELPERS: extrai dados consolidados por cliente ─── */
+function _mGetClientFunilData(clientId,funnelEntry,roiEntry,investimento){
+  // Funnel stages → first = leads, last = vendas, penúltimo = oportunidades
+  const stages=(funnelEntry&&Array.isArray(funnelEntry.stages))?funnelEntry.stages:[];
+  const leads=stages.length>0?Number(stages[0].quantity||0):0;
+  const vendas=stages.length>0?Number(stages[stages.length-1].quantity||0):0;
+  const oportunidades=stages.length>=2?Number(stages[stages.length-2].quantity||0):0;
+  // Retorno gerado = soma dos valores em client_roi_monthly.sales
+  const sales=(roiEntry&&Array.isArray(roiEntry.sales))?roiEntry.sales:[];
+  const retorno=sales.reduce(function(s,v){return s+Number(v.value||0);},0);
+  // ROI = (retorno - investimento) / investimento
+  const inv=Number(investimento)||0;
+  const roi=inv>0?Math.round(((retorno-inv)/inv)*1000)/10:null;
+  // CPL
+  const cpl=leads>0?Math.round((inv/leads)*100)/100:null;
+  // Status do funil: atualizado | pendente | incompleto
+  let funilStatus="pendente";
+  if(funnelEntry){
+    const algumaEtapaPreenchida=stages.some(function(s){return Number(s.quantity||0)>0;});
+    const todasEtapasPreenchidas=stages.length>0&&stages.every(function(s){return Number(s.quantity||0)>0;});
+    if(todasEtapasPreenchidas)funilStatus="atualizado";
+    else if(algumaEtapaPreenchida)funilStatus="incompleto";
+    else funilStatus="pendente";
+  }
+  const lastUpdate=funnelEntry?.updated_at||funnelEntry?.submitted_at||null;
+  return {leads,vendas,oportunidades,retorno,roi,cpl,funilStatus,lastUpdate};
+}
+
 /* ─── FORMATADORES (prefixo _m pra não conflitar com outros módulos) ─── */
 const _mFmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
 const _mFmtDate=iso=>iso?new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"}):"—";
@@ -26297,10 +26353,16 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const [fStatus,setFStatus]=useState("todos");
   const [fResp,setFResp]=useState("todos");
   const [fMonth,setFMonth]=useState("");
-  const [fChip,setFChip]=useState("todos"); // todos | com_alerta | sem_invest | em_estruturacao | ativos
+  const [fChip,setFChip]=useState("todos");
 
   const isSocio=currentUser?.level===1;
   const canManageClients=isSocio;
+
+  // Mês de referência: usa fMonth se setado, senão mês atual
+  const _refDate=fMonth?new Date(fMonth+"-01T00:00:00"):new Date();
+  const refYear=_refDate.getFullYear();
+  const refMonth=_refDate.getMonth()+1;
+  const consolidated=useMediaConsolidated(store.clients||[],refYear,refMonth);
 
   if(openClient){
     return <MediaClientPanel
@@ -26321,10 +26383,14 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
     if(fChip==="sem_invest"&&!(!c.investimento_mensal||Number(c.investimento_mensal)===0))return false;
     if(fChip==="em_estruturacao"&&c.status!=="em_estruturacao")return false;
     if(fChip==="ativos"&&c.status!=="ativa"&&c.status!=="em_dia")return false;
+    if(fChip==="sem_funil"){
+      // precisa que clientFunilData exista — mas neste momento ele ainda não está calculado.
+      // Truque: marcação postergada na renderização. Aqui só passa todos; filtro real abaixo.
+    }
     return true;
   });
 
-  // KPIs do topo
+  // KPIs do topo — consolidados do Funil Digital + ROI
   const allClients=store.clients||[];
   const totalInvest=allClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
   const totalInvestVisivel=visibleClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
@@ -26339,17 +26405,26 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   },0);
   const lastUpdateLabel=lastUpdate?_mFmtRelative(new Date(lastUpdate).toISOString()):"—";
 
-  // Leads/CPL — placeholders (sem mock; só mostra se houver `results` populados)
-  let totalLeads=0, totalConv=0, totalSpent=0;
-  Object.values(store.results||{}).forEach(arr=>{
-    if(!Array.isArray(arr))return;
-    arr.forEach(r=>{
-      totalLeads+=Number(r.leads)||0;
-      totalConv+=Number(r.conversoes)||0;
-      totalSpent+=Number(r.gasto)||0;
-    });
+  // ── Consolidação Funil Digital + ROI por cliente ──
+  // Pra cada cliente, calcula leads/oportunidades/vendas (do funil) + retorno/ROI (do client_roi_monthly)
+  const clientFunilData={};
+  let totalRetorno=0, totalRoiInvestido=0, totalLeads=0, totalVendas=0, totalOpp=0;
+  let semFunilCount=0, comFunilCount=0, funilIncompletoCount=0;
+  allClients.forEach(c=>{
+    const data=_mGetClientFunilData(c.client_id,consolidated.funnels[c.client_id],consolidated.roi[c.client_id],c.investimento_mensal);
+    clientFunilData[c.client_id]=data;
+    if(data.funilStatus==="pendente")semFunilCount++;
+    else comFunilCount++;
+    if(data.funilStatus==="incompleto")funilIncompletoCount++;
+    totalRetorno+=Number(data.retorno||0);
+    totalLeads+=Number(data.leads||0);
+    totalVendas+=Number(data.vendas||0);
+    totalOpp+=Number(data.oportunidades||0);
+    if(Number(c.investimento_mensal)>0)totalRoiInvestido+=Number(c.investimento_mensal);
   });
-  const cpl=totalLeads>0?totalSpent/totalLeads:null;
+  const roiGeral=totalRoiInvestido>0?Math.round(((totalRetorno-totalRoiInvestido)/totalRoiInvestido)*1000)/10:null;
+  const semDadosRetorno=allClients.filter(c=>(Number(c.investimento_mensal)||0)>0 && (clientFunilData[c.client_id]?.funilStatus==="pendente"||!clientFunilData[c.client_id]?.retorno)).length;
+  const cpl=totalLeads>0?totalInvest/totalLeads:null;
 
   const KpiCard=({label,value,sub,icon,color="#0f172a",bg="#f8fafc",muted})=>(
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -26363,11 +26438,12 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   );
 
   const chipDefs=[
-    {id:"todos",            label:"Todos",                count:allClients.length},
-    {id:"ativos",           label:"Ativos",               count:ativosCount,         color:"#16a34a"},
-    {id:"em_estruturacao",  label:"Em estruturação",      count:estruturacaoCount,   color:"#64748b"},
-    {id:"com_alerta",       label:"Com alerta",           count:alertaCount,         color:"#ef4444"},
-    {id:"sem_invest",       label:"Sem investimento",     count:semInvestCount,      color:"#94a3b8"},
+    {id:"todos",            label:"Todos",                  count:allClients.length},
+    {id:"ativos",           label:"Ativos",                 count:ativosCount,         color:"#16a34a"},
+    {id:"em_estruturacao",  label:"Em estruturação",        count:estruturacaoCount,   color:"#64748b"},
+    {id:"com_alerta",       label:"Com alerta",             count:alertaCount,         color:"#ef4444"},
+    {id:"sem_invest",       label:"Sem investimento",       count:semInvestCount,      color:"#94a3b8"},
+    {id:"sem_funil",        label:"Sem Funil Digital",      count:semFunilCount,       color:"#f97316"},
   ];
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -26401,14 +26477,14 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
       </div>
     </div>
 
-    {/* ── KPIs resumo ── */}
+    {/* ── KPIs resumo — estratégicos (orçamento, retorno, ROI) ── */}
     <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"170px"},1fr))`,gap:10}}>
-      <KpiCard label="Investimento total/mês" value={_mFmtBRL(totalInvest)} icon="dollar"  color="#9F43F6" bg="#9F43F614"/>
-      <KpiCard label="Clientes com mídia ativa" value={ativosCount+estruturacaoCount} sub={`${ativosCount} ativos · ${estruturacaoCount} em estruturação`} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
-      <KpiCard label="Em estruturação" value={estruturacaoCount} icon="settings" color="#64748b" bg="#f1f5f9"/>
-      <KpiCard label="Contas com alerta" value={alertaCount} icon="alert" color={alertaCount>0?"#ef4444":"#94a3b8"} bg={alertaCount>0?"#fef2f2":"#f8fafc"}/>
-      <KpiCard label="Leads gerados no período" value={totalLeads>0?totalLeads.toLocaleString("pt-BR"):"—"} sub={totalLeads===0?"Aguardando dados":""} icon="trending-up" color={totalLeads>0?"#16a34a":"#94a3b8"} bg={totalLeads>0?"#dcfce7":"#f8fafc"} muted={totalLeads===0}/>
-      <KpiCard label="Custo médio por lead" value={cpl?_mFmtBRL(cpl):"—"} sub={!cpl?"Aguardando dados":""} icon="zap" color={cpl?"#0f172a":"#94a3b8"} bg="#f8fafc" muted={!cpl}/>
+      <KpiCard label="Orçamento gerido/mês"  value={_mFmtBRL(totalInvest)} sub={`${allClients.length} cliente${allClients.length!==1?"s":""}`} icon="dollar" color="#9F43F6" bg="#9F43F614"/>
+      <KpiCard label="Retorno do mês"        value={totalRetorno>0?_mFmtBRL(totalRetorno):"—"} sub={totalRetorno===0?"Aguardando Funil Digital":""} icon="trending-up" color={totalRetorno>0?"#16a34a":"#94a3b8"} bg={totalRetorno>0?"#dcfce7":"#f8fafc"} muted={totalRetorno===0}/>
+      <KpiCard label="ROI geral do mês"      value={roiGeral!==null?(roiGeral>=0?"+":"")+roiGeral.toFixed(1)+"%":"—"} sub={roiGeral===null?"Aguardando dados":(roiGeral>=0?"Retorno positivo":"Retorno negativo")} icon="chart" color={roiGeral===null?"#94a3b8":roiGeral>=0?"#16a34a":"#ef4444"} bg={roiGeral===null?"#f8fafc":roiGeral>=0?"#dcfce7":"#fef2f2"} muted={roiGeral===null}/>
+      <KpiCard label="Clientes ativos"       value={ativosCount+estruturacaoCount} sub={`${ativosCount} ativos · ${estruturacaoCount} em estruturação`} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
+      <KpiCard label="Sem Funil Digital"     value={semFunilCount} sub={semFunilCount>0?"Aguardando preenchimento":"Todos preenchidos"} icon="alert" color={semFunilCount>0?"#f97316":"#94a3b8"} bg={semFunilCount>0?"#fff7ed":"#f8fafc"}/>
+      <KpiCard label="Contas em atenção"     value={alertaCount} icon="alert" color={alertaCount>0?"#ef4444":"#94a3b8"} bg={alertaCount>0?"#fef2f2":"#f8fafc"}/>
     </div>
 
     <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:-4}}>
@@ -26533,7 +26609,11 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
           </div>
         </div>
       : <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {visibleClients.map(c=><MediaClientCard key={c.client_id} client={c}
+          {visibleClients.filter(c=>{
+            if(fChip!=="sem_funil")return true;
+            return clientFunilData[c.client_id]?.funilStatus==="pendente";
+          }).map(c=><MediaClientCard key={c.client_id} client={c}
+            funilData={clientFunilData[c.client_id]}
             onOpen={()=>setOpenClient(c.client_id)}
             onNovaDemanda={()=>{setShowNovaDemanda(c.client_id);}}
             isMob={isMob}/>)}
@@ -26641,7 +26721,7 @@ function MediaRelatorioGeral({store,onClose}){
 }
 
 /* ─── Card de cliente ──────────────────────────────────── */
-function MediaClientCard({client,onOpen,onNovaDemanda,isMob}){
+function MediaClientCard({client,onOpen,onNovaDemanda,isMob,funilData}){
   const parentId=client.parent_client||client.client_id;
   const cl=CLIENTS.find(c=>c.id===parentId);
   const status=MEDIA_STATUS_OPTS.find(s=>s.id===client.status)||MEDIA_STATUS_OPTS[4];
@@ -26654,10 +26734,23 @@ function MediaClientCard({client,onOpen,onNovaDemanda,isMob}){
   const hasAlert=client.status==="atencao"||client.status==="critico";
   const semResultado=!client.resultado_mes;
 
+  // Dados consolidados do Funil Digital + ROI
+  const fd=funilData||{leads:0,vendas:0,oportunidades:0,retorno:0,roi:null,cpl:null,funilStatus:"pendente"};
+  const funilStatusCfg={
+    atualizado:{label:"Funil atualizado",color:"#16a34a",bg:"#dcfce7"},
+    incompleto:{label:"Funil incompleto",color:"#f97316",bg:"#fff7ed"},
+    pendente:  {label:"Funil pendente",  color:"#ef4444",bg:"#fef2f2"},
+  };
+  const fdSt=funilStatusCfg[fd.funilStatus]||funilStatusCfg.pendente;
+  const hasFunilData=fd.funilStatus!=="pendente";
+  const hasPerformance=fd.leads>0||fd.vendas>0||fd.oportunidades>0;
+  const hasRetorno=Number(fd.retorno)>0;
+
   // Alertas
   const alerts=[];
   if(semInvest)alerts.push("Sem investimento cadastrado");
-  if(semResultado)alerts.push("Sem resultado informado");
+  if(fd.funilStatus==="pendente"&&!semInvest)alerts.push("Funil Digital pendente");
+  if(fd.funilStatus==="incompleto")alerts.push("Funil Digital incompleto");
   if(client.status==="pausado")alerts.push("Conta pausada");
   if(client.status==="atencao")alerts.push("Performance em atenção");
   if(client.status==="critico")alerts.push("Performance crítica");
@@ -26667,79 +26760,89 @@ function MediaClientCard({client,onOpen,onNovaDemanda,isMob}){
     if(days>=14)alerts.push("Sem atualização há "+days+" dias");
   }
 
-  // Performance (placeholder — só mostra se houver dados reais salvos)
-  const leads=Number(client.leads_mes)||0;
-  const cpl=Number(client.cpl)||0;
-  const conv=Number(client.conversoes)||0;
-  const hasPerformance=leads>0||cpl>0||conv>0;
-
   return <div style={{background:"#fff",border:`1px solid ${hasAlert?"#fecaca":"#e2e8f0"}`,borderRadius:14,padding:isMob?"14px":"16px 18px",transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif",display:"flex",flexDirection:"column",gap:14,position:"relative",overflow:"hidden"}}
     onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 22px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=hasAlert?"#ef4444":"#cbd5e1";}}
     onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor=hasAlert?"#fecaca":"#e2e8f0";}}>
 
-    {/* Faixa lateral de status (cor sutil) */}
+    {/* Faixa lateral de status */}
     <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:status.color,opacity:.7}}/>
 
     {/* Conteúdo em colunas */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(220px,1.2fr) minmax(180px,1fr) minmax(180px,1fr) minmax(200px,1.2fr) auto",gap:isMob?14:18,alignItems:"stretch"}}>
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"minmax(200px,1.1fr) minmax(160px,.9fr) minmax(170px,1fr) minmax(170px,1fr) minmax(200px,1.1fr) auto",gap:isMob?14:14,alignItems:"stretch"}}>
 
       {/* Col 1 — Identidade */}
       <div style={{display:"flex",flexDirection:"column",gap:8,minWidth:0,paddingLeft:6}}>
         <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
           <div style={{flexShrink:0}}><ClientLogo clientId={parentId} size="md"/></div>
           <div style={{minWidth:0,flex:1}}>
-            <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.name}</div>
-            <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>{plat.label}</div>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client.name}</div>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:1,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>{plat.label}</div>
           </div>
         </div>
-        {/* Responsável + última atualização */}
         <div style={{display:"flex",alignItems:"center",gap:7,marginTop:4}}>
           {resp&&<UserAvatar user={resp} size={22}/>}
           <div style={{minWidth:0}}>
-            <div style={{color:"#475569",fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resp?.name||"—"}</div>
+            <div style={{color:"#475569",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{resp?.name||"—"}</div>
             <div style={{color:"#94a3b8",fontSize:10,fontWeight:500}}>Atualizado {_mFmtRelative(client.ultima_atualizacao)}</div>
           </div>
         </div>
       </div>
 
       {/* Col 2 — Investimento */}
-      <div style={{background:"#fafaff",border:"1px solid #ede9fe",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:5}}>
-        <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Investimento mensal</div>
-        <div style={{color:semInvest?"#94a3b8":"#0f172a",fontSize:18,fontWeight:800,lineHeight:1.1,letterSpacing:-.3}}>
+      <div style={{background:"#fafaff",border:"1px solid #ede9fe",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
+        <div style={{color:"#7c3aed",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Investimento</div>
+        <div style={{color:semInvest?"#94a3b8":"#0f172a",fontSize:16,fontWeight:800,lineHeight:1.1,letterSpacing:-.3}}>
           {semInvest?"—":_mFmtBRL(investTotal)}
         </div>
-        {!semInvest&&(investMeta>0||investGoogle>0)&&<div style={{display:"flex",gap:8,marginTop:3,flexWrap:"wrap"}}>
-          {investMeta>0&&<span style={{color:"#1d4ed8",fontSize:10.5,fontWeight:600}}>Meta {_mFmtBRL(investMeta)}</span>}
-          {investGoogle>0&&<span style={{color:"#ea580c",fontSize:10.5,fontWeight:600}}>Google {_mFmtBRL(investGoogle)}</span>}
+        {!semInvest&&(investMeta>0||investGoogle>0)&&<div style={{display:"flex",flexDirection:"column",gap:2,marginTop:2}}>
+          {investMeta>0&&<span style={{color:"#1d4ed8",fontSize:10,fontWeight:600}}>Meta {_mFmtBRL(investMeta)}</span>}
+          {investGoogle>0&&<span style={{color:"#ea580c",fontSize:10,fontWeight:600}}>Google {_mFmtBRL(investGoogle)}</span>}
         </div>}
-        {semInvest&&<div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,fontStyle:"italic"}}>Aguardando cadastro</div>}
+        {semInvest&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontStyle:"italic"}}>Aguardando cadastro</div>}
       </div>
 
-      {/* Col 3 — Performance */}
-      <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:5}}>
-        <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Performance</div>
-        {hasPerformance?<>
-          <div style={{display:"flex",gap:14,marginTop:2}}>
-            <div>
-              <div style={{color:"#0f172a",fontSize:14,fontWeight:800,lineHeight:1}}>{leads.toLocaleString("pt-BR")}</div>
-              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,marginTop:2}}>Leads</div>
-            </div>
-            {cpl>0&&<div>
-              <div style={{color:"#0f172a",fontSize:14,fontWeight:800,lineHeight:1}}>{_mFmtBRL(cpl)}</div>
-              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,marginTop:2}}>CPL</div>
-            </div>}
-            {conv>0&&<div>
-              <div style={{color:"#0f172a",fontSize:14,fontWeight:800,lineHeight:1}}>{conv}</div>
-              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,marginTop:2}}>Conv.</div>
-            </div>}
+      {/* Col 3 — Retorno + ROI + Funil Digital status */}
+      <div style={{background:hasRetorno?"#f0fdf4":"#f8fafc",border:`1px solid ${hasRetorno?"#bbf7d0":"#e2e8f0"}`,borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"space-between",gap:4}}>
+        <div>
+          <div style={{color:hasRetorno?"#16a34a":"#64748b",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Retorno · ROI</div>
+          <div style={{color:hasRetorno?"#0f172a":"#94a3b8",fontSize:14.5,fontWeight:800,lineHeight:1.1,letterSpacing:-.3,marginTop:3}}>
+            {hasRetorno?_mFmtBRL(fd.retorno):"—"}
           </div>
-          {client.resultado_mes&&<div style={{color:"#475569",fontSize:11,marginTop:2,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{client.resultado_mes}</div>}
-        </>:<div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,fontStyle:"italic",lineHeight:1.4}}>
-          Aguardando dados de performance
+          {fd.roi!==null&&<div style={{color:fd.roi>=0?"#16a34a":"#ef4444",fontSize:11.5,fontWeight:700,marginTop:2}}>
+            ROI {fd.roi>=0?"+":""}{fd.roi.toFixed(1)}%
+          </div>}
+          {!hasRetorno&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontStyle:"italic",lineHeight:1.4,marginTop:2}}>Aguardando preenchimento</div>}
+        </div>
+        <span style={{background:fdSt.bg,color:fdSt.color,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,whiteSpace:"nowrap",alignSelf:"flex-start",marginTop:4}}>{fdSt.label}</span>
+      </div>
+
+      {/* Col 4 — Performance (Leads / Oportunidades / Vendas) */}
+      <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",justifyContent:"center",gap:4}}>
+        <div style={{color:"#64748b",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Performance</div>
+        {hasPerformance?<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginTop:3}}>
+            <div>
+              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,lineHeight:1}}>{fd.leads.toLocaleString("pt-BR")}</div>
+              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,marginTop:2}}>Leads</div>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,lineHeight:1}}>{fd.oportunidades.toLocaleString("pt-BR")}</div>
+              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,marginTop:2}}>Oport.</div>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,lineHeight:1}}>{fd.vendas.toLocaleString("pt-BR")}</div>
+              <div style={{color:"#94a3b8",fontSize:9,fontWeight:600,marginTop:2}}>Vendas</div>
+            </div>
+          </div>
+          {fd.cpl!==null&&fd.cpl>0&&<div style={{color:"#475569",fontSize:10.5,marginTop:4,fontWeight:600}}>
+            CPL {_mFmtBRL(fd.cpl)}
+          </div>}
+        </>:<div style={{color:"#94a3b8",fontSize:11,fontWeight:500,fontStyle:"italic",lineHeight:1.4}}>
+          Aguardando preenchimento do Funil Digital
         </div>}
       </div>
 
-      {/* Col 4 — Status / Alertas / Próxima ação */}
+      {/* Col 5 — Status / Alertas / Próxima ação */}
       <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <span style={{background:status.bg,color:status.color,borderRadius:6,padding:"3px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{status.label}</span>
@@ -26752,20 +26855,20 @@ function MediaClientCard({client,onOpen,onNovaDemanda,isMob}){
         </div>}
         {client.proxima_acao&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"6px 9px",marginTop:4}}>
           <div style={{color:"#92400e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Próxima ação</div>
-          <div style={{color:"#78350f",fontSize:11.5,lineHeight:1.35,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{client.proxima_acao}</div>
+          <div style={{color:"#78350f",fontSize:11,lineHeight:1.35,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{client.proxima_acao}</div>
         </div>}
       </div>
 
-      {/* Col 5 — Ações */}
-      <div style={{display:"flex",flexDirection:"column",gap:6,justifyContent:"center",alignItems:"stretch",minWidth:isMob?"auto":140}}>
+      {/* Col 6 — Ações */}
+      <div style={{display:"flex",flexDirection:"column",gap:6,justifyContent:"center",alignItems:"stretch",minWidth:isMob?"auto":130}}>
         <button onClick={onOpen}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"background .12s",whiteSpace:"nowrap"}}
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"background .12s",whiteSpace:"nowrap"}}
           onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
           onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
           Abrir painel <Ico n="chevron-right" size={11} color="#fff"/>
         </button>
         {onNovaDemanda&&<button onClick={onNovaDemanda}
-          style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}}
+          style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 14px",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s",whiteSpace:"nowrap"}}
           onMouseEnter={e=>{e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.color="#9F43F6";}}
           onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}>
           <Ico n="plus" size={11}/> Nova demanda
@@ -30838,7 +30941,7 @@ const PORTAL_ALL_TABS=[
   {id:"planejamento",ico:"layers",      label:"Planejamento mensal"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
-  {id:"funil",       ico:"funnel",      label:"Funil comercial"},
+  {id:"funil",       ico:"funnel",      label:"Funil Digital"},
   {id:"faturamento", ico:"wallet",      label:"Faturamento"},
   {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"nps",         ico:"sparkles",    label:"NPS"},
@@ -31408,7 +31511,7 @@ function useFunnelHistory(clientId, limit){
   return {rows,loading};
 }
 
-/* ─── PortalFunil — área "Atualização do Funil Comercial" ───────────
+/* ─── PortalFunil — área "Atualização do Funil Digital" ───────────
    Cliente seleciona mês/ano, preenche quantidade por etapa, salva.
    Pode editar a qualquer momento. Vê resumo de conversões + histórico.
 ─────────────────────────────────────────────────────────────────── */
@@ -31475,7 +31578,7 @@ function PortalFunil({cl, isMob}){
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <Ico n="funnel" size={22} color={cl.color}/>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Funil comercial</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Funil Digital</div>
           <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Registre mensalmente quantas oportunidades passaram em cada etapa.</div>
         </div>
       </div>
@@ -33028,6 +33131,132 @@ const CLIENT_ROI_DEFAULTS = {
   vetservice:        { pixels: 0,    midia: 750 },   // R$ 750 Meta
 };
 
+/* ─── PORTAL RETORNO DIGITAL — seção dentro do Faturamento ───
+   Sincronizada com Gestão de mídia. Lê:
+   - media_funnel_entries (leads/oportunidades/vendas do Funil Digital)
+   - client_roi_monthly (investimento e retorno)
+   ROI = (retorno - investimento_midia) / investimento_midia
+─────────────────────────────────────────────────────────────────────── */
+function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, salesCount}){
+  const [funnelEntry,setFunnelEntry]=useState(null);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(function(){
+    let active=true;
+    if(!window._sb||!clientId){if(active)setLoading(false);return;}
+    setLoading(true);
+    window._sb.from("media_funnel_entries").select("*")
+      .eq("client_id",clientId).eq("year",year).eq("month",month).maybeSingle()
+      .then(function(r){if(active){setFunnelEntry(r.data||null);setLoading(false);}})
+      .catch(function(e){if(active)setLoading(false);console.warn("[retorno digital]",e?.message||e);});
+    // Realtime: atualiza quando funil for atualizado
+    const ch=window._sb.channel("retdig-"+clientId+"-"+year+"-"+month)
+      .on("postgres_changes",{event:"*",schema:"public",table:"media_funnel_entries",filter:"client_id=eq."+clientId},function(){
+        window._sb.from("media_funnel_entries").select("*")
+          .eq("client_id",clientId).eq("year",year).eq("month",month).maybeSingle()
+          .then(function(r){if(active)setFunnelEntry(r.data||null);});
+      }).subscribe();
+    return function(){active=false;try{window._sb.removeChannel(ch);}catch(e){}};
+  },[clientId,year,month]);
+
+  // Extrai dados (mesma logica de _mGetClientFunilData em 17_gestao_midia)
+  const stages=(funnelEntry&&Array.isArray(funnelEntry.stages))?funnelEntry.stages:[];
+  const leads=stages.length>0?Number(stages[0].quantity||0):0;
+  const vendasFunil=stages.length>0?Number(stages[stages.length-1].quantity||0):0;
+  const oportunidades=stages.length>=2?Number(stages[stages.length-2].quantity||0):0;
+  const vendasDisplay=vendasFunil>0?vendasFunil:(Number(salesCount)||0);
+  const inv=Number(midiaSpend)||0;
+  const retorno=Number(totalVendido)||0;
+  const roi=inv>0?Math.round(((retorno-inv)/inv)*1000)/10:null;
+  let funilStatus="pendente";
+  if(funnelEntry){
+    const algumaPreenchida=stages.some(function(s){return Number(s.quantity||0)>0;});
+    const todasPreenchidas=stages.length>0&&stages.every(function(s){return Number(s.quantity||0)>0;});
+    if(todasPreenchidas)funilStatus="atualizado";
+    else if(algumaPreenchida)funilStatus="incompleto";
+  }
+  const lastUpd=funnelEntry?.updated_at||funnelEntry?.submitted_at||null;
+  const lastUpdLabel=lastUpd?new Date(lastUpd).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"}):null;
+  const fdSt=({
+    atualizado:{label:"Atualizado",color:"#16a34a",bg:"#dcfce7"},
+    incompleto:{label:"Incompleto",color:"#f97316",bg:"#fff7ed"},
+    pendente:  {label:"Pendente",  color:"#ef4444",bg:"#fef2f2"},
+  })[funilStatus]||{label:"Pendente",color:"#ef4444",bg:"#fef2f2"};
+  const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
+
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:38,height:38,borderRadius:10,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n="trending-up" size={17} color="#fff"/>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Retorno do investimento digital</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:500}}>Quanto sua mídia paga retornou no mês — sincronizado com o Funil Digital.</div>
+        </div>
+      </div>
+      <span style={{background:fdSt.bg,color:fdSt.color,borderRadius:99,padding:"4px 12px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{fdSt.label}</span>
+    </div>
+
+    {(inv===0&&retorno===0&&leads===0&&vendasDisplay===0)?<div style={{background:"#fafafa",border:"1px dashed #e2e8f0",borderRadius:12,padding:"28px 18px",textAlign:"center"}}>
+      <div style={{display:"inline-flex",width:44,height:44,borderRadius:11,background:"#9F43F614",alignItems:"center",justifyContent:"center",marginBottom:10}}>
+        <Ico n="funnel" size={20} color="#9F43F6"/>
+      </div>
+      <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:4}}>Dados aguardando preenchimento do Funil Digital</div>
+      <div style={{color:"#64748b",fontSize:11.5,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>
+        Quando você preencher leads, oportunidades e vendas no Funil Digital, o cálculo de retorno e ROI aparece aqui automaticamente.
+      </div>
+    </div>:<>
+      {/* Linha de KPIs principais */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:14}}>
+        <div style={{background:"#fafaff",border:"1px solid #ede9fe",borderRadius:10,padding:"12px 13px"}}>
+          <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Investimento</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,marginTop:4}}>{_brl(inv)}</div>
+        </div>
+        <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"12px 13px"}}>
+          <div style={{color:"#16a34a",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Retorno</div>
+          <div style={{color:retorno>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:17,letterSpacing:-.3,marginTop:4}}>{retorno>0?_brl(retorno):"—"}</div>
+        </div>
+        <div style={{background:roi===null?"#f8fafc":roi>=0?"#f0fdf4":"#fef2f2",border:`1px solid ${roi===null?"#e2e8f0":roi>=0?"#bbf7d0":"#fecaca"}`,borderRadius:10,padding:"12px 13px"}}>
+          <div style={{color:roi===null?"#64748b":roi>=0?"#16a34a":"#dc2626",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>ROI do mês</div>
+          <div style={{color:roi===null?"#94a3b8":roi>=0?"#16a34a":"#dc2626",fontWeight:800,fontSize:17,letterSpacing:-.3,marginTop:4}}>
+            {roi===null?"—":(roi>=0?"+":"")+roi.toFixed(1)+"%"}
+          </div>
+        </div>
+        <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 13px"}}>
+          <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Atualizado em</div>
+          <div style={{color:lastUpdLabel?"#0f172a":"#94a3b8",fontWeight:700,fontSize:12.5,marginTop:5,fontStyle:lastUpdLabel?"normal":"italic"}}>{lastUpdLabel||"Não preenchido"}</div>
+        </div>
+      </div>
+
+      {/* Funil — leads / oportunidades / vendas */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 13px"}}>
+          <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Leads recebidos</div>
+          <div style={{color:leads>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.4}}>{leads>0?leads.toLocaleString("pt-BR"):"—"}</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 13px"}}>
+          <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Oportunidades</div>
+          <div style={{color:oportunidades>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.4}}>{oportunidades>0?oportunidades.toLocaleString("pt-BR"):"—"}</div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 13px"}}>
+          <div style={{color:"#64748b",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Vendas</div>
+          <div style={{color:vendasDisplay>0?"#0f172a":"#94a3b8",fontWeight:800,fontSize:18,marginTop:4,letterSpacing:-.4}}>{vendasDisplay>0?vendasDisplay.toLocaleString("pt-BR"):"—"}</div>
+        </div>
+      </div>
+
+      {funilStatus==="incompleto"&&<div style={{marginTop:12,padding:"9px 12px",background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:9,fontSize:11.5,color:"#9a3412",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
+        <Ico n="alert" size={12} color="#f97316"/>
+        Funil Digital está incompleto. Preencha todas as etapas para um cálculo mais preciso.
+      </div>}
+      {funilStatus==="pendente"&&<div style={{marginTop:12,padding:"9px 12px",background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,fontSize:11.5,color:"#7f1d1d",fontWeight:500,display:"flex",alignItems:"center",gap:7}}>
+        <Ico n="alert" size={12} color="#ef4444"/>
+        Funil Digital ainda não foi preenchido neste mês.
+      </div>}
+    </>}
+  </div>;
+}
+
 function PortalFaturamentoROI({cl, selUnit, isMob}){
   const _now=new Date();
   const [year,setYear]=useState(_now.getFullYear());
@@ -33182,6 +33411,14 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
   const _MES_CURTO=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* ── Retorno do Investimento Digital (sincronizado com Funil Digital + Gestão de mídia) ── */}
+    <PortalRetornoDigital
+      clientId={effectiveClientId}
+      year={year} month={month}
+      midiaSpend={Number(midia)||0}
+      totalVendido={totalVendido}
+      salesCount={sales.length}/>
 
     {/* Header + selo + filtros */}
     <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
