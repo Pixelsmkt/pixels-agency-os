@@ -36012,7 +36012,9 @@ function _OpAvatar(props){
 }
 
 /* ─── HELPER: calcular KPIs de cada colaborador ──────────── */
-function _opKpisColab(colab, monthTasks, today0){
+function _opKpisColab(colab, monthTasks, today0, visible){
+  // visible = todos os cards não-deletados (inclui rascunhos, sem filtro de mês)
+  const allTasks = visible || monthTasks;
   const my = monthTasks.filter(function(t){return _opIsAssignee(t, colab.id);});
   const atras = function(arr){
     return arr.filter(function(t){
@@ -36023,26 +36025,30 @@ function _opKpisColab(colab, monthTasks, today0){
     }).length;
   };
   if(colab.id==="ellen"){
+    // Pra Hellen: rascunhos e agendadas usam allTasks (rascunhos não têm publishDate)
+    const myAll = allTasks.filter(function(t){return _opIsAssignee(t, colab.id);});
+    const rascunhos = myAll.filter(function(t){return t.status==="rascunhos";}).length;
+    const agendadas = myAll.filter(function(t){return ["agendado","publicado"].indexOf(t.status)>=0;}).length;
     return [
       {l:"Itens-base", v: my.length, m:56},
       {l:"Copys finalizadas", v: my.filter(function(t){return ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
-      {l:"Rascunhos", v: my.filter(function(t){return t.status==="rascunhos";}).length, m:null},
-      {l:"Agendadas", v: my.filter(function(t){return ["agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Rascunhos", v: rascunhos, m:null},
+      {l:"Agendadas", v: agendadas, m:null},
       {l:"Atrasos", v: atras(my), m:0, invert:true},
     ];
   }
   if(colab.id==="vinicius"){
-    // Vinicius aprova copy, design e vídeo + gestor de projetos
-    const aprovCopy = monthTasks.filter(function(t){return t.status==="demanda";}).length;
-    const aprovDesign = monthTasks.filter(function(t){const tp=_opTipoV2(t);return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0 && (tp==="arte"||tp==="foto");}).length;
-    const aprovVideo = monthTasks.filter(function(t){const tp=_opTipoV2(t);return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0 && (tp==="video"||tp==="short");}).length;
+    // Vinicius aprova copy/design/vídeo — usa allTasks (aprovações não dependem de mês)
+    const aprovCopy = allTasks.filter(function(t){return t.status==="demanda";}).length;
+    const aprovDesign = allTasks.filter(function(t){const tp=_opTipoV2(t);return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0 && (tp==="arte"||tp==="foto");}).length;
+    const aprovVideo = allTasks.filter(function(t){const tp=_opTipoV2(t);return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0 && (tp==="video"||tp==="short");}).length;
     return [
       {l:"Aprov. copy",     v: aprovCopy,   m:null},
       {l:"Aprov. design",   v: aprovDesign, m:null},
       {l:"Aprov. vídeo",    v: aprovVideo,  m:null},
-      {l:"Paradas +48h",    v: monthTasks.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0 && _opHorasParado(t)>48;}).length, m:0, invert:true},
-      {l:"Sem responsável", v: monthTasks.filter(function(t){return !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length, m:0, invert:true},
-      {l:"Sem prazo",       v: monthTasks.filter(function(t){return !t.publishDate && !t.deadline;}).length, m:0, invert:true},
+      {l:"Paradas +48h",    v: allTasks.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0 && _opHorasParado(t)>48;}).length, m:0, invert:true},
+      {l:"Sem responsável", v: allTasks.filter(function(t){return ["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado"].indexOf(t.status)>=0 && !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length, m:0, invert:true},
+      {l:"Sem prazo",       v: allTasks.filter(function(t){return ["recebida","execucao","ajustes"].indexOf(t.status)>=0 && !t.publishDate && !t.deadline;}).length, m:0, invert:true},
     ];
   }
   if(colab.id==="andre"){
@@ -36271,7 +36277,7 @@ function PageOperacional(props){
       </div>
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:14}}>
         {OP_COLABS_DEF.map(function(c){
-          const kpis = _opKpisColab(c, monthTasks, today0);
+          const kpis = _opKpisColab(c, monthTasks, today0, visible);
           const atrasos = (kpis.find(function(k){return ["Atrasos","Atrasos totais","Atrasadas","Atrasados","Clientes críticos","Clientes c/ atraso"].indexOf(k.l)>=0;})||{}).v||0;
           const stCol = atrasos>3 ? _opStatusBadge(30) : (atrasos>0 ? _opStatusBadge(70) : _opStatusBadge(95));
           const gargalo = kpis.find(function(k){return k.invert&&k.v>0;});
@@ -36584,7 +36590,7 @@ function _OpDrawer(props){
   });
   const producao = my.filter(function(t){return ["execucao","ajustes"].indexOf(t.status)>=0;});
   const aguardando = my.filter(function(t){return ["avaliacao","aprovacao_final","demanda"].indexOf(t.status)>=0;});
-  const kpis = _opKpisColab(colab, monthTasks, today0);
+  const kpis = _opKpisColab(colab, monthTasks, today0, visible);
 
   return <div onMouseDown={onClose} style={{position:"fixed",inset:0,zIndex:1500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",display:"flex",alignItems:"stretch",justifyContent:"flex-end",fontFamily:_OP_FF}}>
     <div onMouseDown={function(e){e.stopPropagation();}} style={{background:"#fff",width:isMob?"100%":"min(520px,95%)",height:"100%",display:"flex",flexDirection:"column",fontFamily:_OP_FF,boxShadow:"-20px 0 50px rgba(15,23,42,0.20)"}}>
