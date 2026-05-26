@@ -36027,12 +36027,17 @@ function _opKpisColab(colab, monthTasks, today0){
     ];
   }
   if(colab.id==="vinicius"){
+    // Vinicius aprova copy, design e vídeo + gestor de projetos
+    const aprovCopy = monthTasks.filter(function(t){return t.status==="demanda";}).length;
+    const aprovDesign = monthTasks.filter(function(t){const tp=_opTipoV2(t);return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0 && (tp==="arte"||tp==="foto");}).length;
+    const aprovVideo = monthTasks.filter(function(t){const tp=_opTipoV2(t);return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0 && (tp==="video"||tp==="short");}).length;
     return [
-      {l:"Sem dono", v: monthTasks.filter(function(t){return !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length, m:0, invert:true},
-      {l:"Sem prazo", v: monthTasks.filter(function(t){return !t.publishDate && !t.deadline;}).length, m:0, invert:true},
-      {l:"Aprovações", v: monthTasks.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length, m:null},
-      {l:"Paradas +48h", v: monthTasks.filter(function(t){return _opHorasParado(t)>48;}).length, m:0, invert:true},
-      {l:"Atrasos totais", v: atras(monthTasks), m:0, invert:true},
+      {l:"Aprov. copy",     v: aprovCopy,   m:null},
+      {l:"Aprov. design",   v: aprovDesign, m:null},
+      {l:"Aprov. vídeo",    v: aprovVideo,  m:null},
+      {l:"Paradas +48h",    v: monthTasks.filter(function(t){return ["demanda","avaliacao","aprovacao_final"].indexOf(t.status)>=0 && _opHorasParado(t)>48;}).length, m:0, invert:true},
+      {l:"Sem responsável", v: monthTasks.filter(function(t){return !t.assignee && (!Array.isArray(t.assignees)||t.assignees.length===0);}).length, m:0, invert:true},
+      {l:"Sem prazo",       v: monthTasks.filter(function(t){return !t.publishDate && !t.deadline;}).length, m:0, invert:true},
     ];
   }
   if(colab.id==="andre"){
@@ -36056,20 +36061,23 @@ function _opKpisColab(colab, monthTasks, today0){
     ];
   }
   if(colab.id==="gustavo"){
+    // Gustavo aprova design + performance/clientes críticos
+    const aprovDesignFinal = monthTasks.filter(function(t){const tp=_opTipoV2(t);return t.status==="aprovacao_final" && (tp==="arte"||tp==="foto");}).length;
+    const clientesCriticos = (function(){
+      const set=new Set();
+      monthTasks.forEach(function(t){
+        if(t.status==="publicado")return;
+        const r=t.publishDate||t.deadline; if(!r)return;
+        if(new Date(r+"T00:00:00") < today0) set.add(t.client);
+      });
+      return set.size;
+    })();
     return [
-      {l:"Aguardando avaliação", v: monthTasks.filter(function(t){return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length, m:null},
-      {l:"Aprovados no mês", v: monthTasks.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
-      {l:"Devolvidos p/ ajuste", v: monthTasks.filter(function(t){return t.status==="ajustes";}).length, m:null},
-      {l:"Clientes c/ atraso", v: (function(){
-        const set=new Set();
-        monthTasks.forEach(function(t){
-          if(t.status==="publicado")return;
-          const r=t.publishDate||t.deadline; if(!r)return;
-          if(new Date(r+"T00:00:00") < today0) set.add(t.client);
-        });
-        return set.size;
-      })(), m:0, invert:true},
-      {l:"Reuniões próximas", v:"—", m:null, raw:true},
+      {l:"Aprov. design final", v: aprovDesignFinal, m:null},
+      {l:"Clientes críticos",   v: clientesCriticos, m:0, invert:true},
+      {l:"Relatórios pendentes",v: "—", m:null, raw:true},
+      {l:"Campanhas em atenção",v: "—", m:null, raw:true},
+      {l:"Próximas reuniões",   v: "—", m:null, raw:true},
     ];
   }
   return [];
@@ -36250,103 +36258,125 @@ function PageOperacional(props){
       </div>
     </div>
 
-    {/* 2. EQUIPE DA SEMANA */}
+    {/* 2. EQUIPE DA SEMANA — grid 2 colunas, cards grandes */}
     <section style={{display:"flex",flexDirection:"column",gap:12,fontFamily:_OP_FF}}>
-      <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2,fontFamily:_OP_FF}}>Equipe da semana</div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,fontFamily:_OP_FF}}>Equipe da semana</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_OP_FF}}>Indicadores do mês em curso. Atualizado automaticamente.</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:14}}>
         {OP_COLABS_DEF.map(function(c){
           const kpis = _opKpisColab(c, monthTasks, today0);
-          const atrasos = (kpis.find(function(k){return k.l==="Atrasos"||k.l==="Atrasos totais"||k.l==="Atrasadas"||k.l==="Atrasados"||k.l==="Clientes c/ atraso";})||{}).v||0;
+          const atrasos = (kpis.find(function(k){return ["Atrasos","Atrasos totais","Atrasadas","Atrasados","Clientes críticos","Clientes c/ atraso"].indexOf(k.l)>=0;})||{}).v||0;
           const stCol = atrasos>3 ? _opStatusBadge(30) : (atrasos>0 ? _opStatusBadge(70) : _opStatusBadge(95));
-          // Tenta detectar gargalo principal (primeiro KPI invert que tem v>0)
           const gargalo = kpis.find(function(k){return k.invert&&k.v>0;});
-          return <div key={c.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,position:"relative",overflow:"hidden",fontFamily:_OP_FF}}>
-            <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:c.color}}/>
-            <div style={{display:"flex",alignItems:"center",gap:11,marginTop:2}}>
-              <_OpAvatar colab={c} size={48}/>
+          return <div key={c.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 22px",display:"flex",flexDirection:"column",gap:14,position:"relative",overflow:"hidden",fontFamily:_OP_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+            <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:c.color}}/>
+            {/* Topo: avatar + nome/cargo + status */}
+            <div style={{display:"flex",alignItems:"center",gap:13,marginTop:2}}>
+              <_OpAvatar colab={c} size={54}/>
               <div style={{minWidth:0,flex:1}}>
-                <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_OP_FF}}>{c.name}</div>
-                <div style={{color:c.color,fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:2,fontFamily:_OP_FF}}>{c.role}</div>
+                <div style={{color:"#0f172a",fontWeight:700,fontSize:15.5,letterSpacing:-.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_OP_FF}}>{c.name}</div>
+                <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2,fontFamily:_OP_FF}}>{c.role}</div>
               </div>
-              <span style={{background:stCol.bg,color:stCol.color,border:"1px solid "+stCol.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",flexShrink:0,fontFamily:_OP_FF}}>{stCol.label}</span>
+              <span style={{background:stCol.bg,color:stCol.color,fontSize:10,fontWeight:700,padding:"4px 11px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",flexShrink:0,fontFamily:_OP_FF}}>{stCol.label}</span>
             </div>
-            <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"8px 11px",fontFamily:_OP_FF}}>
-              <div style={{color:c.color,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",fontFamily:_OP_FF}}>Prioridade da semana</div>
-              <div style={{color:"#0f172a",fontSize:12,fontWeight:600,marginTop:2,fontFamily:_OP_FF}}>{c.priority}</div>
+            {/* Prioridade + gargalo lado a lado */}
+            <div style={{display:"grid",gridTemplateColumns:isMob||!gargalo?"1fr":"1fr 1fr",gap:8}}>
+              <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"9px 12px",fontFamily:_OP_FF}}>
+                <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_OP_FF}}>Prioridade</div>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:3,lineHeight:1.4,fontFamily:_OP_FF}}>{c.priority}</div>
+              </div>
+              {gargalo && <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"9px 12px",fontFamily:_OP_FF}}>
+                <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_OP_FF}}>Principal gargalo</div>
+                <div style={{color:"#b91c1c",fontSize:12.5,fontWeight:600,marginTop:3,lineHeight:1.4,fontFamily:_OP_FF}}>{gargalo.l} <span style={{color:"#dc2626",fontWeight:800}}>({gargalo.v})</span></div>
+              </div>}
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            {/* Indicadores — 4 boxes maiores */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {kpis.slice(0,4).map(function(k,i){
                 const danger = k.invert && k.v>0;
-                const ok = k.invert && k.v===0;
-                const col = danger?"#dc2626":(ok?"#16a34a":"#0f172a");
-                return <div key={i} style={{background:"#fff",border:"1px solid #f1f5f9",borderRadius:8,padding:"7px 9px",fontFamily:_OP_FF}}>
-                  <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_OP_FF}}>{k.l}</div>
-                  <div style={{color:col,fontWeight:800,fontSize:15,marginTop:2,fontFeatureSettings:"'tnum'",fontFamily:_OP_FF}}>{k.v}{k.m!=null&&!k.raw&&<span style={{color:"#cbd5e1",fontSize:11,fontWeight:600}}>/{k.m}</span>}</div>
+                const col = danger?"#b91c1c":"#0f172a";
+                return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"11px 13px",fontFamily:_OP_FF}}>
+                  <div style={{color:"#64748b",fontSize:10.5,fontWeight:600,letterSpacing:.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_OP_FF}}>{k.l}</div>
+                  <div style={{color:col,fontWeight:800,fontSize:20,marginTop:4,letterSpacing:-.5,fontFeatureSettings:"'tnum'",fontFamily:_OP_FF}}>{k.v}{k.m!=null&&!k.raw&&<span style={{color:"#cbd5e1",fontSize:13,fontWeight:600,marginLeft:2}}>/{k.m}</span>}</div>
                 </div>;
               })}
             </div>
-            {gargalo && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"7px 10px",fontSize:11,color:"#b91c1c",fontFamily:_OP_FF}}>
-              <strong>Gargalo:</strong> {gargalo.l} ({gargalo.v})
-            </div>}
-            <button onClick={function(){setDrawerColab(c);}}
-              style={{background:"transparent",border:"1px solid #e2e8f0",color:"#0f172a",borderRadius:9,padding:"7px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_OP_FF,marginTop:"auto"}}>
-              Ver detalhes
+            {/* Rodapé */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,paddingTop:6,borderTop:"1px solid #f1f5f9",marginTop:2,fontFamily:_OP_FF}}>
+              <span style={{color:"#94a3b8",fontSize:10.5,fontFamily:_OP_FF}}>Atualizado automaticamente</span>
+              <button onClick={function(){setDrawerColab(c);}}
+                style={{background:"transparent",border:"1px solid #e2e8f0",color:"#0f172a",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:_OP_FF}}>
+                Ver detalhes
+              </button>
+            </div>
+          </div>;
+        })}
+      </div>
+    </section>
+
+    {/* 3. APROVAÇÕES PARADAS — visual clean */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:16,fontFamily:_OP_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,fontFamily:_OP_FF}}>Aprovações paradas</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_OP_FF}}>Sincronizado com a aba Aprovações. Total: <strong style={{color:"#0f172a",fontWeight:700}}>{aprovacoesAll.length}</strong>.</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
+        {[
+          {l:"Copy",   arr:aprovCopy},
+          {l:"Design", arr:aprovDesign},
+          {l:"Vídeo",  arr:aprovVideo},
+          {l:"Total",  arr:aprovacoesAll, isTotal:true},
+        ].map(function(b,i){
+          const par48 = _paradas48(b.arr);
+          const crit = _criticaCliente(b.arr);
+          return <div key={i} style={{background:b.isTotal?"#fafbfc":"#fff",border:"1px solid "+(b.isTotal?"#e2e8f0":"#f1f5f9"),borderRadius:12,padding:"16px 18px",display:"flex",flexDirection:"column",gap:10,fontFamily:_OP_FF}}>
+            <div style={{color:"#64748b",fontSize:11,fontWeight:600,letterSpacing:.2,fontFamily:_OP_FF}}>{b.l}</div>
+            <div style={{color:"#0f172a",fontSize:28,fontWeight:800,letterSpacing:-.8,lineHeight:1,fontFeatureSettings:"'tnum'",fontFamily:_OP_FF}}>{b.arr.length}</div>
+            <div style={{fontSize:11,fontFamily:_OP_FF,color:par48.length>0?"#b91c1c":"#94a3b8"}}>{par48.length===0?"sem paradas +48h":par48.length+" parada"+(par48.length===1?"":"s")+" +48h"}</div>
+            {crit && <div style={{color:"#64748b",fontSize:11,fontFamily:_OP_FF,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Crítico: <span style={{color:"#0f172a",fontWeight:600}}>{crit}</span></div>}
+            <button onClick={goAprovacoes}
+              style={{background:"transparent",border:"none",color:"#9F43F6",padding:0,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_OP_FF,marginTop:"auto",display:"inline-flex",alignItems:"center",gap:4,alignSelf:"flex-start"}}>
+              Ver aprovações
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
           </div>;
         })}
       </div>
     </section>
 
-    {/* 3. APROVAÇÕES PARADAS */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14,fontFamily:_OP_FF}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_OP_FF}}>Aprovações paradas</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontFamily:_OP_FF}}>Sincronizado com a aba Aprovações da sidebar. Total: <strong style={{color:"#0f172a"}}>{aprovacoesAll.length}</strong>.</div>
-        </div>
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
+    {/* 4. STATUS SEMANA + STATUS MÊS */}
+    {(function(){
+      // Motivos do status
+      const aprovPar48 = _paradas48(aprovacoesAll).length;
+      const motivoSem = pctSem>=80 ? "Boa semana — metas dentro do esperado." :
+        (pctSem>=60 ? "Atenção: "+(metaSemana.publ-publSem)+" publicações restantes na semana." :
+        "Crítico: publicações baixas"+(atrasadosMes>0?" e "+atrasadosMes+" atrasos ativos":"")+(aprovPar48>0?" e "+aprovPar48+" aprovações paradas":"")+".");
+      const motivoMes = pctMes>=80 ? "Boa execução do mês." :
+        (pctMes>=60 ? "Atenção: faltam "+(OP_METAS_MES_V2.publicacoes-publicadasMes)+" publicações pra fechar o mês." :
+        "Crítico: "+publicadasMes+"/"+OP_METAS_MES_V2.publicacoes+" publicações"+(atrasadosMes>0?" e "+atrasadosMes+" atrasos ativos":"")+".");
+      return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,fontFamily:_OP_FF}}>
         {[
-          {l:"Copy",   arr:aprovCopy,   color:"#ec4899"},
-          {l:"Design", arr:aprovDesign, color:"#f59e0b"},
-          {l:"Vídeo",  arr:aprovVideo,  color:"#7c3aed"},
-          {l:"Total",  arr:aprovacoesAll, color:"#0f172a"},
-        ].map(function(b,i){
-          const par48 = _paradas48(b.arr);
-          const crit = _criticaCliente(b.arr);
-          return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"13px 14px",display:"flex",flexDirection:"column",gap:8,fontFamily:_OP_FF}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
-              <span style={{color:b.color,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_OP_FF}}>{b.l}</span>
-              <span style={{color:b.color,fontSize:22,fontWeight:900,letterSpacing:-.5,fontFeatureSettings:"'tnum'",fontFamily:_OP_FF}}>{b.arr.length}</span>
+          {tit:"Status da semana", pct:pctSem, st:stSem, motivo:motivoSem},
+          {tit:"Status do mês",    pct:pctMes, st:stMes, motivo:motivoMes},
+        ].map(function(s,i){
+          return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",fontFamily:_OP_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:12}}>
+              <div style={{color:"#0f172a",fontSize:14,fontWeight:700,letterSpacing:-.2,fontFamily:_OP_FF}}>{s.tit}</div>
+              <span style={{background:s.st.bg,color:s.st.color,fontSize:10,fontWeight:700,padding:"3px 10px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",fontFamily:_OP_FF}}>{s.st.label}</span>
             </div>
-            <div style={{color:par48.length>0?"#b91c1c":"#94a3b8",fontSize:11,fontWeight:600,fontFamily:_OP_FF}}>{par48.length} parada{par48.length===1?"":"s"} +48h</div>
-            {crit && <div style={{color:"#475569",fontSize:11,fontFamily:_OP_FF,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>Mais crítico: <strong style={{color:"#0f172a"}}>{crit}</strong></div>}
-            <button onClick={goAprovacoes}
-              style={{background:"transparent",border:"1px solid "+b.color+"55",color:b.color,borderRadius:8,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:_OP_FF,marginTop:"auto"}}>Ver aprovações</button>
+            <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+              <div style={{color:s.st.color,fontSize:34,fontWeight:800,letterSpacing:-1.2,lineHeight:1,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}>{s.pct}<span style={{fontSize:18,opacity:.6}}>%</span></div>
+            </div>
+            <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden",marginTop:12}}>
+              <div style={{width:Math.min(100,s.pct)+"%",height:"100%",background:s.st.color,borderRadius:99,transition:"width .3s"}}/>
+            </div>
+            <div style={{color:"#475569",fontSize:12,marginTop:12,lineHeight:1.5,fontFamily:_OP_FF}}>{s.motivo}</div>
           </div>;
         })}
-      </div>
-    </section>
-
-    {/* 4. STATUS SEMANA + STATUS MÊS */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,fontFamily:_OP_FF}}>
-      {[
-        {tit:"Status da semana", pct:pctSem, st:stSem, det:"Semana "+semanaAtual+" · "+publSem+"/"+metaSemana.publ+" publicações"},
-        {tit:"Status do mês",    pct:pctMes, st:stMes, det:publicadasMes+"/"+OP_METAS_MES_V2.publicacoes+" publicações · "+atrasadosMes+" atrasos"},
-      ].map(function(s,i){
-        return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_OP_FF}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}}>
-            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_OP_FF}}>{s.tit}</div>
-            <span style={{background:s.st.bg,color:s.st.color,border:"1px solid "+s.st.border,fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_OP_FF}}>{s.st.label}</span>
-          </div>
-          <div style={{color:s.st.color,fontSize:42,fontWeight:900,letterSpacing:-1.5,lineHeight:1,fontFamily:_OP_FF,fontFeatureSettings:"'tnum'"}}>{s.pct}<span style={{fontSize:20,opacity:.6}}>%</span></div>
-          <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden",marginTop:10}}>
-            <div style={{width:Math.min(100,s.pct)+"%",height:"100%",background:s.st.color,borderRadius:99,transition:"width .3s"}}/>
-          </div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:8,fontFamily:_OP_FF}}>{s.det}</div>
-        </div>;
-      })}
-    </div>
+      </div>;
+    })()}
 
     {/* 5. ROTINA DA SEMANA */}
     <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14,fontFamily:_OP_FF}}>
