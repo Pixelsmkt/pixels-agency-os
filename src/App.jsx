@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 36/36 | Nao editar diretamente
+// Modulos: 37/37 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -3240,6 +3240,11 @@ function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,n
   const supervisedTasks=supervisedUsers.length>0
     ?(propTasks||[]).filter(t=>!t.deletedAt&&(supervisedUsers.includes(t.assignee)||supervisedUsers.some(s=>(t.assignees||[]).includes(s))))
     :[];
+  // Designer / Editor (freelancer com pagamento por demanda) -> dashboard V2 moderno
+  if(user.pagamentoPorDemanda===true && typeof DashColabV2==="function"){
+    return <DashColabV2 user={user} tasks={tasks} allTasks={allTasks}
+      setTasks={setTasks} isViewing={isViewing} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>;
+  }
   return <PriorityDashCore user={user} tasks={tasks} allTasks={allTasks}
     supervisedTasks={supervisedTasks} supervisedUsers={supervisedUsers}
     setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>;
@@ -38290,5 +38295,321 @@ function ENPSPendenteAviso(props){
     </div>
     <button onClick={onResponder}
       style={{background:"#fff",color:"#9F43F6",border:"none",borderRadius:9,padding:"8px 16px",fontWeight:800,fontSize:12,cursor:"pointer",fontFamily:_NPS_FF,flexShrink:0}}>Responder agora</button>
+  </div>;
+}
+
+// ======= 24_dash_colab.jsx =======
+// Dashboard individual do colaborador (V2) — moderno, focado em execução
+// Usado por André, Guilherme e outros com pagamentoPorDemanda.
+
+const _DC_FF = "'Inter',system-ui,-apple-system,sans-serif";
+
+/* ─── HELPERS ─────────────────────────────────────────────── */
+function _dcFmtBRL(n){
+  return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+function _dcFmtBRL2(n){
+  return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function _dcGreeting(){
+  const h = new Date().getHours();
+  if(h<12) return "Bom dia";
+  if(h<18) return "Boa tarde";
+  return "Boa noite";
+}
+function _dcFmtToday(){
+  const d = new Date();
+  const dias = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+  const meses = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  return dias[d.getDay()]+", "+d.getDate()+" de "+meses[d.getMonth()];
+}
+function _dcCurrentMonth(){
+  const d = new Date();
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+}
+function _dcInMonth(t, refMonth){
+  // refMonth: "YYYY-MM"
+  if(t.publishDate) return t.publishDate.slice(0,7)===refMonth;
+  if(t.referenceMonth) return t.referenceMonth===refMonth;
+  return false;
+}
+function _dcTipoLabel(t){
+  const ct = String(t.contentType||t.tipo||"").toLowerCase();
+  if(ct==="arte") return "Arte única";
+  if(ct==="carrossel") return "Carrossel";
+  if(ct==="foto") return "Foto de obra";
+  if(ct==="video"||ct==="vídeo") return "Vídeo";
+  if(ct==="corte") return "Corte de vídeo";
+  if(ct==="video_short") return "Short (Drive)";
+  return "—";
+}
+function _dcDiasAteSomething(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+"T00:00:00");
+  const today = new Date(); today.setHours(0,0,0,0);
+  return Math.floor((d.getTime()-today.getTime())/86400000);
+}
+function _dcAvatar(user, size){
+  const sz = size||52;
+  const photo = (user && user.profile_data && user.profile_data.photo) ||
+                (typeof localStorage!=="undefined" && localStorage.getItem("pixels-selfprofile-"+user.id) ?
+                  (function(){try{return JSON.parse(localStorage.getItem("pixels-selfprofile-"+user.id)).photo;}catch(e){return null;}})()
+                  : null);
+  if(photo){
+    return <img src={photo} alt={user.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",flexShrink:0,boxShadow:"0 0 0 2px #fff, 0 0 0 3px "+(user.color||"#9F43F6")}}/>;
+  }
+  const ini = (user.name||"?").split(" ").map(function(p){return p[0];}).slice(0,2).join("").toUpperCase();
+  return <div style={{width:sz,height:sz,borderRadius:"50%",background:user.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.36),fontFamily:_DC_FF,flexShrink:0,boxShadow:"0 0 0 2px #fff, 0 0 0 3px "+(user.color||"#9F43F6")}}>{ini}</div>;
+}
+
+/* ─── COMPONENTE PRINCIPAL ────────────────────────────────── */
+function DashColabV2(props){
+  const { user, tasks, allTasks, setTasks, isViewing, currentUser, isMob } = props;
+  const refMonth = _dcCurrentMonth();
+
+  // Tasks do colaborador (já filtradas no pai por assignee)
+  const my = (tasks||[]).filter(function(t){return !t.deletedAt;});
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+
+  // Categorias do mês corrente
+  const myMonth = my.filter(function(t){return _dcInMonth(t, refMonth);});
+
+  // Estados das demandas
+  const STS_ACT = ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"];
+  const emProducao = my.filter(function(t){return ["execucao","ajustes"].indexOf(t.status)>=0;});
+  const aguardandoAprov = my.filter(function(t){return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0;});
+  const atrasadas = my.filter(function(t){
+    if(["aprovado","agendado","publicado"].indexOf(t.status)>=0) return false;
+    if(STS_ACT.indexOf(t.status)<0) return false;
+    const ref = t.publishDate||t.deadline;
+    if(!ref) return false;
+    return new Date(ref+"T00:00:00") < today0;
+  });
+  const entreguesMes = myMonth.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;});
+  const totalAtivas = my.filter(function(t){return STS_ACT.indexOf(t.status)>=0 && t.status!=="publicado";}).length;
+
+  // Pagamentos do mês (usa calcDesignerPayments global)
+  const isEditor = user.dash==="editor";
+  const calc = (typeof calcDesignerPayments==="function") ? calcDesignerPayments(my, user.id, refMonth) : {total:0};
+  const valorReceber = calc.total||0;
+
+  // Detalhamento por tipo
+  const breakdown = isEditor
+    ? [
+        {label:"Vídeo",           count:calc.video||0,    price:DESIGNER_PRICES.video},
+        {label:"Corte de vídeo",  count:calc.corte||0,    price:DESIGNER_PRICES.corte},
+      ]
+    : [
+        {label:"Foto de obra",    count:calc.fotoObra||0, price:DESIGNER_PRICES.fotoObra},
+        {label:"Arte única",      count:calc.arte||0,     price:DESIGNER_PRICES.arte},
+        {label:"Carrossel",       count:calc.carrossel||0,price:DESIGNER_PRICES.carrossel},
+      ];
+
+  // Prioridades de hoje — atrasadas > prazo próximo > ajustes
+  const prioridades = (function(){
+    const list = [];
+    // 1) atrasadas
+    atrasadas.forEach(function(t){
+      const dias = _dcDiasAteSomething(t.publishDate||t.deadline);
+      list.push({task:t, reason:"Atrasada", dias:dias, color:"#dc2626"});
+    });
+    // 2) vencendo hoje
+    my.forEach(function(t){
+      if(["aprovado","agendado","publicado"].indexOf(t.status)>=0) return;
+      if(STS_ACT.indexOf(t.status)<0) return;
+      const ref = t.publishDate||t.deadline;
+      if(!ref) return;
+      const dias = _dcDiasAteSomething(ref);
+      if(dias===0 && atrasadas.indexOf(t)<0) list.push({task:t, reason:"Vence hoje", dias:0, color:"#a16207"});
+      else if(dias>0 && dias<=2 && atrasadas.indexOf(t)<0) list.push({task:t, reason:"Vence em "+dias+"d", dias:dias, color:"#a16207"});
+    });
+    // 3) em ajuste
+    my.filter(function(t){return t.status==="ajustes";}).forEach(function(t){
+      if(list.find(function(x){return x.task.id===t.id;})) return;
+      list.push({task:t, reason:"Em ajuste", dias:null, color:"#7c3aed"});
+    });
+    return list.slice(0, 8);
+  })();
+
+  function clientName(id){
+    if(typeof CLIENTS==="undefined") return id;
+    const c = CLIENTS.find(function(x){return x.id===id;});
+    return c?c.name:id;
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_DC_FF,width:"100%"}}>
+
+    {/* ═══ 1. HEADER DO COLABORADOR ═══ */}
+    <section style={{background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 60%,#3b1764 100%)",borderRadius:18,padding:isMob?"22px 22px":"26px 30px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 14px 40px rgba(15,23,42,0.30)",fontFamily:_DC_FF}}>
+      <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.35),transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"relative",display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
+        {_dcAvatar(user, 64)}
+        <div style={{flex:1,minWidth:200}}>
+          <div style={{color:"#c4b5fd",fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_DC_FF}}>{_dcGreeting()}</div>
+          <div style={{color:"#fff",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.6,lineHeight:1.15,marginTop:3,fontFamily:_DC_FF}}>{user.name}</div>
+          <div style={{color:"#cbd5e1",fontSize:12.5,marginTop:4,fontFamily:_DC_FF}}>{user.role} · {_dcFmtToday()}</div>
+        </div>
+        {/* Resumo lateral */}
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {[
+            {l:"Demandas ativas", v:totalAtivas, c:"#fff"},
+            {l:"Em produção",     v:emProducao.length, c:"#c4b5fd"},
+            {l:"Entregues no mês",v:entreguesMes.length, c:"#86efac"},
+          ].map(function(k,i){
+            return <div key={i} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:11,padding:"10px 14px",minWidth:90,fontFamily:_DC_FF}}>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",fontFamily:_DC_FF}}>{k.l}</div>
+              <div style={{color:k.c,fontSize:22,fontWeight:800,letterSpacing:-.5,marginTop:3,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{k.v}</div>
+            </div>;
+          })}
+          <div style={{background:"linear-gradient(135deg,#9F43F6,#7c3aed)",borderRadius:11,padding:"10px 14px",minWidth:120,fontFamily:_DC_FF,boxShadow:"0 4px 14px rgba(159,67,246,0.45)"}}>
+            <div style={{color:"#fff",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",opacity:.9,fontFamily:_DC_FF}}>A receber no mês</div>
+            <div style={{color:"#fff",fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:3,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{_dcFmtBRL(valorReceber)}</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* ═══ 2. CARDS PRINCIPAIS ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:10,fontFamily:_DC_FF}}>
+      {[
+        {l:"Atribuídas",      v:totalAtivas,            c:"#0f172a"},
+        {l:"Em produção",     v:emProducao.length,      c:"#0891b2"},
+        {l:"Atrasadas",       v:atrasadas.length,       c:atrasadas.length>0?"#dc2626":"#0f172a"},
+        {l:"Aguard. aprovação",v:aguardandoAprov.length,c:"#a16207"},
+        {l:"Entregues no mês",v:entreguesMes.length,    c:"#16a34a"},
+      ].map(function(k,i){
+        return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+          <div style={{color:"#64748b",fontSize:10.5,fontWeight:600,letterSpacing:.2,fontFamily:_DC_FF}}>{k.l}</div>
+          <div style={{color:k.c,fontWeight:800,fontSize:26,marginTop:4,letterSpacing:-.7,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{k.v}</div>
+        </div>;
+      })}
+    </div>
+
+    {/* ═══ 3. PRIORIDADES DE HOJE ═══ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:12,fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_DC_FF}}>Prioridades de hoje</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_DC_FF}}>O que precisa de atenção primeiro — atrasos, prazos curtos e ajustes.</div>
+      </div>
+      {prioridades.length===0
+        ? <div style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:11,padding:"18px 20px",display:"flex",alignItems:"center",gap:12,fontFamily:_DC_FF}}>
+            <div style={{width:36,height:36,borderRadius:9,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div>
+              <div style={{color:"#15803d",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_DC_FF}}>Tudo em dia</div>
+              <div style={{color:"#16a34a",fontSize:12,marginTop:2,fontFamily:_DC_FF}}>Nenhuma urgência no momento. Bom trabalho!</div>
+            </div>
+          </div>
+        : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {prioridades.map(function(p,i){
+              return <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,fontFamily:_DC_FF}}>
+                <div style={{width:6,height:36,borderRadius:3,background:p.color,flexShrink:0}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_DC_FF}}>{p.task.title||"(Sem título)"}</div>
+                  <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontFamily:_DC_FF}}>{clientName(p.task.client)} · {_dcTipoLabel(p.task)}</div>
+                </div>
+                <span style={{background:p.color+"15",color:p.color,fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,letterSpacing:.3,fontFamily:_DC_FF,flexShrink:0,whiteSpace:"nowrap"}}>{p.reason}</span>
+              </div>;
+            })}
+          </div>
+      }
+    </section>
+
+    {/* ═══ 4. EM PRODUÇÃO + AGUARDANDO APROVAÇÃO ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,fontFamily:_DC_FF}}>
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:10}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_DC_FF}}>Em produção</div>
+          <span style={{color:"#94a3b8",fontSize:11,fontFamily:_DC_FF}}>{emProducao.length} {emProducao.length===1?"item":"itens"}</span>
+        </div>
+        {emProducao.length===0
+          ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_DC_FF}}>Nada em produção no momento.</div>
+          : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {emProducao.slice(0,6).map(function(t){
+                return <div key={t.id} style={{padding:"9px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,fontFamily:_DC_FF}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_DC_FF}}>{t.title||"(Sem título)"}</div>
+                  <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontFamily:_DC_FF}}>{clientName(t.client)} · {_dcTipoLabel(t)} · <span style={{color:t.status==="ajustes"?"#a16207":"#0891b2",fontWeight:600}}>{t.status==="ajustes"?"Em ajuste":"Em execução"}</span></div>
+                </div>;
+              })}
+              {emProducao.length>6 && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",paddingTop:4,fontFamily:_DC_FF}}>e mais {emProducao.length-6}…</div>}
+            </div>
+        }
+      </section>
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:10}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_DC_FF}}>Aguardando aprovação</div>
+          <span style={{color:"#94a3b8",fontSize:11,fontFamily:_DC_FF}}>{aguardandoAprov.length} {aguardandoAprov.length===1?"item":"itens"}</span>
+        </div>
+        {aguardandoAprov.length===0
+          ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_DC_FF}}>Nada aguardando aprovação.</div>
+          : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {aguardandoAprov.slice(0,6).map(function(t){
+                return <div key={t.id} style={{padding:"9px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,fontFamily:_DC_FF}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_DC_FF}}>{t.title||"(Sem título)"}</div>
+                  <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontFamily:_DC_FF}}>{clientName(t.client)} · {_dcTipoLabel(t)}</div>
+                </div>;
+              })}
+              {aguardandoAprov.length>6 && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",paddingTop:4,fontFamily:_DC_FF}}>e mais {aguardandoAprov.length-6}…</div>}
+            </div>
+        }
+      </section>
+    </div>
+
+    {/* ═══ 5. PAGAMENTOS DO MÊS — detalhamento automático ═══ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_DC_FF}}>Pagamentos do mês</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_DC_FF}}>Cálculo automático — só entregas em Aprovadas, Agendadas ou Publicadas entram.</div>
+        </div>
+        <div style={{textAlign:"right",background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #e9d5ff",borderRadius:11,padding:"10px 16px",fontFamily:_DC_FF}}>
+          <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",fontFamily:_DC_FF}}>Total do mês</div>
+          <div style={{color:"#7c3aed",fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{_dcFmtBRL2(valorReceber)}</div>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat("+breakdown.length+",1fr)",gap:10}}>
+        {breakdown.map(function(b,i){
+          const subtotal = b.count * b.price;
+          return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"12px 14px",fontFamily:_DC_FF}}>
+            <div style={{color:"#64748b",fontSize:11,fontWeight:600,fontFamily:_DC_FF}}>{b.label}</div>
+            <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:5}}>
+              <span style={{color:"#0f172a",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{b.count}</span>
+              <span style={{color:"#94a3b8",fontSize:11,fontFamily:_DC_FF}}>× {_dcFmtBRL(b.price)}</span>
+            </div>
+            <div style={{color:"#16a34a",fontWeight:700,fontSize:14,marginTop:4,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{_dcFmtBRL2(subtotal)}</div>
+          </div>;
+        })}
+      </div>
+      {calc.naoClassificado>0 && <div style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:11.5,borderRadius:10,padding:"10px 14px",lineHeight:1.5,fontFamily:_DC_FF}}>
+        <strong>{calc.naoClassificado} demanda(s) sem tipo definido</strong> ainda não entram no cálculo. Os sócios precisam classificar.
+      </div>}
+    </section>
+
+    {/* ═══ 6. ENTREGUES NO MÊS ═══ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:10}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_DC_FF}}>Entregues no mês</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontFamily:_DC_FF}}>{entreguesMes.length} entrega{entreguesMes.length===1?"":"s"} no ciclo atual.</div>
+        </div>
+      </div>
+      {entreguesMes.length===0
+        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_DC_FF}}>Nenhuma entrega registrada no mês ainda.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:5}}>
+            {entreguesMes.slice(0,10).map(function(t){
+              return <div key={t.id} style={{padding:"9px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,display:"flex",alignItems:"center",gap:10,fontFamily:_DC_FF}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_DC_FF}}>{t.title||"(Sem título)"}</div>
+                  <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontFamily:_DC_FF}}>{clientName(t.client)} · {_dcTipoLabel(t)}</div>
+                </div>
+              </div>;
+            })}
+            {entreguesMes.length>10 && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",paddingTop:6,fontFamily:_DC_FF}}>e mais {entreguesMes.length-10}…</div>}
+          </div>
+      }
+    </section>
+
   </div>;
 }
