@@ -22768,32 +22768,108 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               const _commentTs=function(c){return _parseTs(c.at)||_parseTs(c.atFmt)||_parseTs(c.time)||0;};
               const _fileTs=function(f){return _parseTs(f.addedAtIso)||_parseTs(f.addedAt)||0;};
 
-              // FIX: itens com batchId agrupam juntos (lote do submit novo).
-              // Itens SEM batchId ficam cada um no proprio round (evita agrupar
-              // imagens antigas com comentarios recentes erroneamente).
-              const _keyFor=function(item,ts){
-                if(item.batchId)return item.batchId;
-                return "_orphan-"+(item.id||Math.random());
-              };
-
+              // Step 1: agrupa itens com batchId (submit novo — comentario + imagens juntos)
               const byBatch=new Map();
-              feedbackComments.forEach(function(c){
+              const orphanComments=[];
+              const orphanAudios=[];
+              const orphanImages=[];
+
+              feedbackComments.forEach(function(c,idx){
                 const ts=_commentTs(c);
-                const key=_keyFor(c,ts);
-                if(!byBatch.has(key))byBatch.set(key,{key:key,ts:ts,comments:[],audio:null,images:[],user:c.user});
-                const r=byBatch.get(key);
-                if(c.type==="audio")r.audio=c; else r.comments.push(c);
-                if(ts>r.ts)r.ts=ts;
-                if(!r.user&&c.user)r.user=c.user;
+                if(c.batchId){
+                  if(!byBatch.has(c.batchId))byBatch.set(c.batchId,{key:c.batchId,ts:ts,comments:[],audio:null,images:[],user:c.user});
+                  const r=byBatch.get(c.batchId);
+                  if(c.type==="audio")r.audio=c; else r.comments.push(c);
+                  if(ts>r.ts)r.ts=ts;
+                  if(!r.user&&c.user)r.user=c.user;
+                }else{
+                  if(c.type==="audio")orphanAudios.push({c:c,ts:ts,idx:idx});
+                  else orphanComments.push({c:c,ts:ts,idx:idx});
+                }
               });
-              allAnnotations.forEach(function(f){
+              allAnnotations.forEach(function(f,idx){
                 const ts=_fileTs(f);
-                const key=_keyFor(f,ts);
-                if(!byBatch.has(key))byBatch.set(key,{key:key,ts:ts,comments:[],audio:null,images:[],user:f.addedBy});
-                const r=byBatch.get(key);
-                r.images.push(f);
-                if(ts>r.ts)r.ts=ts;
-                if(!r.user&&f.addedBy)r.user=f.addedBy;
+                if(f.batchId){
+                  if(!byBatch.has(f.batchId))byBatch.set(f.batchId,{key:f.batchId,ts:ts,comments:[],audio:null,images:[],user:f.addedBy});
+                  const r=byBatch.get(f.batchId);
+                  r.images.push(f);
+                  if(ts>r.ts)r.ts=ts;
+                  if(!r.user&&f.addedBy)r.user=f.addedBy;
+                }else{
+                  orphanImages.push({f:f,ts:ts,idx:idx});
+                }
+              });
+
+              // Step 2: pareia orfaos por dia. Itens mais recentes (em ts ou indice) primeiro.
+              const _cmp=function(a,b){
+                if(b.ts!==a.ts)return b.ts-a.ts;
+                return b.idx-a.idx;
+              };
+              const _dayKey=function(ts){
+                if(!ts)return null;
+                const d=new Date(ts);
+                if(isNaN(d.getTime()))return null;
+                return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+              };
+              orphanComments.sort(_cmp);
+              orphanAudios.sort(_cmp);
+              orphanImages.sort(_cmp);
+              const usedImages=new Set();
+
+              // 2a: pareia cada comentario orfao com a imagem orfa mais recente do mesmo dia
+              orphanComments.forEach(function(co){
+                const cDay=_dayKey(co.ts);
+                if(!cDay){
+                  const key="_orphan-c-"+co.idx;
+                  byBatch.set(key,{key:key,ts:co.ts,comments:[co.c],audio:null,images:[],user:co.c.user});
+                  return;
+                }
+                // Procura imagem orfa mais recente do mesmo dia
+                let matchPos=-1;
+                for(let i=0;i<orphanImages.length;i++){
+                  if(usedImages.has(i))continue;
+                  const io=orphanImages[i];
+                  if(_dayKey(io.ts)===cDay){matchPos=i;break;}
+                }
+                if(matchPos>=0){
+                  usedImages.add(matchPos);
+                  const io=orphanImages[matchPos];
+                  const key="_paired-"+co.idx+"-"+io.idx;
+                  const ts=Math.max(co.ts,io.ts);
+                  byBatch.set(key,{key:key,ts:ts,comments:[co.c],audio:null,images:[io.f],user:co.c.user||io.f.addedBy});
+                }else{
+                  const key="_orphan-c-"+co.idx;
+                  byBatch.set(key,{key:key,ts:co.ts,comments:[co.c],audio:null,images:[],user:co.c.user});
+                }
+              });
+
+              // 2b: pareia cada audio orfao com imagem orfa do mesmo dia (similar)
+              orphanAudios.forEach(function(ao){
+                const aDay=_dayKey(ao.ts);
+                let matchPos=-1;
+                if(aDay){
+                  for(let i=0;i<orphanImages.length;i++){
+                    if(usedImages.has(i))continue;
+                    if(_dayKey(orphanImages[i].ts)===aDay){matchPos=i;break;}
+                  }
+                }
+                if(matchPos>=0){
+                  usedImages.add(matchPos);
+                  const io=orphanImages[matchPos];
+                  const key="_paired-a-"+ao.idx+"-"+io.idx;
+                  const ts=Math.max(ao.ts,io.ts);
+                  byBatch.set(key,{key:key,ts:ts,comments:[],audio:ao.c,images:[io.f],user:ao.c.user||io.f.addedBy});
+                }else{
+                  const key="_orphan-a-"+ao.idx;
+                  byBatch.set(key,{key:key,ts:ao.ts,comments:[],audio:ao.c,images:[],user:ao.c.user});
+                }
+              });
+
+              // 2c: imagens orfas que sobraram, cada uma vira seu proprio round
+              orphanImages.forEach(function(io,i){
+                if(usedImages.has(i))return;
+                const key="_orphan-i-"+io.idx;
+                byBatch.set(key,{key:key,ts:io.ts,comments:[],audio:null,images:[io.f],user:io.f.addedBy});
               });
 
               const rounds=Array.from(byBatch.values())
@@ -22822,18 +22898,34 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       const accent=isClient?"#16a34a":"#7c3aed";
                       const tintBg=isClient?"#f0fdf4":"#faf5ff";
                       const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
-                      // Format helper: tenta extrair "DD/MM/YYYY HH:MM" do melhor campo disponivel
-                      const _fmtDateTime=function(ts){
+                      // Format helper: data+hora, mas omite "00:00" quando so tem data
+                      const _fmtDateTime=function(ts,hasPreciseTime){
                         if(!ts)return "";
                         const d=new Date(ts);
                         if(isNaN(d.getTime()))return "";
-                        return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+                        const datePart=d.toLocaleDateString("pt-BR");
+                        if(!hasPreciseTime)return datePart;
+                        const timePart=d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+                        if(timePart==="00:00")return datePart;
+                        return datePart+" "+timePart;
+                      };
+                      // Detecta se um comentario/imagem tem time precisa (ISO ou string com horario)
+                      const _commentHasTime=function(c){
+                        if(c.at&&/T/.test(String(c.at)))return true;
+                        if(c.atFmt&&/\d{2}:\d{2}/.test(String(c.atFmt)))return true;
+                        if(c.time&&/\d{2}:\d{2}/.test(String(c.time)))return true;
+                        return false;
+                      };
+                      const _fileHasTime=function(f){
+                        if(f.addedAtIso&&/T/.test(String(f.addedAtIso)))return true;
+                        return false;
                       };
                       // Pega timestamp preciso da imagem mais recente do round
                       let whenTs=r.ts;
                       r.images.forEach(function(f){const fts=_fileTs(f); if(fts>whenTs)whenTs=fts;});
                       r.comments.forEach(function(c){const cts=_commentTs(c); if(cts>whenTs)whenTs=cts;});
-                      const when=firstC.atFmt||firstC.time||(whenTs?_fmtDateTime(whenTs):"");
+                      const _whenHasTime=(r.comments.length>0&&_commentHasTime(r.comments[0]))||(r.audio&&_commentHasTime(r.audio))||(r.images.length>0&&r.images.some(_fileHasTime));
+                      const when=firstC.atFmt||firstC.time||(whenTs?_fmtDateTime(whenTs,_whenHasTime):"");
                       return(
                         <div key={r.key} style={{padding:"14px 16px",borderTop:ri>0?"1px solid #f3e8ff":"none",background:isLatest?"#fafaff":"#fff"}}>
                           <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10,flexWrap:"wrap"}}>
@@ -22850,7 +22942,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           {r.comments.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:r.images.length>0?12:0}}>
                             {r.comments.map(function(c){
                               const cts=_commentTs(c);
-                              const cwhen=cts?_fmtDateTime(cts):(c.atFmt||c.time||"");
+                              const cwhen=cts?_fmtDateTime(cts,_commentHasTime(c)):(c.atFmt||c.time||"");
                               return <div key={c.id} style={{background:tintBg,borderLeft:"3px solid "+accent,borderRadius:"0 8px 8px 0",padding:"9px 12px"}}>
                                 <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{String(c.text||"").replace("AJUSTE NECESSARIO: ","")}</div>
                                 {cwhen&&<div style={{color:"#94a3b8",fontSize:10,marginTop:5,fontWeight:500}}>{cwhen}</div>}
@@ -22865,7 +22957,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))",gap:7}}>
                               {r.images.map(function(f,i){
                                 const fts=_fileTs(f);
-                                const fwhen=fts?_fmtDateTime(fts):(f.addedAt||"");
+                                const fwhen=fts?_fmtDateTime(fts,_fileHasTime(f)):(f.addedAt||"");
                                 return <div key={f.id} style={{display:"flex",flexDirection:"column",gap:4}}>
                                   <div onClick={function(){setLightbox({url:f.url,name:f.name||("Arte "+(i+1)),storagePath:f.storagePath});}}
                                     style={{position:"relative",cursor:"zoom-in",borderRadius:8,overflow:"hidden",border:"1px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff",transition:"all .15s"}}
