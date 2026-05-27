@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 38/38 | Nao editar diretamente
+// Modulos: 39/39 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -3228,6 +3228,10 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 }
 
 function RenderDash({user,isViewing=false,tasks,setTasks,notifs,isMob}){
+  // Gustavo (Gestor de Performance) usa dashboard estratégico próprio
+  if(user.id==="gustavo"&&typeof DashGustavo==="function"){
+    return <DashGustavo user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
+  }
   switch(user.dash){
     case"partner":     return <DashPartner     user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
     case"coordinator": return <DashCoordinator user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
@@ -40608,5 +40612,418 @@ function _PlEmptyState({title,desc}){
     </div>
     <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:5}}>{title}</div>
     <div style={{color:"#64748b",fontSize:12.5,maxWidth:420,margin:"0 auto",lineHeight:1.5}}>{desc}</div>
+  </div>;
+}
+
+// ======= 26_dash_gustavo.jsx =======
+// Dashboard estratégico do Gustavo Vedovatto — Gestor de Performance + sócio.
+// Central de comando: metas weekly/mês, rotina, aprovações, clientes em atenção,
+// gestão de mídia, visão financeira, gargalos e agenda.
+// Sincronizado com Estratégia > Planejamento (team_planning),
+// Gestão > Operação (op_rotina_checks), Aprovações (tasks),
+// Gestão de Mídia (media store + funnels), Clientes e Financeiro.
+
+const DG_INTER = "'Inter', system-ui, -apple-system, sans-serif";
+const DG_PURPLE = "#9F43F6";
+
+// ── Helpers ─────────────────────────────────────────────────
+const _dgFmtBRL = n => "R$ " + Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+const _dgToday = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const _dgWeekKey = (d) => {
+  const dt = d ? new Date(d) : new Date();
+  const t = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
+  const dn = (t.getUTCDay()+6)%7;
+  t.setUTCDate(t.getUTCDate()-dn+3);
+  const ft = new Date(Date.UTC(t.getUTCFullYear(),0,4));
+  const wk = 1+Math.round(((t-ft)/86400000-3)/7);
+  return t.getUTCFullYear()+"-W"+String(wk).padStart(2,"0");
+};
+const _dgMonthKey = (d) => { const dt=d?new Date(d):new Date(); return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0"); };
+const _dgSaudacao = () => { const h=new Date().getHours(); if(h<5)return "Boa madrugada"; if(h<12)return "Bom dia"; if(h<18)return "Boa tarde"; return "Boa noite"; };
+const _dgDateLong = () => {
+  const d = new Date();
+  const wd = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+  return wd[d.getDay()] + ", " + d.toLocaleDateString("pt-BR",{day:"2-digit",month:"long"});
+};
+const _dgDays = (deadline) => {
+  if(!deadline) return null;
+  return Math.ceil((new Date(deadline+"T00:00:00")-new Date())/86400000);
+};
+
+// ── Section Title ─────────────────────────────────────────────
+function _DGSec({title, sub, right, icon}){
+  return <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+      {icon&&<div style={{width:30,height:30,borderRadius:9,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
+        <Ico n={icon} size={15} color={DG_PURPLE}/>
+      </div>}
+      <div style={{minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>{title}</div>
+        {sub&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,fontWeight:500}}>{sub}</div>}
+      </div>
+    </div>
+    {right}
+  </div>;
+}
+
+// ── KPI premium ──────────────────────────────────────────────
+function _DGKpi({label, value, sub, icon, color, bg, onClick, muted}){
+  const c = color || "#0f172a";
+  return <div onClick={onClick}
+    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden",fontFamily:DG_INTER,cursor:onClick?"pointer":"default",transition:"all .15s"}}
+    onMouseEnter={e=>{if(onClick){e.currentTarget.style.boxShadow="0 6px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor="#cbd5e1";}}}
+    onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#e2e8f0";}}>
+    <div style={{position:"absolute",top:0,right:0,width:36,height:36,background:bg||"#f8fafc",borderBottomLeftRadius:14,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <Ico n={icon} size={15} color={c}/>
+    </div>
+    <div style={{color:muted?"#94a3b8":c,fontSize:muted?13:23,fontWeight:800,lineHeight:1.1,letterSpacing:-.5,marginBottom:4,paddingRight:30}}>{value}</div>
+    <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+    {sub&&<div style={{color:"#64748b",fontSize:10.5,marginTop:3,fontWeight:500}}>{sub}</div>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  DashGustavo — Central de comando do Gestor de Performance
+// ═══════════════════════════════════════════════════════════════
+function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob}){
+  const tasks = propTasks || [];
+  const allTasks = tasks.filter(t=>!t.deletedAt);
+
+  // ── Estratégia > Planejamento (team_planning) ──
+  const {entries: planEntries, upsert: planUpsert, loading: planLoading} = (typeof usePlanejamentoEntries==="function") ? usePlanejamentoEntries() : {entries:[], upsert:()=>{}, loading:false};
+
+  const weekKey = _dgWeekKey();
+  const monthKey = _dgMonthKey();
+  const metasWeek = planEntries.filter(e=>e.type==="meta_semana"&&e.week_key===weekKey);
+  const metasMes  = planEntries.filter(e=>e.type==="meta_mes"&&e.month_key===monthKey);
+  const minhasMetasWeek = metasWeek.filter(m=>m.author_id===user.id);
+  const empresaMetasWeek = metasWeek.filter(m=>m.author_id!==user.id);
+  const weekConcluidas = metasWeek.filter(m=>m.status==="concluida").length;
+  const weekEmRisco    = metasWeek.filter(m=>m.status==="em_andamento" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<2).length;
+  const weekProgresso  = metasWeek.length>0 ? Math.round((weekConcluidas/metasWeek.length)*100) : 0;
+
+  // ── Aprovações que dependem do Gustavo ──
+  // Em "publicacao" (artes/conteúdo) — Gustavo é sócio aprovador
+  const apvDesign = allTasks.filter(t=>t.status==="avaliacao");
+  const apvCopys  = allTasks.filter(t=>t.status==="demanda" && !t.ajustar);
+  const apvInternas = allTasks.filter(t=>t.status==="interno_avaliacao");
+  const apvDesignAtrasadas = apvDesign.filter(t=>{
+    if(!t.colEnteredAt) return false;
+    return Math.floor((new Date()-new Date(t.colEnteredAt))/86400000) >= 2;
+  });
+  const apvTotal = apvDesign.length + apvCopys.length + apvInternas.length;
+
+  // ── Demandas atrasadas / sem responsável ──
+  const demandasAtrasadas = allTasks.filter(t=>{
+    if(["aprovado","publicado","interno_executado","interno_aprovado"].includes(t.status)) return false;
+    return t.deadline && _dgDays(t.deadline)!==null && _dgDays(t.deadline)<0;
+  });
+  const semResponsavel = allTasks.filter(t=>{
+    if(["aprovado","publicado","interno_executado"].includes(t.status)) return false;
+    return !t.assignee && (!t.assignees||t.assignees.length===0);
+  });
+
+  // ── Clientes em atenção ──
+  const clientesAtencao = (CLIENTS||[]).filter(c=>{
+    if(c.status==="interno") return false;
+    const clTasks = allTasks.filter(t=>t.client===c.id);
+    const lateCount = clTasks.filter(t=>t.deadline && _dgDays(t.deadline)<0 && t.status!=="aprovado" && t.status!=="publicado").length;
+    const lowHealth = (c.health||100) < 60;
+    const lowNps = (c.nps||10) < 7;
+    const semProxAcao = !c.proximaAcao;
+    return lowHealth || lowNps || lateCount>=3;
+  }).slice(0,8);
+
+  // ── Gestão de Mídia (consolidado) ──
+  const mediaStore = (typeof useMediaStore==="function") ? useMediaStore() : {store:{clients:[]}};
+  const _refDate = new Date();
+  const mediaConsol = (typeof useMediaConsolidated==="function") ? useMediaConsolidated(mediaStore.store.clients||[], _refDate.getFullYear(), _refDate.getMonth()+1) : {funnels:{},roi:{},loading:false};
+  const mediaClients = mediaStore.store.clients||[];
+  const mediaTotalInvest = mediaClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
+  let mediaTotalRetorno = 0, mediaTotalRoiInv = 0;
+  mediaClients.forEach(c=>{
+    const r = (mediaConsol.roi||{})[c.client_id];
+    if(r && Array.isArray(r.sales)){
+      mediaTotalRetorno += r.sales.reduce((s,v)=>s+Number(v.value||0),0);
+    }
+    if(Number(c.investimento_mensal)>0) mediaTotalRoiInv += Number(c.investimento_mensal);
+  });
+  const mediaRoiGeral = mediaTotalRoiInv>0 ? Math.round(((mediaTotalRetorno-mediaTotalRoiInv)/mediaTotalRoiInv)*1000)/10 : null;
+  const mediaSemFunil = mediaClients.filter(c=>{
+    const f = (mediaConsol.funnels||{})[c.client_id];
+    return !f || !Array.isArray(f.stages) || !f.stages.some(s=>Number(s.quantity||0)>0);
+  }).length;
+  const mediaAtivos = mediaClients.filter(c=>c.status==="ativa"||c.status==="em_dia").length;
+  const mediaEmAtencao = mediaClients.filter(c=>c.status==="atencao"||c.status==="critico").length;
+
+  // ── Gargalos ──
+  const gargalos = [];
+  apvDesignAtrasadas.forEach(t=>{
+    const dias = Math.floor((new Date()-new Date(t.colEnteredAt))/86400000);
+    gargalos.push({type:"aprovacao", client:t.client, title:t.title, tempo:dias+"d parada", action:"Aprovar design", taskId:t.id});
+  });
+  metasWeek.filter(m=>m.status==="em_andamento" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<2).forEach(m=>{
+    gargalos.push({type:"meta", title:m.title, tempo:_dgDays(m.deadline)<0?(Math.abs(_dgDays(m.deadline))+"d atraso"):"Vence em "+_dgDays(m.deadline)+"d", action:"Revisar meta"});
+  });
+  demandasAtrasadas.slice(0,5).forEach(t=>{
+    gargalos.push({type:"demanda", client:t.client, title:t.title, tempo:Math.abs(_dgDays(t.deadline))+"d atraso", action:"Repriorizar", taskId:t.id});
+  });
+  mediaSemFunil>0&&gargalos.push({type:"funil", title:mediaSemFunil+" cliente"+(mediaSemFunil>1?"s":"")+" sem Funil Digital", tempo:"Pendente", action:"Solicitar preenchimento"});
+
+  // ── Financeiro / MRR ──
+  const finStore = (()=>{ try{const raw=localStorage.getItem("pixels-financeiro-v1"); return raw?JSON.parse(raw):null;}catch{return null;} })();
+  const contratos = (finStore?.contratos)||[];
+  const mrrAtual = contratos.filter(c=>c.statusContrato==="ativo").reduce((s,c)=>s+(Number(c.mrr)||0),0);
+  const contratosAtivos = contratos.filter(c=>c.statusContrato==="ativo").length;
+
+  // ── Próximas reuniões / agenda ──
+  // Pega próximas dailies/weeklies do team_planning + próximas datas importantes de clientes
+  const agenda = [];
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  planEntries.filter(e=>e.type==="daily"||e.type==="weekly")
+    .filter(e=>e.entry_date && new Date(e.entry_date+"T00:00:00") >= hoje)
+    .sort((a,b)=>(a.entry_date||"").localeCompare(b.entry_date||""))
+    .slice(0,5).forEach(e=>{
+      agenda.push({type:e.type==="daily"?"Daily":"Weekly", title:e.title||(e.type==="daily"?"Daily":"Weekly"), date:e.entry_date, author:e.author_name});
+    });
+
+  // ── Toggle status meta ──
+  const _toggleMeta = (m) => {
+    const newStatus = m.status==="concluida"?"em_andamento":"concluida";
+    planUpsert(Object.assign({},m,{status:newStatus,updated_at:new Date().toISOString()}));
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:DG_INTER}}>
+
+    {/* ══════════ HEADER ══════════ */}
+    <div style={{background:"linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1e1b4b 100%)",borderRadius:18,padding:isMob?"18px":"22px 26px",position:"relative",overflow:"hidden"}}>
+      {/* Decoração */}
+      <div style={{position:"absolute",top:-50,right:-50,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle, "+DG_PURPLE+"30 0%, transparent 70%)"}}/>
+      <div style={{position:"absolute",bottom:-40,left:200,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle, "+DG_PURPLE+"22 0%, transparent 70%)"}}/>
+
+      <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:16,minWidth:0}}>
+          <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,"+DG_PURPLE+",#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 12px 32px rgba(159,67,246,0.55)",flexShrink:0}}>
+            <UserAvatar user={user} size={50}/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"rgba(255,255,255,.7)",fontSize:11.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:3}}>{_dgSaudacao()}, {_dgDateLong()}</div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:isMob?20:26,letterSpacing:-.5,lineHeight:1.1}}>Gustavo Vedovatto</div>
+            <div style={{color:"rgba(255,255,255,.65)",fontSize:13,marginTop:4,fontWeight:500}}>Gestor de Performance · Central de comando da agência</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+          {[
+            {label:"Aprovações",value:apvTotal,color:apvTotal>0?"#fbbf24":"#22c55e"},
+            {label:"Clientes em atenção",value:clientesAtencao.length,color:clientesAtencao.length>0?"#fb7185":"#22c55e"},
+            {label:"Metas em risco",value:weekEmRisco,color:weekEmRisco>0?"#f97316":"#22c55e"},
+            {label:"Gargalos",value:gargalos.length,color:gargalos.length>3?"#ef4444":gargalos.length>0?"#f97316":"#22c55e"},
+          ].map((s,i)=><div key={i} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px 14px",backdropFilter:"blur(8px)",minWidth:96}}>
+            <div style={{color:s.color,fontSize:22,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{s.value}</div>
+            <div style={{color:"rgba(255,255,255,.6)",fontSize:10,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginTop:3}}>{s.label}</div>
+          </div>)}
+        </div>
+      </div>
+    </div>
+
+    {/* ══════════ METAS DA WEEKLY ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="target" title="Metas da weekly"
+        sub={metasWeek.length>0 ? (weekConcluidas+"/"+metasWeek.length+" concluídas · "+weekProgresso+"% de progresso") : "Sincronizado com Estratégia > Planejamento"}/>
+      {metasWeek.length>0&&<div style={{height:7,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:14}}>
+        <div style={{height:"100%",width:weekProgresso+"%",background:"linear-gradient(90deg,"+DG_PURPLE+",#7c3aed)",borderRadius:99,transition:"width .3s"}}/>
+      </div>}
+      {metasWeek.length===0?<_DGEmpty icon="target" title="Sem metas da semana ainda" desc="Cadastre metas em Estratégia > Planejamento > Metas."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
+        <div>
+          <div style={{color:"#7c3aed",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Minhas metas ({minhasMetasWeek.length})</div>
+          {minhasMetasWeek.length>0?<div style={{display:"flex",flexDirection:"column",gap:7}}>{minhasMetasWeek.map(m=><_DGMetaCard key={m.id} meta={m} onToggle={_toggleMeta}/>)}</div>:<div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"10px 0"}}>Você ainda não cadastrou metas pra esta semana.</div>}
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Metas da empresa ({empresaMetasWeek.length})</div>
+          {empresaMetasWeek.length>0?<div style={{display:"flex",flexDirection:"column",gap:7}}>{empresaMetasWeek.map(m=><_DGMetaCard key={m.id} meta={m} onToggle={_toggleMeta}/>)}</div>:<div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"10px 0"}}>Sem metas da empresa.</div>}
+        </div>
+      </div>}
+    </div>
+
+    {/* ══════════ METAS DO MÊS ══════════ */}
+    {metasMes.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="flag" title="Metas do mês" sub={"Mês de "+monthKey+" · "+metasMes.filter(m=>m.status==="concluida").length+"/"+metasMes.length+" concluídas"}/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:10}}>
+        {metasMes.map(m=><_DGMetaCard key={m.id} meta={m} onToggle={_toggleMeta} showStatus={true}/>)}
+      </div>
+    </div>}
+
+    {/* ══════════ ROTINA DA SEMANA ══════════ */}
+    {typeof OpRotinaWidget==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="calendar" title="Sua rotina da semana" sub="Sincronizado com Gestão > Operação"/>
+      <OpRotinaWidget userId="gustavo" accentColor={DG_PURPLE}/>
+    </div>}
+
+    {/* ══════════ APROVAÇÕES QUE DEPENDEM DE MIM ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="check" title="Aprovações que dependem de mim" sub={apvTotal+" aguardando sua revisão"}/>
+      {apvTotal===0?<_DGEmpty icon="check" title="Tudo em dia!" desc="Nenhuma aprovação aguardando."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+        <_DGApvCard label="Aprovação de copys" count={apvCopys.length} color="#9F43F6" icon="message"/>
+        <_DGApvCard label="Aprovação de conteúdo (design)" count={apvDesign.length} sub={apvDesignAtrasadas.length>0?(apvDesignAtrasadas.length+" parada"+(apvDesignAtrasadas.length>1?"s":"")+" +2 dias"):""} color="#0ea5e9" icon="image" urgent={apvDesignAtrasadas.length>0}/>
+        <_DGApvCard label="Demandas internas" count={apvInternas.length} color="#f97316" icon="inbox"/>
+      </div>}
+    </div>
+
+    {/* ══════════ CLIENTES EM ATENÇÃO ══════════ */}
+    {clientesAtencao.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="alert" title="Clientes em atenção" sub={clientesAtencao.length+" cliente"+(clientesAtencao.length>1?"s":"")+" precisa"+(clientesAtencao.length===1?"":"m")+" da sua atenção"}/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:10}}>
+        {clientesAtencao.map(c=><_DGClienteAtencao key={c.id} cl={c} tasks={allTasks}/>)}
+      </div>
+    </div>}
+
+    {/* ══════════ GESTÃO DE MÍDIA ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="trending-up" title="Gestão de mídia paga" sub={mediaClients.length+" cliente"+(mediaClients.length>1?"s":"")+" sob gestão · mês "+monthKey}/>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"160px"},1fr))`,gap:10,marginBottom:12}}>
+        <_DGKpi label="Orçamento gerido/mês" value={_dgFmtBRL(mediaTotalInvest)} icon="dollar" color={DG_PURPLE} bg={DG_PURPLE+"14"}/>
+        <_DGKpi label="Retorno do mês" value={mediaTotalRetorno>0?_dgFmtBRL(mediaTotalRetorno):"—"} sub={mediaTotalRetorno===0?"Aguardando Funil Digital":""} icon="trending-up" color={mediaTotalRetorno>0?"#16a34a":"#94a3b8"} bg={mediaTotalRetorno>0?"#dcfce7":"#f8fafc"} muted={mediaTotalRetorno===0}/>
+        <_DGKpi label="ROI geral" value={mediaRoiGeral!==null?(mediaRoiGeral>=0?"+":"")+mediaRoiGeral.toFixed(1)+"%":"—"} sub={mediaRoiGeral===null?"Aguardando dados":""} icon="chart" color={mediaRoiGeral===null?"#94a3b8":mediaRoiGeral>=0?"#16a34a":"#ef4444"} bg={mediaRoiGeral===null?"#f8fafc":mediaRoiGeral>=0?"#dcfce7":"#fef2f2"} muted={mediaRoiGeral===null}/>
+        <_DGKpi label="Ativos / Estruturação" value={mediaAtivos+" / "+(mediaClients.length-mediaAtivos)} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
+        <_DGKpi label="Sem Funil Digital" value={mediaSemFunil} sub={mediaSemFunil>0?"Aguardando preenchimento":""} icon="alert" color={mediaSemFunil>0?"#f97316":"#94a3b8"} bg={mediaSemFunil>0?"#fff7ed":"#f8fafc"}/>
+        <_DGKpi label="Em atenção" value={mediaEmAtencao} icon="alert" color={mediaEmAtencao>0?"#ef4444":"#94a3b8"} bg={mediaEmAtencao>0?"#fef2f2":"#f8fafc"}/>
+      </div>
+    </div>
+
+    {/* ══════════ VISÃO FINANCEIRA ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="dollar" title="Visão financeira resumida" sub="Resumo executivo da operação"/>
+      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"180px"},1fr))`,gap:10}}>
+        <_DGKpi label="MRR atual" value={mrrAtual>0?_dgFmtBRL(mrrAtual):"—"} sub={mrrAtual===0?"Aguardando dados":""} icon="trending-up" color={mrrAtual>0?"#16a34a":"#94a3b8"} bg={mrrAtual>0?"#dcfce7":"#f8fafc"} muted={mrrAtual===0}/>
+        <_DGKpi label="Contratos ativos" value={contratosAtivos} icon="file-text" color={DG_PURPLE} bg={DG_PURPLE+"14"}/>
+        <_DGKpi label="Orçamento mídia" value={_dgFmtBRL(mediaTotalInvest)} sub="Sob gestão da Pixels" icon="dollar" color="#0ea5e9" bg="#0ea5e914"/>
+        <_DGKpi label="Retorno digital total" value={mediaTotalRetorno>0?_dgFmtBRL(mediaTotalRetorno):"—"} sub={mediaTotalRetorno===0?"Aguardando dados":"Soma de todos os clientes"} icon="chart" color={mediaTotalRetorno>0?"#16a34a":"#94a3b8"} bg={mediaTotalRetorno>0?"#dcfce7":"#f8fafc"} muted={mediaTotalRetorno===0}/>
+      </div>
+    </div>
+
+    {/* ══════════ GARGALOS DO MOMENTO ══════════ */}
+    {gargalos.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="alert" title="Gargalos do momento" sub={gargalos.length+" item"+(gargalos.length>1?"s":"")+" exigindo atenção imediata"}/>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {gargalos.slice(0,8).map((g,i)=><_DGGargalo key={i} g={g}/>)}
+      </div>
+    </div>}
+
+    {/* ══════════ AGENDA ══════════ */}
+    {agenda.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
+      <_DGSec icon="calendar" title="Agenda e próximos compromissos" sub="Dailies e weeklies registradas"/>
+      <div style={{display:"flex",flexDirection:"column",gap:7}}>
+        {agenda.map((a,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10}}>
+          <div style={{width:36,height:36,borderRadius:9,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
+            <Ico n="calendar" size={14} color={DG_PURPLE}/>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{a.title}</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{a.type} · {a.author||"—"} · {new Date(a.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})}</div>
+          </div>
+        </div>)}
+      </div>
+    </div>}
+
+  </div>;
+}
+
+// ── Card de meta (com checkbox toggle) ───────────────────────
+function _DGMetaCard({meta, onToggle, showStatus}){
+  const isOk = meta.status==="concluida";
+  const accent = meta.type==="meta_mes"?"#f97316":DG_PURPLE;
+  return <div style={{background:isOk?"#f0fdf4":"#fafafa",border:"1px solid "+(isOk?"#bbf7d0":"#e2e8f0"),borderRadius:11,padding:"11px 13px",display:"flex",alignItems:"flex-start",gap:11,fontFamily:DG_INTER,transition:"all .15s"}}>
+    <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Marcar como concluída"}
+      style={{width:20,height:20,borderRadius:6,border:"2px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,transition:"all .12s"}}>
+      {isOk&&<Ico n="check" size={11} color="#fff"/>}
+    </button>
+    <div style={{flex:1,minWidth:0}}>
+      {showStatus&&<div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:4}}>
+        <span style={{background:accent+"15",color:accent,borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{meta.type==="meta_mes"?"Mensal":"Semanal"}</span>
+      </div>}
+      <div style={{color:isOk?"#166534":"#0f172a",fontSize:12.5,fontWeight:700,lineHeight:1.35,textDecoration:isOk?"line-through":"none"}}>{meta.title||"(sem título)"}</div>
+      {meta.content&&<div style={{color:isOk?"#15803d":"#64748b",fontSize:11,lineHeight:1.5,marginTop:4,whiteSpace:"pre-wrap",wordBreak:"break-word",opacity:isOk?.8:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{meta.content}</div>}
+      <div style={{color:"#94a3b8",fontSize:10,marginTop:5,fontWeight:500}}>{meta.author_name||"—"}</div>
+    </div>
+  </div>;
+}
+
+// ── Card de aprovação resumida ───────────────────────────────
+function _DGApvCard({label, count, sub, color, icon, urgent}){
+  return <div style={{background:"#fafafa",border:"1px solid "+(urgent?"#fecaca":"#e2e8f0"),borderRadius:12,padding:"13px 15px",fontFamily:DG_INTER}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+      <div style={{width:34,height:34,borderRadius:9,background:color+"14",display:"flex",alignItems:"center",justifyContent:"center",color}}>
+        <Ico n={icon} size={15} color={color}/>
+      </div>
+      <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+    </div>
+    <div style={{color:count>0?color:"#94a3b8",fontSize:26,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{count}</div>
+    {sub&&<div style={{color:urgent?"#dc2626":"#64748b",fontSize:11,marginTop:5,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+      {urgent&&<Ico n="alert" size={11} color="#dc2626"/>}{sub}
+    </div>}
+  </div>;
+}
+
+// ── Card de cliente em atenção ───────────────────────────────
+function _DGClienteAtencao({cl, tasks}){
+  const lateCount = tasks.filter(t=>t.client===cl.id && t.deadline && _dgDays(t.deadline)<0 && t.status!=="aprovado" && t.status!=="publicado").length;
+  const motivos = [];
+  if((cl.health||100)<60) motivos.push("Health baixo ("+cl.health+"%)");
+  if((cl.nps||10)<7) motivos.push("NPS baixo");
+  if(lateCount>0) motivos.push(lateCount+" demanda"+(lateCount>1?"s":"")+" atrasada"+(lateCount>1?"s":""));
+  if(!cl.proximaAcao) motivos.push("Sem próxima ação");
+
+  return <div style={{background:"#fff",border:"1px solid #fecaca",borderRadius:12,padding:"13px 15px",fontFamily:DG_INTER,transition:"all .15s",position:"relative"}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+      <ClientLogo clientId={cl.id} size="sm"/>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>{cl.sector||""}</div>
+      </div>
+    </div>
+    {motivos.slice(0,2).map((m,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5,color:"#dc2626",fontSize:11,fontWeight:600,marginTop:4}}>
+      <Ico n="alert" size={10} color="#dc2626"/> {m}
+    </div>)}
+    {cl.proximaAcao&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,padding:"5px 8px",marginTop:8}}>
+      <div style={{color:"#92400e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Próxima ação</div>
+      <div style={{color:"#78350f",fontSize:11,lineHeight:1.35,marginTop:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{cl.proximaAcao}</div>
+    </div>}
+  </div>;
+}
+
+// ── Card de gargalo ──────────────────────────────────────────
+function _DGGargalo({g}){
+  const TYPE_CFG = {
+    aprovacao:{ico:"check",  color:"#9F43F6"},
+    meta:     {ico:"target", color:"#f97316"},
+    demanda:  {ico:"zap",    color:"#ef4444"},
+    funil:    {ico:"alert",  color:"#0ea5e9"},
+  };
+  const cfg = TYPE_CFG[g.type] || {ico:"alert", color:"#64748b"};
+  const cl = g.client ? (CLIENTS||[]).find(c=>c.id===g.client) : null;
+  return <div style={{background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 14px",display:"flex",alignItems:"center",gap:11,fontFamily:DG_INTER,flexWrap:"wrap"}}>
+    <div style={{width:32,height:32,borderRadius:9,background:cfg.color+"14",display:"flex",alignItems:"center",justifyContent:"center",color:cfg.color,flexShrink:0}}>
+      <Ico n={cfg.ico} size={14} color={cfg.color}/>
+    </div>
+    {cl&&<ClientLogo clientId={cl.id} size="sm"/>}
+    <div style={{flex:1,minWidth:140}}>
+      <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical"}}>{g.title}</div>
+      {cl&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:1}}>{cl.name}</div>}
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+      <span style={{color:cfg.color,fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{g.tempo}</span>
+      <span style={{background:cfg.color+"14",color:cfg.color,borderRadius:7,padding:"3px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{g.action}</span>
+    </div>
+  </div>;
+}
+
+// ── Empty state ──────────────────────────────────────────────
+function _DGEmpty({icon, title, desc}){
+  return <div style={{background:"#fafafa",border:"1px dashed #e2e8f0",borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
+    <div style={{display:"inline-flex",width:44,height:44,borderRadius:11,background:DG_PURPLE+"14",color:DG_PURPLE,alignItems:"center",justifyContent:"center",marginBottom:10}}>
+      <Ico n={icon} size={20} color={DG_PURPLE}/>
+    </div>
+    <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:4}}>{title}</div>
+    <div style={{color:"#64748b",fontSize:11.5,maxWidth:360,margin:"0 auto",lineHeight:1.5}}>{desc}</div>
   </div>;
 }
