@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 37/37 | Nao editar diretamente
+// Modulos: 38/38 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -1681,7 +1681,7 @@ const NAV=[
   {id:"chat",       icon:"◐", label:"Chat"},
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
-  {id:"planejamento_mensal",icon:"◬", label:"Planejamento mensal"},
+  {id:"planejamento",icon:"◬", label:"Planejamento"},
   {id:"ia",         icon:"◎", label:"Pixels IA",children:[
     {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
     {id:"ia_churn",      icon:"◬", label:"Alerta Churn"},
@@ -8968,309 +8968,6 @@ function PageClientes({isMob, tasks}){
   </div>);
 }
 
-/* ── CAnalises — Dashboard Reportei embedado + cards resumidos ──
-   Estratégia simplificada (2026-04-20): em vez de extrair 200+ reference_keys
-   manualmente, embutimos o dashboard da Reportei via iframe. Mantemos os 2-3
-   cards principais em cima (leads + CPL) usando dados do Supabase cache.
-   Assim o cliente enxerga TUDO que a Reportei mostra, sempre atualizado. */
-function CAnalises({cl,isMob,tasks}){
-  let sb=window._sb;
-  let [rows,setRows]=useState(null);
-  let [loading,setLoading]=useState(true);
-  let [bioterUnit,setBioterUnit]=useState("chapeco");
-  let [iframeLoaded,setIframeLoaded]=useState(false);
-  let [iframeFailed,setIframeFailed]=useState(false);
-  // Visao geral — meta editavel (status, MRR, score, NPS, datas)
-  let metaHook = (typeof useClientMeta==="function")?useClientMeta(cl.id):{meta:null,save:function(){}};
-  let clientMeta = metaHook.meta;
-  let saveClientMeta = metaHook.save;
-
-  let isBioter=cl.id==="bioter";
-  let cacheIds=isBioter?["bioter_chapeco","bioter_toledo","bioter_castro"]:[cl.id];
-
-  let REPORTEI_URLS={
-    bioter_chapeco:"https://app.reportei.com/dashboard/zovFPvINdfiTZoxqsPsAThPJQln7HmDN",
-    bioter_toledo:"https://app.reportei.com/dashboard/yo075SYsr08BhBYm7yAL1UAfkeIyXT9j",
-    bioter_castro:"https://app.reportei.com/dashboard/N3W68Q3kq9Ka6K5argIQJXJzsPGXr61t",
-    climaves:"https://app.reportei.com/dashboard/h3MihpaCfhBoVdMvEgc9fHI1T6TzODBR",
-    vetservice:"https://app.reportei.com/dashboard/G42f7UB5R7V68m9BFDobFlW61f5ujXiX",
-    construschorr:"https://app.reportei.com/dashboard/4q3Ubekgg97cstORgg5yPBcR8Zvr3Jv3",
-    arabuta:"https://app.reportei.com/dashboard/LmblsNnaMOCfK2H4dn4tPQ2YO17k7CDb",
-  };
-
-  useEffect(function(){
-    if(!sb){setLoading(false);return;}
-    setLoading(true);
-    setIframeLoaded(false);
-    setIframeFailed(false);
-    sb.from("reportei_cache").select("client_id,data,updated_at").in("client_id",cacheIds)
-      .then(function(r){
-        let map={};
-        if(r.data)r.data.forEach(function(row){map[row.client_id]=row;});
-        setRows(map);
-        setLoading(false);
-      }).catch(function(){setRows({});setLoading(false);});
-  },[cl.id]);
-
-  // Reset do iframe ao trocar unidade do Bioter
-  useEffect(function(){
-    setIframeLoaded(false);
-    setIframeFailed(false);
-  },[bioterUnit]);
-
-  let activeId=isBioter?"bioter_"+bioterUnit:cl.id;
-  let row=rows&&rows[activeId];
-  let reporteiUrl=REPORTEI_URLS[activeId];
-
-  let updatedAt=row&&row.updated_at?
-    new Date(row.updated_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):null;
-  let period=row&&row.data&&row.data.period;
-
-  // Altura do iframe: mais alto no desktop
-  let iframeHeight=isMob?900:1400;
-
-  return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
-    {/* Visão geral: métricas + datas + alertas */}
-    {typeof ClientMetricsCards==="function"&&<ClientMetricsCards cl={cl} meta={clientMeta} save={saveClientMeta} isMob={isMob}/>}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"2fr 1fr",gap:12}}>
-      {typeof ClientDatesPanel==="function"&&<ClientDatesPanel meta={clientMeta} save={saveClientMeta} isMob={isMob}/>}
-      {typeof ClientAlertsPanel==="function"&&<ClientAlertsPanel cl={cl} tasks={tasks||[]}/>}
-    </div>
-
-    {/* Sub-tabs Bioter */}
-    {isBioter&&(<div style={{display:"flex",gap:6}}>
-      {[{id:"chapeco",label:"Chapecó"},{id:"toledo",label:"Toledo"},{id:"castro",label:"Castro"}].map(function(u){
-        return(<button key={u.id} onClick={function(){setBioterUnit(u.id);}}
-          style={{background:bioterUnit===u.id?cl.color+"22":"transparent",color:bioterUnit===u.id?cl.color:C.ts,
-            border:"1px solid "+(bioterUnit===u.id?cl.color:C.b1),borderRadius:20,padding:"5px 14px",
-            fontSize:11,fontWeight:bioterUnit===u.id?700:400,cursor:"pointer"}}>
-          {u.label}
-        </button>);
-      })}
-    </div>)}
-
-    {/* Header com info do período */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-      <div>
-        <div style={{color:C.tx,fontWeight:700,fontSize:15}}>Análises de Performance</div>
-        {period&&<div style={{color:C.td,fontSize:11,marginTop:2}}>
-          Período: {period.start} → {period.end}
-          {updatedAt&&" · Atualizado: "+updatedAt}
-        </div>}
-      </div>
-      {reporteiUrl&&(<a href={reporteiUrl} target="_blank" rel="noreferrer"
-        style={{background:C.a,border:"1px solid "+C.a,borderRadius:8,padding:"7px 16px",
-          color:"#fff",fontSize:11,fontWeight:700,textDecoration:"none",
-          display:"flex",alignItems:"center",gap:5}}>
-        ↗ Abrir no Reportei
-      </a>)}
-    </div>
-
-    {/* Loading inicial do Supabase */}
-    {loading&&(<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:48,gap:10,color:C.td}}>
-      <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,
-        borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
-      Buscando dados...
-    </div>)}
-
-    {/* Container do iframe do Reportei */}
-    {!loading&&reporteiUrl&&!iframeFailed&&(<div style={{position:"relative",
-        background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-      {/* Loading overlay enquanto o iframe carrega */}
-      {!iframeLoaded&&(<div style={{position:"absolute",inset:0,
-          display:"flex",alignItems:"center",justifyContent:"center",gap:10,
-          background:C.card,color:C.td,zIndex:1}}>
-        <div style={{width:18,height:18,borderRadius:"50%",border:"2px solid "+C.b1,
-          borderTop:"2px solid "+cl.color,animation:"spin 0.8s linear infinite"}}/>
-        Carregando dashboard Reportei...
-      </div>)}
-      <iframe
-        src={reporteiUrl}
-        title={"Dashboard Reportei — "+cl.name}
-        onLoad={function(){setIframeLoaded(true);}}
-        onError={function(){setIframeFailed(true);}}
-        style={{width:"100%",height:iframeHeight,border:"none",display:"block",
-          background:"#fff"}}
-        allow="clipboard-write"
-      />
-    </div>)}
-
-    {/* Fallback: se o iframe falhar (CSP/X-Frame-Options), mostra card com link */}
-    {!loading&&reporteiUrl&&iframeFailed&&(<div style={{textAlign:"center",padding:48,
-        background:C.card,borderRadius:14,border:"1px solid "+C.b1}}>
-      <div style={{fontSize:40,marginBottom:12}}>📊</div>
-      <div style={{color:C.tx,fontWeight:700,fontSize:15,marginBottom:6}}>
-        Dashboard Reportei
-      </div>
-      <div style={{color:C.td,fontSize:12,marginBottom:16,maxWidth:400,margin:"0 auto 16px"}}>
-        O Reportei não permite embed — abra em nova aba pra ver todos os dados completos,
-        gráficos e comparações.
-      </div>
-      <a href={reporteiUrl} target="_blank" rel="noreferrer"
-        style={{display:"inline-block",background:cl.color,color:"#fff",borderRadius:8,
-          padding:"11px 26px",fontSize:13,fontWeight:700,textDecoration:"none"}}>
-        Abrir Dashboard ↗
-      </a>
-    </div>)}
-
-    {/* Sem URL Reportei configurada */}
-    {!loading&&!reporteiUrl&&(<div style={{textAlign:"center",padding:48,
-        background:C.card,borderRadius:14,border:"1px solid "+C.b1}}>
-      <div style={{fontSize:40,marginBottom:12}}>📡</div>
-      <div style={{color:C.tx,fontWeight:700,fontSize:15}}>
-        Sem dashboard Reportei configurado pra este cliente
-      </div>
-    </div>)}
-
-  </div>);
-}
-
-/* ─── CClienteTimeline — Marcos estilo Aplicativo da Pixels ──────────────
-   Lista vertical com linha contínua, dots coloridos por tipo,
-   add-form inline. Persistência via localStorage.
-─────────────────────────────────────────────────────── */
-function CClienteTimeline({cl, canEdit}){
-  const [marcos,setMarcos]=useState(function(){return loadMarcos(cl.id);});
-  const [adding,setAdding]=useState(false);
-  const [form,setForm]=useState({type:"visita",title:"",description:"",date:new Date().toISOString().slice(0,10)});
-  // Re-carrega quando outro tab/sessão atualiza
-  useEffect(function(){
-    function h(e){if(!e||!e.detail||e.detail.clientId===cl.id)setMarcos(loadMarcos(cl.id));}
-    window.addEventListener("pixels:marcos-updated",h);
-    return function(){window.removeEventListener("pixels:marcos-updated",h);};
-  },[cl.id]);
-  function handleAdd(){
-    if(!form.title.trim())return;
-    const m=buildMarco({type:form.type,title:form.title.trim(),description:form.description.trim(),date:form.date});
-    const next=[m].concat(marcos);
-    setMarcos(next);saveMarcos(cl.id,next);
-    setForm({type:"visita",title:"",description:"",date:new Date().toISOString().slice(0,10)});
-    setAdding(false);
-  }
-  function handleDelete(id){
-    if(!canEdit)return;
-    if(typeof window!=="undefined"&&!window.confirm("Excluir esse marco da timeline?"))return;
-    const next=marcos.filter(function(x){return x.id!==id;});
-    setMarcos(next);saveMarcos(cl.id,next);
-  }
-  // Agrupa por ano-mês pra mostrar separadores temporais
-  const grouped=marcos.reduce(function(acc,m){
-    const ym=(m.date||"").slice(0,7)||"sem-data";
-    if(!acc[ym])acc[ym]=[];
-    acc[ym].push(m);
-    return acc;
-  },{});
-  const yms=Object.keys(grouped).sort().reverse();
-  const monthNames=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-  const fmtMonthLabel=function(ym){
-    if(ym==="sem-data")return "Sem data";
-    const [y,m]=ym.split("-");
-    return monthNames[parseInt(m,10)-1]+" "+y;
-  };
-  const fmtDateBR=function(ds){
-    if(!ds)return "";
-    try{const d=new Date(ds+"T12:00:00");return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}).replace(".","");}catch(e){return ds;}
-  };
-  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {/* Header */}
-    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:17,letterSpacing:-.3}}>Timeline de marcos</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Registro de visitas, reuniões, materiais, feiras e eventos.</div>
-      </div>
-      {canEdit&&!adding&&<button onClick={function(){setAdding(true);}}
-        style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
-        + Adicionar marco
-      </button>}
-    </div>
-
-    {/* Form de novo marco */}
-    {adding&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:18,display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 180px",gap:10}}>
-        <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Título</div>
-          <input value={form.title} onChange={function(e){setForm(Object.assign({},form,{title:e.target.value}));}} placeholder="Ex: Visita técnica em Chapecó"
-            style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 12px",fontSize:13,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}} autoFocus/>
-        </div>
-        <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Data</div>
-          <input type="date" value={form.date} onChange={function(e){setForm(Object.assign({},form,{date:e.target.value}));}}
-            style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 12px",fontSize:13,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
-        </div>
-      </div>
-      <div>
-        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Tipo</div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {MARCO_TYPES.map(function(t){
-            const active=form.type===t.id;
-            return <button key={t.id} onClick={function(){setForm(Object.assign({},form,{type:t.id}));}}
-              style={{background:active?t.bg:"#f8fafc",color:active?t.color:"#64748b",border:"1px solid "+(active?t.color+"55":"#e2e8f0"),borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit"}}>{t.label}</button>;
-          })}
-        </div>
-      </div>
-      <div>
-        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5}}>Descrição <span style={{color:"#cbd5e1",fontWeight:500,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
-        <textarea value={form.description} onChange={function(e){setForm(Object.assign({},form,{description:e.target.value}));}} rows={3} placeholder="Detalhes do que foi feito..."
-          style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 12px",fontSize:13,fontWeight:500,outline:"none",fontFamily:"inherit",boxSizing:"border-box",resize:"vertical"}}/>
-      </div>
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button onClick={function(){setAdding(false);}}
-          style={{background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-        <button onClick={handleAdd} disabled={!form.title.trim()}
-          style={{background:form.title.trim()?"#7c3aed":"#cbd5e1",color:"#fff",border:"none",borderRadius:9,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:form.title.trim()?"pointer":"not-allowed",fontFamily:"inherit"}}>Salvar marco</button>
-      </div>
-    </div>}
-
-    {/* Lista vertical de marcos */}
-    {marcos.length===0&&!adding&&<div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:14,padding:40,textAlign:"center"}}>
-      <div style={{color:"#0f172a",fontWeight:600,fontSize:14}}>Nenhum marco registrado</div>
-      <div style={{color:"#64748b",fontSize:12,marginTop:4}}>Comece adicionando uma visita, reunião ou evento.</div>
-    </div>}
-
-    {marcos.length>0&&<div style={{position:"relative",paddingLeft:isMobOrCompact()?20:32}}>
-      {/* Linha vertical contínua */}
-      <div style={{position:"absolute",left:isMobOrCompact()?7:11,top:8,bottom:8,width:2,background:"#e2e8f0",borderRadius:99}}/>
-      {yms.map(function(ym){
-        return <div key={ym} style={{marginBottom:18}}>
-          <div style={{position:"sticky",top:0,background:"#fafbfc",zIndex:1,marginLeft:-12,padding:"4px 12px",borderRadius:8,marginBottom:8,display:"inline-block"}}>
-            <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7}}>{fmtMonthLabel(ym)}</span>
-          </div>
-          {grouped[ym].map(function(m){
-            const tc=getMarcoTypeConfig(m.type);
-            const u=(typeof TEAM!=="undefined")?TEAM.find(function(t){return t.id===m.author;}):null;
-            return <div key={m.id} style={{position:"relative",marginBottom:14}}>
-              {/* Dot */}
-              <div style={{position:"absolute",left:isMobOrCompact()?-18:-26,top:14,width:16,height:16,borderRadius:"50%",background:tc.color,border:"3px solid #fff",boxShadow:"0 0 0 2px "+tc.color+"33"}}/>
-              <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 16px",transition:"all .12s"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:m.description?6:0}}>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                      <span style={{background:tc.bg,color:tc.color,fontSize:9.5,fontWeight:700,padding:"2px 8px",borderRadius:99,textTransform:"uppercase",letterSpacing:.5}}>{tc.label}</span>
-                      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>{fmtDateBR(m.date)}</span>
-                      {u&&<span style={{color:"#64748b",fontSize:11,fontWeight:500}}>· por {u.name}</span>}
-                    </div>
-                    <div style={{color:"#0f172a",fontWeight:600,fontSize:14,marginTop:5,lineHeight:1.35}}>{m.title}</div>
-                    {m.description&&<div style={{color:"#475569",fontSize:12.5,marginTop:6,whiteSpace:"pre-wrap",lineHeight:1.5}}>{m.description}</div>}
-                  </div>
-                  {canEdit&&<button onClick={function(){handleDelete(m.id);}}
-                    title="Excluir marco"
-                    style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",fontSize:14,padding:"2px 6px",fontFamily:"inherit",borderRadius:6,flexShrink:0,transition:"color .12s"}}
-                    onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
-                    onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>✕</button>}
-                </div>
-              </div>
-            </div>;
-          })}
-        </div>;
-      })}
-    </div>}
-  </div>;
-}
-// helper local pra detectar mobile/sidebar colapsada
-function isMobOrCompact(){
-  try{return typeof window!=="undefined"&&window.innerWidth<640;}catch(e){return false;}
-}
-
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   let TASKS=tasks||[];
   cl=getLiveClient(cl.id)||cl;
@@ -9364,14 +9061,15 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   })();
 
   let TABS=[
-    {id:"analises",    label:"Visão geral"},
-    {id:"onboarding",  label:"Onboarding"},
-    {id:"nps",         label:"NPS"},
-    {id:"evolucao",    label:"Evolução"},
-    {id:"briefing",    label:"Briefing"},
-    {id:"timeline",    label:"Timeline"},
-    {id:"ferramentas", label:"Ferramentas"},
-    {id:"info",        label:"Informações"},
+    {id:"analises",      label:"Visão geral"},
+    {id:"onboarding",    label:"Onboarding"},
+    {id:"nps",           label:"NPS"},
+    {id:"evolucao",      label:"Evolução"},
+    {id:"briefing",      label:"Briefing"},
+    {id:"planejamento",  label:"Planejamento mensal"},
+    {id:"timeline",      label:"Timeline"},
+    {id:"ferramentas",   label:"Ferramentas"},
+    {id:"info",          label:"Informações"},
     ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
   ];
 
@@ -9538,6 +9236,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="timeline"&&<CClienteTimeline cl={cl} canEdit={isSocio||myPerms.editarBriefing||myPerms.editarEvolucao}/>}
     {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
+    {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
     {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
     {tab==="concorrencia"&&canSeeConcorrencia&&(
@@ -29239,7 +28938,7 @@ export default function AgencyOS(){
       case "demandas_internas":    return p.verDemandasInternas||isSocio;
       case "demandas_cal_interno": return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
-      case "planejamento_mensal":  return isSocio||p.verDemandas||["ellen","erick"].indexOf(CURRENT_USER.id)>=0||CURRENT_USER.dash==="coordinator"||CURRENT_USER.dash==="gestor";
+      case "planejamento":         return isSocio||CURRENT_USER.id==="ellen";
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
@@ -29319,7 +29018,7 @@ export default function AgencyOS(){
       case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
-      case "planejamento_mensal":   return (effectivePerms.verDemandas||isSocio||["ellen","erick"].indexOf(CURRENT_USER.id)>=0||CURRENT_USER.dash==="coordinator"||CURRENT_USER.dash==="gestor")?<PageMonthlyPlanInterno {...p}/>:<NoPerm/>;
+      case "planejamento":          return (isSocio||CURRENT_USER.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
@@ -29515,22 +29214,26 @@ export default function AgencyOS(){
         </div>
       </div>
       {/* ── Perfil no topo da sidebar ── */}
-      <div style={{padding:"10px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
-        <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
-          title={sideCollapsed&&!isMob?CURRENT_USER.name+" · "+CURRENT_USER.role:undefined}
-          style={{width:"100%",display:"flex",alignItems:"center",gap:8,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",transition:"all .15s",textAlign:"left",justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}
-          onMouseEnter={e=>e.currentTarget.style.background=C.a+"18"}
-          onMouseLeave={e=>e.currentTarget.style.background=C.s1}>
-          <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={30} status="online" uid={CURRENT_USER.id}/>
-          {(!sideCollapsed||isMob)&&<>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{CURRENT_USER.name}</div>
-              <div style={{color:C.td,fontSize:10}}>{CURRENT_USER.role}</div>
-            </div>
-            <span style={{color:C.td,fontSize:11}}>✏️</span>
-          </>}
-        </button>
-      </div>
+      {(()=>{
+        const displayName=(selfProfileData&&selfProfileData.nome&&selfProfileData.nome.trim())||CURRENT_USER.name;
+        const displayRole=(selfProfileData&&selfProfileData.funcao&&selfProfileData.funcao.trim())||CURRENT_USER.role;
+        return <div style={{padding:"10px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
+          <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
+            title={sideCollapsed&&!isMob?displayName+" · "+displayRole:undefined}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:8,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",transition:"all .15s",textAlign:"left",justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}
+            onMouseEnter={e=>{e.currentTarget.style.background=C.a+"18";e.currentTarget.style.borderColor=C.a+"55";}}
+            onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.borderColor=C.b1;}}>
+            <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={30} status="online" uid={CURRENT_USER.id}/>
+            {(!sideCollapsed||isMob)&&<>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</div>
+                <div style={{color:C.td,fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayRole}</div>
+              </div>
+              <span style={{color:C.td,display:"flex",alignItems:"center",flexShrink:0}}><Ico n="edit" size={12}/></span>
+            </>}
+          </button>
+        </div>;
+      })()}
 
       <nav style={{flex:1,padding:"10px 8px",overflowY:"auto",overflowX:"hidden"}}>
         {viewingAs&&<div style={{background:C.or+"22",border:`1px solid ${C.or}44`,borderRadius:9,padding:"7px 10px",marginBottom:8}}>
@@ -37008,11 +36711,12 @@ function useMonthlyPlan(clientId, clientUnit, year, month){
 /* ═══════════════════════════════════════════════════════════════════
    PageMonthlyPlanInterno — visão da equipe Pixels
 ═══════════════════════════════════════════════════════════════════ */
-function PageMonthlyPlanInterno({isMob}){
+function PageMonthlyPlanInterno({isMob,cl:clProp,hideClientSelector}){
   const _now=new Date();
   const isSocio=CURRENT_USER&&CURRENT_USER.level===1;
   const clientesVisiveis=(CLIENTS||[]).filter(function(c){return c.status!=="interno";});
-  const [selCl,setSelCl]=useState((clientesVisiveis[0]||{}).id||"");
+  // Quando vindo de ClienteDetail (clProp definido), trava no cliente
+  const [selCl,setSelCl]=useState(clProp?.id||(clientesVisiveis[0]||{}).id||"");
   const [selUnit,setSelUnit]=useState("grupo");
   const [month,setMonth]=useState(_now.getMonth()+1);
   const [year,setYear]=useState(_now.getFullYear());
@@ -37077,10 +36781,10 @@ function PageMonthlyPlanInterno({isMob}){
         <div style={{color:C.td,fontSize:12,marginTop:2}}>Estruture o mês de conteúdo de cada cliente. Mesma fonte de dados que aparece pro cliente no portal.</div>
       </div>
       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-        <select value={selCl} onChange={function(e){setSelCl(e.target.value);}}
+        {!hideClientSelector&&<select value={selCl} onChange={function(e){setSelCl(e.target.value);}}
           style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
           {clientesVisiveis.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
-        </select>
+        </select>}
         {isBioter&&(typeof BIOTER_UNITS!=="undefined")&&<select value={selUnit} onChange={function(e){setSelUnit(e.target.value);}}
           style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
           <option value="grupo">Grupo Bioter</option>
@@ -40355,5 +40059,554 @@ function DashColabV2(props){
     {/* ═══ 7. ROTINA DA SEMANA — checklist personalizado do colaborador ═══ */}
     {typeof OpRotinaWidget==="function" && <OpRotinaWidget userId={user.id} accentColor={user.color||"#9F43F6"} isMob={isMob}/>}
 
+  </div>;
+}
+
+// ======= 25_planejamento.jsx =======
+// Planejamento estratégico da equipe: dailies, weeklies, metas semanais e mensais.
+// Acesso: sócios (Vinicius/Gustavo) + estrategista (Hellen).
+// Storage: Supabase via tabela `team_planning` (chave única por tipo+date+author).
+// Fallback localStorage com auto-sync.
+
+const PLAN_INTER = "'Inter', system-ui, -apple-system, sans-serif";
+const PLAN_PURPLE = "#9F43F6";
+
+// ── Helpers de data ───────────────────────────────────────────
+const _plDateISO = (d) => {
+  const dt = d instanceof Date ? d : new Date(d);
+  return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0")+"-"+String(dt.getDate()).padStart(2,"0");
+};
+const _plToday = () => _plDateISO(new Date());
+const _plWeekKey = (d) => {
+  // ISO week key: "YYYY-Www"
+  const dt = d ? new Date(d) : new Date();
+  const target = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
+  const dayNr = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - dayNr + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const week = 1 + Math.round(((target - firstThursday) / 86400000 - 3) / 7);
+  return target.getUTCFullYear()+"-W"+String(week).padStart(2,"0");
+};
+const _plMonthKey = (d) => {
+  const dt = d ? new Date(d) : new Date();
+  return dt.getFullYear()+"-"+String(dt.getMonth()+1).padStart(2,"0");
+};
+const _plFmtDate = (iso) => {
+  if(!iso) return "";
+  const d = new Date(iso+"T12:00:00");
+  if(isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});
+};
+const _plFmtDateLong = (iso) => {
+  if(!iso) return "";
+  const d = new Date(iso+"T12:00:00");
+  if(isNaN(d.getTime())) return iso;
+  const wd = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+  return wd[d.getDay()]+" · "+d.toLocaleDateString("pt-BR",{day:"2-digit",month:"long"});
+};
+const _plWeekRange = (weekKey) => {
+  if(!weekKey) return "";
+  const [y,w] = weekKey.split("-W");
+  const year = parseInt(y,10), wn = parseInt(w,10);
+  // Calcula segunda da semana ISO
+  const simple = new Date(year,0,1+(wn-1)*7);
+  const dow = simple.getDay();
+  const monday = new Date(simple);
+  if(dow<=4) monday.setDate(simple.getDate()-simple.getDay()+1);
+  else monday.setDate(simple.getDate()+8-simple.getDay());
+  const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+  const fmt = d => d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
+  return fmt(monday)+" — "+fmt(sunday);
+};
+
+// ── Hook Supabase storage ─────────────────────────────────────
+function usePlanejamentoEntries(){
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const reload = useCallback(function(){
+    if(!window._sb){
+      // fallback localStorage
+      try{
+        const raw = localStorage.getItem("pixels-planejamento-entries");
+        setEntries(raw ? JSON.parse(raw) : []);
+      }catch(e){ setEntries([]); }
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    window._sb.from("team_planning").select("*")
+      .order("entry_date", {ascending:false}).order("created_at", {ascending:false}).limit(500)
+      .then(function(r){
+        setEntries(r.data || []);
+        setLoading(false);
+      })
+      .catch(function(e){
+        console.warn("[planejamento]",e?.message||e);
+        // fallback localStorage
+        try{
+          const raw = localStorage.getItem("pixels-planejamento-entries");
+          setEntries(raw ? JSON.parse(raw) : []);
+        }catch(_){ setEntries([]); }
+        setLoading(false);
+      });
+  }, []);
+
+  useEffect(function(){ reload(); }, [reload]);
+
+  // Realtime sync
+  useEffect(function(){
+    if(!window._sb) return undefined;
+    const ch = window._sb.channel("planejamento")
+      .on("postgres_changes",{event:"*",schema:"public",table:"team_planning"}, function(){ reload(); })
+      .subscribe();
+    return function(){ try{ window._sb.removeChannel(ch); }catch(e){} };
+  }, [reload]);
+
+  const upsert = useCallback(function(entry){
+    const payload = Object.assign({
+      id: entry.id || "pl-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),
+      author_id: CURRENT_USER.id,
+      author_name: CURRENT_USER.name,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, entry);
+
+    setEntries(function(prev){
+      const idx = prev.findIndex(function(x){return x.id===payload.id;});
+      if(idx>=0){
+        const cp = prev.slice(); cp[idx] = Object.assign({},cp[idx],payload); return cp;
+      }
+      return [payload].concat(prev);
+    });
+
+    if(window._sb){
+      window._sb.from("team_planning")
+        .upsert(payload, {onConflict:"id"})
+        .then(function(){})
+        .catch(function(e){ console.warn("[planejamento upsert]",e?.message||e); });
+    }else{
+      // fallback
+      try{
+        const raw = localStorage.getItem("pixels-planejamento-entries");
+        const arr = raw ? JSON.parse(raw) : [];
+        const idx = arr.findIndex(function(x){return x.id===payload.id;});
+        if(idx>=0) arr[idx] = payload; else arr.unshift(payload);
+        localStorage.setItem("pixels-planejamento-entries", JSON.stringify(arr));
+      }catch(e){}
+    }
+    return payload;
+  }, []);
+
+  const remove = useCallback(function(id){
+    setEntries(function(prev){ return prev.filter(function(x){return x.id!==id;}); });
+    if(window._sb){
+      window._sb.from("team_planning").delete().eq("id",id)
+        .then(function(){})
+        .catch(function(e){ console.warn("[planejamento remove]",e?.message||e); });
+    }else{
+      try{
+        const raw = localStorage.getItem("pixels-planejamento-entries");
+        const arr = raw ? JSON.parse(raw) : [];
+        localStorage.setItem("pixels-planejamento-entries", JSON.stringify(arr.filter(function(x){return x.id!==id;})));
+      }catch(e){}
+    }
+  }, []);
+
+  return { entries, loading, upsert, remove, reload };
+}
+
+// ── Ícones inline (lucide-like) ───────────────────────────────
+function _PlIco({name, size=14, color="currentColor"}){
+  const sp = {width:size, height:size, viewBox:"0 0 24 24", fill:"none", stroke:color, strokeWidth:1.9, strokeLinecap:"round", strokeLinejoin:"round"};
+  switch(name){
+    case "sunrise":  return <svg {...sp}><path d="M17 18a5 5 0 0 0-10 0"/><line x1="12" y1="2" x2="12" y2="9"/><line x1="4.22" y1="10.22" x2="5.64" y2="11.64"/><line x1="1" y1="18" x2="3" y2="18"/><line x1="21" y1="18" x2="23" y2="18"/><line x1="18.36" y1="11.64" x2="19.78" y2="10.22"/><line x1="23" y1="22" x2="1" y2="22"/><polyline points="8 6 12 2 16 6"/></svg>;
+    case "weekly":   return <svg {...sp}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+    case "target":   return <svg {...sp}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
+    case "plus":     return <svg {...sp}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+    case "check":    return <svg {...sp}><polyline points="20 6 9 17 4 12"/></svg>;
+    case "x":        return <svg {...sp}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+    case "edit":     return <svg {...sp}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+    case "trash":    return <svg {...sp}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>;
+    case "user":     return <svg {...sp}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
+    case "flag":     return <svg {...sp}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
+    case "chevron-down": return <svg {...sp}><polyline points="6 9 12 15 18 9"/></svg>;
+    default: return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   PagePlanejamento — Estratégia > Planejamento
+// ═══════════════════════════════════════════════════════════════
+function PagePlanejamento({isMob}){
+  const {entries, loading, upsert, remove} = usePlanejamentoEntries();
+  const [tab, setTab] = useState("dailies"); // dailies | weeklies | metas
+  const [editing, setEditing] = useState(null); // entry sendo editado/criado
+
+  const isSocio = CURRENT_USER && CURRENT_USER.level === 1;
+  const canAccess = isSocio || CURRENT_USER.id === "ellen";
+  if(!canAccess){
+    return <div style={{padding:24,fontFamily:PLAN_INTER,color:"#64748b"}}>Sem permissão.</div>;
+  }
+
+  // Filtra entries por tipo
+  const dailies   = entries.filter(function(e){return e.type==="daily";});
+  const weeklies  = entries.filter(function(e){return e.type==="weekly";});
+  const metas     = entries.filter(function(e){return e.type==="meta_semana"||e.type==="meta_mes";});
+
+  function openNew(type){
+    const base = {
+      type: type,
+      entry_date: _plToday(),
+      week_key: _plWeekKey(),
+      month_key: _plMonthKey(),
+      title: "",
+      content: "",
+      meta_scope: type==="meta_semana"?"semana":type==="meta_mes"?"mes":undefined,
+      status: type==="meta_semana"||type==="meta_mes"?"em_andamento":undefined,
+    };
+    setEditing(base);
+  }
+
+  function handleSave(){
+    if(!editing) return;
+    if(!(editing.content||"").trim() && !(editing.title||"").trim()){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Preencha o conteúdo.",2500);
+      return;
+    }
+    upsert(Object.assign({}, editing, {updated_at:new Date().toISOString()}));
+    setEditing(null);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Salvo.",2000);
+  }
+
+  function handleDelete(id){
+    if(!window.confirm("Excluir este registro?")) return;
+    remove(id);
+  }
+
+  // Conta por status pras KPIs
+  const todayDailies = dailies.filter(function(d){return d.entry_date===_plToday();}).length;
+  const thisWeekWeeklies = weeklies.filter(function(w){return w.week_key===_plWeekKey();}).length;
+  const metasAtivas = metas.filter(function(m){return m.status==="em_andamento";}).length;
+  const metasConcluidas = metas.filter(function(m){return m.status==="concluida";}).length;
+
+  const TABS = [
+    {id:"dailies",  label:"Dailies",  ico:"sunrise", count:dailies.length},
+    {id:"weeklies", label:"Weeklies", ico:"weekly",  count:weeklies.length},
+    {id:"metas",    label:"Metas",    ico:"target",  count:metas.length},
+  ];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:PLAN_INTER}}>
+
+    {/* ═══ Header premium ═══ */}
+    <div style={{background:"linear-gradient(135deg, "+PLAN_PURPLE+"08 0%, transparent 60%)",borderRadius:16,padding:"18px 22px",border:"1px solid "+PLAN_PURPLE+"22",display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+        <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg, "+PLAN_PURPLE+" 0%, #7c3aed 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 28px rgba(159,67,246,.38)",flexShrink:0}}>
+          <_PlIco name="target" size={21} color="#fff"/>
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?19:23,letterSpacing:-.5}}>Planejamento</div>
+          <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontWeight:500,maxWidth:560,lineHeight:1.5}}>
+            Registro de dailies, weeklies e metas semanais/mensais da agência. Visível para sócios e estrategista.
+          </div>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button onClick={function(){openNew(tab==="metas"?"meta_semana":tab==="weeklies"?"weekly":"daily");}}
+          style={{background:PLAN_PURPLE,border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(159,67,246,0.38)"}}>
+          <_PlIco name="plus" size={13} color="#fff"/> Novo {tab==="metas"?"meta":tab==="weeklies"?"weekly":"daily"}
+        </button>
+      </div>
+    </div>
+
+    {/* ═══ KPIs ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+      {[
+        {label:"Dailies hoje",          value:todayDailies,        color:"#9F43F6",bg:"#9F43F614",ico:"sunrise"},
+        {label:"Weeklies desta semana", value:thisWeekWeeklies,    color:"#0ea5e9",bg:"#0ea5e914",ico:"weekly"},
+        {label:"Metas em andamento",    value:metasAtivas,         color:"#f97316",bg:"#fff7ed",  ico:"target"},
+        {label:"Metas concluídas",      value:metasConcluidas,     color:"#16a34a",bg:"#dcfce7",  ico:"check"},
+      ].map(function(k,i){return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:0,right:0,width:36,height:36,background:k.bg,borderBottomLeftRadius:14,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <_PlIco name={k.ico} size={15} color={k.color}/>
+        </div>
+        <div style={{color:k.color,fontSize:22,fontWeight:800,lineHeight:1.1,letterSpacing:-.5,marginBottom:4}}>{k.value}</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{k.label}</div>
+      </div>;})}
+    </div>
+
+    {/* ═══ Tabs ═══ */}
+    <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:5,overflowX:"auto"}}>
+      {TABS.map(function(t){
+        const active=tab===t.id;
+        return <button key={t.id} onClick={function(){setTab(t.id);}}
+          style={{flex:isMob?"0 0 auto":1,background:active?"linear-gradient(135deg, "+PLAN_PURPLE+" 0%, #7c3aed 100%)":"transparent",color:active?"#fff":"#475569",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:active?"0 4px 14px rgba(159,67,246,0.3)":"none",whiteSpace:"nowrap"}}>
+          <_PlIco name={t.ico} size={13} color={active?"#fff":"currentColor"}/>
+          {t.label}
+          <span style={{background:active?"rgba(255,255,255,.25)":"#9F43F614",color:active?"#fff":PLAN_PURPLE,borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800,minWidth:18,textAlign:"center"}}>{t.count}</span>
+        </button>;
+      })}
+    </div>
+
+    {/* ═══ Conteúdo por aba ═══ */}
+    {tab==="dailies"  && <DailiesList   entries={dailies}  onEdit={setEditing} onDelete={handleDelete}/>}
+    {tab==="weeklies" && <WeekliesList  entries={weeklies} onEdit={setEditing} onDelete={handleDelete}/>}
+    {tab==="metas"    && <MetasList     entries={metas}    onEdit={setEditing} onDelete={handleDelete} onUpsert={upsert}/>}
+
+    {/* ═══ Modal editor ═══ */}
+    {editing && <PlanEditModal entry={editing} setEntry={setEditing} onSave={handleSave} onClose={function(){setEditing(null);}}/>}
+
+    {loading && <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"20px 0"}}>Carregando…</div>}
+  </div>;
+}
+
+// ─── Lista de dailies (agrupada por data) ─────────────────────
+function DailiesList({entries, onEdit, onDelete}){
+  if(entries.length===0){
+    return <_PlEmptyState title="Sem dailies ainda" desc="Registre o que você fez no dia, prioridades e bloqueios. Clique em Novo daily para começar."/>;
+  }
+  // Agrupa por data
+  const groups = {};
+  entries.forEach(function(e){
+    const k = e.entry_date || _plToday();
+    if(!groups[k]) groups[k] = [];
+    groups[k].push(e);
+  });
+  const dates = Object.keys(groups).sort(function(a,b){return b.localeCompare(a);});
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {dates.map(function(d){
+      const isToday = d===_plToday();
+      return <div key={d}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{_plFmtDateLong(d)}</div>
+          {isToday && <span style={{background:"#9F43F614",color:PLAN_PURPLE,fontSize:9.5,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Hoje</span>}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {groups[d].map(function(e){return <PlanEntryCard key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} kind="daily"/>;})}
+        </div>
+      </div>;
+    })}
+  </div>;
+}
+
+// ─── Lista de weeklies (agrupada por semana) ──────────────────
+function WeekliesList({entries, onEdit, onDelete}){
+  if(entries.length===0){
+    return <_PlEmptyState title="Sem weeklies ainda" desc="Registre balanços semanais: o que funcionou, gargalos e ajustes. Clique em Novo weekly."/>;
+  }
+  const groups = {};
+  entries.forEach(function(e){
+    const k = e.week_key || _plWeekKey();
+    if(!groups[k]) groups[k] = [];
+    groups[k].push(e);
+  });
+  const weeks = Object.keys(groups).sort(function(a,b){return b.localeCompare(a);});
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {weeks.map(function(w){
+      const isCurrent = w===_plWeekKey();
+      return <div key={w}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>Semana {w.split("-W")[1]} · {_plWeekRange(w)}</div>
+          {isCurrent && <span style={{background:"#0ea5e914",color:"#0ea5e9",fontSize:9.5,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Atual</span>}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {groups[w].map(function(e){return <PlanEntryCard key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} kind="weekly"/>;})}
+        </div>
+      </div>;
+    })}
+  </div>;
+}
+
+// ─── Lista de metas ───────────────────────────────────────────
+function MetasList({entries, onEdit, onDelete, onUpsert}){
+  if(entries.length===0){
+    return <_PlEmptyState title="Sem metas registradas" desc="Defina metas semanais e mensais da agência. Clique em Nova meta."/>;
+  }
+  // Agrupa: metas do mês atual, da semana atual, antigas concluídas
+  const cw = _plWeekKey(), cm = _plMonthKey();
+  const semanaAtual = entries.filter(function(e){return e.type==="meta_semana"&&e.week_key===cw;});
+  const mesAtual    = entries.filter(function(e){return e.type==="meta_mes"&&e.month_key===cm;});
+  const outras      = entries.filter(function(e){return !semanaAtual.includes(e)&&!mesAtual.includes(e);});
+
+  function toggleStatus(e){
+    const next = e.status==="concluida"?"em_andamento":"concluida";
+    onUpsert(Object.assign({},e,{status:next,updated_at:new Date().toISOString()}));
+  }
+
+  const Section = function(props){
+    if(props.items.length===0) return null;
+    return <div>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+        <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{props.title}</div>
+        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>· {props.items.length}</span>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {props.items.map(function(e){return <PlanMetaCard key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} onToggleStatus={function(){toggleStatus(e);}}/>;})}
+      </div>
+    </div>;
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18}}>
+    <Section title={"Metas da semana atual · "+_plWeekRange(cw)} items={semanaAtual}/>
+    <Section title="Metas deste mês" items={mesAtual}/>
+    <Section title="Histórico" items={outras}/>
+  </div>;
+}
+
+// ─── Card de daily/weekly ──────────────────────────────────────
+function PlanEntryCard({entry, onEdit, onDelete, kind}){
+  const author = TEAM.find(function(u){return u.id===entry.author_id;});
+  const accent = kind==="weekly"?"#0ea5e9":PLAN_PURPLE;
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"13px 15px",transition:"all .15s",fontFamily:PLAN_INTER}}
+    onMouseEnter={function(e){e.currentTarget.style.borderColor=accent;e.currentTarget.style.boxShadow="0 6px 18px rgba(15,23,42,0.06)";}}
+    onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:8}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+        {author?<UserAvatar user={author} size={26}/>:<div style={{width:26,height:26,borderRadius:"50%",background:"#f1f5f9"}}/>}
+        <div style={{minWidth:0}}>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{author?author.name:entry.author_name||"—"}</div>
+          {entry.title&&<div style={{color:"#475569",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{entry.title}</div>}
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+        <button onClick={function(){onEdit(entry);}} title="Editar"
+          style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 8px",color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center"}}><_PlIco name="edit" size={12}/></button>
+        <button onClick={function(){onDelete(entry.id);}} title="Excluir"
+          style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 8px",color:"#dc2626",cursor:"pointer",display:"inline-flex",alignItems:"center"}}><_PlIco name="trash" size={12}/></button>
+      </div>
+    </div>
+    <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{entry.content||""}</div>
+    <div style={{color:"#94a3b8",fontSize:10,marginTop:8,fontWeight:500}}>
+      Atualizado {new Date(entry.updated_at||entry.created_at||Date.now()).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}
+    </div>
+  </div>;
+}
+
+// ─── Card de meta ─────────────────────────────────────────────
+function PlanMetaCard({entry, onEdit, onDelete, onToggleStatus}){
+  const isConcluida = entry.status==="concluida";
+  const accent = entry.type==="meta_mes"?"#f97316":PLAN_PURPLE;
+  return <div style={{background:isConcluida?"#f0fdf4":"#fff",border:"1px solid "+(isConcluida?"#bbf7d0":"#e2e8f0"),borderRadius:12,padding:"13px 15px",fontFamily:PLAN_INTER,display:"flex",alignItems:"flex-start",gap:11}}>
+    <button onClick={onToggleStatus} title={isConcluida?"Marcar como em andamento":"Marcar como concluída"}
+      style={{width:22,height:22,borderRadius:6,border:"2px solid "+(isConcluida?"#16a34a":"#cbd5e1"),background:isConcluida?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1}}>
+      {isConcluida&&<_PlIco name="check" size={12} color="#fff"/>}
+    </button>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:5}}>
+        <span style={{background:accent+"15",color:accent,borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{entry.type==="meta_mes"?"Mensal":"Semanal"}</span>
+        {entry.type==="meta_semana"&&entry.week_key&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>Semana · {_plWeekRange(entry.week_key)}</span>}
+        {entry.type==="meta_mes"&&entry.month_key&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{entry.month_key}</span>}
+      </div>
+      <div style={{color:isConcluida?"#166534":"#0f172a",fontSize:13.5,fontWeight:700,lineHeight:1.35,letterSpacing:-.1,textDecoration:isConcluida?"line-through":"none"}}>{entry.title||"(sem título)"}</div>
+      {entry.content&&<div style={{color:isConcluida?"#15803d":"#475569",fontSize:12,lineHeight:1.55,marginTop:5,whiteSpace:"pre-wrap",wordBreak:"break-word",opacity:isConcluida?.8:1}}>{entry.content}</div>}
+      <div style={{color:"#94a3b8",fontSize:10.5,marginTop:6,fontWeight:500}}>
+        {entry.author_name||"—"} · atualizado {_plFmtDate(new Date(entry.updated_at||entry.created_at).toISOString().slice(0,10))}
+      </div>
+    </div>
+    <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+      <button onClick={function(){onEdit(entry);}} title="Editar"
+        style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 8px",color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center"}}><_PlIco name="edit" size={12}/></button>
+      <button onClick={function(){onDelete(entry.id);}} title="Excluir"
+        style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 8px",color:"#dc2626",cursor:"pointer",display:"inline-flex",alignItems:"center"}}><_PlIco name="trash" size={12}/></button>
+    </div>
+  </div>;
+}
+
+// ─── Modal editor ─────────────────────────────────────────────
+function PlanEditModal({entry, setEntry, onSave, onClose}){
+  const isMeta = entry.type==="meta_semana"||entry.type==="meta_mes";
+  const isDaily = entry.type==="daily";
+  const isWeekly = entry.type==="weekly";
+  const titleLabel = isMeta?"Título da meta":isWeekly?"Tópico do weekly":"Tópico do daily";
+  const contentLabel = isMeta?"Descrição da meta · O que e como":isWeekly?"Resumo da semana · O que avançou, gargalos, planos":"O que foi feito hoje · Prioridades e bloqueios";
+  const headerTitle = isMeta?(entry.id?"Editar meta":"Nova meta"):isWeekly?(entry.id?"Editar weekly":"Novo weekly"):(entry.id?"Editar daily":"Novo daily");
+
+  function patch(k,v){ setEntry(function(p){return Object.assign({},p,{[k]:v});}); }
+
+  return <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:PLAN_INTER}}
+    onClick={function(e){if(e.target===e.currentTarget)onClose();}}>
+    <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:580,maxHeight:"90vh",overflow:"auto",boxShadow:"0 30px 80px rgba(0,0,0,0.3)"}}>
+      <div style={{padding:"18px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,"+PLAN_PURPLE+",#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <_PlIco name={isMeta?"target":isWeekly?"weekly":"sunrise"} size={15} color="#fff"/>
+          </div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{headerTitle}</div>
+        </div>
+        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"6px 10px",color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center"}}><_PlIco name="x" size={14}/></button>
+      </div>
+
+      <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+        {/* Tipo de meta */}
+        {isMeta&&<div style={{display:"flex",gap:6}}>
+          {[["meta_semana","Semanal"],["meta_mes","Mensal"]].map(function(opt){
+            const sel=entry.type===opt[0];
+            return <button key={opt[0]} onClick={function(){patch("type",opt[0]); patch("meta_scope",opt[0]==="meta_semana"?"semana":"mes");}}
+              style={{flex:1,background:sel?PLAN_PURPLE+"18":"transparent",border:"1px solid "+(sel?PLAN_PURPLE:"#e2e8f0"),borderRadius:10,padding:"8px 12px",color:sel?PLAN_PURPLE:"#475569",fontSize:12,fontWeight:sel?700:500,cursor:"pointer",fontFamily:"inherit"}}>{opt[1]}</button>;
+          })}
+        </div>}
+
+        {/* Data — só daily */}
+        {isDaily&&<div>
+          <_PlLBL>Data</_PlLBL>
+          <input type="date" value={entry.entry_date||_plToday()} onChange={function(e){patch("entry_date",e.target.value); patch("week_key",_plWeekKey(e.target.value)); patch("month_key",_plMonthKey(e.target.value));}}
+            style={_plInpStyle()}/>
+        </div>}
+
+        {/* Título */}
+        <div>
+          <_PlLBL>{titleLabel}</_PlLBL>
+          <input type="text" value={entry.title||""} onChange={function(e){patch("title",e.target.value);}}
+            placeholder={isMeta?"Ex: Fechar 3 contratos novos":isWeekly?"Ex: Foco da semana — sprint Bioter":"Ex: Reunião com cliente X"}
+            style={_plInpStyle()}/>
+        </div>
+
+        {/* Conteúdo */}
+        <div>
+          <_PlLBL>{contentLabel}</_PlLBL>
+          <textarea value={entry.content||""} onChange={function(e){patch("content",e.target.value);}}
+            rows={isMeta?4:6} placeholder={isDaily?"O que foi feito · Prioridades · Bloqueios":isWeekly?"Resultado · Aprendizado · Próximos passos":"Como vamos medir · Etapas · Responsáveis"}
+            style={Object.assign({},_plInpStyle(),{resize:"vertical",minHeight:100,lineHeight:1.6,fontFamily:"inherit"})}/>
+        </div>
+
+        {/* Status pra metas */}
+        {isMeta&&<div>
+          <_PlLBL>Status</_PlLBL>
+          <div style={{display:"flex",gap:6}}>
+            {[["em_andamento","Em andamento"],["concluida","Concluída"],["nao_atingida","Não atingida"]].map(function(opt){
+              const sel=(entry.status||"em_andamento")===opt[0];
+              return <button key={opt[0]} onClick={function(){patch("status",opt[0]);}}
+                style={{flex:1,background:sel?PLAN_PURPLE+"18":"transparent",border:"1px solid "+(sel?PLAN_PURPLE:"#e2e8f0"),borderRadius:10,padding:"7px 10px",color:sel?PLAN_PURPLE:"#475569",fontSize:11.5,fontWeight:sel?700:500,cursor:"pointer",fontFamily:"inherit"}}>{opt[1]}</button>;
+            })}
+          </div>
+        </div>}
+      </div>
+
+      <div style={{padding:"14px 22px",borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <button onClick={onClose} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 18px",color:"#475569",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={onSave} style={{background:PLAN_PURPLE,border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(159,67,246,.32)",display:"inline-flex",alignItems:"center",gap:6}}>
+          <_PlIco name="check" size={13} color="#fff"/> Salvar
+        </button>
+      </div>
+    </div>
+  </div>;
+}
+
+function _PlLBL({children}){
+  return <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6,fontFamily:PLAN_INTER}}>{children}</div>;
+}
+function _plInpStyle(){
+  return {background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",color:"#0f172a",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:PLAN_INTER,transition:"all .15s"};
+}
+
+function _PlEmptyState({title,desc}){
+  return <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed #e2e8f0",fontFamily:PLAN_INTER}}>
+    <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:52,height:52,borderRadius:13,background:"#9F43F614",color:PLAN_PURPLE,marginBottom:12}}>
+      <_PlIco name="target" size={24} color={PLAN_PURPLE}/>
+    </div>
+    <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:5}}>{title}</div>
+    <div style={{color:"#64748b",fontSize:12.5,maxWidth:420,margin:"0 auto",lineHeight:1.5}}>{desc}</div>
   </div>;
 }
