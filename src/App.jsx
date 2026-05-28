@@ -15983,13 +15983,16 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const filterFn=tab==="publicacao"?isFinalImg:isAnyImg;
   // ORDEM: última imagem subida pelo designer aparece PRIMEIRO (mais recente no topo).
   // Reverte files em ordem cronológica → mais recente primeiro. Cover entra no fim se não estiver nos files.
-  const _filesDesc=(current?.files||[]).filter(filterFn).slice().reverse().map(f=>f.url);
+  // Filtra URLs válidas (http/https/data/blob) — evita placeholders e refs sem url.
+  const _isValidUrl=(u)=>typeof u==="string"&&u.length>0&&(u.startsWith("http")||u.startsWith("data:")||u.startsWith("blob:"));
+  const _filesDesc=(current?.files||[]).filter(filterFn).slice().reverse().map(f=>f.url).filter(_isValidUrl);
   const _coverInFiles=current?.cover&&_filesDesc.includes(current.cover);
+  const _coverValid=_isValidUrl(current?.cover);
   const allImgs=current?(
     _filesDesc.length>0
-      ? [..._filesDesc, ...(current.cover&&!_coverInFiles?[current.cover]:[])]
-      : (current.cover?[current.cover]:[])
-  ).filter(Boolean):[];
+      ? [..._filesDesc, ...(_coverValid&&!_coverInFiles?[current.cover]:[])]
+      : (_coverValid?[current.cover]:[])
+  ):[];
 
   const isSocio=CURRENT_USER.level===1;
   const TABS=[
@@ -16058,17 +16061,19 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
         {tab!=="internas"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
           <div style={{background:C.s1,borderRadius:16,overflow:"hidden",minHeight:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
             {allImgs.length>0
-              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="material" style={{width:"100%",maxHeight:"78vh",objectFit:"contain",display:"block"}}/>)
+              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" style={{width:"100%",maxHeight:"78vh",objectFit:"contain",display:"block"}}/>)
               :(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:60}}>
                   <Ico n="image" size={40}/>
                   <div style={{color:C.ts,fontSize:13}}>Nenhuma imagem anexada</div>
                 </div>)
             }
           </div>
-          {allImgs.length>1&&(<div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap"}}>
+          {allImgs.length>1&&(<div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap",padding:"4px 0"}}>
             {allImgs.map((src,i)=>(
-              <img key={i} src={src} onClick={()=>setImgIdx(i)} alt={"img "+(i+1)}
-                style={{width:60,height:60,objectFit:"cover",borderRadius:10,cursor:"pointer",border:i===imgIdx?"2px solid "+C.a:"2px solid transparent",opacity:i===imgIdx?1:.55,transition:"all .15s"}}/>
+              <img key={i} src={src} onClick={()=>setImgIdx(i)} alt=""
+                style={{width:96,height:96,objectFit:"cover",borderRadius:12,cursor:"pointer",border:i===imgIdx?"3px solid "+C.a:"2px solid #e2e8f0",opacity:i===imgIdx?1:.7,transition:"all .15s",boxShadow:i===imgIdx?"0 4px 12px rgba(161,64,255,0.25)":"none"}}
+                onMouseEnter={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.95;}}
+                onMouseLeave={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.7;}}/>
             ))}
           </div>)}
         </div>}
