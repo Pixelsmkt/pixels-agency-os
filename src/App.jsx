@@ -41253,11 +41253,22 @@ function _DGEmpty({icon, title, desc}){
 // ======= 27_playbooks.jsx =======
 // Playbooks por cliente — Design / Edição de Vídeo / Gestão de Mídia.
 // Acesso: sócios + Hellen (admin) veem tudo. Freelancers veem só sua área.
-// Storage: Supabase tabela `playbooks` (client_id, area, data jsonb) com fallback localStorage.
+// Storage: Supabase tabela `playbooks` (client_id, data jsonb) com cache localStorage.
 
-const PB_INTER = "'Inter', system-ui, -apple-system, sans-serif";
-const PB_PURPLE = "#9F43F6";
-const PB_DARK   = "#0f172a";
+const PB_INTER     = "'Inter', system-ui, -apple-system, sans-serif";
+const PB_PURPLE    = "#9F43F6";
+const PB_PURPLE_DK = "#7c3aed";
+const PB_PURPLE_BG = "#faf5ff";
+const PB_PURPLE_BD = "#ede9fe";
+const PB_BG        = "#f5f5f7";
+const PB_CARD      = "#ffffff";
+const PB_BORDER    = "#e5e7eb";
+const PB_BORDER2   = "#eef0f3";
+const PB_INK       = "#0f172a";
+const PB_TEXT      = "#334155";
+const PB_MUTE      = "#64748b";
+const PB_SOFT      = "#94a3b8";
+const PB_DARK      = "#0f172a";
 
 // ── Helper de storage (Supabase + cache localStorage) ──────
 const PB_LS_KEY = "pixels-playbooks-v1";
@@ -41316,7 +41327,7 @@ const PB_SEED = {
           id: "foto_obra",
           title: "Template de Foto de Obra",
           subtitle: "Para fotos de obras Bioter — valoriza produto, tecnologia aplicada e localização",
-          imgUrl: "", // ← admin sobe URL aqui depois
+          imgUrl: "",
           rules: [
             {
               section: "Texto do card",
@@ -41432,11 +41443,9 @@ const PB_SEED = {
 };
 
 function _pbInitFromCache(){
-  // Sempre começa com cache local (instant render) + merge com SEED pra clientes novos
   const cache = _pbLoadCache();
   const base = JSON.parse(JSON.stringify(PB_SEED));
   if(cache && typeof cache === "object"){
-    // Merge: cache sobrescreve seed (admin pode ter alterado), mas seed preenche clientes que não estão no cache
     Object.keys(cache).forEach(k => { base[k] = cache[k]; });
   }
   _pbSaveCache(base);
@@ -41447,13 +41456,11 @@ function _pbInitFromCache(){
 function _usePlaybooksStore(){
   const [store, setStore] = useState(()=>_pbInitFromCache());
 
-  // Carrega do Supabase no mount
   useEffect(()=>{
     let active = true;
     (async ()=>{
       const remote = await _pbLoadFromSupabase();
       if(!active || !remote) return;
-      // Merge: remote sobrescreve cache; clientes do seed que não estão no remote ainda aparecem
       setStore(prev => {
         const next = Object.assign({}, prev);
         Object.keys(remote).forEach(k => { next[k] = remote[k]; });
@@ -41464,7 +41471,6 @@ function _usePlaybooksStore(){
     return ()=>{ active = false; };
   }, []);
 
-  // Realtime sync: quando outro user edita, atualiza local
   useEffect(()=>{
     if(!window._sb) return undefined;
     const ch = window._sb.channel("playbooks-sync")
@@ -41503,7 +41509,6 @@ function _usePlaybooksStore(){
       _pbSaveCache(next);
       return next;
     });
-    // Persiste no Supabase (async, sem bloquear UI)
     if(newData){
       const ok = await _pbSaveClientToSupabase(clientId, newData);
       if(!ok && typeof pixelsToast!=="undefined") pixelsToast.warning("Salvo só localmente — sem conexão com Supabase.");
@@ -41511,6 +41516,11 @@ function _usePlaybooksStore(){
   }, []);
 
   return [store, updateClient];
+}
+
+// ── Smooth scroll helper ──
+function _pbScrollTo(id){
+  try{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:"smooth", block:"start"}); }catch(_){}
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -41525,11 +41535,10 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   const isFreelaVideo  = effectiveUser.dash === "editor";
   const isFreelaMidia  = effectiveUser.id === "erick";
 
-  // Quais sub-abas o user pode ver
   const VISIBLE_TABS = [];
-  if(isAdmin || isFreelaDesign) VISIBLE_TABS.push({id:"design", label:"Design",            icon:"image"});
-  if(isAdmin || isFreelaVideo)  VISIBLE_TABS.push({id:"video",  label:"Edição de Vídeo",   icon:"play"});
-  if(isAdmin || isFreelaMidia)  VISIBLE_TABS.push({id:"midia",  label:"Gestão de Mídia",   icon:"trending-up"});
+  if(isAdmin || isFreelaDesign) VISIBLE_TABS.push({id:"design", label:"Design",            icon:"image",        color:"#9F43F6"});
+  if(isAdmin || isFreelaVideo)  VISIBLE_TABS.push({id:"video",  label:"Edição de Vídeo",   icon:"play",         color:"#0ea5e9"});
+  if(isAdmin || isFreelaMidia)  VISIBLE_TABS.push({id:"midia",  label:"Gestão de Mídia",   icon:"trending-up",  color:"#16a34a"});
 
   const [tab, setTab] = useState(VISIBLE_TABS[0]?.id || "design");
   const [openClient, setOpenClient] = useState(null);
@@ -41538,15 +41547,16 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   const [editMode, setEditMode] = useState(false);
 
   if(VISIBLE_TABS.length === 0){
-    return <div style={{padding:24,fontFamily:PB_INTER,color:"#64748b"}}>Você não tem acesso aos playbooks.</div>;
+    return <div style={{padding:24,fontFamily:PB_INTER,color:PB_MUTE}}>Você não tem acesso aos playbooks.</div>;
   }
 
-  // ── Drawer detalhe ──────────────────────────────────────
+  // ── Drawer detalhe ──
   if(openClient){
     const clCfg = (CLIENTS||[]).find(c=>c.id===openClient) || {id:openClient,name:openClient};
     const data = store[openClient] || {};
+    const areaCfg = VISIBLE_TABS.find(t=>t.id===tab) || {label:tab, icon:"folder", color:PB_PURPLE};
     return <PlaybookDetalhe
-      cl={clCfg} area={tab} data={data}
+      cl={clCfg} area={tab} areaCfg={areaCfg} data={data}
       isAdmin={isAdmin} editMode={editMode} setEditMode={setEditMode}
       onBack={()=>{setOpenClient(null); setEditMode(false);}}
       onUpdate={(patch)=>_updateClient(openClient, cur => Object.assign({}, cur, patch))}
@@ -41558,7 +41568,7 @@ function PagePlaybooks({isMob, perms, viewingAs}){
       isMob={isMob}/>;
   }
 
-  // ── Lista de clientes ──────────────────────────────────
+  // ── Lista de clientes ──
   const clientList = (CLIENTS||[]).filter(c=>{
     if(c.status==="interno") return false;
     if(!search) return true;
@@ -41573,7 +41583,7 @@ function PagePlaybooks({isMob, perms, viewingAs}){
       <div style={{position:"absolute",bottom:-40,left:160,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle, "+PB_PURPLE+"22 0%, transparent 70%)"}}/>
       <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
-          <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, #7c3aed 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 28px rgba(159,67,246,.45)",flexShrink:0}}>
+          <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 28px rgba(159,67,246,.45)",flexShrink:0}}>
             <Ico n="file-text" size={20} color="#fff"/>
           </div>
           <div style={{minWidth:0}}>
@@ -41594,11 +41604,11 @@ function PagePlaybooks({isMob, perms, viewingAs}){
     </div>
 
     {/* ══ Sub-abas (Design / Vídeo / Mídia) ══ */}
-    {VISIBLE_TABS.length>1 && <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:5,overflowX:"auto"}}>
+    {VISIBLE_TABS.length>1 && <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:5,overflowX:"auto"}}>
       {VISIBLE_TABS.map(t=>{
         const active = tab===t.id;
         return <button key={t.id} onClick={()=>setTab(t.id)}
-          style={{flex:isMob?"0 0 auto":1,background:active?"linear-gradient(135deg, "+PB_PURPLE+" 0%, #7c3aed 100%)":"transparent",color:active?"#fff":"#475569",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:active?"0 4px 14px rgba(159,67,246,0.3)":"none",whiteSpace:"nowrap"}}>
+          style={{flex:isMob?"0 0 auto":1,background:active?"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)":"transparent",color:active?"#fff":"#475569",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:active?"0 4px 14px rgba(159,67,246,0.3)":"none",whiteSpace:"nowrap"}}>
           <Ico n={t.icon} size={13} color={active?"#fff":"currentColor"}/>
           {t.label}
         </button>;
@@ -41607,22 +41617,22 @@ function PagePlaybooks({isMob, perms, viewingAs}){
 
     {/* ══ Grid de clientes ══ */}
     {clientList.length === 0
-      ? <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
-          <div style={{color:"#94a3b8",fontSize:13}}>Nenhum cliente encontrado.</div>
+      ? <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed "+PB_BORDER}}>
+          <div style={{color:PB_SOFT,fontSize:13}}>Nenhum cliente encontrado.</div>
         </div>
       : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:12}}>
           {clientList.map(cl=>{
             const data = store[cl.id] || {};
             const hasArea = !!(data[tab] && (data[tab].orientacoes || (data[tab].templates||[]).length>0));
             return <div key={cl.id} onClick={()=>setOpenClient(cl.id)}
-              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column",gap:10,fontFamily:PB_INTER}}
+              style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"16px 18px",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column",gap:10,fontFamily:PB_INTER}}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.boxShadow="0 6px 18px rgba(159,67,246,.10)";}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=PB_BORDER;e.currentTarget.style.boxShadow="none";}}>
               <div style={{display:"flex",alignItems:"center",gap:11}}>
                 <ClientLogo clientId={cl.id} size="md"/>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>{cl.sector||""}</div>
+                  <div style={{color:PB_INK,fontWeight:700,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                  <div style={{color:PB_SOFT,fontSize:10.5,marginTop:2,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>{cl.sector||""}</div>
                 </div>
               </div>
               {data.sobre && <div style={{color:"#475569",fontSize:11.5,lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{data.sobre}</div>}
@@ -41637,17 +41647,13 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   </div>;
 }
 
-// ─── Página de detalhe do playbook ─────────────────────
-function PlaybookDetalhe({cl, area, data, isAdmin, editMode, setEditMode, onBack, onUpdate, onUpdateArea, isMob}){
-  const areaCfg = {
-    design: {label:"Design",          icon:"image",        color:"#9F43F6"},
-    video:  {label:"Edição de Vídeo", icon:"play",         color:"#0ea5e9"},
-    midia:  {label:"Gestão de Mídia", icon:"trending-up",  color:"#16a34a"},
-  }[area] || {label:area, icon:"folder", color:PB_PURPLE};
-
+// ═══════════════════════════════════════════════════════════════
+//  PlaybookDetalhe — página de um cliente/área específica
+// ═══════════════════════════════════════════════════════════════
+function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMode, onBack, onUpdate, onUpdateArea, isMob}){
   const areaData = data[area] || {};
 
-  // Estados locais pra edição (sincroniza com data quando entra em edit)
+  // Edição inline
   const [editSobre,setEditSobre] = useState(data.sobre||"");
   const [editComm,setEditComm]   = useState(data.comunicacao||"");
   const [editOri,setEditOri]     = useState(areaData.orientacoes||"");
@@ -41667,197 +41673,486 @@ function PlaybookDetalhe({cl, area, data, isAdmin, editMode, setEditMode, onBack
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Playbook salvo!");
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:PB_INTER}}>
+  // Estado local dos checkboxes (lembra entre navegações)
+  const checklistArr = areaData.checklist || [];
+  const chkKey = "pixels-pbchk-"+cl.id+"-"+area;
+  const [checks, setChecks] = useState(()=>{
+    try{ const r=localStorage.getItem(chkKey); if(r) return JSON.parse(r); }catch(_){}
+    return {};
+  });
+  useEffect(()=>{
+    try{ const r=localStorage.getItem(chkKey); setChecks(r?JSON.parse(r):{}); }catch(_){ setChecks({}); }
+  },[cl.id,area]);
+  const toggleCheck = (idx)=>{
+    const next = Object.assign({}, checks, {[idx]: !checks[idx]});
+    setChecks(next);
+    try{ localStorage.setItem(chkKey, JSON.stringify(next)); }catch(_){}
+  };
+  const totalCheck = checklistArr.length;
+  const doneCheck  = checklistArr.reduce((acc,_,i)=>acc + (checks[i]?1:0), 0);
+  const allDone    = totalCheck>0 && doneCheck === totalCheck;
 
-    {/* Header com voltar + título + ações */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
-      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <button onClick={onBack} title="Voltar"
-          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#475569",cursor:"pointer",flexShrink:0}}>
-          <Ico n="chevron-left" size={16}/>
-        </button>
-        <ClientLogo clientId={cl.id} size="md"/>
-        <div style={{minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-            <span style={{background:areaCfg.color+"15",color:areaCfg.color,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
-              <Ico n={areaCfg.icon} size={10} color={areaCfg.color}/>{areaCfg.label}
-            </span>
+  // Refs (links)
+  const refs = areaData.refs || [];
+
+  // Tem template?
+  const templates = (areaData.templates||[]);
+  const hasTemplate = area==="design" && templates.length>0;
+
+  // Anchors visíveis nesta área
+  const SECTIONS = [
+    {id:"pb-sobre",        label:"Sobre",        icon:"building"},
+    {id:"pb-comunicacao",  label:"Comunicação",  icon:"sparkles"},
+    {id:"pb-orientacoes",  label:"Orientações",  icon:areaCfg.icon},
+  ];
+  if(hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
+  SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
+
+  // ─────────── Layout ───────────
+  return <div style={{background:PB_BG,margin:isMob?-12:-16,padding:isMob?12:20,minHeight:"100%",fontFamily:PB_INTER}}>
+    <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:1280,margin:"0 auto"}}>
+
+      {/* ══════════ HEADER PREMIUM ══════════ */}
+      <div style={{background:"linear-gradient(135deg, "+PB_DARK+" 0%, #1e293b 55%, #1e1b4b 100%)",borderRadius:20,padding:isMob?"18px 18px 20px":"24px 28px 26px",position:"relative",overflow:"hidden",boxShadow:"0 14px 40px rgba(15,23,42,.18)"}}>
+        <div style={{position:"absolute",top:-70,right:-70,width:280,height:280,borderRadius:"50%",background:"radial-gradient(circle, "+PB_PURPLE+"45 0%, transparent 65%)"}}/>
+        <div style={{position:"absolute",bottom:-80,left:"35%",width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle, "+PB_PURPLE_DK+"28 0%, transparent 70%)"}}/>
+        <div style={{position:"absolute",top:30,right:"30%",width:140,height:140,borderRadius:"50%",background:"radial-gradient(circle, #6366f120 0%, transparent 75%)"}}/>
+
+        <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"flex-start",gap:isMob?12:16,flexWrap:"wrap",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:isMob?12:16,minWidth:0,flex:1}}>
+            <button onClick={onBack} title="Voltar"
+              style={{background:"rgba(255,255,255,.10)",border:"1px solid rgba(255,255,255,.18)",borderRadius:12,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",cursor:"pointer",flexShrink:0,backdropFilter:"blur(8px)"}}>
+              <Ico n="chevron-left" size={18} color="#fff"/>
+            </button>
+            <div style={{width:isMob?56:64,height:isMob?56:64,borderRadius:16,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 22px rgba(0,0,0,.22)",overflow:"hidden"}}>
+              <ClientLogo clientId={cl.id} size="lg"/>
+            </div>
+            <div style={{minWidth:0,paddingTop:2}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+                <span style={{background:"rgba(159,67,246,.22)",color:"#e9d5ff",border:"1px solid rgba(159,67,246,.45)",borderRadius:8,padding:"3px 10px",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
+                  <Ico n={areaCfg.icon} size={11} color="#e9d5ff"/>{areaCfg.label}
+                </span>
+                {cl.sector && <span style={{background:"rgba(255,255,255,.10)",color:"rgba(255,255,255,.78)",border:"1px solid rgba(255,255,255,.16)",borderRadius:8,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{cl.sector}</span>}
+                <span style={{color:"rgba(255,255,255,.55)",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>Playbook</span>
+              </div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:30,letterSpacing:-.7,lineHeight:1.1}}>{cl.name}</div>
+              {data.sobre && <div style={{color:"rgba(255,255,255,.72)",fontSize:13,marginTop:8,lineHeight:1.55,maxWidth:640,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                {data.sobre}
+              </div>}
+            </div>
           </div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>{cl.name}</div>
+          {isAdmin && <div style={{display:"flex",gap:8,flexShrink:0,paddingTop:2}}>
+            {editMode
+              ? <>
+                  <button onClick={()=>setEditMode(false)} style={{background:"rgba(255,255,255,.10)",border:"1px solid rgba(255,255,255,.18)",borderRadius:11,padding:"9px 16px",color:"#fff",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)"}}>Cancelar</button>
+                  <button onClick={handleSave} style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",border:"none",borderRadius:11,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 20px rgba(159,67,246,.5)",display:"inline-flex",alignItems:"center",gap:6}}>
+                    <Ico n="check" size={14} color="#fff"/> Salvar
+                  </button>
+                </>
+              : <button onClick={()=>setEditMode(true)} style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",border:"none",borderRadius:11,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 20px rgba(159,67,246,.5)",display:"inline-flex",alignItems:"center",gap:6}}>
+                  <Ico n="edit" size={13} color="#fff"/> Editar playbook
+                </button>
+            }
+          </div>}
         </div>
       </div>
-      {isAdmin && <div style={{display:"flex",gap:8}}>
-        {editMode
-          ? <>
-              <button onClick={()=>setEditMode(false)} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 14px",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-              <button onClick={handleSave} style={{background:PB_PURPLE,border:"none",borderRadius:10,padding:"8px 18px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(159,67,246,.35)",display:"inline-flex",alignItems:"center",gap:6}}>
-                <Ico n="check" size={13} color="#fff"/> Salvar
-              </button>
-            </>
-          : <button onClick={()=>setEditMode(true)} style={{background:"#0f172a",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-              <Ico n="edit" size={12} color="#fff"/> Editar playbook
-            </button>
-        }
-      </div>}
-    </div>
 
-    {/* Bloco 1: Sobre a empresa */}
-    <PlaybookBlock title="Sobre a empresa" icon="info" color={PB_PURPLE}>
-      {editMode
-        ? <textarea value={editSobre} onChange={e=>setEditSobre(e.target.value)} rows={4}
-            placeholder="Quem é o cliente, o que vende, onde atua, posicionamento principal..."
-            style={_pbInpStyle()}/>
-        : (data.sobre
-            ? <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{data.sobre}</div>
-            : <_PbEmpty text="Sem descrição cadastrada."/>)
-      }
-    </PlaybookBlock>
+      {/* ══════════ ANCORAS / NAV RÁPIDO ══════════ */}
+      <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:6,display:"flex",gap:4,overflowX:"auto",position:"sticky",top:8,zIndex:5,boxShadow:"0 2px 10px rgba(15,23,42,.04)"}}>
+        {SECTIONS.map(s=>(
+          <button key={s.id} onClick={()=>_pbScrollTo(s.id)}
+            style={{flex:isMob?"0 0 auto":1,background:"transparent",border:"none",borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:600,color:PB_TEXT,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,whiteSpace:"nowrap",transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background=PB_PURPLE_BG;e.currentTarget.style.color=PB_PURPLE_DK;}}
+            onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=PB_TEXT;}}>
+            <Ico n={s.icon} size={13} color="currentColor"/>{s.label}
+          </button>
+        ))}
+      </div>
 
-    {/* Bloco 2: Comunicação da marca */}
-    <PlaybookBlock title="Comunicação da marca" icon="message" color="#0ea5e9">
-      {editMode
-        ? <textarea value={editComm} onChange={e=>setEditComm(e.target.value)} rows={4}
-            placeholder="Tom de voz, estilo de mensagem, tipo de linguagem, o que a marca transmite..."
-            style={_pbInpStyle()}/>
-        : (data.comunicacao
-            ? <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{data.comunicacao}</div>
-            : <_PbEmpty text="Sem orientação de comunicação cadastrada."/>)
-      }
-    </PlaybookBlock>
+      {/* ══════════ GRID 2 COLUNAS ══════════ */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 320px",gap:14,alignItems:"start"}}>
 
-    {/* Bloco 3: Orientações da área */}
-    <PlaybookBlock title={"Orientações de "+areaCfg.label} icon={areaCfg.icon} color={areaCfg.color}>
-      {editMode
-        ? <textarea value={editOri} onChange={e=>setEditOri(e.target.value)} rows={6}
-            placeholder="Padrões, regras, o que manter, o que evitar..."
-            style={_pbInpStyle()}/>
-        : (areaData.orientacoes
-            ? <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{areaData.orientacoes}</div>
-            : <_PbEmpty text={"Orientações de "+areaCfg.label+" em construção."}/>)
-      }
-    </PlaybookBlock>
+        {/* ───── COLUNA PRINCIPAL ───── */}
+        <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
 
-    {/* Bloco 4: Templates específicos (só em area==="design") */}
-    {area==="design" && (areaData.templates||[]).length>0 && (areaData.templates||[]).map(tpl=>(
-      <PlaybookTemplateBlock key={tpl.id} tpl={tpl} isAdmin={isAdmin} editMode={editMode}
-        onSaveImg={(url)=>onUpdateArea({templates:(areaData.templates||[]).map(t=>t.id===tpl.id?Object.assign({},t,{imgUrl:url}):t)})}/>
-    ))}
+          {/* Sobre a empresa */}
+          <PlaybookBlock id="pb-sobre" title="Sobre a empresa" subtitle="Quem é o cliente, onde atua e posicionamento" icon="building" color={PB_PURPLE}>
+            {editMode
+              ? <textarea value={editSobre} onChange={e=>setEditSobre(e.target.value)} rows={5}
+                  placeholder="Quem é o cliente, o que vende, onde atua, posicionamento principal..."
+                  style={_pbInpStyle()}/>
+              : (data.sobre
+                  ? <PbProse text={data.sobre}/>
+                  : <_PbEmpty icon="building" text="Sem descrição cadastrada." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>)
+            }
+          </PlaybookBlock>
 
-    {/* Bloco 5: Checklist rápido */}
-    <PlaybookBlock title="Checklist antes de entregar" icon="check" color="#16a34a">
-      {editMode
-        ? <textarea value={editChk} onChange={e=>setEditChk(e.target.value)} rows={6}
-            placeholder="Um item por linha. Ex:&#10;Conferi o padrão visual?&#10;Conferi o texto?"
-            style={_pbInpStyle()}/>
-        : ((areaData.checklist||[]).length>0
-            ? <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {areaData.checklist.map((item,i)=>(
-                  <div key={i} style={{display:"flex",alignItems:"flex-start",gap:9,padding:"6px 0"}}>
-                    <div style={{width:18,height:18,borderRadius:5,border:"2px solid #cbd5e1",flexShrink:0,marginTop:1}}/>
-                    <span style={{color:"#0f172a",fontSize:13,lineHeight:1.45}}>{item}</span>
-                  </div>
-                ))}
+          {/* Comunicação da marca */}
+          <PlaybookBlock id="pb-comunicacao" title="Comunicação da marca" subtitle="Tom de voz, estilo e linguagem" icon="sparkles" color="#0ea5e9">
+            {editMode
+              ? <textarea value={editComm} onChange={e=>setEditComm(e.target.value)} rows={5}
+                  placeholder="Tom de voz, estilo de mensagem, tipo de linguagem, o que a marca transmite..."
+                  style={_pbInpStyle()}/>
+              : (data.comunicacao
+                  ? <PbProse text={data.comunicacao}/>
+                  : <_PbEmpty icon="sparkles" text="Sem orientação de comunicação cadastrada." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>)
+            }
+          </PlaybookBlock>
+
+          {/* Orientações da área */}
+          <PlaybookBlock id="pb-orientacoes" title={"Orientações de "+areaCfg.label} subtitle="Padrões, regras e referências da área" icon={areaCfg.icon} color={areaCfg.color}>
+            {editMode
+              ? <textarea value={editOri} onChange={e=>setEditOri(e.target.value)} rows={7}
+                  placeholder="Padrões, regras, o que manter, o que evitar..."
+                  style={_pbInpStyle()}/>
+              : (areaData.orientacoes
+                  ? <PbProse text={areaData.orientacoes}/>
+                  : <_PbEmpty icon={areaCfg.icon} text={"Orientações de "+areaCfg.label+" em construção."}/>)
+            }
+          </PlaybookBlock>
+
+          {/* Templates específicos (só design) */}
+          {hasTemplate && <div id="pb-templates" style={{display:"flex",flexDirection:"column",gap:14}}>
+            {templates.map(tpl=>(
+              <PlaybookTemplateBlock key={tpl.id} tpl={tpl} isAdmin={isAdmin} editMode={editMode}
+                onSaveImg={(url)=>onUpdateArea({templates:(areaData.templates||[]).map(t=>t.id===tpl.id?Object.assign({},t,{imgUrl:url}):t)})}/>
+            ))}
+          </div>}
+
+        </div>
+
+        {/* ───── COLUNA LATERAL ───── */}
+        <div style={{display:"flex",flexDirection:"column",gap:14,minWidth:0}}>
+
+          {/* Resumo rápido */}
+          <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
+            <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:10}}>Resumo</div>
+            <div style={{display:"flex",flexDirection:"column",gap:9}}>
+              <PbMini icon="building" label="Cliente" value={cl.name}/>
+              {cl.sector && <PbMini icon="tag" label="Setor" value={cl.sector}/>}
+              <PbMini icon={areaCfg.icon} label="Área" value={areaCfg.label}/>
+              <PbMini icon="checkCircle" label="Checklist" value={totalCheck>0?(doneCheck+"/"+totalCheck+" conferidos"):"sem itens"}/>
+            </div>
+          </div>
+
+          {/* Checklist com progresso */}
+          <div id="pb-checklist" style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg, #16a34a 0%, #15803d 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(22,163,74,.32)"}}>
+                <Ico n="checkCircle" size={17} color="#fff"/>
               </div>
-            : <_PbEmpty text="Sem checklist cadastrado."/>)
-      }
-    </PlaybookBlock>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Checklist</div>
+                <div style={{color:PB_MUTE,fontSize:11,marginTop:1}}>antes de entregar</div>
+              </div>
+            </div>
 
+            {editMode
+              ? <textarea value={editChk} onChange={e=>setEditChk(e.target.value)} rows={8}
+                  placeholder={"Um item por linha. Ex:\nConferi o padrão visual?\nConferi o texto?"}
+                  style={_pbInpStyle()}/>
+              : totalCheck === 0
+                ? <_PbEmpty icon="checkCircle" text="Sem checklist cadastrado."/>
+                : <>
+                    {/* Barra de progresso */}
+                    <div style={{marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <span style={{color:PB_MUTE,fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>Progresso</span>
+                        <span style={{color:allDone?"#15803d":PB_INK,fontSize:12,fontWeight:800}}>{doneCheck}/{totalCheck}</span>
+                      </div>
+                      <div style={{height:7,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                        <div style={{width:(totalCheck?Math.round(100*doneCheck/totalCheck):0)+"%",height:"100%",background:allDone?"linear-gradient(90deg, #16a34a, #22c55e)":"linear-gradient(90deg, "+PB_PURPLE+", "+PB_PURPLE_DK+")",transition:"width .25s"}}/>
+                      </div>
+                    </div>
+
+                    {/* Itens */}
+                    <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                      {checklistArr.map((item,i)=>{
+                        const on = !!checks[i];
+                        return <div key={i} onClick={()=>toggleCheck(i)}
+                          style={{display:"flex",alignItems:"flex-start",gap:9,padding:"7px 8px",borderRadius:9,cursor:"pointer",background:on?"#f0fdf4":"transparent",transition:"background .15s"}}
+                          onMouseEnter={e=>{if(!on)e.currentTarget.style.background="#f8fafc";}}
+                          onMouseLeave={e=>{if(!on)e.currentTarget.style.background="transparent";}}>
+                          <div style={{width:18,height:18,borderRadius:6,border:on?"2px solid #16a34a":"2px solid #cbd5e1",background:on?"#16a34a":"#fff",flexShrink:0,marginTop:1,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}>
+                            {on && <Ico n="check" size={11} color="#fff"/>}
+                          </div>
+                          <span style={{color:on?"#15803d":PB_TEXT,fontSize:12.5,lineHeight:1.45,fontWeight:on?600:500,textDecoration:on?"line-through":"none",textDecorationColor:"#86efac"}}>{item}</span>
+                        </div>;
+                      })}
+                    </div>
+
+                    {/* Banner "Tudo conferido" */}
+                    {allDone && <div style={{marginTop:12,background:"linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%)",border:"1px solid #86efac",borderRadius:11,padding:"10px 12px",display:"flex",alignItems:"center",gap:9}}>
+                      <div style={{width:30,height:30,borderRadius:8,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <Ico n="check" size={15} color="#fff"/>
+                      </div>
+                      <div>
+                        <div style={{color:"#14532d",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>Tudo conferido!</div>
+                        <div style={{color:"#166534",fontSize:10.5,marginTop:1,fontWeight:600}}>Pode mandar pra aprovação.</div>
+                      </div>
+                    </div>}
+                  </>
+            }
+          </div>
+
+          {/* Referências */}
+          <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg, #6366f1 0%, #4338ca 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(99,102,241,.32)"}}>
+                <Ico n="link" size={16} color="#fff"/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Referências</div>
+                <div style={{color:PB_MUTE,fontSize:11,marginTop:1}}>links e materiais úteis</div>
+              </div>
+            </div>
+            {refs.length === 0
+              ? <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:11,padding:"18px 14px",textAlign:"center"}}>
+                  <Ico n="folder" size={22} color="#cbd5e1"/>
+                  <div style={{color:PB_MUTE,fontSize:11.5,marginTop:7,fontWeight:600}}>Nenhuma referência ainda</div>
+                  <div style={{color:PB_SOFT,fontSize:10.5,marginTop:3,lineHeight:1.4}}>Adicione links de inspiração, drives ou guidelines.</div>
+                  {isAdmin && <button onClick={()=>{
+                      const url = prompt("URL da referência:");
+                      if(!url) return;
+                      const title = prompt("Título (opcional):") || url;
+                      onUpdateArea({refs:[...refs, {url:url.trim(), title:title.trim()}]});
+                    }} style={{marginTop:12,background:PB_PURPLE,border:"none",borderRadius:9,padding:"7px 14px",color:"#fff",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+                    <Ico n="plus" size={12} color="#fff"/> Adicionar referência
+                  </button>}
+                </div>
+              : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {refs.map((r,i)=>(
+                    <a key={i} href={r.url} target="_blank" rel="noopener noreferrer"
+                      style={{background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"8px 11px",textDecoration:"none",display:"flex",alignItems:"center",gap:9,transition:"all .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background=PB_PURPLE_BG;}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor=PB_BORDER;e.currentTarget.style.background="#fafafa";}}>
+                      <Ico n="link" size={13} color={PB_PURPLE}/>
+                      <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                        <div style={{color:PB_INK,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title||r.url}</div>
+                        {r.title && <div style={{color:PB_SOFT,fontSize:10,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.url}</div>}
+                      </div>
+                      {isAdmin && <button onClick={(e)=>{e.preventDefault();e.stopPropagation(); if(confirm("Remover esta referência?")) onUpdateArea({refs:refs.filter((_,j)=>j!==i)});}} title="Remover"
+                        style={{background:"transparent",border:"none",cursor:"pointer",padding:4,borderRadius:6,color:PB_SOFT}}>
+                        <Ico n="x" size={12} color="currentColor"/>
+                      </button>}
+                    </a>
+                  ))}
+                  {isAdmin && <button onClick={()=>{
+                      const url = prompt("URL da referência:");
+                      if(!url) return;
+                      const title = prompt("Título (opcional):") || url;
+                      onUpdateArea({refs:[...refs, {url:url.trim(), title:title.trim()}]});
+                    }} style={{marginTop:4,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:9,padding:"7px 11px",color:PB_PURPLE,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                    <Ico n="plus" size={12} color={PB_PURPLE}/> Adicionar
+                  </button>}
+                </div>
+            }
+          </div>
+
+        </div>
+      </div>
+    </div>
   </div>;
 }
 
-// ── Bloco genérico ──────────────────────────────────────
-function PlaybookBlock({title, icon, color, children}){
-  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",fontFamily:PB_INTER}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,paddingBottom:10,borderBottom:"1px solid #f1f5f9"}}>
-      <div style={{width:30,height:30,borderRadius:9,background:color+"14",display:"flex",alignItems:"center",justifyContent:"center",color}}>
-        <Ico n={icon} size={14} color={color}/>
+// ─── Bloco genérico (com id pra ancora + subtitle) ──────────
+function PlaybookBlock({id, title, subtitle, icon, color, children}){
+  return <div id={id} style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:16,padding:"18px 20px",fontFamily:PB_INTER,boxShadow:"0 2px 8px rgba(15,23,42,.03)",scrollMarginTop:80}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,paddingBottom:12,borderBottom:"1px solid "+PB_BORDER2}}>
+      <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg, "+color+" 0%, "+_pbDarken(color)+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px "+color+"40",flexShrink:0}}>
+        <Ico n={icon} size={20} color="#fff" strokeWidth={2.2}/>
       </div>
-      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{title}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:PB_INK,fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>{title}</div>
+        {subtitle && <div style={{color:PB_MUTE,fontSize:11.5,marginTop:2,fontWeight:500}}>{subtitle}</div>}
+      </div>
     </div>
     {children}
   </div>;
 }
 
-// ── Bloco específico de template (Design > Foto de Obra etc.) ──
+// Pequeno darken pra gradiente (evita usar lib)
+function _pbDarken(hex){
+  if(!hex || hex[0]!=="#" || hex.length!==7) return hex;
+  const r=Math.max(0,parseInt(hex.slice(1,3),16)-30);
+  const g=Math.max(0,parseInt(hex.slice(3,5),16)-30);
+  const b=Math.max(0,parseInt(hex.slice(5,7),16)-30);
+  return "#"+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+// ─── Prose component: detecta "O que manter" / "O que evitar" e quebra em blocos visuais ──
+function PbProse({text}){
+  if(!text) return null;
+  const paragraphs = text.split(/\n\s*\n/);
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {paragraphs.map((p,i)=>{
+      const lower = p.toLowerCase();
+      if(lower.startsWith("o que manter") || lower.startsWith("manter:")){
+        return <PbHighlight key={i} kind="manter" text={p}/>;
+      }
+      if(lower.startsWith("o que evitar") || lower.startsWith("evitar:")){
+        return <PbHighlight key={i} kind="evitar" text={p}/>;
+      }
+      return <div key={i} style={{color:PB_TEXT,fontSize:13.2,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{p}</div>;
+    })}
+  </div>;
+}
+
+// ─── Bloco "manter" / "evitar" ────────────────────────────
+function PbHighlight({kind, text}){
+  const isManter = kind === "manter";
+  const cfg = isManter
+    ? {bg:"#f0fdf4", bd:"#bbf7d0", ico:"check",     iconBg:"#16a34a", labelColor:"#15803d", title:"O que manter"}
+    : {bg:"#fef2f2", bd:"#fecaca", ico:"x",         iconBg:"#dc2626", labelColor:"#b91c1c", title:"O que evitar"};
+  // remove o "O que manter:" do conteúdo
+  let body = text.replace(/^o que manter[:\s]*/i, "").replace(/^manter[:\s]*/i, "")
+                 .replace(/^o que evitar[:\s]*/i, "").replace(/^evitar[:\s]*/i, "");
+  return <div style={{background:cfg.bg,border:"1px solid "+cfg.bd,borderRadius:12,padding:"12px 14px",display:"flex",gap:11}}>
+    <div style={{width:30,height:30,borderRadius:9,background:cfg.iconBg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 3px 10px "+cfg.iconBg+"55"}}>
+      <Ico n={cfg.ico} size={15} color="#fff" strokeWidth={2.5}/>
+    </div>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{color:cfg.labelColor,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{cfg.title}</div>
+      <div style={{color:PB_INK,fontSize:12.8,lineHeight:1.6,whiteSpace:"pre-wrap",fontWeight:500}}>{body}</div>
+    </div>
+  </div>;
+}
+
+// ─── Linha de resumo lateral ──────────────────────────────
+function PbMini({icon, label, value}){
+  return <div style={{display:"flex",alignItems:"center",gap:9}}>
+    <div style={{width:30,height:30,borderRadius:9,background:PB_PURPLE_BG,border:"1px solid "+PB_PURPLE_BD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      <Ico n={icon} size={13} color={PB_PURPLE_DK}/>
+    </div>
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{color:PB_SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{label}</div>
+      <div style={{color:PB_INK,fontSize:12,fontWeight:700,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{value}</div>
+    </div>
+  </div>;
+}
+
+// ─── Bloco específico de template ──────────────────────────
 function PlaybookTemplateBlock({tpl, isAdmin, editMode, onSaveImg}){
   const [tmpUrl,setTmpUrl] = useState(tpl.imgUrl||"");
   useEffect(()=>{setTmpUrl(tpl.imgUrl||"");},[tpl.imgUrl, editMode]);
 
-  return <div style={{background:"#fff",border:"1px solid #ede9fe",borderRadius:14,padding:0,overflow:"hidden",fontFamily:PB_INTER}}>
-    {/* Header gradient roxo */}
-    <div style={{background:"linear-gradient(135deg, #faf5ff 0%, #ede9fe 100%)",padding:"14px 18px",borderBottom:"1px solid #ede9fe"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-        <div style={{width:30,height:30,borderRadius:9,background:PB_PURPLE,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Ico n="image" size={14} color="#fff"/>
+  return <div style={{background:"#fff",border:"1px solid "+PB_PURPLE_BD,borderRadius:18,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 6px 24px rgba(159,67,246,.10)",scrollMarginTop:80}}>
+    {/* Header hero gradient */}
+    <div style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",padding:"18px 22px",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:-40,right:-40,width:160,height:160,borderRadius:"50%",background:"rgba(255,255,255,.10)"}}/>
+      <div style={{position:"absolute",bottom:-30,left:"40%",width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,.06)"}}/>
+      <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:13}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)",flexShrink:0}}>
+          <Ico n="image" size={20} color="#fff" strokeWidth={2.2}/>
         </div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>{tpl.title}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
+            <span style={{background:"rgba(255,255,255,.22)",color:"#fff",border:"1px solid rgba(255,255,255,.3)",borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Template oficial</span>
+          </div>
+          <div style={{color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3}}>{tpl.title}</div>
+          {tpl.subtitle && <div style={{color:"rgba(255,255,255,.82)",fontSize:12,marginTop:3,fontWeight:500,lineHeight:1.45}}>{tpl.subtitle}</div>}
+        </div>
       </div>
-      {tpl.subtitle && <div style={{color:"#7c3aed",fontSize:11.5,marginLeft:40,fontWeight:500}}>{tpl.subtitle}</div>}
     </div>
 
-    {/* Imagem de referência */}
-    <div style={{padding:"16px 18px"}}>
-      {(tpl.imgUrl||editMode) && <div style={{marginBottom:16}}>
-        <div style={{color:PB_PURPLE,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Imagem de referência</div>
+    <div style={{padding:"18px 22px"}}>
+      {/* Imagem de referência */}
+      {(tpl.imgUrl||editMode) && <div style={{marginBottom:18}}>
+        <div style={{color:PB_PURPLE_DK,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:5}}>
+          <Ico n="image" size={11} color={PB_PURPLE_DK}/> Imagem de referência
+        </div>
         {tpl.imgUrl
-          ? <div style={{position:"relative",borderRadius:12,overflow:"hidden",border:"1px solid #ede9fe",background:"#f8fafc"}}>
+          ? <div style={{position:"relative",borderRadius:14,overflow:"hidden",border:"1px solid "+PB_PURPLE_BD,background:"#fafafa"}}>
               <img src={tpl.imgUrl} alt="" referrerPolicy="no-referrer"
                 onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
-                style={{maxWidth:"100%",maxHeight:520,objectFit:"contain",display:"block",margin:"0 auto"}}/>
-              <div style={{display:"none",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:40,color:"#94a3b8",textAlign:"center"}}>
+                style={{maxWidth:"100%",maxHeight:560,objectFit:"contain",display:"block",margin:"0 auto"}}/>
+              <div style={{display:"none",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:40,color:PB_SOFT,textAlign:"center"}}>
                 <Ico n="image" size={28} color="#cbd5e1"/>
                 <div style={{fontSize:12,fontWeight:600}}>Imagem indisponível</div>
-                <a href={tpl.imgUrl} target="_blank" rel="noopener noreferrer" style={{color:PB_PURPLE,fontSize:11,fontWeight:700,textDecoration:"none"}}>Abrir URL →</a>
+                <a href={tpl.imgUrl} target="_blank" rel="noopener noreferrer" style={{color:PB_PURPLE,fontSize:11,fontWeight:700,textDecoration:"none"}}>Abrir URL</a>
               </div>
             </div>
-          : <div style={{background:"#fafafa",border:"1px dashed #cbd5e1",borderRadius:10,padding:"24px 18px",textAlign:"center"}}>
-              <Ico n="image" size={26} color="#cbd5e1"/>
-              <div style={{color:"#64748b",fontSize:11.5,marginTop:8}}>Nenhuma imagem cadastrada ainda.</div>
-              {isAdmin && <div style={{color:"#94a3b8",fontSize:10.5,marginTop:4}}>Edite o playbook e cole uma URL aqui.</div>}
+          : <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
+              <Ico n="image" size={28} color="#cbd5e1"/>
+              <div style={{color:PB_MUTE,fontSize:11.5,marginTop:8,fontWeight:600}}>Nenhuma imagem cadastrada</div>
+              {isAdmin && <div style={{color:PB_SOFT,fontSize:10.5,marginTop:4}}>Edite o playbook e cole uma URL aqui.</div>}
             </div>
         }
         {editMode && isAdmin && <div style={{marginTop:10}}>
-          <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>URL da imagem (Supabase Storage / CDN)</div>
+          <div style={{color:PB_MUTE,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>URL da imagem (Supabase Storage / CDN)</div>
           <div style={{display:"flex",gap:8}}>
             <input value={tmpUrl} onChange={e=>setTmpUrl(e.target.value)} placeholder="https://..."
               style={Object.assign({},_pbInpStyle(),{flex:1})}/>
             <button onClick={()=>onSaveImg(tmpUrl.trim())}
               style={{background:PB_PURPLE,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Aplicar URL</button>
           </div>
-          <div style={{color:"#94a3b8",fontSize:10,marginTop:5,lineHeight:1.4}}>Aceita URL pública (Supabase Storage com Public Bucket, Drive público com link direto, qualquer CDN).</div>
+          <div style={{color:PB_SOFT,fontSize:10,marginTop:5,lineHeight:1.4}}>Aceita URL pública (Supabase Storage com Public Bucket, Drive público com link direto, qualquer CDN).</div>
         </div>}
       </div>}
 
-      {/* Regras agrupadas por seção */}
-      {(tpl.rules||[]).map((sec,si)=>(
-        <div key={si} style={{marginBottom:14,paddingBottom:14,borderBottom:si<tpl.rules.length-1?"1px solid #f1f5f9":"none"}}>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,marginBottom:8,letterSpacing:-.1,display:"flex",alignItems:"center",gap:6}}>
-            <div style={{width:4,height:14,background:PB_PURPLE,borderRadius:2}}/>{sec.section}
-          </div>
-          <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:5}}>
-            {sec.items.map((it,ii)=>(
-              <li key={ii} style={{display:"flex",alignItems:"flex-start",gap:8,color:"#475569",fontSize:12,lineHeight:1.55}}>
-                <span style={{color:PB_PURPLE,marginTop:6,flexShrink:0}}>•</span>
-                <span>{it}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+      {/* Regras em grid de cards */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
+        {(tpl.rules||[]).map((sec,si)=>{
+          const secIco = _pbSecIcon(sec.section);
+          return <div key={si} style={{background:"#fafafa",border:"1px solid "+PB_BORDER2,borderRadius:12,padding:"13px 15px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:9,paddingBottom:9,borderBottom:"1px solid "+PB_BORDER2}}>
+              <div style={{width:28,height:28,borderRadius:8,background:PB_PURPLE_BG,border:"1px solid "+PB_PURPLE_BD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Ico n={secIco} size={13} color={PB_PURPLE_DK}/>
+              </div>
+              <div style={{color:PB_INK,fontWeight:800,fontSize:13,letterSpacing:-.2}}>{sec.section}</div>
+            </div>
+            <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:6}}>
+              {sec.items.map((it,ii)=>{
+                const isAttention = it.toUpperCase().startsWith("ATENÇÃO") || it.toUpperCase().startsWith("ATENCAO");
+                return <li key={ii} style={{display:"flex",alignItems:"flex-start",gap:9,color:isAttention?"#b91c1c":PB_TEXT,fontSize:12.5,lineHeight:1.55,background:isAttention?"#fef2f2":"transparent",border:isAttention?"1px solid #fecaca":"none",borderRadius:isAttention?8:0,padding:isAttention?"6px 9px":0}}>
+                  {isAttention
+                    ? <Ico n="alert" size={13} color="#dc2626" strokeWidth={2.3}/>
+                    : <span style={{color:PB_PURPLE,marginTop:6,flexShrink:0,fontSize:14,lineHeight:1}}>•</span>
+                  }
+                  <span style={{flex:1,fontWeight:isAttention?600:500}}>{it}</span>
+                </li>;
+              })}
+            </ul>
+          </div>;
+        })}
+      </div>
 
-      {tpl.summary && <div style={{background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:10,padding:"11px 14px",marginTop:4}}>
-        <div style={{color:PB_PURPLE,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Regra principal</div>
-        <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55}}>{tpl.summary}</div>
+      {tpl.summary && <div style={{background:"linear-gradient(135deg, "+PB_PURPLE_BG+" 0%, #f3e8ff 100%)",border:"1px solid "+PB_PURPLE_BD,borderRadius:12,padding:"13px 16px",marginTop:14,display:"flex",gap:11}}>
+        <div style={{width:30,height:30,borderRadius:9,background:PB_PURPLE,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(159,67,246,.4)"}}>
+          <Ico n="sparkles" size={14} color="#fff" strokeWidth={2.2}/>
+        </div>
+        <div>
+          <div style={{color:PB_PURPLE_DK,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Regra principal</div>
+          <div style={{color:PB_INK,fontSize:13,lineHeight:1.6,fontWeight:500}}>{tpl.summary}</div>
+        </div>
       </div>}
     </div>
   </div>;
 }
 
+// Adivinha ícone pra cada seção do template
+function _pbSecIcon(sectionName){
+  const s = (sectionName||"").toLowerCase();
+  if(s.includes("texto") || s.includes("legenda")) return "fileText";
+  if(s.includes("mapa") || s.includes("localiz")) return "pin";
+  if(s.includes("enquadr") || s.includes("foto") || s.includes("imagem")) return "camera";
+  if(s.includes("limpeza") || s.includes("valoriz")) return "sparkles";
+  if(s.includes("leitura")) return "eye";
+  if(s.includes("ritmo") || s.includes("video") || s.includes("vídeo")) return "play";
+  if(s.includes("cor")) return "image";
+  if(s.includes("tipograf") || s.includes("fonte")) return "fileText";
+  return "check";
+}
+
 // ── Empty state ─────────────────────────────────────────
-function _PbEmpty({text}){
-  return <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>{text}</div>;
+function _PbEmpty({icon, text, sub}){
+  return <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:12,padding:"20px 18px",textAlign:"center"}}>
+    {icon && <Ico n={icon} size={24} color="#cbd5e1"/>}
+    <div style={{color:PB_MUTE,fontSize:12.5,marginTop:icon?8:0,fontWeight:600}}>{text}</div>
+    {sub && <div style={{color:PB_SOFT,fontSize:11,marginTop:4,lineHeight:1.45}}>{sub}</div>}
+  </div>;
 }
 
 function _pbInpStyle(){
-  return {background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",color:"#0f172a",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:PB_INTER,resize:"vertical",lineHeight:1.6};
+  return {background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"10px 13px",color:PB_INK,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:PB_INTER,resize:"vertical",lineHeight:1.6};
 }
