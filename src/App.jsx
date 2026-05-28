@@ -1,5 +1,5 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
-// Modulos: 39/39 | Nao editar diretamente
+// Modulos: 40/40 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 26/26 | Nao editar diretamente
@@ -964,6 +964,7 @@ const DEFAULT_PERMS={
   // Colunas — abertas para todos por padrão (permissões finas definidas por sócio)
   colRascunhos:false, colCopys:false, colDemanda:true, colExecucao:true, colAvaliacao:false,
   colAjustes:true, colAprovado:false, colAprovacaoFinal:false, colAgendado:false, colPublicado:false, colPausado:false,
+  verPlaybooks:false,
   // Fluxo especial — só certos níveis podem desfazer aprovação de copy
   desfazerCopy:false,
   // Etiquetas/Tags (admin features no card)
@@ -1027,10 +1028,10 @@ function withPartnerOverride(perms, userId){
 const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
-  ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true},
-  erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verGestaoMidia:true,editarGestaoMidia:true,gerenciarClientesMidia:false},
-  andre:   {...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true},
-  guilherme:{...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true},
+  ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true,verPlaybooks:true},
+  erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verGestaoMidia:true,editarGestaoMidia:true,gerenciarClientesMidia:false,verPlaybooks:true},
+  andre:   {...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true,verPlaybooks:true},
+  guilherme:{...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true,verPlaybooks:true},
 };
 
 /* ─── SMART FORMAT TITLE — auto-formata título do card ─── */
@@ -1682,6 +1683,7 @@ const NAV=[
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
   {id:"planejamento",icon:"◬", label:"Planejamento"},
+  {id:"playbooks",icon:"◇", label:"Playbooks"},
   {id:"ia",         icon:"◎", label:"Pixels IA",children:[
     {id:"ia_diagnostico",icon:"◎", label:"Diagnóstico"},
     {id:"ia_churn",      icon:"◬", label:"Alerta Churn"},
@@ -29161,6 +29163,7 @@ export default function AgencyOS(){
       case "demandas_cal_interno": return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
       case "demandas_cal_pub":     return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
       case "planejamento":         return isSocio||CURRENT_USER.id==="ellen";
+      case "playbooks":            return isSocio||CURRENT_USER.id==="ellen"||CURRENT_USER.dash==="designer"||CURRENT_USER.dash==="editor"||CURRENT_USER.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
@@ -29241,6 +29244,7 @@ export default function AgencyOS(){
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "planejamento":          return (isSocio||CURRENT_USER.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
+      case "playbooks":             return (isSocio||CURRENT_USER.id==="ellen"||CURRENT_USER.dash==="designer"||CURRENT_USER.dash==="editor"||CURRENT_USER.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
@@ -41244,4 +41248,616 @@ function _DGEmpty({icon, title, desc}){
     <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:4}}>{title}</div>
     <div style={{color:"#64748b",fontSize:11.5,maxWidth:360,margin:"0 auto",lineHeight:1.5}}>{desc}</div>
   </div>;
+}
+
+// ======= 27_playbooks.jsx =======
+// Playbooks por cliente — Design / Edição de Vídeo / Gestão de Mídia.
+// Acesso: sócios + Hellen (admin) veem tudo. Freelancers veem só sua área.
+// Storage: Supabase tabela `playbooks` (client_id, area, data jsonb) com fallback localStorage.
+
+const PB_INTER = "'Inter', system-ui, -apple-system, sans-serif";
+const PB_PURPLE = "#9F43F6";
+const PB_DARK   = "#0f172a";
+
+// ── Helper de storage (Supabase + cache localStorage) ──────
+const PB_LS_KEY = "pixels-playbooks-v1";
+
+function _pbLoadCache(){
+  try{ const raw=localStorage.getItem(PB_LS_KEY); if(raw)return JSON.parse(raw); }catch(_){}
+  return null;
+}
+function _pbSaveCache(s){
+  try{ localStorage.setItem(PB_LS_KEY,JSON.stringify(s)); }catch(_){}
+}
+
+// Carrega todos os playbooks do Supabase (1 row = 1 client_id, data jsonb)
+async function _pbLoadFromSupabase(){
+  if(!window._sb) return null;
+  try{
+    const {data, error} = await window._sb.from("playbooks").select("client_id, data");
+    if(error){ console.warn("[playbooks load]", error.message); return null; }
+    const store = {};
+    (data||[]).forEach(row => { store[row.client_id] = row.data || {}; });
+    return store;
+  }catch(e){
+    console.warn("[playbooks load exception]", e?.message||e);
+    return null;
+  }
+}
+
+// Salva um cliente no Supabase (upsert)
+async function _pbSaveClientToSupabase(clientId, data){
+  if(!window._sb) return false;
+  try{
+    const payload = {
+      client_id: clientId,
+      data: data,
+      updated_at: new Date().toISOString(),
+      updated_by: (typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:"unknown",
+    };
+    const {error} = await window._sb.from("playbooks").upsert(payload, {onConflict:"client_id"});
+    if(error){ console.warn("[playbooks save]", error.message); return false; }
+    return true;
+  }catch(e){
+    console.warn("[playbooks save exception]", e?.message||e);
+    return false;
+  }
+}
+
+// ── Seed inicial ─────────────────────────────────────────────
+const PB_SEED = {
+  bioter: {
+    sobre: "Grupo Bioter — pioneiro em cisternas infladas e soluções de armazenamento de água no campo. Atua em Santa Catarina, Paraná, Mato Grosso do Sul, Minas Gerais, Goiás e Paraguai. Posicionamento: tecnologia agrícola de ponta + presença em diferentes biomas + obras visualmente premium.",
+    comunicacao: "Tom técnico-comercial, com pegada de pioneirismo e qualidade. Frases curtas e diretas. Linguagem que valoriza tecnologia aplicada no campo, eficiência e durabilidade. Evita gírias e textos longos. Sempre passar autoridade técnica.",
+    design: {
+      orientacoes: "Padrão visual: fotos de obra com cisterna em destaque, mapa do Brasil em verde com pin da cidade, tipografia bold para chamada principal.\n\nCores principais: verde Bioter, branco, preto. Acentos em verde claro.\n\nO que manter: tipografia padrão dos templates, hierarquia da frase (1ª linha leve, 2ª linha negrito), mapa verde, retângulo escuro com nome da cidade.\n\nO que evitar: fontes diferentes, cores fora do padrão, mapa em outro lugar que não o canto superior direito, recortes que cortam o produto.",
+      templates: [
+        {
+          id: "foto_obra",
+          title: "Template de Foto de Obra",
+          subtitle: "Para fotos de obras Bioter — valoriza produto, tecnologia aplicada e localização",
+          imgUrl: "", // ← admin sobe URL aqui depois
+          rules: [
+            {
+              section: "Texto do card",
+              items: [
+                "Não alterar a fonte do template",
+                "Não alterar tamanho, espaçamento ou hierarquia do texto",
+                "Frase curta, direta e com pegada de gancho",
+                "2ª linha em negrito (mantendo padrão do template)",
+                "Frases vêm da copywriter — designer só aplica no padrão visual"
+              ]
+            },
+            {
+              section: "Mapa e localização",
+              items: [
+                "Atualizar o pin do mapa conforme a cidade da obra",
+                "Pin não precisa ser milimétrico, mas tem que estar próximo da cidade certa",
+                "ATENÇÃO: já teve erro até de estado — conferir antes de exportar",
+                "Atualizar o nome cidade/estado no rótulo conforme a obra",
+                "Retângulo de fundo do nome segue a mesma proporção do template",
+                "Não aumentar espaçamento lateral nem vertical do fundo",
+                "Fundo se adapta ao texto, sem perder padrão visual",
+                "Posicionar mapa + nome preferencialmente sobre o CÉU ou área limpa",
+                "Se não tiver céu suficiente, completar a parte de cima com IA (resultado natural)",
+                "Evitar posicionar o mapa sobre áreas visualmente carregadas"
+              ]
+            },
+            {
+              section: "Enquadramento da foto",
+              items: [
+                "Não cortar o produto principal da obra",
+                "Evitar zoom excessivo",
+                "Produto inteiro ou com leitura clara",
+                "Faltando espaço (laterais, céu, chão) → completar com IA mantendo aparência natural",
+                "Preenchimento por IA: céu na parte superior, terra/ambiente na inferior, respeitando perspectiva",
+                "IA não pode parecer artificial nem distorcida"
+              ]
+            },
+            {
+              section: "Limpeza e valorização do produto",
+              items: [
+                "Remover sujeiras, imperfeições, rebarbas, dobras ou elementos mal finalizados",
+                "Corrigir detalhes visuais que prejudiquem a percepção da obra",
+                "Não falsificar a obra — apresentar de forma comercial, limpa e valorizada"
+              ]
+            },
+            {
+              section: "Leitura do texto",
+              items: [
+                "Manter sombra atrás do texto quando o fundo for claro ou pouco contrastado",
+                "Se já houver contraste suficiente, sombra pode ser reduzida ou ignorada",
+                "Objetivo: leitura fácil sem pesar visualmente"
+              ]
+            }
+          ],
+          summary: "A foto de obra precisa parecer real, limpa, bem enquadrada e comercial. O template padroniza a comunicação da Bioter e valoriza o produto no campo — sem inventar moda, sem quebrar identidade visual."
+        }
+      ],
+      checklist: [
+        "Conferi o padrão visual do template?",
+        "Conferi o texto (1ª linha leve, 2ª em negrito)?",
+        "Conferi localização do pin no mapa?",
+        "Conferi nome da cidade/estado?",
+        "Produto está inteiro e bem enquadrado?",
+        "Preenchimento com IA está natural?",
+        "Sujeiras/imperfeições foram removidas?",
+        "Sombra do texto adequada ao fundo?"
+      ]
+    },
+    video: {
+      orientacoes: "Estilo: cinematográfico clean, com ritmo controlado. Mostra a obra de drone + close em detalhes técnicos. Legendas grandes e legíveis (Inter bold). Trilhas instrumentais épicas/inspiracionais ou áudios trending agro.\n\nRitmo: cortes médios (2-4s) intercalados com closes técnicos rápidos (0.5-1s). Sem cortes muito acelerados.\n\nLegendas: posicionadas na parte inferior, máx 2 linhas, Inter Bold 70-90px.\n\nO que evitar: efeitos cafonas, transições agressivas, trilhas genéricas, vídeo muito longo (ideal <30s).",
+      checklist: [
+        "Trilha selecionada combina com pegada Bioter?",
+        "Legendas estão legíveis e bem cronometradas?",
+        "Cortes têm ritmo equilibrado?",
+        "Closes técnicos foram incluídos?",
+        "Vídeo tem <30s?",
+        "Identidade visual está coerente com o feed?"
+      ]
+    },
+    midia: {
+      orientacoes: "Objetivo: gerar leads qualificados de pecuaristas e produtores rurais interessados em cisternas infladas.\n\nPúblico principal: pecuaristas, produtores rurais e gestores de propriedades médias/grandes (>100 ha). Faixa 35-65 anos.\n\nRegiões atendidas: Bioter Chapecó (SC + PR), Toledo (PR), Castro (PR + SP rural), Glória de Dourados (MS), Uberlândia (MG + GO), Paraguay/Obligado (Paraguai espanhol/portunhol).\n\nPrincipais ofertas: cisternas infladas de diferentes capacidades, foto de obras realizadas (prova social), agendamento de visita técnica.\n\nCuidados na comunicação: usar termos técnicos do agro corretamente; nunca prometer prazo de obra sem confirmar com a unidade; respeitar idioma quando Paraguai.",
+      checklist: [
+        "Segmentação geográfica está correta pra unidade?",
+        "Faixa etária e perfil de público fazem sentido?",
+        "Criativo usa foto de obra real (não banco de imagens)?",
+        "Copy tem termos do agro corretos?",
+        "CTA leva pra WhatsApp da unidade certa?",
+        "Pixel/conversão configurado?"
+      ]
+    }
+  },
+  construschorr: {
+    sobre: "Construschorr — construtora de Chapecó/SC especializada em obras residenciais e comerciais. Posicionamento: qualidade técnica + acompanhamento próximo + entregas no prazo.",
+    comunicacao: "Tom profissional, próximo do cliente. Foco em mostrar processo, acompanhamento e resultado final. Usa antes/depois e timelapse.",
+    design: { orientacoes: "(em construção — sócios preencher)", checklist: ["Conferi padrão visual?", "Conferi texto?"] },
+    video: { orientacoes: "(em construção)", checklist: [] },
+    midia: { orientacoes: "(em construção)", checklist: [] }
+  },
+  arabuta: {
+    sobre: "Arabutã Pré-Moldados — fabricante de peças pré-moldadas em concreto, com sede em Arabutã/SC. Atende construtoras, obras industriais e residenciais.",
+    comunicacao: "Tom técnico-industrial. Foco em precisão, qualidade da peça e rapidez na entrega.",
+    design: { orientacoes: "(em construção — sócios preencher)", checklist: [] },
+    video: { orientacoes: "(em construção)", checklist: [] },
+    midia: { orientacoes: "(em construção)", checklist: [] }
+  },
+  vetservice: {
+    sobre: "VetService — clínica veterinária com atendimento especializado em pequenos e médios animais.",
+    comunicacao: "Tom acolhedor e humanizado, valorizando o vínculo tutor-animal. Linguagem clara, sem termos médicos pesados.",
+    design: { orientacoes: "(em construção — sócios preencher)", checklist: [] },
+    video: { orientacoes: "(em construção)", checklist: [] },
+    midia: { orientacoes: "(em construção)", checklist: [] }
+  }
+};
+
+function _pbInitFromCache(){
+  // Sempre começa com cache local (instant render) + merge com SEED pra clientes novos
+  const cache = _pbLoadCache();
+  const base = JSON.parse(JSON.stringify(PB_SEED));
+  if(cache && typeof cache === "object"){
+    // Merge: cache sobrescreve seed (admin pode ter alterado), mas seed preenche clientes que não estão no cache
+    Object.keys(cache).forEach(k => { base[k] = cache[k]; });
+  }
+  _pbSaveCache(base);
+  return base;
+}
+
+// Hook: busca playbooks do Supabase + realtime sync
+function _usePlaybooksStore(){
+  const [store, setStore] = useState(()=>_pbInitFromCache());
+
+  // Carrega do Supabase no mount
+  useEffect(()=>{
+    let active = true;
+    (async ()=>{
+      const remote = await _pbLoadFromSupabase();
+      if(!active || !remote) return;
+      // Merge: remote sobrescreve cache; clientes do seed que não estão no remote ainda aparecem
+      setStore(prev => {
+        const next = Object.assign({}, prev);
+        Object.keys(remote).forEach(k => { next[k] = remote[k]; });
+        _pbSaveCache(next);
+        return next;
+      });
+    })();
+    return ()=>{ active = false; };
+  }, []);
+
+  // Realtime sync: quando outro user edita, atualiza local
+  useEffect(()=>{
+    if(!window._sb) return undefined;
+    const ch = window._sb.channel("playbooks-sync")
+      .on("postgres_changes", {event:"*", schema:"public", table:"playbooks"}, (payload)=>{
+        if(payload.eventType === "DELETE"){
+          const cid = payload.old?.client_id;
+          if(cid){
+            setStore(prev => {
+              const next = Object.assign({}, prev);
+              delete next[cid];
+              _pbSaveCache(next);
+              return next;
+            });
+          }
+          return;
+        }
+        const row = payload.new;
+        if(!row?.client_id) return;
+        setStore(prev => {
+          const next = Object.assign({}, prev, {[row.client_id]: row.data||{}});
+          _pbSaveCache(next);
+          return next;
+        });
+      })
+      .subscribe();
+    return ()=>{ try{ window._sb.removeChannel(ch); }catch(_){} };
+  }, []);
+
+  const updateClient = useCallback(async (clientId, mutFn)=>{
+    let newData = null;
+    setStore(prev => {
+      const cur = prev[clientId] || {};
+      const updated = mutFn(JSON.parse(JSON.stringify(cur)));
+      newData = updated;
+      const next = Object.assign({}, prev, {[clientId]: updated});
+      _pbSaveCache(next);
+      return next;
+    });
+    // Persiste no Supabase (async, sem bloquear UI)
+    if(newData){
+      const ok = await _pbSaveClientToSupabase(clientId, newData);
+      if(!ok && typeof pixelsToast!=="undefined") pixelsToast.warning("Salvo só localmente — sem conexão com Supabase.");
+    }
+  }, []);
+
+  return [store, updateClient];
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PagePlaybooks — Estratégia > Playbooks
+// ═══════════════════════════════════════════════════════════════
+function PagePlaybooks({isMob, perms, viewingAs}){
+  const effectiveUser = viewingAs ? (TEAM.find(u=>u.id===viewingAs)||CURRENT_USER) : CURRENT_USER;
+  const isSocio = effectiveUser.level === 1;
+  const isHellen = effectiveUser.id === "ellen";
+  const isAdmin = isSocio || isHellen;
+  const isFreelaDesign = effectiveUser.dash === "designer";
+  const isFreelaVideo  = effectiveUser.dash === "editor";
+  const isFreelaMidia  = effectiveUser.id === "erick";
+
+  // Quais sub-abas o user pode ver
+  const VISIBLE_TABS = [];
+  if(isAdmin || isFreelaDesign) VISIBLE_TABS.push({id:"design", label:"Design",            icon:"image"});
+  if(isAdmin || isFreelaVideo)  VISIBLE_TABS.push({id:"video",  label:"Edição de Vídeo",   icon:"play"});
+  if(isAdmin || isFreelaMidia)  VISIBLE_TABS.push({id:"midia",  label:"Gestão de Mídia",   icon:"trending-up"});
+
+  const [tab, setTab] = useState(VISIBLE_TABS[0]?.id || "design");
+  const [openClient, setOpenClient] = useState(null);
+  const [search, setSearch] = useState("");
+  const [store, _updateClient] = _usePlaybooksStore();
+  const [editMode, setEditMode] = useState(false);
+
+  if(VISIBLE_TABS.length === 0){
+    return <div style={{padding:24,fontFamily:PB_INTER,color:"#64748b"}}>Você não tem acesso aos playbooks.</div>;
+  }
+
+  // ── Drawer detalhe ──────────────────────────────────────
+  if(openClient){
+    const clCfg = (CLIENTS||[]).find(c=>c.id===openClient) || {id:openClient,name:openClient};
+    const data = store[openClient] || {};
+    return <PlaybookDetalhe
+      cl={clCfg} area={tab} data={data}
+      isAdmin={isAdmin} editMode={editMode} setEditMode={setEditMode}
+      onBack={()=>{setOpenClient(null); setEditMode(false);}}
+      onUpdate={(patch)=>_updateClient(openClient, cur => Object.assign({}, cur, patch))}
+      onUpdateArea={(areaPatch)=>_updateClient(openClient, cur => {
+        const next = Object.assign({}, cur);
+        next[tab] = Object.assign({}, next[tab]||{}, areaPatch);
+        return next;
+      })}
+      isMob={isMob}/>;
+  }
+
+  // ── Lista de clientes ──────────────────────────────────
+  const clientList = (CLIENTS||[]).filter(c=>{
+    if(c.status==="interno") return false;
+    if(!search) return true;
+    return c.name.toLowerCase().includes(search.toLowerCase());
+  });
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:PB_INTER}}>
+
+    {/* ══ Header premium ══ */}
+    <div style={{background:"linear-gradient(135deg, "+PB_DARK+" 0%, #1e293b 50%, #1e1b4b 100%)",borderRadius:18,padding:isMob?"18px":"22px 26px",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:-50,right:-50,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle, "+PB_PURPLE+"30 0%, transparent 70%)"}}/>
+      <div style={{position:"absolute",bottom:-40,left:160,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle, "+PB_PURPLE+"22 0%, transparent 70%)"}}/>
+      <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:14,flexWrap:"wrap",justifyContent:"space-between"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+          <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, #7c3aed 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 28px rgba(159,67,246,.45)",flexShrink:0}}>
+            <Ico n="file-text" size={20} color="#fff"/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#fff",fontWeight:800,fontSize:isMob?19:23,letterSpacing:-.5}}>Playbooks</div>
+            <div style={{color:"rgba(255,255,255,.65)",fontSize:12.5,marginTop:3,fontWeight:500,maxWidth:560,lineHeight:1.5}}>
+              Orientações por cliente pra Design, Edição de Vídeo e Gestão de Mídia.
+            </div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10,alignItems:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"7px 12px",minWidth:200}}>
+            <Ico n="search" size={13} color="rgba(255,255,255,.7)"/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente..."
+              style={{background:"transparent",border:"none",outline:"none",color:"#fff",fontSize:12.5,flex:1,fontFamily:"inherit",caretColor:"#fff"}}/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* ══ Sub-abas (Design / Vídeo / Mídia) ══ */}
+    {VISIBLE_TABS.length>1 && <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:5,overflowX:"auto"}}>
+      {VISIBLE_TABS.map(t=>{
+        const active = tab===t.id;
+        return <button key={t.id} onClick={()=>setTab(t.id)}
+          style={{flex:isMob?"0 0 auto":1,background:active?"linear-gradient(135deg, "+PB_PURPLE+" 0%, #7c3aed 100%)":"transparent",color:active?"#fff":"#475569",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:active?"0 4px 14px rgba(159,67,246,0.3)":"none",whiteSpace:"nowrap"}}>
+          <Ico n={t.icon} size={13} color={active?"#fff":"currentColor"}/>
+          {t.label}
+        </button>;
+      })}
+    </div>}
+
+    {/* ══ Grid de clientes ══ */}
+    {clientList.length === 0
+      ? <div style={{background:"#fff",borderRadius:14,padding:"50px 24px",textAlign:"center",border:"1px dashed #e2e8f0"}}>
+          <div style={{color:"#94a3b8",fontSize:13}}>Nenhum cliente encontrado.</div>
+        </div>
+      : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:12}}>
+          {clientList.map(cl=>{
+            const data = store[cl.id] || {};
+            const hasArea = !!(data[tab] && (data[tab].orientacoes || (data[tab].templates||[]).length>0));
+            return <div key={cl.id} onClick={()=>setOpenClient(cl.id)}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column",gap:10,fontFamily:PB_INTER}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.boxShadow="0 6px 18px rgba(159,67,246,.10)";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <ClientLogo clientId={cl.id} size="md"/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>{cl.sector||""}</div>
+                </div>
+              </div>
+              {data.sobre && <div style={{color:"#475569",fontSize:11.5,lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{data.sobre}</div>}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
+                <span style={{background:hasArea?"#dcfce7":"#fef3c7",color:hasArea?"#15803d":"#92400e",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{hasArea?"Playbook ok":"Em construção"}</span>
+                <span style={{color:PB_PURPLE,fontSize:11.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}>Abrir <Ico n="chevron-right" size={11} color={PB_PURPLE}/></span>
+              </div>
+            </div>;
+          })}
+        </div>
+    }
+  </div>;
+}
+
+// ─── Página de detalhe do playbook ─────────────────────
+function PlaybookDetalhe({cl, area, data, isAdmin, editMode, setEditMode, onBack, onUpdate, onUpdateArea, isMob}){
+  const areaCfg = {
+    design: {label:"Design",          icon:"image",        color:"#9F43F6"},
+    video:  {label:"Edição de Vídeo", icon:"play",         color:"#0ea5e9"},
+    midia:  {label:"Gestão de Mídia", icon:"trending-up",  color:"#16a34a"},
+  }[area] || {label:area, icon:"folder", color:PB_PURPLE};
+
+  const areaData = data[area] || {};
+
+  // Estados locais pra edição (sincroniza com data quando entra em edit)
+  const [editSobre,setEditSobre] = useState(data.sobre||"");
+  const [editComm,setEditComm]   = useState(data.comunicacao||"");
+  const [editOri,setEditOri]     = useState(areaData.orientacoes||"");
+  const [editChk,setEditChk]     = useState((areaData.checklist||[]).join("\n"));
+
+  useEffect(()=>{
+    setEditSobre(data.sobre||"");
+    setEditComm(data.comunicacao||"");
+    setEditOri(areaData.orientacoes||"");
+    setEditChk((areaData.checklist||[]).join("\n"));
+  },[cl.id,area,editMode]);
+
+  const handleSave = ()=>{
+    onUpdate({sobre:editSobre, comunicacao:editComm});
+    onUpdateArea({orientacoes:editOri, checklist:editChk.split("\n").map(s=>s.trim()).filter(Boolean)});
+    setEditMode(false);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Playbook salvo!");
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:PB_INTER}}>
+
+    {/* Header com voltar + título + ações */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <button onClick={onBack} title="Voltar"
+          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",color:"#475569",cursor:"pointer",flexShrink:0}}>
+          <Ico n="chevron-left" size={16}/>
+        </button>
+        <ClientLogo clientId={cl.id} size="md"/>
+        <div style={{minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+            <span style={{background:areaCfg.color+"15",color:areaCfg.color,borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
+              <Ico n={areaCfg.icon} size={10} color={areaCfg.color}/>{areaCfg.label}
+            </span>
+          </div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>{cl.name}</div>
+        </div>
+      </div>
+      {isAdmin && <div style={{display:"flex",gap:8}}>
+        {editMode
+          ? <>
+              <button onClick={()=>setEditMode(false)} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 14px",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+              <button onClick={handleSave} style={{background:PB_PURPLE,border:"none",borderRadius:10,padding:"8px 18px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(159,67,246,.35)",display:"inline-flex",alignItems:"center",gap:6}}>
+                <Ico n="check" size={13} color="#fff"/> Salvar
+              </button>
+            </>
+          : <button onClick={()=>setEditMode(true)} style={{background:"#0f172a",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+              <Ico n="edit" size={12} color="#fff"/> Editar playbook
+            </button>
+        }
+      </div>}
+    </div>
+
+    {/* Bloco 1: Sobre a empresa */}
+    <PlaybookBlock title="Sobre a empresa" icon="info" color={PB_PURPLE}>
+      {editMode
+        ? <textarea value={editSobre} onChange={e=>setEditSobre(e.target.value)} rows={4}
+            placeholder="Quem é o cliente, o que vende, onde atua, posicionamento principal..."
+            style={_pbInpStyle()}/>
+        : (data.sobre
+            ? <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{data.sobre}</div>
+            : <_PbEmpty text="Sem descrição cadastrada."/>)
+      }
+    </PlaybookBlock>
+
+    {/* Bloco 2: Comunicação da marca */}
+    <PlaybookBlock title="Comunicação da marca" icon="message" color="#0ea5e9">
+      {editMode
+        ? <textarea value={editComm} onChange={e=>setEditComm(e.target.value)} rows={4}
+            placeholder="Tom de voz, estilo de mensagem, tipo de linguagem, o que a marca transmite..."
+            style={_pbInpStyle()}/>
+        : (data.comunicacao
+            ? <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{data.comunicacao}</div>
+            : <_PbEmpty text="Sem orientação de comunicação cadastrada."/>)
+      }
+    </PlaybookBlock>
+
+    {/* Bloco 3: Orientações da área */}
+    <PlaybookBlock title={"Orientações de "+areaCfg.label} icon={areaCfg.icon} color={areaCfg.color}>
+      {editMode
+        ? <textarea value={editOri} onChange={e=>setEditOri(e.target.value)} rows={6}
+            placeholder="Padrões, regras, o que manter, o que evitar..."
+            style={_pbInpStyle()}/>
+        : (areaData.orientacoes
+            ? <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{areaData.orientacoes}</div>
+            : <_PbEmpty text={"Orientações de "+areaCfg.label+" em construção."}/>)
+      }
+    </PlaybookBlock>
+
+    {/* Bloco 4: Templates específicos (só em area==="design") */}
+    {area==="design" && (areaData.templates||[]).length>0 && (areaData.templates||[]).map(tpl=>(
+      <PlaybookTemplateBlock key={tpl.id} tpl={tpl} isAdmin={isAdmin} editMode={editMode}
+        onSaveImg={(url)=>onUpdateArea({templates:(areaData.templates||[]).map(t=>t.id===tpl.id?Object.assign({},t,{imgUrl:url}):t)})}/>
+    ))}
+
+    {/* Bloco 5: Checklist rápido */}
+    <PlaybookBlock title="Checklist antes de entregar" icon="check" color="#16a34a">
+      {editMode
+        ? <textarea value={editChk} onChange={e=>setEditChk(e.target.value)} rows={6}
+            placeholder="Um item por linha. Ex:&#10;Conferi o padrão visual?&#10;Conferi o texto?"
+            style={_pbInpStyle()}/>
+        : ((areaData.checklist||[]).length>0
+            ? <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {areaData.checklist.map((item,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"flex-start",gap:9,padding:"6px 0"}}>
+                    <div style={{width:18,height:18,borderRadius:5,border:"2px solid #cbd5e1",flexShrink:0,marginTop:1}}/>
+                    <span style={{color:"#0f172a",fontSize:13,lineHeight:1.45}}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            : <_PbEmpty text="Sem checklist cadastrado."/>)
+      }
+    </PlaybookBlock>
+
+  </div>;
+}
+
+// ── Bloco genérico ──────────────────────────────────────
+function PlaybookBlock({title, icon, color, children}){
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",fontFamily:PB_INTER}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,paddingBottom:10,borderBottom:"1px solid #f1f5f9"}}>
+      <div style={{width:30,height:30,borderRadius:9,background:color+"14",display:"flex",alignItems:"center",justifyContent:"center",color}}>
+        <Ico n={icon} size={14} color={color}/>
+      </div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{title}</div>
+    </div>
+    {children}
+  </div>;
+}
+
+// ── Bloco específico de template (Design > Foto de Obra etc.) ──
+function PlaybookTemplateBlock({tpl, isAdmin, editMode, onSaveImg}){
+  const [tmpUrl,setTmpUrl] = useState(tpl.imgUrl||"");
+  useEffect(()=>{setTmpUrl(tpl.imgUrl||"");},[tpl.imgUrl, editMode]);
+
+  return <div style={{background:"#fff",border:"1px solid #ede9fe",borderRadius:14,padding:0,overflow:"hidden",fontFamily:PB_INTER}}>
+    {/* Header gradient roxo */}
+    <div style={{background:"linear-gradient(135deg, #faf5ff 0%, #ede9fe 100%)",padding:"14px 18px",borderBottom:"1px solid #ede9fe"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+        <div style={{width:30,height:30,borderRadius:9,background:PB_PURPLE,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n="image" size={14} color="#fff"/>
+        </div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>{tpl.title}</div>
+      </div>
+      {tpl.subtitle && <div style={{color:"#7c3aed",fontSize:11.5,marginLeft:40,fontWeight:500}}>{tpl.subtitle}</div>}
+    </div>
+
+    {/* Imagem de referência */}
+    <div style={{padding:"16px 18px"}}>
+      {(tpl.imgUrl||editMode) && <div style={{marginBottom:16}}>
+        <div style={{color:PB_PURPLE,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Imagem de referência</div>
+        {tpl.imgUrl
+          ? <div style={{position:"relative",borderRadius:12,overflow:"hidden",border:"1px solid #ede9fe",background:"#f8fafc"}}>
+              <img src={tpl.imgUrl} alt="" referrerPolicy="no-referrer"
+                onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                style={{maxWidth:"100%",maxHeight:520,objectFit:"contain",display:"block",margin:"0 auto"}}/>
+              <div style={{display:"none",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:40,color:"#94a3b8",textAlign:"center"}}>
+                <Ico n="image" size={28} color="#cbd5e1"/>
+                <div style={{fontSize:12,fontWeight:600}}>Imagem indisponível</div>
+                <a href={tpl.imgUrl} target="_blank" rel="noopener noreferrer" style={{color:PB_PURPLE,fontSize:11,fontWeight:700,textDecoration:"none"}}>Abrir URL →</a>
+              </div>
+            </div>
+          : <div style={{background:"#fafafa",border:"1px dashed #cbd5e1",borderRadius:10,padding:"24px 18px",textAlign:"center"}}>
+              <Ico n="image" size={26} color="#cbd5e1"/>
+              <div style={{color:"#64748b",fontSize:11.5,marginTop:8}}>Nenhuma imagem cadastrada ainda.</div>
+              {isAdmin && <div style={{color:"#94a3b8",fontSize:10.5,marginTop:4}}>Edite o playbook e cole uma URL aqui.</div>}
+            </div>
+        }
+        {editMode && isAdmin && <div style={{marginTop:10}}>
+          <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>URL da imagem (Supabase Storage / CDN)</div>
+          <div style={{display:"flex",gap:8}}>
+            <input value={tmpUrl} onChange={e=>setTmpUrl(e.target.value)} placeholder="https://..."
+              style={Object.assign({},_pbInpStyle(),{flex:1})}/>
+            <button onClick={()=>onSaveImg(tmpUrl.trim())}
+              style={{background:PB_PURPLE,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Aplicar URL</button>
+          </div>
+          <div style={{color:"#94a3b8",fontSize:10,marginTop:5,lineHeight:1.4}}>Aceita URL pública (Supabase Storage com Public Bucket, Drive público com link direto, qualquer CDN).</div>
+        </div>}
+      </div>}
+
+      {/* Regras agrupadas por seção */}
+      {(tpl.rules||[]).map((sec,si)=>(
+        <div key={si} style={{marginBottom:14,paddingBottom:14,borderBottom:si<tpl.rules.length-1?"1px solid #f1f5f9":"none"}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,marginBottom:8,letterSpacing:-.1,display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:4,height:14,background:PB_PURPLE,borderRadius:2}}/>{sec.section}
+          </div>
+          <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:5}}>
+            {sec.items.map((it,ii)=>(
+              <li key={ii} style={{display:"flex",alignItems:"flex-start",gap:8,color:"#475569",fontSize:12,lineHeight:1.55}}>
+                <span style={{color:PB_PURPLE,marginTop:6,flexShrink:0}}>•</span>
+                <span>{it}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+
+      {tpl.summary && <div style={{background:"#faf5ff",border:"1px solid #ede9fe",borderRadius:10,padding:"11px 14px",marginTop:4}}>
+        <div style={{color:PB_PURPLE,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Regra principal</div>
+        <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55}}>{tpl.summary}</div>
+      </div>}
+    </div>
+  </div>;
+}
+
+// ── Empty state ─────────────────────────────────────────
+function _PbEmpty({text}){
+  return <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>{text}</div>;
+}
+
+function _pbInpStyle(){
+  return {background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",color:"#0f172a",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:PB_INTER,resize:"vertical",lineHeight:1.6};
 }
