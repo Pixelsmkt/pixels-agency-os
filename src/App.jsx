@@ -15978,8 +15978,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // FIX 7: aprovação de conteúdo mostra APENAS imagens finais (refs do briefing
   // não entram aqui — aparecem em "Visualizar/Editar" → aba Arquivos → Referências).
   // Em "copys" e "ajuste" mostramos tudo (a copy pode ter reference image junto).
-  const isFinalImg=(f)=>f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
-  const isAnyImg=(f)=>f.type?.startsWith("image/");
+  // CRÍTICO: EXCLUI isAnnotation (imagens com risco vermelho dos ajustes anteriores)
+  // pra elas não aparecerem misturadas com as artes finais no carrossel de aprovação.
+  const isFinalImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
+  const isAnyImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/");
   const filterFn=tab==="publicacao"?isFinalImg:isAnyImg;
   // ORDEM: última imagem subida pelo designer aparece PRIMEIRO (mais recente no topo).
   // Reverte files em ordem cronológica → mais recente primeiro. Cover entra no fim se não estiver nos files.
