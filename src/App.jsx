@@ -16037,21 +16037,43 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       {tab==="copys"?"Aprovação de copys":tab==="internas"?"Aprovação de demandas internas":tab==="ajuste"?"Ajustes solicitados":"Aprovação de conteúdo"}
     </div>
 
-    {/* Empty state */}
-    {queue.length===0&&(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:60,gap:16,textAlign:"center",background:C.card,borderRadius:16}}>
-      <div style={{fontSize:48}}>{tab==="copys"?"✅":tab==="internas"?"◧":"🎉"}</div>
-      <div style={{color:C.tx,fontWeight:800,fontSize:18}}>{tab==="copys"?"Nenhuma copy aguarda aprovação":tab==="internas"?"Nenhuma demanda interna aguarda aprovação":"Nenhuma publicação aguarda aprovação"}</div>
-      <div style={{color:C.ts,fontSize:13}}>{tab==="copys"?"Tudo aprovado por aqui!":tab==="internas"?"Tudo aprovado!":"Os materiais aprovados aparecerao aqui."}</div>
-    </div>)}
+    {/* Empty state moderno (sem emojis) */}
+    {queue.length===0&&(()=>{
+      const cfg={
+        copys:     {title:"Nenhuma copy aguarda aprovação",          sub:"Tudo aprovado por aqui.",                color:"#9F43F6"},
+        internas:  {title:"Nenhuma demanda interna aguarda aprovação",sub:"Tudo aprovado.",                         color:"#8b5cf6"},
+        ajuste:    {title:"Nenhum ajuste pendente",                  sub:"Os ajustes solicitados aparecerão aqui.", color:"#f97316"},
+        publicacao:{title:"Nenhuma publicação aguarda aprovação",    sub:"Os materiais aprovados aparecerão aqui.", color:"#16a34a"},
+      }[tab]||{title:"Nada por aqui",sub:"",color:"#9F43F6"};
+      return(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"56px 24px",gap:14,textAlign:"center",background:"#fff",borderRadius:16,border:"1px solid #e2e8f0",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div style={{width:64,height:64,borderRadius:16,background:cfg.color+"14",display:"flex",alignItems:"center",justifyContent:"center",color:cfg.color,boxShadow:"0 6px 18px "+cfg.color+"22"}}>
+          <Ico n="check" size={28} color={cfg.color}/>
+        </div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?15:17,letterSpacing:-.2,maxWidth:420,lineHeight:1.35}}>{cfg.title}</div>
+        <div style={{color:"#64748b",fontSize:12.5,maxWidth:360,lineHeight:1.5}}>{cfg.sub}</div>
+      </div>);
+    })()}
 
     {/* Card view */}
     {current&&(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1280,margin:"0 auto",width:"100%"}}>
 
-      {/* Navigation */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 4px"}}>
-        <button onClick={prev} disabled={clampedIdx===0} style={{background:C.b1,border:"none",borderRadius:99,width:34,height:34,cursor:clampedIdx===0?"not-allowed":"pointer",color:C.tx,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx===0?.3:1,transition:"all .15s"}}>←</button>
-        <span style={{color:C.td,fontSize:12,fontWeight:600,letterSpacing:.2}}>{clampedIdx+1} / {queue.length}</span>
-        <button onClick={next} disabled={clampedIdx>=queue.length-1} style={{background:C.b1,border:"none",borderRadius:99,width:34,height:34,cursor:clampedIdx>=queue.length-1?"not-allowed":"pointer",color:C.tx,fontSize:15,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx>=queue.length-1?.3:1,transition:"all .15s"}}>→</button>
+      {/* Navigation — setas juntas, roxo Pixels */}
+      <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,padding:"4px 0"}}>
+        <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:4,boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
+          <button onClick={prev} disabled={clampedIdx===0}
+            style={{background:clampedIdx===0?"transparent":"#9F43F614",border:"none",borderRadius:99,width:34,height:34,cursor:clampedIdx===0?"not-allowed":"pointer",color:clampedIdx===0?"#cbd5e1":"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
+            onMouseEnter={e=>{if(clampedIdx>0){e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}}
+            onMouseLeave={e=>{if(clampedIdx>0){e.currentTarget.style.background="#9F43F614";e.currentTarget.style.color="#9F43F6";}}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span style={{color:"#475569",fontSize:12.5,fontWeight:700,letterSpacing:.2,padding:"0 14px",minWidth:60,textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>{clampedIdx+1} <span style={{color:"#94a3b8",fontWeight:500}}>de {queue.length}</span></span>
+          <button onClick={next} disabled={clampedIdx>=queue.length-1}
+            style={{background:clampedIdx>=queue.length-1?"transparent":"#9F43F614",border:"none",borderRadius:99,width:34,height:34,cursor:clampedIdx>=queue.length-1?"not-allowed":"pointer",color:clampedIdx>=queue.length-1?"#cbd5e1":"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
+            onMouseEnter={e=>{if(clampedIdx<queue.length-1){e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}}
+            onMouseLeave={e=>{if(clampedIdx<queue.length-1){e.currentTarget.style.background="#9F43F614";e.currentTarget.style.color="#9F43F6";}}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
       </div>
 
       {/* Main content: image + sidebar — grid responsivo */}
@@ -16061,17 +16083,35 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
         {tab!=="internas"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
           {/* Carrossel de miniaturas — fixo no topo, scroll horizontal se for muito longo */}
           {allImgs.length>1&&(<div style={{display:"flex",gap:10,overflowX:"auto",overflowY:"hidden",padding:"4px 2px",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
-            {allImgs.map((src,i)=>(
-              <img key={i} src={src} onClick={()=>setImgIdx(i)} alt="" referrerPolicy="no-referrer"
-                style={{width:84,height:84,objectFit:"cover",borderRadius:11,cursor:"pointer",border:i===imgIdx?"3px solid "+C.a:"2px solid #e2e8f0",opacity:i===imgIdx?1:.7,transition:"all .15s",boxShadow:i===imgIdx?"0 4px 12px rgba(161,64,255,0.25)":"none",flexShrink:0}}
-                onMouseEnter={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.95;}}
-                onMouseLeave={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.7;}}/>
-            ))}
+            {allImgs.map((src,i)=>{
+              const sel=i===imgIdx;
+              return(<div key={i} onClick={()=>setImgIdx(i)}
+                style={{position:"relative",width:84,height:84,borderRadius:11,cursor:"pointer",border:sel?"3px solid "+C.a:"2px solid #e2e8f0",transition:"all .15s",boxShadow:sel?"0 4px 12px rgba(159,67,246,0.28)":"none",flexShrink:0,overflow:"hidden",background:"#f8fafc"}}>
+                <img src={src} alt="" referrerPolicy="no-referrer"
+                  onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                  style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s"}}/>
+                <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#f8fafc,#e2e8f0)",color:"#94a3b8"}}>
+                  <Ico n="image" size={22} color="#94a3b8"/>
+                </div>
+              </div>);
+            })}
           </div>)}
           {/* Imagem principal — altura travada pra não empurrar nada (stories verticais ficam contidas) */}
-          <div style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
             {allImgs.length>0
-              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" referrerPolicy="no-referrer" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:"block"}}/>)
+              ?(<><img key={imgIdx} src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" referrerPolicy="no-referrer"
+                  onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                  style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:"block"}}/>
+                <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14,padding:40,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
+                  <div style={{width:72,height:72,borderRadius:18,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
+                    <Ico n="image" size={32} color="#cbd5e1"/>
+                  </div>
+                  <div style={{color:"#475569",fontSize:13,fontWeight:600,maxWidth:320,lineHeight:1.5,fontFamily:"\'Inter\',system-ui,sans-serif"}}>Não foi possível carregar a imagem</div>
+                  <a href={allImgs[Math.min(imgIdx,allImgs.length-1)]} target="_blank" rel="noopener noreferrer"
+                    style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:99,padding:"7px 18px",fontSize:12,fontWeight:700,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"\'Inter\',system-ui,sans-serif"}}>
+                    Abrir em nova aba
+                  </a>
+                </div></>)
               :(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:60}}>
                   <Ico n="image" size={40}/>
                   <div style={{color:C.ts,fontSize:13}}>Nenhuma imagem anexada</div>
@@ -16240,6 +16280,74 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                           {r.comments.map(cc=>(<div key={cc.id} style={{color:C.tx,fontSize:11.5,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4}}>{String(cc.text||"").replace("AJUSTE NECESSARIO: ","")}</div>))}
                           {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>
                             {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" onClick={()=>setOpenCard(current)}
+                              title="Abrir cartão pra ver em tamanho grande"
+                              style={{width:54,height:54,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"1px solid "+C.b1}}/>))}
+                          </div>}
+                        </div>);
+                      })}
+                    </div>
+                  </div>);
+                })()}
+
+                {/* Histórico de ajustes — ANTES do briefing */}
+                {(()=>{
+                  const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
+                  const fbCmts=(current.comments||[]).filter(cc=>cc.type==="feedback"||cc.type==="audio"||cc.type==="client_request");
+                  if(allAnn.length===0&&fbCmts.length===0)return null;
+                  const _ts=(s)=>{
+                    if(!s)return 0;
+                    const str=String(s);
+                    if(/^\d{4}-\d{2}-\d{2}T/.test(str)){const i=new Date(str).getTime();if(!isNaN(i)&&i>0)return i;}
+                    const m=str.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+                    if(m){const t=new Date(m[3]+"-"+m[2]+"-"+m[1]+"T"+(m[4]||"00").padStart(2,"0")+":"+(m[5]||"00")+":00").getTime();if(!isNaN(t))return t;}
+                    return 0;
+                  };
+                  const _cTs=(cc)=>_ts(cc.at)||_ts(cc.atFmt)||_ts(cc.time)||0;
+                  const _fTs=(f)=>_ts(f.addedAtIso)||_ts(f.addedAt)||0;
+                  const _key=(item)=>item.batchId||"_orphan-"+(item.id||Math.random());
+                  const map=new Map();
+                  fbCmts.forEach(cc=>{
+                    const ts=_cTs(cc),k=_key(cc);
+                    if(!map.has(k))map.set(k,{key:k,ts,comments:[],audio:null,images:[],user:cc.user});
+                    const r=map.get(k);
+                    if(cc.type==="audio")r.audio=cc; else r.comments.push(cc);
+                    if(ts>r.ts)r.ts=ts;
+                    if(!r.user&&cc.user)r.user=cc.user;
+                  });
+                  allAnn.forEach(f=>{
+                    const ts=_fTs(f),k=_key(f);
+                    if(!map.has(k))map.set(k,{key:k,ts,comments:[],audio:null,images:[],user:f.addedBy});
+                    const r=map.get(k);
+                    r.images.push(f);
+                    if(ts>r.ts)r.ts=ts;
+                    if(!r.user&&f.addedBy)r.user=f.addedBy;
+                  });
+                  const rounds=Array.from(map.values()).filter(r=>r.comments.length>0||r.audio||r.images.length>0).sort((a,b)=>b.ts-a.ts);
+                  if(rounds.length===0)return null;
+                  const _fmt=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
+                  return(<div style={{borderTop:"1px solid "+C.b1,paddingTop:14}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                      <div style={{color:"#dc2626",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>Histórico de ajustes</div>
+                      <span style={{background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:700}}>{rounds.length} round{rounds.length>1?"s":""}</span>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {rounds.map((r,ri)=>{
+                        const firstC=r.comments[0]||r.audio||{};
+                        const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
+                        const accent=isClient?"#16a34a":"#7c3aed";
+                        const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
+                        const isLatest=ri===0;
+                        return(<div key={r.key} style={{background:isLatest?"#fafaff":"#fff",border:"1px solid "+(isLatest?accent+"33":C.b1),borderRadius:10,padding:"10px 12px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+                            <span style={{background:accent,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
+                            <span style={{color:C.tx,fontSize:11,fontWeight:700}}>{userName}</span>
+                            {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"1px 7px",borderRadius:99,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ recente</span>}
+                            {r.ts>0&&<span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>{_fmt(r.ts)}</span>}
+                          </div>
+                          {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0||r.images.length>0?6:0}}/>}
+                          {r.comments.map(cc=>(<div key={cc.id} style={{color:C.tx,fontSize:11.5,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4}}>{String(cc.text||"").replace("AJUSTE NECESSARIO: ","")}</div>))}
+                          {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>
+                            {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" referrerPolicy="no-referrer" onClick={()=>setOpenCard(current)}
                               title="Abrir cartão pra ver em tamanho grande"
                               style={{width:54,height:54,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"1px solid "+C.b1}}/>))}
                           </div>}
