@@ -15981,10 +15981,15 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const isFinalImg=(f)=>f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
   const isAnyImg=(f)=>f.type?.startsWith("image/");
   const filterFn=tab==="publicacao"?isFinalImg:isAnyImg;
-  const allImgs=current?[
-    ...(current.cover?[current.cover]:[]),
-    ...(current.files||[]).filter(filterFn).map(f=>f.url),
-  ].filter(Boolean):[];
+  // ORDEM: última imagem subida pelo designer aparece PRIMEIRO (mais recente no topo).
+  // Reverte files em ordem cronológica → mais recente primeiro. Cover entra no fim se não estiver nos files.
+  const _filesDesc=(current?.files||[]).filter(filterFn).slice().reverse().map(f=>f.url);
+  const _coverInFiles=current?.cover&&_filesDesc.includes(current.cover);
+  const allImgs=current?(
+    _filesDesc.length>0
+      ? [..._filesDesc, ...(current.cover&&!_coverInFiles?[current.cover]:[])]
+      : (current.cover?[current.cover]:[])
+  ).filter(Boolean):[];
 
   const isSocio=CURRENT_USER.level===1;
   const TABS=[
@@ -28585,7 +28590,7 @@ export default function AgencyOS(){
     });
     return base;
   });
-  const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};return{...DEFAULT_PERMS,...(livePerms[uid]||ACCESS_STORE[uid]||{})};};
+  const getPerms=(uid)=>{const u=TEAM.find(t=>t.id===uid);if(u?.level===1)return {...PARTNER_PERMS};return{...DEFAULT_PERMS,...(ACCESS_STORE[uid]||{}),...(livePerms[uid]||{})};};
   const myPerms=getPerms(CURRENT_USER.id);
 
   // ── Fetch tasks do Supabase ───────────────────────────────
