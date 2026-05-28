@@ -908,13 +908,13 @@ function calcFunnelConversions(stages){
 
 /* ─── TEAM ───────────────────────────────── */
 const TEAM = [
-  { id:"vinicius",  name:"Vinicius",  role:"CEO / Gestor",          av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"gustavo",   name:"Gustavo",   role:"CEO / Gestor",          av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
-  { id:"erick",     name:"Erick",     role:"Gestor de mídia"     , av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
-  { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
-  { id:"maria",     name:"Maria Clara", role:"Designer",           av:"M", color:"#ec4899", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
-  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
+  { id:"vinicius",  name:"Vinicius",  role:"Gestão de projetos",    av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"gustavo",   name:"Gustavo",   role:"Gestão de performance", av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"ellen",     name:"Hellen",     role:"Estratégia",           av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
+  { id:"erick",     name:"Erick",     role:"Gestão de mídia"     , av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
+  { id:"andre",     name:"André",     role:"Design",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
+  { id:"maria",     name:"Maria Clara", role:"Design",             av:"M", color:"#ec4899", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
+  { id:"guilherme", name:"Guilherme", role:"Edição de vídeo",        av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
@@ -18822,10 +18822,10 @@ function CollabProfilePage({user,profile,onSave,onClose}){
 }
 
 /* ─── Constantes de nível — fora do componente ─── */
-const LEVEL_LABELS={1:"Socio",2:"Coordenacao",3:"Colaborador",4:"Freelancer",5:"Cliente"};
+const LEVEL_LABELS={1:"CEO",2:"Coordenação",3:"Colaborador",5:"Cliente"};
 const LEVEL_COLORS={1:C.a,2:C.pk,3:C.bl,4:C.yw,5:C.gr};
 
-const LEVEL_FILTER_BUTTONS=[{v:0,l:"Todos"},{v:1,l:"Socio"},{v:2,l:"Coord."},{v:3,l:"Colab."},{v:4,l:"Freelancer"}];
+const LEVEL_FILTER_BUTTONS=[{v:0,l:"Todos"},{v:1,l:"CEOs"},{v:2,l:"Coordenação"},{v:3,l:"Colaboradores"}];
 
 const EMPTY_PET={tem:"",nome:"",especie:"",raca:"",idade:""};
 
@@ -18853,11 +18853,10 @@ const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status
 const CLIENT_TABLE_HEADERS=["Cliente","Login","Portal","Módulos ativos","Ações"];
 
 const LEVEL_STRUCTURE=[
-  {l:1,name:"Socio / Dono",       c:C.a,  desc:"Acesso total, pode excluir e gerenciar tudo"},
-  {l:2,name:"Coordenacao / Social Media",c:C.pk,desc:"Gerencia equipe, pode excluir cartoes"},
-  {l:3,name:"Colaborador",        c:C.bl, desc:"Acessa próprio dashboard, não pode excluir"},
-  {l:4,name:"Freelancer",         c:C.yw, desc:"Apenas tarefas atribuidas"},
-  {l:5,name:"Cliente",            c:C.gr, desc:"Portal de aprovacoes"},
+  {l:1,name:"CEOs",          c:C.a,  desc:"Acesso total ao sistema. Gerenciam tudo, todos os módulos e permissões."},
+  {l:2,name:"Coordenação",   c:C.pk, desc:"Coordena equipe, aprova entregas, gerencia clientes."},
+  {l:3,name:"Colaboradores", c:C.bl, desc:"Designers, editores e gestores. Dashboard próprio, vê só o que foi designado pra eles."},
+  {l:5,name:"Cliente",       c:C.gr, desc:"Portal de aprovações e acompanhamento das demandas."},
 ];
 
 function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
@@ -19305,93 +19304,80 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
           </div>
         </div>
 
-      <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-        <div style={{display:"grid",gridTemplateColumns:"2.5fr 1.5fr 1fr 1fr 1fr 120px",gap:0,padding:"10px 20px",background:C.s1,borderBottom:"1px solid "+C.b1}}>
-          {MEMBER_TABLE_HEADERS.map((h,i)=>(
-            <div key={h} style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,textAlign:i>=3?"center":"left"}}>{h}</div>
-          ))}
-        </div>
-
-        {allMembers.map((u,idx)=>{
+      {/* Grid de cards de colaboradores — fotos grandes, sem status nem demandas */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
+        {allMembers.map(u=>{
           const lvColor=LEVEL_COLORS[u.level]||C.ts;
           const lvLabel=LEVEL_LABELS[u.level]||"—";
-          const tc=taskCount(u.id);
-          const dc=doneCount(u.id);
           const photo=collabProfiles[u.id]?.photo;
-          const isLast=idx===allMembers.length-1;
-          return (<div key={u.id}
-            style={{display:"grid",gridTemplateColumns:"2.5fr 1.5fr 1fr 1fr 1fr 120px",gap:0,padding:"14px 20px",borderBottom:isLast?"none":"1px solid "+C.b1+"44",alignItems:"center",transition:"background .12s",cursor:"default"}}
-            onMouseEnter={e=>{e.currentTarget.style.background=C.s1;}}
-            onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
-
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{width:38,height:38,borderRadius:12,overflow:"hidden",flexShrink:0,border:"1.5px solid "+u.color+"44"}}>
+          const displayName=collabProfiles[u.id]?.nome||u.name;
+          return(<div key={u.id}
+            style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:0,overflow:"hidden",transition:"all .15s",display:"flex",flexDirection:"column"}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=u.color+"66";e.currentTarget.style.boxShadow="0 8px 24px "+u.color+"15";e.currentTarget.style.transform="translateY(-2px)";}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
+            {/* Banner com cor do colaborador */}
+            <div style={{height:64,background:"linear-gradient(135deg,"+u.color+","+u.color+"99)",position:"relative"}}>
+              <span style={{position:"absolute",top:10,right:12,background:lvColor,color:"#fff",borderRadius:99,padding:"3px 11px",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",boxShadow:"0 3px 10px rgba(0,0,0,.18)"}}>{lvLabel}</span>
+            </div>
+            {/* Foto sobreposta ao banner */}
+            <div style={{padding:"0 18px 18px",marginTop:-44,display:"flex",flexDirection:"column",gap:12}}>
+              <div style={{width:88,height:88,borderRadius:"50%",overflow:"hidden",border:"4px solid "+C.card,boxShadow:"0 6px 18px rgba(0,0,0,.12)",background:C.card,flexShrink:0}}>
                 {photo
-                  ?(<img src={photo} alt={u.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>)
-                  :(<div style={{width:"100%",height:"100%",background:"linear-gradient(135deg,"+u.color+"33,"+u.color+"11)",display:"flex",alignItems:"center",justifyContent:"center",color:u.color,fontWeight:900,fontSize:15}}>{u.av}</div>)
+                  ?<img src={photo} alt={u.name} referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                  :<div style={{width:"100%",height:"100%",background:"linear-gradient(135deg,"+u.color+","+u.color+"99)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:34}}>{u.av}</div>
                 }
               </div>
               <div>
-                <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{collabProfiles[u.id]?.nome||u.name}</div>
-                <div style={{color:C.td,fontSize:11,marginTop:1}}>{u.id+"@pixelsmarketing.com.br"}</div>
+                <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.2,lineHeight:1.25}}>{displayName}</div>
+                <div style={{color:u.color,fontSize:12.5,fontWeight:600,marginTop:3}}>{u.role}</div>
+                <div style={{color:C.td,fontSize:11,marginTop:4}}>{u.id+"@pixelsmarketing.com.br"}</div>
               </div>
-            </div>
-
-            <div style={{color:C.ts,fontSize:12}}>{u.role}</div>
-
-            <div>
-              <span style={{background:lvColor+"18",color:lvColor,borderRadius:6,padding:"3px 9px",fontSize:10,fontWeight:700}}>{lvLabel}</span>
-            </div>
-
-            <div style={{textAlign:"center"}}>
-              <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{tc}</div>
-              <div style={{color:C.td,fontSize:10,marginTop:1}}>{dc+" concluidas"}</div>
-            </div>
-
-            <div style={{textAlign:"center"}}>
-              <span style={{display:"inline-flex",alignItems:"center",gap:5,background:u.status==="online"?C.gr+"18":C.td+"18",color:u.status==="online"?C.gr:C.td,borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:700}}>
-                <span style={{width:5,height:5,borderRadius:"50%",background:u.status==="online"?C.gr:C.td,flexShrink:0}}/>
-                {u.status==="online"?"Online":"Ausente"}
-              </span>
-            </div>
-
-            <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"flex-end"}}>
-              <button onClick={()=>u.level===1?setViewDash(u.id):setViewUser(u)}
-                title="Ver dashboard" style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.ts}}
-                onMouseEnter={e=>{e.currentTarget.style.background=u.color+"18";e.currentTarget.style.color=u.color;}}
-                onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
-                🎯
-              </button>
-              <button onClick={()=>setEditProfile(u.id)}
-                title="Editar perfil" style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.ts}}
-                onMouseEnter={e=>{e.currentTarget.style.background=u.color+"18";e.currentTarget.style.color=u.color;}}
-                onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
-                👤
-              </button>
-              {(isMePartner||myPerms?.verDashOutros)&&(<button onClick={()=>onViewAs&&onViewAs(u.id)}
-                title={"Ver como "+u.name} style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.ts}}
-                onMouseEnter={e=>{e.currentTarget.style.background=C.or+"18";e.currentTarget.style.color=C.or;}}
-                onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
-                👁
-              </button>)}
-              {isMePartner&&(<button onClick={()=>setEditCollab(u.id)}
-                title="Gerenciar permissoes" style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.ts}}
-                onMouseEnter={e=>{e.currentTarget.style.background=C.a+"18";e.currentTarget.style.color=C.a;}}
-                onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
-                ⚙
-              </button>)}
+              {/* Ações — só ícones SVG modernos, sem emojis */}
+              <div style={{display:"flex",gap:6,paddingTop:10,borderTop:"1px solid "+C.b1+"66"}}>
+                <button onClick={()=>u.level===1?setViewDash(u.id):setViewUser(u)}
+                  title="Ver dashboard"
+                  style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.ts,transition:"all .12s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=u.color+"15";e.currentTarget.style.color=u.color;e.currentTarget.style.borderColor=u.color+"55";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>
+                </button>
+                <button onClick={()=>setEditProfile(u.id)}
+                  title="Editar perfil"
+                  style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.ts,transition:"all .12s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=u.color+"15";e.currentTarget.style.color=u.color;e.currentTarget.style.borderColor=u.color+"55";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+                {(isMePartner||myPerms?.verDashOutros)&&(<button onClick={()=>onViewAs&&onViewAs(u.id)}
+                  title={"Ver como "+u.name}
+                  style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.ts,transition:"all .12s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=C.or+"15";e.currentTarget.style.color=C.or;e.currentTarget.style.borderColor=C.or+"55";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>)}
+                {isMePartner&&(<button onClick={()=>setEditCollab(u.id)}
+                  title="Gerenciar permissões"
+                  style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.ts,transition:"all .12s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=C.a+"15";e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a+"55";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                </button>)}
+              </div>
             </div>
           </div>);
         })}
-
-        {allMembers.length===0&&(<div style={{padding:"40px",textAlign:"center",color:C.td,fontSize:13}}>Nenhum colaborador encontrado.</div>)}
+        {allMembers.length===0&&(<div style={{gridColumn:"1 / -1",padding:"60px 20px",textAlign:"center",color:C.td,fontSize:14,background:C.card,borderRadius:16,border:"1px dashed "+C.b1}}>Nenhum colaborador encontrado.</div>)}
       </div>
 
       {isPartner&&(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-        <div style={{padding:"14px 20px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:10}}>
-          <span style={{fontSize:14}}>🔒</span>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13}}>Estrutura de Niveis</div>
-          <div style={{color:C.td,fontSize:11,marginLeft:4}}>Visivel apenas para socios</div>
+        <div style={{padding:"16px 22px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px "+C.a+"40"}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          </div>
+          <div style={{flex:1}}>
+            <div style={{color:C.tx,fontWeight:800,fontSize:15,letterSpacing:-.2}}>Estrutura de níveis</div>
+            <div style={{color:C.td,fontSize:11.5,marginTop:1}}>Hierarquia de acesso ao sistema · visível apenas para CEOs</div>
+          </div>
         </div>
         <div style={{padding:"6px 0"}}>
           {LEVEL_STRUCTURE.map((lv,idx,arr)=>{
@@ -19425,7 +19411,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
 
           {/* Info box */}
           <div style={{background:C.a+"0a",border:"1px solid "+C.a+"22",borderRadius:12,padding:"12px 16px",fontSize:12,color:C.ts,lineHeight:1.6}}>
-            <strong style={{color:C.tx}}>🏢 Portal do Cliente</strong> — Gerencie os acessos individuais de cada empresa. Cada cliente entra no portal e visualiza somente os dados da própria empresa. Configure quais módulos cada um pode acessar.
+            <strong style={{color:C.tx}}>Portal do Cliente</strong> — Gerencie os acessos individuais de cada empresa. Cada cliente entra no portal e visualiza somente os dados da própria empresa. Configure quais módulos cada um pode acessar.
           </div>
 
           {/* Client list */}
