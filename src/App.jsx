@@ -16057,25 +16057,27 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       {/* Main content: image + sidebar — grid responsivo */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 380px",gap:18,alignItems:"flex-start"}}>
 
-        {/* Image panel — oculto para demandas internas */}
-        {tab!=="internas"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <div style={{background:C.s1,borderRadius:16,overflow:"hidden",minHeight:300,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {/* Image panel — oculto para demandas internas. Carrossel EM CIMA pra ficar sempre visível, imagem com altura travada. */}
+        {tab!=="internas"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {/* Carrossel de miniaturas — fixo no topo, scroll horizontal se for muito longo */}
+          {allImgs.length>1&&(<div style={{display:"flex",gap:10,overflowX:"auto",overflowY:"hidden",padding:"4px 2px",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
+            {allImgs.map((src,i)=>(
+              <img key={i} src={src} onClick={()=>setImgIdx(i)} alt=""
+                style={{width:84,height:84,objectFit:"cover",borderRadius:11,cursor:"pointer",border:i===imgIdx?"3px solid "+C.a:"2px solid #e2e8f0",opacity:i===imgIdx?1:.7,transition:"all .15s",boxShadow:i===imgIdx?"0 4px 12px rgba(161,64,255,0.25)":"none",flexShrink:0}}
+                onMouseEnter={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.95;}}
+                onMouseLeave={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.7;}}/>
+            ))}
+          </div>)}
+          {/* Imagem principal — altura travada pra não empurrar nada (stories verticais ficam contidas) */}
+          <div style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center"}}>
             {allImgs.length>0
-              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" style={{width:"100%",maxHeight:"78vh",objectFit:"contain",display:"block"}}/>)
+              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:"block"}}/>)
               :(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:60}}>
                   <Ico n="image" size={40}/>
                   <div style={{color:C.ts,fontSize:13}}>Nenhuma imagem anexada</div>
                 </div>)
             }
           </div>
-          {allImgs.length>1&&(<div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap",padding:"4px 0"}}>
-            {allImgs.map((src,i)=>(
-              <img key={i} src={src} onClick={()=>setImgIdx(i)} alt=""
-                style={{width:96,height:96,objectFit:"cover",borderRadius:12,cursor:"pointer",border:i===imgIdx?"3px solid "+C.a:"2px solid #e2e8f0",opacity:i===imgIdx?1:.7,transition:"all .15s",boxShadow:i===imgIdx?"0 4px 12px rgba(161,64,255,0.25)":"none"}}
-                onMouseEnter={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.95;}}
-                onMouseLeave={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.7;}}/>
-            ))}
-          </div>)}
         </div>}
 
         {/* Right sidebar — info expandida */}
