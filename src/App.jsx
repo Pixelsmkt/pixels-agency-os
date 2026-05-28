@@ -912,8 +912,8 @@ const TEAM = [
   { id:"gustavo",   name:"Gustavo",   role:"CEO / Gestor",          av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
   { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor de mídia"     , av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
-  { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
-  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true },
+  { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
+  { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
@@ -15839,13 +15839,20 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const pushNotif=(notif)=>{
     if(setGlobalNotifs)setGlobalNotifs(p=>[{id:"n"+Date.now(),read:false,...notif},...p]);
   };
+  // Helper: lista de usuários que devem receber notificação de um card (assignee + assignees, dedup)
+  const _notifTargets=(task)=>{
+    const ids=new Set();
+    if(task.assignee)ids.add(task.assignee);
+    (task.assignees||[]).forEach(uid=>ids.add(uid));
+    return Array.from(ids).filter(Boolean);
+  };
 
   // ── COPY ACTIONS ──
   const approveCopy=(task)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demandas",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
-    pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",body:'"'+task.title+'" foi aprovada e está em Demandas',user:actor,at:"Agora"});
+    pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",body:'"'+task.title+'" foi aprovada e está em Demandas',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
     setCardIdx(0);setImgIdx(0);
   };
 
@@ -15855,7 +15862,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     // Copy ajuste mantém comportamento antigo: fica em "demanda" com flag ajustar:true
     // (apenas ajuste de CONTEÚDO — requestAdjust — vai pra coluna "ajustes")
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:true,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"edit",label:"Marcada para ajuste por "+actor,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
-    pushNotif({type:"ajuste",icon:"✎",title:"Ajuste solicitado na Copy",body:'"'+task.title+'" precisa de revisão. Verifique o feedback.',user:actor,at:"Agora"});
+    pushNotif({type:"ajuste",icon:"✎",title:"Ajuste solicitado na Copy",body:'"'+task.title+'" precisa de revisão. Verifique o feedback.',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
     setCardIdx(0);setImgIdx(0);
   };
 
@@ -15913,7 +15920,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       .map(u=>u.name)
       .join(", ");
     if(isInterna){
-      pushNotif({type:"aprovacao",icon:"✅",title:"Demanda Interna Aprovada",body:'"'+task.title+'" foi aprovada e pode ser executada.',user:actor,at:"Agora",taskId:task.id,category:"interno"});
+      pushNotif({type:"aprovacao",icon:"✅",title:"Demanda Interna Aprovada",body:'"'+task.title+'" foi aprovada e pode ser executada.',user:actor,at:"Agora",taskId:task.id,category:"interno",targetUsers:_notifTargets(task)});
     } else {
       pushNotif({
         type:"aprovacao",icon:"🏆",
@@ -15951,7 +15958,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       comments:newComments,
       timeline:tl,
     }:t));
-    pushNotif({type:"urgente",icon:"⚠",title:"⚠ Ajuste necessário",body:'"'+task.title+'" voltou para Em Execução com solicitação de ajuste.',user:actor,at:"Agora"});
+    pushNotif({type:"urgente",icon:"⚠",title:"⚠ Ajuste necessário",body:'"'+task.title+'" voltou para Em Execução com solicitação de ajuste.',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
     setCardIdx(0);setImgIdx(0);setEditModal(null);
   };
 
@@ -16526,7 +16533,13 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
   const activeAlerts=allAlerts.filter(a=>!a.resolvedAt).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
 
   // Seed data by category
-  const ALL_NOTIFS=[...(notifs||[]),...SEED_NOTIFS];
+  // FIX: respeita targetUsers — só mostra notif pro usuário atual se ele está no array
+  // (ou se o array não existe / está vazio, pra manter broadcast como default)
+  const _isForMe=(nt)=>{
+    if(!nt.targetUsers||!Array.isArray(nt.targetUsers)||nt.targetUsers.length===0)return true;
+    return nt.targetUsers.indexOf(CURRENT_USER.id)>=0;
+  };
+  const ALL_NOTIFS=[...(notifs||[]),...SEED_NOTIFS].filter(_isForMe);
 
   const PANELS=[
     {
@@ -21571,7 +21584,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const userPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
   const canEdit=(userPerms.editarDemanda||user.level<=2)||isAssigned;
   // ── Permissão pra REFERÊNCIAS ── só quem cria cartão (sócio/coord) ou criador da própria demanda
-  const canEditRef=userPerms.criarDemanda||user.level===1||(task.createdBy&&task.createdBy===user.name);
+  const canEditRef=userPerms.criarDemanda||user.level===1||(task.createdBy&&task.createdBy===user.name)||user.dash==="designer"||user.dash==="editor"||user.dash==="coordinator";
 
   // Fix 3 — cleanup do interval de gravação + para o MediaRecorder se o modal desmontar
   useEffect(()=>()=>{
