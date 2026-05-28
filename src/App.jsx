@@ -16062,7 +16062,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           {/* Carrossel de miniaturas — fixo no topo, scroll horizontal se for muito longo */}
           {allImgs.length>1&&(<div style={{display:"flex",gap:10,overflowX:"auto",overflowY:"hidden",padding:"4px 2px",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
             {allImgs.map((src,i)=>(
-              <img key={i} src={src} onClick={()=>setImgIdx(i)} alt=""
+              <img key={i} src={src} onClick={()=>setImgIdx(i)} alt="" referrerPolicy="no-referrer"
                 style={{width:84,height:84,objectFit:"cover",borderRadius:11,cursor:"pointer",border:i===imgIdx?"3px solid "+C.a:"2px solid #e2e8f0",opacity:i===imgIdx?1:.7,transition:"all .15s",boxShadow:i===imgIdx?"0 4px 12px rgba(161,64,255,0.25)":"none",flexShrink:0}}
                 onMouseEnter={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.95;}}
                 onMouseLeave={e=>{if(i!==imgIdx)e.currentTarget.style.opacity=.7;}}/>
@@ -16071,7 +16071,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           {/* Imagem principal — altura travada pra não empurrar nada (stories verticais ficam contidas) */}
           <div style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center"}}>
             {allImgs.length>0
-              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:"block"}}/>)
+              ?(<img src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" referrerPolicy="no-referrer" style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:"block"}}/>)
               :(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:60}}>
                   <Ico n="image" size={40}/>
                   <div style={{color:C.ts,fontSize:13}}>Nenhuma imagem anexada</div>
@@ -23123,14 +23123,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   {imgRef.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidRef.length>0?12:0}}>
                     {imgRef.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
-                        <img src={thumbUrl(a.url)} alt={a.name} loading="lazy"
+                        <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
                           onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
                           onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
                           style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:4,padding:8,background:"#faf5ff",color:"#94a3b8",fontSize:9,textAlign:"center"}}>
-                          <span style={{fontSize:24}}>🖼</span>
-                          <span style={{wordBreak:"break-word",lineHeight:1.3}}>{a.name||"imagem"}</span>
-                          <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#a140ff",fontSize:9,fontWeight:600,marginTop:4}}>Abrir →</a>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#faf5ff,#f3e8ff)",color:"#7c3aed",textAlign:"center"}}>
+                          <Ico n="image" size={22} color="#a140ff"/>
+                          <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+                            style={{background:"#a140ff",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                            Abrir <Ico n="external" size={9} color="#fff"/>
+                          </a>
                         </div>
                         <div style={{position:"absolute",top:4,left:4,background:"#a140ff",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>ref #{i+1}</div>
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
@@ -23168,7 +23171,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 return(<div>
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid #e2e8f0"}}>
                     <div>
-                      <div style={{color:"#0f172a",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>🎨 Arquivos prontos {totalFin>0?`(${totalFin})`:""}</div>
+                      <div style={{color:"#0f172a",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8,display:"flex",alignItems:"center",gap:5}}><Ico n="image" size={12}/> Arquivos prontos {totalFin>0?`(${totalFin})`:""}</div>
                       <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>arte final entregue pela equipe — pronto pra aprovação</div>
                     </div>
                     {canEdit&&<button onClick={()=>fileInputRef.current?.click()} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap"}}>+ adicionar</button>}
@@ -23177,14 +23180,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   {imgFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidFin.length>0?12:0}}>
                     {imgFin.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
-                        <img src={thumbUrl(a.url)} alt={a.name} loading="lazy"
+                        <img src={thumbUrl(a.url)} alt="" loading="lazy" referrerPolicy="no-referrer"
                           onClick={()=>setLightbox({url:a.url,name:a.name,storagePath:a.storagePath})}
                           onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
                           style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
-                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:4,padding:8,background:"#f8fafc",color:"#94a3b8",fontSize:9,textAlign:"center"}}>
-                          <span style={{fontSize:24}}>🖼</span>
-                          <span style={{wordBreak:"break-word",lineHeight:1.3}}>{a.name||"imagem"}</span>
-                          <a href={a.url} target="_blank" rel="noopener noreferrer" style={{color:"#a140ff",fontSize:9,fontWeight:600,marginTop:4}}>Abrir →</a>
+                        <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:6,padding:10,background:"linear-gradient(135deg,#f8fafc,#e2e8f0)",color:"#475569",textAlign:"center"}}>
+                          <Ico n="image" size={22} color="#64748b"/>
+                          <div style={{color:"#475569",fontSize:10,fontWeight:600,wordBreak:"break-word",lineHeight:1.3,maxWidth:"100%"}}>{a.name||"imagem"}</div>
+                          <a href={a.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+                            style={{background:"#0f172a",color:"#fff",fontSize:9.5,fontWeight:700,padding:"4px 10px",borderRadius:99,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:4}}>
+                            Abrir <Ico n="external" size={9} color="#fff"/>
+                          </a>
                         </div>
                         <div style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>#{i+1}</div>
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
