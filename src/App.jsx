@@ -16261,16 +16261,64 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           const _fmt2=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
 
           return(<div style={{background:C.card,borderRadius:18,border:"1px solid "+C.b1,boxShadow:"0 4px 20px rgba(15,23,42,0.04)",padding:isMob?"24px 22px":"40px 56px",display:"flex",flexDirection:"column",gap:22,minHeight:"60vh"}}>
-            {/* Cabeçalho copy */}
+            {/* Cabeçalho copy — sem badge "Copy para aprovação" (redundante) */}
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-              <span style={{background:"#9F43F614",color:"#9F43F6",borderRadius:99,padding:"4px 12px",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
-                <Ico n="fileText" size={11} color="#9F43F6"/>Copy para aprovação
-              </span>
-              {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"3px 10px",display:"flex",alignItems:"center"}}>
-                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:18,maxWidth:80,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:10,fontWeight:700}}>{cl.abbr}</span>)}
+              {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"4px 12px",display:"flex",alignItems:"center"}}>
+                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:20,maxWidth:90,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:11,fontWeight:700}}>{cl.abbr}</span>)}
               </div>)}
-              {assigneeUser&&(<span style={{color:C.ts,fontSize:12,fontWeight:500}}>{assigneeUser.name}</span>)}
+              {/* Unidades Bioter — se cliente=bioter e tem bioterUnit setado */}
+              {cl&&cl.id==="bioter"&&current.bioterUnit&&(()=>{
+                const sel=String(current.bioterUnit||"").split(",").map(s=>s.trim()).filter(Boolean);
+                return sel.map(uid=>{
+                  const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
+                  if(!u)return null;
+                  return(<span key={uid} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"55",borderRadius:8,padding:"3px 10px",fontSize:10.5,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5}}>
+                    <span style={{background:u.color,color:"#fff",fontSize:8.5,fontWeight:800,padding:"1px 5px",borderRadius:4,letterSpacing:.4}}>{u.abbr}</span>
+                    {u.pickerLabel||u.label}
+                  </span>);
+                });
+              })()}
+              {/* Designers/Editores designados (todos do array assignees) */}
+              {(()=>{
+                const ids=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
+                const users=ids.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
+                if(users.length===0)return null;
+                return(<div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:8,padding:"3px 10px 3px 4px"}}>
+                  {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
+                    style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:"2px solid #fff",marginLeft:i===0?0:-6,zIndex:3-i}}>{u.av}</div>))}
+                  {users.length>3&&<span style={{color:C.td,fontSize:10,fontWeight:700,marginLeft:2}}>+{users.length-3}</span>}
+                  <span style={{color:C.ts,fontSize:11.5,fontWeight:600,marginLeft:2}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
+                </div>);
+              })()}
             </div>
+
+            {/* Linha de metadados do card — tipo, publicação, entrega, mês, prioridade */}
+            {(()=>{
+              const ct=(current.contentType||current.tipo||"").toLowerCase();
+              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},corte:{label:"Corte de vídeo",icon:"scan"}};
+              const ctCfg=CT_MAP[ct];
+              const pubD=current.publishDate||current.publish_date||"";
+              const pubT=current.publishTime||current.publish_time||"";
+              const dl=current.deadline||"";
+              const refMes=current.referenceMonth||current.reference_month||"";
+              const pri=(current.priority||"").toLowerCase();
+              const PRI_MAP={alta:{label:"Alta",color:"#dc2626"},media:{label:"Média",color:"#f59e0b"},baixa:{label:"Baixa",color:"#16a34a"}};
+              const priCfg=PRI_MAP[pri];
+              const fmtBR=(iso)=>{if(!iso)return"";const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return iso;};
+              const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
+              const tags=[];
+              if(ctCfg)tags.push({key:"ct",icon:ctCfg.icon,label:ctCfg.label,color:"#7c3aed",bg:"#7c3aed14"});
+              if(pubD)tags.push({key:"pub",icon:"calendar",label:"Publicar "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
+              if(dl)tags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
+              if(refMes)tags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#475569",bg:"#f1f5f9"});
+              if(priCfg)tags.push({key:"pri",icon:"flame",label:priCfg.label,color:priCfg.color,bg:priCfg.color+"14"});
+              if(tags.length===0)return null;
+              return(<div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+                {tags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"33",borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                  <Ico n={t.icon} size={11} color={t.color}/>{t.label}
+                </span>))}
+              </div>);
+            })()}
 
             {/* Título do card — destaque */}
             <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:26,lineHeight:1.25,letterSpacing:-.5}}>{current.title}</div>
@@ -16393,7 +16441,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               <a href={src2} target="_blank" rel="noopener noreferrer" style={{display:"block"}}>
                 <img src={src2} alt="" referrerPolicy="no-referrer"
                   onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
-                  style={{width:"100%",maxHeight:280,objectFit:"cover",display:"block"}}/>
+                  style={{width:"100%",height:"auto",objectFit:"contain",display:"block",background:"#fff"}}/>
                 <div style={{display:"none",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,padding:30,color:"#94a3b8"}}>
                   <Ico n="image" size={22} color="#94a3b8"/>
                   <div style={{fontSize:11}}>imagem indisponível</div>
