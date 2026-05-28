@@ -16227,7 +16227,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           </div>
         </div>}
 
-        {/* Copy panel — foco no texto, imagens só como referência pequena */}
+        {/* Copy panel — briefing centralizado e grande pra leitura confortável */}
         {tab==="copys"&&(()=>{
           const stripHtml=(html)=>{
             if(!html)return"";
@@ -16239,36 +16239,87 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             return t.replace(/\n{3,}/g,"\n\n").trim();
           };
           const captionTxt2=stripHtml(current.caption);
-          const refImgs=allImgs.slice(0,8);
-          return(<div style={{display:"flex",flexDirection:"column",gap:14,alignItems:"center",minHeight:"60vh"}}>
-            <div style={{width:"100%",maxWidth:760,background:C.card,borderRadius:18,border:"1px solid "+C.b1,boxShadow:"0 4px 20px rgba(15,23,42,0.04)",padding:isMob?"22px 20px":"36px 44px",display:"flex",flexDirection:"column",gap:18}}>
-              {/* Cabeçalho copy */}
-              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                <span style={{background:"#9F43F614",color:"#9F43F6",borderRadius:99,padding:"3px 11px",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
-                  <Ico n="fileText" size={11} color="#9F43F6"/>Copy para aprovação
-                </span>
-                {cl&&<span style={{color:C.td,fontSize:11.5,fontWeight:600}}>{cl.name}</span>}
-              </div>
-              {/* Título do card */}
-              <div style={{color:C.tx,fontWeight:800,fontSize:isMob?18:22,lineHeight:1.3,letterSpacing:-.4}}>{current.title}</div>
-              {/* Legenda em destaque */}
-              {captionTxt2
-                ? <div style={{color:C.tx,fontSize:isMob?14:15.5,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"\'Inter\',system-ui,sans-serif"}}>{captionTxt2}</div>
-                : <div style={{color:C.td,fontSize:13,fontStyle:"italic",textAlign:"center",padding:"30px 0"}}>Sem legenda preenchida pra revisar.</div>
-              }
-              {/* Faixa pequena de referências (se houver imagens) */}
-              {refImgs.length>0&&<div style={{borderTop:"1px solid "+C.b1,paddingTop:14,display:"flex",flexDirection:"column",gap:8}}>
-                <div style={{color:C.td,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Imagens de referência ({refImgs.length})</div>
-                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                  {refImgs.map((src2,i)=>(<a key={i} href={src2} target="_blank" rel="noopener noreferrer"
-                    style={{width:64,height:64,borderRadius:9,overflow:"hidden",border:"1px solid "+C.b1,display:"block",background:"#f8fafc",flexShrink:0}}>
-                    <img src={src2} alt="" referrerPolicy="no-referrer"
-                      onError={e=>{e.currentTarget.style.display="none";}}
-                      style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                  </a>))}
-                </div>
-              </div>}
+          const descTxt2=stripHtml(current.desc);
+          // Histórico de ajustes
+          const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
+          const fbCmts=(current.comments||[]).filter(cc=>cc.type==="feedback"||cc.type==="audio"||cc.type==="client_request");
+          const _ts=(s)=>{
+            if(!s)return 0;
+            const str=String(s);
+            if(/^\d{4}-\d{2}-\d{2}T/.test(str)){const i=new Date(str).getTime();if(!isNaN(i)&&i>0)return i;}
+            const m=str.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+            if(m){const t=new Date(m[3]+"-"+m[2]+"-"+m[1]+"T"+(m[4]||"00").padStart(2,"0")+":"+(m[5]||"00")+":00").getTime();if(!isNaN(t))return t;}
+            return 0;
+          };
+          const _cTs2=(cc)=>_ts(cc.at)||_ts(cc.atFmt)||_ts(cc.time)||0;
+          const _fTs2=(f)=>_ts(f.addedAtIso)||_ts(f.addedAt)||0;
+          const _key2=(item)=>item.batchId||"_orphan-"+(item.id||Math.random());
+          const map2=new Map();
+          fbCmts.forEach(cc=>{const ts=_cTs2(cc),k=_key2(cc);if(!map2.has(k))map2.set(k,{key:k,ts,comments:[],audio:null,images:[],user:cc.user});const r=map2.get(k);if(cc.type==="audio")r.audio=cc;else r.comments.push(cc);if(ts>r.ts)r.ts=ts;if(!r.user&&cc.user)r.user=cc.user;});
+          allAnn.forEach(f=>{const ts=_fTs2(f),k=_key2(f);if(!map2.has(k))map2.set(k,{key:k,ts,comments:[],audio:null,images:[],user:f.addedBy});const r=map2.get(k);r.images.push(f);if(ts>r.ts)r.ts=ts;if(!r.user&&f.addedBy)r.user=f.addedBy;});
+          const rounds2=Array.from(map2.values()).filter(r=>r.comments.length>0||r.audio||r.images.length>0).sort((a,b)=>b.ts-a.ts);
+          const _fmt2=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
+
+          return(<div style={{background:C.card,borderRadius:18,border:"1px solid "+C.b1,boxShadow:"0 4px 20px rgba(15,23,42,0.04)",padding:isMob?"24px 22px":"40px 56px",display:"flex",flexDirection:"column",gap:22,minHeight:"60vh"}}>
+            {/* Cabeçalho copy */}
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+              <span style={{background:"#9F43F614",color:"#9F43F6",borderRadius:99,padding:"4px 12px",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
+                <Ico n="fileText" size={11} color="#9F43F6"/>Copy para aprovação
+              </span>
+              {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"3px 10px",display:"flex",alignItems:"center"}}>
+                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:18,maxWidth:80,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:10,fontWeight:700}}>{cl.abbr}</span>)}
+              </div>)}
+              {assigneeUser&&(<span style={{color:C.ts,fontSize:12,fontWeight:500}}>{assigneeUser.name}</span>)}
             </div>
+
+            {/* Título do card — destaque */}
+            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:26,lineHeight:1.25,letterSpacing:-.5}}>{current.title}</div>
+
+            {/* Legenda em destaque */}
+            {captionTxt2&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:18}}>
+              <div style={{color:"#a140ff",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginBottom:10}}>Legenda</div>
+              <div style={{color:C.tx,fontSize:isMob?14:16,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
+            </div>)}
+
+            {/* Histórico de ajustes — antes do briefing */}
+            {rounds2.length>0&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:18}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <div style={{color:"#dc2626",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>Histórico de ajustes</div>
+                <span style={{background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700}}>{rounds2.length} round{rounds2.length>1?"s":""}</span>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {rounds2.map((r,ri)=>{
+                  const firstC=r.comments[0]||r.audio||{};
+                  const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
+                  const accent=isClient?"#16a34a":"#7c3aed";
+                  const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
+                  const isLatest=ri===0;
+                  return(<div key={r.key} style={{background:isLatest?"#fafaff":"#fff",border:"1px solid "+(isLatest?accent+"33":C.b1),borderRadius:11,padding:"12px 14px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+                      <span style={{background:accent,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
+                      <span style={{color:C.tx,fontSize:11.5,fontWeight:700}}>{userName}</span>
+                      {isLatest&&rounds2.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"1px 7px",borderRadius:99,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ recente</span>}
+                      {r.ts>0&&<span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>{_fmt2(r.ts)}</span>}
+                    </div>
+                    {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0?6:0}}/>}
+                    {r.comments.map(cc=>(<div key={cc.id} style={{color:C.tx,fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4}}>{String(cc.text||"").replace("AJUSTE NECESSARIO: ","")}</div>))}
+                  </div>);
+                })}
+              </div>
+            </div>)}
+
+            {/* Briefing pra equipe — completo, em fonte boa */}
+            {descTxt2&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:18}}>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginBottom:10}}>Briefing pra equipe</div>
+              <div style={{color:C.ts,fontSize:isMob?13.5:14.5,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{descTxt2}</div>
+            </div>)}
+
+            {!captionTxt2&&!descTxt2&&(<div style={{color:C.td,fontSize:14,fontStyle:"italic",textAlign:"center",padding:"40px 0"}}>Sem legenda nem briefing preenchido pra revisar.</div>)}
+
+            {/* Tags */}
+            {(current.tags||[]).length>0&&(<div style={{display:"flex",gap:6,flexWrap:"wrap",borderTop:"1px solid "+C.b1,paddingTop:14}}>
+              {current.tags.map(tag=>(<span key={tag} style={{background:C.ag,color:C.a,borderRadius:7,padding:"3px 10px",fontSize:11.5,fontWeight:500}}>{"#"+tag}</span>))}
+            </div>)}
           </div>);
         })()}
 
@@ -16334,8 +16385,26 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             Você não tem permissão para aprovar. Solicite acesso ao administrador.
           </div>)}
 
-          {/* Card info — vem DEPOIS dos botões */}
-          {(()=>{
+
+          {/* Imagens de referência GRANDES — só pra Copys */}
+          {tab==="copys"&&allImgs.length>0&&(<div style={{display:"flex",flexDirection:"column",gap:10,background:C.card,borderRadius:14,padding:"14px",border:"1px solid "+C.b1}}>
+            <div style={{color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginBottom:2}}>Referências ({allImgs.length})</div>
+            {allImgs.slice(0,5).map((src2,i)=>(<div key={i} style={{borderRadius:11,overflow:"hidden",border:"1px solid "+C.b1,background:"#f8fafc",position:"relative"}}>
+              <a href={src2} target="_blank" rel="noopener noreferrer" style={{display:"block"}}>
+                <img src={src2} alt="" referrerPolicy="no-referrer"
+                  onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                  style={{width:"100%",maxHeight:280,objectFit:"cover",display:"block"}}/>
+                <div style={{display:"none",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,padding:30,color:"#94a3b8"}}>
+                  <Ico n="image" size={22} color="#94a3b8"/>
+                  <div style={{fontSize:11}}>imagem indisponível</div>
+                </div>
+              </a>
+            </div>))}
+            {allImgs.length>5&&<div style={{color:C.td,fontSize:11,textAlign:"center",fontStyle:"italic",padding:"6px 0"}}>+ {allImgs.length-5} referência(s) — abra o cartão</div>}
+          </div>)}
+
+          {/* Card info — vem DEPOIS dos botões. Escondido quando copys (já no centro) */}
+          {tab!=="copys"&&(()=>{
             const stripHtml=(html)=>{
               if(!html)return"";
               let t=String(html);
