@@ -1678,7 +1678,6 @@ const NAV=[
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de conteúdo"},
-    {id:"aprovacoes_internas",   icon:"◫", label:"Aprovação demanda interna"},
   ]},
   {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"comercial",  icon:"◈", label:"Comercial"},
@@ -41431,7 +41430,7 @@ const PB_SEED = {
           id: "foto_obra",
           title: "Template de Foto de Obra",
           subtitle: "Para fotos de obras Bioter — valoriza produto, tecnologia aplicada e localização",
-          imgUrl: "",
+          imgUrl: "https://jffvoojcskwumnphsedq.supabase.co/storage/v1/object/public/playbooks/bioter/foto-obra.png",
           rules: [
             {
               section: "Texto do card",
