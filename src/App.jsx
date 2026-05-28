@@ -1660,6 +1660,9 @@ function NavIcon({id,size=18,color}){
   if(id==="interno_conexoes")   return <svg {...p}><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>;
   if(id==="interno_360")        return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg>;
   if(id==="interno_carreira")   return <svg {...p}><path d="M3 17l4-8 4 4 4-6 4 10"/></svg>;
+  // ── Estratégia ──
+  if(id==="planejamento")       return <svg {...p}><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1" fill={cl}/></svg>;
+  if(id==="playbooks")          return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
   return <svg {...p}><rect x="4" y="4" width="16" height="16" rx="2"/></svg>;
 }
 
