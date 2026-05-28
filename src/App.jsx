@@ -16179,6 +16179,76 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                   <div style={{color:C.tx,fontSize:12.5,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{captionTxt}</div>
                 </div>)}
 
+                {/* Histórico de ajustes — vem ANTES do briefing porque é mais relevante na aprovação */}
+                {(()=>{
+                  const allAnn=(current.files||[]).filter(f=>f.isAnnotation);
+                  const fbCmts=(current.comments||[]).filter(cc=>cc.type==="feedback"||cc.type==="audio"||cc.type==="client_request");
+                  if(allAnn.length===0&&fbCmts.length===0)return null;
+                  // Parse timestamps (ISO + BR DD/MM/YYYY HH:MM)
+                  const _ts=(s)=>{
+                    if(!s)return 0;
+                    const str=String(s);
+                    if(/^\d{4}-\d{2}-\d{2}T/.test(str)){const i=new Date(str).getTime();if(!isNaN(i)&&i>0)return i;}
+                    const m=str.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+                    if(m){const t=new Date(m[3]+"-"+m[2]+"-"+m[1]+"T"+(m[4]||"00").padStart(2,"0")+":"+(m[5]||"00")+":00").getTime();if(!isNaN(t))return t;}
+                    return 0;
+                  };
+                  const _cTs=(cc)=>_ts(cc.at)||_ts(cc.atFmt)||_ts(cc.time)||0;
+                  const _fTs=(f)=>_ts(f.addedAtIso)||_ts(f.addedAt)||0;
+                  const _key=(item)=>item.batchId||"_orphan-"+(item.id||Math.random());
+                  // Agrupa
+                  const map=new Map();
+                  fbCmts.forEach(cc=>{
+                    const ts=_cTs(cc),k=_key(cc);
+                    if(!map.has(k))map.set(k,{key:k,ts,comments:[],audio:null,images:[],user:cc.user});
+                    const r=map.get(k);
+                    if(cc.type==="audio")r.audio=cc; else r.comments.push(cc);
+                    if(ts>r.ts)r.ts=ts;
+                    if(!r.user&&cc.user)r.user=cc.user;
+                  });
+                  allAnn.forEach(f=>{
+                    const ts=_fTs(f),k=_key(f);
+                    if(!map.has(k))map.set(k,{key:k,ts,comments:[],audio:null,images:[],user:f.addedBy});
+                    const r=map.get(k);
+                    r.images.push(f);
+                    if(ts>r.ts)r.ts=ts;
+                    if(!r.user&&f.addedBy)r.user=f.addedBy;
+                  });
+                  const rounds=Array.from(map.values()).filter(r=>r.comments.length>0||r.audio||r.images.length>0).sort((a,b)=>b.ts-a.ts);
+                  if(rounds.length===0)return null;
+                  const _fmt=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
+                  return(<div style={{borderTop:"1px solid "+C.b1,paddingTop:14}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                      <div style={{color:"#dc2626",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>Histórico de ajustes</div>
+                      <span style={{background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:700}}>{rounds.length} round{rounds.length>1?"s":""}</span>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {rounds.map((r,ri)=>{
+                        const firstC=r.comments[0]||r.audio||{};
+                        const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
+                        const accent=isClient?"#16a34a":"#7c3aed";
+                        const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
+                        const isLatest=ri===0;
+                        return(<div key={r.key} style={{background:isLatest?"#fafaff":"#fff",border:"1px solid "+(isLatest?accent+"33":C.b1),borderRadius:10,padding:"10px 12px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+                            <span style={{background:accent,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
+                            <span style={{color:C.tx,fontSize:11,fontWeight:700}}>{userName}</span>
+                            {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"1px 7px",borderRadius:99,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ recente</span>}
+                            {r.ts>0&&<span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>{_fmt(r.ts)}</span>}
+                          </div>
+                          {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0||r.images.length>0?6:0}}/>}
+                          {r.comments.map(cc=>(<div key={cc.id} style={{color:C.tx,fontSize:11.5,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4}}>{String(cc.text||"").replace("AJUSTE NECESSARIO: ","")}</div>))}
+                          {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>
+                            {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" onClick={()=>setOpenCard(current)}
+                              title="Abrir cartão pra ver em tamanho grande"
+                              style={{width:54,height:54,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"1px solid "+C.b1}}/>))}
+                          </div>}
+                        </div>);
+                      })}
+                    </div>
+                  </div>);
+                })()}
+
                 {/* Briefing pra equipe (desc) */}
                 {descTxt&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:14}}>
                   <div style={{color:C.td,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Briefing pra equipe</div>
