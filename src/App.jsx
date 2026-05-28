@@ -18905,6 +18905,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
   },[]);
 
   const [mainTab,setMainTab]=useState("equipe");
+  const [novoColabOpen,setNovoColabOpen]=useState(false);
+  const [novoColabBusy,setNovoColabBusy]=useState(false);
+  const [novoColab,setNovoColab]=useState({
+    name:"", email:"", password:"", team_id:"",
+    role:"Designer", dash:"designer", color:"#ec4899", av:"", level:3,
+    photo_base64:"", photo_mime:""
+  });
 
   const [clientAccess,setClientAccess]=useState(()=>{
     const acc={};
@@ -18991,6 +18998,188 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
       }}
       onClose={()=>setEditProfile(null)}
     />)}
+
+    {/* ── NOVO COLABORADOR MODAL ── */}
+    {novoColabOpen&&(()=>{
+      const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+      const lbl={color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5};
+      const onPickFoto=(file)=>{
+        if(!file)return;
+        const r=new FileReader();
+        r.onload=()=>{
+          const b64=String(r.result||"");
+          setNovoColab(p=>({...p,photo_base64:b64,photo_mime:file.type||"image/png"}));
+        };
+        r.readAsDataURL(file);
+      };
+      const submit=async()=>{
+        if(!novoColab.name.trim()||!novoColab.email.trim()||!novoColab.password.trim()||!novoColab.team_id.trim()){
+          if(typeof pixelsToast!=="undefined")pixelsToast.warning("Preencha nome, email, senha e ID curto (team_id).");
+          return;
+        }
+        setNovoColabBusy(true);
+        try{
+          const sb=window._sb;
+          const{data:sess}=await sb.auth.getSession();
+          const tok=sess?.session?.access_token;
+          const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
+          const payload={
+            email:novoColab.email.trim().toLowerCase(),
+            password:novoColab.password,
+            name:novoColab.name.trim(),
+            role:novoColab.role,
+            dash:novoColab.dash,
+            color:novoColab.color,
+            av:novoColab.av||novoColab.name.trim()[0]?.toUpperCase()||"?",
+            level:Number(novoColab.level)||3,
+            team_id:novoColab.team_id.trim().toLowerCase(),
+            photo_base64:novoColab.photo_base64,
+            photo_mime:novoColab.photo_mime,
+          };
+          const res=await fetch(url+"/functions/v1/create-collaborator",{
+            method:"POST",
+            headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},
+            body:JSON.stringify(payload),
+          });
+          const data=await res.json();
+          if(!res.ok){
+            if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao criar colaborador.");
+            setNovoColabBusy(false);
+            return;
+          }
+          if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador criado! Avise pra logar com email/senha.");
+          setNovoColabOpen(false);
+          setNovoColabBusy(false);
+          setNovoColab({name:"",email:"",password:"",team_id:"",role:"Designer",dash:"designer",color:"#ec4899",av:"",level:3,photo_base64:"",photo_mime:""});
+          // Recarrega perfis pra refletir o novo
+          try{
+            const{data:rows}=await sb.from("profiles").select("team_id,profile_data").not("profile_data","is",null);
+            const updates={};
+            (rows||[]).forEach(row=>{if(row.team_id&&row.profile_data){updates[row.team_id]=row.profile_data;try{localStorage.setItem("pixels-selfprofile-"+row.team_id,JSON.stringify(row.profile_data));}catch(e){}}});
+            if(Object.keys(updates).length>0)setCollabProfiles(p=>({...p,...updates}));
+          }catch(e){}
+        }catch(e){
+          if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro de conexao.");
+          setNovoColabBusy(false);
+        }
+      };
+      const DASH_OPTS=[
+        {id:"designer",label:"Designer"},
+        {id:"editor",label:"Editor de Vídeo"},
+        {id:"coordinator",label:"Coordenação / Social"},
+        {id:"gestor",label:"Gestor de Mídia"},
+        {id:"partner",label:"Sócio"},
+      ];
+      const CORS=["#ec4899","#e040fb","#9F43F6","#7c3aed","#6366f1","#0ea5e9","#16a34a","#f59e0b","#ef4444","#475569"];
+      return(<div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.6)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>!novoColabBusy&&setNovoColabOpen(false)}>
+        <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,width:"100%",maxWidth:560,boxShadow:"0 24px 60px rgba(0,0,0,0.35)",overflow:"hidden",maxHeight:"92vh",display:"flex",flexDirection:"column"}}>
+          {/* Header */}
+          <div style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:16,letterSpacing:-.2}}>Novo colaborador</div>
+              <div style={{color:"rgba(255,255,255,0.8)",fontSize:11,marginTop:2}}>Cria login + perfil + foto numa só ação</div>
+            </div>
+            <button onClick={()=>!novoColabBusy&&setNovoColabOpen(false)} style={{background:"rgba(255,255,255,0.18)",border:"none",borderRadius:8,padding:"6px 10px",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700}}>✕</button>
+          </div>
+
+          <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:14,overflowY:"auto"}}>
+            {/* Foto */}
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <div style={{width:72,height:72,borderRadius:"50%",background:novoColab.photo_base64?"url("+novoColab.photo_base64+") center/cover":novoColab.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:26,border:"3px solid "+C.b1,flexShrink:0}}>
+                {!novoColab.photo_base64&&(novoColab.av||novoColab.name[0]||"?").toUpperCase()}
+              </div>
+              <div style={{flex:1}}>
+                <div style={lbl}>Foto de perfil (opcional)</div>
+                <label style={{display:"inline-block",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:600,color:C.ts,cursor:"pointer"}}>
+                  {novoColab.photo_base64?"Trocar foto":"Escolher arquivo"}
+                  <input type="file" accept="image/*" onChange={e=>onPickFoto(e.target.files?.[0])} style={{display:"none"}}/>
+                </label>
+                {novoColab.photo_base64&&<button onClick={()=>setNovoColab(p=>({...p,photo_base64:"",photo_mime:""}))} style={{marginLeft:8,background:"transparent",border:"1px solid "+C.b1,borderRadius:8,padding:"7px 12px",fontSize:11,color:C.td,cursor:"pointer"}}>Remover</button>}
+              </div>
+            </div>
+
+            {/* Nome */}
+            <div>
+              <div style={lbl}>Nome completo</div>
+              <input value={novoColab.name} onChange={e=>setNovoColab(p=>({...p,name:e.target.value,av:p.av||e.target.value[0]?.toUpperCase()||""}))} placeholder="Maria Clara Luz do Nascimento" style={inp}/>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {/* Email */}
+              <div>
+                <div style={lbl}>E-mail (login)</div>
+                <input value={novoColab.email} onChange={e=>setNovoColab(p=>({...p,email:e.target.value}))} placeholder="maria@pixelsmarketing.com.br" style={inp}/>
+              </div>
+              {/* Senha */}
+              <div>
+                <div style={lbl}>Senha inicial</div>
+                <input value={novoColab.password} onChange={e=>setNovoColab(p=>({...p,password:e.target.value}))} type="text" placeholder="ex: Pixels@2026" style={inp}/>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {/* ID curto */}
+              <div>
+                <div style={lbl}>ID curto (team_id)</div>
+                <input value={novoColab.team_id} onChange={e=>setNovoColab(p=>({...p,team_id:e.target.value.toLowerCase().replace(/[^a-z0-9_]/g,"")}))} placeholder="maria" style={inp}/>
+                <div style={{color:C.td,fontSize:10,marginTop:3}}>Usado em ACCESS_STORE e tags. Só letras minúsculas.</div>
+              </div>
+              {/* Função */}
+              <div>
+                <div style={lbl}>Função (role)</div>
+                <input value={novoColab.role} onChange={e=>setNovoColab(p=>({...p,role:e.target.value}))} placeholder="Designer" style={inp}/>
+              </div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {/* Dash */}
+              <div>
+                <div style={lbl}>Tipo de dashboard</div>
+                <select value={novoColab.dash} onChange={e=>setNovoColab(p=>({...p,dash:e.target.value}))} style={{...inp,cursor:"pointer"}}>
+                  {DASH_OPTS.map(o=><option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </div>
+              {/* Nível */}
+              <div>
+                <div style={lbl}>Nível</div>
+                <select value={novoColab.level} onChange={e=>setNovoColab(p=>({...p,level:Number(e.target.value)}))} style={{...inp,cursor:"pointer"}}>
+                  <option value={1}>Sócio (1)</option>
+                  <option value={2}>Coordenação (2)</option>
+                  <option value={3}>Colaborador (3)</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Cor */}
+            <div>
+              <div style={lbl}>Cor do avatar</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {CORS.map(c=>(
+                  <button key={c} onClick={()=>setNovoColab(p=>({...p,color:c}))}
+                    style={{width:30,height:30,borderRadius:"50%",background:c,border:novoColab.color===c?"3px solid #fff":"3px solid transparent",boxShadow:novoColab.color===c?"0 0 0 2px "+c:"0 1px 3px rgba(0,0,0,0.15)",cursor:"pointer",padding:0}}/>
+                ))}
+                <input type="color" value={novoColab.color} onChange={e=>setNovoColab(p=>({...p,color:e.target.value}))} style={{width:36,height:36,border:"none",background:"transparent",cursor:"pointer",borderRadius:8}}/>
+              </div>
+            </div>
+
+            {/* Aviso */}
+            <div style={{background:C.s1,border:"1px dashed "+C.b1,borderRadius:10,padding:"10px 12px",fontSize:11,color:C.td,lineHeight:1.55}}>
+              Depois de criar aqui, lembre de adicionar <b>{novoColab.team_id||"team_id"}</b> em <code>TEAM</code> e <code>ACCESS_STORE</code> no <code>00_globals.jsx</code> e rodar <code>deploy.bat</code> — assim ela aparece pra todo mundo no app.
+            </div>
+
+            {/* Botões */}
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:8,borderTop:"1px solid "+C.b1}}>
+              <button onClick={()=>!novoColabBusy&&setNovoColabOpen(false)} disabled={novoColabBusy}
+                style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:novoColabBusy?"not-allowed":"pointer",fontFamily:"inherit"}}>Cancelar</button>
+              <button onClick={submit} disabled={novoColabBusy}
+                style={{background:novoColabBusy?C.b1:C.a,border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:novoColabBusy?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:novoColabBusy?"none":"0 4px 14px "+C.a+"55"}}>
+                {novoColabBusy?"Criando…":"Criar colaborador"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>);
+    })()}
 
     {/* ── CLIENT ACCESS EDIT MODAL ── */}
     {editClientId&&editClientDraft&&(()=>{
@@ -19088,7 +19277,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
             </button>
           ))}
         </div>
-        {mainTab==="equipe"&&<div style={{color:C.ts,fontSize:12}}>{TEAM.length} membros · {TEAM.filter(u=>u.status==="online").length} online</div>}
+        {mainTab==="equipe"&&<div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{color:C.ts,fontSize:12}}>{TEAM.length} membros · {TEAM.filter(u=>u.status==="online").length} online</div>
+          {isMePartner&&<button onClick={()=>setNovoColabOpen(true)}
+            style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px "+C.a+"55",fontFamily:"inherit"}}>
+            <span style={{fontSize:14,lineHeight:1}}>+</span>Novo colaborador
+          </button>}
+        </div>}
         {mainTab==="clientes"&&<div style={{color:C.ts,fontSize:12}}>{CLIENTS.filter(c=>c.status!=="interno").filter(c=>clientAccess[c.id]?.enabled).length} portais ativos</div>}
       </div>
 
