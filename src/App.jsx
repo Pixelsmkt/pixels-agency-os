@@ -913,6 +913,7 @@ const TEAM = [
   { id:"ellen",     name:"Hellen",     role:"Social Media",         av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestor de mídia"     , av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Designer",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
+  { id:"maria",     name:"Maria Clara", role:"Designer",           av:"M", color:"#ec4899", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
   { id:"guilherme", name:"Guilherme", role:"Editor de Vídeo Sênior", av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
 ];
 
@@ -1031,6 +1032,7 @@ const ACCESS_STORE={
   ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true,verPlaybooks:true},
   erick:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:false,editarDemanda:true,arrastarCards:true,verTodosKanban:false,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verGestaoMidia:true,editarGestaoMidia:true,gerenciarClientesMidia:false,verPlaybooks:true},
   andre:   {...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true,verPlaybooks:true},
+  maria:   {...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true,verPlaybooks:true},
   guilherme:{...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verAprovacoes:true,verAprPublicacao:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalVideo:true,verNotificacoes:true,verPlaybooks:true},
 };
 
@@ -11795,16 +11797,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     return false;
   };
 
-  // Domínio do colaborador freelancer (pagamento por demanda):
-  // Editor de vídeo (dash==="editor") vê TODOS os cards tipo Vídeo, mesmo sem estar marcado.
-  // Designer (dash==="designer") vê TODOS os cards tipo Arte/Carrossel/Foto, mesmo sem estar marcado.
-  // Assim Guilherme/André veem o histórico completo do trabalho deles (incl. aprovados/agendados/publicados).
-  const isMyDomain=(t)=>{
-    if(isMyTask(t))return true;
-    if(activeUser.dash==="editor"&&t.contentType==="video")return true;
-    if(activeUser.dash==="designer"&&(t.contentType==="arte"||t.contentType==="carrossel"||t.contentType==="foto"))return true;
-    return false;
-  };
+  // Domínio do colaborador (designer/editor):
+  // ESTRITO POR TAG: cada designer/editor só vê os cards onde foi explicitamente
+  // marcado em `assignees`. Sem fallback por contentType.
+  // Motivo: com 2+ designers (André/Maria), o fallback fazia um ver o trabalho do outro.
+  // Sócios e quem tem verTodosKanban continuam vendo tudo (isAdmin acima).
+  const isMyDomain=(t)=>isMyTask(t);
 
   const _searchTermNorm=(searchTerm||"").trim().toLowerCase();
   const visible=tasks.filter(t=>{
