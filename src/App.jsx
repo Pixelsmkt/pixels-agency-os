@@ -16184,10 +16184,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       </div>
 
       {/* Main content: image + sidebar — grid responsivo */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 380px",gap:18,alignItems:"flex-start"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(tab==="copys"?"1fr 360px":"1fr 380px"),gap:18,alignItems:"flex-start"}}>
 
-        {/* Image panel — oculto para demandas internas. Carrossel EM CIMA pra ficar sempre visível, imagem com altura travada. */}
-        {tab!=="internas"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {/* Image panel — só para Aprovação de conteúdo (publicacao). */}
+        {tab==="publicacao"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
           {/* Carrossel de miniaturas — fixo no topo, scroll horizontal se for muito longo */}
           {allImgs.length>1&&(<div style={{display:"flex",gap:10,overflowX:"auto",overflowY:"hidden",padding:"4px 2px",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
             {allImgs.map((src,i)=>{
@@ -16226,6 +16226,51 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             }
           </div>
         </div>}
+
+        {/* Copy panel — foco no texto, imagens só como referência pequena */}
+        {tab==="copys"&&(()=>{
+          const stripHtml=(html)=>{
+            if(!html)return"";
+            let t=String(html);
+            t=t.replace(/data-prosemirror-[a-z-]+="[^"]*"/gi,"");
+            t=t.replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n");
+            t=t.replace(/<[^>]+>/g,"");
+            t=t.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+            return t.replace(/\n{3,}/g,"\n\n").trim();
+          };
+          const captionTxt2=stripHtml(current.caption);
+          const refImgs=allImgs.slice(0,8);
+          return(<div style={{display:"flex",flexDirection:"column",gap:14,alignItems:"center",minHeight:"60vh"}}>
+            <div style={{width:"100%",maxWidth:760,background:C.card,borderRadius:18,border:"1px solid "+C.b1,boxShadow:"0 4px 20px rgba(15,23,42,0.04)",padding:isMob?"22px 20px":"36px 44px",display:"flex",flexDirection:"column",gap:18}}>
+              {/* Cabeçalho copy */}
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{background:"#9F43F614",color:"#9F43F6",borderRadius:99,padding:"3px 11px",fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
+                  <Ico n="fileText" size={11} color="#9F43F6"/>Copy para aprovação
+                </span>
+                {cl&&<span style={{color:C.td,fontSize:11.5,fontWeight:600}}>{cl.name}</span>}
+              </div>
+              {/* Título do card */}
+              <div style={{color:C.tx,fontWeight:800,fontSize:isMob?18:22,lineHeight:1.3,letterSpacing:-.4}}>{current.title}</div>
+              {/* Legenda em destaque */}
+              {captionTxt2
+                ? <div style={{color:C.tx,fontSize:isMob?14:15.5,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"\'Inter\',system-ui,sans-serif"}}>{captionTxt2}</div>
+                : <div style={{color:C.td,fontSize:13,fontStyle:"italic",textAlign:"center",padding:"30px 0"}}>Sem legenda preenchida pra revisar.</div>
+              }
+              {/* Faixa pequena de referências (se houver imagens) */}
+              {refImgs.length>0&&<div style={{borderTop:"1px solid "+C.b1,paddingTop:14,display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{color:C.td,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Imagens de referência ({refImgs.length})</div>
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  {refImgs.map((src2,i)=>(<a key={i} href={src2} target="_blank" rel="noopener noreferrer"
+                    style={{width:64,height:64,borderRadius:9,overflow:"hidden",border:"1px solid "+C.b1,display:"block",background:"#f8fafc",flexShrink:0}}>
+                    <img src={src2} alt="" referrerPolicy="no-referrer"
+                      onError={e=>{e.currentTarget.style.display="none";}}
+                      style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                  </a>))}
+                </div>
+              </div>}
+            </div>
+          </div>);
+        })()}
 
         {/* Right sidebar — info expandida */}
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -16320,8 +16365,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 {/* Título */}
                 <div style={{color:C.tx,fontWeight:700,fontSize:16,lineHeight:1.35,letterSpacing:-.2}}>{current.title}</div>
 
-                {/* Legenda — sem limite de altura, sidebar acompanha */}
-                {captionTxt&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:14}}>
+                {/* Legenda — escondida quando tab===copys porque já está no painel centralizado */}
+                {tab!=="copys"&&captionTxt&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:14}}>
                   <div style={{color:"#a140ff",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Legenda</div>
                   <div style={{color:C.tx,fontSize:12.5,lineHeight:1.7,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{captionTxt}</div>
                 </div>)}
@@ -29270,7 +29315,6 @@ export default function AgencyOS(){
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
-      case "aprovacoes_internas":  return p.aprovarDemandaInterna||isSocio;
       case "gestaomidia":          return p.verGestaoMidia||isSocio;
       case "comercial":            return p.verComercial||isSocio;
       case "chat":                 return p.verChat;
@@ -29352,7 +29396,6 @@ export default function AgencyOS(){
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
-      case "aprovacoes_internas":  return (effectivePerms.aprovarDemandaInterna||isSocio)?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="internas"/>:<NoPerm/>;
       case "gestaomidia":          return (effectivePerms.verGestaoMidia||isSocio)?<PageGestaoMidia {...p} currentUser={CURRENT_USER} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
