@@ -13077,11 +13077,10 @@ function DrawerInterno({ task, onClose, onEdit, onDelete, onMove, isSocio, canMo
   );
 }
 
-/* ── Card Kanban (premium) ───────────────────────────────────────── */
+/* ── Card Kanban (redesign 2026-05-28: logo cliente + origem clara + prazo destacado) ── */
 function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
   const pc  = PRIO_CFG[task.priority] || PRIO_CFG.media;
   const dl  = dlInt(task.deadline);
-  const dlC = dl===null?C.td:dl<0?"#ef4444":dl<=2?"#f97316":C.td;
   const aus = TEAM.filter(u=>(task.assignees||[]).includes(u.id));
   const ck  = task.checklist||[];
   const cmt = (task.comments||[]).length;
@@ -13089,21 +13088,64 @@ function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
   const cl  = task.client&&task.client!=="interno" ? CLIENTS.find(c=>c.id===task.client) : null;
   const tipoId = task.internoTipo || task.interno_tipo || task.tipo_solicitacao || task.contentType || task.content_type || "outro";
   const tipo = INTERNO_TIPOS.find(t=>t.id===tipoId);
+  const creator = task.createdBy && TEAM.find(u=>u.id===task.createdBy);
+  const isPortal = task.origem==="portal" || task.origem==="solicitacao_cliente";
+  // Chip prazo: cor + label
+  let prazoChip = null;
+  if(dl!==null){
+    if(dl<0)         prazoChip = {bg:"#fee2e2", bd:"#fecaca", color:"#b91c1c", label:`${Math.abs(dl)}d atraso`, icon:"alert"};
+    else if(dl===0)  prazoChip = {bg:"#ffedd5", bd:"#fed7aa", color:"#c2410c", label:"Vence hoje",            icon:"clock"};
+    else if(dl===1)  prazoChip = {bg:"#fef3c7", bd:"#fde68a", color:"#a16207", label:"Vence amanhã",          icon:"clock"};
+    else if(dl<=3)   prazoChip = {bg:"#fef9c3", bd:"#fde68a", color:"#854d0e", label:`Em ${dl}d`,              icon:"calendar"};
+    else             prazoChip = {bg:"#f1f5f9", bd:"#e2e8f0", color:"#475569", label:new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}), icon:"calendar"};
+  }
+  // Faixa lateral por prioridade
+  const sideBar = task.priority==="urgente" ? "#dc2626" : task.priority==="alta" ? "#ef4444" : null;
+
   return(
     <div draggable onDragStart={e=>onDragStart(e,task.id)} onDragEnd={onDragEnd} onClick={()=>onOpen(task)}
-      style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"11px 12px",cursor:"pointer",userSelect:"none",transition:"all .15s",fontFamily:INTERNO_INTER}}
-      onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 18px rgba(159,67,246,.12)";e.currentTarget.style.borderColor=PIXELS_PURPLE+"55";}}
-      onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor=C.b1;}}>
-      <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8,flexWrap:"wrap"}}>
-        {cl&&<div style={{background:cl.color+"18",border:`1px solid ${cl.color}33`,borderRadius:6,padding:"2px 7px",display:"inline-flex",alignItems:"center"}}><span style={{color:cl.color,fontSize:9.5,fontWeight:700,letterSpacing:.2}}>{cl.abbr}</span></div>}
-        <div style={{background:pc.bg,borderRadius:6,padding:"2px 7px"}}><span style={{color:pc.color,fontSize:9.5,fontWeight:700,letterSpacing:.2}}>{pc.label}</span></div>
-        {task.origem==="portal"&&<div title="Via Portal do Cliente" style={{background:"#0ea5e918",borderRadius:6,padding:"2px 5px",display:"inline-flex",alignItems:"center"}}><IconI name="external" size={9} color="#0ea5e9"/></div>}
+      style={{background:C.card,border:`1px solid ${C.b1}`,borderLeft:sideBar?`3px solid ${sideBar}`:`1px solid ${C.b1}`,borderRadius:12,padding:"12px 13px",cursor:"pointer",userSelect:"none",transition:"all .15s",fontFamily:INTERNO_INTER,position:"relative"}}
+      onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 8px 22px rgba(159,67,246,.14)";e.currentTarget.style.borderColor=PIXELS_PURPLE+"55";if(sideBar)e.currentTarget.style.borderLeftColor=sideBar;}}
+      onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor=C.b1;if(sideBar)e.currentTarget.style.borderLeftColor=sideBar;}}>
+
+      {/* Linha 1: Cliente (logo + nome) ou tag "Interna" */}
+      <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:8,minWidth:0}}>
+        {cl
+          ? <>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <ClientLogo clientId={cl.id} size="sm"/>
+              </div>
+              <span style={{color:C.tx,fontSize:11.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{cl.name}</span>
+            </>
+          : <>
+              <div style={{width:18,height:18,borderRadius:5,background:PIXELS_PURPLE+"18",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <IconI name="building" size={10} color={PIXELS_PURPLE}/>
+              </div>
+              <span style={{color:PIXELS_PURPLE,fontSize:11,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>Interna</span>
+            </>
+        }
+        <div style={{flex:1}}/>
+        {task.priority==="urgente"&&<span title="Urgente" style={{background:"#dc262615",color:"#dc2626",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:3}}><IconI name="zap" size={9} color="#dc2626"/>URG</span>}
       </div>
-      {tipo&&<div style={{display:"flex",alignItems:"center",gap:5,color:PIXELS_PURPLE,marginBottom:5}}>
-        <IconI name={tipo.icon} size={11} color={PIXELS_PURPLE}/>
-        <span style={{fontSize:10,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{tipo.label}</span>
+
+      {/* Linha 2: Tipo da demanda (chip pequena roxa) */}
+      {tipo&&<div style={{display:"inline-flex",alignItems:"center",gap:4,background:PIXELS_PURPLE+"10",border:`1px solid ${PIXELS_PURPLE}26`,borderRadius:6,padding:"2px 7px",color:PIXELS_PURPLE,marginBottom:7}}>
+        <IconI name={tipo.icon} size={10} color={PIXELS_PURPLE}/>
+        <span style={{fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{tipo.label}</span>
       </div>}
-      <div style={{color:C.tx,fontSize:13,fontWeight:600,lineHeight:1.35,marginBottom:9,letterSpacing:-.1,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{task.title}</div>
+
+      {/* Título */}
+      <div style={{color:C.tx,fontSize:13,fontWeight:600,lineHeight:1.4,marginBottom:8,letterSpacing:-.1,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{task.title}</div>
+
+      {/* Sub-rótulo origem */}
+      {isPortal
+        ? <div style={{display:"inline-flex",alignItems:"center",gap:4,color:"#0ea5e9",fontSize:10,fontWeight:600,marginBottom:8}}>
+            <IconI name="external" size={9} color="#0ea5e9"/>Enviada pelo cliente
+          </div>
+        : creator && <div style={{color:C.td,fontSize:10,fontWeight:500,marginBottom:8}}>Criada por {creator.name}</div>
+      }
+
+      {/* Checklist progress */}
       {ck.length>0&&(
         <div style={{marginBottom:8}}>
           <div style={{height:3,background:C.b1,borderRadius:99,overflow:"hidden"}}>
@@ -13111,25 +13153,33 @@ function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
           </div>
         </div>
       )}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
-        <div style={{display:"flex"}}>
-          {aus.slice(0,3).map((u,i)=>(
-            <div key={u.id} title={u.name}
-              style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:i===0?0:-6,zIndex:3-i}}>
-              {u.av}
-            </div>
-          ))}
-          {aus.length>3&&<div style={{width:22,height:22,borderRadius:"50%",background:C.s1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:C.td,border:`2px solid ${C.card}`,marginLeft:-6}}>+{aus.length-3}</div>}
+
+      {/* Footer: avatars + prazo + meta */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingTop:8,borderTop:`1px solid ${C.b1}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          {aus.length>0
+            ? <div style={{display:"flex"}}>
+                {aus.slice(0,3).map((u,i)=>(
+                  <div key={u.id} title={u.name}
+                    style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:i===0?0:-6,zIndex:3-i}}>
+                    {u.av}
+                  </div>
+                ))}
+                {aus.length>3&&<div style={{width:22,height:22,borderRadius:"50%",background:C.s1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:C.td,border:`2px solid ${C.card}`,marginLeft:-6}}>+{aus.length-3}</div>}
+              </div>
+            : <span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#94a3b8",fontSize:10.5,fontWeight:600,background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:99,padding:"2px 8px"}}>
+                <IconI name="user" size={9} color="#94a3b8"/>Sem responsável
+              </span>
+          }
+          {(fls>0||cmt>0||ck.length>0)&&<div style={{display:"flex",alignItems:"center",gap:7,color:C.td,fontSize:10.5,fontWeight:600,marginLeft:4}}>
+            {fls>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="paperclip" size={10}/>{fls}</span>}
+            {cmt>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="message" size={10}/>{cmt}</span>}
+            {ck.length>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="check" size={10}/>{ck.filter(c=>c.done).length}/{ck.length}</span>}
+          </div>}
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:7,color:C.td,fontSize:10.5,fontWeight:600}}>
-          {fls>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="paperclip" size={10}/>{fls}</span>}
-          {cmt>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="message" size={10}/>{cmt}</span>}
-          {ck.length>0&&<span style={{display:"flex",alignItems:"center",gap:2}}><IconI name="check" size={10}/>{ck.filter(c=>c.done).length}/{ck.length}</span>}
-          {task.deadline&&<span style={{display:"flex",alignItems:"center",gap:3,color:dlC,fontWeight:700}}>
-            <IconI name="calendar" size={10} color={dlC}/>
-            {dl<0?`${Math.abs(dl)}d atraso`:dl===0?"hoje":dl===1?"amanhã":new Date(task.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}
-          </span>}
-        </div>
+        {prazoChip&&<span style={{background:prazoChip.bg,border:`1px solid ${prazoChip.bd}`,color:prazoChip.color,borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,letterSpacing:.1,whiteSpace:"nowrap"}}>
+          <IconI name={prazoChip.icon} size={10} color={prazoChip.color}/>{prazoChip.label}
+        </span>}
       </div>
     </div>
   );
@@ -13137,8 +13187,19 @@ function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
 
 /* ── Lista (view alternativa) ────────────────────────────────────── */
 function ListaInterno({ tasks, onOpen }) {
-  const [sortBy,setSortBy]=useState("deadline");
+  const [sortBy,setSortBy]=useState("urgency");
   const sorted = [...tasks].sort((a,b)=>{
+    if(sortBy==="urgency"){
+      // Combo padrão: urgência + prazo
+      const prio={urgente:0,alta:1,media:2,baixa:3};
+      const pa=prio[a.priority]??2, pb=prio[b.priority]??2;
+      if(pa!==pb) return pa-pb;
+      const da=dlInt(a.deadline), db=dlInt(b.deadline);
+      if(da===null && db===null) return 0;
+      if(da===null) return 1;
+      if(db===null) return -1;
+      return da-db;
+    }
     if(sortBy==="deadline"){
       if(!a.deadline&&!b.deadline)return 0;
       if(!a.deadline)return 1;
@@ -13158,14 +13219,21 @@ function ListaInterno({ tasks, onOpen }) {
 
   return(
     <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,overflow:"hidden",fontFamily:INTERNO_INTER}}>
-      <div style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 130px 120px 110px 100px 130px 36px",gap:0,padding:"10px 14px",background:C.s1,borderBottom:`1px solid ${C.b1}`,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,color:C.td}}>
+      <div style={{padding:"10px 14px",background:C.s1,borderBottom:`1px solid ${C.b1}`,display:"flex",alignItems:"center",gap:8}}>
+        <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginRight:"auto"}}>Ordenar por:</div>
+        {[["urgency","Urgência + prazo"],["deadline","Prazo"],["priority","Prioridade"],["status","Status"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setSortBy(k)}
+            style={{background:sortBy===k?PIXELS_PURPLE+"15":"transparent",border:`1px solid ${sortBy===k?PIXELS_PURPLE:C.b1}`,borderRadius:8,padding:"5px 11px",color:sortBy===k?PIXELS_PURPLE:C.ts,fontSize:11,fontWeight:sortBy===k?700:600,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>
+        ))}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 150px 120px 110px 100px 130px 36px",gap:0,padding:"10px 14px",background:"#fafbfc",borderBottom:`1px solid ${C.b1}`,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,color:C.td}}>
         <div/>
-        <div style={{cursor:"pointer"}} onClick={()=>setSortBy("priority")}>Demanda</div>
+        <div>Demanda</div>
         <div>Cliente</div>
-        <div style={{cursor:"pointer"}} onClick={()=>setSortBy("status")}>Status</div>
+        <div>Status</div>
         <div>Tipo</div>
         <div>Resp.</div>
-        <div style={{cursor:"pointer"}} onClick={()=>setSortBy("deadline")}>Prazo</div>
+        <div>Prazo</div>
         <div/>
       </div>
       {sorted.length===0&&<div style={{padding:"50px 20px",textAlign:"center",color:C.td,fontSize:13}}>Nenhuma demanda encontrada com esses filtros.</div>}
@@ -13180,15 +13248,15 @@ function ListaInterno({ tasks, onOpen }) {
         const dlC=dl===null?C.td:dl<0?"#ef4444":dl<=2?"#f97316":C.ts;
         return(
           <div key={t.id} onClick={()=>onOpen(t)}
-            style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 130px 120px 110px 100px 130px 36px",gap:0,padding:"11px 14px",borderBottom:`1px solid ${C.b1}`,cursor:"pointer",alignItems:"center",fontSize:12.5,transition:"background .12s"}}
+            style={{display:"grid",gridTemplateColumns:"38px minmax(220px,1fr) 150px 120px 110px 100px 130px 36px",gap:0,padding:"11px 14px",borderBottom:`1px solid ${C.b1}`,cursor:"pointer",alignItems:"center",fontSize:12.5,transition:"background .12s"}}
             onMouseEnter={e=>e.currentTarget.style.background=C.s1}
             onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-            <div><div style={{width:8,height:8,borderRadius:"50%",background:pc.color}}/></div>
+            <div title={`Prioridade: ${pc.label}`}><div style={{width:8,height:8,borderRadius:"50%",background:pc.color,boxShadow:`0 0 0 2px ${pc.color}25`}}/></div>
             <div>
               <div style={{color:C.tx,fontWeight:600,lineHeight:1.35,marginBottom:2}}>{t.title}</div>
-              {t.origem==="portal"&&<div style={{display:"inline-flex",alignItems:"center",gap:3,color:"#0ea5e9",fontSize:10,fontWeight:700}}><IconI name="external" size={9} color="#0ea5e9"/>Via Portal</div>}
+              {(t.origem==="portal"||t.origem==="solicitacao_cliente")&&<div style={{display:"inline-flex",alignItems:"center",gap:3,color:"#0ea5e9",fontSize:10,fontWeight:700}}><IconI name="external" size={9} color="#0ea5e9"/>Enviada pelo cliente</div>}
             </div>
-            <div>{cl?<div style={{display:"inline-flex",alignItems:"center",gap:5}}><div style={{width:7,height:7,borderRadius:"50%",background:cl.color}}/><span style={{color:C.ts,fontSize:11.5,fontWeight:600}}>{cl.abbr||cl.name}</span></div>:<span style={{color:C.td,fontSize:11.5,fontStyle:"italic"}}>—</span>}</div>
+            <div>{cl?<div style={{display:"inline-flex",alignItems:"center",gap:6}}><ClientLogo clientId={cl.id} size="sm"/><span style={{color:C.ts,fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</span></div>:<span style={{display:"inline-flex",alignItems:"center",gap:4,color:PIXELS_PURPLE,fontSize:11,fontWeight:700,background:PIXELS_PURPLE+"10",border:`1px solid ${PIXELS_PURPLE}26`,borderRadius:6,padding:"2px 7px"}}><IconI name="building" size={9} color={PIXELS_PURPLE}/>Interna</span>}</div>
             <div><span style={{background:col.color+"18",color:col.color,borderRadius:6,padding:"2px 8px",fontSize:10.5,fontWeight:700}}>{col.label}</span></div>
             <div style={{color:C.ts,fontSize:11.5,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>{tipo&&<IconI name={tipo.icon} size={11} color={PIXELS_PURPLE}/>}{tipo?.label||"—"}</div>
             <div style={{display:"flex"}}>
@@ -13496,43 +13564,75 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
     { id:"concluidas",            label:"Concluídas",             count:visibleByPerm.filter(t=>t.status==="interno_executado").length, color:"#22c55e" },
   ];
 
-  const KpiCard = ({label,value,color,icon}) => (
-    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"14px 16px",fontFamily:INTERNO_INTER,position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",top:0,right:0,width:42,height:42,background:color+"12",borderBottomLeftRadius:14,display:"flex",alignItems:"center",justifyContent:"center",color}}>
-        <IconI name={icon} size={16} color={color}/>
+  const KpiCard = ({label,value,color,icon,hint}) => (
+    <div style={{background:C.card,borderRadius:14,border:`1px solid ${C.b1}`,padding:"14px 16px",fontFamily:INTERNO_INTER,position:"relative",overflow:"hidden",transition:"all .15s",cursor:"default"}}
+      onMouseEnter={e=>{e.currentTarget.style.borderColor=color+"55";e.currentTarget.style.boxShadow="0 6px 18px "+color+"15";}}
+      onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="none";}}>
+      <div style={{position:"absolute",top:-30,right:-30,width:90,height:90,borderRadius:"50%",background:`radial-gradient(circle, ${color}18 0%, transparent 70%)`}}/>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,position:"relative",zIndex:1}}>
+        <div>
+          <div style={{color:color,fontSize:26,fontWeight:800,lineHeight:1,letterSpacing:-.6,marginBottom:6}}>{value}</div>
+          <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+          {hint&&<div style={{color:C.td,fontSize:10,marginTop:3,opacity:.7}}>{hint}</div>}
+        </div>
+        <div style={{width:34,height:34,borderRadius:10,background:`linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 6px 14px ${color}40`,flexShrink:0}}>
+          <IconI name={icon} size={15} color="#fff"/>
+        </div>
       </div>
-      <div style={{color,fontSize:24,fontWeight:800,lineHeight:1,letterSpacing:-.5,marginBottom:4}}>{value}</div>
-      <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
     </div>
   );
+
+  // Ordenação canônica: urgentes primeiro, depois prazo crescente, atrasados ainda mais alto
+  const _sortByUrgencyDeadline = (a,b)=>{
+    const prio={urgente:0,alta:1,media:2,baixa:3};
+    const pa=prio[a.priority]??2, pb=prio[b.priority]??2;
+    if(pa!==pb) return pa-pb;
+    const da=dlInt(a.deadline), db=dlInt(b.deadline);
+    if(da===null && db===null) return 0;
+    if(da===null) return 1;
+    if(db===null) return -1;
+    return da-db; // menor (mais atrasado/próximo) primeiro
+  };
 
   const LIMIT_EXECUTADAS = 8;
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:INTERNO_INTER}}>
-      <div style={{background:`linear-gradient(135deg, ${PIXELS_PURPLE}08 0%, transparent 60%)`,borderRadius:16,padding:"18px 20px",border:`1px solid ${PIXELS_PURPLE}22`}}>
-        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:14}}>
-            <div style={{width:42,height:42,borderRadius:12,background:`linear-gradient(135deg, ${PIXELS_PURPLE} 0%, #7c3aed 100%)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 8px 22px ${PIXELS_PURPLE}45`}}>
-              <IconI name="inbox" size={20} color="#fff"/>
+      {/* ══ HEADER PREMIUM ══ */}
+      <div style={{background:"linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #1e1b4b 100%)",borderRadius:18,padding:isMob?"18px":"22px 26px",position:"relative",overflow:"hidden",boxShadow:"0 12px 32px rgba(15,23,42,.15)"}}>
+        <div style={{position:"absolute",top:-60,right:-60,width:260,height:260,borderRadius:"50%",background:`radial-gradient(circle, ${PIXELS_PURPLE}38 0%, transparent 65%)`}}/>
+        <div style={{position:"absolute",bottom:-50,left:"38%",width:200,height:200,borderRadius:"50%",background:`radial-gradient(circle, ${PIXELS_PURPLE}24 0%, transparent 70%)`}}/>
+        <div style={{position:"relative",zIndex:1,display:"flex",alignItems:isMob?"flex-start":"center",justifyContent:"space-between",flexWrap:"wrap",gap:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0,flex:isMob?"1 1 100%":"0 1 auto"}}>
+            <div style={{width:46,height:46,borderRadius:13,background:`linear-gradient(135deg, ${PIXELS_PURPLE} 0%, #7c3aed 100%)`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 10px 28px ${PIXELS_PURPLE}50`,flexShrink:0}}>
+              <IconI name="inbox" size={22} color="#fff"/>
             </div>
-            <div>
-              <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.3,marginBottom:2}}>Demandas Internas</div>
-              <div style={{color:C.td,fontSize:12.5,fontWeight:500}}>Folders, banners, materiais comerciais e demais pedidos extras — sem incluir artes/vídeos de redes sociais.</div>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#fff",fontWeight:800,fontSize:isMob?20:23,letterSpacing:-.5}}>Demandas Internas</div>
+              <div style={{color:"rgba(255,255,255,.65)",fontSize:12.5,marginTop:3,fontWeight:500,maxWidth:560,lineHeight:1.5}}>
+                Central de pedidos do Portal do Cliente + demandas internas da gestão.
+              </div>
             </div>
           </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-            <div style={{display:"flex",background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,overflow:"hidden"}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",flex:isMob?"1 1 100%":"0 1 auto"}}>
+            {/* Toggle de visualização */}
+            <div style={{display:"flex",background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.14)",borderRadius:11,overflow:"hidden",backdropFilter:"blur(8px)"}}>
               {[["kanban","Kanban","kanban"],["lista","Lista","list"],["scanner","Radar","alert"]].map(([v,l,ic])=>(
                 <button key={v} onClick={()=>setView(v)}
-                  style={{background:view===v?PIXELS_PURPLE:"transparent",border:"none",padding:"8px 14px",color:view===v?"#fff":C.ts,fontSize:12,fontWeight:view===v?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .15s"}}>
-                  <IconI name={ic} size={13} color={view===v?"#fff":"currentColor"}/>{l}
+                  style={{background:view===v?`linear-gradient(135deg, ${PIXELS_PURPLE} 0%, #7c3aed 100%)`:"transparent",border:"none",padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:view===v?700:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .15s",boxShadow:view===v?`0 4px 14px ${PIXELS_PURPLE}55`:"none"}}>
+                  <IconI name={ic} size={13} color="#fff"/>{l}
                 </button>
               ))}
             </div>
+            {/* Busca embedded */}
+            <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,.08)",border:"1px solid rgba(255,255,255,.14)",borderRadius:11,padding:"7px 12px",minWidth:isMob?160:200,backdropFilter:"blur(8px)"}}>
+              <IconI name="search" size={13} color="rgba(255,255,255,.7)"/>
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar demanda..."
+                style={{background:"transparent",border:"none",outline:"none",color:"#fff",fontSize:12.5,flex:1,fontFamily:"inherit",caretColor:"#fff"}}/>
+            </div>
             {canCreate&&(
               <button onClick={createCard}
-                style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"inherit",boxShadow:`0 4px 14px ${PIXELS_PURPLE}45`,transition:"transform .12s"}}
+                style={{background:`linear-gradient(135deg, ${PIXELS_PURPLE} 0%, #7c3aed 100%)`,border:"none",borderRadius:11,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"inherit",boxShadow:`0 6px 18px ${PIXELS_PURPLE}55`,transition:"transform .12s"}}
                 onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
                 onMouseLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
                 <IconI name="plus" size={14} color="#fff"/>Nova demanda
@@ -13543,12 +13643,12 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
-        <KpiCard label="Abertas"               value={kpis.abertas}             color={PIXELS_PURPLE}   icon="inbox"/>
-        <KpiCard label="Em execução"           value={kpis.execucao}            color="#f97316"         icon="zap"/>
-        <KpiCard label="Aguard. cliente"       value={kpis.aguardandoCliente}   color="#0ea5e9"         icon="user"/>
-        <KpiCard label="Aguard. aprovação"     value={kpis.aguardandoAprovacao} color="#eab308"         icon="clock"/>
-        <KpiCard label="Atrasadas"             value={kpis.atrasadas}           color="#ef4444"         icon="alert"/>
-        <KpiCard label="Concluídas no mês"     value={kpis.concluidasMes}       color="#22c55e"         icon="check"/>
+        <KpiCard label="Abertas"               value={kpis.abertas}             color={PIXELS_PURPLE}   icon="inbox" hint="Total em andamento"/>
+        <KpiCard label="Em execução"           value={kpis.execucao}            color="#f97316"         icon="zap"   hint="Equipe trabalhando"/>
+        <KpiCard label="Aguard. cliente"       value={kpis.aguardandoCliente}   color="#0ea5e9"         icon="user"  hint="Falta info do cliente"/>
+        <KpiCard label="Aguard. aprovação"     value={kpis.aguardandoAprovacao} color="#eab308"         icon="clock" hint="Cliente revisando"/>
+        <KpiCard label="Atrasadas"             value={kpis.atrasadas}           color="#ef4444"         icon="alert" hint="Prazo vencido"/>
+        <KpiCard label="Concluídas no mês"     value={kpis.concluidasMes}       color="#22c55e"         icon="check" hint="Mês atual"/>
       </div>
 
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -13558,21 +13658,18 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
             const color = c.color || PIXELS_PURPLE;
             return(
               <button key={c.id} onClick={()=>setChip(c.id)}
-                style={{background:active?color:C.card,border:`1px solid ${active?color:C.b1}`,borderRadius:99,padding:"6px 13px",color:active?"#fff":C.ts,fontSize:12,fontWeight:active?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .12s"}}>
+                style={{background:active?color:C.card,border:`1px solid ${active?color:C.b1}`,borderRadius:99,padding:"6px 13px 6px 11px",color:active?"#fff":C.ts,fontSize:12,fontWeight:active?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit",transition:"all .12s",boxShadow:active?`0 4px 12px ${color}40`:"none"}}
+                onMouseEnter={e=>{if(!active){e.currentTarget.style.borderColor=color+"66";e.currentTarget.style.color=color;}}}
+                onMouseLeave={e=>{if(!active){e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.color=C.ts;}}}>
                 {c.label}
-                <span style={{background:active?"rgba(255,255,255,.25)":C.s1,color:active?"#fff":C.td,borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:700,minWidth:18,textAlign:"center"}}>{c.count}</span>
+                <span style={{background:active?"rgba(255,255,255,.25)":color+"15",color:active?"#fff":color,borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:800,minWidth:20,textAlign:"center"}}>{c.count}</span>
               </button>
             );
           })}
           <div style={{flex:1}}/>
-          <div style={{display:"flex",alignItems:"center",gap:6,background:C.card,border:`1px solid ${C.b1}`,borderRadius:10,padding:"6px 11px",minWidth:200}}>
-            <IconI name="search" size={13} color={C.td}/>
-            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar demanda..."
-              style={{background:"transparent",border:"none",outline:"none",color:C.ts,fontSize:12,flex:1,fontFamily:"inherit"}}/>
-          </div>
           <button onClick={()=>setShowFilters(s=>!s)}
             style={{background:showFilters?PIXELS_PURPLE+"18":C.card,border:`1px solid ${showFilters?PIXELS_PURPLE:C.b1}`,borderRadius:10,padding:"7px 13px",color:showFilters?PIXELS_PURPLE:C.ts,fontSize:12,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
-            <IconI name="filter" size={12}/>Filtros
+            <IconI name="filter" size={12}/>Filtros avançados
             {Object.values(filtros).filter(Boolean).length>0&&<span style={{background:PIXELS_PURPLE,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:800}}>{Object.values(filtros).filter(Boolean).length}</span>}
           </button>
         </div>
@@ -13594,6 +13691,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
                 </select>
               </div>
             ))}
+            ))}
             <div style={{display:"flex",alignItems:"flex-end"}}>
               <button onClick={()=>setFiltros({cliente:"",responsavel:"",prioridade:"",tipo:"",origem:""})}
                 style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:8,padding:"7px 14px",color:C.ts,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Limpar filtros</button>
@@ -13606,7 +13704,7 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
         <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
           {INTERNO_COLS.map(col=>{
             let colTasks=filtered.filter(t=>t.status===col.id);
-            colTasks.sort((a,b)=>({urgente:0,alta:1,media:2,baixa:3}[a.priority]??2)-({urgente:0,alta:1,media:2,baixa:3}[b.priority]??2));
+            colTasks.sort(_sortByUrgencyDeadline);
             const isTarget=dragOver===col.id;
             const limitExec = col.id==="interno_executado" && !showExecAntigas;
             const allColCount = colTasks.length;
@@ -13617,20 +13715,23 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
                 onDrop={e=>handleDrop(e,col.id)}
                 onDragLeave={e=>{if(!e.currentTarget.contains(e.relatedTarget))setDragOver(null);}}
                 style={{
-                  minWidth:260,width:260,flexShrink:0,
-                  background:isTarget?col.color+"08":C.s1,
-                  border:`1px solid ${isTarget?col.color+"88":C.b1}`,
-                  borderRadius:14,padding:8,
+                  minWidth:272,width:272,flexShrink:0,
+                  background:isTarget?col.color+"0a":"#f8fafc",
+                  border:`1px solid ${isTarget?col.color+"88":"#e2e8f0"}`,
+                  borderRadius:16,padding:10,
                   display:"flex",flexDirection:"column",gap:0,
                   transition:"all .15s",
                 }}>
-                <div style={{padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",background:col.color,borderRadius:"10px 10px 0 0",margin:"-8px -8px 10px -8px",position:"relative",overflow:"hidden"}}>
-                  <div style={{position:"absolute",inset:0,background:`linear-gradient(135deg, ${col.color} 0%, ${col.color}cc 100%)`,opacity:.95}}/>
-                  <div style={{display:"flex",alignItems:"center",gap:7,position:"relative",zIndex:1}}>
-                    <span style={{color:"#fff",fontWeight:700,fontSize:12,textShadow:"0 1px 2px rgba(0,0,0,0.25)",letterSpacing:.1}}>{col.label}</span>
-                    <span style={{background:"rgba(0,0,0,0.22)",color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:10.5,fontWeight:700}}>{allColCount}</span>
+                {/* Header limpo: dot colorida + label + contador */}
+                <div style={{padding:"6px 4px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,borderBottom:`1px solid ${C.b1}`,marginBottom:10}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:col.color,boxShadow:`0 0 0 3px ${col.color}22`,flexShrink:0}}/>
+                    <div style={{minWidth:0,overflow:"hidden"}}>
+                      <div style={{color:C.tx,fontWeight:800,fontSize:12.5,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
+                      <div title={col.hint} style={{color:C.td,fontSize:10,fontWeight:500,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
+                    </div>
                   </div>
-                  <div title={col.hint} style={{position:"relative",zIndex:1,color:"#ffffff99",fontSize:10,fontWeight:500,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
+                  <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"2px 10px",fontSize:11,fontWeight:800,minWidth:24,textAlign:"center",flexShrink:0}}>{allColCount}</span>
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:8,overflowY:"auto",flex:1,padding:"0 2px",minHeight:60,maxHeight:"calc(100vh - 340px)"}}>
                   {colTasks.map(t=>(
