@@ -10500,8 +10500,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                         ? (_hasFil&&!_hasPrinc?"#16a34a":"#166534")
                         : (cl?cl.color:"#475569");
                       const isDragging=dragTaskId===t.id;
-                      // Ícone moderno por tipo
-                      const tipo=t.tipo||"";
+                      // Ícone moderno por tipo (cobre contentType camelCase do React + content_type snake do Supabase + tipo legacy)
+                      const tipo=String(t.contentType||t.content_type||t.tipo||"").toLowerCase();
                       const isVid=tipo==="video"||tipo==="corte";
                       const isFoto=tipo==="foto";
                       const isArte=tipo==="arte"||tipo==="carrossel";
@@ -10641,7 +10641,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           task={openCard}
           tasks={tasks}
           setTasks={setTasks}
-          onClose={()=>setOpenCard(null)}
+onClose={()=>setOpenCard(null)}
           currentUser={CURRENT_USER}
           cardPerms={{verBriefingCard:true}}
         />
