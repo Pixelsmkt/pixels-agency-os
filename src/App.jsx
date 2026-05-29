@@ -8175,9 +8175,9 @@ function COrientacoes({cl}){
       const ext=(file.name.split(".").pop()||"bin").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
       const rnd=Math.random().toString(36).slice(2,11);
       const path=`orientacoes/${cl.id}/${kind}/${Date.now()}-${rnd}.${ext}`;
-      const {error}=await sb.storage.from("pixels-files").upload(path,file,{cacheControl:"3600",upsert:false});
+      const {error}=await sb.storage.from("agency-files").upload(path,file,{cacheControl:"3600",upsert:false});
       if(error)throw error;
-      const {data:pub}=sb.storage.from("pixels-files").getPublicUrl(path);
+      const {data:pub}=sb.storage.from("agency-files").getPublicUrl(path);
       setUploading(null);
       return{url:pub.publicUrl,formato:ext.toUpperCase(),path};
     }catch(e){
@@ -8230,7 +8230,7 @@ function COrientacoes({cl}){
     if(!await pixelsConfirm("Remover esse item?",{okText:"Remover",danger:true}))return;
     const item=data[arr][idx];
     // Se foi upload nosso, deleta do storage
-    if(item?.path&&!item.externo){try{sb.storage.from("pixels-files").remove([item.path]).catch(()=>{});}catch(e){}}
+    if(item?.path&&!item.externo){try{sb.storage.from("agency-files").remove([item.path]).catch(()=>{});}catch(e){}}
     persist({...data,[arr]:data[arr].filter((_,i)=>i!==idx)});
   };
 
@@ -14937,17 +14937,17 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
   const uploadFile=async(file,folder)=>{
     const ext=file.name?file.name.split(".").pop():"bin";
     const path=`chat/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const{error}=await sb.storage.from("pixels-files").upload(path,file,{upsert:false});
+    const{error}=await sb.storage.from("agency-files").upload(path,file,{upsert:false});
     if(error)throw error;
-    const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+    const{data}=sb.storage.from("agency-files").getPublicUrl(path);
     return data.publicUrl;
   };
 
   const uploadAudio=async(blob)=>{
     const path=`chat/audio/${Date.now()}-${Math.random().toString(36).slice(2)}.webm`;
-    const{error}=await sb.storage.from("pixels-files").upload(path,blob,{upsert:false,contentType:"audio/webm"});
+    const{error}=await sb.storage.from("agency-files").upload(path,blob,{upsert:false,contentType:"audio/webm"});
     if(error)throw error;
-    const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+    const{data}=sb.storage.from("agency-files").getPublicUrl(path);
     return data.publicUrl;
   };
 
@@ -15800,9 +15800,9 @@ function PublicacaoEditModal({task, onClose, onReject}){
         for(let i=0;i<byteStr.length;i++)arr[i]=byteStr.charCodeAt(i);
         const blob=new Blob([arr],{type:"image/png"});
         const path="annotations/"+task.id+"/"+Date.now()+"-"+filename;
-        const{error}=await sb.storage.from("pixels-files").upload(path,blob,{upsert:true,contentType:"image/png"});
+        const{error}=await sb.storage.from("agency-files").upload(path,blob,{upsert:true,contentType:"image/png"});
         if(error)throw error;
-        const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+        const{data}=sb.storage.from("agency-files").getPublicUrl(path);
         return{url:data.publicUrl,storagePath:path};
       }catch(e){
         console.warn("Upload anotação falhou, usando base64:",e);
@@ -18576,9 +18576,9 @@ function CollabProfilePage({user,profile,onSave,onClose}){
       const sb=window._sb;
       const ext=file.name.split(".").pop()||"jpg";
       const path=`avatars/${user.id}-${Date.now()}.${ext}`;
-      const{error}=await sb.storage.from("pixels-files").upload(path,file,{upsert:true});
+      const{error}=await sb.storage.from("agency-files").upload(path,file,{upsert:true});
       if(error)throw error;
-      const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+      const{data}=sb.storage.from("agency-files").getPublicUrl(path);
       setPhoto(data.publicUrl);
       // Atualiza localStorage imediatamente pra todos os UserAvatar refletirem antes do save final
       try{
@@ -19659,13 +19659,13 @@ function StorageManager({tasks}){
       });
 
       // 2. Listar arquivos no bucket — pasta tasks/
-      const{data:items,error}=await sb.storage.from("pixels-files").list("tasks",{limit:1000,offset:0});
+      const{data:items,error}=await sb.storage.from("agency-files").list("tasks",{limit:1000,offset:0});
       if(error)throw error;
 
       // 3. Para cada subpasta (id do task), listar arquivos
       const found=[];
       for(const folder of (items||[])){
-        const{data:files}=await sb.storage.from("pixels-files").list(`tasks/${folder.name}`,{limit:100});
+        const{data:files}=await sb.storage.from("agency-files").list(`tasks/${folder.name}`,{limit:100});
         for(const file of (files||[])){
           const path=`tasks/${folder.name}/${file.name}`;
           if(!validPaths.has(path)){
@@ -19687,7 +19687,7 @@ function StorageManager({tasks}){
     try{
       const sb=window._sb;
       const paths=orphans.map(o=>o.path);
-      const{error}=await sb.storage.from("pixels-files").remove(paths);
+      const{error}=await sb.storage.from("agency-files").remove(paths);
       if(error)throw error;
       newLog.push(`✅ ${paths.length} arquivo(s) deletado(s) com sucesso.`);
       setOrphans([]);
@@ -22637,7 +22637,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       // Deleta upload parcial do storage (best-effort) — evita orfão
       try{
         const sb=window._sb;
-        if(sb&&path)sb.storage.from("pixels-files").remove([path]).catch(()=>{});
+        if(sb&&path)sb.storage.from("agency-files").remove([path]).catch(()=>{});
       }catch(e){}
     });
     xhrRegistryRef.current=[];
@@ -22784,7 +22784,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         await uploadWithProgress(file,path,(pct)=>{
           setAttachments(p=>p.map(a=>a.id===tempId?{...a,progress:pct}:a));
         });
-        const{data}=sb.storage.from("pixels-files").getPublicUrl(path);
+        const{data}=sb.storage.from("agency-files").getPublicUrl(path);
         const thumb=await thumbPromise;
         setAttachments(p=>p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,progress:100,storagePath:path,thumbnail:thumb}:a));
       }catch(err){
@@ -22809,7 +22809,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     // Storage delete em background — loga falhas pra debug (rotina de varrer órfãos no /acessos cobre)
     if(att?.storagePath){
       try{
-        window._sb.storage.from("pixels-files").remove([att.storagePath])
+        window._sb.storage.from("agency-files").remove([att.storagePath])
           .then(({error})=>{if(error)console.warn("[removeAttachment] storage:",error.message);})
           .catch(e=>console.warn("[removeAttachment] storage exception:",e?.message||e));
       }catch(e){console.warn("[removeAttachment] sync exception:",e?.message||e);}
@@ -22838,7 +22838,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     // 1) Tenta SDK do Supabase primeiro (mais confiavel — ignora CORS)
     if(storagePath&&window._sb&&window._sb.storage){
       try{
-        const {data,error}=await window._sb.storage.from("pixels-files").download(storagePath);
+        const {data,error}=await window._sb.storage.from("agency-files").download(storagePath);
         if(error)throw error;
         if(data){_saveBlob(data);return;}
       }catch(e){
