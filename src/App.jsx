@@ -1157,7 +1157,7 @@ function smartFormatTitle(input){
     const core=word.slice(prefix.length,word.length-suffix.length);
     let processed;
     if(_isCamelCaseValid(core)){processed=core;}
-    else if(/^[A-ZÀ-Ý]{2}$/.test(core)){processed=core;}
+    else if(/^[A-ZÀ-Ý]{2,4}$/.test(core)){processed=core;} // siglas 2-4 letras (BR, ETA, CNPJ)
     else {
       const lower=core.toLocaleLowerCase("pt-BR");
       if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)){processed=lower;}
