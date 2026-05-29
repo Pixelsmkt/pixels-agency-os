@@ -10544,12 +10544,19 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                                 Collab
                               </span>}
-                              {/* Chip do tipo de conteudo (Arte/Carrossel/Foto/Vídeo/Corte) */}
+                              {/* Icone do tipo de conteudo (sem texto, so o icone branco) */}
                               {(function(){
-                                const TYPE_LABEL = {arte:"Arte",carrossel:"Carrossel",foto:"Foto",video:"Vídeo",corte:"Corte"};
-                                const lbl = TYPE_LABEL[tipo];
-                                if(!lbl) return null;
-                                return <span title={lbl} style={{display:"inline-flex",alignItems:"center",gap:3,background:"rgba(255,255,255,0.18)",color:"#fff",borderRadius:4,padding:"1px 6px",fontSize:9.5,fontWeight:600,lineHeight:1.4,flexShrink:0,whiteSpace:"nowrap",letterSpacing:.2,textShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>{lbl}</span>;
+                                const TYPE_TITLE = {arte:"Arte única",carrossel:"Carrossel",foto:"Foto de obra",video:"Vídeo",corte:"Corte de vídeo"};
+                                const ttl = TYPE_TITLE[tipo];
+                                if(!ttl) return null;
+                                let svg = null;
+                                if(tipo==="arte") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#fff"/><polyline points="21 15 16 10 5 21"/></svg>;
+                                else if(tipo==="carrossel") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+                                else if(tipo==="foto") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
+                                else if(tipo==="video") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#fff"/></svg>;
+                                else if(tipo==="corte") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>;
+                                if(!svg) return null;
+                                return <span title={ttl} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"rgba(255,255,255,0.20)",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}>{svg}</span>;
                               })()}
                             </div>
                             <span title={isShortFromDrive?"Vídeo short (do Drive)":(pubColor.label||t.status)} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:isShortFromDrive?"#dc2626":pubColor.bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
@@ -10564,13 +10571,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                             </span>
                           </div>
 
-                          {/* Título com ícone de tipo */}
+                          {/* Título (icone do tipo agora está no topo, ao lado da logo) */}
                           <div style={{display:"flex",alignItems:"center",gap:5}}>
-                            {(isVid||isArte||isFoto)&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:0.95}}>
-                              {isVid&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#fff"/></svg>}
-                              {isArte&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#fff"/><polyline points="21 15 16 10 5 21"/></svg>}
-                              {isFoto&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
-                            </span>}
                             <div style={{color:"#fff",fontSize:isMob?10.5:11.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,flex:1,minWidth:0,textShadow:"0 1px 2px rgba(0,0,0,0.18)",letterSpacing:.1}}>
                               {t.title}
                             </div>
