@@ -18846,7 +18846,7 @@ const PORTAL_MODULES=[
   {id:"faturamento", label:"Faturamento",             icon:"💰", desc:"Contratos e faturas"},
 ];
 
-const MAIN_TABS=[["equipe","👥 Equipe & Colaboradores"],["clientes","🏢 Clientes do Portal"],["storage","🗂 Storage"]];
+const MAIN_TABS=[["equipe","Time"],["clientes","Clientes"],["storage","Storage"]];
 
 const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status","Ações"];
 
@@ -18904,6 +18904,12 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
   },[]);
 
   const [mainTab,setMainTab]=useState("equipe");
+  const [teamRev,setTeamRev]=useState(0);
+  useEffect(()=>{
+    const onTeamUpdate=()=>setTeamRev(r=>r+1);
+    window.addEventListener("pixels:team-updated",onTeamUpdate);
+    return()=>window.removeEventListener("pixels:team-updated",onTeamUpdate);
+  },[]);
   const [novoColabOpen,setNovoColabOpen]=useState(false);
   const [novoColabBusy,setNovoColabBusy]=useState(false);
   const [novoColab,setNovoColab]=useState({
@@ -19050,7 +19056,30 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
           setNovoColabOpen(false);
           setNovoColabBusy(false);
           setNovoColab({name:"",email:"",password:"",team_id:"",role:"Designer",dash:"designer",color:"#ec4899",av:"",level:3,photo_base64:"",photo_mime:""});
-          // Recarrega perfis pra refletir o novo
+          // Mescla IMEDIATAMENTE no TEAM (sem precisar refresh)
+          try{
+            if(typeof TEAM!=="undefined" && !TEAM.find(t=>t.id===payload.team_id)){
+              TEAM.push({
+                id:payload.team_id, name:payload.name, role:payload.role,
+                av:payload.av, color:payload.color, level:payload.level,
+                status:"online", dash:payload.dash,
+                canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true,
+                supervisor:["gustavo","vinicius","hellen"],
+                _fromSupabase:true,
+              });
+            }
+            if(typeof ACCESS_STORE!=="undefined" && !ACCESS_STORE[payload.team_id]){
+              const dashDefaults={designer:ACCESS_STORE.andre,editor:ACCESS_STORE.guilherme,coordinator:ACCESS_STORE.ellen,gestor:ACCESS_STORE.erick,partner:ACCESS_STORE.vinicius};
+              ACCESS_STORE[payload.team_id]={...(dashDefaults[payload.dash]||DEFAULT_PERMS)};
+            }
+            if(data.photo_url){
+              const pd={photo:data.photo_url,name:payload.name,role:payload.role};
+              localStorage.setItem("pixels-selfprofile-"+payload.team_id,JSON.stringify(pd));
+              setCollabProfiles(p=>({...p,[payload.team_id]:pd}));
+            }
+            window.dispatchEvent(new CustomEvent("pixels:team-updated"));
+          }catch(e){console.warn(e);}
+          // Recarrega perfis pra pegar profile_data persistido
           try{
             const{data:rows}=await sb.from("profiles").select("team_id,profile_data").not("profile_data","is",null);
             const updates={};
@@ -19072,20 +19101,29 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
       const CORS=["#ec4899","#e040fb","#9F43F6","#7c3aed","#6366f1","#0ea5e9","#16a34a","#f59e0b","#ef4444","#475569"];
       return(<div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.6)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>!novoColabBusy&&setNovoColabOpen(false)}>
         <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:18,width:"100%",maxWidth:560,boxShadow:"0 24px 60px rgba(0,0,0,0.35)",overflow:"hidden",maxHeight:"92vh",display:"flex",flexDirection:"column"}}>
-          {/* Header */}
-          <div style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div>
-              <div style={{color:"#fff",fontWeight:800,fontSize:16,letterSpacing:-.2}}>Novo colaborador</div>
-              <div style={{color:"rgba(255,255,255,0.8)",fontSize:11,marginTop:2}}>Cria login + perfil + foto numa só ação</div>
+          {/* Header premium */}
+          <div style={{background:"linear-gradient(135deg,"+C.a+" 0%,#7c3aed 50%,#1e1b4b 100%)",padding:"22px 26px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative",overflow:"hidden"}}>
+            <div style={{position:"absolute",top:-40,right:-40,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,.15) 0%,transparent 65%)"}}/>
+            <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:12}}>
+              <div style={{width:42,height:42,borderRadius:11,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)"}}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+              </div>
+              <div>
+                <div style={{color:"#fff",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Novo colaborador</div>
+                <div style={{color:"rgba(255,255,255,.78)",fontSize:12,marginTop:2,fontWeight:500}}>Cria login + perfil + foto numa só ação</div>
+              </div>
             </div>
-            <button onClick={()=>!novoColabBusy&&setNovoColabOpen(false)} style={{background:"rgba(255,255,255,0.18)",border:"none",borderRadius:8,padding:"6px 10px",color:"#fff",cursor:"pointer",fontSize:14,fontWeight:700}}>✕</button>
+            <button onClick={()=>!novoColabBusy&&setNovoColabOpen(false)}
+              style={{position:"relative",zIndex:1,background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.22)",borderRadius:10,width:34,height:34,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)"}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
 
           <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:14,overflowY:"auto"}}>
             {/* Foto */}
             <div style={{display:"flex",alignItems:"center",gap:14}}>
               <div style={{width:72,height:72,borderRadius:"50%",background:novoColab.photo_base64?"url("+novoColab.photo_base64+") center/cover":novoColab.color,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:26,border:"3px solid "+C.b1,flexShrink:0}}>
-                {!novoColab.photo_base64&&(novoColab.av||novoColab.name[0]||"?").toUpperCase()}
+                {!novoColab.photo_base64&&((novoColab.av||novoColab.name[0]||"").toUpperCase()||(<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.85}}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>))}
               </div>
               <div style={{flex:1}}>
                 <div style={lbl}>Foto de perfil (opcional)</div>
@@ -19161,9 +19199,10 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
               </div>
             </div>
 
-            {/* Aviso */}
-            <div style={{background:C.s1,border:"1px dashed "+C.b1,borderRadius:10,padding:"10px 12px",fontSize:11,color:C.td,lineHeight:1.55}}>
-              Depois de criar aqui, lembre de adicionar <b>{novoColab.team_id||"team_id"}</b> em <code>TEAM</code> e <code>ACCESS_STORE</code> no <code>00_globals.jsx</code> e rodar <code>deploy.bat</code> — assim ela aparece pra todo mundo no app.
+            {/* Info — sem necessidade de editar arquivos */}
+            <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 12px",fontSize:11.5,color:"#15803d",lineHeight:1.55,display:"flex",gap:8,alignItems:"flex-start"}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><polyline points="20 6 9 17 4 12"/></svg>
+              <span>O colaborador aparece automaticamente pra todo mundo. Sem precisar editar arquivos ou rodar deploy.</span>
             </div>
 
             {/* Botões */}
@@ -19210,7 +19249,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
             <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:16,maxHeight:"68vh",overflowY:"auto"}}>
               {/* Login credentials */}
               <div>
-                <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>🔑 Credenciais de Acesso</div>
+                <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Credenciais de Acesso</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                   <div>
                     <div style={{color:C.td,fontSize:10,marginBottom:4}}>Login</div>
@@ -19222,13 +19261,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
                   </div>
                 </div>
                 <div style={{background:C.s1,borderRadius:8,padding:"8px 12px",marginTop:6,fontSize:10,color:C.td,lineHeight:1.6}}>
-                  ⚠ As credenciais são exibidas aqui para controle interno. Compartilhe com o cliente de forma segura.
+                  As credenciais são exibidas aqui para controle interno. Compartilhe com o cliente de forma segura.
                 </div>
               </div>
 
               {/* Module permissions */}
               <div>
-                <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:10}}>📋 Módulos do Portal</div>
+                <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:10}}>Módulos do Portal</div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   {PORTAL_MODULES.map(mod=>{
                     const on=editClientDraft.modulos?.[mod.id]||false;
@@ -19278,7 +19317,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
         </div>
         {mainTab==="equipe"&&<div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{color:C.ts,fontSize:12}}>{TEAM.length} membros · {TEAM.filter(u=>u.status==="online").length} online</div>
-          {isMePartner&&<button onClick={()=>setNovoColabOpen(true)}
+          {isMePartner&&<button onClick={()=>{setNovoColab({name:"",email:"",password:"",team_id:"",role:"Designer",dash:"designer",color:"#ec4899",av:"",level:3,photo_base64:"",photo_mime:""});setNovoColabOpen(true);}}
             style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px "+C.a+"55",fontFamily:"inherit"}}>
             <span style={{fontSize:14,lineHeight:1}}>+</span>Novo colaborador
           </button>}
@@ -19312,15 +19351,15 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
           const photo=collabProfiles[u.id]?.photo;
           const displayName=collabProfiles[u.id]?.nome||u.name;
           return(<div key={u.id}
-            style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:0,overflow:"hidden",transition:"all .15s",display:"flex",flexDirection:"column"}}
+            style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:0,transition:"all .15s",display:"flex",flexDirection:"column",position:"relative"}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=u.color+"66";e.currentTarget.style.boxShadow="0 8px 24px "+u.color+"15";e.currentTarget.style.transform="translateY(-2px)";}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="translateY(0)";}}>
             {/* Banner com cor do colaborador */}
-            <div style={{height:64,background:"linear-gradient(135deg,"+u.color+","+u.color+"99)",position:"relative"}}>
+            <div style={{height:64,background:"linear-gradient(135deg,"+u.color+","+u.color+"99)",position:"relative",borderRadius:"16px 16px 0 0"}}>
               <span style={{position:"absolute",top:10,right:12,background:lvColor,color:"#fff",borderRadius:99,padding:"3px 11px",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",boxShadow:"0 3px 10px rgba(0,0,0,.18)"}}>{lvLabel}</span>
             </div>
             {/* Foto sobreposta ao banner */}
-            <div style={{padding:"0 18px 18px",marginTop:-44,display:"flex",flexDirection:"column",gap:12}}>
+            <div style={{padding:"0 18px 18px",marginTop:-44,display:"flex",flexDirection:"column",gap:12,position:"relative",zIndex:2}}>
               <div style={{width:88,height:88,borderRadius:"50%",overflow:"hidden",border:"4px solid "+C.card,boxShadow:"0 6px 18px rgba(0,0,0,.12)",background:C.card,flexShrink:0}}>
                 {photo
                   ?<img src={photo} alt={u.name} referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
@@ -29045,19 +29084,60 @@ export default function AgencyOS(){
     const loadAllTeamPhotos=async()=>{
       try{
         const sb=window._sb;
-        const{data:rows}=await sb.from("profiles").select("team_id,profile_data").not("profile_data","is",null);
+        // Pega TODOS os campos pra também mesclar no TEAM + ACCESS_STORE
+        const{data:rows}=await sb.from("profiles").select("team_id,name,role,av,color,level,dash,user_type,profile_data");
         if(!rows)return;
+        let teamChanged=false;
         rows.forEach(row=>{
-          if(!row.team_id||!row.profile_data)return;
-          try{
-            const prev=localStorage.getItem("pixels-selfprofile-"+row.team_id);
-            const next=JSON.stringify(row.profile_data);
-            if(prev!==next){
-              localStorage.setItem("pixels-selfprofile-"+row.team_id,next);
-              window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:row.team_id}}));
-            }
-          }catch(e){}
+          if(!row.team_id||row.user_type==="client")return;
+          // 1) Foto/profile_data
+          if(row.profile_data){
+            try{
+              const prev=localStorage.getItem("pixels-selfprofile-"+row.team_id);
+              const next=JSON.stringify(row.profile_data);
+              if(prev!==next){
+                localStorage.setItem("pixels-selfprofile-"+row.team_id,next);
+                window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:row.team_id}}));
+              }
+            }catch(e){}
+          }
+          // 2) Auto-sync TEAM — se nao existe, adiciona ao array global
+          if(typeof TEAM!=="undefined" && !TEAM.find(t=>t.id===row.team_id)){
+            TEAM.push({
+              id:row.team_id,
+              name:row.name||row.team_id,
+              role:row.role||"Colaborador",
+              av:row.av||(row.name||row.team_id).charAt(0).toUpperCase(),
+              color:row.color||"#94a3b8",
+              level:row.level||3,
+              status:"online",
+              dash:row.dash||"designer",
+              canDelete:false,
+              canPixelsIA:false,
+              pagamentoPorDemanda:true,
+              supervisor:["gustavo","vinicius","hellen"],
+              _fromSupabase:true,
+            });
+            teamChanged=true;
+          }
+          // 3) Auto-sync ACCESS_STORE — se nao tem perms, copia do default por dash
+          if(typeof ACCESS_STORE!=="undefined" && !ACCESS_STORE[row.team_id]){
+            const dashDefaults={
+              designer:ACCESS_STORE.andre,
+              editor:ACCESS_STORE.guilherme,
+              coordinator:ACCESS_STORE.ellen,
+              gestor:ACCESS_STORE.erick,
+              partner:ACCESS_STORE.vinicius,
+            };
+            const base=dashDefaults[row.dash]||(typeof DEFAULT_PERMS!=="undefined"?DEFAULT_PERMS:{});
+            ACCESS_STORE[row.team_id]={...base};
+            teamChanged=true;
+          }
         });
+        // Se TEAM mudou, dispara evento pro app refazer renders
+        if(teamChanged){
+          window.dispatchEvent(new CustomEvent("pixels:team-updated"));
+        }
       }catch(e){console.warn("Erro carregando perfis dos colaboradores:",e);}
     };
     loadAllTeamPhotos();
