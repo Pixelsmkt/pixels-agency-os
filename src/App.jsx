@@ -24304,19 +24304,19 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   }
                 };
                 return <button key={u.id} onClick={toggle}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",border:"none",borderTop:i>0?"1px solid #f8fafc":"none",background:sel?"#eef2ff":"#fff",cursor:"pointer",textAlign:"left",transition:"background .1s"}}>
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:11,padding:"10px 13px",border:"none",borderTop:i>0?"1px solid #f1f5f9":"none",background:sel?"#eef2ff":"#fff",cursor:"pointer",textAlign:"left",transition:"background .1s",fontFamily:"'Inter',system-ui,-apple-system,sans-serif"}}>
                   <UserAvatar user={u} size={24} border={false}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#1e293b",fontSize:12,fontWeight:sel?700:400}}>
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:sel?700:600,letterSpacing:-.1,fontFamily:"inherit"}}>
                       {u.name}
-                      {supUser&&<span style={{background:"#ede9fe",color:"#7c3aed",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:700,marginLeft:6}}>
+                      {supUser&&<span style={{background:"#ede9fe",color:"#7c3aed",borderRadius:5,padding:"1px 7px",fontSize:9,fontWeight:700,marginLeft:6,letterSpacing:.2,fontFamily:"inherit"}}>
                         + {supUser.name.split(" ")[0]} auto
                       </span>}
                     </div>
-                    <div style={{color:"#94a3b8",fontSize:10}}>{u.role}</div>
+                    <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:2,fontFamily:"inherit"}}>{u.role}</div>
                   </div>
-                  <div style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${sel?"#6366f1":"#cbd5e1"}`,background:sel?"#6366f1":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    {sel&&<span style={{color:"#fff",fontSize:9,fontWeight:900}}>✓</span>}
+                  <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${sel?"#6366f1":"#cbd5e1"}`,background:sel?"#6366f1":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
+                    {sel&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                   </div>
                 </button>;
               })}
