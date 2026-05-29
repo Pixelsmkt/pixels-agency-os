@@ -815,21 +815,23 @@ const THEMES={
   },
 };
 
-let _themeKey="dark";
-let C={...THEMES.dark};
+let _themeKey="light";
+let C={...THEMES.light};
 
 function applyTheme(key){
-  _themeKey=key;
-  const t=THEMES[key]||THEMES.dark;
+  // FORÇADO: todos os usuários sempre em tema LIGHT (decisão do Vinicius, 2026-05-29)
+  // Não importa o que for passado, sempre aplica light.
+  _themeKey="light";
+  const t=THEMES.light;
   Object.assign(C,t);
-  try{localStorage.setItem("pixels-theme",key);}catch(e){}
-  if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,theme:key},{onConflict:"user_id"}).then(()=>{}).catch(e=>console.warn("[theme] save falhou:",e?.message||e));
+  try{localStorage.setItem("pixels-theme","light");}catch(e){}
+  if(window._sb)window._sb.from("user_settings").upsert({user_id:CURRENT_USER.id,theme:"light"},{onConflict:"user_id"}).then(()=>{}).catch(e=>console.warn("[theme] save falhou:",e?.message||e));
 }
 
-// Load saved theme on startup
+// Force LIGHT on startup — limpa qualquer valor salvo de dark/agro
 try{
-  const saved=localStorage.getItem("pixels-theme");
-  if(saved&&THEMES[saved])applyTheme(saved);
+  localStorage.setItem("pixels-theme","light");
+  applyTheme("light");
 }catch(e){}
 
 const KANBAN_COLS = [
@@ -29972,10 +29974,10 @@ export default function AgencyOS(){
       case "demandas":
       case "demandas_kanban":      return p.verDemandas;
       case "demandas_internas":    return p.verDemandasInternas||isSocio;
-      case "demandas_cal_interno": return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
-      case "demandas_cal_pub":     return isSocio||(CURRENT_USER.dash==="coordinator")||p.verCalPub;
-      case "planejamento":         return isSocio||CURRENT_USER.id==="ellen";
-      case "playbooks":            return isSocio||CURRENT_USER.id==="ellen"||CURRENT_USER.dash==="designer"||CURRENT_USER.dash==="editor"||CURRENT_USER.id==="erick"||!!p.verPlaybooks;
+      case "demandas_cal_interno": return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
+      case "demandas_cal_pub":     return isSocio||(effectiveUser.dash==="coordinator")||p.verCalPub;
+      case "planejamento":         return isSocio||effectiveUser.id==="ellen";
+      case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
       case "aprovacoes_copys":
       case "aprovacoes_publicacao":return p.verAprovacoes;
@@ -30054,8 +30056,8 @@ export default function AgencyOS(){
       case "demandas_internas":     return (effectivePerms.verDemandasInternas||isSocio)?<PageDemandasInternas {...p} tasks={tasks} setTasks={setTasks} notifs={notifs} setNotifs={setNotifs}/>:<NoPerm/>;
       case "demandas_cal_pub":      return (effectivePerms.verCalPub||isSocio)?<PageCalendarioPublicacoes {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "demandas_cal_interno":  return (effectivePerms.verCalPub||isSocio)?<PageCalendarioInterno {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
-      case "planejamento":          return (isSocio||CURRENT_USER.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
-      case "playbooks":             return (isSocio||CURRENT_USER.id==="ellen"||CURRENT_USER.dash==="designer"||CURRENT_USER.dash==="editor"||CURRENT_USER.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
+      case "planejamento":          return (isSocio||effectiveUser.id==="ellen")?<PagePlanejamento {...p}/>:<NoPerm/>;
+      case "playbooks":             return (isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||effectivePerms.verPlaybooks)?<PagePlaybooks {...p}/>:<NoPerm/>;
       case "chat":                  return effectivePerms.verChat?<PageChat {...p} tasks={tasks} setTasks={setTasks} presenceMap={presenceMap}/>:<NoPerm/>;
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
