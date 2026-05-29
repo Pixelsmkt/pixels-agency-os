@@ -8978,6 +8978,98 @@ function PageClientes({isMob, tasks}){
   </div>);
 }
 
+/* ─── CAnalises — Visão Geral do cliente (KPIs + lista de próximas) ─── */
+function CAnalises({cl,isMob,tasks}){
+  const TASKS = Array.isArray(tasks) ? tasks : [];
+  const clTasks = TASKS.filter(function(t){return t&&t.client===cl.id&&!t.deletedAt;});
+  const ativas  = clTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado";});
+  const atrasadas = ativas.filter(function(t){
+    if(!t.deadline) return false;
+    return new Date(t.deadline) < new Date();
+  });
+  const pendCopy  = ativas.filter(function(t){return t.status==="demanda";});
+  const pendApr   = ativas.filter(function(t){return t.status==="avaliacao";});
+  const execucao  = ativas.filter(function(t){return t.status==="execucao";});
+  const ajustes   = ativas.filter(function(t){return t.status==="ajustes";});
+  const proxPubs  = clTasks
+    .filter(function(t){return t.publishDate && t.status!=="publicado";})
+    .sort(function(a,b){return String(a.publishDate).localeCompare(String(b.publishDate));})
+    .slice(0,6);
+  const concluidas = clTasks.filter(function(t){return t.status==="aprovado"||t.status==="publicado";});
+
+  const fmt = function(iso){
+    if(!iso) return "—";
+    const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return m[3]+"/"+m[2]+"/"+m[1].slice(2);
+    return iso;
+  };
+
+  const KPI = function(props){
+    return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:14,padding:"16px 18px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{color:props.color||"#9F43F6",fontSize:28,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{props.value}</div>
+      <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:6}}>{props.label}</div>
+      {props.hint && <div style={{color:"#94a3b8",fontSize:10.5,marginTop:3}}>{props.hint}</div>}
+    </div>;
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* KPIs */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
+      <KPI value={ativas.length}     label="Demandas ativas" color="#9F43F6"/>
+      <KPI value={atrasadas.length}  label="Atrasadas"       color="#ef4444" hint={atrasadas.length>0?"Atenção!":"Em dia"}/>
+      <KPI value={pendCopy.length}   label="Copy pendente"   color="#a140ff"/>
+      <KPI value={pendApr.length}    label="Aguardando aprovação" color="#eab308"/>
+      <KPI value={execucao.length}   label="Em execução"     color="#f97316"/>
+      <KPI value={ajustes.length}    label="Em ajuste"       color="#dc2626"/>
+      <KPI value={concluidas.length} label="Concluídas"      color="#16a34a"/>
+    </div>
+
+    {/* Próximas publicações */}
+    <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:14,padding:"16px 18px"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Próximas publicações</div>
+        <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 10px",fontSize:10.5,fontWeight:700}}>{proxPubs.length}</span>
+      </div>
+      {proxPubs.length===0
+        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"14px 0"}}>Sem publicações agendadas.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {proxPubs.map(function(t){
+              return <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#fafafa",borderRadius:10,border:"1px solid #f1f5f9"}}>
+                <div style={{minWidth:56,textAlign:"center",background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,padding:"4px 6px"}}>
+                  <div style={{color:"#9F43F6",fontSize:14,fontWeight:800,lineHeight:1}}>{fmt(t.publishDate).split("/")[0]||"—"}</div>
+                  <div style={{color:"#64748b",fontSize:9.5,fontWeight:600,letterSpacing:.5,textTransform:"uppercase",marginTop:2}}>{fmt(t.publishDate).split("/")[1]||""}</div>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"Sem título"}</div>
+                  <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{t.publishTime||""} · {t.status||""}</div>
+                </div>
+              </div>;
+            })}
+          </div>
+      }
+    </div>
+
+    {/* Atrasos (se houver) */}
+    {atrasadas.length>0 && <div style={{background:"#fff",border:"1px solid #fecaca",borderRadius:14,padding:"16px 18px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <div style={{width:8,height:8,borderRadius:"50%",background:"#dc2626"}}/>
+        <div style={{color:"#b91c1c",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Demandas atrasadas</div>
+        <span style={{background:"#fef2f2",color:"#b91c1c",borderRadius:99,padding:"2px 10px",fontSize:10.5,fontWeight:700,marginLeft:"auto"}}>{atrasadas.length}</span>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {atrasadas.slice(0,5).map(function(t){
+          const dias = Math.floor((Date.now() - new Date(t.deadline).getTime())/86400000);
+          return <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #fef2f2"}}>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"Sem título"}</div>
+            <span style={{background:"#fef2f2",color:"#b91c1c",borderRadius:6,padding:"2px 9px",fontSize:10.5,fontWeight:700}}>{dias}d atraso</span>
+          </div>;
+        })}
+        {atrasadas.length>5 && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",paddingTop:6,fontStyle:"italic"}}>+ {atrasadas.length-5} demanda(s)</div>}
+      </div>
+    </div>}
+  </div>;
+}
+
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   let TASKS=tasks||[];
   cl=getLiveClient(cl.id)||cl;
