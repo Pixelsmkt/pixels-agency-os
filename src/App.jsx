@@ -10530,9 +10530,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                           onMouseEnter={e=>{if(!isDragging){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 10px rgba(0,0,0,0.18)";}}}
                           onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.14)";}}>
 
-                          {/* Topo: chip da logo do cliente + badge de status moderno */}
+                          {/* Topo: chip da logo do cliente + chip do tipo + badge de status moderno */}
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:4}}>
-                            <div style={{display:"inline-flex",alignItems:"center",gap:4,flexShrink:0,maxWidth:"78%",minWidth:0}}>
+                            <div style={{display:"inline-flex",alignItems:"center",gap:4,flexShrink:0,maxWidth:"82%",minWidth:0,flexWrap:"wrap"}}>
                               <div style={{display:"inline-flex",alignItems:"center",background:"#fff",borderRadius:4,padding:"1px 4px",height:15,flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.10)"}}>
                                 {hasLogo
                                   ? <img src={CLIENT_LOGOS[t.client]} alt={cl?cl.name:""} style={{height:11,maxWidth:48,objectFit:"contain",display:"block"}}/>
@@ -10544,6 +10544,13 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                                 Collab
                               </span>}
+                              {/* Chip do tipo de conteudo (Arte/Carrossel/Foto/Vídeo/Corte) */}
+                              {(function(){
+                                const TYPE_LABEL = {arte:"Arte",carrossel:"Carrossel",foto:"Foto",video:"Vídeo",corte:"Corte"};
+                                const lbl = TYPE_LABEL[tipo];
+                                if(!lbl) return null;
+                                return <span title={lbl} style={{display:"inline-flex",alignItems:"center",gap:3,background:"rgba(255,255,255,0.18)",color:"#fff",borderRadius:4,padding:"1px 6px",fontSize:9.5,fontWeight:600,lineHeight:1.4,flexShrink:0,whiteSpace:"nowrap",letterSpacing:.2,textShadow:"0 1px 2px rgba(0,0,0,0.18)"}}>{lbl}</span>;
+                              })()}
                             </div>
                             <span title={isShortFromDrive?"Vídeo short (do Drive)":(pubColor.label||t.status)} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:isShortFromDrive?"#dc2626":pubColor.bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
                               {isShortFromDrive
