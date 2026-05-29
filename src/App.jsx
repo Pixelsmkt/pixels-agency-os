@@ -18927,12 +18927,12 @@ const defaultClientAccess=(cl)=>({
 });
 
 const PORTAL_MODULES=[
-  {id:"dashboard",   label:"Dashboard",               icon:"🎯", desc:"Visão geral da empresa"},
-  {id:"demandas",    label:"Demandas",                icon:"◈",  desc:"Acompanhamento de demandas"},
-  {id:"calendario",  label:"Calendário de Publicações",icon:"📅", desc:"Calendário linkado ao interno"},
-  {id:"chat",        label:"Chat",                    icon:"💬", desc:"Canal exclusivo com a equipe"},
-  {id:"analises",    label:"Análises",                icon:"📊", desc:"Tráfego Pago e Redes Sociais"},
-  {id:"faturamento", label:"Faturamento",             icon:"💰", desc:"Contratos e faturas"},
+  {id:"dashboard",   label:"Dashboard",               icon:"home",        desc:"Visão geral da empresa"},
+  {id:"demandas",    label:"Demandas",                icon:"kanban",      desc:"Acompanhamento de demandas"},
+  {id:"calendario",  label:"Calendário de Publicações",icon:"calendar",   desc:"Calendário linkado ao interno"},
+  {id:"chat",        label:"Chat",                    icon:"message",     desc:"Canal exclusivo com a equipe"},
+  {id:"analises",    label:"Análises",                icon:"chart",       desc:"Tráfego Pago e Redes Sociais"},
+  {id:"faturamento", label:"Faturamento",             icon:"wallet",      desc:"Contratos e faturas"},
 ];
 
 const MAIN_TABS=[["equipe","Time"],["clientes","Clientes"],["storage","Storage"]];
@@ -19537,11 +19537,6 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
       {mainTab==="clientes"&&(
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
 
-          {/* Info box */}
-          <div style={{background:C.a+"0a",border:"1px solid "+C.a+"22",borderRadius:12,padding:"12px 16px",fontSize:12,color:C.ts,lineHeight:1.6}}>
-            <strong style={{color:C.tx}}>Portal do Cliente</strong> — Gerencie os acessos individuais de cada empresa. Cada cliente entra no portal e visualiza somente os dados da própria empresa. Configure quais módulos cada um pode acessar.
-          </div>
-
           {/* Client list */}
           <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
             <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 2fr 100px",padding:"10px 20px",background:C.s1,borderBottom:"1px solid "+C.b1}}>
@@ -19559,50 +19554,53 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
                   onMouseEnter={e=>e.currentTarget.style.background=C.s1}
                   onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
 
-                  {/* Client name */}
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:36,height:36,borderRadius:10,background:cl.color+"18",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",color:cl.color,fontWeight:900,fontSize:13,flexShrink:0}}>
-                      {cl.name.slice(0,2).toUpperCase()}
+                  {/* Cliente: logo + nome */}
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:44,height:44,borderRadius:11,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:4}}>
+                      <ClientLogo clientId={cl.id} size="md"/>
                     </div>
-                    <div>
-                      <div style={{color:C.tx,fontWeight:700,fontSize:13}}>{cl.name}</div>
-                      <div style={{color:C.td,fontSize:10}}>{cl.sector}</div>
+                    <div style={{minWidth:0}}>
+                      <div style={{color:C.tx,fontWeight:700,fontSize:14,letterSpacing:-.2}}>{cl.name}</div>
+                      <div style={{color:C.td,fontSize:11,marginTop:1}}>{cl.sector}</div>
                     </div>
                   </div>
 
                   {/* Login */}
                   <div>
-                    <div style={{color:C.ts,fontSize:11,fontFamily:"monospace"}}>{acc.login||"—"}</div>
-                    {acc.updatedAt&&<div style={{color:C.td,fontSize:9,marginTop:2}}>Atualizado {new Date(acc.updatedAt).toLocaleDateString("pt-BR")}</div>}
+                    <div style={{color:C.ts,fontSize:12,fontFamily:"monospace"}}>{acc.login||"—"}</div>
+                    {acc.updatedAt&&<div style={{color:C.td,fontSize:10,marginTop:2}}>Atualizado {new Date(acc.updatedAt).toLocaleDateString("pt-BR")}</div>}
                   </div>
 
-                  {/* Status toggle */}
+                  {/* Status (clean, dot + label discretos) */}
                   <div style={{display:"flex",justifyContent:"center"}}>
-                    <div onClick={()=>isPartner&&toggleClientEnabled(cl.id)}
-                      style={{display:"flex",alignItems:"center",gap:5,background:acc.enabled?C.gr+"18":C.b1,border:"1px solid "+(acc.enabled?C.gr+"44":C.b1),borderRadius:20,padding:"5px 10px",cursor:isPartner?"pointer":"default"}}>
-                      <div style={{width:7,height:7,borderRadius:"50%",background:acc.enabled?C.gr:C.td}}/>
-                      <span style={{color:acc.enabled?C.gr:C.td,fontSize:10,fontWeight:700}}>{acc.enabled?"Ativo":"Inativo"}</span>
+                    <div onClick={()=>isPartner&&toggleClientEnabled(cl.id)} title={isPartner?"Clique pra "+(acc.enabled?"desativar":"ativar"):""}
+                      style={{display:"inline-flex",alignItems:"center",gap:7,background:acc.enabled?"#dcfce7":"#f1f5f9",border:"1px solid "+(acc.enabled?"#86efac":C.b1),borderRadius:99,padding:"5px 12px",cursor:isPartner?"pointer":"default",transition:"all .12s"}}>
+                      <div style={{width:7,height:7,borderRadius:"50%",background:acc.enabled?"#16a34a":"#94a3b8"}}/>
+                      <span style={{color:acc.enabled?"#15803d":"#64748b",fontSize:11,fontWeight:700,letterSpacing:.2}}>{acc.enabled?"Ativo":"Inativo"}</span>
                     </div>
                   </div>
 
-                  {/* Active modules */}
-                  <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}}>
+                  {/* Modulos ativos — chips com Ico, cor neutra + cor do cliente nos detalhes */}
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:"center",alignItems:"center"}}>
                     {activeMods.length===0
-                      ?<span style={{color:C.td,fontSize:10}}>Nenhum</span>
+                      ?<span style={{color:C.td,fontSize:11,fontStyle:"italic"}}>Nenhum módulo</span>
                       :activeMods.map(m=>(
-                        <span key={m.id} style={{background:cl.color+"14",color:cl.color,borderRadius:5,padding:"1px 7px",fontSize:9,fontWeight:700}}>{m.icon} {m.label}</span>
+                        <span key={m.id} title={m.desc}
+                          style={{background:cl.color+"10",color:cl.color,border:"1px solid "+cl.color+"30",borderRadius:7,padding:"4px 9px",fontSize:10.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,letterSpacing:.1}}>
+                          <Ico n={m.icon} size={10} color={cl.color}/>{m.label}
+                        </span>
                       ))
                     }
                   </div>
 
-                  {/* Actions */}
+                  {/* Ações — engrenagem SVG (sem emoji) */}
                   <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
                     {isPartner&&(
                       <button onClick={()=>openEditClient(cl.id)} title="Configurar acesso"
-                        style={{background:"none",border:"1px solid "+C.b1,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.ts}}
-                        onMouseEnter={e=>{e.currentTarget.style.background=cl.color+"18";e.currentTarget.style.color=cl.color;}}
-                        onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.ts;}}>
-                        ⚙
+                        style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:9,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.ts,transition:"all .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background=cl.color+"15";e.currentTarget.style.color=cl.color;e.currentTarget.style.borderColor=cl.color+"55";}}
+                        onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+                        <Ico n="settings" size={14}/>
                       </button>
                     )}
                   </div>
@@ -19611,21 +19609,6 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
             })}
           </div>
 
-          {/* Portal modules legend */}
-          <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"14px 18px"}}>
-            <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:10}}>Estrutura do Portal</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
-              {PORTAL_MODULES.map(m=>(
-                <div key={m.id} style={{background:C.s1,borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:18}}>{m.icon}</span>
-                  <div>
-                    <div style={{color:C.tx,fontWeight:700,fontSize:12}}>{m.label}</div>
-                    <div style={{color:C.td,fontSize:10}}>{m.desc}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
@@ -41137,7 +41120,6 @@ function PagePlanejamento({isMob}){
   const TABS = [
     {id:"dailies",  label:"Dailies",  ico:"sunrise", count:dailies.length},
     {id:"weeklies", label:"Weeklies", ico:"weekly",  count:weeklies.length},
-    {id:"metas",    label:"Metas",    ico:"target",  count:metas.length},
   ];
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:PLAN_INTER}}>
@@ -41156,9 +41138,9 @@ function PagePlanejamento({isMob}){
         </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={function(){openNew(tab==="metas"?"meta_semana":tab==="weeklies"?"weekly":"daily");}}
+        <button onClick={function(){openNew(tab==="weeklies"?"weekly":"daily");}}
           style={{background:PLAN_PURPLE,border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(159,67,246,0.38)"}}>
-          <_PlIco name="plus" size={13} color="#fff"/> Novo {tab==="metas"?"meta":tab==="weeklies"?"weekly":"daily"}
+          <_PlIco name="plus" size={13} color="#fff"/> Novo {tab==="weeklies"?"weekly":"daily"}
         </button>
       </div>
     </div>
@@ -41195,12 +41177,148 @@ function PagePlanejamento({isMob}){
     {/* ═══ Conteúdo por aba ═══ */}
     {tab==="dailies"  && <DailiesList   entries={dailies}  onEdit={setEditing} onDelete={handleDelete}/>}
     {tab==="weeklies" && <WeekliesList  entries={weeklies} onEdit={setEditing} onDelete={handleDelete}/>}
-    {tab==="metas"    && <MetasList     entries={metas}    onEdit={setEditing} onDelete={handleDelete} onUpsert={upsert}/>}
+
+    {/* ═══ Seção fixa de Metas (sempre visível embaixo das dailies/weeklies) ═══ */}
+    <MetasFixedPanel entries={metas} onEdit={setEditing} onDelete={handleDelete} onUpsert={upsert} onNew={openNew}/>
 
     {/* ═══ Modal editor ═══ */}
     {editing && <PlanEditModal entry={editing} setEntry={setEditing} onSave={handleSave} onClose={function(){setEditing(null);}}/>}
 
     {loading && <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"20px 0"}}>Carregando…</div>}
+  </div>;
+}
+
+// ─── MetasFixedPanel — painel SEMPRE visível com 3 metas: semanal, mensal e anual 2026 ──
+function MetasFixedPanel({entries, onEdit, onDelete, onUpsert, onNew}){
+  const cw = _plWeekKey(), cm = _plMonthKey();
+  const semanaAtual = entries.filter(function(e){return e.type==="meta_semana"&&e.week_key===cw;});
+  const mesAtual    = entries.filter(function(e){return e.type==="meta_mes"&&e.month_key===cm;});
+  // Meta anual: marca com type=meta_mes e month_key=YYYY-anual (gambiarra, mas funciona)
+  const anuais = entries.filter(function(e){
+    return (e.type==="meta_mes"||e.type==="meta_anual")&&(e.month_key==="2026-anual"||e.month_key==="anual-2026");
+  });
+
+  // Datas pra mostrar
+  function _fmtBR(iso){
+    if(!iso) return "";
+    var m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return m[3]+"/"+m[2]+"/"+m[1].slice(2);
+    return iso;
+  }
+  // Semana atual: domingo a sábado
+  function _weekEnd(){
+    var d = new Date();
+    var dow = d.getDay();
+    var endOffset = 6 - dow;
+    var end = new Date(d);
+    end.setDate(d.getDate()+endOffset);
+    return end.toISOString().slice(0,10);
+  }
+  function _monthBounds(){
+    var d = new Date();
+    var ini = new Date(d.getFullYear(), d.getMonth(), 1);
+    var fim = new Date(d.getFullYear(), d.getMonth()+1, 0);
+    return {ini:ini.toISOString().slice(0,10), fim:fim.toISOString().slice(0,10)};
+  }
+  var weekEnd = _weekEnd();
+  var monthB  = _monthBounds();
+
+  function toggleStatus(e){
+    var next = e.status==="concluida"?"em_andamento":"concluida";
+    onUpsert(Object.assign({},e,{status:next,updated_at:new Date().toISOString()}));
+  }
+
+  function novaSemanal(){
+    onEdit({type:"meta_semana", week_key:cw, month_key:cm, title:"", content:"",
+            meta_scope:"semana", status:"em_andamento", entry_date:_plToday()});
+  }
+  function novaMensal(){
+    onEdit({type:"meta_mes", week_key:cw, month_key:cm, title:"", content:"",
+            meta_scope:"mes", status:"em_andamento", entry_date:_plToday()});
+  }
+  function novaAnual(){
+    onEdit({type:"meta_mes", week_key:cw, month_key:"2026-anual", title:"", content:"",
+            meta_scope:"mes", status:"em_andamento", entry_date:_plToday()});
+  }
+
+  function _MetaBox(props){
+    return <div style={{background:"#fff",border:"1px solid "+props.borderCl,borderRadius:14,padding:"16px 18px",display:"flex",flexDirection:"column",gap:12,minHeight:140}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+          <div style={{width:34,height:34,borderRadius:10,background:"linear-gradient(135deg, "+props.color+" 0%, "+props.colorDark+" 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px "+props.color+"38",flexShrink:0}}>
+            <_PlIco name={props.icon} size={16} color="#fff"/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>{props.title}</div>
+            <div style={{color:"#64748b",fontSize:10.5,marginTop:1,fontWeight:600}}>{props.subtitle}</div>
+          </div>
+        </div>
+        <button onClick={props.onNew} title="Nova meta"
+          style={{background:props.color+"15",border:"1px solid "+props.color+"40",borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:props.color,cursor:"pointer",flexShrink:0}}>
+          <_PlIco name="plus" size={13} color={props.color}/>
+        </button>
+      </div>
+      {props.items.length===0
+        ? <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"12px 0",textAlign:"center"}}>Sem meta definida ainda</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {props.items.map(function(e){
+              var done = e.status==="concluida";
+              return <div key={e.id} style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 10px",background:done?"#f0fdf4":"#fafafa",border:"1px solid "+(done?"#bbf7d0":"#eef0f3"),borderRadius:9}}>
+                <button onClick={function(){toggleStatus(e);}} title={done?"Reabrir":"Marcar como concluída"}
+                  style={{width:18,height:18,borderRadius:5,border:done?"2px solid #16a34a":"2px solid #cbd5e1",background:done?"#16a34a":"#fff",flexShrink:0,marginTop:1,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",padding:0}}>
+                  {done&&<_PlIco name="check" size={11} color="#fff"/>}
+                </button>
+                <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={function(){onEdit(e);}}>
+                  <div style={{color:done?"#15803d":"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.35,textDecoration:done?"line-through":"none"}}>{e.title||e.content||"(sem título)"}</div>
+                  {e.content&&e.title&&<div style={{color:"#64748b",fontSize:11,marginTop:2,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{e.content}</div>}
+                </div>
+                <button onClick={function(){onDelete(e.id);}} title="Excluir"
+                  style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:2,flexShrink:0}}>
+                  <_PlIco name="x" size={11} color="currentColor"/>
+                </button>
+              </div>;
+            })}
+          </div>
+      }
+    </div>;
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:8}}>
+    <div style={{display:"flex",alignItems:"center",gap:9,padding:"4px 2px"}}>
+      <div style={{width:30,height:30,borderRadius:8,background:"linear-gradient(135deg, "+PLAN_PURPLE+" 0%, #7c3aed 100%)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <_PlIco name="target" size={15} color="#fff"/>
+      </div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Metas em andamento</div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12}}>
+      <_MetaBox
+        title="Meta semanal"
+        subtitle={"Até "+_fmtBR(weekEnd)}
+        icon="weekly"
+        color="#0ea5e9"
+        colorDark="#0284c7"
+        borderCl="#bae6fd"
+        items={semanaAtual}
+        onNew={novaSemanal}/>
+      <_MetaBox
+        title="Meta mensal"
+        subtitle={_fmtBR(monthB.ini)+" a "+_fmtBR(monthB.fim)}
+        icon="target"
+        color="#f97316"
+        colorDark="#ea580c"
+        borderCl="#fed7aa"
+        items={mesAtual}
+        onNew={novaMensal}/>
+      <_MetaBox
+        title="Meta para final de 2026"
+        subtitle="Visão anual"
+        icon="check"
+        color="#16a34a"
+        colorDark="#15803d"
+        borderCl="#bbf7d0"
+        items={anuais}
+        onNew={novaAnual}/>
+    </div>
   </div>;
 }
 
