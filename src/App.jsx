@@ -10943,7 +10943,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
       const data=await askClaude({
         model:"claude-sonnet-4-20250514",max_tokens:1000,
         system:`Você é a Pixels IA, assistente criativa de uma agência de marketing digital chamada Pixels. Transforme ideias em demandas de produção claras. Gere APENAS JSON válido sem markdown:\n{"titulo":"...","descricao":"...","formato":"...","objetivo":"...","pontos_atencao":"...","tags":["tag1","tag2"]}`,
-        messages:[{role:"user",content:`BRIEFING: ${briefing||"Sem cliente"}\n\nIDEIA: ${idea}\n\nDIRECIONAR PARA: ${recipient==="both"?"Hellen + Erick":recipient==="ellen"?"Hellen (Social Media)":"Erick (Meta/Google Ads)"}\n\nGere a demanda.`}]
+        messages:[{role:"user",content:`BRIEFING: ${briefing||"Sem cliente"}\n\nIDEIA: ${idea}\n\nDIRECIONAR PARA: ${recipient==="both"?"Hellen + Erick":recipient==="ellen"?"Hellen (Estratégia)":"Erick (Gestão de mídia)"}\n\nGere a demanda.`}]
       });
       const text=(data.content||[]).map(b=>b.text||"").join("");
       let parsed;
@@ -11042,7 +11042,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
         <div>
           <div style={{color:C.ts,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>👥 Direcionar para</div>
           <div style={{display:"flex",gap:8}}>
-            {[{id:"ellen",label:"Hellen",sublabel:"Social Media",color:C.a},{id:"erick",label:"Erick",sublabel:"Meta & Google",color:C.or},{id:"both",label:"Ambos",sublabel:"Hellen + Erick",color:C.gr}].map(r=>(
+            {[{id:"ellen",label:"Hellen",sublabel:"Estratégia",color:C.a},{id:"erick",label:"Erick",sublabel:"Gestão de mídia",color:C.or},{id:"both",label:"Ambos",sublabel:"Hellen + Erick",color:C.gr}].map(r=>(
               <button key={r.id} onClick={()=>setRecipient(r.id)}
                 style={{flex:1,background:recipient===r.id?`linear-gradient(135deg,${r.color},${r.color}88)`:C.s1,border:`2px solid ${recipient===r.id?r.color:C.b1}`,borderRadius:12,padding:"10px 8px",cursor:"pointer",textAlign:"center",transition:"all .2s"}}>
                 <div style={{color:recipient===r.id?"#fff":r.color,fontWeight:800,fontSize:13}}>{r.label}</div>
@@ -12268,8 +12268,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           </div>
         </div>}
 
-        {/* ── Progresso do mês (com seletor) ── */}
-        <ProgressoDoMes visible={visible} mode="produzir"/>
+        {/* ── Progresso do mês — só CEOs (nivel 1) e Estrategista (Hellen) ── */}
+        {(activeUser?.level===1||activeUser?.id==="ellen")&&<ProgressoDoMes visible={visible} mode="produzir"/>}
 
         <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
           {visibleCols.map(col=>{
@@ -18139,7 +18139,7 @@ const PERM_GROUPS={
     {key:"filtroCliente",     label:"Filtro por Cliente",         desc:"Pode filtrar por cliente"},
     {key:"filtroPerfil",      label:"Filtro por Colaborador",     desc:"Pode filtrar por perfil"},
     {section:"Colunas Visíveis"},
-    {key:"colRascunhos",      label:"Rascunhos",                  desc:"Coluna onde Social Media trabalha o copy ANTES de ir pra aprovação"},
+    {key:"colRascunhos",      label:"Rascunhos",                  desc:"Coluna onde Estratégia trabalha o copy ANTES de ir pra aprovação"},
     {key:"colCopys",          label:"Copys",                      desc:"Coluna onde entram novas demandas de copy"},
     {key:"colDemanda",        label:"Demandas",                   desc:"Coluna de demandas recebidas"},
     {key:"colExecucao",       label:"Em execução",                desc:"Coluna de trabalho em andamento"},
@@ -18438,7 +18438,9 @@ function CollabProfilePage({user,profile,onSave,onClose}){
   const fileRef=useRef(null);
 
   const [nome,setNome]=useState(p.nome||user.name);
-  const [funcao,setFuncao]=useState(p.funcao||user.role);
+  // Sempre usa o role do TEAM atual (setor oficial) — ignora valores antigos
+  // salvos no profile_data quando o setor mudou (ex: "Gestor Meta & Google" → "Gestão de mídia")
+  const [funcao,setFuncao]=useState(user.role||p.funcao||"");
   const [telefone,setTelefone]=useState(p.telefone||"");
   const [email,setEmail]=useState(p.email||user.id+"@pixelsmarketing.com.br");
   const [nascimento,setNascimento]=useState(p.nascimento||"");
@@ -18606,11 +18608,6 @@ function CollabProfilePage({user,profile,onSave,onClose}){
               <div style={{color:"rgba(255,255,255,0.85)",fontSize:12.5,marginTop:3,fontWeight:500}}>{funcao||"—"}</div>
             </div>
             <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <button onClick={save} style={{background:"rgba(255,255,255,0.18)",border:"1px solid rgba(255,255,255,0.45)",borderRadius:10,padding:"9px 20px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:12.5,whiteSpace:"nowrap",fontFamily:"inherit",backdropFilter:"blur(6px)",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}
-                onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,0.28)"}
-                onMouseLeave={e=>e.currentTarget.style.background="rgba(255,255,255,0.18)"}>
-                <Ico n="check" size={13} color="#fff"/> Salvar
-              </button>
               <button onClick={onClose} style={{background:"rgba(0,0,0,0.25)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:10,padding:"9px 12px",color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",fontFamily:"inherit",transition:"all .15s"}}
                 onMouseEnter={e=>e.currentTarget.style.background="rgba(0,0,0,0.4)"}
                 onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.25)"}>
@@ -18822,10 +18819,10 @@ function CollabProfilePage({user,profile,onSave,onClose}){
 }
 
 /* ─── Constantes de nível — fora do componente ─── */
-const LEVEL_LABELS={1:"CEO",2:"Coordenação",3:"Colaborador",5:"Cliente"};
+const LEVEL_LABELS={1:"Gestão",2:"Coordenação",3:"Colaborador",5:"Cliente"};
 const LEVEL_COLORS={1:C.a,2:C.pk,3:C.bl,4:C.yw,5:C.gr};
 
-const LEVEL_FILTER_BUTTONS=[{v:0,l:"Todos"},{v:1,l:"CEOs"},{v:2,l:"Coordenação"},{v:3,l:"Colaboradores"}];
+const LEVEL_FILTER_BUTTONS=[{v:0,l:"Todos"},{v:1,l:"Gestão"},{v:2,l:"Coordenação"},{v:3,l:"Colaborador"}];
 
 const EMPTY_PET={tem:"",nome:"",especie:"",raca:"",idade:""};
 
@@ -18853,10 +18850,10 @@ const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status
 const CLIENT_TABLE_HEADERS=["Cliente","Login","Portal","Módulos ativos","Ações"];
 
 const LEVEL_STRUCTURE=[
-  {l:1,name:"CEOs",          c:C.a,  desc:"Acesso total ao sistema. Gerenciam tudo, todos os módulos e permissões."},
-  {l:2,name:"Coordenação",   c:C.pk, desc:"Coordena equipe, aprova entregas, gerencia clientes."},
-  {l:3,name:"Colaboradores", c:C.bl, desc:"Designers, editores e gestores. Dashboard próprio, vê só o que foi designado pra eles."},
-  {l:5,name:"Cliente",       c:C.gr, desc:"Portal de aprovações e acompanhamento das demandas."},
+  {l:1,name:"Gestão",      c:C.a,  desc:"Acesso total ao sistema. Gerenciam tudo, todos os módulos e permissões."},
+  {l:2,name:"Coordenação", c:C.pk, desc:"Coordena equipe, aprova entregas, gerencia clientes."},
+  {l:3,name:"Colaborador", c:C.bl, desc:"Designers, editores e gestores. Dashboard próprio, vê só o que foi designado pra ele."},
+  {l:5,name:"Clientes",    c:C.gr, desc:"Portal de aprovações e acompanhamento das demandas."},
 ];
 
 function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
@@ -19092,11 +19089,11 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
         }
       };
       const DASH_OPTS=[
-        {id:"designer",label:"Designer"},
-        {id:"editor",label:"Editor de Vídeo"},
-        {id:"coordinator",label:"Coordenação / Social"},
-        {id:"gestor",label:"Gestor de Mídia"},
-        {id:"partner",label:"Sócio"},
+        {id:"designer",label:"Design"},
+        {id:"editor",label:"Edição de vídeo"},
+        {id:"coordinator",label:"Estratégia"},
+        {id:"gestor",label:"Gestão de mídia"},
+        {id:"partner",label:"Gestão"},
       ];
       const CORS=["#ec4899","#e040fb","#9F43F6","#7c3aed","#6366f1","#0ea5e9","#16a34a","#f59e0b","#ef4444","#475569"];
       return(<div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.6)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>!novoColabBusy&&setNovoColabOpen(false)}>
@@ -19180,7 +19177,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
               <div>
                 <div style={lbl}>Nível</div>
                 <select value={novoColab.level} onChange={e=>setNovoColab(p=>({...p,level:Number(e.target.value)}))} style={{...inp,cursor:"pointer"}}>
-                  <option value={1}>Sócio (1)</option>
+                  <option value={1}>Gestão (1)</option>
                   <option value={2}>Coordenação (2)</option>
                   <option value={3}>Colaborador (3)</option>
                 </select>
@@ -19662,7 +19659,6 @@ function StorageManager({tasks}){
         ))}
       </div>}
     </div>}
-
 
     {/* Log */}
     {log.length>0&&<div style={{background:C.s1,borderRadius:10,padding:"12px 16px"}}>
@@ -38007,7 +38003,7 @@ const OP_COLABS_DEF = [
   {id:"andre",     name:"André Leal",           role:"Designer",              color:"#f59e0b", priority:"Artes da semana"},
   {id:"guilherme", name:"Guilherme Ferreira",   role:"Editor de Vídeo",       color:"#7c3aed", priority:"Vídeos previstos"},
   {id:"gustavo",   name:"Gustavo",              role:"Gestor de Performance", color:"#16a34a", priority:"Aprovação final + clientes críticos"},
-  {id:"erick",     name:"Erick Soares",         role:"Gestor de Mídia",       color:"#dc2626", priority:"Otimizar campanhas e CPL"},
+  {id:"erick",     name:"Erick Soares",         role:"Gestão de mídia",       color:"#dc2626", priority:"Otimizar campanhas e CPL"},
 ];
 
 /* ─── HELPERS ─────────────────────────────────────────────── */
@@ -38267,7 +38263,7 @@ function _opKpisColab(colab, monthTasks, today0, visible){
     ];
   }
   if(colab.id==="erick"){
-    // Erick — Gestor de Mídia: indicadores manuais (dados ainda não vêm de campanha)
+    // Erick — Gestão de mídia: indicadores manuais (dados ainda não vêm de campanha)
     return [
       {l:"Contas revisadas",     v:"—", m:null, raw:true},
       {l:"Campanhas em alerta",  v:"—", m:null, raw:true},
