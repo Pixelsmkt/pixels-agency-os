@@ -40945,6 +40945,115 @@ const _plWeekRange = (weekKey) => {
   const fmt = d => d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
   return fmt(monday)+" — "+fmt(sunday);
 };
+// Segunda 00h00 da semana ATUAL
+const _plMondayOfWeek = (date) => {
+  const d = date ? new Date(date) : new Date();
+  d.setHours(0,0,0,0);
+  const dow = d.getDay(); // 0=Dom..6=Sab
+  const diff = dow===0 ? -6 : (1 - dow);
+  d.setDate(d.getDate()+diff);
+  return d;
+};
+// Sexta 23h59 da semana ATUAL
+const _plFridayOfWeek = (date) => {
+  const mon = _plMondayOfWeek(date);
+  const fri = new Date(mon); fri.setDate(mon.getDate()+4); fri.setHours(23,59,59,999);
+  return fri;
+};
+// Array de 5 cards segunda-sexta da semana atual: [{iso,wd,day,isToday,isPast}]
+const _plBusinessDaysOfWeek = (date) => {
+  const mon = _plMondayOfWeek(date);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const WD = ["Segunda","Terça","Quarta","Quinta","Sexta"];
+  const out = [];
+  for(let i=0;i<5;i++){
+    const d = new Date(mon); d.setDate(mon.getDate()+i);
+    out.push({
+      iso: _plDateISO(d),
+      wd: WD[i],
+      day: d.getDate(),
+      month: d.toLocaleDateString("pt-BR",{month:"short"}).replace(".",""),
+      isToday: d.getTime()===today.getTime(),
+      isPast: d.getTime()<today.getTime(),
+    });
+  }
+  return out;
+};
+// Próxima segunda às 11h (se hoje for segunda antes das 11h, retorna hoje 11h)
+const _plNextMondayAt11 = () => {
+  const now = new Date();
+  const d = new Date(now); d.setHours(11,0,0,0);
+  const dow = now.getDay(); // 0=Dom..6=Sab
+  if(dow===1 && now < d){
+    // hoje é segunda mas ainda nao deu 11h
+    return d;
+  }
+  // próxima segunda
+  const diff = dow===0 ? 1 : (8 - dow);
+  d.setDate(d.getDate()+diff);
+  return d;
+};
+const _plNextBusinessDay = () => {
+  const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+1);
+  while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1);
+  return d;
+};
+const _plFmtShortBR = (d) => d ? d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}) : "";
+const _plMonthBounds = (date) => {
+  const d = date ? new Date(date) : new Date();
+  const ini = new Date(d.getFullYear(), d.getMonth(), 1);
+  const fim = new Date(d.getFullYear(), d.getMonth()+1, 0);
+  return {ini, fim};
+};
+// Primeira segunda do MES atual (ou de outro mes se passar offset)
+const _plFirstMondayOfMonth = (date) => {
+  const d = date ? new Date(date) : new Date();
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  while(first.getDay()!==1) first.setDate(first.getDate()+1);
+  first.setHours(11,0,0,0);
+  return first;
+};
+// Proxima monthly: primeira segunda do MES seguinte as 11h
+const _plNextMonthly = () => {
+  const now = new Date();
+  const thisMonth1stMon = _plFirstMondayOfMonth(now);
+  if(now < thisMonth1stMon) return thisMonth1stMon;
+  const next = new Date(now.getFullYear(), now.getMonth()+1, 1);
+  while(next.getDay()!==1) next.setDate(next.getDate()+1);
+  next.setHours(11,0,0,0);
+  return next;
+};
+// Lista de meses do ano corrente: [{key,label,dateIni,isPast,isCurrent,isFuture}]
+const _plMonthsOfYear = (year) => {
+  const y = year || new Date().getFullYear();
+  const now = new Date();
+  const cm = now.getMonth(), cy = now.getFullYear();
+  const NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  const out = [];
+  for(let i=0;i<12;i++){
+    const ini = new Date(y,i,1);
+    const monIso = _plFirstMondayOfMonth(ini).toISOString().slice(0,10);
+    out.push({
+      key: y+"-"+String(i+1).padStart(2,"0"),
+      year: y, monthNum: i+1,
+      name: NAMES[i], short: SHORT[i],
+      monIso,
+      isCurrent: y===cy && i===cm,
+      isPast:    y<cy || (y===cy && i<cm),
+      isFuture:  y>cy || (y===cy && i>cm),
+    });
+  }
+  return out;
+};
+// Participantes de cada tipo de reuniao
+const _plParticipantes = (type) => {
+  if(typeof TEAM==="undefined") return [];
+  if(type==="daily")   return ["vinicius","gustavo"];
+  if(type==="weekly")  return ["vinicius","gustavo","ellen"];
+  if(type==="monthly") return TEAM.filter(u=>u.id&&u.level&&u.level<=3).map(u=>u.id);
+  return [];
+};
 
 // ── Hook Supabase storage ─────────────────────────────────────
 function usePlanejamentoEntries(){
@@ -41079,6 +41188,7 @@ function PagePlanejamento({isMob}){
   // Filtra entries por tipo
   const dailies   = entries.filter(function(e){return e.type==="daily";});
   const weeklies  = entries.filter(function(e){return e.type==="weekly";});
+  const monthlies = entries.filter(function(e){return e.type==="monthly";});
   const metas     = entries.filter(function(e){return e.type==="meta_semana"||e.type==="meta_mes";});
 
   function openNew(type){
@@ -41111,15 +41221,28 @@ function PagePlanejamento({isMob}){
     remove(id);
   }
 
-  // Conta por status pras KPIs
-  const todayDailies = dailies.filter(function(d){return d.entry_date===_plToday();}).length;
-  const thisWeekWeeklies = weeklies.filter(function(w){return w.week_key===_plWeekKey();}).length;
-  const metasAtivas = metas.filter(function(m){return m.status==="em_andamento";}).length;
-  const metasConcluidas = metas.filter(function(m){return m.status==="concluida";}).length;
+  // Conta por status pras KPIs (segunda-sexta da semana atual + mês + ano)
+  const _mon = _plMondayOfWeek();
+  const _fri = _plFridayOfWeek();
+  const _monIso = _plDateISO(_mon);
+  const _friIso = _plDateISO(_fri);
+  const _mb = _plMonthBounds();
+  const _mIni = _plDateISO(_mb.ini);
+  const _mFim = _plDateISO(_mb.fim);
+  const _yIni = new Date().getFullYear()+"-01-01";
+  const _yFim = new Date().getFullYear()+"-12-31";
+  const dailiesNaSemana  = dailies.filter(function(d){return d.entry_date>=_monIso&&d.entry_date<=_friIso;}).length;
+  const dailiesNoMes     = dailies.filter(function(d){return d.entry_date>=_mIni&&d.entry_date<=_mFim;}).length;
+  const weekliesNoMes    = weeklies.filter(function(w){return w.entry_date>=_mIni&&w.entry_date<=_mFim;}).length;
+  const monthliesNoAno   = monthlies.filter(function(m){return m.entry_date>=_yIni&&m.entry_date<=_yFim;}).length;
+  const _nextWeekly  = _plNextMondayAt11();
+  const _nextDaily   = _plNextBusinessDay();
+  const _nextMonthly = _plNextMonthly();
 
   const TABS = [
-    {id:"dailies",  label:"Dailies",  ico:"sunrise", count:dailies.length},
-    {id:"weeklies", label:"Weeklies", ico:"weekly",  count:weeklies.length},
+    {id:"dailies",   label:"Dailies",   ico:"sunrise", count:dailies.length},
+    {id:"weeklies",  label:"Weeklies",  ico:"weekly",  count:weeklies.length},
+    {id:"monthlies", label:"Monthlies", ico:"target",  count:monthlies.length},
   ];
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:PLAN_INTER}}>
@@ -41138,26 +41261,29 @@ function PagePlanejamento({isMob}){
         </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={function(){openNew(tab==="weeklies"?"weekly":"daily");}}
+        <button onClick={function(){openNew(tab==="monthlies"?"monthly":tab==="weeklies"?"weekly":"daily");}}
           style={{background:PLAN_PURPLE,border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(159,67,246,0.38)"}}>
-          <_PlIco name="plus" size={13} color="#fff"/> Novo {tab==="weeklies"?"weekly":"daily"}
+          <_PlIco name="plus" size={13} color="#fff"/> Novo {tab==="monthlies"?"monthly":tab==="weeklies"?"weekly":"daily"}
         </button>
       </div>
     </div>
 
     {/* ═══ KPIs ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
       {[
-        {label:"Dailies hoje",          value:todayDailies,        color:"#9F43F6",bg:"#9F43F614",ico:"sunrise"},
-        {label:"Weeklies desta semana", value:thisWeekWeeklies,    color:"#0ea5e9",bg:"#0ea5e914",ico:"weekly"},
-        {label:"Metas em andamento",    value:metasAtivas,         color:"#f97316",bg:"#fff7ed",  ico:"target"},
-        {label:"Metas concluídas",      value:metasConcluidas,     color:"#16a34a",bg:"#dcfce7",  ico:"check"},
+        {label:"Dailies na semana", value:dailiesNaSemana+"/5", hint:"seg a sex · CEOs", color:"#9F43F6",bg:"#9F43F614",ico:"sunrise"},
+        {label:"Weeklies no mês",   value:weekliesNoMes,        hint:"CEOs + Hellen", color:"#0ea5e9",bg:"#0ea5e914",ico:"weekly"},
+        {label:"Monthlies no ano",  value:monthliesNoAno,       hint:"todo o time", color:"#7c3aed",bg:"#ede9fe",ico:"target"},
+        {label:"Próxima daily",     value:_plFmtShortBR(_nextDaily), hint:"dia útil seguinte", color:"#f97316",bg:"#fff7ed",ico:"calendar"},
+        {label:"Próxima weekly",    value:_plFmtShortBR(_nextWeekly),hint:"segunda · 11h", color:"#16a34a",bg:"#dcfce7",ico:"weekly"},
+        {label:"Próxima monthly",   value:_plFmtShortBR(_nextMonthly),hint:"1ª seg do mês · 11h", color:"#dc2626",bg:"#fee2e2",ico:"target"},
       ].map(function(k,i){return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:0,right:0,width:36,height:36,background:k.bg,borderBottomLeftRadius:14,display:"flex",alignItems:"center",justifyContent:"center"}}>
           <_PlIco name={k.ico} size={15} color={k.color}/>
         </div>
         <div style={{color:k.color,fontSize:22,fontWeight:800,lineHeight:1.1,letterSpacing:-.5,marginBottom:4}}>{k.value}</div>
         <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{k.label}</div>
+        {k.hint&&<div style={{color:"#cbd5e1",fontSize:9.5,marginTop:3,fontWeight:500}}>{k.hint}</div>}
       </div>;})}
     </div>
 
@@ -41175,8 +41301,9 @@ function PagePlanejamento({isMob}){
     </div>
 
     {/* ═══ Conteúdo por aba ═══ */}
-    {tab==="dailies"  && <DailiesList   entries={dailies}  onEdit={setEditing} onDelete={handleDelete}/>}
-    {tab==="weeklies" && <WeekliesList  entries={weeklies} onEdit={setEditing} onDelete={handleDelete}/>}
+    {tab==="dailies"   && <DailiesList   entries={dailies}   onEdit={setEditing} onDelete={handleDelete}/>}
+    {tab==="weeklies"  && <WeekliesList  entries={weeklies}  onEdit={setEditing} onDelete={handleDelete}/>}
+    {tab==="monthlies" && <MonthliesList entries={monthlies} onEdit={setEditing} onDelete={handleDelete}/>}
 
     {/* ═══ Seção fixa de Metas (sempre visível embaixo das dailies/weeklies) ═══ */}
     <MetasFixedPanel entries={metas} onEdit={setEditing} onDelete={handleDelete} onUpsert={upsert} onNew={openNew}/>
@@ -41205,23 +41332,12 @@ function MetasFixedPanel({entries, onEdit, onDelete, onUpsert, onNew}){
     if(m) return m[3]+"/"+m[2]+"/"+m[1].slice(2);
     return iso;
   }
-  // Semana atual: domingo a sábado
-  function _weekEnd(){
-    var d = new Date();
-    var dow = d.getDay();
-    var endOffset = 6 - dow;
-    var end = new Date(d);
-    end.setDate(d.getDate()+endOffset);
-    return end.toISOString().slice(0,10);
-  }
-  function _monthBounds(){
-    var d = new Date();
-    var ini = new Date(d.getFullYear(), d.getMonth(), 1);
-    var fim = new Date(d.getFullYear(), d.getMonth()+1, 0);
-    return {ini:ini.toISOString().slice(0,10), fim:fim.toISOString().slice(0,10)};
-  }
-  var weekEnd = _weekEnd();
-  var monthB  = _monthBounds();
+  // Semana atual: segunda a sexta (não domingo-sábado)
+  var weekMonIso = _plDateISO(_plMondayOfWeek());
+  var weekFriIso = _plDateISO(_plFridayOfWeek());
+  var mb = _plMonthBounds();
+  var monthIniIso = _plDateISO(mb.ini);
+  var monthFimIso = _plDateISO(mb.fim);
 
   function toggleStatus(e){
     var next = e.status==="concluida"?"em_andamento":"concluida";
@@ -41293,7 +41409,7 @@ function MetasFixedPanel({entries, onEdit, onDelete, onUpsert, onNew}){
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:12}}>
       <_MetaBox
         title="Meta semanal"
-        subtitle={"Até "+_fmtBR(weekEnd)}
+        subtitle={"Seg "+_fmtBR(weekMonIso)+" a Sex "+_fmtBR(weekFriIso)}
         icon="weekly"
         color="#0ea5e9"
         colorDark="#0284c7"
@@ -41302,7 +41418,7 @@ function MetasFixedPanel({entries, onEdit, onDelete, onUpsert, onNew}){
         onNew={novaSemanal}/>
       <_MetaBox
         title="Meta mensal"
-        subtitle={_fmtBR(monthB.ini)+" a "+_fmtBR(monthB.fim)}
+        subtitle={_fmtBR(monthIniIso)+" a "+_fmtBR(monthFimIso)}
         icon="target"
         color="#f97316"
         colorDark="#ea580c"
@@ -41322,33 +41438,109 @@ function MetasFixedPanel({entries, onEdit, onDelete, onUpsert, onNew}){
   </div>;
 }
 
-// ─── Lista de dailies (agrupada por data) ─────────────────────
+// ─── Lista HORIZONTAL de dailies — 5 cards (seg-sex) da semana atual ─────────
 function DailiesList({entries, onEdit, onDelete}){
-  if(entries.length===0){
-    return <_PlEmptyState title="Sem dailies ainda" desc="Registre o que você fez no dia, prioridades e bloqueios. Clique em Novo daily para começar."/>;
-  }
-  // Agrupa por data
-  const groups = {};
+  const days = _plBusinessDaysOfWeek();
+  // Mapeia entries por data pra lookup rápido
+  const byDate = {};
   entries.forEach(function(e){
-    const k = e.entry_date || _plToday();
-    if(!groups[k]) groups[k] = [];
-    groups[k].push(e);
+    const k = e.entry_date || "";
+    if(!k) return;
+    if(!byDate[k]) byDate[k] = [];
+    byDate[k].push(e);
   });
-  const dates = Object.keys(groups).sort(function(a,b){return b.localeCompare(a);});
+
+  function newForDay(iso){
+    onEdit({
+      type:"daily",
+      entry_date: iso,
+      week_key: _plWeekKey(iso),
+      month_key: _plMonthKey(iso),
+      title:"", content:"",
+    });
+  }
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {dates.map(function(d){
-      const isToday = d===_plToday();
-      return <div key={d}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>{_plFmtDateLong(d)}</div>
-          {isToday && <span style={{background:"#9F43F614",color:PLAN_PURPLE,fontSize:9.5,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Hoje</span>}
-        </div>
+    {/* Header da semana */}
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 2px"}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Esta semana</div>
+      <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>Seg {days[0].day}/{days[0].month} — Sex {days[4].day}/{days[4].month}</span>
+      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>· CEOs</span>
+      <div style={{marginLeft:"auto"}}><_PlParticipantsRow type="daily" size={20}/></div>
+    </div>
+
+    {/* Grid horizontal: 5 cards lado a lado em telas grandes, scroll em mobile */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(180px,1fr))",gap:10,overflowX:"auto",paddingBottom:4}}>
+      {days.map(function(d){
+        const items = byDate[d.iso] || [];
+        const hasContent = items.length>0;
+        const isToday = d.isToday;
+        return <div key={d.iso}
+          style={{background:isToday?"#faf5ff":"#fff",border:"1px solid "+(isToday?"#d8b4fe":"#e2e8f0"),borderRadius:13,padding:"12px 12px",display:"flex",flexDirection:"column",gap:10,minHeight:160,position:"relative"}}>
+          {/* Cabeçalho do dia */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+            <div style={{minWidth:0}}>
+              <div style={{color:isToday?PLAN_PURPLE:"#475569",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{d.wd}</div>
+              <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4,lineHeight:1}}>{d.day}<span style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginLeft:3}}>/{d.month}</span></div>
+            </div>
+            {isToday && <span style={{background:PLAN_PURPLE,color:"#fff",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Hoje</span>}
+          </div>
+
+          {/* Status / conteúdo */}
+          {hasContent
+            ? <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+                {items.map(function(e){
+                  return <div key={e.id} onClick={function(){onEdit(e);}}
+                    style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:9,padding:"8px 10px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:8}}>
+                    <div style={{width:16,height:16,borderRadius:5,border:"2px solid #16a34a",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                      <_PlIco name="check" size={10} color="#fff"/>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.title||"(sem título)"}</div>
+                      {e.content&&<div style={{color:"#64748b",fontSize:10.5,marginTop:3,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{e.content}</div>}
+                    </div>
+                  </div>;
+                })}
+              </div>
+            : <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {d.isPast
+                  ? <div style={{display:"inline-flex",alignItems:"center",gap:6,color:"#cbd5e1",fontSize:11,fontWeight:600}}>
+                      <_PlIco name="x" size={11} color="#cbd5e1"/>Não preenchida
+                    </div>
+                  : <div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>{isToday?"Aguardando":"Em breve"}</div>
+                }
+              </div>
+          }
+
+          {/* Botão de marcar/criar */}
+          <button onClick={function(){newForDay(d.iso);}}
+            style={{background:isToday?PLAN_PURPLE:"#f8fafc",border:"1px solid "+(isToday?PLAN_PURPLE:"#e2e8f0"),borderRadius:9,padding:"7px",color:isToday?"#fff":"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
+            <_PlIco name="plus" size={11} color={isToday?"#fff":"currentColor"}/>{hasContent?"Adicionar":"Preencher"}
+          </button>
+        </div>;
+      })}
+    </div>
+
+    {/* Histórico abaixo — outros dias não cobertos */}
+    {(function(){
+      const monIso = days[0].iso;
+      const friIso = days[4].iso;
+      const outras = Object.keys(byDate).filter(function(k){return k<monIso||k>friIso;}).sort().reverse();
+      if(outras.length===0) return null;
+      return <div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginTop:10,marginBottom:8}}>Histórico de outras semanas</div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {groups[d].map(function(e){return <PlanEntryCard key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} kind="daily"/>;})}
+          {outras.map(function(d){
+            return <div key={d}>
+              <div style={{color:"#0f172a",fontSize:12,fontWeight:700,marginBottom:5}}>{_plFmtDateLong(d)}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {byDate[d].map(function(e){return <PlanEntryCard key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} kind="daily"/>;})}
+              </div>
+            </div>;
+          })}
         </div>
       </div>;
-    })}
+    })()}
   </div>;
 }
 
@@ -41378,6 +41570,99 @@ function WeekliesList({entries, onEdit, onDelete}){
         </div>
       </div>;
     })}
+  </div>;
+}
+
+// ─── _PlParticipantsRow — Avatars dos participantes de cada reuniao ────
+function _PlParticipantsRow({type, size}){
+  const ids = _plParticipantes(type);
+  const sz = size||18;
+  if(ids.length===0) return null;
+  return <div style={{display:"flex",alignItems:"center"}}>
+    {ids.map(function(uid,i){
+      const u = (typeof TEAM!=="undefined") ? TEAM.find(x=>x.id===uid) : null;
+      if(!u) return null;
+      return <div key={uid} title={u.name}
+        style={{width:sz,height:sz,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-(sz/3),zIndex:10-i,flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <UserAvatar user={u} size={sz} border={false}/>
+      </div>;
+    })}
+  </div>;
+}
+
+// ─── Lista HORIZONTAL de Monthlies — cards por mes do ano corrente ────────
+function MonthliesList({entries, onEdit, onDelete}){
+  const months = _plMonthsOfYear();
+  const byMonth = {};
+  entries.forEach(function(e){
+    if(!e.entry_date) return;
+    const ym = String(e.entry_date).slice(0,7);
+    if(!byMonth[ym]) byMonth[ym] = [];
+    byMonth[ym].push(e);
+  });
+
+  function newForMonth(m){
+    onEdit({
+      type:"monthly",
+      entry_date: m.monIso,
+      week_key: _plWeekKey(m.monIso),
+      month_key: _plMonthKey(m.monIso),
+      title:"", content:"",
+    });
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 2px"}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{new Date().getFullYear()}</div>
+      <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>Participantes: todo o time</span>
+      <div style={{marginLeft:"auto"}}><_PlParticipantsRow type="monthly" size={20}/></div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:10}}>
+      {months.map(function(m){
+        const items = byMonth[m.key]||[];
+        const has = items.length>0;
+        return <div key={m.key}
+          style={{background:m.isCurrent?"#faf5ff":"#fff",border:"1px solid "+(m.isCurrent?"#d8b4fe":"#e2e8f0"),borderRadius:13,padding:"12px 13px",display:"flex",flexDirection:"column",gap:10,minHeight:170,opacity:m.isPast&&!has?.65:1}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{color:m.isCurrent?PLAN_PURPLE:"#475569",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{m.short}/{String(m.year).slice(2)}</div>
+              <div style={{color:"#0f172a",fontSize:16,fontWeight:800,letterSpacing:-.3,lineHeight:1.1}}>{m.name}</div>
+            </div>
+            {m.isCurrent && <span style={{background:PLAN_PURPLE,color:"#fff",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Mês atual</span>}
+          </div>
+          {has
+            ? <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+                {items.map(function(e){
+                  return <div key={e.id} onClick={function(){onEdit(e);}}
+                    style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:9,padding:"8px 10px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:8}}>
+                    <div style={{width:16,height:16,borderRadius:5,border:"2px solid #16a34a",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                      <_PlIco name="check" size={10} color="#fff"/>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.title||"(sem título)"}</div>
+                    </div>
+                  </div>;
+                })}
+              </div>
+            : <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {m.isPast
+                  ? <div style={{display:"inline-flex",alignItems:"center",gap:6,color:"#cbd5e1",fontSize:11,fontWeight:600}}>
+                      <_PlIco name="x" size={11} color="#cbd5e1"/>Não realizada
+                    </div>
+                  : <div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>{m.isCurrent?"Próxima":"Futura"}</div>
+                }
+              </div>
+          }
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginTop:"auto"}}>
+            <_PlParticipantsRow type="monthly" size={16}/>
+            <button onClick={function(){newForMonth(m);}}
+              style={{background:m.isCurrent?PLAN_PURPLE:"#f8fafc",border:"1px solid "+(m.isCurrent?PLAN_PURPLE:"#e2e8f0"),borderRadius:8,padding:"5px 11px",color:m.isCurrent?"#fff":"#475569",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <_PlIco name="plus" size={10} color={m.isCurrent?"#fff":"currentColor"}/>{has?"Adicionar":"Preencher"}
+            </button>
+          </div>
+        </div>;
+      })}
+    </div>
   </div>;
 }
 
@@ -41479,11 +41764,20 @@ function PlanMetaCard({entry, onEdit, onDelete, onToggleStatus}){
 // ─── Modal editor ─────────────────────────────────────────────
 function PlanEditModal({entry, setEntry, onSave, onClose}){
   const isMeta = entry.type==="meta_semana"||entry.type==="meta_mes";
+  const isAnual = isMeta && (entry.month_key==="2026-anual"||entry.month_key==="anual-2026");
   const isDaily = entry.type==="daily";
   const isWeekly = entry.type==="weekly";
-  const titleLabel = isMeta?"Título da meta":isWeekly?"Tópico do weekly":"Tópico do daily";
-  const contentLabel = isMeta?"Descrição da meta · O que e como":isWeekly?"Resumo da semana · O que avançou, gargalos, planos":"O que foi feito hoje · Prioridades e bloqueios";
-  const headerTitle = isMeta?(entry.id?"Editar meta":"Nova meta"):isWeekly?(entry.id?"Editar weekly":"Novo weekly"):(entry.id?"Editar daily":"Novo daily");
+  const isMonthly = entry.type==="monthly";
+  const titleLabel = isMeta?"Título da meta":isMonthly?"Tópico do monthly":isWeekly?"Tópico do weekly":"Tópico do daily";
+  const contentLabel = isMeta?"Descrição da meta · O que e como"
+                     :isMonthly?"Resumo do mês · O que avançou, números, próximos passos"
+                     :isWeekly?"Resumo da semana · O que avançou, gargalos, planos"
+                     :"O que foi feito hoje · Prioridades e bloqueios";
+  const headerTitle = isAnual?(entry.id?"Editar meta de 2026":"Nova meta para final de 2026")
+                    :isMeta?(entry.id?"Editar meta":"Nova meta")
+                    :isMonthly?(entry.id?"Editar monthly":"Novo monthly")
+                    :isWeekly?(entry.id?"Editar weekly":"Novo weekly")
+                    :(entry.id?"Editar daily":"Novo daily");
 
   function patch(k,v){ setEntry(function(p){return Object.assign({},p,{[k]:v});}); }
 
@@ -41493,21 +41787,36 @@ function PlanEditModal({entry, setEntry, onSave, onClose}){
       <div style={{padding:"18px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,"+PLAN_PURPLE+",#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <_PlIco name={isMeta?"target":isWeekly?"weekly":"sunrise"} size={15} color="#fff"/>
+            <_PlIco name={isMeta?"target":isMonthly?"target":isWeekly?"weekly":"sunrise"} size={15} color="#fff"/>
           </div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{headerTitle}</div>
         </div>
         <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"6px 10px",color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center"}}><_PlIco name="x" size={14}/></button>
       </div>
 
+      {/* Participantes da reuniao */}
+      {(isDaily||isWeekly||isMonthly)&&<div style={{padding:"10px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"#fafbfc"}}>
+        <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Participantes</span>
+        <_PlParticipantsRow type={entry.type} size={22}/>
+        <span style={{color:"#475569",fontSize:11,fontWeight:600,marginLeft:4}}>
+          {isDaily?"Vinicius + Gustavo (CEOs)":isWeekly?"Vinicius + Gustavo + Hellen":"Todo o time"}
+        </span>
+      </div>}
+
       <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
-        {/* Tipo de meta */}
-        {isMeta&&<div style={{display:"flex",gap:6}}>
+        {/* Tipo de meta — só pra Semanal/Mensal (anual nao escolhe) */}
+        {isMeta&&!isAnual&&<div style={{display:"flex",gap:6}}>
           {[["meta_semana","Semanal"],["meta_mes","Mensal"]].map(function(opt){
             const sel=entry.type===opt[0];
             return <button key={opt[0]} onClick={function(){patch("type",opt[0]); patch("meta_scope",opt[0]==="meta_semana"?"semana":"mes");}}
               style={{flex:1,background:sel?PLAN_PURPLE+"18":"transparent",border:"1px solid "+(sel?PLAN_PURPLE:"#e2e8f0"),borderRadius:10,padding:"8px 12px",color:sel?PLAN_PURPLE:"#475569",fontSize:12,fontWeight:sel?700:500,cursor:"pointer",fontFamily:"inherit"}}>{opt[1]}</button>;
           })}
+        </div>}
+        {/* Chip fixo pra meta anual 2026 */}
+        {isAnual&&<div style={{display:"inline-flex",alignItems:"center",gap:7,background:"linear-gradient(135deg, #f0fdf4, #dcfce7)",border:"1px solid #86efac",borderRadius:10,padding:"8px 14px",alignSelf:"flex-start"}}>
+          <_PlIco name="check" size={13} color="#16a34a"/>
+          <span style={{color:"#15803d",fontSize:12,fontWeight:800,letterSpacing:.2}}>Meta para final de 2026</span>
+          <span style={{color:"#16a34a",fontSize:10.5,fontWeight:600,opacity:.8}}>· Visão anual</span>
         </div>}
 
         {/* Data — só daily */}
@@ -41521,7 +41830,7 @@ function PlanEditModal({entry, setEntry, onSave, onClose}){
         <div>
           <_PlLBL>{titleLabel}</_PlLBL>
           <input type="text" value={entry.title||""} onChange={function(e){patch("title",e.target.value);}}
-            placeholder={isMeta?"Ex: Fechar 3 contratos novos":isWeekly?"Ex: Foco da semana — sprint Bioter":"Ex: Reunião com cliente X"}
+            placeholder={isMeta?"Ex: Fechar 3 contratos novos":isMonthly?"Ex: Balanço de Maio":isWeekly?"Ex: Foco da semana — sprint Bioter":"Ex: Reunião com cliente X"}
             style={_plInpStyle()}/>
         </div>
 
@@ -41529,7 +41838,7 @@ function PlanEditModal({entry, setEntry, onSave, onClose}){
         <div>
           <_PlLBL>{contentLabel}</_PlLBL>
           <textarea value={entry.content||""} onChange={function(e){patch("content",e.target.value);}}
-            rows={isMeta?4:6} placeholder={isDaily?"O que foi feito · Prioridades · Bloqueios":isWeekly?"Resultado · Aprendizado · Próximos passos":"Como vamos medir · Etapas · Responsáveis"}
+            rows={isMeta?4:6} placeholder={isDaily?"O que foi feito · Prioridades · Bloqueios":isWeekly?"Resultado · Aprendizado · Próximos passos":isMonthly?"Balanço do mês · Conquistas · Métricas · Próximo mês":"Como vamos medir · Etapas · Responsáveis"}
             style={Object.assign({},_plInpStyle(),{resize:"vertical",minHeight:100,lineHeight:1.6,fontFamily:"inherit"})}/>
         </div>
 
