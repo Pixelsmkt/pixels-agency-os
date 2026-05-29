@@ -12373,7 +12373,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         {/* ── Progresso do mês — só CEOs (nivel 1) e Estrategista (Hellen) ── */}
         {(activeUser?.level===1||activeUser?.id==="ellen")&&<ProgressoDoMes visible={visible} mode="produzir"/>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"stretch"}}>
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
@@ -24290,7 +24290,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <span style={{color:"#94a3b8",fontSize:11,flexShrink:0,marginLeft:"auto"}}>▾</span>
             </button>
             {showAssigneesPicker&&<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:100,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",marginTop:3,overflow:"hidden"}}>
-              {TEAM.map((u,i)=>{
+              {/* Só EXECUTORES: designers (André, Maria) + editores (Guilherme). Quem criou aparece na timeline. */}
+              {TEAM.filter(u=>u.dash==="designer"||u.dash==="editor").map((u,i)=>{
                 const sel=assignees.includes(u.id);
                 const sup=SUPERVISORS[u.id]; // Se este user tem supervisor, mostra um aviso
                 const supUser=sup?TEAM.find(x=>x.id===sup):null;
