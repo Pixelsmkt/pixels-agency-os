@@ -833,9 +833,10 @@ try{
 }catch(e){}
 
 const KANBAN_COLS = [
-  { id:"rascunhos", label:"Rascunhos",              color:C.kRascunhos, dark:false },
-  { id:"demanda",   label:"Copys",                  color:C.kDemanda,   dark:false },
-  { id:"recebida",  label:"Demanda",                color:C.kRecebida,  dark:false },
+  { id:"rascunhos",      label:"Rascunhos",              color:C.kRascunhos,  dark:false },
+  { id:"demanda",        label:"Copys",                  color:C.kDemanda,    dark:false },
+  { id:"alteracao_copy", label:"Alteração de copy",      color:"#ea580c",     dark:true  },
+  { id:"recebida",       label:"Demanda",                color:C.kRecebida,   dark:false },
   { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
   { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
   { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
@@ -1907,8 +1908,8 @@ const Chip=({color,children,sm})=>(
 /* ─── STATUS DE CARD ─────────────────────────
    Labels e cores usados em vários módulos (chat, portal, card preview).
    Movido para cá para remover dependência oculta entre 05_chat e 14_portal. */
-const CARD_STATUS_LABEL={demanda:"Copys",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
-const CARD_STATUS_COLOR={demanda:"#a140ff",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
+const CARD_STATUS_LABEL={demanda:"Copys",alteracao_copy:"Alteração de copy",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
+const CARD_STATUS_COLOR={demanda:"#a140ff",alteracao_copy:"#ea580c",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
 
 /* ─── ASK CLAUDE HELPER ─────────────────────────────
    Chama a Edge Function `ask-claude` do Supabase, que faz proxy seguro para
@@ -16003,6 +16004,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [cardIdx,setCardIdx]=useState(0);
   const [imgIdx,setImgIdx]=useState(0);
   const [openCard,setOpenCard]=useState(null);
+  const [ajusteModal,setAjusteModal]=useState(null);
+  const [ajusteText,setAjusteText]=useState("");
   const [editModal,setEditModal]=useState(null);
   const [lastApproved,setLastApproved]=useState(null);
 
@@ -16060,14 +16063,82 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     setCardIdx(0);setImgIdx(0);
   };
 
-  const markAjustar=(task)=>{
+  const markAjustar=(task,comentario)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
-    // Copy ajuste mantém comportamento antigo: fica em "demanda" com flag ajustar:true
-    // (apenas ajuste de CONTEÚDO — requestAdjust — vai pra coluna "ajustes")
-    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:true,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"edit",label:"Marcada para ajuste por "+actor,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
-    pushNotif({type:"ajuste",icon:"✎",title:"Ajuste solicitado na Copy",body:'"'+task.title+'" precisa de revisão. Verifique o feedback.',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
+    const cmtTxt=String(comentario||"").trim();
+    const now=new Date().toISOString();
+    // Move pra nova coluna "Alteração de copy" + grava comentário do sócio (se houver)
+    if(setTasks)setTasks(p=>p.map(t=>{
+      if(t.id!==task.id)return t;
+      const novosComments=[...(t.comments||[])];
+      if(cmtTxt){
+        novosComments.push({
+          id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+          type:"copy_ajuste_request",
+          text:cmtTxt,
+          user:actor,
+          at:now,
+          atFmt:nowFmt(),
+        });
+      }
+      return {
+        ...t,
+        status:"alteracao_copy",
+        ajustar:true,
+        colEnteredAt:now,
+        comments:novosComments,
+        timeline:[...(t.timeline||[]),{
+          type:"status",
+          from:t.status,
+          to:"alteracao_copy",
+          fromLabel:"Copys",
+          toLabel:"Alteração de copy",
+          at:now,
+          atFmt:nowFmt(),
+          user:actor,
+          note:cmtTxt||undefined,
+        }],
+      };
+    }));
+    pushNotif({type:"ajuste",icon:"✎",title:"Ajuste solicitado na Copy",body:'"'+task.title+'" foi pra Alteração de copy'+(cmtTxt?" — "+cmtTxt.slice(0,80):""),user:actor,at:"Agora",targetUsers:_notifTargets(task)});
     setCardIdx(0);setImgIdx(0);
+  };
+
+  // ── Salvar comentário simples (sem mover de coluna) ──
+  const addCopyComment=(task,texto)=>{
+    if(!isApprover)return;
+    const txt=String(texto||"").trim();
+    if(!txt)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const now=new Date().toISOString();
+    if(setTasks)setTasks(p=>p.map(t=>{
+      if(t.id!==task.id)return t;
+      const novosComments=[...(t.comments||[])];
+      novosComments.push({
+        id:"cmt_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),
+        type:"copy_comment",
+        text:txt,
+        user:actor,
+        at:now,
+        atFmt:nowFmt(),
+      });
+      return{...t,comments:novosComments,timeline:[...(t.timeline||[]),{type:"comment",label:"Comentário de "+actor,at:now,atFmt:nowFmt(),user:actor,note:txt.slice(0,200)}]};
+    }));
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Comentário salvo.");
+  };
+
+  // ── Editar campos do card direto pela aprovação (titulo, caption, desc) ──
+  const editCopyField=(task,field,value)=>{
+    if(!isApprover)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const now=new Date().toISOString();
+    if(setTasks)setTasks(p=>p.map(t=>{
+      if(t.id!==task.id)return t;
+      const oldVal=t[field]||"";
+      return{...t,[field]:value,timeline:[...(t.timeline||[]),{type:"edit",label:actor+" editou "+(field==="caption"?"a legenda":field==="desc"?"o briefing":field==="title"?"o título":field),at:now,atFmt:nowFmt(),user:actor,from:String(oldVal).slice(0,80),to:String(value).slice(0,80)}]};
+    }));
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Salvo.");
   };
 
   // ── PUBLICATION ACTIONS ──
@@ -16487,11 +16558,15 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
                 Aprovar copy
               </button>
-              <button onClick={()=>markAjustar(current)}
+              <button onClick={()=>setAjusteModal(current)}
                 style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar ajuste
+              </button>
+              <button onClick={()=>setEditModal(current)}
+                style={{width:"100%",background:"#f8fafc",color:"#475569",border:"1px solid "+C.b1,borderRadius:10,padding:"10px 0",fontWeight:600,fontSize:12,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <Ico n="edit" size={12} color="#475569"/> Editar copy
               </button>
             </>)}
 
@@ -16749,7 +16824,110 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
         </div>
       </div>
     </div>)}
+
+    {/* ── Modal Solicitar ajuste com comentário ── */}
+    {ajusteModal&&<div onClick={e=>{if(e.target===e.currentTarget){setAjusteModal(null);setAjusteText("");}}}
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 60px rgba(15,23,42,0.35)",overflow:"hidden"}}>
+        <div style={{background:"linear-gradient(135deg, #f97316 0%, #ea580c 100%)",padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ico n="edit" size={15} color="#fff"/>
+            </div>
+            <div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Solicitar ajuste</div>
+              <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1}}>Vai pra coluna "Alteração de copy"</div>
+            </div>
+          </div>
+          <button onClick={()=>{setAjusteModal(null);setAjusteText("");}} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={14} color="#fff"/></button>
+        </div>
+        <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{color:C.td,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>O que precisa ajustar?</div>
+          <textarea value={ajusteText} onChange={e=>setAjusteText(e.target.value)}
+            autoFocus rows={5} placeholder="Descreva o que precisa mudar (palavras, tom, foco etc). Opcional, mas ajuda a Hellen muito."
+            style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 13px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6,borderTop:"1px solid "+C.b1}}>
+            <button onClick={()=>{setAjusteModal(null);setAjusteText("");}}
+              style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 18px",color:C.ts,fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+            <button onClick={()=>{markAjustar(ajusteModal,ajusteText);setAjusteModal(null);setAjusteText("");}}
+              style={{background:"linear-gradient(135deg, #f97316 0%, #ea580c 100%)",border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(234,88,12,.4)",display:"inline-flex",alignItems:"center",gap:6}}>
+              <Ico n="check" size={13} color="#fff"/>Confirmar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>}
+
+    {/* ── Modal Editar copy (titulo + legenda + briefing inline) ── */}
+    {editModal&&(()=>{
+      const stripHtml=(html)=>{
+        if(!html)return"";let t=String(html);
+        t=t.replace(/data-prosemirror-[a-z-]+="[^"]*"/gi,"");
+        t=t.replace(/<br\s*\/?>/gi,"\n").replace(/<\/p>\s*/gi,"\n\n").replace(/<\/(?:div|li|h[1-6])>/gi,"\n");
+        t=t.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
+        return t.replace(/\n{3,}/g,"\n\n").trim();
+      };
+      return <_EditCopyModal task={editModal} onClose={()=>setEditModal(null)} onSave={(field,val)=>{editCopyField(editModal,field,val);}} stripHtml={stripHtml}/>;
+    })()}
+
   </div>);
+}
+
+// ── Modal de edicao inline: titulo, legenda, briefing ──
+function _EditCopyModal({task,onClose,onSave,stripHtml}){
+  const [title,setTitle]=useState(task.title||"");
+  const [caption,setCaption]=useState(stripHtml(task.caption)||"");
+  const [desc,setDesc]=useState(stripHtml(task.desc)||"");
+
+  function saveAll(){
+    if(title!==task.title) onSave("title",title);
+    if(caption!==(stripHtml(task.caption)||"")) onSave("caption",caption);
+    if(desc!==(stripHtml(task.desc)||"")) onSave("desc",desc);
+    onClose();
+  }
+
+  return <div onClick={e=>{if(e.target===e.currentTarget)onClose();}}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:680,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(15,23,42,0.35)"}}>
+      <div style={{background:"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)",padding:"18px 22px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:2}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:34,height:34,borderRadius:10,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="edit" size={15} color="#fff"/>
+          </div>
+          <div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Editar copy</div>
+            <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,marginTop:1}}>Ajuste título, legenda ou briefing direto aqui</div>
+          </div>
+        </div>
+        <button onClick={onClose} style={{background:"rgba(255,255,255,.18)",border:"none",borderRadius:8,width:30,height:30,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="x" size={14} color="#fff"/></button>
+      </div>
+      <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:16}}>
+        <div>
+          <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}><Ico n="fileText" size={11} color="#9F43F6"/>Título</div>
+          <input value={title} onChange={e=>setTitle(e.target.value)}
+            style={{background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 13px",color:"#0f172a",fontSize:14,fontWeight:600,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"}}/>
+        </div>
+        <div>
+          <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}><Ico n="message" size={11} color="#9F43F6"/>Legenda</div>
+          <textarea value={caption} onChange={e=>setCaption(e.target.value)} rows={6}
+            style={{background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 13px",color:"#0f172a",fontSize:13.5,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.6}}/>
+        </div>
+        <div>
+          <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}><Ico n="users" size={11} color="#9F43F6"/>Briefing pra equipe</div>
+          <textarea value={desc} onChange={e=>setDesc(e.target.value)} rows={5}
+            style={{background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10,padding:"11px 13px",color:"#475569",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.6}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
+          <button onClick={onClose}
+            style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 18px",color:"#475569",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+          <button onClick={saveAll}
+            style={{background:"linear-gradient(135deg, #9F43F6 0%, #7c3aed 100%)",border:"none",borderRadius:10,padding:"9px 22px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(159,67,246,.4)",display:"inline-flex",alignItems:"center",gap:6}}>
+            <Ico n="check" size={13} color="#fff"/>Salvar alterações
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>;
 }
 
 // ======= 07_notificacoes.jsx =======
