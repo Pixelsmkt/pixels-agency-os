@@ -10364,8 +10364,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         </div>
       </div>
 
-      {/* ── Progresso do mês (publicar) ── */}
-      {typeof ProgressoDoMes!=="undefined"&&<ProgressoDoMes visible={(tasks||[]).filter(function(t){return !t.deletedAt;})} mode="publicar"/>}
+      {/* ── Progresso do mês (publicar) — sincronizado com o calendario ── */}
+      {typeof ProgressoDoMes!=="undefined"&&<ProgressoDoMes visible={(tasks||[]).filter(function(t){return !t.deletedAt;})} mode="publicar" externalDate={calMonth} setExternalDate={setCalMonth}/>}
 
       {/* ── Filtro de cliente ── */}
       <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
@@ -10656,10 +10656,27 @@ onClose={()=>setOpenCard(null)}
 // Dropdown de filtro — definido fora do render para manter estado entre renders
 
 /* ─── ProgressoDoMes — widget moderno com seletor de mês ─────────── */
-function ProgressoDoMes({visible,mode="produzir"}){
+function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
+  // Modo controlado: recebe externalDate (calMonth) + setExternalDate do pai.
+  // Modo descontrolado: usa state interno (offset).
+  const isControlled = !!(externalDate && typeof setExternalDate==="function");
   const [offset,setOffset]=useState(0);
   const now=new Date();
-  const cur=new Date(now.getFullYear(),now.getMonth()+offset,1);
+  const cur = isControlled
+    ? new Date(externalDate.getFullYear(),externalDate.getMonth(),1)
+    : new Date(now.getFullYear(),now.getMonth()+offset,1);
+  function _goPrev(){
+    if(isControlled) setExternalDate(d=>new Date(d.getFullYear(),d.getMonth()-1,1));
+    else _goPrev();
+  }
+  function _goNext(){
+    if(isControlled) setExternalDate(d=>new Date(d.getFullYear(),d.getMonth()+1,1));
+    else _goNext();
+  }
+  function _goToday(){
+    if(isControlled) setExternalDate(new Date());
+    else _goToday();
+  }
   const monthStr=cur.getFullYear()+"-"+String(cur.getMonth()+1).padStart(2,"0");
   const monthLabel=cur.toLocaleDateString("pt-BR",{month:"long"});
   const yearLabel=cur.getFullYear();
