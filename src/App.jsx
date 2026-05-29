@@ -10653,8 +10653,6 @@ onClose={()=>setOpenCard(null)}
   );
 }
 
-// ======= 04_demandas.jsx =======
-
 // Dropdown de filtro — definido fora do render para manter estado entre renders
 
 /* ─── ProgressoDoMes — widget moderno com seletor de mês ─────────── */
@@ -12373,7 +12371,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         {/* ── Progresso do mês — só CEOs (nivel 1) e Estrategista (Hellen) ── */}
         {(activeUser?.level===1||activeUser?.id==="ellen")&&<ProgressoDoMes visible={visible} mode="produzir"/>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"stretch"}}>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
@@ -12422,6 +12420,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               background:isDraggingOver?"#9ca3af":"#d1d5db",
               borderRadius:12,padding:"5px 5px 6px",
               maxHeight:"calc(100vh - 240px)",
+              minHeight:120,
               overflow:"hidden",
               transition:"background .15s",display:"flex",flexDirection:"column",gap:0
             }}>
