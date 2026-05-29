@@ -16357,7 +16357,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           const rounds2=Array.from(map2.values()).filter(r=>r.comments.length>0||r.audio||r.images.length>0).sort((a,b)=>b.ts-a.ts);
           const _fmt2=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
 
-          return(<div style={{background:C.card,borderRadius:18,border:"1px solid "+C.b1,boxShadow:"0 4px 20px rgba(15,23,42,0.04)",padding:isMob?"24px 22px":"40px 56px",display:"flex",flexDirection:"column",gap:22,minHeight:"60vh"}}>
+          return(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,boxShadow:"0 4px 16px rgba(15,23,42,0.04)",padding:isMob?"18px 18px":"26px 32px",display:"flex",flexDirection:"column",gap:14,minHeight:"50vh"}}>
             {/* Cabeçalho copy — sem badge "Copy para aprovação" (redundante) */}
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
               {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"4px 12px",display:"flex",alignItems:"center"}}>
@@ -16369,8 +16369,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 return sel.map(uid=>{
                   const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
                   if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"55",borderRadius:8,padding:"3px 10px",fontSize:10.5,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5}}>
-                    <span style={{background:u.color,color:"#fff",fontSize:8.5,fontWeight:800,padding:"1px 5px",borderRadius:4,letterSpacing:.4}}>{u.abbr}</span>
+                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5}}>
+                    <span style={{width:5,height:5,borderRadius:"50%",background:u.color,flexShrink:0}}/>
                     {u.pickerLabel||u.label}
                   </span>);
                 });
@@ -16380,11 +16380,15 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 const ids=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
                 const users=ids.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
                 if(users.length===0)return null;
-                return(<div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:8,padding:"3px 10px 3px 4px"}}>
-                  {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
-                    style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:"2px solid #fff",marginLeft:i===0?0:-6,zIndex:3-i}}>{u.av}</div>))}
-                  {users.length>3&&<span style={{color:C.td,fontSize:10,fontWeight:700,marginLeft:2}}>+{users.length-3}</span>}
-                  <span style={{color:C.ts,fontSize:11.5,fontWeight:600,marginLeft:2}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
+                return(<div style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:7,padding:"2px 9px 2px 3px"}}>
+                  <div style={{display:"flex",alignItems:"center"}}>
+                    {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
+                      style={{width:20,height:20,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-5,zIndex:3-i,flexShrink:0}}>
+                      <UserAvatar user={u} size={20} border={false}/>
+                    </div>))}
+                  </div>
+                  {users.length>3&&<span style={{color:C.td,fontSize:9.5,fontWeight:700}}>+{users.length-3}</span>}
+                  <span style={{color:C.ts,fontSize:11,fontWeight:600,marginLeft:1}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
                 </div>);
               })()}
             </div>
@@ -16405,32 +16409,33 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
               const tags=[];
               if(ctCfg)tags.push({key:"ct",icon:ctCfg.icon,label:ctCfg.label,color:"#7c3aed",bg:"#7c3aed14"});
-              if(pubD)tags.push({key:"pub",icon:"calendar",label:"Publicar "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
+              // Ordem: Entrega vem ANTES da publicação
               if(dl)tags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
+              if(pubD)tags.push({key:"pub",icon:"calendar",label:"Data de publicação "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
               if(refMes)tags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#475569",bg:"#f1f5f9"});
               if(priCfg)tags.push({key:"pri",icon:"flame",label:priCfg.label,color:priCfg.color,bg:priCfg.color+"14"});
               if(tags.length===0)return null;
               return(<div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
-                {tags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"33",borderRadius:8,padding:"3px 10px",fontSize:11,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
-                  <Ico n={t.icon} size={11} color={t.color}/>{t.label}
+                {tags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:7,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:.15,display:"inline-flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
+                  <Ico n={t.icon} size={10} color={t.color}/>{t.label}
                 </span>))}
               </div>);
             })()}
 
             {/* Título do card — destaque */}
-            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:26,lineHeight:1.25,letterSpacing:-.5}}>{current.title}</div>
+            <div style={{color:C.tx,fontWeight:800,fontSize:isMob?17:20,lineHeight:1.25,letterSpacing:-.4}}>{current.title}</div>
 
             {/* Legenda em destaque */}
-            {captionTxt2&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:18}}>
-              <div style={{color:"#a140ff",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginBottom:10}}>Legenda</div>
-              <div style={{color:C.tx,fontSize:isMob?14:16,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
+            {captionTxt2&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:12}}>
+              <div style={{color:"#a140ff",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Legenda</div>
+              <div style={{color:C.tx,fontSize:isMob?13:14.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{captionTxt2}</div>
             </div>)}
 
             {/* Histórico de ajustes — antes do briefing */}
-            {rounds2.length>0&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:18}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                <div style={{color:"#dc2626",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.8}}>Histórico de ajustes</div>
-                <span style={{background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700}}>{rounds2.length} round{rounds2.length>1?"s":""}</span>
+            {rounds2.length>0&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:12}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+                <div style={{color:"#dc2626",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Histórico de ajustes</div>
+                <span style={{background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700}}>{rounds2.length} round{rounds2.length>1?"s":""}</span>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
                 {rounds2.map((r,ri)=>{
@@ -16454,9 +16459,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             </div>)}
 
             {/* Briefing pra equipe — completo, em fonte boa */}
-            {descTxt2&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:18}}>
-              <div style={{color:C.td,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.8,marginBottom:10}}>Briefing pra equipe</div>
-              <div style={{color:C.ts,fontSize:isMob?13.5:14.5,lineHeight:1.75,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{descTxt2}</div>
+            {descTxt2&&(<div style={{borderTop:"1px solid "+C.b1,paddingTop:12}}>
+              <div style={{color:C.td,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>Briefing pra equipe</div>
+              <div style={{color:C.ts,fontSize:isMob?12.5:13.5,lineHeight:1.65,whiteSpace:"pre-wrap",wordBreak:"break-word",fontFamily:"'Inter',system-ui,sans-serif"}}>{descTxt2}</div>
             </div>)}
 
             {!captionTxt2&&!descTxt2&&(<div style={{color:C.td,fontSize:14,fontStyle:"italic",textAlign:"center",padding:"40px 0"}}>Sem legenda nem briefing preenchido pra revisar.</div>)}
