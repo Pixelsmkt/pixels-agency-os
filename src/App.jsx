@@ -834,18 +834,20 @@ try{
   applyTheme("light");
 }catch(e){}
 
+// PADRÃO ÚNICO de cores — hardcoded LIGHT pra todos os usuários (Vinicius, Hellen, Maria, etc).
+// NÃO referencia o objeto C porque queremos a mesma paleta sempre, sem depender do tema do user.
 const KANBAN_COLS = [
-  { id:"rascunhos",      label:"Rascunhos",              color:C.kRascunhos,  dark:false },
-  { id:"demanda",        label:"Copys",                  color:C.kDemanda,    dark:false },
-  { id:"alteracao_copy", label:"Alteração de copy",      color:"#ea580c",     dark:true  },
-  { id:"recebida",       label:"Demanda",                color:C.kRecebida,   dark:false },
-  { id:"execucao",  label:"Em Execução",            color:C.kExecucao,  dark:true  },
-  { id:"ajustes",   label:"Ajustes",                color:C.kAlteracao, dark:true  },
-  { id:"avaliacao", label:"Concluído p/ Avaliação", color:C.kAvaliacao, dark:false },
-  { id:"aprovado",        label:"Aprovação interna", color:C.kAprovado,       dark:true  },
-  { id:"aprovacao_final", label:"Aprovação final",   color:C.kAprovacaoFinal, dark:true  },
-  { id:"agendado",        label:"Publicadas",        color:C.kAgendado,       dark:true  },
-  { id:"pausado",   label:"Pausado",                color:C.kPausado,   dark:false },
+  { id:"rascunhos",      label:"Rascunhos",              color:"#64748b", dark:false },
+  { id:"demanda",        label:"Copys",                  color:"#2563eb", dark:false },
+  { id:"alteracao_copy", label:"Alteração de copy",      color:"#ea580c", dark:true  },
+  { id:"recebida",       label:"Demanda",                color:"#db2777", dark:false },
+  { id:"execucao",       label:"Em Execução",            color:"#d97706", dark:true  },
+  { id:"ajustes",        label:"Ajustes",                color:"#7c1d1d", dark:true  },
+  { id:"avaliacao",      label:"Concluído p/ Avaliação", color:"#ea580c", dark:false },
+  { id:"aprovado",       label:"Aprovação interna",      color:"#059669", dark:true  },
+  { id:"aprovacao_final",label:"Aprovação final",        color:"#0d9488", dark:true  },
+  { id:"agendado",       label:"Publicadas",             color:"#7c3aed", dark:true  },
+  { id:"pausado",        label:"Pausado",                color:"#94a3b8", dark:false },
 ];
 
 /* ─── FUNIL DE VENDAS — config por cliente ─────────────────────────────
@@ -10407,19 +10409,8 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       )}
 
 
-      {/* ── Seletor de mes + acoes (proximo da grade) ── */}
+      {/* Ações (mês controlado pelo ProgressoDoMes acima) */}
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
-        <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()-1,1))} aria-label="Mês anterior"
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
-        <div style={{color:"#0f172a",fontWeight:700,fontSize:14,minWidth:150,textAlign:"center"}}>
-          {MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}
-        </div>
-        <button onClick={()=>setCalMonth(m=>new Date(m.getFullYear(),m.getMonth()+1,1))} aria-label="Próximo mês"
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>›</button>
-        <button onClick={()=>setCalMonth(new Date())}
-          style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-          Hoje
-        </button>
         <button onClick={handleGeneratePlan}
           title={filterClient==="todos"?"Sugere datas pra cards de todos os clientes":"Sugere datas só pra cards de "+((CLIENTS||[]).find(function(c){return c.id===filterClient;})?.name||"este cliente")}
           style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
@@ -10669,16 +10660,20 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
     : new Date(now.getFullYear(),now.getMonth()+offset,1);
   function _goPrev(){
     if(isControlled) setExternalDate(d=>new Date(d.getFullYear(),d.getMonth()-1,1));
-    else _goPrev();
+    else setOffset(o=>o-1);
   }
   function _goNext(){
     if(isControlled) setExternalDate(d=>new Date(d.getFullYear(),d.getMonth()+1,1));
-    else _goNext();
+    else setOffset(o=>o+1);
   }
   function _goToday(){
     if(isControlled) setExternalDate(new Date());
-    else _goToday();
+    else setOffset(0);
   }
+  // Em modo controlado, "Hoje" só aparece se não está no mês atual
+  const _isToday = isControlled
+    ? (cur.getMonth()===now.getMonth() && cur.getFullYear()===now.getFullYear())
+    : offset===0;
   const monthStr=cur.getFullYear()+"-"+String(cur.getMonth()+1).padStart(2,"0");
   const monthLabel=cur.toLocaleDateString("pt-BR",{month:"long"});
   const yearLabel=cur.getFullYear();
@@ -10849,17 +10844,17 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
         <div>
           <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,marginBottom:6}}>Progresso do mês</div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={()=>setOffset(o=>o-1)} title="Mês anterior" style={{width:34,height:34,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
+            <button onClick={_goPrev} title="Mês anterior" style={{width:34,height:34,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
             <div style={{minWidth:170,textAlign:"center"}}>
               <div style={{color:"#fff",fontSize:22,fontWeight:800,letterSpacing:-.5,textTransform:"capitalize",lineHeight:1.1}}>{monthLabel}</div>
               <div style={{color:"#64748b",fontSize:12,fontWeight:600,marginTop:2}}>{yearLabel}</div>
             </div>
-            <button onClick={()=>setOffset(o=>o+1)} title="Próximo mês" style={{width:34,height:34,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
+            <button onClick={_goNext} title="Próximo mês" style={{width:34,height:34,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
-            {offset!==0&&<button onClick={()=>setOffset(0)} style={{height:34,padding:"0 14px",borderRadius:10,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:.3,fontFamily:"inherit",marginLeft:4}}>Hoje</button>}
+            {!_isToday&&<button onClick={_goToday} style={{height:34,padding:"0 14px",borderRadius:10,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:.3,fontFamily:"inherit",marginLeft:4}}>Hoje</button>}
           </div>
         </div>
         {/* Direita — indicador único (depende do mode) + anel de % */}
