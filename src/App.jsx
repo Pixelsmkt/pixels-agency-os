@@ -10454,7 +10454,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 onDragLeave={function(){if(dropDayId===(day&&day.toDateString()))setDropDayId(null);}}
                 onDrop={function(e){if(day){e.preventDefault();handleDropOnDay(day);}}}
                 style={{
-                height:isMob?110:150,
+                height:isMob?140:210,
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
                 padding:"8px 6px 6px",
