@@ -24109,7 +24109,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {assignees.length===0
                 ? <span style={{color:"#94a3b8",flex:1}}>Selecionar responsável...</span>
                 : <div style={{display:"flex",alignItems:"center",gap:4,flex:1,minWidth:0,flexWrap:"wrap"}}>
-                    {assignees.map(aid=>{const au=TEAM.find(u=>u.id===aid);return au?<span key={aid} style={{background:"#e8edf2",color:"#1e293b",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{au.name}</span>:null;})}
+                    {assignees.map(aid=>{const au=TEAM.find(u=>u.id===aid);return au?<span key={aid} style={{background:"#f1f5f9",color:"#0f172a",borderRadius:99,padding:"3px 10px",fontSize:13,fontWeight:600,whiteSpace:"nowrap"}}>{au.name}</span>:null;})}
                   </div>
               }
               <span style={{color:"#94a3b8",fontSize:11,flexShrink:0,marginLeft:"auto"}}>▾</span>
