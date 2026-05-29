@@ -29085,49 +29085,56 @@ export default function AgencyOS(){
         if(!rows)return;
         let teamChanged=false;
         rows.forEach(row=>{
-          if(!row.team_id||row.user_type==="client")return;
-          // 1) Foto/profile_data
-          if(row.profile_data){
-            try{
-              const prev=localStorage.getItem("pixels-selfprofile-"+row.team_id);
-              const next=JSON.stringify(row.profile_data);
-              if(prev!==next){
-                localStorage.setItem("pixels-selfprofile-"+row.team_id,next);
-                window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:row.team_id}}));
-              }
-            }catch(e){}
-          }
-          // 2) Auto-sync TEAM — se nao existe, adiciona ao array global
-          if(typeof TEAM!=="undefined" && !TEAM.find(t=>t.id===row.team_id)){
-            TEAM.push({
-              id:row.team_id,
-              name:row.name||row.team_id,
-              role:row.role||"Colaborador",
-              av:row.av||(row.name||row.team_id).charAt(0).toUpperCase(),
-              color:row.color||"#94a3b8",
-              level:row.level||3,
-              status:"online",
-              dash:row.dash||"designer",
-              canDelete:false,
-              canPixelsIA:false,
-              pagamentoPorDemanda:true,
-              supervisor:["gustavo","vinicius","hellen"],
-              _fromSupabase:true,
-            });
-            teamChanged=true;
-          }
-          // 3) Auto-sync ACCESS_STORE — se nao tem perms, copia do default por dash
-          if(typeof ACCESS_STORE!=="undefined" && !ACCESS_STORE[row.team_id]){
-            const dashDefaults={
-              designer:ACCESS_STORE.andre,
-              editor:ACCESS_STORE.guilherme,
-              coordinator:ACCESS_STORE.ellen,
-              gestor:ACCESS_STORE.erick,
-              partner:ACCESS_STORE.vinicius,
-            };
-            const base=dashDefaults[row.dash]||(typeof DEFAULT_PERMS!=="undefined"?DEFAULT_PERMS:{});
-            ACCESS_STORE[row.team_id]={...base};
-            teamChanged=true;
+          try{
+            if(!row||!row.team_id||typeof row.team_id!=="string"||row.user_type==="client")return;
+            const teamId=String(row.team_id);
+            const rowName=row.name?String(row.name):teamId;
+            // 1) Foto/profile_data
+            if(row.profile_data){
+              try{
+                const prev=localStorage.getItem("pixels-selfprofile-"+teamId);
+                const next=JSON.stringify(row.profile_data);
+                if(prev!==next){
+                  localStorage.setItem("pixels-selfprofile-"+teamId,next);
+                  window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:teamId}}));
+                }
+              }catch(e){}
+            }
+            // 2) Auto-sync TEAM — se nao existe, adiciona ao array global
+            if(typeof TEAM!=="undefined" && Array.isArray(TEAM) && !TEAM.find(t=>t&&t.id===teamId)){
+              const firstChar=(rowName.charAt(0)||"?").toUpperCase();
+              TEAM.push({
+                id:teamId,
+                name:rowName,
+                role:row.role?String(row.role):"Colaborador",
+                av:row.av?String(row.av):firstChar,
+                color:row.color?String(row.color):"#94a3b8",
+                level:typeof row.level==="number"?row.level:3,
+                status:"online",
+                dash:row.dash?String(row.dash):"designer",
+                canDelete:false,
+                canPixelsIA:false,
+                pagamentoPorDemanda:true,
+                supervisor:["gustavo","vinicius","hellen"],
+                _fromSupabase:true,
+              });
+              teamChanged=true;
+            }
+            // 3) Auto-sync ACCESS_STORE — se nao tem perms, copia do default por dash
+            if(typeof ACCESS_STORE!=="undefined" && ACCESS_STORE && !ACCESS_STORE[teamId]){
+              const dashDefaults={
+                designer:ACCESS_STORE.andre,
+                editor:ACCESS_STORE.guilherme,
+                coordinator:ACCESS_STORE.ellen,
+                gestor:ACCESS_STORE.erick,
+                partner:ACCESS_STORE.vinicius,
+              };
+              const base=dashDefaults[row.dash]||(typeof DEFAULT_PERMS!=="undefined"?DEFAULT_PERMS:{})||{};
+              ACCESS_STORE[teamId]={...base};
+              teamChanged=true;
+            }
+          }catch(rowErr){
+            console.warn("[loadAllTeamPhotos row erro]",row&&row.team_id,rowErr);
           }
         });
         // Se TEAM mudou, dispara evento pro app refazer renders
@@ -41961,13 +41968,20 @@ const PB_SEED = {
 };
 
 function _pbInitFromCache(){
-  const cache = _pbLoadCache();
-  const base = JSON.parse(JSON.stringify(PB_SEED));
-  if(cache && typeof cache === "object"){
-    Object.keys(cache).forEach(k => { base[k] = cache[k]; });
+  try{
+    const cache = _pbLoadCache();
+    const base = JSON.parse(JSON.stringify(PB_SEED));
+    if(cache && typeof cache === "object" && !Array.isArray(cache)){
+      Object.keys(cache).forEach(k => {
+        if(cache[k] && typeof cache[k]==="object") base[k] = cache[k];
+      });
+    }
+    _pbSaveCache(base);
+    return base;
+  }catch(e){
+    console.warn("[_pbInitFromCache erro]",e);
+    return JSON.parse(JSON.stringify(PB_SEED));
   }
-  _pbSaveCache(base);
-  return base;
 }
 
 // Hook: busca playbooks do Supabase + realtime sync
