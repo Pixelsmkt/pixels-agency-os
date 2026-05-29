@@ -10454,7 +10454,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 onDragLeave={function(){if(dropDayId===(day&&day.toDateString()))setDropDayId(null);}}
                 onDrop={function(e){if(day){e.preventDefault();handleDropOnDay(day);}}}
                 style={{
-                height:isMob?140:210,
+                height:isMob?170:260,
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
                 padding:"8px 6px 6px",
@@ -10564,7 +10564,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                               {isArte&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="#fff"/><polyline points="21 15 16 10 5 21"/></svg>}
                               {isFoto&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
                             </span>}
-                            <div style={{color:"#fff",fontSize:isMob?11:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.25,flex:1,minWidth:0,textShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
+                            <div style={{color:"#fff",fontSize:isMob?10.5:11.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,flex:1,minWidth:0,textShadow:"0 1px 2px rgba(0,0,0,0.18)",letterSpacing:.1}}>
                               {t.title}
                             </div>
                           </div>
@@ -40994,7 +40994,8 @@ const _plNextMondayAt11 = () => {
   return d;
 };
 const _plNextBusinessDay = () => {
-  const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+1);
+  // Se hoje é dia útil, retorna HOJE (próxima daily é hoje). Senão, próxima segunda.
+  const d = new Date(); d.setHours(0,0,0,0);
   while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1);
   return d;
 };
@@ -41046,14 +41047,25 @@ const _plMonthsOfYear = (year) => {
   }
   return out;
 };
-// Participantes de cada tipo de reuniao
-const _plParticipantes = (type) => {
+// Participantes DEFAULT de cada tipo de reuniao (usado ao criar novo entry)
+const _plDefaultParticipantes = (type) => {
   if(typeof TEAM==="undefined") return [];
   if(type==="daily")   return ["vinicius","gustavo"];
   if(type==="weekly")  return ["vinicius","gustavo","ellen"];
   if(type==="monthly") return TEAM.filter(u=>u.id&&u.level&&u.level<=3).map(u=>u.id);
   return [];
 };
+// Le participants do entry (pode estar como array, csv ou null) — fallback pros defaults
+const _plReadParticipants = (entry) => {
+  if(!entry) return [];
+  const p = entry.participants;
+  if(Array.isArray(p)) return p.filter(Boolean);
+  if(typeof p==="string" && p.trim()) return p.split(",").map(s=>s.trim()).filter(Boolean);
+  // Sem participants definidos — devolve [] (vazio) em vez do default
+  return [];
+};
+// Compat: nome antigo usado em outras partes
+const _plParticipantes = (type) => _plDefaultParticipantes(type);
 
 // ── Hook Supabase storage ─────────────────────────────────────
 function usePlanejamentoEntries(){
@@ -41457,6 +41469,7 @@ function DailiesList({entries, onEdit, onDelete}){
       week_key: _plWeekKey(iso),
       month_key: _plMonthKey(iso),
       title:"", content:"",
+      participants: _plDefaultParticipantes("daily"),
     });
   }
 
@@ -41465,8 +41478,7 @@ function DailiesList({entries, onEdit, onDelete}){
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 2px"}}>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Esta semana</div>
       <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>Seg {days[0].day}/{days[0].month} — Sex {days[4].day}/{days[4].month}</span>
-      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>· CEOs</span>
-      <div style={{marginLeft:"auto"}}><_PlParticipantsRow type="daily" size={20}/></div>
+      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>· Default: CEOs (selecionável)</span>
     </div>
 
     {/* Grid horizontal: 5 cards lado a lado em telas grandes, scroll em mobile */}
@@ -41491,14 +41503,18 @@ function DailiesList({entries, onEdit, onDelete}){
             ? <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
                 {items.map(function(e){
                   return <div key={e.id} onClick={function(){onEdit(e);}}
-                    style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:9,padding:"8px 10px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:8}}>
-                    <div style={{width:16,height:16,borderRadius:5,border:"2px solid #16a34a",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-                      <_PlIco name="check" size={10} color="#fff"/>
+                    style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:9,padding:"8px 10px",cursor:"pointer",display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                      <div style={{width:16,height:16,borderRadius:5,border:"2px solid #16a34a",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                        <_PlIco name="check" size={10} color="#fff"/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.title||"(sem título)"}</div>
+                        {e.content&&<div style={{color:"#64748b",fontSize:10.5,marginTop:3,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{e.content}</div>}
+                      </div>
                     </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.title||"(sem título)"}</div>
-                      {e.content&&<div style={{color:"#64748b",fontSize:10.5,marginTop:3,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{e.content}</div>}
-                    </div>
+                    {/* Participantes do dia (foto dos que marcaram presenca) */}
+                    {_plReadParticipants(e).length>0 && <_PlParticipantsRow entry={e} size={16}/>}
                   </div>;
                 })}
               </div>
@@ -41544,40 +41560,134 @@ function DailiesList({entries, onEdit, onDelete}){
   </div>;
 }
 
-// ─── Lista de weeklies (agrupada por semana) ──────────────────
+// ─── Lista HORIZONTAL de Weeklies — cards de cada segunda do mes atual ─────
 function WeekliesList({entries, onEdit, onDelete}){
-  if(entries.length===0){
-    return <_PlEmptyState title="Sem weeklies ainda" desc="Registre balanços semanais: o que funcionou, gargalos e ajustes. Clique em Novo weekly."/>;
+  // Gera lista de segundas-feiras do mes corrente
+  const mb = _plMonthBounds();
+  const segs = [];
+  const cursor = new Date(mb.ini);
+  while(cursor.getDay()!==1) cursor.setDate(cursor.getDate()+1); // primeira segunda
+  while(cursor<=mb.fim){
+    const iso = _plDateISO(cursor);
+    segs.push({
+      iso,
+      day: cursor.getDate(),
+      month: cursor.toLocaleDateString("pt-BR",{month:"short"}).replace(".",""),
+      wk: _plWeekKey(iso),
+      isCurrent: iso===_plDateISO(_plMondayOfWeek()),
+      isPast: cursor < new Date(new Date().setHours(0,0,0,0)),
+    });
+    cursor.setDate(cursor.getDate()+7);
   }
-  const groups = {};
+
+  // Mapeia entries por semana
+  const byWeek = {};
   entries.forEach(function(e){
-    const k = e.week_key || _plWeekKey();
-    if(!groups[k]) groups[k] = [];
-    groups[k].push(e);
+    if(!e.week_key) return;
+    if(!byWeek[e.week_key]) byWeek[e.week_key] = [];
+    byWeek[e.week_key].push(e);
   });
-  const weeks = Object.keys(groups).sort(function(a,b){return b.localeCompare(a);});
+
+  function newForWeek(seg){
+    onEdit({
+      type:"weekly",
+      entry_date: seg.iso,
+      week_key: seg.wk,
+      month_key: _plMonthKey(seg.iso),
+      title:"", content:"",
+      participants: _plDefaultParticipantes("weekly"),
+    });
+  }
+
+  // Histórico: weeklies de outros meses
+  const outros = entries.filter(function(e){
+    return !segs.some(function(s){return s.wk===e.week_key;});
+  });
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {weeks.map(function(w){
-      const isCurrent = w===_plWeekKey();
-      return <div key={w}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-          <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2}}>Semana {w.split("-W")[1]} · {_plWeekRange(w)}</div>
-          {isCurrent && <span style={{background:"#0ea5e914",color:"#0ea5e9",fontSize:9.5,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Atual</span>}
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {groups[w].map(function(e){return <PlanEntryCard key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} kind="weekly"/>;})}
-        </div>
-      </div>;
-    })}
+    {/* Header do mês */}
+    <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 2px"}}>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{mb.ini.toLocaleDateString("pt-BR",{month:"long",year:"numeric"})}</div>
+      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>· Default: CEOs + Hellen (selecionável)</span>
+    </div>
+
+    {/* Grid horizontal: 1 card por segunda do mês */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
+      {segs.map(function(s){
+        const items = byWeek[s.wk]||[];
+        const has = items.length>0;
+        return <div key={s.iso}
+          style={{background:s.isCurrent?"#f0f9ff":"#fff",border:"1px solid "+(s.isCurrent?"#bae6fd":"#e2e8f0"),borderRadius:13,padding:"12px 13px",display:"flex",flexDirection:"column",gap:10,minHeight:170,opacity:s.isPast&&!has?.65:1}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+            <div>
+              <div style={{color:s.isCurrent?"#0ea5e9":"#475569",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Segunda {s.day}/{s.month}</div>
+              <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2,lineHeight:1.2,marginTop:2}}>Weekly da semana</div>
+            </div>
+            {s.isCurrent && <span style={{background:"#0ea5e9",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Atual</span>}
+          </div>
+          {has
+            ? <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+                {items.map(function(e){
+                  return <div key={e.id} onClick={function(){onEdit(e);}}
+                    style={{background:"#fff",border:"1px solid #bae6fd",borderRadius:9,padding:"8px 10px",cursor:"pointer",display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                      <div style={{width:16,height:16,borderRadius:5,border:"2px solid #16a34a",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                        <_PlIco name="check" size={10} color="#fff"/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.title||"(sem título)"}</div>
+                        {e.content&&<div style={{color:"#64748b",fontSize:10.5,marginTop:3,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{e.content}</div>}
+                      </div>
+                    </div>
+                    {_plReadParticipants(e).length>0 && <_PlParticipantsRow entry={e} size={16}/>}
+                  </div>;
+                })}
+              </div>
+            : <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {s.isPast
+                  ? <div style={{display:"inline-flex",alignItems:"center",gap:6,color:"#cbd5e1",fontSize:11,fontWeight:600}}>
+                      <_PlIco name="x" size={11} color="#cbd5e1"/>Não realizada
+                    </div>
+                  : <div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>{s.isCurrent?"Aguardando":"Futura"}</div>
+                }
+              </div>
+          }
+          <button onClick={function(){newForWeek(s);}}
+            style={{background:s.isCurrent?"#0ea5e9":"#f8fafc",border:"1px solid "+(s.isCurrent?"#0ea5e9":"#e2e8f0"),borderRadius:9,padding:"7px",color:s.isCurrent?"#fff":"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,marginTop:"auto"}}>
+            <_PlIco name="plus" size={11} color={s.isCurrent?"#fff":"currentColor"}/>{has?"Adicionar":"Preencher"}
+          </button>
+        </div>;
+      })}
+    </div>
+
+    {/* Histórico de outras semanas */}
+    {outros.length>0 && <div>
+      <div style={{color:"#94a3b8",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginTop:10,marginBottom:8}}>Weeklies anteriores</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {outros.sort(function(a,b){return String(b.week_key||"").localeCompare(String(a.week_key||""));}).map(function(e){
+          return <PlanEntryCard key={e.id} entry={e} onEdit={onEdit} onDelete={onDelete} kind="weekly"/>;
+        })}
+      </div>
+    </div>}
   </div>;
 }
 
-// ─── _PlParticipantsRow — Avatars dos participantes de cada reuniao ────
-function _PlParticipantsRow({type, size}){
-  const ids = _plParticipantes(type);
+// ─── _PlParticipantsRow — Avatars dos PARTICIPANTES REGISTRADOS no card ────
+// Recebe entry (com participants array/csv) — fallback ao default só se NAO TEM nada salvo
+function _PlParticipantsRow({entry, type, size, showEmpty}){
   const sz = size||18;
-  if(ids.length===0) return null;
+  let ids = [];
+  if(entry){
+    ids = _plReadParticipants(entry);
+    // Se nao salvou ninguem ainda, mostra defaults em CINZA pra indicar "ainda nao marcado"
+    if(ids.length===0 && entry.type) ids = _plDefaultParticipantes(entry.type);
+  }else if(type){
+    ids = _plDefaultParticipantes(type);
+  }
+  if(ids.length===0){
+    if(showEmpty) return <span style={{color:"#cbd5e1",fontSize:10.5,fontStyle:"italic"}}>nenhum marcado</span>;
+    return null;
+  }
   return <div style={{display:"flex",alignItems:"center"}}>
     {ids.map(function(uid,i){
       const u = (typeof TEAM!=="undefined") ? TEAM.find(x=>x.id===uid) : null;
@@ -41587,6 +41697,43 @@ function _PlParticipantsRow({type, size}){
         <UserAvatar user={u} size={sz} border={false}/>
       </div>;
     })}
+  </div>;
+}
+
+// ─── _PlParticipantsPicker — seletor visual de participantes (no modal) ────
+function _PlParticipantsPicker({selected, onChange, type}){
+  const ids = Array.isArray(selected) ? selected : (selected ? String(selected).split(",").filter(Boolean) : []);
+  const defaultIds = _plDefaultParticipantes(type);
+  function toggle(uid){
+    const has = ids.indexOf(uid)>=0;
+    const next = has ? ids.filter(function(x){return x!==uid;}) : ids.concat([uid]);
+    onChange(next);
+  }
+  function setDefault(){onChange(defaultIds.slice());}
+  function clearAll(){onChange([]);}
+  if(typeof TEAM==="undefined") return null;
+  const TEAMLIST = TEAM.filter(function(u){return u.id&&(u.level||3)<=3;});
+  return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+      <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Participantes desta reunião</span>
+      <div style={{display:"flex",gap:6}}>
+        <button onClick={setDefault} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:7,padding:"3px 9px",color:"#9F43F6",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Padrão</button>
+        <button onClick={clearAll} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:7,padding:"3px 9px",color:"#64748b",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Limpar</button>
+      </div>
+    </div>
+    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+      {TEAMLIST.map(function(u){
+        const sel = ids.indexOf(u.id)>=0;
+        return <button key={u.id} onClick={function(){toggle(u.id);}}
+          title={u.name+" — "+(u.role||"")}
+          style={{display:"inline-flex",alignItems:"center",gap:7,background:sel?u.color+"15":"#fff",border:"2px solid "+(sel?u.color:"#e2e8f0"),borderRadius:99,padding:"4px 12px 4px 4px",cursor:"pointer",transition:"all .15s",fontFamily:"inherit"}}>
+          <div style={{width:24,height:24,borderRadius:"50%",overflow:"hidden",flexShrink:0,opacity:sel?1:.6,filter:sel?"none":"grayscale(.5)"}}>
+            <UserAvatar user={u} size={24} border={false}/>
+          </div>
+          <span style={{color:sel?u.color:"#94a3b8",fontSize:11.5,fontWeight:sel?700:500}}>{u.name.split(" ")[0]}</span>
+        </button>;
+      })}
+    </div>
   </div>;
 }
 
@@ -41608,14 +41755,14 @@ function MonthliesList({entries, onEdit, onDelete}){
       week_key: _plWeekKey(m.monIso),
       month_key: _plMonthKey(m.monIso),
       title:"", content:"",
+      participants: _plDefaultParticipantes("monthly"),
     });
   }
 
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"4px 2px"}}>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{new Date().getFullYear()}</div>
-      <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600}}>Participantes: todo o time</span>
-      <div style={{marginLeft:"auto"}}><_PlParticipantsRow type="monthly" size={20}/></div>
+      <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:500}}>· Default: todo o time (selecionável)</span>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:10}}>
       {months.map(function(m){
@@ -41634,13 +41781,16 @@ function MonthliesList({entries, onEdit, onDelete}){
             ? <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
                 {items.map(function(e){
                   return <div key={e.id} onClick={function(){onEdit(e);}}
-                    style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:9,padding:"8px 10px",cursor:"pointer",display:"flex",alignItems:"flex-start",gap:8}}>
-                    <div style={{width:16,height:16,borderRadius:5,border:"2px solid #16a34a",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
-                      <_PlIco name="check" size={10} color="#fff"/>
+                    style={{background:"#fff",border:"1px solid #e9d5ff",borderRadius:9,padding:"8px 10px",cursor:"pointer",display:"flex",flexDirection:"column",gap:6}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+                      <div style={{width:16,height:16,borderRadius:5,border:"2px solid #16a34a",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                        <_PlIco name="check" size={10} color="#fff"/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.title||"(sem título)"}</div>
+                      </div>
                     </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.title||"(sem título)"}</div>
-                    </div>
+                    {_plReadParticipants(e).length>0 && <_PlParticipantsRow entry={e} size={16}/>}
                   </div>;
                 })}
               </div>
@@ -41653,8 +41803,7 @@ function MonthliesList({entries, onEdit, onDelete}){
                 }
               </div>
           }
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginTop:"auto"}}>
-            <_PlParticipantsRow type="monthly" size={16}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:6,marginTop:"auto"}}>
             <button onClick={function(){newForMonth(m);}}
               style={{background:m.isCurrent?PLAN_PURPLE:"#f8fafc",border:"1px solid "+(m.isCurrent?PLAN_PURPLE:"#e2e8f0"),borderRadius:8,padding:"5px 11px",color:m.isCurrent?"#fff":"#475569",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
               <_PlIco name="plus" size={10} color={m.isCurrent?"#fff":"currentColor"}/>{has?"Adicionar":"Preencher"}
@@ -41794,13 +41943,12 @@ function PlanEditModal({entry, setEntry, onSave, onClose}){
         <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"6px 10px",color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center"}}><_PlIco name="x" size={14}/></button>
       </div>
 
-      {/* Participantes da reuniao */}
-      {(isDaily||isWeekly||isMonthly)&&<div style={{padding:"10px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10,background:"#fafbfc"}}>
-        <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Participantes</span>
-        <_PlParticipantsRow type={entry.type} size={22}/>
-        <span style={{color:"#475569",fontSize:11,fontWeight:600,marginLeft:4}}>
-          {isDaily?"Vinicius + Gustavo (CEOs)":isWeekly?"Vinicius + Gustavo + Hellen":"Todo o time"}
-        </span>
+      {/* Participantes da reuniao — seletor visual */}
+      {(isDaily||isWeekly||isMonthly)&&<div style={{padding:"14px 22px",borderBottom:"1px solid #f1f5f9",background:"#fafbfc"}}>
+        <_PlParticipantsPicker
+          selected={entry.participants||(_plReadParticipants(entry).length===0?_plDefaultParticipantes(entry.type):entry.participants)}
+          onChange={function(arr){patch("participants",arr);}}
+          type={entry.type}/>
       </div>}
 
       <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
