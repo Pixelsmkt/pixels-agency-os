@@ -12644,7 +12644,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   {/* THUMBNAIL ESTILO TRELLO — 200px de altura, imagem inteira (contain) com letterbox no fundo cinza */}
                   {thumbUrl&&(function(){
                     const hasVisibleTagStripe=isAdminUser&&(t.tags||[]).length>0;
-                    const mt=hasVisibleTagStripe?5:0;
+                    const hasTopChips=!!(t.contentType||t.referenceMonth);
+                    // Respiro entre chips (Arte única / Mai/26) e capa: 8px.
+                    // Sem chips em cima a capa cola no topo (visual sem espaço morto).
+                    const mt=hasVisibleTagStripe?5:(hasTopChips?8:0);
                     return thumbUrl.startsWith("#")
                       ?<div style={{height:200,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,marginTop:mt}}/>
                       :<div style={{height:200,background:"#f1f5f9",marginTop:mt,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
