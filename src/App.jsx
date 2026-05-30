@@ -1617,13 +1617,26 @@ const NoPerm=()=>(
 );
 
 /* ─── NOTIFICAÇÕES ───────────────────────── */
+/* ─── NOTIF_STORE — store de notificações REAIS ─────────────────
+   Notificações são geradas em runtime pelos fluxos (aprovação, ajuste,
+   menções no chat etc) via pushNotif()/addNotif(). NUNCA inicializar
+   com dados mock — usuários veem dados reais ou empty state.
+   Persiste em localStorage por usuário pra sobreviver F5.
+─────────────────────────────────────────────────────────────────── */
+const _NOTIF_LS_KEY="pixels-notifs-v2";
+function _loadNotifsLS(){
+  try{
+    const raw=localStorage.getItem(_NOTIF_LS_KEY);
+    if(!raw)return [];
+    const arr=JSON.parse(raw);
+    return Array.isArray(arr)?arr.slice(0,100):[];
+  }catch(e){return [];}
+}
+function _saveNotifsLS(arr){
+  try{localStorage.setItem(_NOTIF_LS_KEY,JSON.stringify((arr||[]).slice(0,100)));}catch(e){}
+}
 const NOTIF_STORE={
-  items:[
-    {id:"n1",type:"demanda",  icon:"📋",title:"Nova demanda recebida",body:"Copy Bioter Chapeco foi aprovada e está em Demandas Recebidas",read:false,at:"Hoje 09:14",user:"Vinicius"},
-    {id:"n2",type:"aprovacao",icon:"✅",title:"Aprovação pendente",    body:"Copy Feed Climaves aguarda sua aprovação",read:false,at:"Hoje 09:22",user:"Sistema"},
-    {id:"n3",type:"chat",     icon:"💬",title:"Vinicius no #geral",    body:"Vinicius: Bioter ROAS subindo!",read:true, at:"Hoje 08:30",user:"Vinicius"},
-    {id:"n4",type:"ajuste",   icon:"🔄",title:"Ajuste solicitado",     body:"Copy Construschorr Lancamento precisa de revisão",read:false,at:"Ontem 18:00",user:"Vinicius"},
-  ]
+  items:_loadNotifsLS(),
 };
 
 
@@ -17254,30 +17267,8 @@ function DashboardAlerts({userId,isMob}){
   </div></>;
 }
 
-/* ─── SEED NOTIFS — exemplos e histórico demo ─────────── */
-// IDs prefixados com "seed-" para não colidir com notifs reais do NOTIF_STORE
-const SEED_NOTIFS=[
-  // Demandas
-  {id:"seed-d1",category:"demanda",icon:"📋",read:false,title:"Demanda em Execução",body:"Copy Feed Climaves Inverno foi movida para Em Execução",at:"Hoje 09:14",user:"Sistema"},
-  {id:"seed-d2",category:"demanda",icon:"📋",read:false,title:"Demanda em Execução",body:"Reels Arabutã 15s entrou em produção",at:"Hoje 08:50",user:"Sistema"},
-  {id:"seed-d3",category:"demanda",icon:"📋",read:true, title:"Demanda em Execução",body:"Vídeo Feed Bioter foi recebido por Guilherme",at:"Ontem 17:30",user:"Sistema"},
-  {id:"seed-d4",category:"demanda",icon:"📋",read:true, title:"Demanda em Execução",body:"Agendar Posts Climaves Abril iniciado por Hellen",at:"Ontem 15:00",user:"Sistema"},
-  {id:"seed-d5",category:"demanda",icon:"📋",read:true, title:"Nova Demanda Recebida",body:"Banner Google Display Bioter adicionado ao quadro",at:"25/03 10:00",user:"Vinicius"},
-  // Pendências
-  {id:"seed-p1",category:"pendencia",icon:"🔄",read:false,title:"Ajuste Solicitado",body:"Copy Construschorr Lançamento precisa de revisão — veja o feedback do revisor",at:"Hoje 10:30",user:"Vinicius"},
-  {id:"seed-p2",category:"pendencia",icon:"🔄",read:false,title:"Arte Reprovada",body:"Cards Instagram Arabutã Abril voltou para execução com urgência máxima",at:"Hoje 09:45",user:"Gustavo"},
-  {id:"seed-p3",category:"pendencia",icon:"⚠",read:true, title:"Pendência de Vídeo",body:"Reels Produto Arabutã aguarda correção antes da publicação",at:"Ontem 14:20",user:"Gustavo"},
-  {id:"seed-p4",category:"pendencia",icon:"🔄",read:true, title:"Copy em Ajuste",body:"Legenda Stories Arabutã foi enviada para revisão de copy",at:"Ontem 11:00",user:"Vinicius"},
-  // Chat
-  {id:"seed-c1",category:"chat",icon:"💬",read:false,title:"Menção em #geral",body:"Vinicius mencionou você: @André precisa do banner para amanhã",at:"Hoje 11:15",user:"Vinicius"},
-  {id:"seed-c2",category:"chat",icon:"💬",read:false,title:"Mensagem direta",body:"Gustavo enviou uma mensagem para você",at:"Hoje 10:00",user:"Gustavo"},
-  {id:"seed-c3",category:"chat",icon:"💬",read:true, title:"Menção em #design",body:"Hellen: @André o carrossel do Bioter ficou incrível!",at:"Ontem 16:40",user:"Hellen"},
-  {id:"seed-c4",category:"chat",icon:"💬",read:true, title:"Menção em #edição",body:"Vinicius: @Guilherme prazo do Reels Bioter é hoje",at:"Ontem 09:00",user:"Vinicius"},
-  // Recados
-  {id:"seed-r1",category:"recado",icon:"📢",read:false,title:"Recado da Empresa",body:"🎉 Parabéns pelo fechamento do mês! Meta superada em 12%. Obrigado equipe!",at:"Hoje 08:00",user:"Pixels Agência"},
-  {id:"seed-r2",category:"recado",icon:"📢",read:true, title:"Aviso de Expediente",body:"Amanhã é feriado — não haverá turno. Bom descanso a todos! 🙌",at:"Ontem 18:00",user:"Pixels Agência"},
-  {id:"seed-r3",category:"recado",icon:"📢",read:true, title:"Reunião Semanal",body:"Reunião de alinhamento na sexta às 14h. Presença de todos confirmada.",at:"25/03 09:00",user:"Pixels Agência"},
-];
+/* SEED_NOTIFS removido — usuários veem apenas notificações reais */
+const SEED_NOTIFS=[];
 
 function PageNotificacoes({isMob, notifs, setNotifs}){
   const [expanded,setExpanded]=useState({}); // which panels show "ver mais"
@@ -29511,6 +29502,13 @@ export default function AgencyOS(){
   useEffect(()=>{try{if(activeCl)localStorage.setItem("pixels-active-client",activeCl);else localStorage.removeItem("pixels-active-client");}catch(e){}},[activeCl]);
   const [mindmapActiveCl,setMindmapActiveCl] = useState(false);
   const [notifs,setNotifs]         = useState(NOTIF_STORE.items);
+  // Persistir notifs em localStorage + manter NOTIF_STORE.items sincronizado
+  useEffect(()=>{
+    try{
+      NOTIF_STORE.items=notifs;
+      if(typeof _saveNotifsLS==="function")_saveNotifsLS(notifs);
+    }catch(_){}
+  },[notifs]);
   const [viewingAs,setViewingAs]   = useState(null);
   // ═══ PRESENCE — quem está online/ausente/offline ═══
   const [presenceMap,setPresenceMap] = useState({});
@@ -30256,27 +30254,65 @@ export default function AgencyOS(){
       onClose={()=>setShowSelfProfile(false)}
     />}
 
-    {notifDrawer&&<div style={{position:"fixed",inset:0,zIndex:100,background:"rgba(0,0,0,0.5)"}} onClick={()=>{setNotifDrawer(false);markRead();}}/>}
-    {notifDrawer&&<div style={{position:"fixed",top:0,right:0,bottom:0,width:340,background:C.card,borderLeft:`1px solid ${C.b1}`,zIndex:101,display:"flex",flexDirection:"column",boxShadow:"-8px 0 32px rgba(0,0,0,0.2)"}}>
-      <div style={{padding:"18px 20px",borderBottom:`1px solid ${C.b1}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-        <div style={{color:C.tx,fontWeight:800,fontSize:15}}>Notificações</div>
-        <button onClick={()=>{setNotifDrawer(false);markRead();}} style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18}}>✕</button>
+    {notifDrawer&&<div style={{position:"fixed",inset:0,zIndex:100,background:"rgba(15,23,42,0.45)"}} onClick={()=>{setNotifDrawer(false);markRead();}}/>}
+    {notifDrawer&&<div style={{position:"fixed",top:0,right:0,bottom:0,width:360,background:"#fff",borderLeft:"1px solid #e5e7eb",zIndex:101,display:"flex",flexDirection:"column",boxShadow:"-12px 0 40px rgba(15,23,42,0.08)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{padding:"18px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.3}}>Notificações</div>
+          {notifs.filter(n=>!n.read).length>0&&<span style={{background:"#a140ff",color:"#fff",fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:99,lineHeight:1.4}}>{notifs.filter(n=>!n.read).length}</span>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          {notifs.filter(n=>!n.read).length>0&&<button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} title="Marcar todas como lidas" style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,display:"flex",alignItems:"center"}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/><polyline points="22 6 11 17 6 12"/></svg>
+          </button>}
+          <button onClick={()=>{setNotifDrawer(false);markRead();}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,display:"flex",alignItems:"center"}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
       </div>
-      <div style={{flex:1,overflowY:"auto",padding:"10px 0"}}>
-        {notifs.length===0&&<div style={{padding:24,textAlign:"center",color:C.td,fontSize:13}}>Nenhuma notificação</div>}
-        {notifs.slice(0,30).map(n=>(
-          <div key={n.id} style={{padding:"12px 20px",borderBottom:`1px solid ${C.b1}44`,background:n.read?"transparent":C.a+"08"}}>
-            <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-              <span style={{fontSize:18,flexShrink:0}}>{n.icon||"🔔"}</span>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:C.tx,fontWeight:600,fontSize:13,marginBottom:2}}>{n.title}</div>
-                {n.body&&<div style={{color:C.ts,fontSize:12,lineHeight:1.5}}>{n.body}</div>}
-                <div style={{color:C.td,fontSize:10,marginTop:4}}>{n.at}</div>
-              </div>
-              {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:C.a,flexShrink:0,marginTop:4}}/>}
-            </div>
+      <div style={{flex:1,overflowY:"auto"}}>
+        {notifs.length===0&&<div style={{padding:"60px 24px",textAlign:"center"}}>
+          <div style={{width:56,height:56,borderRadius:"50%",background:"#f8fafc",border:"1px solid #e5e7eb",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
           </div>
-        ))}
+          <div style={{color:"#0f172a",fontWeight:600,fontSize:14,marginBottom:4}}>Tudo em dia</div>
+          <div style={{color:"#94a3b8",fontSize:12.5,lineHeight:1.5,maxWidth:240,margin:"0 auto"}}>Você verá aqui novas demandas, ajustes solicitados e menções no chat.</div>
+        </div>}
+        {notifs.slice(0,40).map(n=>{
+          const _typeIcon=()=>{
+            const t=n.type||n.category;
+            const sw={width:14,height:14,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};
+            if(t==="ajuste"||t==="pendencia")return {color:"#f97316",bg:"#fff7ed",svg:<svg {...sw}><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>};
+            if(t==="urgente")return {color:"#dc2626",bg:"#fef2f2",svg:<svg {...sw}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>};
+            if(t==="aprovacao"||t==="demanda")return {color:"#059669",bg:"#ecfdf5",svg:<svg {...sw}><polyline points="20 6 9 17 4 12"/></svg>};
+            if(t==="chat")return {color:"#a140ff",bg:"#faf5ff",svg:<svg {...sw}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>};
+            return {color:"#64748b",bg:"#f1f5f9",svg:<svg {...sw}><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/></svg>};
+          };
+          const ic=_typeIcon();
+          const _click=()=>{
+            // marcar lida
+            setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x));
+            // se tem taskId, dispara abertura do card via globalCard (mesmo mecanismo Ctrl+K)
+            if(n.taskId){
+              setGlobalCard&&setGlobalCard(n.taskId);
+              setNotifDrawer(false);
+            }
+          };
+          return <div key={n.id} onClick={_click}
+            style={{padding:"14px 22px",borderBottom:"1px solid #f8fafc",background:n.read?"#fff":"#faf5ff",cursor:n.taskId?"pointer":"default",transition:"background .15s"}}
+            onMouseEnter={ev=>{if(n.taskId)ev.currentTarget.style.background=n.read?"#f8fafc":"#f3e8ff";}}
+            onMouseLeave={ev=>{ev.currentTarget.style.background=n.read?"#fff":"#faf5ff";}}>
+            <div style={{display:"flex",gap:11,alignItems:"flex-start"}}>
+              <div style={{width:30,height:30,borderRadius:8,background:ic.bg,color:ic.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{ic.svg}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:3,lineHeight:1.35}}>{n.title}</div>
+                {n.body&&<div style={{color:"#64748b",fontSize:12,lineHeight:1.45}}>{n.body}</div>}
+                <div style={{color:"#94a3b8",fontSize:11,marginTop:5,fontWeight:500}}>{n.at}</div>
+              </div>
+              {!n.read&&<div style={{width:7,height:7,borderRadius:"50%",background:"#a140ff",flexShrink:0,marginTop:8}}/>}
+            </div>
+          </div>;
+        })}
       </div>
     </div>}
 
