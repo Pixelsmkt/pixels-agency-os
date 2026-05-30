@@ -29232,62 +29232,83 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
   };
 
   return(
-    <div style={{position:"fixed",inset:0,background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter','DM Sans',system-ui,sans-serif"}}>
-      <div style={{position:"absolute",top:"20%",left:"50%",transform:"translateX(-50%)",width:400,height:400,borderRadius:"50%",background:C.a,opacity:.04,filter:"blur(80px)",pointerEvents:"none"}}/>
-      <div style={{width:"100%",maxWidth:380,padding:"0 20px"}}>
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:36}}>
-          {/* Logo Pixels — grid 3x3 de pixels em gradiente roxo */}
-          <div style={{width:84,height:84,borderRadius:20,background:`linear-gradient(135deg,${C.a},${C.aD})`,
-              display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16,
-              boxShadow:`0 12px 40px ${C.a}55,inset 0 0 0 1px rgba(255,255,255,0.12)`,
-              position:"relative",overflow:"hidden"}}>
-            {/* Grid de pixels brancos formando padrão "P" */}
-            <svg width="52" height="52" viewBox="0 0 60 60">
-              {/* Linha 1 */}
+    <div style={{position:"fixed",inset:0,background:"#fafafa",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Inter',system-ui,sans-serif",padding:20,boxSizing:"border-box"}}>
+      {/* Glow sutil de fundo */}
+      <div style={{position:"absolute",top:"-10%",left:"50%",transform:"translateX(-50%)",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,#a140ff15,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{width:"100%",maxWidth:380,position:"relative",zIndex:1}}>
+        {/* Header — logo + título */}
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:32}}>
+          <div style={{width:56,height:56,borderRadius:14,background:"linear-gradient(135deg,#a140ff,#7c3aed)",
+              display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,
+              boxShadow:"0 8px 24px rgba(161,64,255,0.25)"}}>
+            <svg width="32" height="32" viewBox="0 0 60 60">
               <rect x="4"  y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
               <rect x="22" y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
               <rect x="40" y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.6"/>
-              {/* Linha 2 */}
               <rect x="4"  y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
               <rect x="22" y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
               <rect x="40" y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
-              {/* Linha 3 */}
               <rect x="4"  y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
               <rect x="22" y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
               <rect x="40" y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
             </svg>
           </div>
-          <div style={{color:C.tx,fontWeight:900,fontSize:26,letterSpacing:-.8,lineHeight:1}}>
-            <span style={{background:`linear-gradient(135deg,${C.a},${C.aL})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>PIXELS</span>
-          </div>
-          <div style={{color:C.ts,fontWeight:600,fontSize:12,letterSpacing:2,marginTop:6,textTransform:"uppercase"}}>Agency OS</div>
-          <div style={{color:C.td,fontSize:10,marginTop:10,fontWeight:500}}>Acesso restrito à equipe</div>
+          <h1 style={{color:"#0f172a",fontWeight:700,fontSize:22,letterSpacing:-.5,margin:0,lineHeight:1.2}}>Bem-vindo de volta</h1>
+          <p style={{color:"#64748b",fontSize:13,marginTop:6,marginBottom:0,fontWeight:400}}>Acesse sua conta da Pixels</p>
         </div>
-        <div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:20,padding:"28px 28px 24px",boxShadow:"0 24px 64px rgba(0,0,0,0.3)"}}>
-          <div style={{marginBottom:14}}>
-            <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>E-mail</div>
-            <input type="email" value={email} onChange={e=>{setEmail(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&doLogin()} placeholder="seu@email.com" autoComplete="email"
-              style={{width:"100%",background:C.s1,border:`1px solid ${error?C.rd:C.b1}`,borderRadius:10,padding:"10px 14px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+
+        {/* Card do formulário */}
+        <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:16,padding:"28px 28px 24px",boxShadow:"0 4px 24px rgba(15,23,42,0.04)"}}>
+          {/* E-mail */}
+          <div style={{marginBottom:16}}>
+            <label style={{color:"#374151",fontSize:12,fontWeight:600,display:"block",marginBottom:7}}>E-mail</label>
+            <input type="email" value={email} onChange={ev=>{setEmail(ev.target.value);setError("");}} onKeyDown={ev=>ev.key==="Enter"&&doLogin()} placeholder="voce@pixelsmarketing.com.br" autoComplete="email"
+              style={{width:"100%",background:"#fff",border:`1px solid ${error?"#ef4444":"#e5e7eb"}`,borderRadius:10,padding:"11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"}}
+              onFocus={ev=>{if(!error)ev.target.style.borderColor="#a140ff";}}
+              onBlur={ev=>{if(!error)ev.target.style.borderColor="#e5e7eb";}}/>
           </div>
-          <div style={{marginBottom:20}}>
-            <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Senha</div>
-            <div style={{position:"relative"}}>
-              <input type={showPass?"text":"password"} value={password} onChange={e=>{setPassword(e.target.value);setError("");}} onKeyDown={e=>e.key==="Enter"&&doLogin()} placeholder="Digite sua senha..." autoComplete="current-password"
-                style={{width:"100%",background:C.s1,border:`1px solid ${error?C.rd:C.b1}`,borderRadius:10,padding:"10px 44px 10px 14px",color:C.tx,fontSize:13,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
-              <button onClick={()=>setShowPass(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:14,padding:0}}>{showPass?"🙈":"👁"}</button>
+
+          {/* Senha */}
+          <div style={{marginBottom:18}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+              <label style={{color:"#374151",fontSize:12,fontWeight:600}}>Senha</label>
+              <button onClick={doForgot} type="button" style={{background:"none",border:"none",color:"#a140ff",fontSize:11.5,cursor:"pointer",fontWeight:600,padding:0,fontFamily:"inherit"}}>Esqueci minha senha</button>
             </div>
-            {error&&<div style={{color:C.rd,fontSize:11,marginTop:5,fontWeight:600}}>{error}</div>}
+            <div style={{position:"relative"}}>
+              <input type={showPass?"text":"password"} value={password} onChange={ev=>{setPassword(ev.target.value);setError("");}} onKeyDown={ev=>ev.key==="Enter"&&doLogin()} placeholder="••••••••" autoComplete="current-password"
+                style={{width:"100%",background:"#fff",border:`1px solid ${error?"#ef4444":"#e5e7eb"}`,borderRadius:10,padding:"11px 42px 11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"}}
+                onFocus={ev=>{if(!error)ev.target.style.borderColor="#a140ff";}}
+                onBlur={ev=>{if(!error)ev.target.style.borderColor="#e5e7eb";}}/>
+              <button type="button" onClick={()=>setShowPass(v=>!v)} aria-label={showPass?"Ocultar senha":"Mostrar senha"}
+                style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                {showPass
+                  ?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  :<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+              </button>
+            </div>
           </div>
+
+          {/* Erro inline */}
+          {error&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,padding:"9px 12px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span style={{color:"#991b1b",fontSize:12.5,fontWeight:500}}>{error}</span>
+          </div>}
+
+          {/* Botão Entrar */}
           <button onClick={doLogin} disabled={loading||!email.trim()||!password}
-            style={{width:"100%",background:(!loading&&email.trim()&&password)?`linear-gradient(135deg,${C.a},${C.aD})`:C.b1,color:(!loading&&email.trim()&&password)?"#fff":C.td,border:"none",borderRadius:12,padding:"12px 0",fontWeight:800,fontSize:14,cursor:"pointer",transition:"all .2s"}}>
-            {loading?"Entrando...":"Entrar"}
+            style={{width:"100%",background:(!loading&&email.trim()&&password)?"#0f172a":"#e5e7eb",color:(!loading&&email.trim()&&password)?"#fff":"#94a3b8",border:"none",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:14,cursor:(!loading&&email.trim()&&password)?"pointer":"not-allowed",transition:"all .15s",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}
+            onMouseEnter={ev=>{if(!loading&&email.trim()&&password)ev.currentTarget.style.background="#1e293b";}}
+            onMouseLeave={ev=>{if(!loading&&email.trim()&&password)ev.currentTarget.style.background="#0f172a";}}>
+            {loading
+              ?<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" style={{animation:"pixelsSpin 0.8s linear infinite"}}><circle cx="12" cy="12" r="10" opacity="0.25"/><path d="M12 2a10 10 0 0110 10"/></svg> Entrando...</>
+              :<>Entrar</>}
           </button>
-          <div style={{textAlign:"center",marginTop:14}}>
-            <button onClick={doForgot} style={{background:"none",border:"none",color:C.a,fontSize:11,cursor:"pointer",fontWeight:600,textDecoration:"underline"}}>Esqueci minha senha</button>
-          </div>
         </div>
-        <div style={{textAlign:"center",marginTop:20,color:C.td,fontSize:11}}>Pixels Agency OS · Acesso restrito</div>
+
+        {/* Footer discreto */}
+        <div style={{textAlign:"center",marginTop:24,color:"#94a3b8",fontSize:11,letterSpacing:.3}}>Pixels Agency OS · v5</div>
       </div>
+      <style>{`@keyframes pixelsSpin{to{transform:rotate(360deg)}}`}</style>
     </div>
   );
 }
