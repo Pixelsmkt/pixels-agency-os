@@ -19892,7 +19892,7 @@ function StorageManager({tasks}){
     {/* Header */}
     <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,padding:"18px 20px"}}>
       <div style={{color:C.tx,fontWeight:800,fontSize:16,marginBottom:4}}>🗂 Gerenciador de Storage</div>
-      <div style={{color:C.ts,fontSize:12}}>Escaneia o bucket <strong>pixels-files</strong> e identifica arquivos órfãos — arquivos que não pertencem a nenhum cartão ativo ou na lixeira.</div>
+      <div style={{color:C.ts,fontSize:12}}>Escaneia o bucket <strong>agency-files</strong> e identifica arquivos órfãos — arquivos que não pertencem a nenhum cartão ativo ou na lixeira.</div>
     </div>
 
     {/* Aviso */}
@@ -22841,7 +22841,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       // Pega URL do Supabase (window._sb tem o config interno)
       const sbUrl=sb.supabaseUrl||sb.rest?.url?.replace("/rest/v1","")||"";
       if(!sbUrl)return reject(new Error("URL Supabase não configurada"));
-      const url=`${sbUrl}/storage/v1/object/pixels-files/${path}`;
+      const url=`${sbUrl}/storage/v1/object/agency-files/${path}`;
       const xhr=new XMLHttpRequest();
       // Registra para poder abortar em unmount
       const regEntry={xhr,path};
