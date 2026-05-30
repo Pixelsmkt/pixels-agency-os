@@ -850,6 +850,30 @@ const KANBAN_COLS = [
   { id:"pausado",        label:"Pausado",                color:"#94a3b8", dark:false },
 ];
 
+/* ─── Migração defensiva de URLs antigas ──────────────────────────
+   Cards salvos antes da migração pixels-files → agency-files (2026-05)
+   podem ter URLs no formato antigo no JSON (files, comments, timeline).
+   Esta função reescreve em runtime pra evitar 404 em cards históricos.
+─────────────────────────────────────────────────────────────────── */
+function fixLegacyUrl(u){
+  if(!u||typeof u!=="string")return u;
+  // /storage/v1/object/(public/)?pixels-files/... → agency-files
+  return u.replace(/\/pixels-files\//g,"/agency-files/");
+}
+function fixLegacyAttachments(arr){
+  if(!Array.isArray(arr))return arr;
+  return arr.map(a=>{
+    if(!a||typeof a!=="object")return a;
+    const nx={...a};
+    if(nx.url)nx.url=fixLegacyUrl(nx.url);
+    if(nx.thumbnail)nx.thumbnail=fixLegacyUrl(nx.thumbnail);
+    if(nx.cover)nx.cover=fixLegacyUrl(nx.cover);
+    return nx;
+  });
+}
+window.fixLegacyUrl=fixLegacyUrl;
+window.fixLegacyAttachments=fixLegacyAttachments;
+
 /* ─── FUNIL DE VENDAS — config por cliente ─────────────────────────────
    Cada cliente tem um funil próprio. Cliente preenche no Portal, a equipe
    consome via Gestão de Mídia. Etapas são FIXAS (não editáveis em runtime
@@ -29084,7 +29108,7 @@ const rowToTask = (r) => ({
   deadline:     r.deadline     || "",
   startDate:    r.start_date   || "",
   completedAt:  r.completed_at || "",
-  cover:        r.cover        || null,
+  cover:        (typeof fixLegacyUrl==="function"?fixLegacyUrl(r.cover):r.cover) || null,
   deletedAt:    r.deleted_at   || null,
   colEnteredAt: r.col_entered_at || null,
   createdAt:    r.created_at   || "",
@@ -29102,9 +29126,9 @@ const rowToTask = (r) => ({
   assignees:    Array.isArray(r.assignees) ? r.assignees : [],
   watchers:     Array.isArray(r.watchers)  ? r.watchers  : [],
   tags:         Array.isArray(r.tags)      ? r.tags      : [],
-  comments:     Array.isArray(r.comments)  ? r.comments  : [],
-  files:        Array.isArray(r.files)     ? r.files     : [],
-  timeline:     Array.isArray(r.timeline)  ? r.timeline  : [],
+  comments:     Array.isArray(r.comments)  ? (typeof fixLegacyAttachments==="function"?fixLegacyAttachments(r.comments):r.comments)  : [],
+  files:        Array.isArray(r.files)     ? (typeof fixLegacyAttachments==="function"?fixLegacyAttachments(r.files):r.files)     : [],
+  timeline:     Array.isArray(r.timeline)  ? (typeof fixLegacyAttachments==="function"?fixLegacyAttachments(r.timeline):r.timeline)  : [],
   checklist:    Array.isArray(r.checklist) ? r.checklist : [],
   caption:      r.caption      || "",
   desc:         r.description  || "",
