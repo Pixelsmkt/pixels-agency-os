@@ -15707,6 +15707,11 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const [penColor,setPenColor]=useState("#e53e3e");
   const [penSize,setPenSize]=useState(4);
   const [isEraser,setIsEraser]=useState(false);
+  // ─── Ferramenta de TEXTO ─────────────────────────
+  // Quando textMode está ativo, click no canvas abre um input naquela posição.
+  // O usuário digita, aperta Enter pra fixar (rasteriza no canvas com penColor + fontSize).
+  const [textMode,setTextMode]=useState(false);
+  const [pendingText,setPendingText]=useState(null); // {x, y, text} ou null
   const [feedback,setFeedback]=useState("");
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
@@ -15784,7 +15789,37 @@ function PublicacaoEditModal({task, onClose, onReject}){
     const cy=e.touches?e.touches[0].clientY:e.clientY;
     return{x:(cx-r.left)*(canvasRef.current.width/r.width),y:(cy-r.top)*(canvasRef.current.height/r.height)};
   };
-  const onMD=(e)=>{e.preventDefault();setDrawing(true);const ctx=canvasRef.current.getContext("2d");const p=getPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);};
+  // Click no canvas em modo texto: cria um input naquela posição
+  const onCanvasClickForText=(e)=>{
+    if(!textMode)return;
+    e.preventDefault();e.stopPropagation();
+    const p=getPos(e);
+    // Salva o estado atual do canvas antes (já foi pelo useEffect dos drawings)
+    setPendingText({x:p.x,y:p.y,text:""});
+  };
+  // Fixa o texto no canvas: rasteriza com penColor e fontSize derivado do penSize
+  const commitText=()=>{
+    if(!pendingText||!pendingText.text||!pendingText.text.trim()){setPendingText(null);return;}
+    const cv=canvasRef.current;
+    if(!cv){setPendingText(null);return;}
+    const ctx=cv.getContext("2d");
+    ctx.globalCompositeOperation="source-over";
+    // penSize 2/4/8/14 → fonte 18/26/40/64 (legível)
+    const fontPx=({2:18,4:26,8:40,14:64})[penSize]||26;
+    ctx.font="bold "+fontPx+"px Inter, system-ui, -apple-system, sans-serif";
+    ctx.fillStyle=penColor;
+    ctx.textBaseline="top";
+    // Multi-linha: separa por \n
+    const lines=String(pendingText.text).split("\n");
+    lines.forEach((line,i)=>{
+      ctx.fillText(line,pendingText.x,pendingText.y+i*fontPx*1.15);
+    });
+    setPendingText(null);
+  };
+  const onMD=(e)=>{
+    if(textMode){onCanvasClickForText(e);return;}
+    e.preventDefault();setDrawing(true);const ctx=canvasRef.current.getContext("2d");const p=getPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);
+  };
   const onMM=(e)=>{
     if(!drawing)return;e.preventDefault();
     const ctx=canvasRef.current.getContext("2d");const p=getPos(e);
@@ -15986,10 +16021,16 @@ function PublicacaoEditModal({task, onClose, onReject}){
                 style={{minWidth:24,height:22,background:penSize===s?C.a:"transparent",color:penSize===s?"#fff":C.ts,border:"none",borderRadius:6,cursor:"pointer",fontSize:10.5,fontWeight:700,padding:"0 6px",transition:"all .12s"}}>{s}</button>)}
             </div>
             {/* Ferramentas */}
-            <button onClick={()=>setIsEraser(v=>!v)}
+            <button onClick={()=>{setIsEraser(v=>!v);if(textMode)setTextMode(false);}}
               style={{background:isEraser?C.rd+"15":C.s1,color:isEraser?C.rd:C.ts,border:isEraser?`1px solid ${C.rd}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
               <Ico n="trash" size={11}/>
               <span>Borracha</span>
+            </button>
+            <button onClick={()=>{setTextMode(v=>!v);if(isEraser)setIsEraser(false);}}
+              title="Inserir texto digitando"
+              style={{background:textMode?C.a+"15":C.s1,color:textMode?C.a:C.ts,border:textMode?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+              <span>Texto</span>
             </button>
             <button onClick={clearCurrent}
               style={{background:C.s1,color:C.ts,border:"none",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
@@ -16014,9 +16055,31 @@ function PublicacaoEditModal({task, onClose, onReject}){
               :<div style={{minHeight:200,display:"flex",alignItems:"center",justifyContent:"center",color:C.td,fontSize:13}}>Sem imagem</div>
             }
             <canvas ref={canvasRef} width={800} height={600}
-              style={{position:"absolute",inset:0,width:"100%",height:"100%",cursor:isEraser?"cell":"crosshair"}}
+              style={{position:"absolute",inset:0,width:"100%",height:"100%",cursor:textMode?"text":(isEraser?"cell":"crosshair")}}
               onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}
               onTouchStart={onMD} onTouchMove={onMM} onTouchEnd={onMU}/>
+            {/* Input flutuante quando textMode + click ativos */}
+            {pendingText&&(()=>{
+              // Converter coords do canvas (800x600) pra pixels da tela
+              const cv=canvasRef.current;
+              if(!cv)return null;
+              const r=cv.getBoundingClientRect();
+              const parentR=cv.parentElement.getBoundingClientRect();
+              const sx=r.width/cv.width;
+              const sy=r.height/cv.height;
+              const fontPx=({2:18,4:26,8:40,14:64})[penSize]||26;
+              const left=(pendingText.x*sx)+(r.left-parentR.left);
+              const top=(pendingText.y*sy)+(r.top-parentR.top);
+              return <textarea autoFocus value={pendingText.text}
+                onChange={e=>setPendingText(p=>({...p,text:e.target.value}))}
+                onKeyDown={e=>{
+                  if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();commitText();}
+                  else if(e.key==="Escape"){e.preventDefault();setPendingText(null);}
+                }}
+                onBlur={()=>commitText()}
+                placeholder="Digite e tecle Enter"
+                style={{position:"absolute",left,top,minWidth:140,minHeight:fontPx*1.4,padding:"2px 6px",background:"rgba(255,255,255,0.96)",border:"2px dashed "+penColor,borderRadius:6,color:penColor,fontWeight:700,fontSize:fontPx*sx,fontFamily:"Inter, system-ui, -apple-system, sans-serif",lineHeight:1.15,outline:"none",resize:"none",boxShadow:"0 2px 12px rgba(15,23,42,0.18)",zIndex:5,overflow:"hidden"}}/>;
+            })()}
           </div>
         </div>
 
