@@ -16059,7 +16059,11 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [openCard,setOpenCard]=useState(null);
   const [ajusteModal,setAjusteModal]=useState(null);
   const [ajusteText,setAjusteText]=useState("");
-  const [editModal,setEditModal]=useState(null);
+  // SPLIT: dois modais distintos pra não sobrepor (bug reportado pelo Vinicius).
+  // editAnnot = "Anotar ajustes" (riscar imagem) na aba publicação.
+  // editCopy  = "Editar copy" (título+legenda+briefing) na aba copys.
+  const [editAnnot,setEditAnnot]=useState(null);
+  const [editCopy,setEditCopy]=useState(null);
   const [lastApproved,setLastApproved]=useState(null);
 
   // FIX 1: reset cardIdx, imgIdx, lastApproved e modais ao trocar de aba
@@ -16068,7 +16072,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       setTab(initTab);
       setCardIdx(0);setImgIdx(0);
       setLastApproved(null);
-      setOpenCard(null);setEditModal(null);
+      setOpenCard(null);setEditAnnot(null);setEditCopy(null);
     }
   },[initTab]);
 
@@ -16287,7 +16291,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       timeline:tl,
     }:t));
     pushNotif({type:"urgente",icon:"⚠",title:"⚠ Ajuste necessário",body:'"'+task.title+'" voltou para Em Execução com solicitação de ajuste.',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
-    setCardIdx(0);setImgIdx(0);setEditModal(null);
+    setCardIdx(0);setImgIdx(0);setEditAnnot(null);setEditCopy(null);
   };
 
   const queue=tab==="copys"?copyQueue:tab==="ajuste"?ajusteQueue:tab==="internas"?internasQueue:pubQueue;
@@ -16334,7 +16338,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   return (<div style={{display:"flex",flexDirection:"column",gap:16}}>
     {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(() =>{})} onClose={()=>setOpenCard(null)} currentUser={effectiveUser}/>)}
-    {editModal&&(<PublicacaoEditModal task={editModal} onClose={()=>setEditModal(null)} onReject={(task,fb,df,af,cmts)=>requestAdjust(task,fb,df,af,cmts)}/>)}
+    {editAnnot&&(<PublicacaoEditModal task={editAnnot} onClose={()=>setEditAnnot(null)} onReject={(task,fb,df,af,cmts)=>requestAdjust(task,fb,df,af,cmts)}/>)}
 
     {/* Drive toast — aparece apos aprovar publicacao */}
     {lastApproved&&(()=>{
@@ -16617,7 +16621,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar ajuste
               </button>
-              <button onClick={()=>setEditModal(current)}
+              <button onClick={()=>setEditCopy(current)}
                 style={{width:"100%",background:"#f8fafc",color:"#475569",border:"1px solid "+C.b1,borderRadius:10,padding:"10px 0",fontWeight:600,fontSize:12,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}>
                 <Ico n="edit" size={12} color="#475569"/> Editar copy
               </button>
@@ -16630,7 +16634,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
                 Aprovar publicação
               </button>
-              <button onClick={()=>setEditModal(current)}
+              <button onClick={()=>setEditAnnot(current)}
                 style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
@@ -16912,7 +16916,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     </div>}
 
     {/* ── Modal Editar copy (titulo + legenda + briefing inline) ── */}
-    {editModal&&(()=>{
+    {editCopy&&(()=>{
       const stripHtml=(html)=>{
         if(!html)return"";let t=String(html);
         t=t.replace(/data-prosemirror-[a-z-]+="[^"]*"/gi,"");
@@ -16920,7 +16924,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
         t=t.replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'");
         return t.replace(/\n{3,}/g,"\n\n").trim();
       };
-      return <_EditCopyModal task={editModal} onClose={()=>setEditModal(null)} onSave={(field,val)=>{editCopyField(editModal,field,val);}} stripHtml={stripHtml}/>;
+      return <_EditCopyModal task={editCopy} onClose={()=>setEditCopy(null)} onSave={(field,val)=>{editCopyField(editCopy,field,val);}} stripHtml={stripHtml}/>;
     })()}
 
   </div>);
