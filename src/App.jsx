@@ -16415,6 +16415,64 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
         {/* Image panel — só para Aprovação de conteúdo (publicacao). */}
         {tab==="publicacao"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {/* ── Header de chips: cliente, unidade, responsáveis, tipo, prazos, prioridade ── */}
+          {(()=>{
+            const ct=(current.contentType||current.tipo||"").toLowerCase();
+            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},corte:{label:"Corte de vídeo",icon:"scan"}};
+            const ctCfg=CT_MAP[ct];
+            const pubD=current.publishDate||current.publish_date||"";
+            const pubT=current.publishTime||current.publish_time||"";
+            const dl=current.deadline||"";
+            const refMes=current.referenceMonth||current.reference_month||"";
+            const pri=(current.priority||"").toLowerCase();
+            const PRI_MAP={alta:{label:"Alta",color:"#dc2626"},media:{label:"Média",color:"#f59e0b"},baixa:{label:"Baixa",color:"#16a34a"}};
+            const priCfg=PRI_MAP[pri];
+            const fmtBR=(iso)=>{if(!iso)return"";const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return iso;};
+            const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
+            const metaTags=[];
+            if(ctCfg)metaTags.push({key:"ct",icon:ctCfg.icon,label:ctCfg.label,color:"#7c3aed",bg:"#7c3aed14"});
+            if(dl)metaTags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
+            if(pubD)metaTags.push({key:"pub",icon:"calendar",label:"Publicação "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
+            if(refMes)metaTags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#475569",bg:"#f1f5f9"});
+            if(priCfg)metaTags.push({key:"pri",icon:"flame",label:priCfg.label,color:priCfg.color,bg:priCfg.color+"14"});
+            const bioterSel=(cl&&cl.id==="bioter"&&current.bioterUnit)?String(current.bioterUnit).split(",").map(s=>s.trim()).filter(Boolean):[];
+            const assigneeIds=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
+            const assigneeUsers=assigneeIds.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
+            const hasAnyChip=cl||metaTags.length>0||bioterSel.length>0||assigneeUsers.length>0;
+            if(!hasAnyChip)return null;
+            return(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"12px 14px",display:"flex",flexDirection:"column",gap:9,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+              {/* Linha 1: cliente + unidades + responsáveis */}
+              {(cl||bioterSel.length>0||assigneeUsers.length>0)&&(<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:7,padding:"3px 10px",display:"flex",alignItems:"center"}}>
+                  {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:16,maxWidth:78,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:10.5,fontWeight:700}}>{cl.abbr||cl.name}</span>)}
+                </div>)}
+                {bioterSel.map(uid=>{
+                  const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
+                  if(!u)return null;
+                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5}}>
+                    <span style={{width:5,height:5,borderRadius:"50%",background:u.color,flexShrink:0}}/>
+                    {u.pickerLabel||u.label}
+                  </span>);
+                })}
+                {assigneeUsers.length>0&&(<div style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:7,padding:"2px 9px 2px 3px"}}>
+                  <div style={{display:"flex",alignItems:"center"}}>
+                    {assigneeUsers.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
+                      style={{width:20,height:20,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-5,zIndex:3-i,flexShrink:0}}>
+                      <UserAvatar user={u} size={20} border={false}/>
+                    </div>))}
+                  </div>
+                  {assigneeUsers.length>3&&<span style={{color:C.td,fontSize:9.5,fontWeight:700}}>+{assigneeUsers.length-3}</span>}
+                  <span style={{color:C.ts,fontSize:11,fontWeight:600,marginLeft:1}}>{assigneeUsers.map(u=>u.name.split(" ")[0]).join(", ")}</span>
+                </div>)}
+              </div>)}
+              {/* Linha 2: tipo + prazos + mês + prioridade */}
+              {metaTags.length>0&&(<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:7,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:.15,display:"inline-flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
+                  <Ico n={t.icon} size={10} color={t.color}/>{t.label}
+                </span>))}
+              </div>)}
+            </div>);
+          })()}
           {/* Carrossel de miniaturas — fixo no topo, scroll horizontal se for muito longo */}
           {allImgs.length>1&&(<div style={{display:"flex",gap:10,overflowX:"auto",overflowY:"hidden",padding:"4px 2px",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
             {allImgs.map((src,i)=>{
