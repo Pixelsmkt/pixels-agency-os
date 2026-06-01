@@ -15714,8 +15714,43 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const [aiLoading,setAiLoading]=useState(false);
   const [isSubmitting,setIsSubmitting]=useState(false);
   const [aiTranscript,setAiTranscript]=useState("");
+  const [refImages,setRefImages]=useState([]); // imagens de referência subidas no painel
+  const [refUploading,setRefUploading]=useState(false);
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
+  const refFileInputRef=useRef(null);
+
+  // Upload de imagens de referência pra Supabase Storage
+  const handleRefUpload=async(files)=>{
+    if(!files||files.length===0)return;
+    setRefUploading(true);
+    try{
+      const sb=window._sb;
+      const uploads=Array.from(files).filter(f=>f.type&&f.type.startsWith("image/"));
+      const out=[];
+      for(const f of uploads){
+        const ext=(f.name.split(".").pop()||"png").toLowerCase();
+        const path="ajuste-refs/"+task.id+"/"+Date.now()+"-"+Math.random().toString(36).slice(2,8)+"."+ext;
+        const{error}=await sb.storage.from("agency-files").upload(path,f,{upsert:false,contentType:f.type});
+        if(error){console.warn("[ref-upload]",error);continue;}
+        const{data}=sb.storage.from("agency-files").getPublicUrl(path);
+        out.push({id:Date.now()+Math.random(),name:f.name,type:f.type,url:data.publicUrl,storagePath:path,size:f.size});
+      }
+      if(out.length>0)setRefImages(p=>[...p,...out]);
+    }catch(e){
+      console.warn("Upload refs falhou:",e);
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao subir imagens.");
+    }
+    setRefUploading(false);
+  };
+  const removeRef=(id)=>{
+    const target=refImages.find(r=>r.id===id);
+    setRefImages(p=>p.filter(r=>r.id!==id));
+    // best-effort: limpa do storage
+    if(target?.storagePath&&window._sb){
+      window._sb.storage.from("agency-files").remove([target.storagePath]).catch(()=>{});
+    }
+  };
 
   const PEN_COLORS=["#e53e3e","#f97316","#eab308","#22c55e","#3b82f6","#a855f7","#ec4899","#000","#fff"];
 
@@ -15844,13 +15879,16 @@ function PublicacaoEditModal({task, onClose, onReject}){
     // batchId: linka este lote de feedback (comentario + audio + imagens marcadas).
     const batchId="adj-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
     const audioFiles=audioURL?[{id:Date.now()+999,name:"Audio_feedback.webm",type:"audio/webm",url:audioURL,size:0,addedAt:nowStr,addedBy:CURRENT_USER.name,batchId}]:[];
+    // Refs subidas no painel — viram files do card com flag isRef pra serem exibidas como referência
+    const refFiles=refImages.map((r,i)=>({...r,addedAt:nowStr,addedAtIso:nowIso,addedBy:CURRENT_USER.name,isRef:true,batchId}));
+    const extraFiles=[...audioFiles,...refFiles];
     const newComment=feedback.trim()?{id:Date.now(),user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"AJUSTE NECESSARIO: "+feedback.trim(),time:nowFull,at:nowIso,atFmt:nowFull,type:"feedback",batchId}:null;
     const audioComment=audioURL?{id:Date.now()+1,user:CURRENT_USER.name,av:CURRENT_USER.av,color:C.or,text:"",type:"audio",audioUrl:audioURL,time:nowFull,at:nowIso,atFmt:nowFull,batchId}:null;
     const comments=[newComment,audioComment].filter(Boolean);
 
     // Collect entries that have a drawing
     const entries=finalDrawings.map((d,i)=>d?{d,bg:allImgs[i]||null,i}:null).filter(Boolean);
-    if(entries.length===0){onReject(task,feedback,[],audioFiles,comments);setIsSubmitting(false);return;}
+    if(entries.length===0){onReject(task,feedback,[],extraFiles,comments);setIsSubmitting(false);return;}
 
     let done=0;
     const result=new Array(entries.length).fill(null);
@@ -15886,7 +15924,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
             sourceIdx:e.i,
           };
         }
-        if(++done===entries.length){setIsSubmitting(false);onReject(task,feedback,result.filter(Boolean),audioFiles,comments);}
+        if(++done===entries.length){setIsSubmitting(false);onReject(task,feedback,result.filter(Boolean),extraFiles,comments);}
       });
     });
   };
@@ -15982,31 +16020,74 @@ function PublicacaoEditModal({task, onClose, onReject}){
           </div>
         </div>
 
-        {/* Right — feedback panel */}
-        <div style={{width:280,flexShrink:0,background:C.s1,borderLeft:`1px solid ${C.b1}`,padding:18,display:"flex",flexDirection:"column",gap:14}}>
+        {/* Right — feedback panel (redesign 2026-06: maior, com referências) */}
+        <div style={{width:360,flexShrink:0,background:"#fff",borderLeft:`1px solid ${C.b1}`,padding:"20px 22px",display:"flex",flexDirection:"column",gap:18,overflowY:"auto",maxHeight:"calc(100vh - 110px)"}}>
 
           <div>
-            <div style={{display:"flex",alignItems:"center",gap:6,color:C.ts,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>
-              <Ico n="edit" size={11}/>
+            <div style={{display:"flex",alignItems:"center",gap:6,color:"#0f172a",fontSize:11.5,fontWeight:700,marginBottom:9,letterSpacing:-.1}}>
+              <Ico n="edit" size={13} color="#0f172a"/>
               <span>Instruções de alteração</span>
             </div>
             <textarea value={feedback} onChange={e=>setFeedback(e.target.value)}
-              placeholder="Descreva o que precisa ser alterado em cada imagem..."
-              rows={6} style={{width:"100%",background:"#fff",border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 12px",color:C.tx,fontSize:12,lineHeight:1.5,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"}}
+              placeholder="Descreva detalhadamente o que precisa ser alterado em cada imagem. Quanto mais específico, melhor o resultado.\n\nEx: trocar fundo verde por azul, ajustar título pra ficar centralizado, deixar logo Bioter maior no canto superior direito..."
+              rows={10} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.b1}`,borderRadius:12,padding:"14px 16px",color:"#0f172a",fontSize:13,lineHeight:1.55,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s",minHeight:200}}
               onFocus={e=>e.target.style.borderColor=C.a}
               onBlur={e=>e.target.style.borderColor=C.b1}/>
           </div>
 
+          {/* IMAGENS DE REFERÊNCIA — upload novo */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,color:"#0f172a",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>
+                <Ico n="image" size={13} color="#0f172a"/>
+                <span>Imagens de referência</span>
+                {refImages.length>0&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginLeft:2}}>({refImages.length})</span>}
+              </div>
+            </div>
+            <input ref={refFileInputRef} type="file" accept="image/*" multiple
+              onChange={e=>{handleRefUpload(e.target.files);e.target.value="";}}
+              style={{display:"none"}}/>
+            {refImages.length===0
+              ?<button onClick={()=>refFileInputRef.current?.click()} disabled={refUploading}
+                style={{width:"100%",background:"#faf5ff",color:C.a,border:`1.5px dashed ${C.a}66`,borderRadius:12,padding:"18px 14px",fontWeight:600,fontSize:12.5,cursor:refUploading?"not-allowed":"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,transition:"all .15s",fontFamily:"inherit"}}
+                onMouseEnter={e=>{if(!refUploading){e.currentTarget.style.background="#f3e8ff";e.currentTarget.style.borderColor=C.a;}}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.borderColor=C.a+"66";}}>
+                {refUploading
+                  ?<><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{animation:"spin 0.8s linear infinite"}}><circle cx="12" cy="12" r="10" opacity=".25"/><path d="M12 2a10 10 0 0110 10"/></svg> Enviando...</>
+                  :<><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <div style={{textAlign:"center",lineHeight:1.4}}>
+                      <div>Clique pra anexar referências</div>
+                      <div style={{fontSize:11,color:"#94a3b8",fontWeight:500,marginTop:3}}>Imagens que ajudem a equipe a entender o ajuste</div>
+                    </div></>}
+              </button>
+              :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
+                  {refImages.map(r=>(<div key={r.id} style={{position:"relative",borderRadius:9,overflow:"hidden",border:"1px solid "+C.b1,background:"#f8fafc",aspectRatio:"1 / 1"}}>
+                    <img src={r.url} alt={r.name} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                    <button onClick={()=>removeRef(r.id)} title="Remover"
+                      style={{position:"absolute",top:4,right:4,background:"rgba(15,23,42,0.88)",border:"none",borderRadius:"50%",width:20,height:20,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>))}
+                </div>
+                <button onClick={()=>refFileInputRef.current?.click()} disabled={refUploading}
+                  style={{width:"100%",background:"#f8fafc",color:C.ts,border:`1px solid ${C.b1}`,borderRadius:9,padding:"8px 0",fontWeight:600,fontSize:11.5,cursor:refUploading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontFamily:"inherit"}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  {refUploading?"Enviando...":"Adicionar mais"}
+                </button>
+              </div>}
+          </div>
+
           <button onClick={transcribeWithAI} disabled={aiLoading||!feedback.trim()}
-            style={{width:"100%",background:!feedback.trim()||aiLoading?C.b1:`linear-gradient(135deg,${C.a},${C.aD})`,color:!feedback.trim()||aiLoading?C.td:"#fff",border:"none",borderRadius:10,padding:"10px 0",fontWeight:700,fontSize:12,letterSpacing:.2,cursor:!feedback.trim()||aiLoading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:!feedback.trim()||aiLoading?"none":"0 2px 8px "+C.a+"33"}}>
-            <Ico n="zap" size={12}/>
-            <span>{aiLoading?"Processando...":"Pixels IA — Refinar"}</span>
+            style={{width:"100%",background:!feedback.trim()||aiLoading?C.b1:`linear-gradient(135deg,${C.a},${C.aD})`,color:!feedback.trim()||aiLoading?C.td:"#fff",border:"none",borderRadius:10,padding:"11px 0",fontWeight:700,fontSize:12.5,letterSpacing:.2,cursor:!feedback.trim()||aiLoading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:!feedback.trim()||aiLoading?"none":"0 2px 8px "+C.a+"33"}}>
+            <Ico n="zap" size={13}/>
+            <span>{aiLoading?"Processando...":"Pixels IA — Refinar texto"}</span>
           </button>
           {aiTranscript&&<div style={{background:C.a+"10",borderRadius:9,padding:"9px 12px",border:`1px solid ${C.a}33`,fontSize:11.5,color:C.tx,lineHeight:1.55}}>{aiTranscript}</div>}
 
           <div>
-            <div style={{display:"flex",alignItems:"center",gap:6,color:C.ts,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>
-              <Ico n="mic" size={11}/>
+            <div style={{display:"flex",alignItems:"center",gap:6,color:"#0f172a",fontSize:11.5,fontWeight:700,marginBottom:9,letterSpacing:-.1}}>
+              <Ico n="mic" size={13} color="#0f172a"/>
               <span>Áudio</span>
             </div>
             {!isRecording&&!audioURL&&<button onClick={startRec}
@@ -16449,8 +16530,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 {bioterSel.map(uid=>{
                   const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
                   if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5}}>
-                    <span style={{width:5,height:5,borderRadius:"50%",background:u.color,flexShrink:0}}/>
+                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center"}}>
                     {u.pickerLabel||u.label}
                   </span>);
                 })}
@@ -16557,8 +16637,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 return sel.map(uid=>{
                   const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
                   if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5}}>
-                    <span style={{width:5,height:5,borderRadius:"50%",background:u.color,flexShrink:0}}/>
+                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center"}}>
                     {u.pickerLabel||u.label}
                   </span>);
                 });
