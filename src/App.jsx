@@ -1720,8 +1720,8 @@ const NAV=[
     {id:"demandas_cal_interno",icon:"▦", label:"Calendário interno"},
     {id:"demandas_internas",   icon:"◫", label:"Demandas internas"},
   ]},
-  {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
-    {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de copys"},
+  {id:"aprovacoes", icon:"◇", label:"Avaliações",children:[
+    {id:"aprovacoes_copys",      icon:"✦", label:"Avaliação de copys"},
     {id:"aprovacoes_publicacao", icon:"▷", label:"Avaliação de design"},
     {id:"aprovacoes_video",      icon:"▶", label:"Avaliação de vídeo"},
   ]},
@@ -16666,7 +16666,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   const isSocio=CURRENT_USER.level===1;
   const TABS=[
-    {id:"copys",      label:"Aprovação de copys", count:copyQueue.length,     color:C.a},
+    {id:"copys",      label:"Avaliação de copys", count:copyQueue.length,     color:C.a},
     {id:"publicacao", label:"Avaliação de design",count:pubQueue.length,      color:C.gr},
     {id:"video",      label:"Avaliação de vídeo", count:pubVideoQueue.length, color:"#0ea5e9"},
     ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
@@ -16705,7 +16705,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     })()}
 
     <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1,fontFamily:"Inter, system-ui, -apple-system, sans-serif"}}>
-      {tab==="copys"?"Aprovação de copys":tab==="internas"?"Aprovação de demandas internas":tab==="ajuste"?"Ajustes solicitados":tab==="video"?"Avaliação de vídeo":"Avaliação de design"}
+      {tab==="copys"?"Avaliação de copys":tab==="internas"?"Aprovação de demandas internas":tab==="ajuste"?"Ajustes solicitados":tab==="video"?"Avaliação de vídeo":"Avaliação de design"}
     </div>
 
     {/* Empty state moderno (sem emojis) */}
@@ -18818,7 +18818,7 @@ const PERM_TABS=[
   {id:"dashboard",    navIcon:"meudash",    label:"Dashboard",          color:"#7c3aed"},
   {id:"demandas",     navIcon:"demandas",   label:"Demandas",           color:"#2563eb"},
   {id:"dem_internas", navIcon:"demandas",   label:"Demandas Internas",  color:"#6366f1"},
-  {id:"aprovacoes",   navIcon:"aprovacoes", label:"Aprovações",         color:"#16a34a"},
+  {id:"aprovacoes",   navIcon:"aprovacoes", label:"Avaliações",         color:"#16a34a"},
   {id:"chat",         navIcon:"chat",       label:"Chat",               color:"#0891b2"},
   {id:"clientes",     navIcon:"clientes",   label:"Clientes",           color:"#d97706"},
   {id:"analises",     navIcon:"analises",   label:"Análises",           color:"#7c3aed"},
@@ -29707,7 +29707,7 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
 const MOBILE_NAV=[
   {id:"meudash",   icon:"⊡",label:"Dashboard"},
   {id:"demandas",  icon:"◈", label:"Demandas"},
-  {id:"aprovacoes",icon:"◇", label:"Aprovações"},
+  {id:"aprovacoes",icon:"◇", label:"Avaliações"},
   {id:"chat",      icon:"◐", label:"Chat"},
   {id:"clientes",  icon:"◉", label:"Clientes"},
 ];
@@ -30457,12 +30457,26 @@ export default function AgencyOS(){
       default:                     return true;
     }
   };
-  // Pendências de aprovação — para destaque laranja no menu
-  const pendingAprovacoes=tasks.filter(t=>
-    !t.deletedAt&&(
-      t.status==="avaliacao"||(t.status==="demanda"&&!t.ajustar)
-    )
-  ).length;
+  // Pendências de aprovação — para destaque vermelho no menu
+  // Contagens granulares por sub-aba pra mostrar badge ao lado de cada filho.
+  const _isVideoTask=(t)=>{
+    const ct=String(t.contentType||t.tipo||"").toLowerCase();
+    if(ct==="video"||ct==="vídeo"||ct==="video_short"||ct==="corte"||ct==="corte de vídeo"||ct==="corte_de_video")return true;
+    const sect=String(t.sector||"").toLowerCase();
+    if(sect==="video"||sect==="vídeo"||sect==="edicao"||sect==="edição")return true;
+    return false;
+  };
+  const pendingCopys=tasks.filter(t=>!t.deletedAt&&t.status==="demanda"&&!t.ajustar).length;
+  const _pubAvail=tasks.filter(t=>!t.deletedAt&&t.status==="avaliacao");
+  const pendingDesign=_pubAvail.filter(t=>!_isVideoTask(t)).length;
+  const pendingVideo =_pubAvail.filter(t=> _isVideoTask(t)).length;
+  const pendingAprovacoes=pendingCopys+pendingDesign+pendingVideo;
+  // Mapa pra render no sidebar: child id → count
+  const CHILD_BADGES={
+    aprovacoes_copys:pendingCopys,
+    aprovacoes_publicacao:pendingDesign,
+    aprovacoes_video:pendingVideo,
+  };
 
   const NAV_VISIBLE=NAV.filter((n,i,arr)=>{
     if(n.type==="divider"){
@@ -30779,7 +30793,7 @@ export default function AgencyOS(){
                 if(!isExpanded)nav(n.children[0].id);
               } else {
                 // Folha sem children: ao navegar, fecha qualquer pai expandido
-                // que não contenha a página atual (ex: muda de "Aprovação de copys"
+                // que não contenha a página atual (ex: muda de "Avaliação de copys"
                 // pra "Gestão de mídia" → fecha o submenu de Aprovações).
                 setExpanded({});
                 nav(n.id);
@@ -30798,12 +30812,15 @@ export default function AgencyOS(){
               </span>}
             </button>
             {(!sideCollapsed||isMob)&&hasChildren&&isExpanded&&<div style={{marginLeft:12,borderLeft:`2px solid ${C.a}33`,paddingLeft:8,marginBottom:4}}>
-              {n.children.filter(child=>canSee(child,effectivePerms)).map(child=>(
-                <button key={child.id} onClick={()=>nav(child.id)}
+              {n.children.filter(child=>canSee(child,effectivePerms)).map(child=>{
+                const childBadge=CHILD_BADGES&&CHILD_BADGES[child.id]>0?CHILD_BADGES[child.id]:0;
+                return <button key={child.id} onClick={()=>nav(child.id)}
                   style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:500,fontSize:12,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
-                  <NavIcon id={child.id} size={16} color={page===child.id?C.a:C.ts}/><span style={{marginLeft:2}}>{child.label}</span>
-                </button>
-              ))}
+                  <NavIcon id={child.id} size={16} color={page===child.id?C.a:C.ts}/>
+                  <span style={{marginLeft:2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{child.label}</span>
+                  {childBadge>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900,flexShrink:0}}>{childBadge}</span>}
+                </button>;
+              })}
             </div>}
           </div>);
         })}
@@ -42918,7 +42935,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         </div>
         <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
           {[
-            {label:"Aprovações",value:apvTotal,color:apvTotal>0?"#fbbf24":"#22c55e"},
+            {label:"Avaliações",value:apvTotal,color:apvTotal>0?"#fbbf24":"#22c55e"},
             {label:"Clientes em atenção",value:clientesAtencao.length,color:clientesAtencao.length>0?"#fb7185":"#22c55e"},
             {label:"Metas em risco",value:weekEmRisco,color:weekEmRisco>0?"#f97316":"#22c55e"},
             {label:"Gargalos",value:gargalos.length,color:gargalos.length>3?"#ef4444":gargalos.length>0?"#f97316":"#22c55e"},
@@ -42967,7 +42984,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
       <_DGSec icon="check" title="Aprovações que dependem de mim" sub={apvTotal+" aguardando sua revisão"}/>
       {apvTotal===0?<_DGEmpty icon="check" title="Tudo em dia!" desc="Nenhuma aprovação aguardando."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
-        <_DGApvCard label="Aprovação de copys" count={apvCopys.length} color="#9F43F6" icon="message"/>
+        <_DGApvCard label="Avaliação de copys" count={apvCopys.length} color="#9F43F6" icon="message"/>
         <_DGApvCard label="Aprovação de conteúdo (design)" count={apvDesign.length} sub={apvDesignAtrasadas.length>0?(apvDesignAtrasadas.length+" parada"+(apvDesignAtrasadas.length>1?"s":"")+" +2 dias"):""} color="#0ea5e9" icon="image" urgent={apvDesignAtrasadas.length>0}/>
         <_DGApvCard label="Demandas internas" count={apvInternas.length} color="#f97316" icon="inbox"/>
       </div>}
