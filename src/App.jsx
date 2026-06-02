@@ -30806,8 +30806,8 @@ export default function AgencyOS(){
                 {(!sideCollapsed||isMob)&&<span>{n.label}</span>}
               </span>
               {(!sideCollapsed||isMob)&&<span style={{display:"flex",alignItems:"center",gap:4}}>
-                {n.id==="notificacoes"&&unreadNotifs>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.3}}>{unreadNotifs}</span>}
-                {showAprBadge&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.3}}>{pendingAprovacoes}</span>}
+                {n.id==="notificacoes"&&unreadNotifs>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.1,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.4}}>{unreadNotifs}</span>}
+                {showAprBadge&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.1,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.4}}>{pendingAprovacoes}</span>}
                 {hasChildren&&<span style={{color:C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
               </span>}
             </button>
@@ -30818,7 +30818,7 @@ export default function AgencyOS(){
                   style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:"#334155",cursor:"pointer",fontWeight:page===child.id?600:500,fontSize:12,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
                   <NavIcon id={child.id} size={16} color={page===child.id?C.a:C.ts}/>
                   <span style={{marginLeft:2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{child.label}</span>
-                  {childBadge>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.3,flexShrink:0}}>{childBadge}</span>}
+                  {childBadge>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:10.5,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.1,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.4,flexShrink:0}}>{childBadge}</span>}
                 </button>;
               })}
             </div>}
