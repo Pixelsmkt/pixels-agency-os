@@ -1665,6 +1665,7 @@ function NavIcon({id,size=18,color}){
   // ── Submenus Aprovações ──
   if(id==="aprovacoes_copys")      return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
   if(id==="aprovacoes_publicacao") return <svg {...p}><rect x="3" y="3" width="18" height="14" rx="2"/><circle cx="9" cy="9" r="1.5"/><path d="M21 13l-4.5-4.5L9 16"/><path d="M16 20l2 2 4-4"/></svg>;
+  if(id==="aprovacoes_video")      return <svg {...p}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><path d="M7 4l2 5M12 4l2 5M17 4l2 5"/><polygon points="10 12 15 14.5 10 17" fill="currentColor" stroke="none"/></svg>;
   if(id==="aprovacoes_internas")   return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M12 2v6h6"/><path d="M9 15l2 2 4-4"/></svg>;
   if(id==="gestaomidia")           return <svg {...p}><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 010 18"/><path d="M12 3a14 14 0 000 18"/></svg>;
   if(id==="comercial")             return <svg {...p}><path d="M3 3v18h18"/><path d="M7 14l3-3 4 4 6-7"/><circle cx="20" cy="8" r="1.5"/></svg>;
@@ -1721,7 +1722,8 @@ const NAV=[
   ]},
   {id:"aprovacoes", icon:"◇", label:"Aprovações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Aprovação de copys"},
-    {id:"aprovacoes_publicacao", icon:"▷", label:"Aprovação de conteúdo"},
+    {id:"aprovacoes_publicacao", icon:"▷", label:"Avaliação de design"},
+    {id:"aprovacoes_video",      icon:"▶", label:"Avaliação de vídeo"},
   ]},
   {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"comercial",  icon:"◈", label:"Comercial"},
@@ -15728,6 +15730,80 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const [shapeTool,setShapeTool]=useState(null);
   const shapeStartRef=useRef(null); // {x, y}
   const shapeSnapshotRef=useRef(null); // ImageData do canvas no momento do click
+
+  // ─── HISTORY (undo/redo, Ctrl+Z) ──────────────────
+  // Por imagem (key = activeIdx), stack de ImageData snapshots.
+  // pointer: índice do estado ATUAL no stack. undo decrementa, redo incrementa.
+  // Limite 30 por imagem pra não estourar memória.
+  const historyRef=useRef({}); // {[idx]: {stack:[ImageData,...], pointer:number}}
+  const [historyTick,setHistoryTick]=useState(0); // força re-render quando botões precisam atualizar disabled
+  const HISTORY_LIMIT=30;
+  const getHist=(idx)=>{
+    if(!historyRef.current[idx])historyRef.current[idx]={stack:[],pointer:-1};
+    return historyRef.current[idx];
+  };
+  // Snapshot do estado ATUAL — chamado APÓS cada ação (caneta solta, shape commit, texto commit, borracha solta, limpar)
+  const pushHistory=()=>{
+    const cv=canvasRef.current;if(!cv)return;
+    const ctx=cv.getContext("2d");
+    const snap=ctx.getImageData(0,0,cv.width,cv.height);
+    const h=getHist(activeIdx);
+    // Se já fizemos undo e agora estamos desenhando algo novo, descarta o futuro
+    if(h.pointer<h.stack.length-1){h.stack=h.stack.slice(0,h.pointer+1);}
+    h.stack.push(snap);
+    if(h.stack.length>HISTORY_LIMIT)h.stack.shift();
+    h.pointer=h.stack.length-1;
+    setHistoryTick(t=>t+1);
+  };
+  const undo=()=>{
+    const cv=canvasRef.current;if(!cv)return;
+    const h=getHist(activeIdx);
+    if(h.pointer<=0){
+      // Voltar pro estado vazio inicial
+      if(h.pointer===0){
+        const ctx=cv.getContext("2d");
+        ctx.clearRect(0,0,cv.width,cv.height);
+        h.pointer=-1;
+        setHistoryTick(t=>t+1);
+      }
+      return;
+    }
+    h.pointer--;
+    const ctx=cv.getContext("2d");
+    ctx.putImageData(h.stack[h.pointer],0,0);
+    setHistoryTick(t=>t+1);
+  };
+  const redo=()=>{
+    const cv=canvasRef.current;if(!cv)return;
+    const h=getHist(activeIdx);
+    if(h.pointer>=h.stack.length-1)return;
+    h.pointer++;
+    const ctx=cv.getContext("2d");
+    ctx.putImageData(h.stack[h.pointer],0,0);
+    setHistoryTick(t=>t+1);
+  };
+  // Atalhos de teclado: Ctrl+Z / Cmd+Z (undo), Ctrl+Shift+Z / Cmd+Shift+Z / Ctrl+Y (redo)
+  useEffect(()=>{
+    const onKey=(e)=>{
+      // Não interceptar se estiver digitando em input/textarea (Vinicius escrevendo o feedback)
+      const tag=(e.target&&e.target.tagName||"").toLowerCase();
+      if(tag==="textarea"||tag==="input"||e.target?.isContentEditable)return;
+      const meta=e.ctrlKey||e.metaKey;
+      if(!meta)return;
+      if(e.key==="z"||e.key==="Z"){
+        e.preventDefault();
+        if(e.shiftKey)redo();else undo();
+      }else if(e.key==="y"||e.key==="Y"){
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown",onKey);
+    return()=>window.removeEventListener("keydown",onKey);
+  },[activeIdx]);
+  // Re-checa botões qd troca de imagem
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(()=>{setHistoryTick(t=>t+1);},[activeIdx]);
   // Helper: limpa todos os outros modos quando ativa um
   const activateMode=(mode)=>{
     setIsEraser(mode==="eraser");
@@ -15870,6 +15946,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
       ctx.fillText(line,pendingText.x,pendingText.y+i*fontPx*1.15);
     });
     setPendingText(null);
+    pushHistory();
   };
   const onMD=(e)=>{
     if(textMode){onCanvasClickForText(e);return;}
@@ -15897,6 +15974,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
     ctx.lineCap="round";ctx.lineJoin="round";ctx.lineTo(p.x,p.y);ctx.stroke();
   };
   const onMU=(e)=>{
+    const wasDrawing=drawing;
     if(shapeTool&&drawing&&shapeStartRef.current){
       // Commit final da forma com o ponto atual (ou último move)
       try{
@@ -15910,9 +15988,10 @@ function PublicacaoEditModal({task, onClose, onReject}){
       shapeStartRef.current=null;shapeSnapshotRef.current=null;
     }
     setDrawing(false);
+    if(wasDrawing)pushHistory();
   };
 
-  const clearCurrent=()=>{const cv=canvasRef.current;cv.getContext("2d").clearRect(0,0,cv.width,cv.height);};
+  const clearCurrent=()=>{const cv=canvasRef.current;cv.getContext("2d").clearRect(0,0,cv.width,cv.height);pushHistory();};
 
   const fmtSec=s=>`${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
 
@@ -16128,6 +16207,22 @@ function PublicacaoEditModal({task, onClose, onReject}){
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
               <span>Texto</span>
             </button>
+            {/* Undo / Redo */}
+            {(()=>{
+              const h=historyRef.current[activeIdx]||{stack:[],pointer:-1};
+              const canUndo=h.pointer>=0;
+              const canRedo=h.pointer<h.stack.length-1;
+              return <>
+                <button onClick={undo} disabled={!canUndo} title="Desfazer (Ctrl+Z)"
+                  style={{background:C.s1,color:canUndo?C.ts:C.td,border:"none",borderRadius:8,padding:"6px 9px",cursor:canUndo?"pointer":"not-allowed",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",opacity:canUndo?1:.4}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
+                </button>
+                <button onClick={redo} disabled={!canRedo} title="Refazer (Ctrl+Shift+Z)"
+                  style={{background:C.s1,color:canRedo?C.ts:C.td,border:"none",borderRadius:8,padding:"6px 9px",cursor:canRedo?"pointer":"not-allowed",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",opacity:canRedo?1:.4}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>
+                </button>
+              </>;
+            })()}
             <button onClick={clearCurrent}
               style={{background:C.s1,color:C.ts,border:"none",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
               onMouseEnter={e=>e.currentTarget.style.background=C.b1}
@@ -16325,8 +16420,18 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const copyQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"&&!t.ajustar));
   // Ajuste queue: cards marcados para ajuste
   const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_")));
-  // Publication queue: cards in "avaliacao"
-  const pubQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="avaliacao"));
+  // Publication queue: cards in "avaliacao" — separada por tipo (design vs vídeo)
+  // Vinicius pediu (2026-06): cards de vídeo/corte vão pra sub-aba "Avaliação de vídeo".
+  const _isVideoTask=(t)=>{
+    const ct=String(t.contentType||t.tipo||"").toLowerCase();
+    if(ct==="video"||ct==="vídeo"||ct==="video_short"||ct==="corte"||ct==="corte de vídeo"||ct==="corte_de_video")return true;
+    const sect=String(t.sector||"").toLowerCase();
+    if(sect==="video"||sect==="vídeo"||sect==="edicao"||sect==="edição")return true;
+    return false;
+  };
+  const _pubAll=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="avaliacao"));
+  const pubQueue=_pubAll.filter(t=>!_isVideoTask(t)); // mantém o nome legado; agora = só design
+  const pubVideoQueue=_pubAll.filter(t=>_isVideoTask(t));
   // Demandas Internas queue
   const internasQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="interno_avaliacao"));
 
@@ -16524,15 +16629,16 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     setCardIdx(0);setImgIdx(0);setEditAnnot(null);setEditCopy(null);
   };
 
-  const queue=tab==="copys"?copyQueue:tab==="ajuste"?ajusteQueue:tab==="internas"?internasQueue:pubQueue;
+  const queue=tab==="copys"?copyQueue:tab==="ajuste"?ajusteQueue:tab==="internas"?internasQueue:tab==="video"?pubVideoQueue:pubQueue;
   // FIX 4: clamp seguro — se queue vazia, current fica undefined
   const clampedIdx=queue.length>0?Math.min(cardIdx,queue.length-1):0;
   const current=queue[clampedIdx]||null;
   const cl=current?CLIENTS.find(c=>c.id===current.client):null;
   const assigneeUser=current?TEAM.find(x=>x.id===current.assignee):null;
 
-  const prev=()=>{setCardIdx(i=>Math.max(0,i-1));setImgIdx(0);};
-  const next=()=>{setCardIdx(i=>Math.min(queue.length-1,i+1));setImgIdx(0);};
+  // Wrap-around: setas do contador giram a fila (← do primeiro vai pro último, → do último vai pro primeiro).
+  const prev=()=>{setCardIdx(i=>queue.length<=1?0:(i<=0?queue.length-1:i-1));setImgIdx(0);};
+  const next=()=>{setCardIdx(i=>queue.length<=1?0:(i>=queue.length-1?0:i+1));setImgIdx(0);};
 
   // FIX 5: resetar cardIdx, imgIdx e lastApproved ao trocar aba manualmente
   const switchTab=(newTab)=>{setTab(newTab);setCardIdx(0);setImgIdx(0);setLastApproved(null);};
@@ -16544,7 +16650,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // pra elas não aparecerem misturadas com as artes finais no carrossel de aprovação.
   const isFinalImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
   const isAnyImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/");
-  const filterFn=tab==="publicacao"?isFinalImg:isAnyImg;
+  const filterFn=(tab==="publicacao"||tab==="video")?isFinalImg:isAnyImg;
   // ORDEM: última imagem subida pelo designer aparece PRIMEIRO (mais recente no topo).
   // Reverte files em ordem cronológica → mais recente primeiro. Cover entra no fim se não estiver nos files.
   // Filtra URLs válidas (http/https/data/blob) — evita placeholders e refs sem url.
@@ -16560,8 +16666,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   const isSocio=CURRENT_USER.level===1;
   const TABS=[
-    {id:"copys",      label:"Aprovação de copys",      count:copyQueue.length,    color:C.a},
-    {id:"publicacao", label:"Aprovação de conteúdo", count:pubQueue.length,     color:C.gr},
+    {id:"copys",      label:"Aprovação de copys", count:copyQueue.length,     color:C.a},
+    {id:"publicacao", label:"Avaliação de design",count:pubQueue.length,      color:C.gr},
+    {id:"video",      label:"Avaliação de vídeo", count:pubVideoQueue.length, color:"#0ea5e9"},
     ...((perms?.aprovarDemandaInterna||isSocio)?[{id:"internas",label:"Demanda interna",count:internasQueue.length,color:"#8b5cf6"}]:[]),
     ...((perms?.verAprAjuste||isSocio)?[{id:"ajuste", label:"Ajustes solicitados", count:ajusteQueue.length, color:C.or}]:[]),
   ];
@@ -16598,7 +16705,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     })()}
 
     <div style={{color:C.tx,fontWeight:800,fontSize:isMob?20:28,letterSpacing:-0.6,lineHeight:1.1,fontFamily:"Inter, system-ui, -apple-system, sans-serif"}}>
-      {tab==="copys"?"Aprovação de copys":tab==="internas"?"Aprovação de demandas internas":tab==="ajuste"?"Ajustes solicitados":"Aprovação de conteúdo"}
+      {tab==="copys"?"Aprovação de copys":tab==="internas"?"Aprovação de demandas internas":tab==="ajuste"?"Ajustes solicitados":tab==="video"?"Avaliação de vídeo":"Avaliação de design"}
     </div>
 
     {/* Empty state moderno (sem emojis) */}
@@ -16624,17 +16731,17 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       {/* Navigation — setas juntas, roxo Pixels */}
       <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,padding:"4px 0"}}>
         <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:4,boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
-          <button onClick={prev} disabled={clampedIdx===0}
-            style={{background:clampedIdx===0?"transparent":"#9F43F614",border:"none",borderRadius:99,width:34,height:34,cursor:clampedIdx===0?"not-allowed":"pointer",color:clampedIdx===0?"#cbd5e1":"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
-            onMouseEnter={e=>{if(clampedIdx>0){e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}}
-            onMouseLeave={e=>{if(clampedIdx>0){e.currentTarget.style.background="#9F43F614";e.currentTarget.style.color="#9F43F6";}}}>
+          <button onClick={prev} disabled={queue.length<=1}
+            style={{background:queue.length<=1?"transparent":"#9F43F614",border:"none",borderRadius:99,width:34,height:34,cursor:queue.length<=1?"not-allowed":"pointer",color:queue.length<=1?"#cbd5e1":"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
+            onMouseEnter={e=>{if(queue.length>1){e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}}
+            onMouseLeave={e=>{if(queue.length>1){e.currentTarget.style.background="#9F43F614";e.currentTarget.style.color="#9F43F6";}}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <span style={{color:"#475569",fontSize:12.5,fontWeight:700,letterSpacing:.2,padding:"0 14px",minWidth:60,textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>{clampedIdx+1} <span style={{color:"#94a3b8",fontWeight:500}}>de {queue.length}</span></span>
-          <button onClick={next} disabled={clampedIdx>=queue.length-1}
-            style={{background:clampedIdx>=queue.length-1?"transparent":"#9F43F614",border:"none",borderRadius:99,width:34,height:34,cursor:clampedIdx>=queue.length-1?"not-allowed":"pointer",color:clampedIdx>=queue.length-1?"#cbd5e1":"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
-            onMouseEnter={e=>{if(clampedIdx<queue.length-1){e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}}
-            onMouseLeave={e=>{if(clampedIdx<queue.length-1){e.currentTarget.style.background="#9F43F614";e.currentTarget.style.color="#9F43F6";}}}>
+          <button onClick={next} disabled={queue.length<=1}
+            style={{background:queue.length<=1?"transparent":"#9F43F614",border:"none",borderRadius:99,width:34,height:34,cursor:queue.length<=1?"not-allowed":"pointer",color:queue.length<=1?"#cbd5e1":"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
+            onMouseEnter={e=>{if(queue.length>1){e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}}
+            onMouseLeave={e=>{if(queue.length>1){e.currentTarget.style.background="#9F43F614";e.currentTarget.style.color="#9F43F6";}}}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
@@ -16644,7 +16751,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(tab==="copys"?"1fr 360px":"1fr 380px"),gap:18,alignItems:"flex-start"}}>
 
         {/* Image panel — só para Aprovação de conteúdo (publicacao). */}
-        {tab==="publicacao"&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {(tab==="publicacao"||tab==="video")&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
           {/* ── Header de chips: cliente, unidade, responsáveis, tipo, prazos, prioridade ── */}
           {(()=>{
             const ct=(current.contentType||current.tipo||"").toLowerCase();
@@ -16913,7 +17020,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               </button>
             </>)}
 
-            {tab==="publicacao"&&(<>
+            {(tab==="publicacao"||tab==="video")&&(<>
               <button onClick={()=>approvePub(current)}
                 style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
@@ -30311,7 +30418,8 @@ export default function AgencyOS(){
       case "playbooks":            return isSocio||effectiveUser.id==="ellen"||effectiveUser.dash==="designer"||effectiveUser.dash==="editor"||effectiveUser.id==="erick"||!!p.verPlaybooks;
       case "aprovacoes":
       case "aprovacoes_copys":
-      case "aprovacoes_publicacao":return p.verAprovacoes;
+      case "aprovacoes_publicacao":
+      case "aprovacoes_video":     return p.verAprovacoes;
       case "gestaomidia":          return p.verGestaoMidia||isSocio;
       case "comercial":            return p.verComercial||isSocio;
       case "chat":                 return p.verChat;
@@ -30393,6 +30501,7 @@ export default function AgencyOS(){
       case "aprovacoes":
       case "aprovacoes_copys":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="copys"/>:<NoPerm/>;
       case "aprovacoes_publicacao": return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="publicacao"/>:<NoPerm/>;
+      case "aprovacoes_video":      return effectivePerms.verAprovacoes?<PageAprovacoes {...p} tasks={tasks} setTasks={setTasks} globalNotifs={notifs} setGlobalNotifs={setNotifs} initTab="video"/>:<NoPerm/>;
       case "gestaomidia":          return (effectivePerms.verGestaoMidia||isSocio)?<PageGestaoMidia {...p} currentUser={CURRENT_USER} tasks={tasks} setTasks={setTasks} onNavTo={nav}/>:<NoPerm/>;
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
