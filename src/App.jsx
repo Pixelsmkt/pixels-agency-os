@@ -15716,9 +15716,9 @@ function PublicacaoEditModal({task, onClose, onReject}){
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
   const [recSeconds,setRecSeconds]=useState(0);
-  const [aiLoading,setAiLoading]=useState(false);
+  // aiLoading/aiTranscript removidos — botão "Pixels IA — Refinar" foi tirado a pedido do Vinicius
   const [isSubmitting,setIsSubmitting]=useState(false);
-  const [aiTranscript,setAiTranscript]=useState("");
+
   const [refImages,setRefImages]=useState([]); // imagens de referência subidas no painel
   const [refUploading,setRefUploading]=useState(false);
   const mediaRecRef=useRef(null);
@@ -15851,22 +15851,6 @@ function PublicacaoEditModal({task, onClose, onReject}){
     clearInterval(recTimerRef.current);
   },[]);
 
-  const transcribeWithAI=async()=>{
-    if(!feedback.trim())return;
-    setAiLoading(true);
-    try{
-      const d=await askClaude({
-        model:"claude-sonnet-4-20250514",max_tokens:300,
-        messages:[{role:"user",content:`Você é assistente de feedback criativo da agência Pixels. O revisor deixou estas instruções para "${task.title}":\n\n"${feedback}"\n\nReescreva como feedback profissional em pt-BR, com bullet points. Seja construtivo. Máx 150 palavras.`}]
-      });
-      const text=d.content?.map(b=>b.text||"").join("")||"";
-      setAiTranscript(text);setFeedback(p=>p+"\n\n🤖 Pixels IA:\n"+text);
-    }catch(e){
-      console.warn("Pixels IA transcribe error:",e?.message||e);
-      setAiTranscript(e?.message||"Erro ao conectar à Pixels IA.");
-    }
-    setAiLoading(false);
-  };
 
   // Count annotated images
   const annotatedCount=drawings.filter(Boolean).length+(canvasRef.current&&!drawings[activeIdx]?1:0);
@@ -16083,109 +16067,99 @@ function PublicacaoEditModal({task, onClose, onReject}){
           </div>
         </div>
 
-        {/* Right — feedback panel (redesign 2026-06: maior, com referências) */}
-        <div style={{width:360,flexShrink:0,background:"#fff",borderLeft:`1px solid ${C.b1}`,padding:"20px 22px",display:"flex",flexDirection:"column",gap:18,overflowY:"auto",maxHeight:"calc(100vh - 110px)"}}>
+        {/* Right — feedback panel (redesign moderno 2026-06: Linear/Notion style) */}
+        <div style={{width:380,flexShrink:0,background:"#fff",borderLeft:"1px solid #e5e7eb",display:"flex",flexDirection:"column",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+          {/* Conteúdo scrollável */}
+          <div style={{flex:1,overflowY:"auto",padding:"24px 24px 20px",display:"flex",flexDirection:"column",gap:22}}>
 
-          <div>
-            <div style={{display:"flex",alignItems:"center",gap:6,color:"#0f172a",fontSize:11.5,fontWeight:700,marginBottom:9,letterSpacing:-.1}}>
-              <Ico n="edit" size={13} color="#0f172a"/>
-              <span>Instruções de alteração</span>
+            {/* Instruções */}
+            <div>
+              <label style={{display:"block",color:"#0f172a",fontSize:13,fontWeight:600,marginBottom:8,letterSpacing:-.1}}>Instruções de alteração</label>
+              <textarea value={feedback} onChange={e=>setFeedback(e.target.value)}
+                placeholder="Ex: trocar fundo verde por azul, centralizar o título, aumentar a logo Bioter no canto superior direito..."
+                rows={8}
+                style={{width:"100%",background:"#fff",border:"1px solid #e5e7eb",borderRadius:10,padding:"12px 14px",color:"#0f172a",fontSize:13.5,lineHeight:1.55,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s, box-shadow .15s",minHeight:180}}
+                onFocus={e=>{e.target.style.borderColor="#a140ff";e.target.style.boxShadow="0 0 0 3px rgba(161,64,255,0.1)";}}
+                onBlur={e=>{e.target.style.borderColor="#e5e7eb";e.target.style.boxShadow="none";}}/>
             </div>
-            <textarea value={feedback} onChange={e=>setFeedback(e.target.value)}
-              placeholder="Descreva detalhadamente o que precisa ser alterado em cada imagem. Quanto mais específico, melhor o resultado.\n\nEx: trocar fundo verde por azul, ajustar título pra ficar centralizado, deixar logo Bioter maior no canto superior direito..."
-              rows={10} style={{width:"100%",background:"#fff",border:`1.5px solid ${C.b1}`,borderRadius:12,padding:"14px 16px",color:"#0f172a",fontSize:13,lineHeight:1.55,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s",minHeight:200}}
-              onFocus={e=>e.target.style.borderColor=C.a}
-              onBlur={e=>e.target.style.borderColor=C.b1}/>
-          </div>
 
-          {/* IMAGENS DE REFERÊNCIA — upload novo */}
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:9}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,color:"#0f172a",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>
-                <Ico n="image" size={13} color="#0f172a"/>
-                <span>Imagens de referência</span>
-                {refImages.length>0&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginLeft:2}}>({refImages.length})</span>}
+            {/* Imagens de referência */}
+            <div>
+              <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
+                <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Referências</label>
+                {refImages.length>0&&<span style={{color:"#94a3b8",fontSize:12,fontWeight:500}}>{refImages.length} {refImages.length===1?"imagem":"imagens"}</span>}
               </div>
+              <input ref={refFileInputRef} type="file" accept="image/*" multiple
+                onChange={e=>{handleRefUpload(e.target.files);e.target.value="";}}
+                style={{display:"none"}}/>
+              {refImages.length===0
+                ?<button onClick={()=>refFileInputRef.current?.click()} disabled={refUploading} type="button"
+                  style={{width:"100%",background:"#fafafa",color:"#64748b",border:"1px dashed #d4d4d8",borderRadius:10,padding:"22px 16px",fontWeight:500,fontSize:13,cursor:refUploading?"not-allowed":"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,transition:"all .15s",fontFamily:"inherit"}}
+                  onMouseEnter={e=>{if(!refUploading){e.currentTarget.style.background="#f5f5f5";e.currentTarget.style.borderColor="#a140ff";e.currentTarget.style.color="#a140ff";}}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="#fafafa";e.currentTarget.style.borderColor="#d4d4d8";e.currentTarget.style.color="#64748b";}}>
+                  {refUploading
+                    ?<><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{animation:"spin 0.8s linear infinite"}}><circle cx="12" cy="12" r="10" opacity=".25"/><path d="M12 2a10 10 0 0110 10"/></svg> <span>Enviando...</span></>
+                    :<><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><span style={{fontSize:13}}>Anexar imagens</span></>}
+                </button>
+                :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                    {refImages.map(r=>(<div key={r.id} style={{position:"relative",borderRadius:8,overflow:"hidden",border:"1px solid #e5e7eb",background:"#f8fafc",aspectRatio:"1 / 1"}}>
+                      <img src={r.url} alt={r.name} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                      <button onClick={()=>removeRef(r.id)} title="Remover" type="button"
+                        style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,0.9)",border:"none",borderRadius:"50%",width:20,height:20,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>))}
+                  </div>
+                  <button onClick={()=>refFileInputRef.current?.click()} disabled={refUploading} type="button"
+                    style={{width:"100%",background:"#fff",color:"#475569",border:"1px solid #e5e7eb",borderRadius:8,padding:"9px 0",fontWeight:500,fontSize:12.5,cursor:refUploading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontFamily:"inherit",transition:"all .12s"}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e5e7eb";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    {refUploading?"Enviando...":"Adicionar mais"}
+                  </button>
+                </div>}
             </div>
-            <input ref={refFileInputRef} type="file" accept="image/*" multiple
-              onChange={e=>{handleRefUpload(e.target.files);e.target.value="";}}
-              style={{display:"none"}}/>
-            {refImages.length===0
-              ?<button onClick={()=>refFileInputRef.current?.click()} disabled={refUploading}
-                style={{width:"100%",background:"#faf5ff",color:C.a,border:`1.5px dashed ${C.a}66`,borderRadius:12,padding:"18px 14px",fontWeight:600,fontSize:12.5,cursor:refUploading?"not-allowed":"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,transition:"all .15s",fontFamily:"inherit"}}
-                onMouseEnter={e=>{if(!refUploading){e.currentTarget.style.background="#f3e8ff";e.currentTarget.style.borderColor=C.a;}}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.borderColor=C.a+"66";}}>
-                {refUploading
-                  ?<><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{animation:"spin 0.8s linear infinite"}}><circle cx="12" cy="12" r="10" opacity=".25"/><path d="M12 2a10 10 0 0110 10"/></svg> Enviando...</>
-                  :<><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <div style={{textAlign:"center",lineHeight:1.4}}>
-                      <div>Clique pra anexar referências</div>
-                      <div style={{fontSize:11,color:"#94a3b8",fontWeight:500,marginTop:3}}>Imagens que ajudem a equipe a entender o ajuste</div>
-                    </div></>}
-              </button>
-              :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:7}}>
-                  {refImages.map(r=>(<div key={r.id} style={{position:"relative",borderRadius:9,overflow:"hidden",border:"1px solid "+C.b1,background:"#f8fafc",aspectRatio:"1 / 1"}}>
-                    <img src={r.url} alt={r.name} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                    <button onClick={()=>removeRef(r.id)} title="Remover"
-                      style={{position:"absolute",top:4,right:4,background:"rgba(15,23,42,0.88)",border:"none",borderRadius:"50%",width:20,height:20,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>))}
+
+            {/* Áudio */}
+            <div>
+              <label style={{display:"block",color:"#0f172a",fontSize:13,fontWeight:600,marginBottom:8,letterSpacing:-.1}}>Áudio</label>
+              {!isRecording&&!audioURL&&<button onClick={startRec} type="button"
+                style={{width:"100%",background:"#fff",color:"#64748b",border:"1px solid #e5e7eb",borderRadius:10,padding:"11px 0",fontWeight:500,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .15s",fontFamily:"inherit"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="#e5e7eb";}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                <span>Gravar áudio</span>
+              </button>}
+              {isRecording&&<div style={{display:"flex",gap:8}}>
+                <div style={{flex:1,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:"#dc2626",display:"inline-block",animation:"pulse 1.2s ease-in-out infinite"}}/>
+                  <span style={{color:"#991b1b",fontWeight:600,fontSize:13,fontVariantNumeric:"tabular-nums"}}>{fmtSec(recSeconds)}</span>
                 </div>
-                <button onClick={()=>refFileInputRef.current?.click()} disabled={refUploading}
-                  style={{width:"100%",background:"#f8fafc",color:C.ts,border:`1px solid ${C.b1}`,borderRadius:9,padding:"8px 0",fontWeight:600,fontSize:11.5,cursor:refUploading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,fontFamily:"inherit"}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  {refUploading?"Enviando...":"Adicionar mais"}
+                <button onClick={stopRec} type="button" style={{background:"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"8px 14px",fontWeight:600,fontSize:12,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5}}>
+                  <span style={{width:9,height:9,background:"#fff",borderRadius:1.5,display:"inline-block"}}/>
+                  <span>Parar</span>
                 </button>
               </div>}
-          </div>
-
-          <button onClick={transcribeWithAI} disabled={aiLoading||!feedback.trim()}
-            style={{width:"100%",background:!feedback.trim()||aiLoading?C.b1:`linear-gradient(135deg,${C.a},${C.aD})`,color:!feedback.trim()||aiLoading?C.td:"#fff",border:"none",borderRadius:10,padding:"11px 0",fontWeight:700,fontSize:12.5,letterSpacing:.2,cursor:!feedback.trim()||aiLoading?"not-allowed":"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:!feedback.trim()||aiLoading?"none":"0 2px 8px "+C.a+"33"}}>
-            <Ico n="zap" size={13}/>
-            <span>{aiLoading?"Processando...":"Pixels IA — Refinar texto"}</span>
-          </button>
-          {aiTranscript&&<div style={{background:C.a+"10",borderRadius:9,padding:"9px 12px",border:`1px solid ${C.a}33`,fontSize:11.5,color:C.tx,lineHeight:1.55}}>{aiTranscript}</div>}
-
-          <div>
-            <div style={{display:"flex",alignItems:"center",gap:6,color:"#0f172a",fontSize:11.5,fontWeight:700,marginBottom:9,letterSpacing:-.1}}>
-              <Ico n="mic" size={13} color="#0f172a"/>
-              <span>Áudio</span>
+              {audioURL&&!isRecording&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+                <audio src={audioURL} controls style={{width:"100%",height:36}}/>
+                <button onClick={()=>setAudioURL(null)} type="button" style={{alignSelf:"flex-start",background:"none",border:"none",color:"#94a3b8",fontSize:12,cursor:"pointer",padding:0,fontFamily:"inherit"}}>Descartar gravação</button>
+              </div>}
             </div>
-            {!isRecording&&!audioURL&&<button onClick={startRec}
-              style={{width:"100%",background:"#fff",color:C.rd,border:`1px solid ${C.rd}55`,borderRadius:10,padding:"9px 0",fontWeight:600,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background=C.rd+"08";e.currentTarget.style.borderColor=C.rd;}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=C.rd+"55";}}>
-              <span style={{width:8,height:8,borderRadius:"50%",background:C.rd,display:"inline-block"}}/>
-              <span>Gravar áudio</span>
-            </button>}
-            {isRecording&&<div style={{display:"flex",gap:6}}>
-              <div style={{flex:1,background:C.rd+"10",borderRadius:10,padding:"8px 12px",display:"flex",alignItems:"center",gap:6}}>
-                <span style={{width:8,height:8,borderRadius:"50%",background:C.rd,display:"inline-block",animation:"pulse 1.2s ease-in-out infinite"}}/>
-                <span style={{color:C.rd,fontWeight:700,fontSize:12,fontVariantNumeric:"tabular-nums"}}>{fmtSec(recSeconds)}</span>
-              </div>
-              <button onClick={stopRec} style={{background:C.rd,color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:11,cursor:"pointer",display:"inline-flex",alignItems:"center"}}>
-                <span style={{width:10,height:10,background:"#fff",borderRadius:2,display:"inline-block"}}/>
-              </button>
-            </div>}
-            {audioURL&&!isRecording&&<>
-              <audio src={audioURL} controls style={{width:"100%",height:34,marginBottom:6}}/>
-              <button onClick={()=>setAudioURL(null)} style={{background:"none",border:"none",color:C.td,fontSize:11,cursor:"pointer",padding:0,textDecoration:"underline",textUnderlineOffset:2}}>Descartar áudio</button>
-            </>}
           </div>
 
-          <div style={{marginTop:"auto",display:"flex",flexDirection:"column",gap:8,paddingTop:10,borderTop:`1px solid ${C.b1}`}}>
-            <button onClick={handleReject} disabled={isSubmitting}
-              style={{width:"100%",background:isSubmitting?C.td:C.or,color:"#fff",border:"none",borderRadius:10,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:isSubmitting?"not-allowed":"pointer",boxShadow:isSubmitting?"none":"0 2px 8px "+C.or+"40",transition:"all .15s"}}
-              onMouseEnter={e=>{if(!isSubmitting){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.or+"55";}}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=isSubmitting?"none":"0 2px 8px "+C.or+"40";}}>
-              {isSubmitting?"Enviando anotações...":"Solicitar ajuste"}
+          {/* Footer fixo com botões */}
+          <div style={{padding:"16px 24px 20px",borderTop:"1px solid #f1f5f9",background:"#fff",display:"flex",flexDirection:"column",gap:8}}>
+            <button onClick={handleReject} disabled={isSubmitting} type="button"
+              style={{width:"100%",background:isSubmitting?"#cbd5e1":"#ea580c",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:600,fontSize:14,letterSpacing:-.1,cursor:isSubmitting?"not-allowed":"pointer",transition:"all .15s",fontFamily:"inherit"}}
+              onMouseEnter={e=>{if(!isSubmitting)e.currentTarget.style.background="#c2410c";}}
+              onMouseLeave={e=>{if(!isSubmitting)e.currentTarget.style.background="#ea580c";}}>
+              {isSubmitting?"Enviando...":"Solicitar ajuste"}
             </button>
-            <button onClick={onClose}
-              style={{width:"100%",background:"transparent",color:C.ts,border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 0",fontWeight:600,fontSize:12.5,cursor:"pointer",transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background=C.b1;e.currentTarget.style.color=C.tx;}}
-              onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=C.ts;}}>
+            <button onClick={onClose} type="button"
+              style={{width:"100%",background:"transparent",color:"#64748b",border:"none",borderRadius:10,padding:"9px 0",fontWeight:500,fontSize:13,cursor:"pointer",transition:"color .15s",fontFamily:"inherit"}}
+              onMouseEnter={e=>{e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={e=>{e.currentTarget.style.color="#64748b";}}>
               Cancelar
             </button>
           </div>
