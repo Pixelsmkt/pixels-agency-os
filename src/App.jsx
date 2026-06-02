@@ -16780,8 +16780,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             return(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"12px 14px",display:"flex",flexDirection:"column",gap:9,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
               {/* Linha 1: cliente + unidades + responsáveis */}
               {(cl||bioterSel.length>0||assigneeUsers.length>0)&&(<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:7,padding:"3px 10px",display:"flex",alignItems:"center"}}>
-                  {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:16,maxWidth:78,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:10.5,fontWeight:700}}>{cl.abbr||cl.name}</span>)}
+                {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"5px 14px",display:"flex",alignItems:"center"}}>
+                  {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:26,maxWidth:110,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:13,fontWeight:700}}>{cl.abbr||cl.name}</span>)}
                 </div>)}
                 {bioterSel.map(uid=>{
                   const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
@@ -16790,15 +16790,15 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                     {u.pickerLabel||u.label}
                   </span>);
                 })}
-                {assigneeUsers.length>0&&(<div style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:7,padding:"2px 9px 2px 3px"}}>
+                {assigneeUsers.length>0&&(<div style={{display:"inline-flex",alignItems:"center",gap:7,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:99,padding:"3px 12px 3px 4px"}}>
                   <div style={{display:"flex",alignItems:"center"}}>
                     {assigneeUsers.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
-                      style={{width:20,height:20,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-5,zIndex:3-i,flexShrink:0}}>
-                      <UserAvatar user={u} size={20} border={false}/>
+                      style={{width:30,height:30,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-7,zIndex:3-i,flexShrink:0}}>
+                      <UserAvatar user={u} size={30} border={false}/>
                     </div>))}
                   </div>
-                  {assigneeUsers.length>3&&<span style={{color:C.td,fontSize:9.5,fontWeight:700}}>+{assigneeUsers.length-3}</span>}
-                  <span style={{color:C.ts,fontSize:11,fontWeight:600,marginLeft:1}}>{assigneeUsers.map(u=>u.name.split(" ")[0]).join(", ")}</span>
+                  {assigneeUsers.length>3&&<span style={{color:C.td,fontSize:10.5,fontWeight:700}}>+{assigneeUsers.length-3}</span>}
+                  <span style={{color:"#0f172a",fontSize:13,fontWeight:600,marginLeft:2}}>{assigneeUsers.map(u=>u.name.split(" ")[0]).join(", ")}</span>
                 </div>)}
               </div>)}
               {/* Linha 2: tipo + prazos + mês + prioridade */}
@@ -16884,8 +16884,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           return(<div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,boxShadow:"0 4px 16px rgba(15,23,42,0.04)",padding:isMob?"18px 18px":"26px 32px",display:"flex",flexDirection:"column",gap:14,minHeight:"50vh"}}>
             {/* Cabeçalho copy — sem badge "Copy para aprovação" (redundante) */}
             <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-              {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"4px 12px",display:"flex",alignItems:"center"}}>
-                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:20,maxWidth:90,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:11,fontWeight:700}}>{cl.abbr}</span>)}
+              {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"5px 14px",display:"flex",alignItems:"center"}}>
+                {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:30,maxWidth:120,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:14,fontWeight:700}}>{cl.abbr}</span>)}
               </div>)}
               {/* Unidades Bioter — se cliente=bioter e tem bioterUnit setado */}
               {cl&&cl.id==="bioter"&&current.bioterUnit&&(()=>{
@@ -16903,15 +16903,15 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 const ids=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
                 const users=ids.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
                 if(users.length===0)return null;
-                return(<div style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:7,padding:"2px 9px 2px 3px"}}>
+                return(<div style={{display:"inline-flex",alignItems:"center",gap:7,background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:99,padding:"3px 12px 3px 4px"}}>
                   <div style={{display:"flex",alignItems:"center"}}>
                     {users.slice(0,3).map((u,i)=>(<div key={u.id} title={u.name}
-                      style={{width:20,height:20,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-5,zIndex:3-i,flexShrink:0}}>
-                      <UserAvatar user={u} size={20} border={false}/>
+                      style={{width:30,height:30,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",marginLeft:i===0?0:-7,zIndex:3-i,flexShrink:0}}>
+                      <UserAvatar user={u} size={30} border={false}/>
                     </div>))}
                   </div>
-                  {users.length>3&&<span style={{color:C.td,fontSize:9.5,fontWeight:700}}>+{users.length-3}</span>}
-                  <span style={{color:C.ts,fontSize:11,fontWeight:600,marginLeft:1}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
+                  {users.length>3&&<span style={{color:C.td,fontSize:10.5,fontWeight:700}}>+{users.length-3}</span>}
+                  <span style={{color:"#0f172a",fontSize:13,fontWeight:600,marginLeft:2}}>{users.map(u=>u.name.split(" ")[0]).join(", ")}</span>
                 </div>);
               })()}
             </div>
@@ -30806,8 +30806,8 @@ export default function AgencyOS(){
                 {(!sideCollapsed||isMob)&&<span>{n.label}</span>}
               </span>
               {(!sideCollapsed||isMob)&&<span style={{display:"flex",alignItems:"center",gap:4}}>
-                {n.id==="notificacoes"&&unreadNotifs>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{unreadNotifs}</span>}
-                {showAprBadge&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900}}>{pendingAprovacoes}</span>}
+                {n.id==="notificacoes"&&unreadNotifs>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.3}}>{unreadNotifs}</span>}
+                {showAprBadge&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.3}}>{pendingAprovacoes}</span>}
                 {hasChildren&&<span style={{color:C.td,fontSize:11,display:"inline-block",transition:"transform .25s",transform:isExpanded?"rotate(90deg)":"rotate(0deg)"}}>›</span>}
               </span>}
             </button>
@@ -30818,7 +30818,7 @@ export default function AgencyOS(){
                   style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:"#334155",cursor:"pointer",fontWeight:page===child.id?600:500,fontSize:12,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
                   <NavIcon id={child.id} size={16} color={page===child.id?C.a:C.ts}/>
                   <span style={{marginLeft:2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{child.label}</span>
-                  {childBadge>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900,flexShrink:0}}>{childBadge}</span>}
+                  {childBadge>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:600,fontVariantNumeric:"tabular-nums",letterSpacing:.2,fontFamily:"'Inter',system-ui,sans-serif",lineHeight:1.3,flexShrink:0}}>{childBadge}</span>}
                 </button>;
               })}
             </div>}
