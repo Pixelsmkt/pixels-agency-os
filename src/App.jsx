@@ -12083,11 +12083,17 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const _statusToCol=(s)=>s==="publicado"?"agendado":s;
     if(_statusToCol(t.status)===toColId&&toColId==="agendado"){setDrag(null);setOver(null);return;}
     if(t.status===toColId){setDrag(null);setOver(null);return;}
-    if(t.status==="demanda"){
+    // ── OVERRIDE TOTAL DE SÓCIO ──────────────────────────────────────────
+    // Sócios (level===1: Vinicius, Gustavo) podem arrastar QUALQUER card em
+    // QUALQUER direção. Sem bloqueio por status. As travas de processo abaixo
+    // (Copys / Avaliação) valem só pra colaboradores.
+    // Reportado pelo Vinicius 2026-06: ele não conseguia mover "Concluído p/
+    // avaliação" → "Publicações" porque a regra de avaliacao bloqueava todos.
+    const _bypass=activeUser.level===1;
+    if(!_bypass&&t.status==="demanda"){
       // Copys normalmente NÃO podem ser arrastadas — saem APENAS pelo fluxo de aprovação.
       // Exceção: quem tem perm "desfazerCopy" pode arrastar de volta pra "rascunhos" (cancela aprovação).
-      if(toColId==="rascunhos"&&(myPerms.desfazerCopy===true||activeUser.level===1)){
-        // permitido: cancelar envio à aprovação e voltar pra rascunhos
+      if(toColId==="rascunhos"&&myPerms.desfazerCopy===true){
         pixelsToast.info("Cartão voltou pra Rascunhos. Aprovação foi cancelada.",4000);
       } else {
         pixelsToast.warning("Este cartão precisa ser aprovado pelos gestores antes de prosseguir.",5000);
@@ -12095,12 +12101,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         return;
       }
     }
-    if(t.status==="avaliacao"){
-      // Avaliação só sai via fluxo de Aprovação (Aprovar / Solicitar Ajuste)
+    if(!_bypass&&t.status==="avaliacao"){
+      // Avaliação só sai via fluxo de Aprovação (Aprovar / Solicitar Ajuste).
+      // Sócio bypassa esta regra (override acima).
       pixelsToast.warning("Este cartão está aguardando aprovação. Use o menu Aprovações pra liberar.",5000);
       setDrag(null);setOver(null);
       return;
     }
+    // Demais transições (recebida → execucao, execucao → avaliacao, ajustes,
+    // aprovado, agendado, pausado, etc) são LIVRES pra todo mundo com
+    // arrastarCards=true — André, Maria, Guilherme, Ellen, Erick e sócios.
     // Normaliza: status "publicado" eh tratado como coluna "agendado" (Publicadas)
     const _fromColId=t.status==="publicado"?"agendado":t.status;
     // Valida contra cols (config local) OU KANBAN_COLS (canonico — fallback)
