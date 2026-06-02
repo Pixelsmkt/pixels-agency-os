@@ -30732,7 +30732,7 @@ export default function AgencyOS(){
       </div>
     </div>}
 
-    <aside style={{width:210,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-220):0,top:0,bottom:0,zIndex:50,transition:"left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none"}}>
+    <aside style={{width:240,background:C.s1,borderRight:`1px solid ${C.b1}`,display:"flex",flexDirection:"column",flexShrink:0,position:isMob?"fixed":"relative",left:isMob?(sideOpen?0:-250):0,top:0,bottom:0,zIndex:50,transition:"left .28s cubic-bezier(.22,1,.36,1)",boxShadow:isMob&&sideOpen?"4px 0 20px rgba(0,0,0,0.25)":"none"}}>
       <div style={{padding:"14px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8,justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}>
           {sideCollapsed&&!isMob
@@ -30784,7 +30784,7 @@ export default function AgencyOS(){
           const isExpanded=hasChildren?(expanded[n.id]!==undefined?expanded[n.id]:isActive):false;
           const showAprBadge=n.id==="aprovacoes"&&pendingAprovacoes>0;
           const btnBg=isActive?C.ag:"none";
-          const btnColor=isActive?C.a:C.ts;
+          const btnColor=isActive?C.a:"#334155"; // slate-700 — mais escura que C.ts (#64748b)
           return(<div key={n.id}>
             <button onClick={()=>{
               if(hasChildren){
@@ -30815,7 +30815,7 @@ export default function AgencyOS(){
               {n.children.filter(child=>canSee(child,effectivePerms)).map(child=>{
                 const childBadge=CHILD_BADGES&&CHILD_BADGES[child.id]>0?CHILD_BADGES[child.id]:0;
                 return <button key={child.id} onClick={()=>nav(child.id)}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:C.ts,cursor:"pointer",fontWeight:page===child.id?600:500,fontSize:12,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,border:"none",background:page===child.id?C.a+"18":"none",color:page===child.id?C.a:"#334155",cursor:"pointer",fontWeight:page===child.id?600:500,fontSize:12,marginBottom:1,textAlign:"left",transition:"all .12s"}}>
                   <NavIcon id={child.id} size={16} color={page===child.id?C.a:C.ts}/>
                   <span style={{marginLeft:2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{child.label}</span>
                   {childBadge>0&&<span style={{background:C.rd,color:"#fff",borderRadius:99,padding:"1px 6px",fontSize:9,fontWeight:900,flexShrink:0}}>{childBadge}</span>}
