@@ -15712,6 +15712,51 @@ function PublicacaoEditModal({task, onClose, onReject}){
   // O usuário digita, aperta Enter pra fixar (rasteriza no canvas com penColor + fontSize).
   const [textMode,setTextMode]=useState(false);
   const [pendingText,setPendingText]=useState(null); // {x, y, text} ou null
+  // ─── Ferramentas de FORMA ────────────────────────
+  // shapeTool: null = livre (caneta), ou "line" | "arrow" | "rect" | "circle"
+  // Click-drag desenha a forma com penColor + penSize.
+  const [shapeTool,setShapeTool]=useState(null);
+  const shapeStartRef=useRef(null); // {x, y}
+  const shapeSnapshotRef=useRef(null); // ImageData do canvas no momento do click
+  // Helper: limpa todos os outros modos quando ativa um
+  const activateMode=(mode)=>{
+    setIsEraser(mode==="eraser");
+    setTextMode(mode==="text");
+    setShapeTool(mode==="line"||mode==="arrow"||mode==="rect"||mode==="circle"?mode:null);
+  };
+  // Desenha a forma (preview ou final) — usa snapshot+restore pra atualizar
+  const drawShape=(ctx,start,end)=>{
+    ctx.globalCompositeOperation="source-over";
+    ctx.strokeStyle=penColor;
+    ctx.lineWidth=penSize;
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    ctx.fillStyle=penColor;
+    if(shapeTool==="line"){
+      ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.lineTo(end.x,end.y);ctx.stroke();
+    }else if(shapeTool==="arrow"){
+      // linha + ponta de seta
+      ctx.beginPath();ctx.moveTo(start.x,start.y);ctx.lineTo(end.x,end.y);ctx.stroke();
+      const dx=end.x-start.x,dy=end.y-start.y;
+      const ang=Math.atan2(dy,dx);
+      const head=Math.max(14,penSize*4);
+      ctx.beginPath();
+      ctx.moveTo(end.x,end.y);
+      ctx.lineTo(end.x-head*Math.cos(ang-Math.PI/7),end.y-head*Math.sin(ang-Math.PI/7));
+      ctx.lineTo(end.x-head*Math.cos(ang+Math.PI/7),end.y-head*Math.sin(ang+Math.PI/7));
+      ctx.closePath();
+      ctx.fill();
+    }else if(shapeTool==="rect"){
+      const x=Math.min(start.x,end.x),y=Math.min(start.y,end.y);
+      const w=Math.abs(end.x-start.x),h=Math.abs(end.y-start.y);
+      ctx.strokeRect(x,y,w,h);
+    }else if(shapeTool==="circle"){
+      // Elipse do retângulo do drag (não círculo perfeito — melhor pra marcar)
+      const cx=(start.x+end.x)/2,cy=(start.y+end.y)/2;
+      const rx=Math.abs(end.x-start.x)/2,ry=Math.abs(end.y-start.y)/2;
+      ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);ctx.stroke();
+    }
+  };
   const [feedback,setFeedback]=useState("");
   const [isRecording,setIsRecording]=useState(false);
   const [audioURL,setAudioURL]=useState(null);
@@ -15818,16 +15863,44 @@ function PublicacaoEditModal({task, onClose, onReject}){
   };
   const onMD=(e)=>{
     if(textMode){onCanvasClickForText(e);return;}
-    e.preventDefault();setDrawing(true);const ctx=canvasRef.current.getContext("2d");const p=getPos(e);ctx.beginPath();ctx.moveTo(p.x,p.y);
+    e.preventDefault();
+    const cv=canvasRef.current;const ctx=cv.getContext("2d");const p=getPos(e);
+    if(shapeTool){
+      // Salva snapshot pra restaurar durante o preview
+      shapeStartRef.current=p;
+      shapeSnapshotRef.current=ctx.getImageData(0,0,cv.width,cv.height);
+      setDrawing(true);
+      return;
+    }
+    setDrawing(true);ctx.beginPath();ctx.moveTo(p.x,p.y);
   };
   const onMM=(e)=>{
     if(!drawing)return;e.preventDefault();
-    const ctx=canvasRef.current.getContext("2d");const p=getPos(e);
+    const cv=canvasRef.current;const ctx=cv.getContext("2d");const p=getPos(e);
+    if(shapeTool&&shapeStartRef.current&&shapeSnapshotRef.current){
+      ctx.putImageData(shapeSnapshotRef.current,0,0);
+      drawShape(ctx,shapeStartRef.current,p);
+      return;
+    }
     ctx.globalCompositeOperation=isEraser?"destination-out":"source-over";
     ctx.strokeStyle=penColor;ctx.lineWidth=isEraser?penSize*4:penSize;
     ctx.lineCap="round";ctx.lineJoin="round";ctx.lineTo(p.x,p.y);ctx.stroke();
   };
-  const onMU=()=>setDrawing(false);
+  const onMU=(e)=>{
+    if(shapeTool&&drawing&&shapeStartRef.current){
+      // Commit final da forma com o ponto atual (ou último move)
+      try{
+        const p=e&&e.clientX!==undefined?getPos(e):null;
+        if(p){
+          const ctx=canvasRef.current.getContext("2d");
+          ctx.putImageData(shapeSnapshotRef.current,0,0);
+          drawShape(ctx,shapeStartRef.current,p);
+        }
+      }catch(_){}
+      shapeStartRef.current=null;shapeSnapshotRef.current=null;
+    }
+    setDrawing(false);
+  };
 
   const clearCurrent=()=>{const cv=canvasRef.current;cv.getContext("2d").clearRect(0,0,cv.width,cv.height);};
 
@@ -16005,12 +16078,41 @@ function PublicacaoEditModal({task, onClose, onReject}){
                 style={{minWidth:24,height:22,background:penSize===s?C.a:"transparent",color:penSize===s?"#fff":C.ts,border:"none",borderRadius:6,cursor:"pointer",fontSize:10.5,fontWeight:700,padding:"0 6px",transition:"all .12s"}}>{s}</button>)}
             </div>
             {/* Ferramentas */}
-            <button onClick={()=>{setIsEraser(v=>!v);if(textMode)setTextMode(false);}}
+            {/* Modo livre — caneta normal (default) */}
+            <button onClick={()=>activateMode("pen")}
+              title="Caneta livre"
+              style={{background:!isEraser&&!textMode&&!shapeTool?C.a+"15":C.s1,color:!isEraser&&!textMode&&!shapeTool?C.a:C.ts,border:!isEraser&&!textMode&&!shapeTool?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+              <span>Caneta</span>
+            </button>
+            {/* Formas geométricas */}
+            <button onClick={()=>activateMode("line")} title="Linha reta"
+              style={{background:shapeTool==="line"?C.a+"15":C.s1,color:shapeTool==="line"?C.a:C.ts,border:shapeTool==="line"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="4" y1="20" x2="20" y2="4"/></svg>
+              <span>Linha</span>
+            </button>
+            <button onClick={()=>activateMode("arrow")} title="Seta"
+              style={{background:shapeTool==="arrow"?C.a+"15":C.s1,color:shapeTool==="arrow"?C.a:C.ts,border:shapeTool==="arrow"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
+              <span>Seta</span>
+            </button>
+            <button onClick={()=>activateMode("rect")} title="Retângulo"
+              style={{background:shapeTool==="rect"?C.a+"15":C.s1,color:shapeTool==="rect"?C.a:C.ts,border:shapeTool==="rect"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+              <span>Retângulo</span>
+            </button>
+            <button onClick={()=>activateMode("circle")} title="Círculo"
+              style={{background:shapeTool==="circle"?C.a+"15":C.s1,color:shapeTool==="circle"?C.a:C.ts,border:shapeTool==="circle"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="9"/></svg>
+              <span>Círculo</span>
+            </button>
+            <button onClick={()=>activateMode("eraser")}
+              title="Borracha"
               style={{background:isEraser?C.rd+"15":C.s1,color:isEraser?C.rd:C.ts,border:isEraser?`1px solid ${C.rd}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
               <Ico n="trash" size={11}/>
               <span>Borracha</span>
             </button>
-            <button onClick={()=>{setTextMode(v=>!v);if(isEraser)setIsEraser(false);}}
+            <button onClick={()=>activateMode("text")}
               title="Inserir texto digitando"
               style={{background:textMode?C.a+"15":C.s1,color:textMode?C.a:C.ts,border:textMode?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
@@ -16039,7 +16141,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
               :<div style={{minHeight:200,display:"flex",alignItems:"center",justifyContent:"center",color:C.td,fontSize:13}}>Sem imagem</div>
             }
             <canvas ref={canvasRef} width={800} height={600}
-              style={{position:"absolute",inset:0,width:"100%",height:"100%",cursor:textMode?"text":(isEraser?"cell":"crosshair")}}
+              style={{position:"absolute",inset:0,width:"100%",height:"100%",cursor:textMode?"text":(isEraser?"cell":(shapeTool?"crosshair":"crosshair"))}}
               onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}
               onTouchStart={onMD} onTouchMove={onMM} onTouchEnd={onMU}/>
             {/* Input flutuante quando textMode + click ativos */}
