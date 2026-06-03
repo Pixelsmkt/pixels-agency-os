@@ -15701,6 +15701,41 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
 }
 
 // ======= 06_aprovacoes.jsx =======
+// ── _ApprovImg: <img> com retry automático ─────────────────────
+// Bug observado: a thumb da imagem carrega OK mas a img principal falha (race condition
+// do onError disparando antes da imagem terminar de baixar). Esse componente:
+//   1) tenta carregar normal
+//   2) se onError, espera 400ms e tenta de novo (bust de cache via querystring)
+//   3) se falhar 2x, mostra fallback (controlado pelo pai via display:none nextElement)
+//   4) onLoad reseta display caso a img tenha aparecido depois de um retry tardio
+function _ApprovImg({src,idx}){
+  const [tryNum,setTryNum]=useState(0); // 0 = original, 1 = retry1, 2 = falhou
+  const [hidden,setHidden]=useState(false);
+  const realSrc=tryNum===0?src:(src+(src.includes("?")?"&":"?")+"_r="+tryNum);
+  useEffect(()=>{setTryNum(0);setHidden(false);},[src,idx]);
+  return <img src={realSrc} alt="" referrerPolicy="no-referrer"
+    onLoad={e=>{
+      // Imagem carregou — garante que o fallback ao lado fique escondido
+      const ph=e.currentTarget.nextElementSibling;
+      if(ph&&ph.style)ph.style.display="none";
+      setHidden(false);
+    }}
+    onError={(e)=>{
+      if(tryNum<1){
+        // Primeira falha: tenta de novo após 400ms (cache bust)
+        setTimeout(()=>setTryNum(t=>t+1),400);
+        return;
+      }
+      // Falhou 2x — mostra fallback
+      console.warn("[aprov] imagem falhou definitivamente:",src);
+      e.currentTarget.style.display="none";
+      const ph=e.currentTarget.nextElementSibling;
+      if(ph)ph.style.display="flex";
+      setHidden(true);
+    }}
+    style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:hidden?"none":"block"}}/>;
+}
+
 function PublicacaoEditModal({task, onClose, onReject}){
   // Apenas arquivos FINAIS (referências do briefing não devem entrar na anotação de ajuste)
   // Default pra dados antigos sem `tipo`: vira "final" (preserva fluxo legado)
@@ -16839,13 +16874,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           {/* Imagem principal — altura travada pra não empurrar nada (stories verticais ficam contidas) */}
           <div style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
             {allImgs.length>0
-              ?(<><img key={imgIdx} src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" referrerPolicy="no-referrer"
-                  onError={e=>{
-                    console.warn("[aprov] imagem falhou:",allImgs[Math.min(imgIdx,allImgs.length-1)]);
-                    e.currentTarget.style.display="none";
-                    const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";
-                  }}
-                  style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:"block"}}/>
+              ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} idx={imgIdx} key={"k"+imgIdx}/>
                 <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:32,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
                   <div style={{width:64,height:64,borderRadius:16,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
                     <Ico n="image" size={28} color="#cbd5e1"/>
