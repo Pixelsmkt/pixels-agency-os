@@ -16674,7 +16674,19 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   ];
 
   return (<div style={{display:"flex",flexDirection:"column",gap:16}}>
-    {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(() =>{})} onClose={()=>setOpenCard(null)} currentUser={effectiveUser}/>)}
+    {openCard&&(<CardModal task={openCard} tasks={tasks||[]} setTasks={setTasks||(() =>{})} onClose={()=>setOpenCard(null)} currentUser={effectiveUser}
+      canDelete={isSocio||!!perms?.verLixeira}
+      onTrash={(id)=>{
+        if(!setTasks)return;
+        const t=(tasks||[]).find(x=>x.id===id);
+        if(!t){setOpenCard(null);return;}
+        const ok=window.confirm("Mover \""+(t.title||"este cartão")+"\" para a lixeira? Você pode restaurar nos próximos 30 dias.");
+        if(!ok)return;
+        setTasks(p=>p.map(x=>x.id===id?{...x,deletedAt:new Date().toISOString()}:x));
+        setOpenCard(null);
+        if(typeof pixelsToast!=="undefined")pixelsToast.info("Card movido para a lixeira. Recupere nos próximos 30 dias.",4500);
+      }}
+      cardPerms={perms}/>)}
     {editAnnot&&(<PublicacaoEditModal task={editAnnot} onClose={()=>setEditAnnot(null)} onReject={(task,fb,df,af,cmts)=>requestAdjust(task,fb,df,af,cmts)}/>)}
 
     {/* Drive toast — aparece apos aprovar publicacao */}
@@ -16828,17 +16840,30 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           <div style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
             {allImgs.length>0
               ?(<><img key={imgIdx} src={allImgs[Math.min(imgIdx,allImgs.length-1)]} alt="" referrerPolicy="no-referrer"
-                  onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                  onError={e=>{
+                    console.warn("[aprov] imagem falhou:",allImgs[Math.min(imgIdx,allImgs.length-1)]);
+                    e.currentTarget.style.display="none";
+                    const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";
+                  }}
                   style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:"block"}}/>
-                <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:14,padding:40,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
-                  <div style={{width:72,height:72,borderRadius:18,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
-                    <Ico n="image" size={32} color="#cbd5e1"/>
+                <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:32,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
+                  <div style={{width:64,height:64,borderRadius:16,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
+                    <Ico n="image" size={28} color="#cbd5e1"/>
                   </div>
-                  <div style={{color:"#475569",fontSize:13,fontWeight:600,maxWidth:320,lineHeight:1.5,fontFamily:"\'Inter\',system-ui,sans-serif"}}>Não foi possível carregar a imagem</div>
-                  <a href={allImgs[Math.min(imgIdx,allImgs.length-1)]} target="_blank" rel="noopener noreferrer"
-                    style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:99,padding:"7px 18px",fontSize:12,fontWeight:700,textDecoration:"none",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"\'Inter\',system-ui,sans-serif"}}>
-                    Abrir em nova aba
-                  </a>
+                  <div style={{color:"#0f172a",fontSize:14,fontWeight:600,maxWidth:340,lineHeight:1.5,fontFamily:"\'Inter\',system-ui,sans-serif"}}>Esta imagem não carregou</div>
+                  <div style={{color:"#64748b",fontSize:12,fontWeight:400,maxWidth:340,lineHeight:1.5,fontFamily:"\'Inter\',system-ui,sans-serif"}}>Pode ser que ela tenha sido apagada ou o link expirou. Você pode pular pra próxima ou tentar abrir direto.</div>
+                  <div style={{display:"flex",gap:8,marginTop:4,flexWrap:"wrap",justifyContent:"center"}}>
+                    {allImgs.length>1&&<button onClick={()=>setImgIdx(i=>(i+1)%allImgs.length)}
+                      style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 16px",fontSize:12,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"\'Inter\',system-ui,sans-serif"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                      Pular pra próxima
+                    </button>}
+                    <a href={allImgs[Math.min(imgIdx,allImgs.length-1)]} target="_blank" rel="noopener noreferrer"
+                      style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"8px 16px",fontSize:12,fontWeight:600,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"\'Inter\',system-ui,sans-serif"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                      Abrir direto
+                    </a>
+                  </div>
                 </div></>)
               :(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:60}}>
                   <Ico n="image" size={40}/>
