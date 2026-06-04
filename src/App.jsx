@@ -16833,7 +16833,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             const assigneeUsers=assigneeIds.map(uid=>TEAM.find(x=>x.id===uid)).filter(Boolean);
             const hasAnyChip=cl||metaTags.length>0||bioterSel.length>0||assigneeUsers.length>0;
             if(!hasAnyChip)return null;
-            return(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"12px 14px",display:"flex",flexDirection:"column",gap:9,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+            return(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:11,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
               {/* Linha 1: cliente + unidades + responsáveis */}
               {(cl||bioterSel.length>0||assigneeUsers.length>0)&&(<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                 {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"5px 14px",display:"flex",alignItems:"center"}}>
@@ -16842,7 +16842,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 {bioterSel.map(uid=>{
                   const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
                   if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center"}}>
+                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center"}}>
                     {u.pickerLabel||u.label}
                   </span>);
                 })}
@@ -16857,10 +16857,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                   <span style={{color:"#0f172a",fontSize:13,fontWeight:600,marginLeft:2}}>{assigneeUsers.map(u=>u.name.split(" ")[0]).join(", ")}</span>
                 </div>)}
               </div>)}
-              {/* Linha 2: tipo + prazos + mês + prioridade */}
-              {metaTags.length>0&&(<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:7,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:.15,display:"inline-flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
-                  <Ico n={t.icon} size={10} color={t.color}/>{t.label}
+              {/* Linha 2: tipo + prazos + mês + prioridade — chips grandes, padronizados com linha 1 */}
+              {metaTags.length>0&&(<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+                  <Ico n={t.icon} size={14} color={t.color}/>{t.label}
                 </span>))}
               </div>)}
             </div>);
