@@ -12085,13 +12085,14 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     const _statusToCol=(s)=>s==="publicado"?"agendado":s;
     if(_statusToCol(t.status)===toColId&&toColId==="agendado"){setDrag(null);setOver(null);return;}
     if(t.status===toColId){setDrag(null);setOver(null);return;}
-    // ── OVERRIDE TOTAL DE SÓCIO ──────────────────────────────────────────
-    // Sócios (level===1: Vinicius, Gustavo) podem arrastar QUALQUER card em
-    // QUALQUER direção. Sem bloqueio por status. As travas de processo abaixo
-    // (Copys / Avaliação) valem só pra colaboradores.
-    // Reportado pelo Vinicius 2026-06: ele não conseguia mover "Concluído p/
-    // avaliação" → "Publicações" porque a regra de avaliacao bloqueava todos.
-    const _bypass=activeUser.level===1;
+    // ── OVERRIDE TOTAL DE SÓCIO + COORDENAÇÃO ────────────────────────────
+    // Sócios (level===1: Vinicius, Gustavo) E coordenação (Hellen, dash=coordinator)
+    // podem arrastar QUALQUER card em QUALQUER direção. Sem bloqueio por status.
+    // As travas de processo abaixo (Copys / Avaliação) valem só pra
+    // designers/editores que precisam respeitar o fluxo de aprovação.
+    // Reportado pelo Vinicius 2026-06: ele e Hellen não conseguiam mover
+    // "Concluído p/ avaliação" → "Publicações" porque a regra bloqueava todos.
+    const _bypass=activeUser.level===1||activeUser.dash==="coordinator";
     if(!_bypass&&t.status==="demanda"){
       // Copys normalmente NÃO podem ser arrastadas — saem APENAS pelo fluxo de aprovação.
       // Exceção: quem tem perm "desfazerCopy" pode arrastar de volta pra "rascunhos" (cancela aprovação).
