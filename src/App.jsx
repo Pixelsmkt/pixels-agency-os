@@ -16679,26 +16679,34 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // FIX 5: resetar cardIdx, imgIdx e lastApproved ao trocar aba manualmente
   const switchTab=(newTab)=>{setTab(newTab);setCardIdx(0);setImgIdx(0);setLastApproved(null);};
 
-  // FIX 7: aprovação de conteúdo mostra APENAS imagens finais (refs do briefing
-  // não entram aqui — aparecem em "Visualizar/Editar" → aba Arquivos → Referências).
-  // Em "copys" e "ajuste" mostramos tudo (a copy pode ter reference image junto).
-  // CRÍTICO: EXCLUI isAnnotation (imagens com risco vermelho dos ajustes anteriores)
-  // pra elas não aparecerem misturadas com as artes finais no carrossel de aprovação.
+  // Filtros de imagem com FALLBACK em 3 camadas (Vinicius 2026-06):
+  //   1) isFinalImg estrito (arte final pronta, sem ref/anotação)
+  //   2) Se camada 1 vier vazia → isAnyImg permissivo (inclui refs, foto de obra)
+  //   3) Se ainda vazio mas tem cover válido → mostra o cover
+  // Isso resolveu cards "Foto de obra" e similares que apareciam no kanban
+  // mas davam "Nenhuma imagem anexada" na avaliação.
   const isFinalImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
   const isAnyImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/");
-  const filterFn=(tab==="publicacao"||tab==="video")?isFinalImg:isAnyImg;
-  // ORDEM: última imagem subida pelo designer aparece PRIMEIRO (mais recente no topo).
-  // Reverte files em ordem cronológica → mais recente primeiro. Cover entra no fim se não estiver nos files.
-  // Filtra URLs válidas (http/https/data/blob) — evita placeholders e refs sem url.
   const _isValidUrl=(u)=>typeof u==="string"&&u.length>0&&(u.startsWith("http")||u.startsWith("data:")||u.startsWith("blob:"));
-  const _filesDesc=(current?.files||[]).filter(filterFn).slice().reverse().map(f=>f.url).filter(_isValidUrl);
-  const _coverInFiles=current?.cover&&_filesDesc.includes(current.cover);
-  const _coverValid=_isValidUrl(current?.cover);
+  // Reescreve URLs antigas pixels-files → agency-files em runtime (defesa em profundidade).
+  const _fixUrl=(u)=>(typeof window!=="undefined"&&typeof window.fixLegacyUrl==="function")?window.fixLegacyUrl(u):u;
+  const _extractImgs=(files,fn)=>(files||[]).filter(fn).slice().reverse().map(f=>_fixUrl(f.url)).filter(_isValidUrl);
+  let _filesDesc=[];
+  if(tab==="publicacao"||tab==="video"){
+    _filesDesc=_extractImgs(current?.files,isFinalImg);
+    if(_filesDesc.length===0)_filesDesc=_extractImgs(current?.files,isAnyImg);
+  }else{
+    _filesDesc=_extractImgs(current?.files,isAnyImg);
+  }
+  const _coverFixed=_fixUrl(current?.cover);
+  const _coverValid=_isValidUrl(_coverFixed);
+  const _coverInFiles=_coverValid&&_filesDesc.includes(_coverFixed);
   const allImgs=current?(
     _filesDesc.length>0
-      ? [..._filesDesc, ...(_coverValid&&!_coverInFiles?[current.cover]:[])]
-      : (_coverValid?[current.cover]:[])
+      ? [..._filesDesc, ...(_coverValid&&!_coverInFiles?[_coverFixed]:[])]
+      : (_coverValid?[_coverFixed]:[])
   ):[];
+  const filterFn=(tab==="publicacao"||tab==="video")?isFinalImg:isAnyImg;
 
   const isSocio=CURRENT_USER.level===1;
   const TABS=[
