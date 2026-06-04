@@ -15709,30 +15709,29 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
 //   2) se onError, espera 400ms e tenta de novo (bust de cache via querystring)
 //   3) se falhar 2x, mostra fallback (controlado pelo pai via display:none nextElement)
 //   4) onLoad reseta display caso a img tenha aparecido depois de um retry tardio
-function _ApprovImg({src,idx}){
+function _ApprovImg({src,idx,onFail}){
   const [tryNum,setTryNum]=useState(0); // 0 = original, 1 = retry1, 2 = falhou
   const [hidden,setHidden]=useState(false);
   const realSrc=tryNum===0?src:(src+(src.includes("?")?"&":"?")+"_r="+tryNum);
   useEffect(()=>{setTryNum(0);setHidden(false);},[src,idx]);
   return <img src={realSrc} alt="" referrerPolicy="no-referrer"
     onLoad={e=>{
-      // Imagem carregou — garante que o fallback ao lado fique escondido
       const ph=e.currentTarget.nextElementSibling;
       if(ph&&ph.style)ph.style.display="none";
       setHidden(false);
     }}
     onError={(e)=>{
       if(tryNum<1){
-        // Primeira falha: tenta de novo após 400ms (cache bust)
         setTimeout(()=>setTryNum(t=>t+1),400);
         return;
       }
-      // Falhou 2x — mostra fallback
       console.warn("[aprov] imagem falhou definitivamente:",src);
       e.currentTarget.style.display="none";
       const ph=e.currentTarget.nextElementSibling;
       if(ph)ph.style.display="flex";
       setHidden(true);
+      // Avisa o pai pra remover essa URL da lista (esconde thumb também)
+      if(typeof onFail==="function")onFail(src);
     }}
     style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",objectFit:"contain",display:hidden?"none":"block"}}/>;
 }
@@ -16418,6 +16417,16 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [cardIdx,setCardIdx]=useState(0);
   const [imgIdx,setImgIdx]=useState(0);
   const [openCard,setOpenCard]=useState(null);
+  // URLs de imagens que já sabemos que falharam — pra esconder thumbs quebradas
+  // e auto-pular pra próxima boa quando o user abrir um card.
+  const [brokenImgs,setBrokenImgs]=useState(()=>new Set());
+  const markBroken=useCallback((url)=>{
+    if(!url)return;
+    setBrokenImgs(prev=>{
+      if(prev.has(url))return prev;
+      const next=new Set(prev);next.add(url);return next;
+    });
+  },[]);
   const [ajusteModal,setAjusteModal]=useState(null);
   const [ajusteText,setAjusteText]=useState("");
   // SPLIT: dois modais distintos pra não sobrepor (bug reportado pelo Vinicius).
@@ -16701,11 +16710,28 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const _coverFixed=_fixUrl(current?.cover);
   const _coverValid=_isValidUrl(_coverFixed);
   const _coverInFiles=_coverValid&&_filesDesc.includes(_coverFixed);
-  const allImgs=current?(
+  const _allImgsRaw=current?(
     _filesDesc.length>0
       ? [..._filesDesc, ...(_coverValid&&!_coverInFiles?[_coverFixed]:[])]
       : (_coverValid?[_coverFixed]:[])
   ):[];
+  // Remove URLs que já sabemos que estão quebradas (descobertas via onError anterior).
+  // Se TODAS forem quebradas, mantém raw pra mostrar o fallback de erro (não some tudo).
+  const allImgs=(()=>{
+    const filtered=_allImgsRaw.filter(u=>!brokenImgs.has(u));
+    return filtered.length>0?filtered:_allImgsRaw;
+  })();
+  // Auto-skip: quando entra num card, se o imgIdx aponta pra uma URL quebrada,
+  // pula automaticamente pra primeira que ainda não falhou.
+  useEffect(()=>{
+    if(!current)return;
+    const cur=_allImgsRaw[imgIdx];
+    if(cur&&brokenImgs.has(cur)){
+      const nextOk=_allImgsRaw.findIndex(u=>!brokenImgs.has(u));
+      if(nextOk>=0&&nextOk!==imgIdx)setImgIdx(nextOk);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[current?.id,brokenImgs,imgIdx]);
   const filterFn=(tab==="publicacao"||tab==="video")?isFinalImg:isAnyImg;
 
   const isSocio=CURRENT_USER.level===1;
@@ -16869,21 +16895,23 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           {allImgs.length>1&&(<div style={{display:"flex",gap:10,overflowX:"auto",overflowY:"hidden",padding:"4px 2px",scrollbarWidth:"thin",WebkitOverflowScrolling:"touch"}}>
             {allImgs.map((src,i)=>{
               const sel=i===imgIdx;
-              return(<div key={i} onClick={()=>setImgIdx(i)}
+              return(<div key={src+"_"+i} onClick={()=>setImgIdx(i)}
                 style={{position:"relative",width:84,height:84,borderRadius:11,cursor:"pointer",border:sel?"3px solid "+C.a:"2px solid #e2e8f0",transition:"all .15s",boxShadow:sel?"0 4px 12px rgba(159,67,246,0.28)":"none",flexShrink:0,overflow:"hidden",background:"#f8fafc"}}>
                 <img src={src} alt="" referrerPolicy="no-referrer"
-                  onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+                  onError={e=>{
+                    // Marca essa URL como quebrada — react re-renderiza e a thumb some
+                    markBroken(src);
+                    // No frame atual, esconde direto pra evitar flash do placeholder
+                    e.currentTarget.style.display="none";
+                  }}
                   style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s"}}/>
-                <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",background:"linear-gradient(135deg,#f8fafc,#e2e8f0)",color:"#94a3b8"}}>
-                  <Ico n="image" size={22} color="#94a3b8"/>
-                </div>
               </div>);
             })}
           </div>)}
           {/* Imagem principal — altura travada pra não empurrar nada (stories verticais ficam contidas) */}
           <div style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
             {allImgs.length>0
-              ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} idx={imgIdx} key={"k"+imgIdx}/>
+              ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} idx={imgIdx} key={"k"+imgIdx} onFail={markBroken}/>
                 <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:32,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
                   <div style={{width:64,height:64,borderRadius:16,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
                     <Ico n="image" size={28} color="#cbd5e1"/>
