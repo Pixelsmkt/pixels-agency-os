@@ -23798,19 +23798,35 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       </div>
     </div>}
 
-    {showUnsavedDialog&&<div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
-      <div style={{background:"#fff",borderRadius:18,padding:"28px 32px",maxWidth:360,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.25)",textAlign:"center"}}>
-        <div style={{fontSize:32,marginBottom:12}}>💾</div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,marginBottom:8}}>Deseja salvar sua alteração?</div>
-        <div style={{color:"#64748b",fontSize:13,marginBottom:24}}>Você fez mudanças que ainda não foram salvas.</div>
-        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+    {showUnsavedDialog&&<div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{background:"#fff",borderRadius:16,padding:"28px 28px 24px",maxWidth:400,width:"90%",boxShadow:"0 25px 70px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.04)"}}>
+        {/* Header com ícone + texto à esquerda — padrão Vercel/Linear */}
+        <div style={{display:"flex",alignItems:"flex-start",gap:14,marginBottom:22}}>
+          <div style={{flexShrink:0,width:40,height:40,borderRadius:10,background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:600,fontSize:15,letterSpacing:-.2,marginBottom:4,lineHeight:1.35}}>Salvar alterações?</div>
+            <div style={{color:"#64748b",fontSize:13.5,lineHeight:1.5}}>Você fez mudanças neste cartão que ainda não foram salvas.</div>
+          </div>
+        </div>
+        {/* Botões — primária à direita, padrão moderno */}
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
           <button onClick={()=>{setShowUnsavedDialog(false);onClose();}}
-            style={{background:"#f1f5f9",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:700,fontSize:13,color:"#64748b",cursor:"pointer"}}>
-            Não, descartar
+            style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",fontWeight:500,fontSize:13,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";e.currentTarget.style.borderColor="#cbd5e1";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="#e2e8f0";}}>
+            Descartar
           </button>
           <button onClick={()=>{setShowUnsavedDialog(false);save();}}
-            style={{background:"#0f172a",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:700,fontSize:13,color:"#fff",cursor:"pointer"}}>
-            Sim, salvar
+            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",fontWeight:600,fontSize:13,cursor:"pointer",fontFamily:"inherit",transition:"background .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="#1e293b";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#0f172a";}}>
+            Salvar alterações
           </button>
         </div>
       </div>
