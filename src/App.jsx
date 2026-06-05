@@ -24953,7 +24953,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
-                  style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,padding:"10px 6px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:9,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?700:500,transition:"all .12s",lineHeight:1.2,textAlign:"center"}}>
+                  style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,padding:"8px 6px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:9,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?600:500,transition:"all .12s",lineHeight:1.2,textAlign:"center",height:72,boxSizing:"border-box"}}>
                   <Ico n={opt.icon} size={16}/>
                   <span>{opt.label}</span>
                 </button>;
