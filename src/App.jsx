@@ -17181,12 +17181,12 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               </button>
             </>)}
 
-            {/* Ver detalhes — chip discreto */}
+            {/* Ver detalhes — mesmo tamanho dos outros botões, mas estilo ghost (ação secundária) */}
             {tab!=="internas"&&<button onClick={()=>setOpenCard(current)}
-              style={{alignSelf:"center",marginTop:2,background:C.s1,color:C.ts,border:"1px solid "+C.b1,borderRadius:99,padding:"6px 14px",fontWeight:500,fontSize:11.5,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}
-              onMouseEnter={e=>{e.currentTarget.style.background=C.b1;e.currentTarget.style.color=C.tx;}}
-              onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.ts;}}>
-              <Ico n="eye" size={12}/>
+              style={{width:"100%",background:"transparent",color:C.ts,border:"1px solid "+C.b1,borderRadius:10,padding:"11px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,letterSpacing:.1}}
+              onMouseEnter={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.tx;e.currentTarget.style.borderColor=C.tx+"33";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
+              <Ico n="eye" size={14}/>
               <span>Ver detalhes do cartão</span>
             </button>}
           </div>):(<div style={{background:C.s1,borderRadius:10,padding:"12px",color:C.ts,fontSize:11,textAlign:"center"}}>
