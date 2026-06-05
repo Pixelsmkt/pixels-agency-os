@@ -25048,13 +25048,19 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         const isSel=selDay===d&&selMonth===calViewMonth&&selYear===calViewYear;
                         const dt=new Date(calViewYear,calViewMonth,d);
                         const isWeekend=dt.getDay()===0||dt.getDay()===6;
-                        const isPast=dt<new Date(new Date().setHours(0,0,0,0));
+                        const _today=new Date();_today.setHours(0,0,0,0);
+                        const isToday=dt.getTime()===_today.getTime();
+                        // Datas passadas são PERMITIDAS (Hellen pode registrar posts feitos fora do app).
+                        // Indicador visual sutil: levemente mais claras, mas totalmente clicáveis.
+                        const isPast=dt<_today;
                         return <button key={d} onClick={()=>pickDay(d)}
-                          style={{textAlign:"center",padding:"5px 0",borderRadius:7,border:"none",cursor:isPast?"default":"pointer",fontSize:11,fontWeight:isSel?800:400,
-                            background:isSel?"#6366f1":isPast?"transparent":"#fff",
-                            color:isSel?"#fff":isPast?"#cbd5e1":isWeekend?"#f97316":"#1e293b",
-                            opacity:isPast?0.4:1,
-                            boxShadow:isSel?"0 2px 8px rgba(99,102,241,0.4)":undefined}}>
+                          style={{textAlign:"center",padding:"5px 0",borderRadius:7,border:isToday&&!isSel?"1.5px solid #6366f1":"none",cursor:"pointer",fontSize:11,fontWeight:isSel?700:(isToday?700:400),
+                            background:isSel?"#6366f1":"#fff",
+                            color:isSel?"#fff":isToday?"#6366f1":isWeekend?"#f97316":(isPast?"#94a3b8":"#1e293b"),
+                            boxShadow:isSel?"0 2px 8px rgba(99,102,241,0.4)":undefined,
+                            transition:"background .12s"}}
+                          onMouseEnter={e=>{if(!isSel)e.currentTarget.style.background="#f1f5f9";}}
+                          onMouseLeave={e=>{if(!isSel)e.currentTarget.style.background="#fff";}}>
                           {d}
                         </button>;
                       })}
