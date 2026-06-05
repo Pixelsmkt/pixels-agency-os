@@ -2186,7 +2186,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
   if(n==="film")      return <svg {...p}><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>;
   if(n==="flag")      return <svg {...p}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
-  if(n==="scissors")  return <svg {...p}><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><line x1="8.5" y1="6" x2="21" y2="3"/><line x1="8.5" y1="18" x2="21" y2="21"/></svg>;
+  if(n==="scissors")  return <svg {...p}><circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><line x1="8.5" y1="8.5" x2="19" y2="19"/><line x1="8.5" y1="15.5" x2="19" y2="5"/></svg>;
   if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
   if(n==="users")     return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(n==="building")  return <svg {...p}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>;
@@ -10575,7 +10575,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                             <div style={{display:"inline-flex",alignItems:"center",gap:4,flexShrink:0,maxWidth:"82%",minWidth:0,flexWrap:"wrap"}}>
                               {/* Icone do tipo — ANTES da logo da empresa */}
                               {(function(){
-                                const TYPE_TITLE = {arte:"Arte única",carrossel:"Carrossel",foto:"Foto de obra",video:"Vídeo",video_complexo:"Vídeo complexo",video_feira:"Vídeo feira",corte:"Corte de vídeo"};
+                                const TYPE_TITLE = {arte:"Arte única",carrossel:"Carrossel",foto:"Foto de obra",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo feira",corte:"Corte de vídeo"};
                                 const ttl = TYPE_TITLE[tipo];
                                 if(!ttl) return null;
                                 let svg = null;
@@ -10583,7 +10583,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                                 else if(tipo==="carrossel") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
                                 else if(tipo==="foto") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
                                 else if(tipo==="video") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#fff"/></svg>;
-                                else if(tipo==="corte") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><line x1="8.5" y1="6" x2="21" y2="3"/><line x1="8.5" y1="18" x2="21" y2="21"/></svg>;
+                                else if(tipo==="corte") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><line x1="8.5" y1="8.5" x2="19" y2="19"/><line x1="8.5" y1="15.5" x2="19" y2="5"/></svg>;
                                 else if(tipo==="video_complexo") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>;
                                 else if(tipo==="video_feira") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
                                 if(!svg) return null;
@@ -12634,7 +12634,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         arte:{label:"Arte única",icon:"image"},
                         carrossel:{label:"Carrossel",icon:"layers"},
                         video:{label:"Vídeo",icon:"play"},
-                        video_complexo:{label:"Vídeo complexo",icon:"film"},
+                        video_complexo:{label:"Vídeo dinâmico",icon:"film"},
                         video_feira:{label:"Vídeo feira",icon:"flag"},
                         foto:{label:"Foto de obra",icon:"camera"},
                         corte:{label:"Corte de vídeo",icon:"scissors"},
@@ -12648,7 +12648,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           {ct.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
                           {ct.icon==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
                           {ct.icon==="scan"&&<><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></>}
-                          {ct.icon==="scissors"&&<><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><line x1="8.5" y1="6" x2="21" y2="3"/><line x1="8.5" y1="18" x2="21" y2="21"/></>}
+                          {ct.icon==="scissors"&&<><circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><line x1="8.5" y1="8.5" x2="19" y2="19"/><line x1="8.5" y1="15.5" x2="19" y2="5"/></>}
                           {ct.icon==="film"&&<><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></>}
                           {ct.icon==="flag"&&<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></>}
                         </svg>
@@ -16853,7 +16853,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           {/* ── Header de chips: cliente, unidade, responsáveis, tipo, prazos, prioridade ── */}
           {(()=>{
             const ct=(current.contentType||current.tipo||"").toLowerCase();
-            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo complexo",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
             const ctCfg=CT_MAP[ct];
             const pubD=current.publishDate||current.publish_date||"";
             const pubT=current.publishTime||current.publish_time||"";
@@ -17026,7 +17026,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             {/* Linha de metadados do card — tipo, publicação, entrega, mês, prioridade */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
-              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo complexo",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
               const ctCfg=CT_MAP[ct];
               const pubD=current.publishDate||current.publish_date||"";
               const pubT=current.publishTime||current.publish_time||"";
@@ -24947,7 +24947,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 {id:"carrossel",label:"Carrossel",icon:"layers"},
                 {id:"foto",label:"Foto de obra",icon:"camera"},
                 {id:"video",label:"Vídeo",icon:"play"},
-                {id:"video_complexo",label:"Vídeo complexo",icon:"film"},
+                {id:"video_complexo",label:"Vídeo dinâmico",icon:"film"},
                 {id:"video_feira",label:"Vídeo feira",icon:"flag"},
                 {id:"corte",label:"Corte de vídeo",icon:"scissors"},
               ].map(opt=>{
