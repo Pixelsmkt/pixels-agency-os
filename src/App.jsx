@@ -10210,9 +10210,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     if(filterClient!=="todos"){
       if(t.client!==filterClient) return false;
     }
-    // Filtro unidade Bioter
+    // Filtro unidade Bioter — inteligente, considera collabs (grupo/brasil/multi-unidade)
     if(filterClient==="bioter" && filterBioterUnit!=="todos"){
-      if(t.bioterUnit!==filterBioterUnit) return false;
+      // bioterUnit pode ser: "castro" | "castro,toledo" | "grupo" | "brasil"
+      const _units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+      // Match em qualquer um dos casos:
+      //   - A unidade selecionada está EXPLICITAMENTE listada
+      //   - O card é "grupo" (vai pra TODAS as unidades)
+      //   - O card é "brasil" e a unidade não é "paraguay"
+      const _matchExplicit=_units.indexOf(filterBioterUnit)>=0;
+      const _matchGrupo=_units.indexOf("grupo")>=0;
+      const _matchBrasil=_units.indexOf("brasil")>=0 && filterBioterUnit!=="paraguay";
+      if(!(_matchExplicit||_matchGrupo||_matchBrasil))return false;
     }
     return true;
   });
@@ -24197,15 +24206,30 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       r.comments.forEach(function(c){const cts=_commentTs(c); if(cts>whenTs)whenTs=cts;});
                       const _whenHasTime=(r.comments.length>0&&_commentHasTime(r.comments[0]))||(r.audio&&_commentHasTime(r.audio))||(r.images.length>0&&r.images.some(_fileHasTime));
                       const when=firstC.atFmt||firstC.time||(whenTs?_fmtDateTime(whenTs,_whenHasTime):"");
+                      const _roundNum=rounds.length-ri;
+                      const _imgCount=r.images.length;
+                      const _cmtCount=r.comments.length;
                       return(
-                        <div key={r.key} style={{padding:"14px 16px",borderTop:ri>0?"1px solid #f3e8ff":"none",background:isLatest?"#fafaff":"#fff"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10,flexWrap:"wrap"}}>
-                            <span style={{background:accent,color:"#fff",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2.5px 8px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
-                            <span style={{color:"#0f172a",fontSize:11.5,fontWeight:700}}>{userName}</span>
-                            {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"2px 7px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>+ recente</span>}
-                            {when&&<span style={{color:"#94a3b8",fontSize:10.5,marginLeft:"auto"}}>{when}</span>}
-                          </div>
-
+                        <details key={r.key} open={isLatest} style={{borderTop:ri>0?"1px solid #f3e8ff":"none",background:isLatest?"#fafaff":"#fff"}}>
+                          <summary style={{padding:"14px 16px",cursor:"pointer",listStyle:"none",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,transition:"transform .2s",transform:isLatest?"rotate(90deg)":"rotate(0deg)"}} className="pixels-round-chev"><polyline points="9 18 15 12 9 6"/></svg>
+                            <span style={{background:"#f1f5f9",color:"#475569",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:6,letterSpacing:.3,flexShrink:0}}>Round {_roundNum}</span>
+                            <span style={{background:accent,color:"#fff",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2.5px 8px",borderRadius:4,flexShrink:0}}>{isClient?"Cliente":"Revisor"}</span>
+                            <span style={{color:"#0f172a",fontSize:12,fontWeight:700,flexShrink:0}}>{userName}</span>
+                            {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"2px 7px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",flexShrink:0}}>+ recente</span>}
+                            <div style={{color:"#94a3b8",fontSize:10.5,marginLeft:"auto",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                              {_cmtCount>0&&<span style={{display:"inline-flex",alignItems:"center",gap:3}}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                                {_cmtCount}
+                              </span>}
+                              {_imgCount>0&&<span style={{display:"inline-flex",alignItems:"center",gap:3}}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                                {_imgCount}
+                              </span>}
+                              {when&&<span>{when}</span>}
+                            </div>
+                          </summary>
+                          <div style={{padding:"0 16px 14px"}}>
                           {r.audio&&r.audio.audioUrl&&<div style={{marginBottom:10}}>
                             <audio src={r.audio.audioUrl} controls style={{width:"100%",height:32}}/>
                           </div>}
@@ -24242,7 +24266,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                               })}
                             </div>
                           </div>}
-                        </div>
+                          </div>
+                        </details>
                       );
                     })}
                   </div>
