@@ -15754,12 +15754,22 @@ function _ApprovImg({src,idx,onFail}){
 
 function PublicacaoEditModal({task, onClose, onReject}){
   // Apenas arquivos FINAIS (referências do briefing não devem entrar na anotação de ajuste)
-  // Default pra dados antigos sem `tipo`: vira "final" (preserva fluxo legado)
-  const isFinalImg=(f)=>f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
+  // Filtros com FALLBACK em 3 camadas (mesmo padrão da PageAprovacoes):
+  //   1) isFinalImg estrito (arte final pronta)
+  //   2) Se vazio → isAnyImg permissivo (inclui refs, foto de obra)
+  //   3) Se ainda vazio → fica com finalMedia/cover (que pode estar vazio mas é o que tem)
+  // Reportado pelo Vinicius 2026-06: card "Figurinha da Copa Biodigestor" mostrava
+  // a imagem na PageAprovacoes mas dava "Sem imagem" ao abrir Anotar ajustes.
+  const isFinalImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
+  const isAnyImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/");
+  // Reescreve URLs antigas pixels-files → agency-files em runtime (defesa em profundidade).
+  const _fixUrlA=(u)=>(typeof window!=="undefined"&&typeof window.fixLegacyUrl==="function")?window.fixLegacyUrl(u):u;
+  const _strict=(task.files||[]).filter(isFinalImg).map(f=>_fixUrlA(f.url));
+  const _perm  =_strict.length>0?_strict:(task.files||[]).filter(isAnyImg).map(f=>_fixUrlA(f.url));
   const allImgs=[
-    ...(task.finalMedia||[]),
-    ...(task.files||[]).filter(isFinalImg).map(f=>f.url),
-    ...(task.cover&&!task.finalMedia?.includes(task.cover)?[task.cover]:[]),
+    ...(task.finalMedia||[]).map(_fixUrlA),
+    ..._perm,
+    ...(task.cover&&!task.finalMedia?.includes(task.cover)?[_fixUrlA(task.cover)]:[]),
   ].filter(Boolean);
 
   const [activeIdx,setActiveIdx]=useState(0);
