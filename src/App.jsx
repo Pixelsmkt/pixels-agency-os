@@ -2186,6 +2186,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="play")      return <svg {...p}><polygon points="5 3 19 12 5 21 5 3"/></svg>;
   if(n==="film")      return <svg {...p}><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>;
   if(n==="flag")      return <svg {...p}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
+  if(n==="scissors")  return <svg {...p}><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>;
   if(n==="camera")    return <svg {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>;
   if(n==="users")     return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(n==="building")  return <svg {...p}><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>;
@@ -10582,7 +10583,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                                 else if(tipo==="carrossel") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
                                 else if(tipo==="foto") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
                                 else if(tipo==="video") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="6 4 20 12 6 20 6 4" fill="#fff"/></svg>;
-                                else if(tipo==="corte") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>;
+                                else if(tipo==="corte") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>;
                                 else if(tipo==="video_complexo") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg>;
                                 else if(tipo==="video_feira") svg = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
                                 if(!svg) return null;
@@ -12636,7 +12637,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         video_complexo:{label:"Vídeo complexo",icon:"film"},
                         video_feira:{label:"Vídeo feira",icon:"flag"},
                         foto:{label:"Foto de obra",icon:"camera"},
-                        corte:{label:"Corte de vídeo",icon:"scan"},
+                        corte:{label:"Corte de vídeo",icon:"scissors"},
                       };
                       const ct=types[t.contentType];
                       if(!ct)return null;
@@ -12647,6 +12648,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           {ct.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
                           {ct.icon==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
                           {ct.icon==="scan"&&<><path d="M3 7V5a2 2 0 012-2h2"/><path d="M17 3h2a2 2 0 012 2v2"/><path d="M21 17v2a2 2 0 01-2 2h-2"/><path d="M7 21H5a2 2 0 01-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></>}
+                          {ct.icon==="scissors"&&<><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></>}
                           {ct.icon==="film"&&<><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></>}
                           {ct.icon==="flag"&&<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></>}
                         </svg>
@@ -16851,7 +16853,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           {/* ── Header de chips: cliente, unidade, responsáveis, tipo, prazos, prioridade ── */}
           {(()=>{
             const ct=(current.contentType||current.tipo||"").toLowerCase();
-            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo complexo",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scan"}};
+            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo complexo",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
             const ctCfg=CT_MAP[ct];
             const pubD=current.publishDate||current.publish_date||"";
             const pubT=current.publishTime||current.publish_time||"";
@@ -16998,7 +17000,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 return sel.map(uid=>{
                   const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
                   if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:7,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center"}}>
+                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center"}}>
                     {u.pickerLabel||u.label}
                   </span>);
                 });
@@ -17024,7 +17026,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             {/* Linha de metadados do card — tipo, publicação, entrega, mês, prioridade */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
-              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo complexo",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scan"}};
+              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo complexo",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
               const ctCfg=CT_MAP[ct];
               const pubD=current.publishDate||current.publish_date||"";
               const pubT=current.publishTime||current.publish_time||"";
@@ -17043,9 +17045,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               if(refMes)tags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#475569",bg:"#f1f5f9"});
               if(priCfg)tags.push({key:"pri",icon:"flame",label:priCfg.label,color:priCfg.color,bg:priCfg.color+"14"});
               if(tags.length===0)return null;
-              return(<div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
-                {tags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:7,padding:"2px 9px",fontSize:10.5,fontWeight:700,letterSpacing:.15,display:"inline-flex",alignItems:"center",gap:4,whiteSpace:"nowrap"}}>
-                  <Ico n={t.icon} size={10} color={t.color}/>{t.label}
+              return(<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                {tags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+                  <Ico n={t.icon} size={14} color={t.color}/>{t.label}
                 </span>))}
               </div>);
             })()}
@@ -24947,7 +24949,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 {id:"video",label:"Vídeo",icon:"play"},
                 {id:"video_complexo",label:"Vídeo complexo",icon:"film"},
                 {id:"video_feira",label:"Vídeo feira",icon:"flag"},
-                {id:"corte",label:"Corte de vídeo",icon:"scan"},
+                {id:"corte",label:"Corte de vídeo",icon:"scissors"},
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
