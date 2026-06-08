@@ -33685,8 +33685,9 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     return imgs[imgs.length-1].url;
   })();
 
-  const goPrev=function(){setCardIdx(function(i){return Math.max(0,i-1);});setImgIdx(0);};
-  const goNext=function(){setCardIdx(function(i){return Math.min(aguardando.length-1,i+1);});setImgIdx(0);};
+  // Wrap-around: setas giram a fila (‹ do primeiro vai pro último, › do último volta pro 1)
+  const goPrev=function(){setCardIdx(function(i){return aguardando.length<=1?0:(i<=0?aguardando.length-1:i-1);});setImgIdx(0);};
+  const goNext=function(){setCardIdx(function(i){return aguardando.length<=1?0:(i>=aguardando.length-1?0:i+1);});setImgIdx(0);};
 
   const handleAprovar=function(task){
     setTasks(function(prev){return prev.map(function(t){
@@ -33773,20 +33774,26 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     {/* Card view — single card carousel (igual aprovação interna) */}
     {current&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
 
-      {/* Navegação topo: ‹ contador › */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 4px"}}>
-        <button onClick={goPrev} disabled={clampedIdx===0}
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,width:36,height:36,cursor:clampedIdx===0?"not-allowed":"pointer",color:"#0f172a",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx===0?.3:1,transition:"all .15s"}}>
-          ‹
-        </button>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{color:"#475569",fontSize:12,fontWeight:600,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{clampedIdx+1} de {aguardando.length}</span>
-          <span style={{color:"#94a3b8",fontSize:11}}>aguardando aprovação</span>
+      {/* Navegação topo: setas centralizadas + cor do cliente, wrap-around */}
+      <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"4px 0"}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:4,boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
+          <button onClick={goPrev} disabled={aguardando.length<=1} aria-label="Cartão anterior"
+            style={{background:aguardando.length<=1?"transparent":cl.color+"14",border:"none",borderRadius:99,width:36,height:36,cursor:aguardando.length<=1?"not-allowed":"pointer",color:aguardando.length<=1?"#cbd5e1":cl.color,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
+            onMouseEnter={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color;e.currentTarget.style.color="#fff";}}}
+            onMouseLeave={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color+"14";e.currentTarget.style.color=cl.color;}}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 4px"}}>
+            <span style={{color:"#475569",fontSize:12.5,fontWeight:700,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{clampedIdx+1} <span style={{color:"#94a3b8",fontWeight:500}}>de {aguardando.length}</span></span>
+            <span style={{color:"#94a3b8",fontSize:11}}>· aguardando aprovação</span>
+          </div>
+          <button onClick={goNext} disabled={aguardando.length<=1} aria-label="Próximo cartão"
+            style={{background:aguardando.length<=1?"transparent":cl.color+"14",border:"none",borderRadius:99,width:36,height:36,cursor:aguardando.length<=1?"not-allowed":"pointer",color:aguardando.length<=1?"#cbd5e1":cl.color,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
+            onMouseEnter={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color;e.currentTarget.style.color="#fff";}}}
+            onMouseLeave={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color+"14";e.currentTarget.style.color=cl.color;}}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
         </div>
-        <button onClick={goNext} disabled={clampedIdx>=aguardando.length-1}
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,width:36,height:36,cursor:clampedIdx>=aguardando.length-1?"not-allowed":"pointer",color:"#0f172a",fontSize:16,display:"flex",alignItems:"center",justifyContent:"center",opacity:clampedIdx>=aguardando.length-1?.3:1,transition:"all .15s"}}>
-          ›
-        </button>
       </div>
 
       {/* Grid: imagem grande à esquerda + sidebar à direita */}
@@ -33820,31 +33827,18 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
             <div style={{color:"#0f172a",fontWeight:800,fontSize:17,lineHeight:1.35,letterSpacing:-.3,wordBreak:"break-word"}}>
               {current.title||"(sem título)"}
             </div>
-            {/* Descrição (renderiza HTML do prosemirror — strip de atributos de editor) */}
-            {(function(){
-              const raw=current.desc||current.description||"";
-              if(!raw)return null;
-              // Se vier HTML (prosemirror salva com tags), renderiza como HTML
-              // Strip dos atributos data-prosemirror-* (poluem o output)
-              const isHtml=/<[a-z][\s\S]*>/i.test(raw);
-              if(isHtml){
-                const clean=String(raw)
-                  .replace(/\sdata-prosemirror-[a-z-]+="[^"]*"/g,"")
-                  .replace(/\sdata-pm-[a-z-]+="[^"]*"/g,"")
-                  .replace(/\sdata-card-data="[^"]*"/g,"")
-                  .replace(/\sdata-inline-card[a-z-]*="[^"]*"/g,"")
-                  .replace(/\saria-busy="[^"]*"/g,"")
-                  .replace(/\sstyle="[^"]*"/g,"");  // remove inline styles tb (UX consistente)
-                return <div className="portal-desc-html" style={{color:"#475569",fontSize:12.5,lineHeight:1.6,wordBreak:"break-word"}}
-                  dangerouslySetInnerHTML={{__html:clean}}/>;
-              }
-              return <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{raw}</div>;
-            })()}
-            {/* Caption (legenda do post) */}
-            {current.caption&&<div style={{background:"#f8fafc",borderRadius:10,padding:"10px 12px",borderLeft:"3px solid "+cl.color}}>
-              <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Legenda</div>
-              <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{current.caption}</div>
-            </div>}
+            {/* Briefing pra equipe (desc) REMOVIDO do portal — cliente vê só a legenda final */}
+            {/* Caption (legenda do post) — única coisa textual que o cliente precisa ver */}
+            {current.caption
+              ? <div style={{background:"#f8fafc",borderRadius:10,padding:"12px 14px",borderLeft:"3px solid "+cl.color}}>
+                  <div style={{color:"#475569",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Legenda do post</div>
+                  <div style={{color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap",wordBreak:"break-word"}}>{current.caption}</div>
+                </div>
+              : <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"10px 12px",color:"#9a3412",fontSize:11.5,lineHeight:1.5,display:"flex",alignItems:"center",gap:8}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  <span>Sem legenda preenchida ainda. A equipe vai adicionar antes de publicar.</span>
+                </div>
+            }
             {/* Siglas da unidade Bioter (se for Bioter) */}
             {cl&&cl.id==="bioter"&&current.bioterUnit&&(function(){
               const ids=String(current.bioterUnit).split(",").filter(Boolean);
@@ -35877,22 +35871,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
           }catch(e){console.warn("[client-event] save:",e);}
         }}/>
 
-        {/* Recent activity */}
-        <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
-          <div style={{padding:"12px 16px",borderBottom:"1px solid "+C.b1,color:C.tx,fontWeight:700,fontSize:12,display:"inline-flex",alignItems:"center",gap:6}}>
-            <Ico n="clock" size={13} color={C.tx}/> Últimas atualizações
-          </div>
-          {(()=>{const _slice=clTasksVisiveis.slice(0,5);return _slice.map((t,i)=>(
-            <div key={t.id} style={{padding:"10px 16px",borderBottom:i<_slice.length-1?"1px solid "+C.b1+"33":"none",display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:7,height:7,borderRadius:"50%",background:CARD_STATUS_COLOR[t.status]||C.a,flexShrink:0}}/>
-              <div style={{flex:1,color:C.tx,fontSize:12,fontWeight:500}}>{t.title}</div>
-              <span style={{background:(CARD_STATUS_COLOR[t.status]||C.a)+"18",color:CARD_STATUS_COLOR[t.status]||C.a,borderRadius:6,padding:"1px 8px",fontSize:9,fontWeight:700,flexShrink:0}}>
-                {CARD_STATUS_LABEL[t.status]||t.status}
-              </span>
-            </div>
-          ))})()}
-          {clTasksVisiveis.length===0&&<div style={{padding:"32px",textAlign:"center",color:C.td,fontSize:12}}>Nenhuma demanda registrada.</div>}
-        </div>
+        {/* Últimas atualizações removido (Vinicius 2026-06: dashboard mais clean) */}
       </div>
     )}
 
