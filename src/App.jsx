@@ -16676,16 +16676,35 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   };
 
   // ── Editar campos do card direto pela aprovação (titulo, caption, desc) ──
+  // Bonus: se o card está em "alteracao_copy" e Hellen edita um campo de copy,
+  // move automaticamente pra "demanda" (Avaliação de copys). Sem clique extra.
   const editCopyField=(task,field,value)=>{
     if(!isApprover)return;
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const now=new Date().toISOString();
+    const isCopyField=field==="title"||field==="caption"||field==="desc";
     if(setTasks)setTasks(p=>p.map(t=>{
       if(t.id!==task.id)return t;
       const oldVal=t[field]||"";
-      return{...t,[field]:value,timeline:[...(t.timeline||[]),{type:"edit",label:actor+" editou "+(field==="caption"?"a legenda":field==="desc"?"o briefing":field==="title"?"o título":field),at:now,atFmt:nowFmt(),user:actor,from:String(oldVal).slice(0,80),to:String(value).slice(0,80)}]};
+      const editTl={type:"edit",label:actor+" editou "+(field==="caption"?"a legenda":field==="desc"?"o briefing":field==="title"?"o título":field),at:now,atFmt:nowFmt(),user:actor,from:String(oldVal).slice(0,80),to:String(value).slice(0,80)};
+      const tlExtra=[];
+      let next={...t,[field]:value};
+      // Auto-envio pra avaliação ao ajustar copy
+      if(t.status==="alteracao_copy"&&isCopyField){
+        next.status="demanda";
+        next.colEnteredAt=now;
+        next.ajustar=false;
+        next.isAlteracao=false;
+        tlExtra.push({type:"status",fromLabel:"Alteração de copy",toLabel:"Copys",from:"alteracao_copy",to:"demanda",at:now,atFmt:nowFmt(),user:actor,note:"Auto-enviado pra avaliação após ajuste de copy"});
+      }
+      next.timeline=[...(t.timeline||[]),editTl,...tlExtra];
+      return next;
     }));
-    if(typeof pixelsToast!=="undefined")pixelsToast.success("Salvo.");
+    if(task.status==="alteracao_copy"&&isCopyField){
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Copy ajustada e enviada pra Avaliação de copys!",4500);
+    }else{
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Salvo.");
+    }
   };
 
   // ── PUBLICATION ACTIONS ──
