@@ -16714,6 +16714,32 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     setCardIdx(0);setImgIdx(0);setEditAnnot(null);setEditCopy(null);
   };
 
+  // Volta o card pra coluna "Alteração de copy" — caso de uso real:
+  // 1) Vinicius percebe na avaliação que tem AJUSTE GRANDE na copy (não só ajuste de arte)
+  // 2) Aprovou por engano um card que tinha problema na copy — quer reverter
+  // Pula todas as etapas intermediárias e vai direto pra "alteracao_copy" da Hellen.
+  // Notif vai DIRETO pra Hellen (não broadcast).
+  const sendBackToCopy=(task)=>{
+    if(!isApprover)return;
+    const ok=window.confirm("Mandar \""+(task.title||"este cartão")+"\" pra Hellen ajustar a copy?\n\nO card vai voltar pra coluna 'Alteração de copy', pulando as etapas intermediárias. Use quando o ajuste de copy é grande ou quando aprovou por engano.");
+    if(!ok)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const fromLabel=task.status==="avaliacao"?"Concluídas para avaliação":(task.status==="aprovado"?"Aprovado":task.status);
+    const tl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel:"Alteração de copy",from:task.status,to:"alteracao_copy",at:new Date().toISOString(),atFmt:nowFmt(),user:actor,note:"Devolvido pra Hellen ajustar a copy (via aprovação)"}];
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{
+      ...t,
+      status:"alteracao_copy",
+      ajustar:true,
+      isAlteracao:true,
+      colEnteredAt:new Date().toISOString(),
+      timeline:tl,
+    }:t));
+    // Notificação DIRECIONADA: alvo Hellen ("ellen") em vez de broadcast
+    pushNotif({type:"urgente",icon:"📝",title:"Copy precisa ajuste",body:'"'+task.title+'" voltou pra Alteração de copy. '+actor+' pediu ajuste grande na copy.',user:actor,at:"Agora",targetUsers:["ellen"],taskId:task.id});
+    setCardIdx(0);setImgIdx(0);
+    if(typeof pixelsToast!=="undefined")pixelsToast.info("Card mandado pra Hellen ajustar a copy.",4500);
+  };
+
   const queue=tab==="copys"?copyQueue:tab==="ajuste"?ajusteQueue:tab==="internas"?internasQueue:tab==="video"?pubVideoQueue:pubQueue;
   // FIX 4: clamp seguro — se queue vazia, current fica undefined
   const clampedIdx=queue.length>0?Math.min(cardIdx,queue.length-1):0;
@@ -17163,6 +17189,14 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar ajuste
+              </button>
+              <button onClick={()=>sendBackToCopy(current)}
+                title="Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."
+                style={{width:"100%",background:"transparent",color:"#a16207",border:"1px solid #fde68a",borderRadius:10,padding:"11px 0",fontWeight:600,fontSize:12.5,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#fef3c7";e.currentTarget.style.borderColor="#fbbf24";e.currentTarget.style.color="#78350f";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fde68a";e.currentTarget.style.color="#a16207";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M14 8H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
+                Mandar pra ajustar a copy
               </button>
             </>)}
 
