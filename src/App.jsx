@@ -17192,11 +17192,11 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               </button>
               <button onClick={()=>sendBackToCopy(current)}
                 title="Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."
-                style={{width:"100%",background:"transparent",color:"#a16207",border:"1px solid #fde68a",borderRadius:10,padding:"11px 0",fontWeight:600,fontSize:12.5,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#fef3c7";e.currentTarget.style.borderColor="#fbbf24";e.currentTarget.style.color="#78350f";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fde68a";e.currentTarget.style.color="#a16207";}}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M14 8H8a2 2 0 00-2 2v8a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
-                Mandar pra ajustar a copy
+                style={{width:"100%",background:"transparent",color:"#7c3aed",border:"1px solid "+C.b1,borderRadius:10,padding:"11px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#7c3aed66";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.b1;}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Ajustar copy
               </button>
             </>)}
 
