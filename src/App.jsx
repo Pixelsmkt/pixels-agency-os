@@ -22977,8 +22977,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [bioterUnit,setBioterUnit]=useState(task.bioterUnit||"chapeco");
   // Etiqueta interna admin (ex: "Pacote 10/06"). Só visível/editável p/ sócios.
   const [adminTag,setAdminTag]=useState(task.adminTag||"");
-  // isAdmin = pode editar etiquetas/tags. Permissão: gerenciarEtiquetas. Sócios sempre podem.
+  // isAdmin = pode editar etiquetas/tags + mês de pagamento. Sócios sempre podem.
   const isAdmin = !!(CURRENT_USER && (CURRENT_USER.level === 1 || (cardPerms&&cardPerms.gerenciarEtiquetas===true)));
+  // canEditContentType: tipo de conteúdo. Admin + editor de vídeo (Guilherme) podem.
+  // Designers (André, Maria) NÃO podem — afeta cálculo de pagamento por demanda.
+  const canEditContentType = isAdmin || !!(CURRENT_USER && CURRENT_USER.dash === "editor");
   // Tags (faixas coloridas no card). Visíveis pra todos, editáveis só p/ sócios.
   const [tags,setTags]=useState(Array.isArray(task.tags)?task.tags:[]);
   const [newTagInput,setNewTagInput]=useState("");
@@ -23235,7 +23238,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const nextTags = isAdmin ? (tags||[]) : (t.tags||[]);
       // referenceMonth só pode ser alterado por admin (sócio). Se não-admin salvar, preserva valor antigo.
       const nextReferenceMonth = isAdmin ? (referenceMonth||null) : (t.referenceMonth||null);
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:contentType||null,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+      // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
+      const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
     }));
     onClose();
   };
@@ -24996,7 +25001,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
           {/* Tipo de Conteúdo — pílulas selecionáveis (5 opções) — tudo em roxo */}
           <div>
-            <label style={LB}><Ico n="image" size={11} color="#9F43F6"/> Tipo de conteúdo</label>
+            <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Ico n="image" size={11} color="#9F43F6"/> Tipo de conteúdo</span>
+              {!canEditContentType&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios e edição</span>}
+            </label>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5}}>
               {[
                 {id:"arte",label:"Arte única",icon:"image"},
@@ -25008,8 +25016,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 {id:"corte",label:"Corte de vídeo",icon:"scissors"},
               ].map(opt=>{
                 const isSel=contentType===opt.id;
-                return <button key={opt.id} type="button" onClick={()=>{if(!canEdit)return;setContentType(isSel?"":opt.id);}} disabled={!canEdit}
-                  style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,padding:"8px 6px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:9,cursor:canEdit?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?600:500,transition:"all .12s",lineHeight:1.2,textAlign:"center",height:72,boxSizing:"border-box"}}>
+                const _canPick=canEdit&&canEditContentType;
+                return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;setContentType(isSel?"":opt.id);}} disabled={!_canPick}
+                  style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,padding:"8px 6px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:9,cursor:_canPick?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?600:500,transition:"all .12s",lineHeight:1.2,textAlign:"center",height:72,boxSizing:"border-box",opacity:_canPick?1:.7}}>
                   <Ico n={opt.icon} size={16}/>
                   <span>{opt.label}</span>
                 </button>;
@@ -29798,23 +29807,9 @@ function LoginScreen({onLoginCollaborator,onLoginClient}){
       {/* Glow sutil de fundo */}
       <div style={{position:"absolute",top:"-10%",left:"50%",transform:"translateX(-50%)",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,#a140ff15,transparent 70%)",pointerEvents:"none"}}/>
       <div style={{width:"100%",maxWidth:380,position:"relative",zIndex:1}}>
-        {/* Header — logo + título */}
+        {/* Header — logo Pixels + título */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",marginBottom:32}}>
-          <div style={{width:56,height:56,borderRadius:14,background:"linear-gradient(135deg,#a140ff,#7c3aed)",
-              display:"flex",alignItems:"center",justifyContent:"center",marginBottom:20,
-              boxShadow:"0 8px 24px rgba(161,64,255,0.25)"}}>
-            <svg width="32" height="32" viewBox="0 0 60 60">
-              <rect x="4"  y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
-              <rect x="22" y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
-              <rect x="40" y="4"  width="14" height="14" rx="2" fill="#fff" opacity="0.6"/>
-              <rect x="4"  y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
-              <rect x="22" y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
-              <rect x="40" y="22" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
-              <rect x="4"  y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.95"/>
-              <rect x="22" y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
-              <rect x="40" y="40" width="14" height="14" rx="2" fill="#fff" opacity="0.3"/>
-            </svg>
-          </div>
+          <img src="/logo-pixels.png" alt="Pixels" style={{height:56,width:"auto",maxWidth:240,objectFit:"contain",marginBottom:22,display:"block"}}/>
           <h1 style={{color:"#0f172a",fontWeight:700,fontSize:22,letterSpacing:-.5,margin:0,lineHeight:1.2}}>Bem-vindo de volta</h1>
           <p style={{color:"#64748b",fontSize:13,marginTop:6,marginBottom:0,fontWeight:400}}>Acesse sua conta da Pixels</p>
         </div>
