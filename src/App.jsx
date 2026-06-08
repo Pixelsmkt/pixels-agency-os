@@ -10787,7 +10787,9 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
   const monthStr=cur.getFullYear()+"-"+String(cur.getMonth()+1).padStart(2,"0");
   const monthLabel=cur.toLocaleDateString("pt-BR",{month:"long"});
   const yearLabel=cur.getFullYear();
-  const STS=["recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado"];
+  // Contabiliza só o que JÁ FOI APROVADO (interno OU pelo cliente) — não inflar com
+  // coisas que ainda tão em produção/avaliação. Reportado pelo Vinicius 2026-06.
+  const STS=["aprovado","aprovacao_final","agendado","publicado"];
   const weeks=4;
   function inMonth(t){
     // Prioridade: publishDate > referenceMonth > createdAt > mes atual
@@ -24968,8 +24970,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <span style={{color:"#94a3b8",fontSize:11,flexShrink:0,marginLeft:"auto"}}>▾</span>
             </button>
             {showAssigneesPicker&&<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:100,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",marginTop:3,overflow:"hidden"}}>
-              {/* Só EXECUTORES: designers (André, Maria) + editores (Guilherme). Quem criou aparece na timeline. */}
-              {TEAM.filter(u=>u.dash==="designer"||u.dash==="editor").map((u,i)=>{
+              {/* Executores (designers, editores) + sócios (Vinicius, Gustavo) que também
+                 podem ser marcados quando precisam atuar. Quem criou aparece na timeline. */}
+              {TEAM.filter(u=>u.dash==="designer"||u.dash==="editor"||u.level===1).map((u,i)=>{
                 const sel=assignees.includes(u.id);
                 const sup=SUPERVISORS[u.id]; // Se este user tem supervisor, mostra um aviso
                 const supUser=sup?TEAM.find(x=>x.id===sup):null;
