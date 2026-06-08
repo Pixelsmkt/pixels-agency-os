@@ -9988,6 +9988,20 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
     }).catch(function(e){console.warn("[client-events] load:",e?.message||e);});
     return function(){canceled=true;};
   },[]);
+  // Helper pra apagar evento do cliente (sócios/coordenação podem)
+  const deleteClientEvent=function(ev){
+    if(!window.confirm("Apagar este evento do cliente?\n\nO cliente vai parar de ver no portal dele também."))return;
+    if(typeof window==="undefined"||!window._sb)return;
+    // Carrega array atual, remove o evento, e persiste
+    window._sb.from("clients").select("client_events").eq("client_id",ev.clientId).single().then(function(res){
+      if(!res||!res.data||!Array.isArray(res.data.client_events))return;
+      const next=res.data.client_events.filter(function(e){return e.id!==ev.id;});
+      window._sb.from("clients").update({client_events:next}).eq("client_id",ev.clientId).then(function(){
+        setAllClientEvents(function(prev){return (prev||[]).filter(function(e){return e.id!==ev.id;});});
+        if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento do cliente apagado.",3000);
+      }).catch(function(e){console.warn("[client-events] delete:",e?.message||e);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao apagar evento.");});
+    }).catch(function(e){console.warn("[client-events] load before delete:",e?.message||e);});
+  };
   // Filtrar eventos pelo cliente ativo (se houver) + agrupados por data
   const _eventsByDate=useMemo(function(){
     const map=new Map();
@@ -10568,12 +10582,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                     return evs.map(function(ev){
                       const cl=CLIENTS.find(function(x){return x.id===ev.clientId;});
                       return <div key={ev.id} title={(cl?cl.name+" — ":"")+ev.title+(ev.description?"\n\n"+ev.description:"")+"\n\nEnviado em "+(new Date(ev.createdAt||"").toLocaleDateString("pt-BR")||"?")}
-                        style={{background:"#fde68a",color:"#78350f",borderRadius:6,padding:"4px 7px",fontSize:10.5,fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:5,boxShadow:"0 1px 3px rgba(245,158,11,0.25)",border:"1.5px solid #f59e0b",overflow:"hidden",flexShrink:0}}>
+                        style={{background:"#fde68a",color:"#78350f",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:5,boxShadow:"0 1px 3px rgba(245,158,11,0.25)",border:"1.5px solid #f59e0b",overflow:"hidden",flexShrink:0,position:"relative"}}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                         <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
                           <div style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",opacity:.85,lineHeight:1.1}}>{cl?cl.name:"Cliente"} · do cliente</div>
                           <div style={{fontSize:10.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,marginTop:1}}>{ev.title}</div>
                         </div>
+                        <button onClick={function(e){e.stopPropagation();deleteClientEvent(ev);}} title="Apagar este evento"
+                          style={{background:"rgba(120,53,15,0.15)",border:"none",borderRadius:5,width:18,height:18,color:"#78350f",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0,transition:"background .12s"}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="rgba(120,53,15,0.30)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.background="rgba(120,53,15,0.15)";}}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
                       </div>;
                     });
                   })()}
@@ -32837,6 +32857,18 @@ function PortalCalendario({cl, tasks, isMob, clientEvents:initialEvents, onClien
   const thisMonth=publicacoes.filter(function(t){const d=new Date(t.publishDate+"T12:00:00");return d.getFullYear()===calMonth.getFullYear()&&d.getMonth()===calMonth.getMonth();});
   const eventsThisMonth=(clientEvents||[]).filter(function(ev){if(!ev.date)return false;const d=new Date(ev.date+"T12:00:00");return d.getFullYear()===calMonth.getFullYear()&&d.getMonth()===calMonth.getMonth();});
 
+  const deleteEvent=function(id){
+    if(!window.confirm("Apagar este evento? Ele vai sumir do calendário da Pixels."))return;
+    const newEvents=(clientEvents||[]).filter(function(e){return e.id!==id;});
+    setClientEvents(newEvents);
+    try{
+      if(typeof window!=="undefined"&&window._sb){
+        window._sb.from("clients").update({client_events:newEvents}).eq("client_id",cl.id).then(function(){
+          if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.",3000);
+        }).catch(function(e){console.warn("[client-events] delete:",e?.message||e);});
+      }
+    }catch(e){console.warn("[client-events] delete:",e);}
+  };
   const submitEvent=function(){
     if(!evTitle.trim()||!evDate)return;
     const ev={
@@ -32984,12 +33016,29 @@ function PortalCalendario({cl, tasks, isMob, clientEvents:initialEvents, onClien
                 display:"flex",alignItems:"center",
                 justifyContent:isToday?"center":undefined,
               }}>{day.getDate()}</div>
-              {/* Eventos sinalizados pelo cliente (chips amarelos no topo do dia) */}
+              {/* Eventos sinalizados pelo cliente — visual de CARD igual os de publicação */}
               {day&&eventsByDay(day).map(function(ev){
                 return <div key={ev.id} title={ev.title+(ev.description?"\n\n"+ev.description:"")}
-                  style={{background:"#fbbf24",color:"#78350f",borderRadius:6,padding:"3px 7px",fontSize:10.5,fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:4,boxShadow:"0 1px 2px rgba(0,0,0,0.10)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                  <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{ev.title}</span>
+                  style={{background:"#fbbf24",borderRadius:8,padding:"6px 8px 7px",cursor:"default",position:"relative",transition:"all .12s",boxShadow:"0 1px 3px rgba(245,158,11,0.30)",border:"1.5px solid #f59e0b",flexShrink:0,marginBottom:3,display:"flex",flexDirection:"column",gap:3,minHeight:54}}
+                  onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 10px rgba(245,158,11,0.40)";}}
+                  onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(245,158,11,0.30)";}}>
+                  {/* Header: badge "SINALIZAÇÃO" + botão X */}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:2}}>
+                    <div style={{display:"inline-flex",alignItems:"center",gap:4,background:"rgba(120,53,15,0.15)",color:"#78350f",borderRadius:4,padding:"1px 6px",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                      Sinalização
+                    </div>
+                    <button onClick={function(e){e.stopPropagation();deleteEvent(ev.id);}} title="Apagar este evento"
+                      style={{background:"rgba(120,53,15,0.15)",border:"none",borderRadius:5,width:18,height:18,color:"#78350f",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0,transition:"background .12s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.background="rgba(120,53,15,0.30)";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="rgba(120,53,15,0.15)";}}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  </div>
+                  {/* Título */}
+                  <div style={{color:"#78350f",fontSize:isMob?10.5:11.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.3,letterSpacing:.1,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",wordBreak:"break-word"}}>
+                    {ev.title}
+                  </div>
                 </div>;
               })}
               {/* Cards do dia (publicações) */}
