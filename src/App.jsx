@@ -33774,25 +33774,29 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
     {/* Card view — single card carousel (igual aprovação interna) */}
     {current&&<div style={{display:"flex",flexDirection:"column",gap:14}}>
 
-      {/* Navegação topo: setas centralizadas + cor do cliente, wrap-around */}
+      {/* Navegação topo: contador + setas LADO A LADO (cor do cliente, wrap-around) */}
       <div style={{display:"flex",justifyContent:"center",alignItems:"center",padding:"4px 0"}}>
-        <div style={{display:"inline-flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:4,boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
-          <button onClick={goPrev} disabled={aguardando.length<=1} aria-label="Cartão anterior"
-            style={{background:aguardando.length<=1?"transparent":cl.color+"14",border:"none",borderRadius:99,width:36,height:36,cursor:aguardando.length<=1?"not-allowed":"pointer",color:aguardando.length<=1?"#cbd5e1":cl.color,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
-            onMouseEnter={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color;e.currentTarget.style.color="#fff";}}}
-            onMouseLeave={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color+"14";e.currentTarget.style.color=cl.color;}}}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          </button>
-          <div style={{display:"flex",alignItems:"center",gap:6,padding:"0 4px"}}>
+        <div style={{display:"inline-flex",alignItems:"center",gap:10,background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:"4px 14px 4px 16px",boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
+          {/* Contador à esquerda */}
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
             <span style={{color:"#475569",fontSize:12.5,fontWeight:700,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{clampedIdx+1} <span style={{color:"#94a3b8",fontWeight:500}}>de {aguardando.length}</span></span>
             <span style={{color:"#94a3b8",fontSize:11}}>· aguardando aprovação</span>
           </div>
-          <button onClick={goNext} disabled={aguardando.length<=1} aria-label="Próximo cartão"
-            style={{background:aguardando.length<=1?"transparent":cl.color+"14",border:"none",borderRadius:99,width:36,height:36,cursor:aguardando.length<=1?"not-allowed":"pointer",color:aguardando.length<=1?"#cbd5e1":cl.color,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
-            onMouseEnter={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color;e.currentTarget.style.color="#fff";}}}
-            onMouseLeave={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color+"14";e.currentTarget.style.color=cl.color;}}}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </button>
+          {/* Setas grudadas à direita */}
+          <div style={{display:"inline-flex",alignItems:"center",gap:4,paddingLeft:6,borderLeft:"1px solid #e2e8f0",marginLeft:2}}>
+            <button onClick={goPrev} disabled={aguardando.length<=1} aria-label="Cartão anterior"
+              style={{background:aguardando.length<=1?"transparent":cl.color+"14",border:"none",borderRadius:99,width:34,height:34,cursor:aguardando.length<=1?"not-allowed":"pointer",color:aguardando.length<=1?"#cbd5e1":cl.color,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
+              onMouseEnter={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color;e.currentTarget.style.color="#fff";}}}
+              onMouseLeave={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color+"14";e.currentTarget.style.color=cl.color;}}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button onClick={goNext} disabled={aguardando.length<=1} aria-label="Próximo cartão"
+              style={{background:aguardando.length<=1?"transparent":cl.color+"14",border:"none",borderRadius:99,width:34,height:34,cursor:aguardando.length<=1?"not-allowed":"pointer",color:aguardando.length<=1?"#cbd5e1":cl.color,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s",padding:0}}
+              onMouseEnter={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color;e.currentTarget.style.color="#fff";}}}
+              onMouseLeave={function(e){if(aguardando.length>1){e.currentTarget.style.background=cl.color+"14";e.currentTarget.style.color=cl.color;}}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
         </div>
       </div>
 
