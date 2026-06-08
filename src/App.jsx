@@ -9968,6 +9968,37 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   const [openCard,setOpenCard]=useState(null);
+  // Eventos sinalizados pelos clientes via Portal — array de {clientId, id, title, date, description}
+  const [allClientEvents,setAllClientEvents]=useState([]);
+  useEffect(function(){
+    if(typeof window==="undefined"||!window._sb)return;
+    let canceled=false;
+    window._sb.from("clients").select("client_id,client_events").then(function(res){
+      if(canceled)return;
+      if(!res||!res.data)return;
+      const flat=[];
+      res.data.forEach(function(row){
+        if(Array.isArray(row.client_events)){
+          row.client_events.forEach(function(ev){
+            flat.push(Object.assign({},ev,{clientId:row.client_id}));
+          });
+        }
+      });
+      setAllClientEvents(flat);
+    }).catch(function(e){console.warn("[client-events] load:",e?.message||e);});
+    return function(){canceled=true;};
+  },[]);
+  // Filtrar eventos pelo cliente ativo (se houver) + agrupados por data
+  const _eventsByDate=useMemo(function(){
+    const map=new Map();
+    (allClientEvents||[]).forEach(function(ev){
+      if(filterClient!=="todos"&&ev.clientId!==filterClient)return;
+      if(!ev.date)return;
+      if(!map.has(ev.date))map.set(ev.date,[]);
+      map.get(ev.date).push(ev);
+    });
+    return map;
+  },[allClientEvents,filterClient]);
   const [ctxMenu,setCtxMenu]=useState(null); // {x,y,task} pro menu botao-direito
   const [genConfirm,setGenConfirm]=useState(null);
   const [showMissingSlots,setShowMissingSlots]=useState(false);
@@ -10529,6 +10560,23 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                     display:"flex",alignItems:"center",
                     justifyContent:isToday?"center":undefined,
                   }}>{day.getDate()}</div>
+
+                  {/* Eventos sinalizados pelo cliente (cards amarelos com selo DO CLIENTE) */}
+                  {(function(){
+                    const dayKey=day.getFullYear()+"-"+String(day.getMonth()+1).padStart(2,"0")+"-"+String(day.getDate()).padStart(2,"0");
+                    const evs=_eventsByDate.get(dayKey)||[];
+                    return evs.map(function(ev){
+                      const cl=CLIENTS.find(function(x){return x.id===ev.clientId;});
+                      return <div key={ev.id} title={(cl?cl.name+" — ":"")+ev.title+(ev.description?"\n\n"+ev.description:"")+"\n\nEnviado em "+(new Date(ev.createdAt||"").toLocaleDateString("pt-BR")||"?")}
+                        style={{background:"#fde68a",color:"#78350f",borderRadius:6,padding:"4px 7px",fontSize:10.5,fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:5,boxShadow:"0 1px 3px rgba(245,158,11,0.25)",border:"1.5px solid #f59e0b",overflow:"hidden",flexShrink:0}}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                          <div style={{fontSize:8,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",opacity:.85,lineHeight:1.1}}>{cl?cl.name:"Cliente"} · do cliente</div>
+                          <div style={{fontSize:10.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,marginTop:1}}>{ev.title}</div>
+                        </div>
+                      </div>;
+                    });
+                  })()}
 
                   {/* Cards do dia */}
                   <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden"}}>
@@ -17196,7 +17244,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#7c3aed66";}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.b1;}}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                Ajustar copy
+                Enviar para ajuste de copy
               </button>
             </>)}
 
@@ -32744,8 +32792,25 @@ function PortalChat({cl, isClientView}){
 
 /* ── Portal Calendar ── Visual identico ao PageCalendarioPublicacoes interno
    Read-only: cliente nao arrasta cards, soh visualiza. */
-function PortalCalendario({cl, tasks, isMob}){
+function PortalCalendario({cl, tasks, isMob, clientEvents:initialEvents, onClientEventCreate}){
   const [calMonth,setCalMonth]=useState(new Date());
+  const [showNewEvent,setShowNewEvent]=useState(false);
+  const [evTitle,setEvTitle]=useState("");
+  const [evDate,setEvDate]=useState(new Date().toISOString().slice(0,10));
+  const [evDesc,setEvDesc]=useState("");
+  // State local: carregamos client_events do Supabase ao montar e mantemos sincronizado.
+  const [clientEvents,setClientEvents]=useState(initialEvents||[]);
+  useEffect(function(){
+    if(!cl||!cl.id||typeof window==="undefined"||!window._sb)return;
+    let canceled=false;
+    window._sb.from("clients").select("client_events").eq("client_id",cl.id).single()
+      .then(function(res){
+        if(canceled)return;
+        const evs=res&&res.data&&Array.isArray(res.data.client_events)?res.data.client_events:[];
+        setClientEvents(evs);
+      }).catch(function(e){console.warn("[client-events] load:",e?.message||e);});
+    return function(){canceled=true;};
+  },[cl&&cl.id]);
   const MONTHS=PORTAL_MONTHS;
   const WEEKDAYS=PORTAL_WEEKDAYS;
 
@@ -32765,7 +32830,32 @@ function PortalCalendario({cl, tasks, isMob}){
   };
   const fmtDay=function(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
   const tasksByDay=function(d){return d?publicacoes.filter(function(t){return t.publishDate===fmtDay(d);}):[];};
+  const eventsByDay=function(d){return d?(clientEvents||[]).filter(function(ev){return ev.date===fmtDay(d);}):[];};
   const thisMonth=publicacoes.filter(function(t){const d=new Date(t.publishDate+"T12:00:00");return d.getFullYear()===calMonth.getFullYear()&&d.getMonth()===calMonth.getMonth();});
+  const eventsThisMonth=(clientEvents||[]).filter(function(ev){if(!ev.date)return false;const d=new Date(ev.date+"T12:00:00");return d.getFullYear()===calMonth.getFullYear()&&d.getMonth()===calMonth.getMonth();});
+
+  const submitEvent=function(){
+    if(!evTitle.trim()||!evDate)return;
+    const ev={
+      id:"ce-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),
+      title:evTitle.trim(),
+      date:evDate,
+      description:evDesc.trim()||"",
+      createdAt:new Date().toISOString(),
+      createdBy:"Cliente",
+    };
+    const newEvents=[...(clientEvents||[]),ev];
+    setClientEvents(newEvents);
+    // Persistir em Supabase
+    try{
+      if(typeof window!=="undefined"&&window._sb){
+        window._sb.from("clients").update({client_events:newEvents}).eq("client_id",cl.id).then(function(){
+          if(typeof pixelsToast!=="undefined")pixelsToast.success("Evento enviado pra equipe da Pixels!",4000);
+        }).catch(function(e){console.warn("[client-events] save:",e?.message||e);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar evento.");});
+      }
+    }catch(e){console.warn("[client-events] save:",e);}
+    setShowNewEvent(false);setEvTitle("");setEvDesc("");setEvDate(new Date().toISOString().slice(0,10));
+  };
 
   // Cor do card por unidade Bioter (segue logica do interno)
   const _BIOTER_PRINC=["chapeco","castro","toledo"];
@@ -32788,9 +32878,17 @@ function PortalCalendario({cl, tasks, isMob}){
     <div style={{display:"flex",alignItems:"flex-start",flexWrap:"wrap",gap:12,justifyContent:"space-between"}}>
       <div>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Calendário de Publicações</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{thisMonth.length} publicação{thisMonth.length!==1?"ões":""} em {MONTHS[calMonth.getMonth()]}</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>{thisMonth.length} publicação{thisMonth.length!==1?"ões":""}{eventsThisMonth.length>0?" + "+eventsThisMonth.length+" sinalizaç"+(eventsThisMonth.length>1?"ões":"ão"):""} em {MONTHS[calMonth.getMonth()]}</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <button onClick={function(){setShowNewEvent(true);}}
+          title="Sinalizar pra equipe um evento, lançamento ou atualização importante"
+          style={{background:"#fbbf24",color:"#78350f",border:"1px solid #f59e0b",borderRadius:9,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#f59e0b";e.currentTarget.style.color="#fff";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#fbbf24";e.currentTarget.style.color="#78350f";}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Sinalizar evento
+        </button>
         <button onClick={function(){setCalMonth(function(m){return new Date(m.getFullYear(),m.getMonth()-1,1);});}} aria-label="Mês anterior"
           style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,width:36,height:36,color:"#475569",cursor:"pointer",fontSize:14,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center"}}>‹</button>
         <div style={{color:"#0f172a",fontWeight:700,fontSize:14,minWidth:150,textAlign:"center"}}>{MONTHS[calMonth.getMonth()]} {calMonth.getFullYear()}</div>
@@ -32800,6 +32898,52 @@ function PortalCalendario({cl, tasks, isMob}){
           style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Hoje</button>
       </div>
     </div>
+
+    {/* Modal Sinalizar evento — overlay simples, sem dependências externas */}
+    {showNewEvent&&<div onClick={function(){setShowNewEvent(false);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,padding:"28px 28px 24px",maxWidth:480,width:"100%",boxShadow:"0 25px 70px rgba(15,23,42,0.18)"}}>
+        <div style={{display:"flex",alignItems:"flex-start",gap:14,marginBottom:18}}>
+          <div style={{flexShrink:0,width:40,height:40,borderRadius:10,background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:600,fontSize:15,letterSpacing:-.2,marginBottom:4}}>Sinalizar evento pra equipe</div>
+            <div style={{color:"#64748b",fontSize:13,lineHeight:1.5}}>Avise quando tiver algo importante acontecendo na sua empresa — feira, lançamento, evento. A equipe Pixels vai poder se planejar pra cobrir.</div>
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:18}}>
+          <div>
+            <label style={{display:"block",color:"#0f172a",fontSize:13,fontWeight:600,marginBottom:6,letterSpacing:-.1}}>Título</label>
+            <input value={evTitle} onChange={function(e){setEvTitle(e.target.value);}} placeholder="Ex: Feira do Agro"
+              style={{width:"100%",background:"#fff",border:"1px solid #e5e7eb",borderRadius:10,padding:"11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <label style={{display:"block",color:"#0f172a",fontSize:13,fontWeight:600,marginBottom:6,letterSpacing:-.1}}>Data</label>
+            <input type="date" value={evDate} onChange={function(e){setEvDate(e.target.value);}}
+              style={{width:"100%",background:"#fff",border:"1px solid #e5e7eb",borderRadius:10,padding:"11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <label style={{display:"block",color:"#0f172a",fontSize:13,fontWeight:600,marginBottom:6,letterSpacing:-.1}}>Descrição <span style={{color:"#94a3b8",fontWeight:400}}>(opcional)</span></label>
+            <textarea value={evDesc} onChange={function(e){setEvDesc(e.target.value);}} placeholder="Ex: Vamos participar com estande. Quero atualizar redes durante o evento."
+              rows={3} style={{width:"100%",background:"#fff",border:"1px solid #e5e7eb",borderRadius:10,padding:"11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",minHeight:80}}/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+          <button onClick={function(){setShowNewEvent(false);}}
+            style={{background:"transparent",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",fontWeight:500,fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>
+            Cancelar
+          </button>
+          <button onClick={submitEvent} disabled={!evTitle.trim()||!evDate}
+            style={{background:!evTitle.trim()||!evDate?"#cbd5e1":"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",fontWeight:600,fontSize:13,cursor:!evTitle.trim()||!evDate?"not-allowed":"pointer",fontFamily:"inherit"}}>
+            Sinalizar pra equipe
+          </button>
+        </div>
+      </div>
+    </div>}
 
     {/* Grade do calendário — visual identico ao interno */}
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,overflow:"hidden"}}>
@@ -32837,7 +32981,15 @@ function PortalCalendario({cl, tasks, isMob}){
                 display:"flex",alignItems:"center",
                 justifyContent:isToday?"center":undefined,
               }}>{day.getDate()}</div>
-              {/* Cards do dia */}
+              {/* Eventos sinalizados pelo cliente (chips amarelos no topo do dia) */}
+              {day&&eventsByDay(day).map(function(ev){
+                return <div key={ev.id} title={ev.title+(ev.description?"\n\n"+ev.description:"")}
+                  style={{background:"#fbbf24",color:"#78350f",borderRadius:6,padding:"3px 7px",fontSize:10.5,fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:4,boxShadow:"0 1px 2px rgba(0,0,0,0.10)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{ev.title}</span>
+                </div>;
+              })}
+              {/* Cards do dia (publicações) */}
               <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden"}}>
                 {dayTasks.map(function(t){
                   const bg=cardColorOf(t);
@@ -35621,29 +35773,23 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
         </div>
           );})()}
 
-        {/* Social media summary */}
-        {cl.social&&<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"16px 20px"}}>
-          <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:12,display:"inline-flex",alignItems:"center",gap:6}}>
-            <Ico n="chart" size={13} color={C.ts}/> Redes Sociais
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10}}>
-            {[
-              {l:"Seguidores",v:(cl.social.followers||0).toLocaleString("pt-BR"),c:C.a},
-              {l:"Crescimento",v:"+"+(cl.social.growth||0)+"%",c:C.gr},
-              {l:"Alcance",v:(cl.social.reach||0).toLocaleString("pt-BR"),c:"#0284c7"},
-              {l:"Engajamento",v:(cl.social.eng||0)+"%",c:C.or},
-              {l:"Posts",v:cl.social.posts||0,c:"#8b5cf6"},
-            ].map((k,i)=>(
-              <div key={i} style={{background:C.s1,borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-                <div style={{color:k.c,fontWeight:900,fontSize:18,fontFeatureSettings:"'tnum'"}}>{k.v}</div>
-                <div style={{color:C.td,fontSize:9,marginTop:2}}>{k.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>}
+        {/* KPIs sociais removidos (Vinicius 2026-06: dados eram mockados, voltam quando integrar Reportei) */}
 
-        {/* Calendário de Publicações — embutido no Dashboard */}
-        <PortalCalendario cl={cl} tasks={clTasks} isMob={isMob}/>
+        {/* Calendário de Publicações + Eventos do cliente — embutido no Dashboard */}
+        <PortalCalendario cl={cl} tasks={clTasks} isMob={isMob} clientEvents={cl.clientEvents||[]} onClientEventCreate={(ev)=>{
+          // Cria sinalização pra equipe (não vira card de demanda)
+          const newEvents=[...((cl.clientEvents)||[]),ev];
+          // Atualiza local + persiste em Supabase via window._sb
+          try{
+            if(typeof window!=="undefined"&&window._sb){
+              window._sb.from("clients").update({client_events:newEvents}).eq("client_id",cl.id).then(function(){
+                if(typeof pixelsToast!=="undefined")pixelsToast.success("Evento enviado pra equipe da Pixels!",4000);
+              });
+            }
+            // Atualiza cliente em memória (próximo refetch puxa do banco, mas pra UX imediata)
+            cl.clientEvents=newEvents;
+          }catch(e){console.warn("[client-event] save:",e);}
+        }}/>
 
         {/* Recent activity */}
         <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
