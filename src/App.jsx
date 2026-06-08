@@ -16984,8 +16984,23 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             const priCfg=PRI_MAP[pri];
             const fmtBR=(iso)=>{if(!iso)return"";const m=String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);if(m)return m[3]+"/"+m[2]+"/"+m[1];return iso;};
             const fmtMes=(s)=>{if(!s)return"";const m=String(s).match(/^(\d{4})-(\d{2})/);if(!m)return s;const MES=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];return MES[parseInt(m[2])-1]+"/"+m[1].slice(2);};
+            // Data/hora em que o card entrou em "avaliacao" (= enviado pra aprovação).
+            // colEnteredAt registra o último timestamp de mudança de coluna.
+            const sentAt=current.colEnteredAt||"";
+            const fmtSentBR=function(iso){
+              if(!iso)return "";
+              const d=new Date(iso);
+              if(isNaN(d.getTime()))return "";
+              const dd=String(d.getDate()).padStart(2,"0");
+              const mm=String(d.getMonth()+1).padStart(2,"0");
+              const yy=d.getFullYear();
+              const hh=String(d.getHours()).padStart(2,"0");
+              const mi=String(d.getMinutes()).padStart(2,"0");
+              return dd+"/"+mm+"/"+yy+" "+hh+":"+mi;
+            };
             const metaTags=[];
             if(ctCfg)metaTags.push({key:"ct",icon:ctCfg.icon,label:ctCfg.label,color:"#7c3aed",bg:"#7c3aed14"});
+            if(sentAt)metaTags.push({key:"sent",icon:"clock",label:"Enviado "+fmtSentBR(sentAt),color:"#6366f1",bg:"#6366f114"});
             if(dl)metaTags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
             if(pubD)metaTags.push({key:"pub",icon:"calendar",label:"Publicação "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
             if(refMes)metaTags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#475569",bg:"#f1f5f9"});
@@ -32993,7 +33008,7 @@ function PortalCalendario({cl, tasks, isMob, clientEvents:initialEvents, onClien
           const isToday=day&&day.toDateString()===new Date().toDateString();
           const hasTasks=dayTasks.length>0;
           return <div key={i} style={{
-            height:isMob?110:150,
+            height:isMob?170:260,
             borderRight:"1px solid #e2e8f0",
             borderBottom:"1px solid #e2e8f0",
             padding:"8px 6px 6px",
