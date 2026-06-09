@@ -41721,11 +41721,11 @@ function CClienteNPS(props){
         <_NotaScale value={score} onChange={setScore}/>
       </div>
       <div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que motivou a nota? (opcional)</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que motivou a nota?</div>
         <textarea value={reason} onChange={function(e){setReason(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
       </div>
       <div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar? (opcional)</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar?</div>
         <textarea value={improvement} onChange={function(e){setImprovement(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
       </div>
       <div style={{display:"flex",justifyContent:"flex-end"}}>
@@ -41817,11 +41817,11 @@ function PortalNPS(props){
         <input value={respondent} onChange={function(e){setRespondent(e.target.value);}} placeholder="Quem está respondendo?" style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",boxSizing:"border-box",background:"#fafbfc"}}/>
       </div>
       <div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que motivou sua nota? (opcional)</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que motivou sua nota?</div>
         <textarea value={reason} onChange={function(e){setReason(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
       </div>
       <div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar? (opcional)</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar?</div>
         <textarea value={improvement} onChange={function(e){setImprovement(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
       </div>
       <div style={{display:"flex",justifyContent:"flex-end"}}>
