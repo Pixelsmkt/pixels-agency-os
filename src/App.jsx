@@ -41686,7 +41686,15 @@ function useENPS(){
   const [loading, setLoading] = useState(true);
   useEffect(function(){
     if(!window._sb){setLoading(false);return;}
-    window._sb.from("enps_responses").select("*").order("created_at",{ascending:false}).then(function(r){
+    // 🔒 PRIVACIDADE: colaborador comum só puxa as PRÓPRIAS rows.
+    // Sócios (level 1) e Hellen têm acesso ao consolidado.
+    // Backup: RLS no Supabase (ver SQL no canvas) trava de novo no servidor.
+    const _canSeeAll = (typeof CURRENT_USER!=="undefined" && CURRENT_USER && (CURRENT_USER.level===1 || CURRENT_USER.id==="ellen" || CURRENT_USER.id==="hellen"));
+    let q = window._sb.from("enps_responses").select("*").order("created_at",{ascending:false});
+    if(!_canSeeAll && CURRENT_USER && CURRENT_USER.id){
+      q = q.eq("user_id", CURRENT_USER.id);
+    }
+    q.then(function(r){
       if(!r.error) setRows(r.data||[]);
       setLoading(false);
     });
