@@ -25356,8 +25356,42 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <span>Mês de pagamento</span>
               {!isAdmin&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios editam</span>}
             </label>
-            <input type="month" value={referenceMonth} onChange={e=>setReferenceMonth(e.target.value)} disabled={!canEdit||!isAdmin}
-              style={{...SI,fontSize:13,borderColor:referenceMonth?"#7c3aed44":undefined,background:referenceMonth?"#7c3aed08":undefined,color:referenceMonth?"#7c3aed":"#94a3b8",fontWeight:referenceMonth?700:500,cursor:isAdmin?"pointer":"not-allowed"}}/>
+            {(()=>{
+              // Stepper de mês com setas circulares prev/next + display formatado.
+              // Click no centro abre o input month nativo (fallback pra escolha rápida).
+              const _MN=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+              const _now=new Date();
+              const _cur=referenceMonth||(_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0"));
+              const _step=function(delta){
+                const [y,m]=_cur.split("-").map(Number);
+                const d=new Date(y,m-1+delta,1);
+                setReferenceMonth(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));
+              };
+              const _label=referenceMonth?(_MN[parseInt(_cur.split("-")[1])-1]+" "+_cur.split("-")[0]):"Selecione o mês";
+              const _enabled=canEdit&&isAdmin;
+              const _hidRef=React.useRef(null);
+              const ArrowBtn=function(props){
+                const dir=props.dir;
+                return <button type="button" disabled={!_enabled} onClick={function(e){e.preventDefault();_step(dir==="prev"?-1:1);}}
+                  style={{width:32,height:32,borderRadius:"50%",border:"1px solid #e2e8f0",background:_enabled?"#fff":"#f8fafc",color:_enabled?"#475569":"#cbd5e1",cursor:_enabled?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s",padding:0}}
+                  onMouseEnter={function(e){if(_enabled){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color="#7c3aed";}}}
+                  onMouseLeave={function(e){if(_enabled){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {dir==="prev"?<polyline points="15 18 9 12 15 6"/>:<polyline points="9 18 15 12 9 6"/>}
+                  </svg>
+                </button>;
+              };
+              return <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <ArrowBtn dir="prev"/>
+                <button type="button" disabled={!_enabled} onClick={function(){if(_enabled&&_hidRef.current){try{_hidRef.current.showPicker&&_hidRef.current.showPicker();}catch(e){}}}}
+                  style={{flex:1,height:38,borderRadius:9,border:"1px solid "+(referenceMonth?"#c4b5fd":"#e2e8f0"),background:referenceMonth?"#f5f3ff":"#fafbfc",color:referenceMonth?"#7c3aed":"#94a3b8",fontWeight:referenceMonth?700:500,fontSize:13,cursor:_enabled?"pointer":"not-allowed",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                  {_label}
+                  <input ref={_hidRef} type="month" value={referenceMonth} onChange={function(e){setReferenceMonth(e.target.value);}}
+                    style={{position:"absolute",inset:0,opacity:0,pointerEvents:"none"}} disabled={!_enabled}/>
+                </button>
+                <ArrowBtn dir="next"/>
+              </div>;
+            })()}
           </div>
 
           {/* Prioridade+Prazo */}
@@ -25393,16 +25427,37 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   const dt=new Date(deadline+"T12:00:00");
                   return dt.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});
                 };
+                const stepDay=function(delta){
+                  const base=deadline?new Date(deadline+"T12:00:00"):new Date();
+                  base.setDate(base.getDate()+delta);
+                  const yy=base.getFullYear(),mm=String(base.getMonth()+1).padStart(2,"0"),dd=String(base.getDate()).padStart(2,"0");
+                  setDeadline(yy+"-"+mm+"-"+dd);
+                };
+                const ArrowD=function(props){
+                  const dir=props.dir;
+                  return <button type="button" disabled={!canEdit} onClick={function(e){e.preventDefault();e.stopPropagation();stepDay(dir==="prev"?-1:1);}}
+                    style={{width:32,height:32,borderRadius:"50%",border:"1px solid #e2e8f0",background:canEdit?"#fff":"#f8fafc",color:canEdit?"#475569":"#cbd5e1",cursor:canEdit?"pointer":"not-allowed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s",padding:0}}
+                    onMouseEnter={function(e){if(canEdit){e.currentTarget.style.background="#eef2ff";e.currentTarget.style.borderColor="#a5b4fc";e.currentTarget.style.color="#6366f1";}}}
+                    onMouseLeave={function(e){if(canEdit){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#475569";}}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      {dir==="prev"?<polyline points="15 18 9 12 15 6"/>:<polyline points="9 18 15 12 9 6"/>}
+                    </svg>
+                  </button>;
+                };
                 return <div style={{position:"relative"}}>
-                  {canEdit
-                    ? <button onClick={()=>setShowCalendar(v=>!v)}
-                        style={{...SI,display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",background:!deadline?"#fff7f7":undefined,borderColor:!deadline?"#fca5a5":undefined}}>
-                        <span style={{fontSize:14}}>📅</span>
-                        <span style={{flex:1,color:deadline?"#1e293b":"#94a3b8",fontSize:12}}>{displayDeadline()}</span>
-                        {deadline&&<button onMouseDown={e=>{e.stopPropagation();setDeadline("");}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,padding:"0 2px"}} title="Limpar">×</button>}
-                      </button>
-                    : <div style={SI}>{deadline?new Date(deadline+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}):"—"}</div>
-                  }
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {canEdit&&<ArrowD dir="prev"/>}
+                    {canEdit
+                      ? <button onClick={()=>setShowCalendar(v=>!v)}
+                          style={{...SI,flex:1,display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",background:!deadline?"#fff7f7":undefined,borderColor:!deadline?"#fca5a5":undefined}}>
+                          <span style={{fontSize:14}}>📅</span>
+                          <span style={{flex:1,color:deadline?"#1e293b":"#94a3b8",fontSize:12}}>{displayDeadline()}</span>
+                          {deadline&&<button onMouseDown={e=>{e.stopPropagation();setDeadline("");}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,padding:"0 2px"}} title="Limpar">×</button>}
+                        </button>
+                      : <div style={{...SI,flex:1}}>{deadline?new Date(deadline+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}):"—"}</div>
+                    }
+                    {canEdit&&<ArrowD dir="next"/>}
+                  </div>
                   {showCalendar&&canEdit&&<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:200,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",padding:14,minWidth:260}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                       <button onClick={()=>{if(calViewMonth===0){setCalViewMonth(11);setCalViewYear(y=>y-1);}else setCalViewMonth(m=>m-1);}}
