@@ -36131,9 +36131,6 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
   </div>);
 }
 
-  </div>);
-}
-
 // ======= 15_contratos.jsx =======
 /* ── Constantes de módulo ── */
 const CONTRATO_TIPO_C={mensal:"Mensal",anual:"Anual",projeto:"Projeto","recorrente":"Recorrente"};
