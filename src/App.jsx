@@ -41605,61 +41605,97 @@ function PortalNPS(props){
   const [score, setScore] = useState(null);
   const [reason, setReason] = useState("");
   const [improvement, setImprovement] = useState("");
-
-  const last = rows[0]||null;
-  const dias = last ? _npsDaysUntil(last.next_due_date) : null;
-  const podeResponder = !last || dias==null || dias<=0;
+  const [respondent, setRespondent] = useState(function(){
+    try{ return localStorage.getItem("pixels-nps-respondent-"+cl.id) || ""; }catch(e){ return ""; }
+  });
+  const [sentToast, setSentToast] = useState(null);
 
   function handleSubmit(){
     if(score==null) return;
+    if(!respondent.trim()){
+      if(typeof pixelsToast!=="undefined") pixelsToast.warning("Diga seu nome antes de enviar.",4000);
+      return;
+    }
+    try{ localStorage.setItem("pixels-nps-respondent-"+cl.id, respondent.trim()); }catch(e){}
     add({
       score:score,
       reason:reason.trim(),
       improvement_suggestion:improvement.trim(),
-      respondent_name:cl.name,
+      respondent_name:respondent.trim(),
       respondent_user_id:"",
       source:"portal",
     }).then(function(){
       setScore(null); setReason(""); setImprovement("");
-      if(typeof pixelsToast!=="undefined") pixelsToast.success("Resposta enviada. Obrigado!",4000);
+      setSentToast(Date.now());
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Avaliação registrada. Obrigado!",4000);
+      setTimeout(function(){setSentToast(null);},5000);
     });
   }
 
   if(loading) return <div style={{padding:30,textAlign:"center",color:"#94a3b8",fontFamily:_NPS_FF}}>Carregando...</div>;
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_NPS_FF}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF}}>
     <div style={{fontFamily:_NPS_FF}}>
       <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3,fontFamily:_NPS_FF}}>Avalie a Pixels</div>
-      <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_NPS_FF}}>Sua opinião nos ajuda a evoluir. Solicitada a cada 2 meses.</div>
+      <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_NPS_FF}}>Sua opinião nos ajuda a evoluir. Pode registrar quando quiser.</div>
     </div>
 
-    {podeResponder
-      ? <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF}}>
-          <div style={{color:"#0f172a",fontSize:15,fontWeight:700,lineHeight:1.4,fontFamily:_NPS_FF}}>De 0 a 10, o quanto você indicaria a Pixels para outra empresa?</div>
-          <_NotaScale value={score} onChange={setScore}/>
-          <div>
-            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que motivou sua nota? (opcional)</div>
-            <textarea value={reason} onChange={function(e){setReason(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
-          </div>
-          <div>
-            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar? (opcional)</div>
-            <textarea value={improvement} onChange={function(e){setImprovement(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
-          </div>
-          <div style={{display:"flex",justifyContent:"flex-end"}}>
-            <button onClick={handleSubmit} disabled={score==null}
-              style={{background:score!=null?"#9F43F6":"#cbd5e1",color:"#fff",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:800,fontSize:13,cursor:score!=null?"pointer":"not-allowed",fontFamily:_NPS_FF}}>Enviar avaliação</button>
-          </div>
-        </section>
-      : <section style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:14,padding:"22px 26px",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
-          <div style={{width:42,height:42,borderRadius:11,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          <div style={{minWidth:0}}>
-            <div style={{color:"#15803d",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_NPS_FF}}>Obrigado pela sua avaliação!</div>
-            <div style={{color:"#15803d",fontSize:12.5,marginTop:3,fontFamily:_NPS_FF}}>Última resposta em {_npsFmtData(last.created_at)}. Próxima avaliação em {_npsFmtDate(last.next_due_date)}.</div>
-          </div>
-        </section>
-    }
+    {sentToast && <div style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:11,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,fontFamily:_NPS_FF}}>
+      <div style={{width:24,height:24,borderRadius:7,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div style={{color:"#15803d",fontWeight:700,fontSize:13,fontFamily:_NPS_FF}}>Avaliação enviada. Obrigado!</div>
+    </div>}
+
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF}}>
+      <div style={{color:"#0f172a",fontSize:15,fontWeight:700,lineHeight:1.4,fontFamily:_NPS_FF}}>De 0 a 10, o quanto você indicaria a Pixels para outra empresa?</div>
+      <_NotaScale value={score} onChange={setScore}/>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>Seu nome</div>
+        <input value={respondent} onChange={function(e){setRespondent(e.target.value);}} placeholder="Quem está respondendo?" style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",boxSizing:"border-box",background:"#fafbfc"}}/>
+      </div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que motivou sua nota? (opcional)</div>
+        <textarea value={reason} onChange={function(e){setReason(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+      </div>
+      <div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,fontFamily:_NPS_FF}}>O que podemos melhorar? (opcional)</div>
+        <textarea value={improvement} onChange={function(e){setImprovement(e.target.value);}} rows={2} style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 12px",fontSize:13,fontFamily:_NPS_FF,outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc"}}/>
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end"}}>
+        <button onClick={handleSubmit} disabled={score==null||!respondent.trim()}
+          style={{background:(score!=null&&respondent.trim())?"#9F43F6":"#cbd5e1",color:"#fff",border:"none",borderRadius:10,padding:"10px 24px",fontWeight:800,fontSize:13,cursor:(score!=null&&respondent.trim())?"pointer":"not-allowed",fontFamily:_NPS_FF}}>Enviar avaliação</button>
+      </div>
+    </section>
+
+    {/* Histórico de avaliações */}
+    {rows.length>0 && <section style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2,fontFamily:_NPS_FF}}>Avaliações anteriores</div>
+        <div style={{color:"#94a3b8",fontSize:11,fontFamily:_NPS_FF}}>{rows.length} registro{rows.length>1?"s":""}</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {rows.map(function(r){
+          const cls = _npsClassify(r.score);
+          return <div key={r.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",display:"flex",gap:14,fontFamily:_NPS_FF}}>
+            <div style={{width:46,height:46,borderRadius:11,background:cls.color,color:"#fff",fontSize:18,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:_NPS_FF,boxShadow:"0 4px 10px "+cls.color+"35"}}>{r.score}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+                <span style={{background:cls.bg,color:cls.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:5,textTransform:"uppercase",letterSpacing:.4,fontFamily:_NPS_FF}}>{cls.label}</span>
+                <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFamily:_NPS_FF}}>{r.respondent_name||"—"}</span>
+                <span style={{color:"#94a3b8",fontSize:11,fontFamily:_NPS_FF,marginLeft:"auto"}}>{_npsFmtData(r.created_at)}</span>
+              </div>
+              {r.reason && <div style={{color:"#475569",fontSize:12.5,marginTop:4,lineHeight:1.5,fontFamily:_NPS_FF}}>
+                <span style={{color:"#94a3b8",fontWeight:600,marginRight:6,fontFamily:_NPS_FF}}>Motivo:</span>{r.reason}
+              </div>}
+              {r.improvement_suggestion && <div style={{color:"#475569",fontSize:12.5,marginTop:4,lineHeight:1.5,fontFamily:_NPS_FF}}>
+                <span style={{color:"#94a3b8",fontWeight:600,marginRight:6,fontFamily:_NPS_FF}}>Sugestão:</span>{r.improvement_suggestion}
+              </div>}
+            </div>
+          </div>;
+        })}
+      </div>
+    </section>}
   </div>;
 }
 
