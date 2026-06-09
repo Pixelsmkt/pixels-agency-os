@@ -3437,72 +3437,43 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
   const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(effectiveUser.id));
 
   return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto",width:"100%"}}>
-    {/* ── CAPA COMPACTA — fina barra colorida + linha branca com info ── */}
-    <div style={{position:"relative",marginBottom:4,borderRadius:12,overflow:"hidden",border:`0.5px solid ${C.b1}`}}>
-
-      {/* ── BARRA COLORIDA SLIM ── */}
-      <div style={{background:`linear-gradient(135deg,${coverColor},${coverColor}bb)`,height:isMob?32:40,width:"100%",position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 12px"}}>
-        {/* Botões compactos esquerda */}
-        <div style={{display:"flex",gap:6,position:"relative"}}>
-          <button onClick={()=>window._openMyProfile&&window._openMyProfile()} title="Editar perfil"
-            style={{background:"rgba(255,255,255,0.22)",border:"none",borderRadius:7,padding:"4px 9px",color:"#fff",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            {!isMob&&"Editar"}
-          </button>
-          <button onClick={()=>setShowColorPicker(v=>!v)} title="Cor da capa"
-            style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:7,padding:"4px 9px",color:"rgba(255,255,255,0.95)",fontSize:11,fontWeight:600,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r=".5" fill="#fff"/><circle cx="17.5" cy="10.5" r=".5" fill="#fff"/><circle cx="8.5" cy="7.5" r=".5" fill="#fff"/><circle cx="6.5" cy="12.5" r=".5" fill="#fff"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 011.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
-            {!isMob&&"Cor"}
-          </button>
-          {showColorPicker&&<div style={{position:"absolute",top:30,left:0,background:C.card,borderRadius:10,padding:10,border:`0.5px solid ${C.b1}`,display:"flex",gap:6,flexWrap:"wrap",maxWidth:180,zIndex:10}}>
-            {COVER_COLORS.map(cor=>(
-              <button key={cor} onClick={()=>saveCoverColor(cor)}
-                style={{width:24,height:24,borderRadius:6,background:cor,border:coverColor===cor?"2px solid "+C.a:"1px solid transparent",cursor:"pointer"}}/>
-            ))}
-          </div>}
+    {/* ── CAPA: foto grande + nome + cargo + data + demandas + sino ── */}
+    <div style={{position:"relative",borderRadius:14,overflow:"hidden",background:`linear-gradient(135deg,${coverColor},${coverColor}cc)`,padding:isMob?"14px 14px":"18px 22px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:"wrap"}}>
+      {/* Foto grande */}
+      <div style={{width:isMob?78:108,height:isMob?78:108,borderRadius:"50%",border:"3px solid rgba(255,255,255,0.9)",overflow:"hidden",flexShrink:0,background:"rgba(0,0,0,0.15)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 24px rgba(0,0,0,0.18)"}}>
+        {photo
+          ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+          :<span style={{color:"#fff",fontWeight:700,fontSize:isMob?32:46}}>{effectiveUser.av}</span>
+        }
+      </div>
+      {/* Nome + cargo + data */}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"rgba(255,255,255,0.85)",fontSize:11,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:3}}>{greeting} · {now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</div>
+        <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:28,letterSpacing:-.6,lineHeight:1.1}}>{displayName}</div>
+        <div style={{color:"rgba(255,255,255,0.78)",fontSize:13,fontWeight:500,marginTop:4}}>{displayRole}</div>
+      </div>
+      {/* Demandas + sino à direita */}
+      <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:14}}>
+        <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+            <span style={{color:"#bbf7d0",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{conclMes}</span>
+            <span style={{color:"rgba(255,255,255,0.55)",fontSize:13}}>/</span>
+            <span style={{color:"#fff",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{emAberto}</span>
+          </div>
+          <div style={{color:"rgba(255,255,255,0.7)",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>Demandas</div>
         </div>
-
-        {/* Sino direita compacto */}
-        <button onClick={()=>onNotif&&onNotif()}
-          style={{background:unread>0?"#a140ff":"rgba(255,255,255,0.2)",border:"none",borderRadius:8,padding:"4px 10px",cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        {lateMes.length>0&&<div style={{background:"#dc2626",color:"#fff",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",boxShadow:"0 4px 12px rgba(220,38,38,0.35)"}}>
+          <span style={{fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{lateMes.length}</span>
+          <div style={{fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3,opacity:.95}}>Atrasadas</div>
+        </div>}
+        <button onClick={()=>onNotif&&onNotif()} title="Notificações"
+          style={{background:unread>0?"#a140ff":"rgba(255,255,255,0.2)",border:"none",borderRadius:10,padding:"10px 12px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,boxShadow:unread>0?"0 4px 12px rgba(161,64,255,0.35)":"none"}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 01-3.46 0"/>
           </svg>
-          {unread>0&&<span style={{color:"#fff",fontSize:12,fontWeight:600,lineHeight:1}}>{unread}</span>}
+          {unread>0&&<span style={{color:"#fff",fontSize:13,fontWeight:700,lineHeight:1}}>{unread}</span>}
         </button>
-      </div>
-
-      {/* ── LINHA BRANCA COMPACTA — foto + nome + stats em UMA linha ── */}
-      <div style={{background:C.card,padding:isMob?"12px 12px":"14px 18px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:isMob?"wrap":"nowrap"}}>
-
-        {/* Foto — totalmente abaixo da barra (não cortada) */}
-        <div style={{width:isMob?72:96,height:isMob?72:96,borderRadius:"50%",border:"3px solid "+C.card,overflow:"hidden",flexShrink:0,background:coverColor,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          {photo
-            ?<img src={photo} alt={displayName} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-            :<span style={{color:"#fff",fontWeight:600,fontSize:isMob?28:38}}>{effectiveUser.av}</span>
-          }
-        </div>
-
-        {/* Nome + cargo + data — linha única compacta */}
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
-            <div style={{color:C.tx,fontWeight:600,fontSize:isMob?16:19,letterSpacing:-.3,lineHeight:1.2}}>{displayName}</div>
-            <div style={{color:C.td,fontSize:11}}>· {greeting}</div>
-          </div>
-          <div style={{color:C.ts,fontSize:11,fontWeight:500,marginTop:2}}>{displayRole}{!isMob&&<span style={{color:C.td}}> · {now.toLocaleDateString("pt-BR",{weekday:"long",day:"numeric",month:"long"})}</span>}</div>
-        </div>
-
-        {/* Demandas do mês — pill compacto à direita */}
-        <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:12}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-            <span style={{color:C.gr,fontWeight:600,fontSize:isMob?16:18,lineHeight:1}}>{conclMes}</span>
-            <span style={{color:C.td,fontSize:10}}>/</span>
-            <span style={{color:C.tx,fontWeight:600,fontSize:isMob?16:18,lineHeight:1}}>{emAberto}</span>
-            <span style={{color:C.td,fontSize:9,marginLeft:3}}>{isMob?"":"demandas"}</span>
-          </div>
-          {lateMes.length>0&&<span style={{background:"#dc2626",color:"#fff",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:500,whiteSpace:"nowrap"}}>{lateMes.length} atrasada{lateMes.length>1?"s":""}</span>}
-        </div>
       </div>
     </div>
 
@@ -43710,10 +43681,10 @@ function _PlEmptyState({title,desc}){
 
 // ======= 26_dash_gustavo.jsx =======
 // Dashboard estratégico do Gustavo Vedovatto — Gestor de Performance + sócio.
-// v2 (redesign 2026-06): cabeçalho enxuto, Metas do dia, Planejamento da semana
-// horizontalizado (grade Seg-Sex), cadastro inline de metas, aprovações limpas,
-// clientes em atenção com selo de prioridade, mídia e financeiro mais executivos.
-// Continua sincronizado com Estratégia > Planejamento (team_planning).
+// v3 (2026-06): visual horizontalizado, Metas do dia + semana lado a lado,
+// Planejamento da semana com rotina hardcoded (OP_ROTINAS_POR_USER) + metas custom,
+// Clientes em atenção com dados reais (atrasos, health, MRR, próx. reunião),
+// Aprovações limpas, Mídia/Financeiro 2 colunas, estados vazios bonitos.
 
 const DG_INTER = "'Inter', system-ui, -apple-system, sans-serif";
 const DG_PURPLE = "#9F43F6";
@@ -43755,19 +43726,22 @@ const _dgDays = (deadline) => {
   if(!deadline) return null;
   return Math.ceil((new Date(deadline+"T00:00:00")-new Date())/86400000);
 };
-// Pega a data (YYYY-MM-DD) de um dia da semana atual. dayIdx: 1=Seg, 2=Ter, ..., 5=Sex.
 function _dgWeekDate(dayIdx){
   const today = new Date();
-  const todayIdx = today.getDay()===0 ? 7 : today.getDay(); // Dom=7, Seg=1
+  const todayIdx = today.getDay()===0 ? 7 : today.getDay();
   const diff = dayIdx - todayIdx;
   const d = new Date(today);
   d.setDate(d.getDate()+diff);
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 }
-// Resolve a categoria da meta (procura no content ou no campo category)
 function _dgCatOf(meta){
   if(meta.category) return DG_CATEGORIAS.find(c=>c.id===meta.category);
   return null;
+}
+function _dgDiasDesde(iso){
+  if(!iso) return null;
+  const d = new Date(iso); if(isNaN(d.getTime())) return null;
+  return Math.floor((new Date()-d)/86400000);
 }
 
 // ── Section Title ─────────────────────────────────────────────
@@ -43797,9 +43771,12 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const {entries: planEntries, upsert: planUpsert, remove: planRemove, loading: planLoading} =
     (typeof usePlanejamentoEntries==="function") ? usePlanejamentoEntries() : {entries:[], upsert:()=>{}, remove:()=>{}, loading:false};
 
+  // ── Rotina hardcoded por usuário (OP_ROTINAS_POR_USER) ──
+  const _rotinaDias = (typeof _opRotinaDiasFor==="function") ? _opRotinaDiasFor(user.id) : (typeof OP_ROTINAS_POR_USER!=="undefined"?OP_ROTINAS_POR_USER[user.id]:null) || [];
   const weekKey  = _dgWeekKey();
   const monthKey = _dgMonthKey();
   const hoje     = _dgToday();
+  const {checks: rotinaChecks, toggle: rotinaToggle} = (typeof useOpRotinaChecks==="function") ? useOpRotinaChecks(weekKey, user.id) : {checks:{}, toggle:()=>{}};
 
   // Todas metas desta semana
   const metasWeek = planEntries.filter(e=>e.type==="meta_semana"&&e.week_key===weekKey);
@@ -43812,7 +43789,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const metasHoje = metasWeek.filter(m=>m.deadline===hoje);
   const hojeConcluidas = metasHoje.filter(m=>m.status==="concluida").length;
 
-  // Metas distribuídas por dia da semana (Seg-Sex)
+  // Metas distribuídas por dia da semana
   const metasPorDia = {};
   DG_DAYS.forEach(d=>{ metasPorDia[d.key] = []; });
   metasWeek.forEach(m=>{
@@ -43823,7 +43800,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     if(day) metasPorDia[day.key].push(m);
   });
 
-  // ── Aprovações que dependem do Gustavo ──
+  // ── Aprovações ──
   const apvDesign = allTasks.filter(t=>t.status==="avaliacao");
   const apvCopys  = allTasks.filter(t=>t.status==="demanda" && !t.ajustar);
   const apvInternas = allTasks.filter(t=>t.status==="interno_avaliacao");
@@ -43833,30 +43810,53 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   });
   const apvTotal = apvDesign.length + apvCopys.length + apvInternas.length;
 
-  // ── Demandas atrasadas / sem responsável ──
+  // ── Demandas atrasadas ──
   const demandasAtrasadas = allTasks.filter(t=>{
     if(["aprovado","publicado","interno_executado","interno_aprovado"].includes(t.status)) return false;
     return t.deadline && _dgDays(t.deadline)!==null && _dgDays(t.deadline)<0;
   });
 
-  // ── Clientes em atenção (max 4 com selo de prioridade) ──
+  // ── Clientes em atenção (DADOS REAIS) ──
+  // Considera: health<60, nps<7, demandas atrasadas, próx. reunião distante, status="atencao"
   const clientesAtencaoRaw = (CLIENTS||[]).filter(c=>c.status!=="interno").map(c=>{
     const clTasks = allTasks.filter(t=>t.client===c.id);
     const lateCount = clTasks.filter(t=>t.deadline && _dgDays(t.deadline)<0 && t.status!=="aprovado" && t.status!=="publicado").length;
-    const lowHealth = (c.health||100) < 60;
-    const lowNps = (c.nps||10) < 7;
-    const semProxAcao = !c.proximaAcao;
-    if(!(lowHealth || lowNps || lateCount>=3 || semProxAcao)) return null;
+    const tasksAbertas = clTasks.filter(t=>!["aprovado","publicado","interno_executado","interno_aprovado"].includes(t.status)).length;
+    const tasksApvDesign = clTasks.filter(t=>t.status==="avaliacao").length;
+    const tasksApvCopy   = clTasks.filter(t=>t.status==="demanda"&&!t.ajustar).length;
+    const lowHealth = (Number(c.health||100)) < 60;
+    const lowNps    = (Number(c.nps||100))    < 70; // nps usado em escala 0-100 nos dados
+    const isAtencao = c.status==="atencao"||c.status==="critico";
+    const diasReuniao = c.nextMeeting ? _dgDiasDesde(c.nextMeeting) : null;
+    const ultReuniaoDistante = c.lastMeeting ? (_dgDiasDesde(c.lastMeeting) > 30) : false;
+    // Filtro: precisa ter pelo menos UM sinal real
+    if(!(lowHealth || lowNps || isAtencao || lateCount>=3 || ultReuniaoDistante)) return null;
     // Score de prioridade
     let score = 0;
-    if(lateCount>=10) score+=3; else if(lateCount>=3) score+=2;
+    if(lateCount>=10) score+=4; else if(lateCount>=5) score+=3; else if(lateCount>=3) score+=2;
     if(lowHealth) score+=2;
+    if(isAtencao) score+=2;
     if(lowNps) score+=1;
-    if(semProxAcao) score+=1;
+    if(ultReuniaoDistante) score+=1;
     let prio = "Baixa";
-    if(score>=4) prio = "Alta";
-    else if(score>=2) prio = "Média";
-    return {cl:c, lateCount, lowHealth, lowNps, semProxAcao, prio, score};
+    if(score>=5) prio = "Alta";
+    else if(score>=3) prio = "Média";
+    // Determina motivo principal (acionável)
+    const motivos = [];
+    if(lateCount>0) motivos.push(lateCount+" demanda"+(lateCount>1?"s":"")+" atrasada"+(lateCount>1?"s":""));
+    if(lowHealth) motivos.push("Health "+Math.round(c.health)+"%");
+    if(lowNps && c.nps) motivos.push("NPS "+Math.round(c.nps)+"/100");
+    if(tasksApvDesign+tasksApvCopy>0) motivos.push((tasksApvDesign+tasksApvCopy)+" aguardando aprovação");
+    if(ultReuniaoDistante) motivos.push("Sem reunião há +30 dias");
+    // Próxima ação real
+    let proxAcao;
+    if(lateCount>0) proxAcao = "Revisar entregas atrasadas";
+    else if(tasksApvDesign>0) proxAcao = "Aprovar designs pendentes";
+    else if(tasksApvCopy>0) proxAcao = "Revisar copys pendentes";
+    else if(ultReuniaoDistante) proxAcao = "Agendar reunião de alinhamento";
+    else if(lowHealth) proxAcao = "Reverter queda de health";
+    else proxAcao = null;
+    return {cl:c, lateCount, lowHealth, lowNps, motivos, proxAcao, prio, score, tasksAbertas, diasReuniao};
   }).filter(Boolean).sort((a,b)=>b.score-a.score);
   const clientesAtencao = clientesAtencaoRaw.slice(0,4);
 
@@ -43874,7 +43874,6 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     }
     if(Number(c.investimento_mensal)>0) mediaTotalRoiInv += Number(c.investimento_mensal);
   });
-  // ROI: só calcula se tem retorno > 0 (não exibe "-100%" pra ausência de dado)
   const mediaTemDado = mediaTotalRetorno > 0;
   const mediaRoiGeral = mediaTemDado ? Math.round(((mediaTotalRetorno-mediaTotalRoiInv)/mediaTotalRoiInv)*1000)/10 : null;
   const mediaSemFunil = mediaClients.filter(c=>{
@@ -43884,17 +43883,20 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const mediaAtivos = mediaClients.filter(c=>c.status==="ativa"||c.status==="em_dia").length;
   const mediaEmAtencao = mediaClients.filter(c=>c.status==="atencao"||c.status==="critico").length;
 
-  // ── Financeiro / MRR ──
+  // ── Financeiro ──
   const finStore = (()=>{ try{const raw=localStorage.getItem("pixels-financeiro-v1"); return raw?JSON.parse(raw):null;}catch{return null;} })();
   const contratos = (finStore?.contratos)||[];
   const mrrAtual = contratos.filter(c=>c.statusContrato==="ativo").reduce((s,c)=>s+(Number(c.mrr)||0),0);
   const contratosAtivos = contratos.filter(c=>c.statusContrato==="ativo").length;
   const projetosAbertos = contratos.filter(c=>c.statusContrato==="ativo" && c.tipo==="projeto").length;
   const totalPrevisto = mrrAtual + contratos.filter(c=>c.statusContrato==="ativo" && c.tipo==="projeto").reduce((s,c)=>s+(Number(c.valorProjeto)||0),0);
+  // Fallback: se não tem financeiro local, usa CLIENTS.contract
+  const mrrFallback = mrrAtual===0 ? (CLIENTS||[]).filter(c=>c.status!=="interno").reduce((s,c)=>s+(Number(c.contract)||0),0) : mrrAtual;
+  const clientesFallback = contratosAtivos===0 ? (CLIENTS||[]).filter(c=>c.status!=="interno"&&Number(c.contract)>0).length : contratosAtivos;
 
   // ── Filtros UI ──
-  const [filtroStatus, setFiltroStatus] = useState("todas"); // todas | pendentes | concluidas
-  const [novaMeta, setNovaMeta] = useState(null); // null ou {day, ...}
+  const [filtroStatus, setFiltroStatus] = useState("todas");
+  const [novaMeta, setNovaMeta] = useState(null);
   const _filtrar = (arr) => {
     if(filtroStatus==="pendentes") return arr.filter(m=>m.status!=="concluida");
     if(filtroStatus==="concluidas") return arr.filter(m=>m.status==="concluida");
@@ -43907,107 +43909,132 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     planUpsert(Object.assign({},m,{status:newStatus,updated_at:new Date().toISOString()}));
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:DG_INTER}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:DG_INTER}}>
 
-    {/* ══════════ HEADER PREMIUM ENXUTO ══════════ */}
-    <div style={{background:"linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1e1b4b 100%)",borderRadius:18,padding:isMob?"16px 18px":"20px 24px",position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",top:-50,right:-50,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle, "+DG_PURPLE+"30 0%, transparent 70%)"}}/>
-      <div style={{position:"absolute",bottom:-40,left:200,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle, "+DG_PURPLE+"22 0%, transparent 70%)"}}/>
-      <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
-          <div style={{width:52,height:52,borderRadius:15,background:"linear-gradient(135deg,"+DG_PURPLE+",#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 28px rgba(159,67,246,0.45)",flexShrink:0}}>
-            <UserAvatar user={user} size={46}/>
-          </div>
-          <div style={{minWidth:0}}>
-            <div style={{color:"rgba(255,255,255,.7)",fontSize:11,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:2}}>{_dgSaudacao()} · {_dgDateLong()}</div>
-            <div style={{color:"#fff",fontWeight:800,fontSize:isMob?19:24,letterSpacing:-.5,lineHeight:1.1}}>{user.name}</div>
-            <div style={{color:"rgba(255,255,255,.62)",fontSize:12.5,marginTop:3,fontWeight:500}}>{user.role||"Gestor"} · Central de comando</div>
-          </div>
+    {/* ══════════ STATS DA CENTRAL DE COMANDO (sem duplicar foto/nome) ══════════ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
+      {[
+        {label:"Aprovações pendentes",value:apvTotal,color:apvTotal>0?"#f59e0b":"#16a34a",bg:apvTotal>0?"#fffbeb":"#f0fdf4",icon:"check"},
+        {label:"Clientes em atenção", value:clientesAtencao.length,color:clientesAtencao.length>0?"#ef4444":"#16a34a",bg:clientesAtencao.length>0?"#fef2f2":"#f0fdf4",icon:"alert"},
+        {label:"Metas pra hoje",       value:metasHoje.length,color:metasHoje.length>0?DG_PURPLE:"#16a34a",bg:metasHoje.length>0?DG_PURPLE+"14":"#f0fdf4",icon:"target"},
+        {label:"Demandas atrasadas",   value:demandasAtrasadas.length,color:demandasAtrasadas.length>0?"#ef4444":"#16a34a",bg:demandasAtrasadas.length>0?"#fef2f2":"#f0fdf4",icon:"clock"},
+      ].map((s,i)=><div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+        <div style={{width:38,height:38,borderRadius:10,background:s.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Ico n={s.icon} size={16} color={s.color}/>
         </div>
-        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>{s.label}</div>
+          <div style={{color:s.color,fontSize:22,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"\'tnum\'"}}>{s.value}</div>
+        </div>
+      </div>)}
+    </div>
+
+    {/* ══════════ LINHA: METAS DO DIA + METAS DA SEMANA (horizontal) ══════════ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+      {/* METAS DO DIA */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+        <_DGSec icon="target" title="Metas do dia" sub="Prioridades que precisam sair hoje."
+          right={<button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
+              style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Adicionar
+            </button>}/>
+        {metasHoje.length>0&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'",marginBottom:8}}>{hojeConcluidas}/{metasHoje.length} concluídas</div>}
+        {metasHoje.length===0?<_DGEmpty icon="check" title="Nenhuma meta cadastrada para hoje." desc="Use o botão acima ou as colunas do Planejamento da semana."/>:<div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {metasHoje.map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta}/>)}
+        </div>}
+      </div>
+
+      {/* METAS DA SEMANA */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+        <_DGSec icon="flag" title="Metas da semana" sub={"Resumo geral · Semana "+weekKey.slice(-3)}/>
+        {/* Progress bar */}
+        <div style={{height:8,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:10}}>
+          <div style={{height:"100%",width:weekProgresso+"%",background:"linear-gradient(90deg,"+DG_PURPLE+",#7c3aed)",borderRadius:99,transition:"width .3s"}}/>
+        </div>
+        {/* 4 mini-stats */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
           {[
-            {label:"Avaliações",value:apvTotal,color:apvTotal>0?"#fbbf24":"#22c55e"},
-            {label:"Clientes",value:clientesAtencao.length,color:clientesAtencao.length>0?"#fb7185":"#22c55e"},
-            {label:"Metas hoje",value:metasHoje.length,color:metasHoje.length>0?DG_PURPLE+"":"#22c55e"},
-            {label:"Atrasadas",value:weekAtrasadas,color:weekAtrasadas>0?"#ef4444":"#22c55e"},
-          ].map((s,i)=><div key={i} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:10,padding:"9px 13px",backdropFilter:"blur(8px)",minWidth:88}}>
-            <div style={{color:s.color,fontSize:20,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{s.value}</div>
-            <div style={{color:"rgba(255,255,255,.55)",fontSize:9.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginTop:3}}>{s.label}</div>
+            {l:"Total",v:metasWeek.length,c:"#0f172a"},
+            {l:"OK",v:weekConcluidas,c:"#16a34a"},
+            {l:"Pend.",v:weekPendentes,c:"#f59e0b"},
+            {l:"Atras.",v:weekAtrasadas,c:weekAtrasadas>0?"#ef4444":"#94a3b8"},
+          ].map((s,i)=><div key={i} style={{textAlign:"center",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:8,padding:"7px 4px"}}>
+            <div style={{color:s.c,fontSize:18,fontWeight:800,letterSpacing:-.3,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>{s.l}</div>
           </div>)}
         </div>
+        {/* Próximas 3 a vencer */}
+        {metasWeek.filter(m=>m.status!=="concluida"&&m.deadline).sort((a,b)=>(a.deadline||"").localeCompare(b.deadline||"")).slice(0,3).map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} compact/>)}
+        {metasWeek.length===0&&<_DGEmpty icon="flag" title="Sem metas cadastradas." desc="Use o botão Adicionar nas colunas da semana."/>}
       </div>
     </div>
 
-    {/* ══════════ METAS DO DIA ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-      <_DGSec icon="target" title="Metas do dia" sub="Prioridades que precisam sair hoje."
-        right={<div style={{display:"flex",alignItems:"center",gap:8}}>
-          {metasHoje.length>0&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{hojeConcluidas}/{metasHoje.length} concluídas</div>}
-          <button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
-            style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            Adicionar meta
-          </button>
-        </div>}/>
-      {metasHoje.length===0?<_DGEmpty icon="check" title="Nenhuma meta cadastrada para hoje." desc="Adicione uma meta acima ou ela aparecerá aqui quando vencer hoje."/>:<div style={{display:"flex",flexDirection:"column",gap:7}}>
-        {metasHoje.map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta}/>)}
-      </div>}
-    </div>
-
-    {/* ══════════ PLANEJAMENTO DA SEMANA ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-      <_DGSec icon="calendar" title="Planejamento da semana" sub="Organize as metas, acompanhe as demandas e marque o que já foi concluído."
-        right={<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          {/* Filtros */}
-          <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:8,padding:2}}>
-            {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
-              const a = filtroStatus===f.id;
-              return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
-                style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none"}}>
-                {f.l}
-              </button>;
-            })}
-          </div>
+    {/* ══════════ PLANEJAMENTO DA SEMANA — Rotina + Metas custom ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+      <_DGSec icon="calendar" title="Planejamento da semana" sub="Sua rotina personalizada + metas adicionadas. Marque o que foi feito."
+        right={<div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:8,padding:2}}>
+          {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
+            const a = filtroStatus===f.id;
+            return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
+              style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:6,padding:"5px 11px",fontSize:11,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none"}}>
+              {f.l}
+            </button>;
+          })}
         </div>}/>
 
-      {/* Resumo semanal pequeno */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14,padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
-        {[
-          {l:"Total",v:metasWeek.length,c:"#0f172a"},
-          {l:"Concluídas",v:weekConcluidas,c:"#16a34a"},
-          {l:"Pendentes",v:weekPendentes,c:"#f59e0b"},
-          {l:"Atrasadas",v:weekAtrasadas,c:weekAtrasadas>0?"#ef4444":"#94a3b8"},
-        ].map((s,i)=><div key={i} style={{textAlign:"center"}}>
-          <div style={{color:s.c,fontSize:18,fontWeight:800,letterSpacing:-.3,lineHeight:1}}>{s.v}</div>
-          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>{s.l}</div>
-        </div>)}
-      </div>
-
-      {/* Grade Seg-Sex horizontalizada */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,1fr)",gap:10,overflowX:isMob?"auto":"visible"}}>
+      {/* Grade Seg-Sex FULL WIDTH */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:10}}>
         {DG_DAYS.map(d=>{
           const metasDia = _filtrar(metasPorDia[d.key]||[]);
-          const totalDia = (metasPorDia[d.key]||[]).length;
-          const concDia = (metasPorDia[d.key]||[]).filter(m=>m.status==="concluida").length;
+          const totalMetas = (metasPorDia[d.key]||[]).length;
+          const concMetas = (metasPorDia[d.key]||[]).filter(m=>m.status==="concluida").length;
           const isHoje = _dgWeekDate(d.idx)===hoje;
-          return <div key={d.key} style={{background:isHoje?"#f5f3ff":"#fafbfc",border:"1px solid "+(isHoje?"#ddd6fe":"#e2e8f0"),borderRadius:11,padding:"11px 12px",display:"flex",flexDirection:"column",gap:8,minHeight:140}}>
+          // Rotina hardcoded do dia
+          const rotinaDia = _rotinaDias.find(r=>r.id===d.key);
+          const rotinaItens = rotinaDia?.itens||[];
+          // Filtros aplicados também à rotina
+          const rotinaFiltered = filtroStatus==="todas"?rotinaItens:
+            (filtroStatus==="concluidas"?rotinaItens.filter(it=>rotinaChecks[it.id]):rotinaItens.filter(it=>!rotinaChecks[it.id]));
+          const rotinaConc = rotinaItens.filter(it=>rotinaChecks[it.id]).length;
+          const dayConc = concMetas + rotinaConc;
+          const dayTotal = totalMetas + rotinaItens.length;
+          return <div key={d.key} style={{background:isHoje?"#f5f3ff":"#fafbfc",border:"1px solid "+(isHoje?"#ddd6fe":"#e2e8f0"),borderRadius:11,padding:"10px 11px",display:"flex",flexDirection:"column",gap:8,minHeight:200}}>
             {/* Header do dia */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
-              <div>
-                <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>{d.short}{isHoje&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,color:DG_PURPLE,background:DG_PURPLE+"22",padding:"1px 6px",borderRadius:99}}>HOJE</span>}</div>
+              <div style={{minWidth:0}}>
+                <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.1,display:"flex",alignItems:"center",gap:5}}>
+                  {d.short}{isHoje&&<span style={{fontSize:8.5,fontWeight:700,color:DG_PURPLE,background:DG_PURPLE+"22",padding:"1px 5px",borderRadius:99,letterSpacing:.4}}>HOJE</span>}
+                </div>
+                {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:10,marginTop:2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
               </div>
-              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{concDia}/{totalDia}</div>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0}}>{dayConc}/{dayTotal}</div>
             </div>
-            {/* Metas */}
-            {metasDia.length===0?<div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",textAlign:"center",padding:"12px 4px",lineHeight:1.4}}>Sem metas</div>:<div style={{display:"flex",flexDirection:"column",gap:6}}>
+
+            {/* Rotina hardcoded */}
+            {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
+              {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)}/>)}
+            </div>}
+
+            {/* Divisor se tem rotina E metas */}
+            {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#e2e8f0",margin:"3px 0"}}/>}
+
+            {/* Metas custom */}
+            {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
               {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta}/>)}
             </div>}
-            {/* Botão + */}
+
+            {/* Empty state se nada */}
+            {rotinaFiltered.length===0&&metasDia.length===0&&<div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",textAlign:"center",padding:"10px 4px",lineHeight:1.4}}>
+              {filtroStatus==="todas"?"Sem itens":"Sem "+filtroStatus.toLowerCase()}
+            </div>}
+
+            {/* Botão + sempre no fim */}
             <button onClick={()=>setNovaMeta({day:d})}
-              style={{marginTop:"auto",background:"transparent",color:"#64748b",border:"1px dashed #cbd5e1",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4,transition:"all .12s"}}
+              style={{marginTop:"auto",background:"transparent",color:"#64748b",border:"1px dashed #cbd5e1",borderRadius:7,padding:"5px 8px",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4,transition:"all .12s"}}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=DG_PURPLE;e.currentTarget.style.color=DG_PURPLE;}}
               onMouseLeave={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
               Adicionar
             </button>
           </div>;
@@ -44015,47 +44042,52 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       </div>
     </div>
 
-    {/* ══════════ PENDÊNCIAS PARA MINHA APROVAÇÃO ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-      <_DGSec icon="check" title="Pendências para minha aprovação" sub="Demandas que aguardam sua revisão ou decisão."/>
-      {apvTotal===0?<_DGEmpty icon="check" title="Nenhuma aprovação pendente." desc="Tudo em dia por aqui."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
-        <_DGApvCard label="Copys para revisar" count={apvCopys.length} color="#9F43F6" icon="message"/>
-        <_DGApvCard label="Designs para aprovar" count={apvDesign.length} sub={apvDesignAtrasadas.length>0?(apvDesignAtrasadas.length+" atrasada"+(apvDesignAtrasadas.length>1?"s":"")):""} color="#0ea5e9" icon="image" urgent={apvDesignAtrasadas.length>0}/>
-        <_DGApvCard label="Demandas internas" count={apvInternas.length} color="#f97316" icon="inbox"/>
-      </div>}
-    </div>
+    {/* ══════════ APROVAÇÕES + CLIENTES EM ATENÇÃO (lado a lado) ══════════ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1.5fr",gap:12}}>
+      {/* Aprovações */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+        <_DGSec icon="check" title="Pendências para minha aprovação" sub="Demandas que aguardam sua revisão."/>
+        {apvTotal===0?<_DGEmpty icon="check" title="Nenhuma aprovação pendente." desc="Tudo em dia por aqui."/>:<div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <_DGApvCard label="Copys para revisar" count={apvCopys.length} color="#9F43F6" icon="message"/>
+          <_DGApvCard label="Designs para aprovar" count={apvDesign.length} sub={apvDesignAtrasadas.length>0?(apvDesignAtrasadas.length+" atrasada"+(apvDesignAtrasadas.length>1?"s":"")):""} color="#0ea5e9" icon="image" urgent={apvDesignAtrasadas.length>0}/>
+          <_DGApvCard label="Demandas internas" count={apvInternas.length} color="#f97316" icon="inbox"/>
+        </div>}
+      </div>
 
-    {/* ══════════ CLIENTES QUE PRECISAM DE ATENÇÃO ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-      <_DGSec icon="alert" title="Clientes que precisam de atenção" sub="Prioridades da semana por atraso, gargalo ou falta de próxima ação."
-        right={clientesAtencaoRaw.length>4?<span style={{color:DG_PURPLE,fontSize:11.5,fontWeight:700,cursor:"pointer"}}>Ver todos ({clientesAtencaoRaw.length})</span>:null}/>
-      {clientesAtencao.length===0?<_DGEmpty icon="check" title="Tudo certo por aqui." desc="Nenhum cliente crítico no momento."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(260px,1fr))",gap:10}}>
-        {clientesAtencao.map(item=><_DGClienteAtencao key={item.cl.id} item={item}/>)}
-      </div>}
-    </div>
-
-    {/* ══════════ GESTÃO DE MÍDIA PAGA ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-      <_DGSec icon="trending-up" title="Gestão de mídia paga" sub="Resumo das campanhas, investimento e pendências de estruturação."/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(170px,1fr))",gap:10}}>
-        {/* Destaque: Orçamento gerido */}
-        <_DGKpi label="Orçamento gerido" value={mediaTotalInvest>0?_dgFmtBRL(mediaTotalInvest)+"/mês":"—"} icon="dollar" color={mediaTotalInvest>0?DG_PURPLE:"#94a3b8"} bg={mediaTotalInvest>0?DG_PURPLE+"14":"#f8fafc"} muted={mediaTotalInvest===0} highlight/>
-        <_DGKpi label="Clientes ativos" value={mediaAtivos+" cliente"+(mediaAtivos!==1?"s":"")} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
-        <_DGKpi label="Funil digital" value={(mediaClients.length-mediaSemFunil)+"/"+mediaClients.length+" estruturados"} sub={mediaSemFunil>0?"Aguardando preenchimento":""} icon="trending-up" color={mediaSemFunil>0?"#f97316":"#16a34a"} bg={mediaSemFunil>0?"#fff7ed":"#dcfce7"}/>
-        <_DGKpi label="Em atenção" value={mediaEmAtencao} icon="alert" color={mediaEmAtencao>0?"#ef4444":"#94a3b8"} bg={mediaEmAtencao>0?"#fef2f2":"#f8fafc"} muted={mediaEmAtencao===0}/>
-        <_DGKpi label="ROI geral" value={mediaTemDado?(mediaRoiGeral>=0?"+":"")+mediaRoiGeral.toFixed(1)+"%":"—"} sub={mediaTemDado?"":"ROI aguardando dados"} icon="chart" color={mediaTemDado?(mediaRoiGeral>=0?"#16a34a":"#ef4444"):"#94a3b8"} bg={mediaTemDado?(mediaRoiGeral>=0?"#dcfce7":"#fef2f2"):"#f8fafc"} muted={!mediaTemDado}/>
+      {/* Clientes em atenção */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+        <_DGSec icon="alert" title="Clientes que precisam de atenção" sub="Atrasos reais, gargalos e clientes em risco."
+          right={clientesAtencaoRaw.length>4?<span style={{color:DG_PURPLE,fontSize:11.5,fontWeight:700,cursor:"pointer"}}>Ver todos ({clientesAtencaoRaw.length})</span>:null}/>
+        {clientesAtencao.length===0?<_DGEmpty icon="check" title="Tudo certo por aqui." desc="Nenhum cliente crítico no momento."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
+          {clientesAtencao.map(item=><_DGClienteAtencao key={item.cl.id} item={item}/>)}
+        </div>}
       </div>
     </div>
 
-    {/* ══════════ RESUMO FINANCEIRO ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-      <_DGSec icon="dollar" title="Resumo financeiro" sub="Visão rápida da operação comercial e recorrência."/>
-      {mrrAtual===0&&contratosAtivos===0?<_DGEmpty icon="dollar" title="Sem dados financeiros cadastrados ainda." desc="Vá em Gestão > Financeiro para começar."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
-        <_DGKpi label="Receita recorrente" value={mrrAtual>0?_dgFmtBRL(mrrAtual)+"/mês":"—"} icon="trending-up" color={mrrAtual>0?"#16a34a":"#94a3b8"} bg={mrrAtual>0?"#dcfce7":"#f8fafc"} muted={mrrAtual===0}/>
-        <_DGKpi label="Projetos do mês" value={projetosAbertos} icon="file-text" color={DG_PURPLE} bg={DG_PURPLE+"14"}/>
-        <_DGKpi label="Total previsto" value={totalPrevisto>0?_dgFmtBRL(totalPrevisto):"—"} icon="dollar" color={totalPrevisto>0?"#0f172a":"#94a3b8"} bg="#f8fafc" muted={totalPrevisto===0}/>
-        <_DGKpi label="Clientes ativos" value={contratosAtivos} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
-      </div>}
+    {/* ══════════ MÍDIA + FINANCEIRO (lado a lado) ══════════ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.6fr 1fr",gap:12}}>
+      {/* Mídia */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+        <_DGSec icon="trending-up" title="Gestão de mídia paga" sub="Resumo das campanhas, investimento e estruturação."/>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(150px,1fr))",gap:8}}>
+          <_DGKpi label="Orçamento gerido" value={mediaTotalInvest>0?_dgFmtBRL(mediaTotalInvest):"—"} sub={mediaTotalInvest>0?"/mês":""} icon="dollar" color={mediaTotalInvest>0?DG_PURPLE:"#94a3b8"} bg={mediaTotalInvest>0?DG_PURPLE+"14":"#f8fafc"} muted={mediaTotalInvest===0} highlight/>
+          <_DGKpi label="Clientes ativos" value={mediaAtivos} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
+          <_DGKpi label="Funil digital" value={(mediaClients.length-mediaSemFunil)+"/"+mediaClients.length} sub={mediaSemFunil>0?"Aguardando preenchimento":"Todos estruturados"} icon="trending-up" color={mediaSemFunil>0?"#f97316":"#16a34a"} bg={mediaSemFunil>0?"#fff7ed":"#dcfce7"}/>
+          <_DGKpi label="Em atenção" value={mediaEmAtencao} icon="alert" color={mediaEmAtencao>0?"#ef4444":"#94a3b8"} bg={mediaEmAtencao>0?"#fef2f2":"#f8fafc"} muted={mediaEmAtencao===0}/>
+          <_DGKpi label="ROI geral" value={mediaTemDado?(mediaRoiGeral>=0?"+":"")+mediaRoiGeral.toFixed(1)+"%":"—"} sub={mediaTemDado?"":"ROI aguardando dados"} icon="chart" color={mediaTemDado?(mediaRoiGeral>=0?"#16a34a":"#ef4444"):"#94a3b8"} bg={mediaTemDado?(mediaRoiGeral>=0?"#dcfce7":"#fef2f2"):"#f8fafc"} muted={!mediaTemDado}/>
+        </div>
+      </div>
+
+      {/* Financeiro */}
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+        <_DGSec icon="dollar" title="Resumo financeiro" sub="Operação comercial e recorrência."/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <_DGKpi label="Receita recorrente" value={mrrFallback>0?_dgFmtBRL(mrrFallback):"—"} sub={mrrFallback>0?"/mês":""} icon="trending-up" color={mrrFallback>0?"#16a34a":"#94a3b8"} bg={mrrFallback>0?"#dcfce7":"#f8fafc"} muted={mrrFallback===0}/>
+          <_DGKpi label="Clientes ativos" value={clientesFallback} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
+          <_DGKpi label="Projetos abertos" value={projetosAbertos} icon="file-text" color={DG_PURPLE} bg={DG_PURPLE+"14"}/>
+          <_DGKpi label="Total previsto" value={totalPrevisto>0?_dgFmtBRL(totalPrevisto):"—"} icon="dollar" color={totalPrevisto>0?"#0f172a":"#94a3b8"} bg="#f8fafc" muted={totalPrevisto===0}/>
+        </div>
+      </div>
     </div>
 
     {/* MODAL NOVA META */}
@@ -44064,103 +44096,117 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   </div>;
 }
 
-// ── Item de meta (linha simples pra Metas do dia) ────────────
-function _DGMetaItem({meta, onToggle}){
+// ── Item meta linha simples ──────────────────────────────────
+function _DGMetaItem({meta, onToggle, compact}){
   const isOk = meta.status==="concluida";
   const isLate = !isOk && meta.deadline && _dgDays(meta.deadline)<0;
   const cat = _dgCatOf(meta);
-  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,fontFamily:DG_INTER,transition:"all .12s"}}>
+  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:9,padding:compact?"7px 9px":"9px 11px",display:"flex",alignItems:"center",gap:9,fontFamily:DG_INTER,transition:"all .12s",marginBottom:compact?5:0}}>
     <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Concluir"}
-      style={{width:20,height:20,borderRadius:6,border:"2px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all .12s"}}>
-      {isOk&&<Ico n="check" size={11} color="#fff"/>}
+      style={{width:18,height:18,borderRadius:5,border:"2px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,padding:0,transition:"all .12s"}}>
+      {isOk&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </button>
-    <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-      <span style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:12.5,fontWeight:700,textDecoration:isOk?"line-through":"none",minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
-      {cat&&<span style={{background:cat.color+"18",color:cat.color,borderRadius:5,padding:"2px 8px",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
-      {meta.responsible_name&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{meta.responsible_name}</span>}
+    <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+      <span style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:12,fontWeight:700,textDecoration:isOk?"line-through":"none",minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
+      {cat&&<span style={{background:cat.color+"18",color:cat.color,borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
     </div>
-    {isLate&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>Atrasada</span>}
+    {isLate&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>Atras.</span>}
   </div>;
 }
 
-// ── Mini meta (pra grade semanal) ────────────────────────────
+// ── Mini meta (grade semanal) ─────────────────────────────────
 function _DGMetaMini({meta, onToggle}){
   const isOk = meta.status==="concluida";
   const isLate = !isOk && meta.deadline && _dgDays(meta.deadline)<0;
   const cat = _dgCatOf(meta);
-  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:8,padding:"7px 9px",display:"flex",alignItems:"flex-start",gap:7,fontFamily:DG_INTER,transition:"all .12s"}}>
+  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:7,padding:"6px 8px",display:"flex",alignItems:"flex-start",gap:6,fontFamily:DG_INTER,transition:"all .12s"}}>
     <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Concluir"}
-      style={{width:15,height:15,borderRadius:4,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,padding:0,transition:"all .12s"}}>
-      {isOk&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+      style={{width:14,height:14,borderRadius:4,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,padding:0,transition:"all .12s"}}>
+      {isOk&&<svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </button>
     <div style={{flex:1,minWidth:0}}>
-      <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11.5,fontWeight:600,lineHeight:1.3,textDecoration:isOk?"line-through":"none",wordBreak:"break-word"}}>{meta.title||"(sem título)"}</div>
-      {cat&&<span style={{display:"inline-block",background:cat.color+"15",color:cat.color,borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,marginTop:3,letterSpacing:.2}}>{cat.label}</span>}
+      <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11,fontWeight:600,lineHeight:1.3,textDecoration:isOk?"line-through":"none",wordBreak:"break-word"}}>{meta.title||"(sem título)"}</div>
+      {cat&&<span style={{display:"inline-block",background:cat.color+"15",color:cat.color,borderRadius:3,padding:"1px 5px",fontSize:8.5,fontWeight:700,marginTop:2,letterSpacing:.2}}>{cat.label}</span>}
     </div>
+  </div>;
+}
+
+// ── Item rotina hardcoded ────────────────────────────────────
+function _DGRotinaItem({item, checked, onToggle}){
+  return <div onClick={onToggle} style={{cursor:"pointer",background:checked?"#f0fdf4":"#fff",border:"1px solid "+(checked?"#bbf7d0":"#e2e8f0"),borderRadius:7,padding:"6px 8px",display:"flex",alignItems:"center",gap:6,fontFamily:DG_INTER,transition:"all .12s"}}>
+    <div style={{width:14,height:14,borderRadius:4,border:"1.5px solid "+(checked?"#16a34a":"#cbd5e1"),background:checked?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      {checked&&<svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+    </div>
+    <span style={{color:checked?"#166534":"#475569",fontSize:11,fontWeight:600,lineHeight:1.3,textDecoration:checked?"line-through":"none",flex:1,minWidth:0}}>{item.label}</span>
   </div>;
 }
 
 // ── KPI ──────────────────────────────────────────────────────
 function _DGKpi({label, value, sub, icon, color, bg, muted, highlight}){
   const c = color || "#0f172a";
-  return <div style={{background:highlight?bg:"#fff",border:"1px solid "+(highlight?color+"33":"#e2e8f0"),borderRadius:12,padding:highlight?"14px 16px":"12px 14px",position:"relative",overflow:"hidden",fontFamily:DG_INTER,transition:"all .15s"}}>
-    <div style={{position:"absolute",top:0,right:0,width:32,height:32,background:highlight?"#fff":(bg||"#f8fafc"),borderBottomLeftRadius:12,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <Ico n={icon} size={14} color={c}/>
+  return <div style={{background:highlight?bg:"#fff",border:"1px solid "+(highlight?color+"33":"#e2e8f0"),borderRadius:11,padding:"11px 13px",position:"relative",overflow:"hidden",fontFamily:DG_INTER,transition:"all .15s"}}>
+    <div style={{position:"absolute",top:0,right:0,width:30,height:30,background:highlight?"#fff":(bg||"#f8fafc"),borderBottomLeftRadius:11,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <Ico n={icon} size={13} color={c}/>
     </div>
-    <div style={{color:muted?"#94a3b8":c,fontSize:highlight?22:18,fontWeight:800,lineHeight:1.1,letterSpacing:-.4,marginBottom:3,paddingRight:28,fontFeatureSettings:"'tnum'"}}>{value}</div>
-    <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
+    <div style={{color:muted?"#94a3b8":c,fontSize:highlight?20:17,fontWeight:800,lineHeight:1.1,letterSpacing:-.4,marginBottom:3,paddingRight:26,fontFeatureSettings:"'tnum'"}}>{value}</div>
+    <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
     {sub&&<div style={{color:"#64748b",fontSize:10,marginTop:2,fontWeight:500}}>{sub}</div>}
   </div>;
 }
 
-// ── Card de aprovação (compacto + clean) ─────────────────────
+// ── Card de aprovação ────────────────────────────────────────
 function _DGApvCard({label, count, sub, color, icon, urgent}){
   const neutral = count===0;
-  return <div style={{background:"#fff",border:"1px solid "+(neutral?"#e2e8f0":urgent?"#fecaca":"#e2e8f0"),borderRadius:11,padding:"12px 14px",fontFamily:DG_INTER,transition:"all .15s"}}>
-    <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:7}}>
-      <div style={{width:30,height:30,borderRadius:8,background:neutral?"#f8fafc":color+"14",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <Ico n={icon} size={14} color={neutral?"#94a3b8":color}/>
-      </div>
+  return <div style={{background:"#fff",border:"1px solid "+(neutral?"#e2e8f0":urgent?"#fecaca":"#e2e8f0"),borderRadius:10,padding:"10px 12px",fontFamily:DG_INTER,display:"flex",alignItems:"center",gap:10}}>
+    <div style={{width:34,height:34,borderRadius:8,background:neutral?"#f8fafc":color+"14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      <Ico n={icon} size={15} color={neutral?"#94a3b8":color}/>
+    </div>
+    <div style={{flex:1,minWidth:0}}>
       <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
+      <div style={{color:neutral?"#94a3b8":urgent?"#dc2626":"#64748b",fontSize:11,fontWeight:600,marginTop:2}}>
+        {neutral?"Nenhuma pendente":(count+" pendente"+(count>1?"s":"")+(sub?" · "+sub:""))}
+      </div>
     </div>
-    <div style={{color:neutral?"#94a3b8":color,fontSize:24,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{count}</div>
-    <div style={{color:neutral?"#94a3b8":urgent?"#dc2626":"#64748b",fontSize:11,marginTop:5,fontWeight:600}}>
-      {neutral?"Nenhuma pendente":(count+" pendente"+(count>1?"s":"")+(sub?" · "+sub:""))}
-    </div>
+    <div style={{color:neutral?"#cbd5e1":color,fontSize:24,fontWeight:800,letterSpacing:-.5,lineHeight:1,flexShrink:0}}>{count}</div>
   </div>;
 }
 
-// ── Card cliente em atenção (sem inteiro vermelho) ───────────
+// ── Cliente em atenção (DADOS REAIS) ─────────────────────────
 function _DGClienteAtencao({item}){
   const cl = item.cl;
   const prioColor = item.prio==="Alta"?"#dc2626":item.prio==="Média"?"#f59e0b":"#64748b";
   const prioBg    = item.prio==="Alta"?"#fef2f2":item.prio==="Média"?"#fffbeb":"#f8fafc";
-  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",fontFamily:DG_INTER,transition:"all .15s"}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 13px",fontFamily:DG_INTER,transition:"all .15s",display:"flex",flexDirection:"column",gap:7}}>
+    <div style={{display:"flex",alignItems:"center",gap:9}}>
       <ClientLogo clientId={cl.id} size="sm"/>
       <div style={{minWidth:0,flex:1}}>
-        <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>{cl.sector||"—"}</div>
+        <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}{cl.contract?" · "+_dgFmtBRL(cl.contract)+"/mês":""}</div>
       </div>
-      <span style={{background:prioBg,color:prioColor,border:"1px solid "+prioColor+"33",borderRadius:6,padding:"3px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{item.prio}</span>
+      <span style={{background:prioBg,color:prioColor,border:"1px solid "+prioColor+"33",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,whiteSpace:"nowrap"}}>{item.prio}</span>
     </div>
-    {item.lateCount>0&&<div style={{color:"#475569",fontSize:11.5,marginTop:3,fontWeight:600}}>
-      <span style={{color:"#dc2626"}}>{item.lateCount} demanda{item.lateCount>1?"s":""} atrasada{item.lateCount>1?"s":""}</span>
+    {/* Motivos reais */}
+    {item.motivos.length>0&&<div style={{display:"flex",flexDirection:"column",gap:2}}>
+      {item.motivos.slice(0,3).map((m,i)=><div key={i} style={{color:"#475569",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+        <span style={{color:prioColor,fontSize:9}}>●</span>{m}
+      </div>)}
     </div>}
-    {cl.proximaAcao?<div style={{color:"#64748b",fontSize:11,marginTop:6,lineHeight:1.4}}>
-      <span style={{color:"#94a3b8",fontWeight:700,marginRight:5,textTransform:"uppercase",fontSize:9,letterSpacing:.4}}>Próx. ação</span>{cl.proximaAcao}
-    </div>:<div style={{color:"#f59e0b",fontSize:10.5,fontWeight:700,marginTop:6,letterSpacing:.2}}>Sem próxima ação definida</div>}
+    {/* Próxima ação */}
+    {item.proxAcao&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:7,padding:"6px 9px",marginTop:3}}>
+      <div style={{color:"#94a3b8",fontSize:8.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Próxima ação</div>
+      <div style={{color:"#0f172a",fontSize:11,fontWeight:600,marginTop:1,lineHeight:1.3}}>{item.proxAcao}</div>
+    </div>}
   </div>;
 }
 
 // ── Empty state ──────────────────────────────────────────────
 function _DGEmpty({icon, title, desc}){
-  return <div style={{background:"#fafafa",border:"1px dashed #e2e8f0",borderRadius:12,padding:"22px 18px",textAlign:"center"}}>
-    <div style={{display:"inline-flex",width:40,height:40,borderRadius:11,background:DG_PURPLE+"14",color:DG_PURPLE,alignItems:"center",justifyContent:"center",marginBottom:9}}>
-      <Ico n={icon} size={18} color={DG_PURPLE}/>
+  return <div style={{background:"#fafafa",border:"1px dashed #e2e8f0",borderRadius:11,padding:"18px 14px",textAlign:"center"}}>
+    <div style={{display:"inline-flex",width:36,height:36,borderRadius:10,background:DG_PURPLE+"14",color:DG_PURPLE,alignItems:"center",justifyContent:"center",marginBottom:7}}>
+      <Ico n={icon} size={16} color={DG_PURPLE}/>
     </div>
-    <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:3}}>{title}</div>
-    {desc&&<div style={{color:"#64748b",fontSize:11.5,maxWidth:360,margin:"0 auto",lineHeight:1.5}}>{desc}</div>}
+    <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,marginBottom:2}}>{title}</div>
+    {desc&&<div style={{color:"#64748b",fontSize:11,maxWidth:320,margin:"0 auto",lineHeight:1.5}}>{desc}</div>}
   </div>;
 }
 
