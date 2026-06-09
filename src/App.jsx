@@ -9386,7 +9386,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
-    {tab==="timeline"&&<CClienteTimeline cl={cl} canEdit={isSocio||myPerms.editarBriefing||myPerms.editarEvolucao}/>}
+    {tab==="timeline"&&<CEvolucao cl={cl} isSocio={isSocio||myPerms.editarEvolucao}/>}
     {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
@@ -35752,8 +35752,8 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
-    {tab==="marcos"&&typeof CClienteTimeline==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px"}}>
-      <CClienteTimeline cl={cl} canEdit={true}/>
+    {tab==="marcos"&&typeof CEvolucao==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px"}}>
+      <CEvolucao cl={cl} isSocio={false}/>
     </div>}
     {tab==="nps"&&typeof PortalNPS==="function"&&<PortalNPS cl={cl} isMob={isMob}/>}
 
@@ -35798,10 +35798,10 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
               return <div key={t.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",cursor:"pointer",transition:"all .15s",display:"flex",flexDirection:"column"}}
                 onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=cl.color+"66";}}
                 onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
-                {/* Imagem capa quadrada — estilo Instagram */}
-                <div style={{aspectRatio:"1/1",background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                {/* Imagem capa estilo Instagram vertical (4:5 = 1080x1350) — não corta posts verticais */}
+                <div style={{aspectRatio:"4/5",background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
                   {cover
-                    ?<img src={cover} alt={t.title||""} loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+                    ?<img src={cover} alt={t.title||""} loading="lazy" style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}}/>
                     :<Ico n="image" size={28} color="#cbd5e1"/>
                   }
                   {/* Badge data no canto */}
