@@ -35809,10 +35809,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
                     {dataLabel}
                   </div>}
                 </div>
-                {/* Título compacto */}
-                <div style={{padding:"8px 10px",color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",minHeight:34}}>
-                  {t.title||"(sem título)"}
-                </div>
+                {/* Título removido (Vinicius 2026-06: cliente vê só a arte + data da capa) */}
               </div>;
             })}
           </div>
