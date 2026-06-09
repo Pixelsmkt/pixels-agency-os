@@ -25458,7 +25458,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               };
               const _label=referenceMonth?(_MN[parseInt(_cur.split("-")[1])-1]+" "+_cur.split("-")[0]):"Selecione o mês";
               const _enabled=canEdit&&isAdmin;
-              const _hidRef=React.useRef(null);
+              const _hidRef=useRef(null);
               const ArrowBtn=function(props){
                 const dir=props.dir;
                 return <button type="button" disabled={!_enabled} onClick={function(e){e.preventDefault();_step(dir==="prev"?-1:1);}}
