@@ -23388,11 +23388,24 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,"")
       .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,"")
       .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi,"")
+      // strip event handlers
       .replace(/\son\w+\s*=\s*"[^"]*"/gi,"")
       .replace(/\son\w+\s*=\s*'[^']*'/gi,"")
       .replace(/\son\w+\s*=\s*[^\s>]*/gi,"")
       .replace(/javascript:/gi,"")
-      .replace(/<(?!\/?(b|i|u|strong|em|br|p|div|span|ul|ol|li|a|h[1-6])\b)[^>]*>/gi,"");
+      // strip tags fora do whitelist
+      .replace(/<(?!\/?(b|i|u|strong|em|br|p|div|span|ul|ol|li|a|h[1-6])\b)[^>]*>/gi,"")
+      // strip <font>/<font ...> (deixa só o conteúdo)
+      .replace(/<\/?font[^>]*>/gi,"")
+      // strip style/class/face/size/color attributes — sempre Arial 12 ABNT via CSS .brief-arial
+      .replace(/\sstyle\s*=\s*"[^"]*"/gi,"")
+      .replace(/\sstyle\s*=\s*'[^']*'/gi,"")
+      .replace(/\sclass\s*=\s*"[^"]*"/gi,"")
+      .replace(/\sclass\s*=\s*'[^']*'/gi,"")
+      .replace(/\s(face|size|color|align|bgcolor|width|height)\s*=\s*"[^"]*"/gi,"")
+      .replace(/\s(face|size|color|align|bgcolor|width|height)\s*=\s*'[^']*'/gi,"")
+      // remove span vazios depois de strip de styles
+      .replace(/<span\s*>([\s\S]*?)<\/span>/gi,"$1");
     // AUTO-LINKIFY: converte URLs em <a> clicáveis (preservando <a> existentes)
     return autoLinkifyHTML(cleaned);
   };
@@ -24609,12 +24622,43 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             })()}
             <div>
               {canEdit&&<RichToolbar elRef={descRef}/>}
+              {/* Força Arial 12 ABNT em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
+              <style>{".brief-arial,.brief-arial *{font-family:Arial,Helvetica,sans-serif!important;font-size:12pt!important;line-height:1.5!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
               <div
                 ref={descRef}
+                className="brief-arial"
                 contentEditable={canEdit}
                 suppressContentEditableWarning
                 onBlur={e=>setDesc(e.currentTarget.innerHTML)}
                 onMouseDown={e=>e.stopPropagation()}
+                onPaste={e=>{
+                  if(!canEdit)return;
+                  e.preventDefault();
+                  const cd=e.clipboardData||window.clipboardData;
+                  if(!cd)return;
+                  const html=cd.getData("text/html");
+                  const text=cd.getData("text/plain")||"";
+                  let toInsert;
+                  if(html){
+                    // Sanitiza HTML colado (remove style/class/font/etc — vira Arial 12 via CSS)
+                    toInsert=sanitizeRichText(html);
+                  }else{
+                    // Texto puro — preserva quebras de linha
+                    toInsert=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+                  }
+                  try{document.execCommand("insertHTML",false,toInsert);}
+                  catch(err){
+                    // Fallback: append no fim
+                    const tmp=document.createElement("div");
+                    tmp.innerHTML=toInsert;
+                    const sel=window.getSelection();
+                    if(sel&&sel.rangeCount>0){
+                      const range=sel.getRangeAt(0);
+                      range.deleteContents();
+                      while(tmp.firstChild)range.insertNode(tmp.firstChild);
+                    }
+                  }
+                }}
                 onClick={e=>{
                   const a=e.target.closest&&e.target.closest("a");
                   if(!a)return;
@@ -24626,7 +24670,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     window.open(href,"_blank","noopener,noreferrer");
                   }
                 }}
-                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"12px",color:"#334155",fontSize:13,outline:"none",fontFamily:"'DM Sans',system-ui,sans-serif",lineHeight:1.7,boxSizing:"border-box",minHeight:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
+                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:canEdit?"0 0 10px 10px":"10px",padding:"14px",color:"#0f172a",outline:"none",boxSizing:"border-box",minHeight:160,background:"#f8fafc",whiteSpace:"pre-wrap",wordBreak:"break-word",cursor:canEdit?"text":"default"}}/>
               {canEdit&&<div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
                 <button onClick={save}
                   style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 20px",fontWeight:700,fontSize:12,cursor:"pointer"}}>
