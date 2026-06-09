@@ -9720,7 +9720,7 @@ function CBriefingTab({cl,isSocio}){
 }
 
 /* ─── CMarcos — Timeline simples de marcos do projeto (Portal + interno) ─── */
-const MARCO_TYPES={
+const MARCO_TIPOS={
   comercial: {label:"Comercial",color:"#7c3aed",bg:"#f3e8ff"},
   reuniao:   {label:"Reunião",  color:"#0ea5e9",bg:"#e0f2fe"},
   producao:  {label:"Produção", color:"#ea580c",bg:"#ffedd5"},
@@ -9728,8 +9728,8 @@ const MARCO_TYPES={
   resultado: {label:"Resultado",color:"#16a34a",bg:"#dcfce7"},
   entrega:   {label:"Entrega",  color:"#475569",bg:"#f1f5f9"},
 };
-const _LEGACY_MARCO={kickoff:"comercial",meta:"resultado",venda:"resultado",conquista:"resultado",estrategia:"entrega"};
-function _normMarcoType(t){return MARCO_TYPES[t]?t:(_LEGACY_MARCO[t]||"entrega");}
+const _LEGACY_MARCO_MAP={kickoff:"comercial",meta:"resultado",venda:"resultado",conquista:"resultado",estrategia:"entrega"};
+function _normMarcoTipo(t){return MARCO_TIPOS[t]?t:(_LEGACY_MARCO_MAP[t]||"entrega");}
 
 function CMarcos({cl,canEdit}){
   const sb=window._sb;
@@ -9785,8 +9785,8 @@ function CMarcos({cl,canEdit}){
     ):(
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         {marcos.map(function(m){
-          const tk=_normMarcoType(m.type);
-          const t=MARCO_TYPES[tk];
+          const tk=_normMarcoTipo(m.type);
+          const t=MARCO_TIPOS[tk];
           return(<div key={m.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",position:"relative",transition:"border-color .15s"}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
               <span style={{background:t.bg,color:t.color,fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:6,letterSpacing:.2}}>{t.label}</span>
@@ -9841,7 +9841,7 @@ function MarcoForm({cl,onClose,onSaved}){
         <div>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Tipo</div>
           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {Object.entries(MARCO_TYPES).map(function(e){const id=e[0];const t=e[1];return(
+            {Object.entries(MARCO_TIPOS).map(function(e){const id=e[0];const t=e[1];return(
               <button key={id} onClick={function(){setType(id);}} style={{
                 background:type===id?t.bg:"#fff",color:type===id?t.color:"#64748b",
                 border:"1px solid "+(type===id?t.color+"40":"#e2e8f0"),
