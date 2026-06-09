@@ -32840,8 +32840,7 @@ const PORTAL_ALL_TABS=[
   {id:"planejamento",ico:"layers",      label:"Planejamento mensal"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
-  {id:"funil",       ico:"funnel",      label:"Funil Digital"},
-  {id:"faturamento", ico:"wallet",      label:"Faturamento"},
+  {id:"performance", ico:"chart",       label:"Performance"},
   {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"nps",         ico:"sparkles",    label:"NPS"},
   {id:"chat",        ico:"message",     label:"Chat"},
@@ -33006,7 +33005,10 @@ function PortalChat({cl, isClientView}){
 
 /* ── Portal Calendar ── Visual identico ao PageCalendarioPublicacoes interno
    Read-only: cliente nao arrasta cards, soh visualiza. */
-function PortalCalendario({cl, tasks, isMob, clientEvents:initialEvents, onClientEventCreate}){
+function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents, onClientEventCreate}){
+  // Grupo Bioter = visão consolidada com muitos posts → célula alta. Demais (unidade individual ou outros clientes) → compacto.
+  const _isGroupView = cl && cl.id==="bioter" && (!selUnit || selUnit==="grupo");
+  const _cellHeight = isMob ? (_isGroupView?170:130) : (_isGroupView?260:150);
   const [calMonth,setCalMonth]=useState(new Date());
   const [showNewEvent,setShowNewEvent]=useState(false);
   const [evTitle,setEvTitle]=useState("");
@@ -33184,7 +33186,7 @@ function PortalCalendario({cl, tasks, isMob, clientEvents:initialEvents, onClien
           const isToday=day&&day.toDateString()===new Date().toDateString();
           const hasTasks=dayTasks.length>0;
           return <div key={i} style={{
-            height:isMob?170:260,
+            height:_cellHeight,
             borderRight:"1px solid #e2e8f0",
             borderBottom:"1px solid #e2e8f0",
             padding:"8px 6px 6px",
@@ -33710,7 +33712,7 @@ function PortalFunil({cl, isMob}){
     <div style={{background:"#fff",borderRadius:14,padding:"18px 22px",border:"1px solid #e2e8f0"}}>
       <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:14}}>Quantidade por etapa</div>
       {/* Cabeçalho da tabela */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 110px 110px",gap:10,padding:"6px 10px",alignItems:"center"}}>
+      <div style={{display:"grid",gridTemplateColumns:"minmax(180px,1fr) 120px 120px",gap:12,padding:"6px 10px",alignItems:"center",maxWidth:580}}>
         <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Etapa</div>
         <div style={{color:"#1877F2",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,textAlign:"center",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
           <svg viewBox="0 0 24 24" width="13" height="13"><path fill="#1877F2" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
@@ -33731,7 +33733,7 @@ function PortalFunil({cl, isMob}){
         {stages.map(function(s,i){
           const m=(form[s.id]&&form[s.id].meta)||0;
           const g=(form[s.id]&&form[s.id].google)||0;
-          return <div key={s.id} style={{display:"grid",gridTemplateColumns:"1fr 110px 110px",gap:10,alignItems:"center",padding:"8px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
+          return <div key={s.id} style={{display:"grid",gridTemplateColumns:"minmax(180px,1fr) 120px 120px",gap:12,alignItems:"center",padding:"8px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,maxWidth:580}}>
             <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
               <span style={{width:22,height:22,borderRadius:6,background:cl.color+"15",color:cl.color,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{i+1}</span>
               <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.3,overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</span>
@@ -35221,8 +35223,8 @@ function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, 
           <Ico n="trending-up" size={17} color="#fff"/>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Retorno do investimento digital</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:500}}>Quanto sua mídia paga retornou no mês — sincronizado com o Funil Digital.</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Retorno do investimento</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:500}}>Quanto sua mídia paga retornou no mês — calculado a partir do funil acima.</div>
         </div>
       </div>
       <span style={{background:fdSt.bg,color:fdSt.color,borderRadius:99,padding:"4px 12px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{fdSt.label}</span>
@@ -35232,9 +35234,9 @@ function PortalRetornoDigital({clientId, year, month, midiaSpend, totalVendido, 
       <div style={{display:"inline-flex",width:44,height:44,borderRadius:11,background:"#9F43F614",alignItems:"center",justifyContent:"center",marginBottom:10}}>
         <Ico n="funnel" size={20} color="#9F43F6"/>
       </div>
-      <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:4}}>Dados aguardando preenchimento do Funil Digital</div>
+      <div style={{color:"#0f172a",fontSize:13,fontWeight:700,marginBottom:4}}>Aguardando preenchimento do funil</div>
       <div style={{color:"#64748b",fontSize:11.5,maxWidth:380,margin:"0 auto",lineHeight:1.5}}>
-        Quando você preencher leads, oportunidades e vendas no Funil Digital, o cálculo de retorno e ROI aparece aqui automaticamente.
+        Preencha as etapas do funil acima e clique em Salvar — o cálculo de retorno e ROI aparece aqui automaticamente.
       </div>
     </div>:<>
       {/* Linha de KPIs principais */}
@@ -35917,10 +35919,13 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
     {/* ── CALENDÁRIO ── */}
     {tab==="solicitar"&&<PortalSolicitar tasks={tasks} selCl={selCl} cl={cl}/>}
-        {tab==="calendario"&&<PortalCalendario cl={cl} tasks={TASKS} isMob={isMob}/>}
+        {tab==="calendario"&&<PortalCalendario cl={cl} tasks={TASKS} isMob={isMob} selUnit={selUnit}/>}
 
-    {/* ── FUNIL COMERCIAL ── cliente preenche, gestão de mídia consome */}
-    {tab==="funil"&&<PortalFunil cl={cl} isMob={isMob}/>}
+    {/* ── PERFORMANCE ── funil + ROI unificados (cliente preenche etapas, vê resultado) */}
+    {tab==="performance"&&<div style={{display:"flex",flexDirection:"column",gap:28}}>
+      <PortalFunil cl={cl} isMob={isMob}/>
+      <PortalFaturamentoROI cl={cl} selUnit={selUnit} isMob={isMob}/>
+    </div>}
 
     {/* ── PUBLICAÇÕES ── grid estilo feed (cards pequenos, capa única) */}
     {tab==="publicacoes"&&(()=>{
@@ -36012,7 +36017,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
         {/* KPIs sociais removidos (Vinicius 2026-06: dados eram mockados, voltam quando integrar Reportei) */}
 
         {/* Calendário de Publicações + Eventos do cliente — embutido no Dashboard */}
-        <PortalCalendario cl={cl} tasks={clTasks} isMob={isMob} clientEvents={cl.clientEvents||[]} onClientEventCreate={(ev)=>{
+        <PortalCalendario cl={cl} tasks={clTasks} isMob={isMob} selUnit={selUnit} clientEvents={cl.clientEvents||[]} onClientEventCreate={(ev)=>{
           // Cria sinalização pra equipe (não vira card de demanda)
           const newEvents=[...((cl.clientEvents)||[]),ev];
           // Atualiza local + persiste em Supabase via window._sb
@@ -36121,8 +36126,10 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       </div>);
     })()}
 
-    {/* ── FATURAMENTO ── Calculadora de ROI de Marketing */}
-    {tab==="faturamento"&&<PortalFaturamentoROI cl={cl} selUnit={selUnit} isMob={isMob}/>}
+    {/* Faturamento agora vive dentro da aba Performance (renderizado acima junto com PortalFunil) */}
+
+  </div>);
+}
 
   </div>);
 }
