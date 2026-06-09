@@ -9220,7 +9220,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"evolucao",      label:"Evolução"},
     {id:"briefing",      label:"Briefing"},
     {id:"planejamento",  label:"Planejamento mensal"},
-    {id:"timeline",      label:"Timeline"},
+    {id:"timeline",      label:"Marcos"},
     {id:"ferramentas",   label:"Ferramentas"},
     {id:"info",          label:"Informações"},
     ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
@@ -9386,7 +9386,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
-    {tab==="timeline"&&<CEvolucao cl={cl} isSocio={isSocio||myPerms.editarEvolucao}/>}
+    {tab==="timeline"&&<CMarcos cl={cl} canEdit={isSocio||myPerms.editarEvolucao}/>}
     {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
@@ -9714,6 +9714,163 @@ function CBriefingTab({cl,isSocio}){
       <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"10px 12px"}}>
         <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>🎨 Identidade visual + Tom de voz + Contatos</div>
         <div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>Acesse na aba <strong>Ferramentas → Orientações para a equipe</strong> pra editar logos, paleta, fontes, tom de voz, hashtags e contatos do cliente.</div>
+      </div>
+    </div>
+  </div>);
+}
+
+/* ─── CMarcos — Timeline simples de marcos do projeto (Portal + interno) ─── */
+const MARCO_TYPES={
+  comercial: {label:"Comercial",color:"#7c3aed",bg:"#f3e8ff"},
+  reuniao:   {label:"Reunião",  color:"#0ea5e9",bg:"#e0f2fe"},
+  producao:  {label:"Produção", color:"#ea580c",bg:"#ffedd5"},
+  campanha:  {label:"Campanha", color:"#db2777",bg:"#fce7f3"},
+  resultado: {label:"Resultado",color:"#16a34a",bg:"#dcfce7"},
+  entrega:   {label:"Entrega",  color:"#475569",bg:"#f1f5f9"},
+};
+const _LEGACY_MARCO={kickoff:"comercial",meta:"resultado",venda:"resultado",conquista:"resultado",estrategia:"entrega"};
+function _normMarcoType(t){return MARCO_TYPES[t]?t:(_LEGACY_MARCO[t]||"entrega");}
+
+function CMarcos({cl,canEdit}){
+  const sb=window._sb;
+  const [marcos,setMarcos]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [showForm,setShowForm]=useState(false);
+
+  const reload=async function(){
+    if(!sb){setLoading(false);return;}
+    try{
+      const r=await sb.from("client_milestones").select("*").eq("client_id",cl.id).order("date",{ascending:false});
+      setMarcos(r.data||[]);
+    }catch(e){console.warn("[marcos] load:",e?.message||e);}
+    setLoading(false);
+  };
+  useEffect(function(){reload();},[cl.id]);
+
+  const fmtDate=function(d){
+    if(!d)return"—";
+    try{return new Date(d+"T12:00:00").toLocaleDateString("pt-BR");}
+    catch(e){return d;}
+  };
+
+  return(<div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"Inter,system-ui,sans-serif"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+      <div>
+        <div style={{fontSize:18,fontWeight:800,color:"#0f172a",letterSpacing:-.3}}>Marcos do projeto</div>
+        <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Acompanhe os principais acontecimentos e conquistas da parceria.</div>
+      </div>
+      {canEdit&&<button onClick={function(){setShowForm(true);}}
+        style={{background:"#9F43F6",color:"#fff",border:"none",padding:"9px 16px",borderRadius:9,fontSize:12.5,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Adicionar marco
+      </button>}
+    </div>
+
+    {loading?(
+      <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13}}>Carregando marcos...</div>
+    ):marcos.length===0?(
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"44px 28px",textAlign:"center"}}>
+        <div style={{width:52,height:52,borderRadius:14,background:"#f1f5f9",margin:"0 auto 14px",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:6,letterSpacing:-.1}}>Nenhum marco registrado ainda</div>
+        <div style={{fontSize:12.5,color:"#64748b",maxWidth:380,margin:"0 auto",lineHeight:1.55}}>Os principais acontecimentos da parceria aparecerão aqui conforme forem registrados pela equipe.</div>
+        {canEdit&&<button onClick={function(){setShowForm(true);}}
+          style={{marginTop:18,background:"#fff",color:"#9F43F6",border:"1px solid #e9d5ff",padding:"8px 16px",borderRadius:9,fontSize:12.5,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Adicionar marco
+        </button>}
+      </div>
+    ):(
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {marcos.map(function(m){
+          const tk=_normMarcoType(m.type);
+          const t=MARCO_TYPES[tk];
+          return(<div key={m.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",position:"relative",transition:"border-color .15s"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
+              <span style={{background:t.bg,color:t.color,fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:6,letterSpacing:.2}}>{t.label}</span>
+              <span style={{fontSize:12,color:"#94a3b8",fontWeight:500}}>{fmtDate(m.date)}</span>
+            </div>
+            <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:m.description?5:0,letterSpacing:-.1,paddingRight:canEdit?28:0}}>{m.title}</div>
+            {m.description&&<div style={{fontSize:13,color:"#475569",lineHeight:1.55,whiteSpace:"pre-wrap"}}>{m.description}</div>}
+            {canEdit&&<button onClick={async function(){
+              if(!confirm("Excluir este marco?"))return;
+              await sb.from("client_milestones").delete().eq("id",m.id);
+              reload();
+            }} title="Excluir marco" style={{position:"absolute",top:13,right:13,background:"none",border:"none",color:"#cbd5e1",fontSize:18,cursor:"pointer",padding:0,width:24,height:24,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>×</button>}
+          </div>);
+        })}
+      </div>
+    )}
+
+    {showForm&&<MarcoForm cl={cl} onClose={function(){setShowForm(false);}} onSaved={function(){setShowForm(false);reload();}}/>}
+  </div>);
+}
+
+function MarcoForm({cl,onClose,onSaved}){
+  const sb=window._sb;
+  const [type,setType]=useState("comercial");
+  const [date,setDate]=useState(function(){return new Date().toISOString().split("T")[0];});
+  const [title,setTitle]=useState("");
+  const [description,setDescription]=useState("");
+  const [saving,setSaving]=useState(false);
+
+  const save=async function(){
+    if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
+    setSaving(true);
+    try{
+      await sb.from("client_milestones").insert({
+        client_id:cl.id,date,type,title:title.trim(),
+        description:description.trim()||null,
+        metrics:{},
+        created_by:typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:""
+      });
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Marco registrado!");
+      onSaved();
+    }catch(e){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e?.message||e));}
+    setSaving(false);
+  };
+
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"Inter,system-ui,sans-serif"}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,width:"min(500px,92%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
+      <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.2}}>Novo marco</div>
+      <div style={{fontSize:12,color:"#94a3b8",marginBottom:18}}>{cl.name}</div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Tipo</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {Object.entries(MARCO_TYPES).map(function(e){const id=e[0];const t=e[1];return(
+              <button key={id} onClick={function(){setType(id);}} style={{
+                background:type===id?t.bg:"#fff",color:type===id?t.color:"#64748b",
+                border:"1px solid "+(type===id?t.color+"40":"#e2e8f0"),
+                padding:"6px 12px",borderRadius:7,fontSize:11.5,fontWeight:600,cursor:"pointer",transition:"all .12s"
+              }}>{t.label}</button>
+            );})}
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"140px 1fr",gap:12}}>
+          <div>
+            <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Data</div>
+            <input type="date" value={date} onChange={function(e){setDate(e.target.value);}} style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Título</div>
+            <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="Ex: Contrato fechado" style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          </div>
+        </div>
+
+        <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Descrição curta</div>
+          <textarea value={description} onChange={function(e){setDescription(e.target.value);}} placeholder="Contexto rápido sobre o marco..." rows={3} style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",lineHeight:1.5,outline:"none"}}/>
+        </div>
+      </div>
+
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
+        <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
+        <button onClick={save} disabled={saving} style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:600,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1}}>{saving?"Salvando...":"Salvar marco"}</button>
       </div>
     </div>
   </div>);
@@ -35752,9 +35909,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
-    {tab==="marcos"&&typeof CEvolucao==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"22px 26px"}}>
-      <CEvolucao cl={cl} isSocio={false}/>
-    </div>}
+    {tab==="marcos"&&typeof CMarcos==="function"&&<CMarcos cl={cl} canEdit={false}/>}
     {tab==="nps"&&typeof PortalNPS==="function"&&<PortalNPS cl={cl} isMob={isMob}/>}
 
     {/* ── PLANEJAMENTO MENSAL ── plano do mês compartilhado entre Pixels e cliente */}
