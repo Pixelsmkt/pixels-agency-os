@@ -1227,11 +1227,11 @@ function smartFormatTitle(input){
 }
 
 /* ─── DESIGNER PAYMENTS ─── */
-const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50 };
+const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50 };
 const PAID_STATUSES = ["aprovado","agendado","publicado"];
 function calcDesignerPayments(tasks, designerId, refMonth){
-  const out = { fotoObra:0, arte:0, carrossel:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
-                tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksOutros:[] };
+  const out = { fotoObra:0, arte:0, carrossel:0, folder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
+                tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksFolder:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksOutros:[] };
   (tasks||[]).forEach(t=>{
     if(!t)return;
     const assigned=t.assignee===designerId||(Array.isArray(t.assignees)&&t.assignees.includes(designerId));
@@ -1240,6 +1240,7 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     if(refMonth&&t.referenceMonth!==refMonth)return;
     if(t.contentType==="foto"){out.fotoObra++;out.tasksFotoObra.push(t);}
     else if(t.contentType==="carrossel"){out.carrossel++;out.tasksCarrossel.push(t);}
+    else if(t.contentType==="folder"){out.folder++;out.tasksFolder.push(t);}
     else if(t.contentType==="arte"){out.arte++;out.tasksArte.push(t);}
     else if(t.contentType==="video"){out.video++;out.tasksVideo.push(t);}
     else if(t.contentType==="corte"){out.corte++;out.tasksCorte.push(t);}
@@ -1250,6 +1251,7 @@ function calcDesignerPayments(tasks, designerId, refMonth){
   out.total = out.fotoObra*DESIGNER_PRICES.fotoObra
             + out.arte*DESIGNER_PRICES.arte
             + out.carrossel*DESIGNER_PRICES.carrossel
+            + out.folder*DESIGNER_PRICES.folder
             + out.video*DESIGNER_PRICES.video
             + out.corte*DESIGNER_PRICES.corte
             + out.videoComplexo*DESIGNER_PRICES.videoComplexo
@@ -1328,6 +1330,7 @@ function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact
               <ChipBreak label="Foto" count={c.fotoObra} price={DESIGNER_PRICES.fotoObra}/>
               <ChipBreak label="Arte" count={c.arte} price={DESIGNER_PRICES.arte}/>
               <ChipBreak label="Carrossel" count={c.carrossel} price={DESIGNER_PRICES.carrossel}/>
+              <ChipBreak label="Folder" count={c.folder} price={DESIGNER_PRICES.folder}/>
             </>}
             {c.total===0&&<span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>Sem pagamentos no mês.</span>}
           </div>
@@ -19003,6 +19006,33 @@ function PageGestaoFinanceiro({isMob,tasks}){
       <FreelancerPaymentsBlock tasks={tasks||[]} refMonth={payMonth} onChangeMonth={setPayMonth} isMob={isMob}/>
     </Block>
 
+    {/* ════ 4c. TABELA DE PREÇOS POR TIPO DE CONTEÚDO (referência pros sócios) ════ */}
+    <Block>
+      <BlockHeader ico="dollar" color="#7c3aed" title="Tabela de preços por tipo de conteúdo" subtitle="Valor pago por demanda aprovada — referência única do que vai no cálculo dos freelancers"/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
+        {[
+          {label:"Arte única",       sub:"feed + story",        valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.arte:30,           area:"Design"},
+          {label:"Carrossel",        sub:"feed + story",        valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.carrossel:45,      area:"Design"},
+          {label:"Folder",           sub:"PDF / impresso",      valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.folder:30,         area:"Design"},
+          {label:"Foto de obra",     sub:"ajuste de template",  valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.fotoObra:20,       area:"Design"},
+          {label:"Vídeo",            sub:"edição padrão",       valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.video:100,         area:"Edição"},
+          {label:"Vídeo dinâmico",   sub:"motion / complexo",   valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.videoComplexo:150, area:"Edição"},
+          {label:"Vídeo de feira",   sub:"vídeo curto / loop",  valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.videoFeira:50,     area:"Edição"},
+          {label:"Corte de vídeo",   sub:"shorts / reels",      valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.corte:20,          area:"Edição"},
+        ].map(function(t,i){
+          const isDesign = t.area==="Design";
+          const accent = isDesign?"#ec4899":"#0ea5e9";
+          return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"10px 12px",display:"flex",flexDirection:"column",gap:3,position:"relative"}}>
+            <span style={{background:accent+"14",color:accent,fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:5,letterSpacing:.4,textTransform:"uppercase",alignSelf:"flex-start"}}>{t.area}</span>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,marginTop:3,letterSpacing:-.1}}>{t.label}</div>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500}}>{t.sub}</div>
+            <div style={{color:"#0f172a",fontSize:17,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.4,marginTop:4}}>{_brl(t.valor)}<span style={{color:"#94a3b8",fontSize:10,fontWeight:600,marginLeft:3}}>/demanda</span></div>
+          </div>;
+        })}
+      </div>
+      <div style={{color:"#94a3b8",fontSize:11,marginTop:8,lineHeight:1.5}}>Valores referenciados em <code style={{background:"#f1f5f9",padding:"1px 6px",borderRadius:4,fontSize:10,color:"#475569"}}>DESIGNER_PRICES</code> (00_globals.jsx). Ajuste lá pra atualizar o cálculo dos freelancers e esta tabela automaticamente.</div>
+    </Block>
+
     {/* ════ 5. CUSTO OPERACIONAL TOTAL — destacado com custo por cliente ════ */}
     <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b 60%,#334155)",borderRadius:14,padding:"18px 22px",color:"#fff",position:"relative",overflow:"hidden"}}>
       {/* Decoração: anel atrás */}
@@ -25403,6 +25433,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {[
                 {id:"arte",label:"Arte única",icon:"image"},
                 {id:"carrossel",label:"Carrossel",icon:"layers"},
+                {id:"folder",label:"Folder",icon:"file-text"},
                 {id:"foto",label:"Foto de obra",icon:"camera"},
                 {id:"video",label:"Vídeo",icon:"play"},
                 {id:"video_complexo",label:"Vídeo dinâmico",icon:"film"},
