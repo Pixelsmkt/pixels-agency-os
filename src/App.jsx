@@ -43710,18 +43710,31 @@ function _PlEmptyState({title,desc}){
 
 // ======= 26_dash_gustavo.jsx =======
 // Dashboard estratégico do Gustavo Vedovatto — Gestor de Performance + sócio.
-// Central de comando: metas weekly/mês, rotina, aprovações, clientes em atenção,
-// gestão de mídia, visão financeira, gargalos e agenda.
-// Sincronizado com Estratégia > Planejamento (team_planning),
-// Gestão > Operação (op_rotina_checks), Aprovações (tasks),
-// Gestão de Mídia (media store + funnels), Clientes e Financeiro.
+// v2 (redesign 2026-06): cabeçalho enxuto, Metas do dia, Planejamento da semana
+// horizontalizado (grade Seg-Sex), cadastro inline de metas, aprovações limpas,
+// clientes em atenção com selo de prioridade, mídia e financeiro mais executivos.
+// Continua sincronizado com Estratégia > Planejamento (team_planning).
 
 const DG_INTER = "'Inter', system-ui, -apple-system, sans-serif";
 const DG_PURPLE = "#9F43F6";
+const DG_DAYS = [
+  {key:"seg", label:"Segunda", short:"Seg", idx:1},
+  {key:"ter", label:"Terça",   short:"Ter", idx:2},
+  {key:"qua", label:"Quarta",  short:"Qua", idx:3},
+  {key:"qui", label:"Quinta",  short:"Qui", idx:4},
+  {key:"sex", label:"Sexta",   short:"Sex", idx:5},
+];
+const DG_CATEGORIAS = [
+  {id:"performance", label:"Performance", color:"#9F43F6"},
+  {id:"criacao",     label:"Criação",     color:"#ec4899"},
+  {id:"atendimento", label:"Atendimento", color:"#0ea5e9"},
+  {id:"estrategia",  label:"Estratégia",  color:"#f59e0b"},
+  {id:"operacao",    label:"Operação",    color:"#64748b"},
+];
 
 // ── Helpers ─────────────────────────────────────────────────
 const _dgFmtBRL = n => "R$ " + Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
-const _dgToday = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const _dgToday  = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const _dgWeekKey = (d) => {
   const dt = d ? new Date(d) : new Date();
   const t = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
@@ -43742,12 +43755,26 @@ const _dgDays = (deadline) => {
   if(!deadline) return null;
   return Math.ceil((new Date(deadline+"T00:00:00")-new Date())/86400000);
 };
+// Pega a data (YYYY-MM-DD) de um dia da semana atual. dayIdx: 1=Seg, 2=Ter, ..., 5=Sex.
+function _dgWeekDate(dayIdx){
+  const today = new Date();
+  const todayIdx = today.getDay()===0 ? 7 : today.getDay(); // Dom=7, Seg=1
+  const diff = dayIdx - todayIdx;
+  const d = new Date(today);
+  d.setDate(d.getDate()+diff);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+// Resolve a categoria da meta (procura no content ou no campo category)
+function _dgCatOf(meta){
+  if(meta.category) return DG_CATEGORIAS.find(c=>c.id===meta.category);
+  return null;
+}
 
 // ── Section Title ─────────────────────────────────────────────
 function _DGSec({title, sub, right, icon}){
-  return <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:10}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
-      {icon&&<div style={{width:30,height:30,borderRadius:9,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
+  return <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:12}}>
+    <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0}}>
+      {icon&&<div style={{width:32,height:32,borderRadius:9,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
         <Ico n={icon} size={15} color={DG_PURPLE}/>
       </div>}
       <div style={{minWidth:0}}>
@@ -43759,22 +43786,6 @@ function _DGSec({title, sub, right, icon}){
   </div>;
 }
 
-// ── KPI premium ──────────────────────────────────────────────
-function _DGKpi({label, value, sub, icon, color, bg, onClick, muted}){
-  const c = color || "#0f172a";
-  return <div onClick={onClick}
-    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden",fontFamily:DG_INTER,cursor:onClick?"pointer":"default",transition:"all .15s"}}
-    onMouseEnter={e=>{if(onClick){e.currentTarget.style.boxShadow="0 6px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor="#cbd5e1";}}}
-    onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#e2e8f0";}}>
-    <div style={{position:"absolute",top:0,right:0,width:36,height:36,background:bg||"#f8fafc",borderBottomLeftRadius:14,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <Ico n={icon} size={15} color={c}/>
-    </div>
-    <div style={{color:muted?"#94a3b8":c,fontSize:muted?13:23,fontWeight:800,lineHeight:1.1,letterSpacing:-.5,marginBottom:4,paddingRight:30}}>{value}</div>
-    <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
-    {sub&&<div style={{color:"#64748b",fontSize:10.5,marginTop:3,fontWeight:500}}>{sub}</div>}
-  </div>;
-}
-
 // ═══════════════════════════════════════════════════════════════
 //  DashGustavo — Central de comando do Gestor de Performance
 // ═══════════════════════════════════════════════════════════════
@@ -43783,20 +43794,36 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const allTasks = tasks.filter(t=>!t.deletedAt);
 
   // ── Estratégia > Planejamento (team_planning) ──
-  const {entries: planEntries, upsert: planUpsert, loading: planLoading} = (typeof usePlanejamentoEntries==="function") ? usePlanejamentoEntries() : {entries:[], upsert:()=>{}, loading:false};
+  const {entries: planEntries, upsert: planUpsert, remove: planRemove, loading: planLoading} =
+    (typeof usePlanejamentoEntries==="function") ? usePlanejamentoEntries() : {entries:[], upsert:()=>{}, remove:()=>{}, loading:false};
 
-  const weekKey = _dgWeekKey();
+  const weekKey  = _dgWeekKey();
   const monthKey = _dgMonthKey();
+  const hoje     = _dgToday();
+
+  // Todas metas desta semana
   const metasWeek = planEntries.filter(e=>e.type==="meta_semana"&&e.week_key===weekKey);
-  const metasMes  = planEntries.filter(e=>e.type==="meta_mes"&&e.month_key===monthKey);
-  const minhasMetasWeek = metasWeek.filter(m=>m.author_id===user.id);
-  const empresaMetasWeek = metasWeek.filter(m=>m.author_id!==user.id);
   const weekConcluidas = metasWeek.filter(m=>m.status==="concluida").length;
-  const weekEmRisco    = metasWeek.filter(m=>m.status==="em_andamento" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<2).length;
+  const weekPendentes  = metasWeek.filter(m=>m.status!=="concluida").length;
+  const weekAtrasadas  = metasWeek.filter(m=>m.status!=="concluida" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<0).length;
   const weekProgresso  = metasWeek.length>0 ? Math.round((weekConcluidas/metasWeek.length)*100) : 0;
 
+  // Metas do DIA (deadline === hoje)
+  const metasHoje = metasWeek.filter(m=>m.deadline===hoje);
+  const hojeConcluidas = metasHoje.filter(m=>m.status==="concluida").length;
+
+  // Metas distribuídas por dia da semana (Seg-Sex)
+  const metasPorDia = {};
+  DG_DAYS.forEach(d=>{ metasPorDia[d.key] = []; });
+  metasWeek.forEach(m=>{
+    if(!m.deadline) return;
+    const dt = new Date(m.deadline+"T00:00:00");
+    const di = dt.getDay()===0?7:dt.getDay();
+    const day = DG_DAYS.find(d=>d.idx===di);
+    if(day) metasPorDia[day.key].push(m);
+  });
+
   // ── Aprovações que dependem do Gustavo ──
-  // Em "publicacao" (artes/conteúdo) — Gustavo é sócio aprovador
   const apvDesign = allTasks.filter(t=>t.status==="avaliacao");
   const apvCopys  = allTasks.filter(t=>t.status==="demanda" && !t.ajustar);
   const apvInternas = allTasks.filter(t=>t.status==="interno_avaliacao");
@@ -43811,23 +43838,29 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     if(["aprovado","publicado","interno_executado","interno_aprovado"].includes(t.status)) return false;
     return t.deadline && _dgDays(t.deadline)!==null && _dgDays(t.deadline)<0;
   });
-  const semResponsavel = allTasks.filter(t=>{
-    if(["aprovado","publicado","interno_executado"].includes(t.status)) return false;
-    return !t.assignee && (!t.assignees||t.assignees.length===0);
-  });
 
-  // ── Clientes em atenção ──
-  const clientesAtencao = (CLIENTS||[]).filter(c=>{
-    if(c.status==="interno") return false;
+  // ── Clientes em atenção (max 4 com selo de prioridade) ──
+  const clientesAtencaoRaw = (CLIENTS||[]).filter(c=>c.status!=="interno").map(c=>{
     const clTasks = allTasks.filter(t=>t.client===c.id);
     const lateCount = clTasks.filter(t=>t.deadline && _dgDays(t.deadline)<0 && t.status!=="aprovado" && t.status!=="publicado").length;
     const lowHealth = (c.health||100) < 60;
     const lowNps = (c.nps||10) < 7;
     const semProxAcao = !c.proximaAcao;
-    return lowHealth || lowNps || lateCount>=3;
-  }).slice(0,8);
+    if(!(lowHealth || lowNps || lateCount>=3 || semProxAcao)) return null;
+    // Score de prioridade
+    let score = 0;
+    if(lateCount>=10) score+=3; else if(lateCount>=3) score+=2;
+    if(lowHealth) score+=2;
+    if(lowNps) score+=1;
+    if(semProxAcao) score+=1;
+    let prio = "Baixa";
+    if(score>=4) prio = "Alta";
+    else if(score>=2) prio = "Média";
+    return {cl:c, lateCount, lowHealth, lowNps, semProxAcao, prio, score};
+  }).filter(Boolean).sort((a,b)=>b.score-a.score);
+  const clientesAtencao = clientesAtencaoRaw.slice(0,4);
 
-  // ── Gestão de Mídia (consolidado) ──
+  // ── Gestão de Mídia ──
   const mediaStore = (typeof useMediaStore==="function") ? useMediaStore() : {store:{clients:[]}};
   const _refDate = new Date();
   const mediaConsol = (typeof useMediaConsolidated==="function") ? useMediaConsolidated(mediaStore.store.clients||[], _refDate.getFullYear(), _refDate.getMonth()+1) : {funnels:{},roi:{},loading:false};
@@ -43841,7 +43874,9 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     }
     if(Number(c.investimento_mensal)>0) mediaTotalRoiInv += Number(c.investimento_mensal);
   });
-  const mediaRoiGeral = mediaTotalRoiInv>0 ? Math.round(((mediaTotalRetorno-mediaTotalRoiInv)/mediaTotalRoiInv)*1000)/10 : null;
+  // ROI: só calcula se tem retorno > 0 (não exibe "-100%" pra ausência de dado)
+  const mediaTemDado = mediaTotalRetorno > 0;
+  const mediaRoiGeral = mediaTemDado ? Math.round(((mediaTotalRetorno-mediaTotalRoiInv)/mediaTotalRoiInv)*1000)/10 : null;
   const mediaSemFunil = mediaClients.filter(c=>{
     const f = (mediaConsol.funnels||{})[c.client_id];
     return !f || !Array.isArray(f.stages) || !f.stages.some(s=>Number(s.quantity||0)>0);
@@ -43849,36 +43884,22 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const mediaAtivos = mediaClients.filter(c=>c.status==="ativa"||c.status==="em_dia").length;
   const mediaEmAtencao = mediaClients.filter(c=>c.status==="atencao"||c.status==="critico").length;
 
-  // ── Gargalos ──
-  const gargalos = [];
-  apvDesignAtrasadas.forEach(t=>{
-    const dias = Math.floor((new Date()-new Date(t.colEnteredAt))/86400000);
-    gargalos.push({type:"aprovacao", client:t.client, title:t.title, tempo:dias+"d parada", action:"Aprovar design", taskId:t.id});
-  });
-  metasWeek.filter(m=>m.status==="em_andamento" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<2).forEach(m=>{
-    gargalos.push({type:"meta", title:m.title, tempo:_dgDays(m.deadline)<0?(Math.abs(_dgDays(m.deadline))+"d atraso"):"Vence em "+_dgDays(m.deadline)+"d", action:"Revisar meta"});
-  });
-  demandasAtrasadas.slice(0,5).forEach(t=>{
-    gargalos.push({type:"demanda", client:t.client, title:t.title, tempo:Math.abs(_dgDays(t.deadline))+"d atraso", action:"Repriorizar", taskId:t.id});
-  });
-  mediaSemFunil>0&&gargalos.push({type:"funil", title:mediaSemFunil+" cliente"+(mediaSemFunil>1?"s":"")+" sem Funil Digital", tempo:"Pendente", action:"Solicitar preenchimento"});
-
   // ── Financeiro / MRR ──
   const finStore = (()=>{ try{const raw=localStorage.getItem("pixels-financeiro-v1"); return raw?JSON.parse(raw):null;}catch{return null;} })();
   const contratos = (finStore?.contratos)||[];
   const mrrAtual = contratos.filter(c=>c.statusContrato==="ativo").reduce((s,c)=>s+(Number(c.mrr)||0),0);
   const contratosAtivos = contratos.filter(c=>c.statusContrato==="ativo").length;
+  const projetosAbertos = contratos.filter(c=>c.statusContrato==="ativo" && c.tipo==="projeto").length;
+  const totalPrevisto = mrrAtual + contratos.filter(c=>c.statusContrato==="ativo" && c.tipo==="projeto").reduce((s,c)=>s+(Number(c.valorProjeto)||0),0);
 
-  // ── Próximas reuniões / agenda ──
-  // Pega próximas dailies/weeklies do team_planning + próximas datas importantes de clientes
-  const agenda = [];
-  const hoje = new Date(); hoje.setHours(0,0,0,0);
-  planEntries.filter(e=>e.type==="daily"||e.type==="weekly")
-    .filter(e=>e.entry_date && new Date(e.entry_date+"T00:00:00") >= hoje)
-    .sort((a,b)=>(a.entry_date||"").localeCompare(b.entry_date||""))
-    .slice(0,5).forEach(e=>{
-      agenda.push({type:e.type==="daily"?"Daily":"Weekly", title:e.title||(e.type==="daily"?"Daily":"Weekly"), date:e.entry_date, author:e.author_name});
-    });
+  // ── Filtros UI ──
+  const [filtroStatus, setFiltroStatus] = useState("todas"); // todas | pendentes | concluidas
+  const [novaMeta, setNovaMeta] = useState(null); // null ou {day, ...}
+  const _filtrar = (arr) => {
+    if(filtroStatus==="pendentes") return arr.filter(m=>m.status!=="concluida");
+    if(filtroStatus==="concluidas") return arr.filter(m=>m.status==="concluida");
+    return arr;
+  };
 
   // ── Toggle status meta ──
   const _toggleMeta = (m) => {
@@ -43886,238 +43907,353 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     planUpsert(Object.assign({},m,{status:newStatus,updated_at:new Date().toISOString()}));
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:DG_INTER}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:DG_INTER}}>
 
-    {/* ══════════ HEADER ══════════ */}
-    <div style={{background:"linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1e1b4b 100%)",borderRadius:18,padding:isMob?"18px":"22px 26px",position:"relative",overflow:"hidden"}}>
-      {/* Decoração */}
+    {/* ══════════ HEADER PREMIUM ENXUTO ══════════ */}
+    <div style={{background:"linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1e1b4b 100%)",borderRadius:18,padding:isMob?"16px 18px":"20px 24px",position:"relative",overflow:"hidden"}}>
       <div style={{position:"absolute",top:-50,right:-50,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle, "+DG_PURPLE+"30 0%, transparent 70%)"}}/>
       <div style={{position:"absolute",bottom:-40,left:200,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle, "+DG_PURPLE+"22 0%, transparent 70%)"}}/>
-
       <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:16,minWidth:0}}>
-          <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,"+DG_PURPLE+",#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 12px 32px rgba(159,67,246,0.55)",flexShrink:0}}>
-            <UserAvatar user={user} size={50}/>
+        <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+          <div style={{width:52,height:52,borderRadius:15,background:"linear-gradient(135deg,"+DG_PURPLE+",#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 28px rgba(159,67,246,0.45)",flexShrink:0}}>
+            <UserAvatar user={user} size={46}/>
           </div>
           <div style={{minWidth:0}}>
-            <div style={{color:"rgba(255,255,255,.7)",fontSize:11.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:3}}>{_dgSaudacao()}, {_dgDateLong()}</div>
-            <div style={{color:"#fff",fontWeight:800,fontSize:isMob?20:26,letterSpacing:-.5,lineHeight:1.1}}>Gustavo Vedovatto</div>
-            <div style={{color:"rgba(255,255,255,.65)",fontSize:13,marginTop:4,fontWeight:500}}>Gestor de Performance · Central de comando da agência</div>
+            <div style={{color:"rgba(255,255,255,.7)",fontSize:11,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginBottom:2}}>{_dgSaudacao()} · {_dgDateLong()}</div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:isMob?19:24,letterSpacing:-.5,lineHeight:1.1}}>{user.name}</div>
+            <div style={{color:"rgba(255,255,255,.62)",fontSize:12.5,marginTop:3,fontWeight:500}}>{user.role||"Gestor"} · Central de comando</div>
           </div>
         </div>
-        <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
           {[
             {label:"Avaliações",value:apvTotal,color:apvTotal>0?"#fbbf24":"#22c55e"},
-            {label:"Clientes em atenção",value:clientesAtencao.length,color:clientesAtencao.length>0?"#fb7185":"#22c55e"},
-            {label:"Metas em risco",value:weekEmRisco,color:weekEmRisco>0?"#f97316":"#22c55e"},
-            {label:"Gargalos",value:gargalos.length,color:gargalos.length>3?"#ef4444":gargalos.length>0?"#f97316":"#22c55e"},
-          ].map((s,i)=><div key={i} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,padding:"10px 14px",backdropFilter:"blur(8px)",minWidth:96}}>
-            <div style={{color:s.color,fontSize:22,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{s.value}</div>
-            <div style={{color:"rgba(255,255,255,.6)",fontSize:10,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginTop:3}}>{s.label}</div>
+            {label:"Clientes",value:clientesAtencao.length,color:clientesAtencao.length>0?"#fb7185":"#22c55e"},
+            {label:"Metas hoje",value:metasHoje.length,color:metasHoje.length>0?DG_PURPLE+"":"#22c55e"},
+            {label:"Atrasadas",value:weekAtrasadas,color:weekAtrasadas>0?"#ef4444":"#22c55e"},
+          ].map((s,i)=><div key={i} style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:10,padding:"9px 13px",backdropFilter:"blur(8px)",minWidth:88}}>
+            <div style={{color:s.color,fontSize:20,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{s.value}</div>
+            <div style={{color:"rgba(255,255,255,.55)",fontSize:9.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginTop:3}}>{s.label}</div>
           </div>)}
         </div>
       </div>
     </div>
 
-    {/* ══════════ METAS DA WEEKLY ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="target" title="Metas da weekly"
-        sub={metasWeek.length>0 ? (weekConcluidas+"/"+metasWeek.length+" concluídas · "+weekProgresso+"% de progresso") : "Sincronizado com Estratégia > Planejamento"}/>
-      {metasWeek.length>0&&<div style={{height:7,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:14}}>
-        <div style={{height:"100%",width:weekProgresso+"%",background:"linear-gradient(90deg,"+DG_PURPLE+",#7c3aed)",borderRadius:99,transition:"width .3s"}}/>
-      </div>}
-      {metasWeek.length===0?<_DGEmpty icon="target" title="Sem metas da semana ainda" desc="Cadastre metas em Estratégia > Planejamento > Metas."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
-        <div>
-          <div style={{color:"#7c3aed",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Minhas metas ({minhasMetasWeek.length})</div>
-          {minhasMetasWeek.length>0?<div style={{display:"flex",flexDirection:"column",gap:7}}>{minhasMetasWeek.map(m=><_DGMetaCard key={m.id} meta={m} onToggle={_toggleMeta}/>)}</div>:<div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"10px 0"}}>Você ainda não cadastrou metas pra esta semana.</div>}
-        </div>
-        <div>
-          <div style={{color:"#0f172a",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:8}}>Metas da empresa ({empresaMetasWeek.length})</div>
-          {empresaMetasWeek.length>0?<div style={{display:"flex",flexDirection:"column",gap:7}}>{empresaMetasWeek.map(m=><_DGMetaCard key={m.id} meta={m} onToggle={_toggleMeta}/>)}</div>:<div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"10px 0"}}>Sem metas da empresa.</div>}
-        </div>
+    {/* ══════════ METAS DO DIA ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+      <_DGSec icon="target" title="Metas do dia" sub="Prioridades que precisam sair hoje."
+        right={<div style={{display:"flex",alignItems:"center",gap:8}}>
+          {metasHoje.length>0&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{hojeConcluidas}/{metasHoje.length} concluídas</div>}
+          <button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
+            style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Adicionar meta
+          </button>
+        </div>}/>
+      {metasHoje.length===0?<_DGEmpty icon="check" title="Nenhuma meta cadastrada para hoje." desc="Adicione uma meta acima ou ela aparecerá aqui quando vencer hoje."/>:<div style={{display:"flex",flexDirection:"column",gap:7}}>
+        {metasHoje.map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta}/>)}
       </div>}
     </div>
 
-    {/* ══════════ METAS DO MÊS ══════════ */}
-    {metasMes.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="flag" title="Metas do mês" sub={"Mês de "+monthKey+" · "+metasMes.filter(m=>m.status==="concluida").length+"/"+metasMes.length+" concluídas"}/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:10}}>
-        {metasMes.map(m=><_DGMetaCard key={m.id} meta={m} onToggle={_toggleMeta} showStatus={true}/>)}
+    {/* ══════════ PLANEJAMENTO DA SEMANA ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+      <_DGSec icon="calendar" title="Planejamento da semana" sub="Organize as metas, acompanhe as demandas e marque o que já foi concluído."
+        right={<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          {/* Filtros */}
+          <div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:8,padding:2}}>
+            {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
+              const a = filtroStatus===f.id;
+              return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
+                style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none"}}>
+                {f.l}
+              </button>;
+            })}
+          </div>
+        </div>}/>
+
+      {/* Resumo semanal pequeno */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14,padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
+        {[
+          {l:"Total",v:metasWeek.length,c:"#0f172a"},
+          {l:"Concluídas",v:weekConcluidas,c:"#16a34a"},
+          {l:"Pendentes",v:weekPendentes,c:"#f59e0b"},
+          {l:"Atrasadas",v:weekAtrasadas,c:weekAtrasadas>0?"#ef4444":"#94a3b8"},
+        ].map((s,i)=><div key={i} style={{textAlign:"center"}}>
+          <div style={{color:s.c,fontSize:18,fontWeight:800,letterSpacing:-.3,lineHeight:1}}>{s.v}</div>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>{s.l}</div>
+        </div>)}
       </div>
-    </div>}
 
-    {/* ══════════ ROTINA DA SEMANA ══════════ */}
-    {typeof OpRotinaWidget==="function"&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="calendar" title="Sua rotina da semana" sub="Sincronizado com Gestão > Operação"/>
-      <OpRotinaWidget userId="gustavo" accentColor={DG_PURPLE}/>
-    </div>}
+      {/* Grade Seg-Sex horizontalizada */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,1fr)",gap:10,overflowX:isMob?"auto":"visible"}}>
+        {DG_DAYS.map(d=>{
+          const metasDia = _filtrar(metasPorDia[d.key]||[]);
+          const totalDia = (metasPorDia[d.key]||[]).length;
+          const concDia = (metasPorDia[d.key]||[]).filter(m=>m.status==="concluida").length;
+          const isHoje = _dgWeekDate(d.idx)===hoje;
+          return <div key={d.key} style={{background:isHoje?"#f5f3ff":"#fafbfc",border:"1px solid "+(isHoje?"#ddd6fe":"#e2e8f0"),borderRadius:11,padding:"11px 12px",display:"flex",flexDirection:"column",gap:8,minHeight:140}}>
+            {/* Header do dia */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+              <div>
+                <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.1}}>{d.short}{isHoje&&<span style={{marginLeft:5,fontSize:9,fontWeight:700,color:DG_PURPLE,background:DG_PURPLE+"22",padding:"1px 6px",borderRadius:99}}>HOJE</span>}</div>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{concDia}/{totalDia}</div>
+            </div>
+            {/* Metas */}
+            {metasDia.length===0?<div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",textAlign:"center",padding:"12px 4px",lineHeight:1.4}}>Sem metas</div>:<div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta}/>)}
+            </div>}
+            {/* Botão + */}
+            <button onClick={()=>setNovaMeta({day:d})}
+              style={{marginTop:"auto",background:"transparent",color:"#64748b",border:"1px dashed #cbd5e1",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4,transition:"all .12s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=DG_PURPLE;e.currentTarget.style.color=DG_PURPLE;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+              Adicionar
+            </button>
+          </div>;
+        })}
+      </div>
+    </div>
 
-    {/* ══════════ APROVAÇÕES QUE DEPENDEM DE MIM ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="check" title="Aprovações que dependem de mim" sub={apvTotal+" aguardando sua revisão"}/>
-      {apvTotal===0?<_DGEmpty icon="check" title="Tudo em dia!" desc="Nenhuma aprovação aguardando."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
-        <_DGApvCard label="Avaliação de copys" count={apvCopys.length} color="#9F43F6" icon="message"/>
-        <_DGApvCard label="Aprovação de conteúdo (design)" count={apvDesign.length} sub={apvDesignAtrasadas.length>0?(apvDesignAtrasadas.length+" parada"+(apvDesignAtrasadas.length>1?"s":"")+" +2 dias"):""} color="#0ea5e9" icon="image" urgent={apvDesignAtrasadas.length>0}/>
+    {/* ══════════ PENDÊNCIAS PARA MINHA APROVAÇÃO ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+      <_DGSec icon="check" title="Pendências para minha aprovação" sub="Demandas que aguardam sua revisão ou decisão."/>
+      {apvTotal===0?<_DGEmpty icon="check" title="Nenhuma aprovação pendente." desc="Tudo em dia por aqui."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+        <_DGApvCard label="Copys para revisar" count={apvCopys.length} color="#9F43F6" icon="message"/>
+        <_DGApvCard label="Designs para aprovar" count={apvDesign.length} sub={apvDesignAtrasadas.length>0?(apvDesignAtrasadas.length+" atrasada"+(apvDesignAtrasadas.length>1?"s":"")):""} color="#0ea5e9" icon="image" urgent={apvDesignAtrasadas.length>0}/>
         <_DGApvCard label="Demandas internas" count={apvInternas.length} color="#f97316" icon="inbox"/>
       </div>}
     </div>
 
-    {/* ══════════ CLIENTES EM ATENÇÃO ══════════ */}
-    {clientesAtencao.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="alert" title="Clientes em atenção" sub={clientesAtencao.length+" cliente"+(clientesAtencao.length>1?"s":"")+" precisa"+(clientesAtencao.length===1?"":"m")+" da sua atenção"}/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:10}}>
-        {clientesAtencao.map(c=><_DGClienteAtencao key={c.id} cl={c} tasks={allTasks}/>)}
-      </div>
-    </div>}
+    {/* ══════════ CLIENTES QUE PRECISAM DE ATENÇÃO ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+      <_DGSec icon="alert" title="Clientes que precisam de atenção" sub="Prioridades da semana por atraso, gargalo ou falta de próxima ação."
+        right={clientesAtencaoRaw.length>4?<span style={{color:DG_PURPLE,fontSize:11.5,fontWeight:700,cursor:"pointer"}}>Ver todos ({clientesAtencaoRaw.length})</span>:null}/>
+      {clientesAtencao.length===0?<_DGEmpty icon="check" title="Tudo certo por aqui." desc="Nenhum cliente crítico no momento."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(260px,1fr))",gap:10}}>
+        {clientesAtencao.map(item=><_DGClienteAtencao key={item.cl.id} item={item}/>)}
+      </div>}
+    </div>
 
-    {/* ══════════ GESTÃO DE MÍDIA ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="trending-up" title="Gestão de mídia paga" sub={mediaClients.length+" cliente"+(mediaClients.length>1?"s":"")+" sob gestão · mês "+monthKey}/>
-      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"160px"},1fr))`,gap:10,marginBottom:12}}>
-        <_DGKpi label="Orçamento gerido/mês" value={_dgFmtBRL(mediaTotalInvest)} icon="dollar" color={DG_PURPLE} bg={DG_PURPLE+"14"}/>
-        <_DGKpi label="Retorno do mês" value={mediaTotalRetorno>0?_dgFmtBRL(mediaTotalRetorno):"—"} sub={mediaTotalRetorno===0?"Aguardando Funil Digital":""} icon="trending-up" color={mediaTotalRetorno>0?"#16a34a":"#94a3b8"} bg={mediaTotalRetorno>0?"#dcfce7":"#f8fafc"} muted={mediaTotalRetorno===0}/>
-        <_DGKpi label="ROI geral" value={mediaRoiGeral!==null?(mediaRoiGeral>=0?"+":"")+mediaRoiGeral.toFixed(1)+"%":"—"} sub={mediaRoiGeral===null?"Aguardando dados":""} icon="chart" color={mediaRoiGeral===null?"#94a3b8":mediaRoiGeral>=0?"#16a34a":"#ef4444"} bg={mediaRoiGeral===null?"#f8fafc":mediaRoiGeral>=0?"#dcfce7":"#fef2f2"} muted={mediaRoiGeral===null}/>
-        <_DGKpi label="Ativos / Estruturação" value={mediaAtivos+" / "+(mediaClients.length-mediaAtivos)} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
-        <_DGKpi label="Sem Funil Digital" value={mediaSemFunil} sub={mediaSemFunil>0?"Aguardando preenchimento":""} icon="alert" color={mediaSemFunil>0?"#f97316":"#94a3b8"} bg={mediaSemFunil>0?"#fff7ed":"#f8fafc"}/>
-        <_DGKpi label="Em atenção" value={mediaEmAtencao} icon="alert" color={mediaEmAtencao>0?"#ef4444":"#94a3b8"} bg={mediaEmAtencao>0?"#fef2f2":"#f8fafc"}/>
+    {/* ══════════ GESTÃO DE MÍDIA PAGA ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+      <_DGSec icon="trending-up" title="Gestão de mídia paga" sub="Resumo das campanhas, investimento e pendências de estruturação."/>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(170px,1fr))",gap:10}}>
+        {/* Destaque: Orçamento gerido */}
+        <_DGKpi label="Orçamento gerido" value={mediaTotalInvest>0?_dgFmtBRL(mediaTotalInvest)+"/mês":"—"} icon="dollar" color={mediaTotalInvest>0?DG_PURPLE:"#94a3b8"} bg={mediaTotalInvest>0?DG_PURPLE+"14":"#f8fafc"} muted={mediaTotalInvest===0} highlight/>
+        <_DGKpi label="Clientes ativos" value={mediaAtivos+" cliente"+(mediaAtivos!==1?"s":"")} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
+        <_DGKpi label="Funil digital" value={(mediaClients.length-mediaSemFunil)+"/"+mediaClients.length+" estruturados"} sub={mediaSemFunil>0?"Aguardando preenchimento":""} icon="trending-up" color={mediaSemFunil>0?"#f97316":"#16a34a"} bg={mediaSemFunil>0?"#fff7ed":"#dcfce7"}/>
+        <_DGKpi label="Em atenção" value={mediaEmAtencao} icon="alert" color={mediaEmAtencao>0?"#ef4444":"#94a3b8"} bg={mediaEmAtencao>0?"#fef2f2":"#f8fafc"} muted={mediaEmAtencao===0}/>
+        <_DGKpi label="ROI geral" value={mediaTemDado?(mediaRoiGeral>=0?"+":"")+mediaRoiGeral.toFixed(1)+"%":"—"} sub={mediaTemDado?"":"ROI aguardando dados"} icon="chart" color={mediaTemDado?(mediaRoiGeral>=0?"#16a34a":"#ef4444"):"#94a3b8"} bg={mediaTemDado?(mediaRoiGeral>=0?"#dcfce7":"#fef2f2"):"#f8fafc"} muted={!mediaTemDado}/>
       </div>
     </div>
 
-    {/* ══════════ VISÃO FINANCEIRA ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="dollar" title="Visão financeira resumida" sub="Resumo executivo da operação"/>
-      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"140px":"180px"},1fr))`,gap:10}}>
-        <_DGKpi label="MRR atual" value={mrrAtual>0?_dgFmtBRL(mrrAtual):"—"} sub={mrrAtual===0?"Aguardando dados":""} icon="trending-up" color={mrrAtual>0?"#16a34a":"#94a3b8"} bg={mrrAtual>0?"#dcfce7":"#f8fafc"} muted={mrrAtual===0}/>
-        <_DGKpi label="Contratos ativos" value={contratosAtivos} icon="file-text" color={DG_PURPLE} bg={DG_PURPLE+"14"}/>
-        <_DGKpi label="Orçamento mídia" value={_dgFmtBRL(mediaTotalInvest)} sub="Sob gestão da Pixels" icon="dollar" color="#0ea5e9" bg="#0ea5e914"/>
-        <_DGKpi label="Retorno digital total" value={mediaTotalRetorno>0?_dgFmtBRL(mediaTotalRetorno):"—"} sub={mediaTotalRetorno===0?"Aguardando dados":"Soma de todos os clientes"} icon="chart" color={mediaTotalRetorno>0?"#16a34a":"#94a3b8"} bg={mediaTotalRetorno>0?"#dcfce7":"#f8fafc"} muted={mediaTotalRetorno===0}/>
-      </div>
+    {/* ══════════ RESUMO FINANCEIRO ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+      <_DGSec icon="dollar" title="Resumo financeiro" sub="Visão rápida da operação comercial e recorrência."/>
+      {mrrAtual===0&&contratosAtivos===0?<_DGEmpty icon="dollar" title="Sem dados financeiros cadastrados ainda." desc="Vá em Gestão > Financeiro para começar."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
+        <_DGKpi label="Receita recorrente" value={mrrAtual>0?_dgFmtBRL(mrrAtual)+"/mês":"—"} icon="trending-up" color={mrrAtual>0?"#16a34a":"#94a3b8"} bg={mrrAtual>0?"#dcfce7":"#f8fafc"} muted={mrrAtual===0}/>
+        <_DGKpi label="Projetos do mês" value={projetosAbertos} icon="file-text" color={DG_PURPLE} bg={DG_PURPLE+"14"}/>
+        <_DGKpi label="Total previsto" value={totalPrevisto>0?_dgFmtBRL(totalPrevisto):"—"} icon="dollar" color={totalPrevisto>0?"#0f172a":"#94a3b8"} bg="#f8fafc" muted={totalPrevisto===0}/>
+        <_DGKpi label="Clientes ativos" value={contratosAtivos} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
+      </div>}
     </div>
 
-    {/* ══════════ GARGALOS DO MOMENTO ══════════ */}
-    {gargalos.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="alert" title="Gargalos do momento" sub={gargalos.length+" item"+(gargalos.length>1?"s":"")+" exigindo atenção imediata"}/>
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {gargalos.slice(0,8).map((g,i)=><_DGGargalo key={i} g={g}/>)}
-      </div>
-    </div>}
-
-    {/* ══════════ AGENDA ══════════ */}
-    {agenda.length>0&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px"}}>
-      <_DGSec icon="calendar" title="Agenda e próximos compromissos" sub="Dailies e weeklies registradas"/>
-      <div style={{display:"flex",flexDirection:"column",gap:7}}>
-        {agenda.map((a,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:10}}>
-          <div style={{width:36,height:36,borderRadius:9,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
-            <Ico n="calendar" size={14} color={DG_PURPLE}/>
-          </div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{a.title}</div>
-            <div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{a.type} · {a.author||"—"} · {new Date(a.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})}</div>
-          </div>
-        </div>)}
-      </div>
-    </div>}
+    {/* MODAL NOVA META */}
+    {novaMeta && <_DGNovaMeta day={novaMeta.day} user={user} weekKey={weekKey} onClose={()=>setNovaMeta(null)} onSave={(payload)=>{planUpsert(payload);setNovaMeta(null);}}/>}
 
   </div>;
 }
 
-// ── Card de meta (com checkbox toggle) ───────────────────────
-function _DGMetaCard({meta, onToggle, showStatus}){
+// ── Item de meta (linha simples pra Metas do dia) ────────────
+function _DGMetaItem({meta, onToggle}){
   const isOk = meta.status==="concluida";
-  const accent = meta.type==="meta_mes"?"#f97316":DG_PURPLE;
-  return <div style={{background:isOk?"#f0fdf4":"#fafafa",border:"1px solid "+(isOk?"#bbf7d0":"#e2e8f0"),borderRadius:11,padding:"11px 13px",display:"flex",alignItems:"flex-start",gap:11,fontFamily:DG_INTER,transition:"all .15s"}}>
-    <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Marcar como concluída"}
-      style={{width:20,height:20,borderRadius:6,border:"2px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,transition:"all .12s"}}>
+  const isLate = !isOk && meta.deadline && _dgDays(meta.deadline)<0;
+  const cat = _dgCatOf(meta);
+  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,fontFamily:DG_INTER,transition:"all .12s"}}>
+    <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Concluir"}
+      style={{width:20,height:20,borderRadius:6,border:"2px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all .12s"}}>
       {isOk&&<Ico n="check" size={11} color="#fff"/>}
     </button>
+    <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <span style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:12.5,fontWeight:700,textDecoration:isOk?"line-through":"none",minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
+      {cat&&<span style={{background:cat.color+"18",color:cat.color,borderRadius:5,padding:"2px 8px",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
+      {meta.responsible_name&&<span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{meta.responsible_name}</span>}
+    </div>
+    {isLate&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>Atrasada</span>}
+  </div>;
+}
+
+// ── Mini meta (pra grade semanal) ────────────────────────────
+function _DGMetaMini({meta, onToggle}){
+  const isOk = meta.status==="concluida";
+  const isLate = !isOk && meta.deadline && _dgDays(meta.deadline)<0;
+  const cat = _dgCatOf(meta);
+  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:8,padding:"7px 9px",display:"flex",alignItems:"flex-start",gap:7,fontFamily:DG_INTER,transition:"all .12s"}}>
+    <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Concluir"}
+      style={{width:15,height:15,borderRadius:4,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,padding:0,transition:"all .12s"}}>
+      {isOk&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+    </button>
     <div style={{flex:1,minWidth:0}}>
-      {showStatus&&<div style={{display:"inline-flex",alignItems:"center",gap:5,marginBottom:4}}>
-        <span style={{background:accent+"15",color:accent,borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{meta.type==="meta_mes"?"Mensal":"Semanal"}</span>
-      </div>}
-      <div style={{color:isOk?"#166534":"#0f172a",fontSize:12.5,fontWeight:700,lineHeight:1.35,textDecoration:isOk?"line-through":"none"}}>{meta.title||"(sem título)"}</div>
-      {meta.content&&<div style={{color:isOk?"#15803d":"#64748b",fontSize:11,lineHeight:1.5,marginTop:4,whiteSpace:"pre-wrap",wordBreak:"break-word",opacity:isOk?.8:1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{meta.content}</div>}
-      <div style={{color:"#94a3b8",fontSize:10,marginTop:5,fontWeight:500}}>{meta.author_name||"—"}</div>
+      <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11.5,fontWeight:600,lineHeight:1.3,textDecoration:isOk?"line-through":"none",wordBreak:"break-word"}}>{meta.title||"(sem título)"}</div>
+      {cat&&<span style={{display:"inline-block",background:cat.color+"15",color:cat.color,borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,marginTop:3,letterSpacing:.2}}>{cat.label}</span>}
     </div>
   </div>;
 }
 
-// ── Card de aprovação resumida ───────────────────────────────
+// ── KPI ──────────────────────────────────────────────────────
+function _DGKpi({label, value, sub, icon, color, bg, muted, highlight}){
+  const c = color || "#0f172a";
+  return <div style={{background:highlight?bg:"#fff",border:"1px solid "+(highlight?color+"33":"#e2e8f0"),borderRadius:12,padding:highlight?"14px 16px":"12px 14px",position:"relative",overflow:"hidden",fontFamily:DG_INTER,transition:"all .15s"}}>
+    <div style={{position:"absolute",top:0,right:0,width:32,height:32,background:highlight?"#fff":(bg||"#f8fafc"),borderBottomLeftRadius:12,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <Ico n={icon} size={14} color={c}/>
+    </div>
+    <div style={{color:muted?"#94a3b8":c,fontSize:highlight?22:18,fontWeight:800,lineHeight:1.1,letterSpacing:-.4,marginBottom:3,paddingRight:28,fontFeatureSettings:"'tnum'"}}>{value}</div>
+    <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
+    {sub&&<div style={{color:"#64748b",fontSize:10,marginTop:2,fontWeight:500}}>{sub}</div>}
+  </div>;
+}
+
+// ── Card de aprovação (compacto + clean) ─────────────────────
 function _DGApvCard({label, count, sub, color, icon, urgent}){
-  return <div style={{background:"#fafafa",border:"1px solid "+(urgent?"#fecaca":"#e2e8f0"),borderRadius:12,padding:"13px 15px",fontFamily:DG_INTER}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-      <div style={{width:34,height:34,borderRadius:9,background:color+"14",display:"flex",alignItems:"center",justifyContent:"center",color}}>
-        <Ico n={icon} size={15} color={color}/>
+  const neutral = count===0;
+  return <div style={{background:"#fff",border:"1px solid "+(neutral?"#e2e8f0":urgent?"#fecaca":"#e2e8f0"),borderRadius:11,padding:"12px 14px",fontFamily:DG_INTER,transition:"all .15s"}}>
+    <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:7}}>
+      <div style={{width:30,height:30,borderRadius:8,background:neutral?"#f8fafc":color+"14",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <Ico n={icon} size={14} color={neutral?"#94a3b8":color}/>
       </div>
-      <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
     </div>
-    <div style={{color:count>0?color:"#94a3b8",fontSize:26,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{count}</div>
-    {sub&&<div style={{color:urgent?"#dc2626":"#64748b",fontSize:11,marginTop:5,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
-      {urgent&&<Ico n="alert" size={11} color="#dc2626"/>}{sub}
-    </div>}
+    <div style={{color:neutral?"#94a3b8":color,fontSize:24,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{count}</div>
+    <div style={{color:neutral?"#94a3b8":urgent?"#dc2626":"#64748b",fontSize:11,marginTop:5,fontWeight:600}}>
+      {neutral?"Nenhuma pendente":(count+" pendente"+(count>1?"s":"")+(sub?" · "+sub:""))}
+    </div>
   </div>;
 }
 
-// ── Card de cliente em atenção ───────────────────────────────
-function _DGClienteAtencao({cl, tasks}){
-  const lateCount = tasks.filter(t=>t.client===cl.id && t.deadline && _dgDays(t.deadline)<0 && t.status!=="aprovado" && t.status!=="publicado").length;
-  const motivos = [];
-  if((cl.health||100)<60) motivos.push("Health baixo ("+cl.health+"%)");
-  if((cl.nps||10)<7) motivos.push("NPS baixo");
-  if(lateCount>0) motivos.push(lateCount+" demanda"+(lateCount>1?"s":"")+" atrasada"+(lateCount>1?"s":""));
-  if(!cl.proximaAcao) motivos.push("Sem próxima ação");
-
-  return <div style={{background:"#fff",border:"1px solid #fecaca",borderRadius:12,padding:"13px 15px",fontFamily:DG_INTER,transition:"all .15s",position:"relative"}}>
+// ── Card cliente em atenção (sem inteiro vermelho) ───────────
+function _DGClienteAtencao({item}){
+  const cl = item.cl;
+  const prioColor = item.prio==="Alta"?"#dc2626":item.prio==="Média"?"#f59e0b":"#64748b";
+  const prioBg    = item.prio==="Alta"?"#fef2f2":item.prio==="Média"?"#fffbeb":"#f8fafc";
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",fontFamily:DG_INTER,transition:"all .15s"}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
       <ClientLogo clientId={cl.id} size="sm"/>
       <div style={{minWidth:0,flex:1}}>
         <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>{cl.sector||""}</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>{cl.sector||"—"}</div>
       </div>
+      <span style={{background:prioBg,color:prioColor,border:"1px solid "+prioColor+"33",borderRadius:6,padding:"3px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4}}>{item.prio}</span>
     </div>
-    {motivos.slice(0,2).map((m,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:5,color:"#dc2626",fontSize:11,fontWeight:600,marginTop:4}}>
-      <Ico n="alert" size={10} color="#dc2626"/> {m}
-    </div>)}
-    {cl.proximaAcao&&<div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:7,padding:"5px 8px",marginTop:8}}>
-      <div style={{color:"#92400e",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Próxima ação</div>
-      <div style={{color:"#78350f",fontSize:11,lineHeight:1.35,marginTop:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{cl.proximaAcao}</div>
+    {item.lateCount>0&&<div style={{color:"#475569",fontSize:11.5,marginTop:3,fontWeight:600}}>
+      <span style={{color:"#dc2626"}}>{item.lateCount} demanda{item.lateCount>1?"s":""} atrasada{item.lateCount>1?"s":""}</span>
     </div>}
-  </div>;
-}
-
-// ── Card de gargalo ──────────────────────────────────────────
-function _DGGargalo({g}){
-  const TYPE_CFG = {
-    aprovacao:{ico:"check",  color:"#9F43F6"},
-    meta:     {ico:"target", color:"#f97316"},
-    demanda:  {ico:"zap",    color:"#ef4444"},
-    funil:    {ico:"alert",  color:"#0ea5e9"},
-  };
-  const cfg = TYPE_CFG[g.type] || {ico:"alert", color:"#64748b"};
-  const cl = g.client ? (CLIENTS||[]).find(c=>c.id===g.client) : null;
-  return <div style={{background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 14px",display:"flex",alignItems:"center",gap:11,fontFamily:DG_INTER,flexWrap:"wrap"}}>
-    <div style={{width:32,height:32,borderRadius:9,background:cfg.color+"14",display:"flex",alignItems:"center",justifyContent:"center",color:cfg.color,flexShrink:0}}>
-      <Ico n={cfg.ico} size={14} color={cfg.color}/>
-    </div>
-    {cl&&<ClientLogo clientId={cl.id} size="sm"/>}
-    <div style={{flex:1,minWidth:140}}>
-      <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical"}}>{g.title}</div>
-      {cl&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:1}}>{cl.name}</div>}
-    </div>
-    <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0,flexWrap:"wrap"}}>
-      <span style={{color:cfg.color,fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{g.tempo}</span>
-      <span style={{background:cfg.color+"14",color:cfg.color,borderRadius:7,padding:"3px 9px",fontSize:10.5,fontWeight:700,whiteSpace:"nowrap"}}>{g.action}</span>
-    </div>
+    {cl.proximaAcao?<div style={{color:"#64748b",fontSize:11,marginTop:6,lineHeight:1.4}}>
+      <span style={{color:"#94a3b8",fontWeight:700,marginRight:5,textTransform:"uppercase",fontSize:9,letterSpacing:.4}}>Próx. ação</span>{cl.proximaAcao}
+    </div>:<div style={{color:"#f59e0b",fontSize:10.5,fontWeight:700,marginTop:6,letterSpacing:.2}}>Sem próxima ação definida</div>}
   </div>;
 }
 
 // ── Empty state ──────────────────────────────────────────────
 function _DGEmpty({icon, title, desc}){
-  return <div style={{background:"#fafafa",border:"1px dashed #e2e8f0",borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
-    <div style={{display:"inline-flex",width:44,height:44,borderRadius:11,background:DG_PURPLE+"14",color:DG_PURPLE,alignItems:"center",justifyContent:"center",marginBottom:10}}>
-      <Ico n={icon} size={20} color={DG_PURPLE}/>
+  return <div style={{background:"#fafafa",border:"1px dashed #e2e8f0",borderRadius:12,padding:"22px 18px",textAlign:"center"}}>
+    <div style={{display:"inline-flex",width:40,height:40,borderRadius:11,background:DG_PURPLE+"14",color:DG_PURPLE,alignItems:"center",justifyContent:"center",marginBottom:9}}>
+      <Ico n={icon} size={18} color={DG_PURPLE}/>
     </div>
-    <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:4}}>{title}</div>
-    <div style={{color:"#64748b",fontSize:11.5,maxWidth:360,margin:"0 auto",lineHeight:1.5}}>{desc}</div>
+    <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:3}}>{title}</div>
+    {desc&&<div style={{color:"#64748b",fontSize:11.5,maxWidth:360,margin:"0 auto",lineHeight:1.5}}>{desc}</div>}
+  </div>;
+}
+
+// ── Modal Nova Meta ──────────────────────────────────────────
+function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
+  const [title, setTitle] = useState("");
+  const [selDay, setSelDay] = useState(day?day.key:DG_DAYS[0].key);
+  const [responsavelId, setResponsavelId] = useState(user.id);
+  const [category, setCategory] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const _save = ()=>{
+    if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
+    setSaving(true);
+    const dayObj = DG_DAYS.find(d=>d.key===selDay)||DG_DAYS[0];
+    const deadline = _dgWeekDate(dayObj.idx);
+    const resp = TEAM.find(t=>t.id===responsavelId);
+    const payload = {
+      id: "meta-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+      type: "meta_semana",
+      week_key: weekKey,
+      title: title.trim(),
+      deadline,
+      day_of_week: selDay,
+      category: category||null,
+      client_id: clientId||null,
+      author_id: user.id,
+      author_name: user.name,
+      responsible_id: responsavelId,
+      responsible_name: resp?resp.name:user.name,
+      status: "em_andamento",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    onSave(payload);
+    setSaving(false);
+  };
+
+  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,width:"min(520px,92%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
+      <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.2}}>Nova meta semanal</div>
+      <div style={{fontSize:12,color:"#94a3b8",marginBottom:18}}>Cadastre uma meta e marque o dia em que ela vence.</div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:13}}>
+        <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Título</div>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Revisar campanhas em atenção"
+            style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
+        </div>
+        <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Dia da semana</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {DG_DAYS.map(d=>{
+              const a = selDay===d.key;
+              return <button key={d.key} onClick={()=>setSelDay(d.key)} style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"7px 13px",borderRadius:7,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER}}>
+                {d.label}
+              </button>;
+            })}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Responsável</div>
+            <select value={responsavelId} onChange={e=>setResponsavelId(e.target.value)}
+              style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
+              {TEAM.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Categoria <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
+            <select value={category} onChange={e=>setCategory(e.target.value)}
+              style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
+              <option value="">—</option>
+              {DG_CATEGORIAS.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Cliente <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
+          <select value={clientId} onChange={e=>setClientId(e.target.value)}
+            style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
+            <option value="">— (interno)</option>
+            {(CLIENTS||[]).filter(c=>c.status!=="interno").map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:20}}>
+        <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
+        <button onClick={_save} disabled={saving} style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER}}>{saving?"Salvando...":"Salvar meta"}</button>
+      </div>
+    </div>
   </div>;
 }
 
