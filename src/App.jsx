@@ -24946,10 +24946,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {dragOverFiles&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
                 <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="download" size={15}/> Solte os arquivos aqui</div>
               </div>}
-              {attachments.length===0&&!dragOverFiles&&<div style={{textAlign:"center",padding:"32px 0",color:"#cbd5e1"}}>
-                <div style={{marginBottom:8,color:"#cbd5e1",display:"flex",justifyContent:"center"}}><Ico n="paperclip" size={32}/></div>
-                <div style={{fontSize:12}}>Nenhum arquivo ainda</div>
-                {(canEdit||canEditRef)&&<div style={{fontSize:10,marginTop:4,color:"#94a3b8"}}>Arraste arquivos aqui ou use o botão "+ adicionar"</div>}
+              {attachments.length===0&&!dragOverFiles&&<div style={{textAlign:"center",padding:"36px 0 28px",marginBottom:6}}>
+                <div style={{width:62,height:62,borderRadius:16,background:"linear-gradient(135deg,#faf5ff,#f3e8ff)",border:"1px solid #ede9fe",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12,color:"#a78bfa"}}><Ico n="paperclip" size={26}/></div>
+                <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,marginBottom:4,letterSpacing:-.1}}>Nenhum arquivo ainda</div>
+                {(canEdit||canEditRef)&&<div style={{fontSize:11.5,color:"#94a3b8",lineHeight:1.5}}>Arraste arquivos aqui ou clique em <span style={{color:"#7c3aed",fontWeight:600}}>+ Adicionar</span> nas seções abaixo</div>}
               </div>}
 
               {/* ── Lista de uploads com progress bar individual ── */}
@@ -24995,14 +24995,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {(imgRef.length>0||vidRef.length>0||canEditRef)&&(()=>{
                 const totalRef=imgRef.length+vidRef.length;
                 return(<div style={{marginTop:4,marginBottom:18}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid #e9d5ff"}}>
-                    <div>
-                      <div style={{color:"#a140ff",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8,display:"flex",alignItems:"center",gap:5}}><Ico n="pin" size={12}/> Imagens de referência {totalRef>0?`(${totalRef})`:""}</div>
-                      <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>exemplos, sugestões e direcionamento pra equipe executar</div>
+                  <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:12}}>
+                    <div style={{width:32,height:32,borderRadius:10,background:"#7c3aed14",color:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="pin" size={15}/></div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1,display:"flex",alignItems:"center",gap:7}}>Imagens de referência {totalRef>0&&<span style={{background:"#7c3aed14",color:"#7c3aed",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{totalRef}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>exemplos, sugestões e direcionamento pra equipe</div>
                     </div>
-                    {canEditRef&&<button onClick={()=>fileInputRefRef.current?.click()} style={{background:"#a140ff15",color:"#a140ff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap"}}>+ adicionar</button>}
+                    {canEditRef&&<button onClick={()=>fileInputRefRef.current?.click()} style={{background:"#7c3aed",color:"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,boxShadow:"0 2px 6px rgba(124,58,237,0.25)"}}>+ Adicionar</button>}
                   </div>
-                  {totalRef===0&&(<div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>{canEditRef?"Nenhuma referência ainda — clique em adicionar pra subir exemplos.":"Sem referências pra esse cartão."}</div>)}
+                  {totalRef===0&&(<div style={{color:"#94a3b8",fontSize:12,padding:"2px 0 14px"}}>{canEditRef?"Nenhuma referência subida ainda.":"Sem referências pra esse cartão."}</div>)}
                   {imgRef.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidRef.length>0?12:0}}>
                     {imgRef.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",aspectRatio:"1",background:"#faf5ff"}}>
@@ -25052,14 +25053,15 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {(imgFin.length>0||vidFin.length>0||canEdit)&&(()=>{
                 const totalFin=imgFin.length+vidFin.length;
                 return(<div>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8,paddingBottom:6,borderBottom:"0.5px solid #e2e8f0"}}>
-                    <div>
-                      <div style={{color:"#0f172a",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8,display:"flex",alignItems:"center",gap:5}}><Ico n="image" size={12}/> Arquivos prontos {totalFin>0?`(${totalFin})`:""}</div>
-                      <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>arte final entregue pela equipe — pronto pra aprovação</div>
+                  <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:12,marginTop:6}}>
+                    <div style={{width:32,height:32,borderRadius:10,background:"#0f172a0d",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="image" size={15}/></div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1,display:"flex",alignItems:"center",gap:7}}>Arquivos prontos {totalFin>0&&<span style={{background:"#0f172a0d",color:"#0f172a",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{totalFin}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>arte final entregue pela equipe — pronto pra avaliação</div>
                     </div>
-                    {canEdit&&<button onClick={()=>fileInputRef.current?.click()} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"6px 12px",fontSize:11,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap"}}>+ adicionar</button>}
+                    {canEdit&&<button onClick={()=>fileInputRef.current?.click()} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,boxShadow:"0 2px 6px rgba(15,23,42,0.2)"}}>+ Adicionar</button>}
                   </div>
-                  {totalFin===0&&(<div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>{canEdit?"Sem arte final ainda — clique em adicionar pra subir o entregável.":"Sem arquivos finais entregues."}</div>)}
+                  {totalFin===0&&(<div style={{color:"#94a3b8",fontSize:12,padding:"2px 0 14px"}}>{canEdit?"Sem arte final ainda — clique em + Adicionar pra subir o entregável.":"Sem arquivos finais entregues."}</div>)}
                   {imgFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidFin.length>0?12:0}}>
                     {imgFin.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
