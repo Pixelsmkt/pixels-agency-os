@@ -1263,6 +1263,85 @@ function formatRefMonth(refMonth){
   return meses[m-1]+"/"+String(y).slice(-2);
 }
 
+
+/* ─── FreelancerPaymentsBlock — card consolidado com pagamentos de todos os freelancers
+       (André + Maria + Guilherme) por tipo de conteúdo no mês de referência selecionado.
+       Reutilizado em DashPartner e em PageGestaoFinanceiro.                        ─── */
+function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact}){
+  const fmtBRL=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
+  const freelancers=(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.pagamentoPorDemanda;});
+  const rows=freelancers.map(function(fr){
+    const calc=calcDesignerPayments(tasks||[],fr.id,refMonth);
+    return {fr:fr,calc:calc,isEditor:fr.dash==="editor"};
+  });
+  const total=rows.reduce(function(s,r){return s+r.calc.total;},0);
+
+  const ChipBreak=function(props){
+    const label=props.label,count=props.count,price=props.price;
+    if(!count) return null;
+    return <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f1f5f9",color:"#475569",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:6,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <strong style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{count}</strong>
+      <span style={{color:"#94a3b8",fontSize:10}}>×</span>
+      <span>{label}</span>
+      <span style={{color:"#9F43F6",fontWeight:700,marginLeft:2,fontFeatureSettings:"'tnum'"}}>{fmtBRL(count*price).replace(",00","")}</span>
+    </span>;
+  };
+
+  return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:compact?"14px 16px":"16px 20px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>Pagamentos por demanda</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:2}}>Calculado pelos cards aprovados no mês de referência</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <input type="month" value={refMonth||""} onChange={function(e){onChangeMonth&&onChangeMonth(e.target.value);}}
+          style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer",fontFamily:"inherit"}}/>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
+          <div style={{color:"#7c3aed",fontWeight:900,fontSize:20,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{fmtBRL(total)}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Linhas por freelancer */}
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {rows.map(function(r){
+        const fr=r.fr,c=r.calc;
+        return <div key={fr.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"160px 1fr 110px",gap:12,alignItems:"center",padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
+          {/* Identidade */}
+          <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+            {typeof UserAvatar!=="undefined"?<UserAvatar user={fr} size={30}/>:<div style={{width:30,height:30,borderRadius:"50%",background:fr.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>{fr.av||(fr.name||"?")[0]}</div>}
+            <div style={{minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,letterSpacing:-.1}}>{fr.name}</div>
+              <div style={{color:"#94a3b8",fontSize:10}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
+            </div>
+          </div>
+          {/* Breakdown por tipo */}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+            {r.isEditor?<>
+              <ChipBreak label="Vídeo" count={c.video} price={DESIGNER_PRICES.video}/>
+              <ChipBreak label="Corte" count={c.corte} price={DESIGNER_PRICES.corte}/>
+              <ChipBreak label="V. dinâmico" count={c.videoComplexo} price={DESIGNER_PRICES.videoComplexo}/>
+              <ChipBreak label="V. feira" count={c.videoFeira} price={DESIGNER_PRICES.videoFeira}/>
+            </>:<>
+              <ChipBreak label="Foto" count={c.fotoObra} price={DESIGNER_PRICES.fotoObra}/>
+              <ChipBreak label="Arte" count={c.arte} price={DESIGNER_PRICES.arte}/>
+              <ChipBreak label="Carrossel" count={c.carrossel} price={DESIGNER_PRICES.carrossel}/>
+            </>}
+            {c.total===0&&<span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>Sem pagamentos no mês.</span>}
+          </div>
+          {/* Total individual */}
+          <div style={{textAlign:"right"}}>
+            <div style={{color:"#16a34a",fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{fmtBRL(c.total)}</div>
+            {c.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:9.5,marginTop:2}}>{c.naoClassificado} s/ tipo</div>}
+          </div>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
 /* ─── SAFE STORAGE — wrapper localStorage com quota check ─── */
 // Captura QuotaExceededError automaticamente. Tenta limpar caches antigos.
 const safeStorage={
@@ -2628,57 +2707,8 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
       👁 Visualizando dashboard de <strong>{user.name}</strong>
     </div>}
 
-    {/* ═══ PAGAMENTO POR DEMANDA — Card pra cada freelancer (André designer + Guilherme editor) ═══ */}
-    {(function(){
-      const fmtBRL=n=>"R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
-      const CardCat=({label,count,price,color})=><div style={{background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e5e7eb",display:"flex",flexDirection:"column",gap:3}}>
-        <div style={{color:"#64748b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>{label}</div>
-        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-          <span style={{color:"#0f172a",fontWeight:800,fontSize:22}}>{count}</span>
-          <span style={{color:"#94a3b8",fontSize:11}}>× {fmtBRL(price).replace(",00","")}</span>
-        </div>
-        <div style={{color:color,fontWeight:700,fontSize:13}}>{fmtBRL(count*price)}</div>
-      </div>;
-      const freelancers=TEAM.filter(u=>u.pagamentoPorDemanda);
-      return <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {freelancers.map(fr=>{
-          const calc=calcDesignerPayments(allTasks,fr.id,payMonth);
-          const isEditor=fr.dash==="editor";
-          return <div key={fr.id} style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:"16px 20px"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:10,marginBottom:14}}>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <UserAvatar user={fr} size={36}/>
-                <div>
-                  <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pagamento por demanda · {fr.name}</div>
-                  <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{isEditor?"Vídeos entregues":"Demandas designadas"} no mês de referência</div>
-                </div>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:10}}>
-                <input type="month" value={payMonth} onChange={e=>setPayMonth(e.target.value)}
-                  style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer"}}/>
-                <div style={{textAlign:"right"}}>
-                  <div style={{color:"#64748b",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
-                  <div style={{color:"#7c3aed",fontWeight:900,fontSize:22,letterSpacing:-.5}}>{fmtBRL(calc.total)}</div>
-                </div>
-              </div>
-            </div>
-            {isEditor
-              ?<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
-                <CardCat label="Vídeo" count={calc.video} price={DESIGNER_PRICES.video} color="#16a34a"/>
-                <CardCat label="Corte de vídeo" count={calc.corte} price={DESIGNER_PRICES.corte} color="#16a34a"/>
-              </div>
-              :<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
-                <CardCat label="Foto de obra" count={calc.fotoObra} price={DESIGNER_PRICES.fotoObra} color="#16a34a"/>
-                <CardCat label="Arte única" count={calc.arte} price={DESIGNER_PRICES.arte} color="#16a34a"/>
-                <CardCat label="Carrossel" count={calc.carrossel} price={DESIGNER_PRICES.carrossel} color="#16a34a"/>
-              </div>}
-            {calc.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:10,marginTop:8,fontStyle:"italic"}}>
-              {calc.naoClassificado} demanda(s) sem tipo de conteúdo definido — não entram no cálculo.
-            </div>}
-          </div>;
-        })}
-      </div>;
-    })()}
+    {/* ═══ PAGAMENTO POR DEMANDA — Bloco consolidado (André + Maria + Guilherme) ═══ */}
+    <FreelancerPaymentsBlock tasks={allTasks} refMonth={payMonth} onChangeMonth={setPayMonth} isMob={isMob}/>
 
     {/* ═══ HEADER FIXO — MINHAS DEMANDAS ═══ */}
     {myTasks.length>0&&(
@@ -18357,7 +18387,6 @@ function PageNotificacoes({isMob, notifs, setNotifs}){
   </div>;
 }
 
-// ======= 08_financeiro.jsx =======
 // Aba Financeiro — visão consolidada de receita da Pixels.
 // Mostra SÓ o que já é contrato/receita/projeto vendido/projeção/cobrança.
 // NUNCA mostra prospects ou oportunidades em aberto — isso é Comercial.
@@ -18766,11 +18795,10 @@ const GF_CUSTO_FIXO = {
   ],
 };
 
-// Custo de Servir — por área
+// Custo de Servir — só áreas de valor fixo mensal (Estratégia + Gestão de mídia).
+// Design e Edição de vídeo agora são calculados por demanda via FreelancerPaymentsBlock.
 const GF_CUSTO_SERVIR = {
   "Estratégia":        [{label:"Hellen Benning",     valor:2500}],
-  "Design":            [{label:"André Leal",         valor:1000}],
-  "Edição de vídeo":   [{label:"Guilherme Ferreira", valor:1170}],
   "Gestão de mídia":   [{label:"Erick Soares",       valor:2400}],
 };
 
@@ -18795,7 +18823,8 @@ const GF_RESERVA_CAIXA_PCT = 0.10;
 // Meta de margem (configurável)
 const GF_META_MARGEM_PCT = 0.50;
 
-function PageGestaoFinanceiro({isMob}){
+function PageGestaoFinanceiro({isMob,tasks}){
+  const [payMonth,setPayMonth]=useState(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
   const [contratosExpand,setContratosExpand]=useState({Bioter:true});
   const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
   const _brlF=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
@@ -18817,7 +18846,13 @@ function PageGestaoFinanceiro({isMob}){
   // Custos
   const sumGroup=function(g){return Object.values(g).reduce(function(s,arr){return s+arr.reduce(function(t,it){return t+it.valor;},0);},0);};
   const custoFixoTotal=sumGroup(GF_CUSTO_FIXO);
-  const custoServirTotal=sumGroup(GF_CUSTO_SERVIR);
+  const custoServirFixoTotal=sumGroup(GF_CUSTO_SERVIR);
+  // Total dinâmico dos freelancers (pagos por demanda) no payMonth
+  const freelancersTotal=(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.pagamentoPorDemanda;}).reduce(function(s,u){
+    const c=(typeof calcDesignerPayments==="function")?calcDesignerPayments(tasks||[],u.id,payMonth):{total:0};
+    return s+(c.total||0);
+  },0);
+  const custoServirTotal=custoServirFixoTotal+freelancersTotal;
   const custoOperacional=custoFixoTotal+custoServirTotal;
 
   // Impostos
@@ -18929,25 +18964,21 @@ function PageGestaoFinanceiro({isMob}){
           <div style={{color:"#475569",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{_brlF(custoFixoTotal)}</div>
           <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoFixoTotal/clientesAtivos)} por cliente</div>
         </div>}/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:12}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
         {Object.entries(GF_CUSTO_FIXO).map(function(arr){
           const [cat,items]=arr;
           const subtotal=items.reduce(function(s,it){return s+it.valor;},0);
-          const pct=custoFixoTotal>0?(subtotal/custoFixoTotal)*100:0;
-          return <div key={cat} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"12px 14px"}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:8}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5}}>{cat}</div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:14,fontFeatureSettings:"'tnum'"}}>{_brlF(subtotal)}</div>
+          return <div key={cat}>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9"}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:12,letterSpacing:-.1}}>{cat}</div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{_brlF(subtotal)}</div>
             </div>
-            {/* Barra de proporção */}
-            <div style={{background:"#e2e8f0",borderRadius:99,height:5,overflow:"hidden",marginBottom:8}}>
-              <div style={{width:pct+"%",height:"100%",background:"#475569",borderRadius:99}}/>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {/* Chips compactos em grid auto-fill */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:6}}>
               {items.map(function(it,i){
-                return <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11.5}}>
-                  <span style={{color:"#475569"}}>{it.label}</span>
-                  <span style={{color:"#0f172a",fontWeight:600,fontFeatureSettings:"'tnum'"}}>{_brlF(it.valor)}</span>
+                return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:7,padding:"7px 10px",display:"flex",flexDirection:"column",gap:2}}>
+                  <span style={{color:"#64748b",fontSize:10.5,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.label}</span>
+                  <span style={{color:"#0f172a",fontWeight:700,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>{_brlF(it.valor)}</span>
                 </div>;
               })}
             </div>
@@ -18956,33 +18987,29 @@ function PageGestaoFinanceiro({isMob}){
       </div>
     </Block>
 
-    {/* ════ 4. CUSTO DE SERVIR ════ */}
+    {/* ════ 4. CUSTO DE SERVIR (valor fixo: Estratégia + Gestão de mídia) ════ */}
     <Block>
-      <BlockHeader ico="users" color="#0891b2" title="Custo de servir" subtitle="O que custa entregar os serviços contratados"
+      <BlockHeader ico="users" color="#0891b2" title="Custo de servir (fixo)" subtitle="Áreas com pagamento mensal fixo"
         right={<div style={{textAlign:"right"}}>
-          <div style={{color:"#0891b2",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{_brlF(custoServirTotal)}</div>
-          <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoServirTotal/clientesAtivos)} por cliente</div>
+          <div style={{color:"#0891b2",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{_brlF(custoServirFixoTotal)}</div>
+          <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoServirFixoTotal/clientesAtivos)} por cliente</div>
         </div>}/>
-      {/* Gráfico horizontal por área */}
-      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
         {Object.entries(GF_CUSTO_SERVIR).map(function(arr){
           const [area,items]=arr;
           const subtotal=items.reduce(function(s,it){return s+it.valor;},0);
-          const pct=custoServirTotal>0?(subtotal/custoServirTotal)*100:0;
-          return <div key={area}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:4}}>
-              <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-                <span style={{color:"#0f172a",fontWeight:700,fontSize:12.5}}>{area}</span>
-                <span style={{color:"#64748b",fontSize:11.5}}>· {items.map(function(i){return i.label;}).join(", ")}</span>
-              </div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{_brlF(subtotal)} <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginLeft:4}}>· {_pct(pct)}</span></div>
-            </div>
-            <div style={{background:"#f1f5f9",borderRadius:99,height:14,overflow:"hidden"}}>
-              <div style={{width:pct+"%",height:"100%",background:"linear-gradient(90deg,#0891b2,#06b6d4)",borderRadius:99}}/>
-            </div>
+          return <div key={area} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:7,padding:"8px 11px",display:"flex",flexDirection:"column",gap:2}}>
+            <span style={{color:"#0891b2",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{area}</span>
+            <span style={{color:"#64748b",fontSize:11.5,fontWeight:500}}>{items.map(function(i){return i.label;}).join(", ")}</span>
+            <span style={{color:"#0f172a",fontWeight:800,fontSize:13.5,fontFeatureSettings:"'tnum'",marginTop:2}}>{_brlF(subtotal)}</span>
           </div>;
         })}
       </div>
+    </Block>
+
+    {/* ════ 4b. PAGAMENTOS POR DEMANDA — Design + Edição de vídeo (cálculo auto) ════ */}
+    <Block>
+      <FreelancerPaymentsBlock tasks={tasks||[]} refMonth={payMonth} onChangeMonth={setPayMonth} isMob={isMob}/>
     </Block>
 
     {/* ════ 5. CUSTO OPERACIONAL TOTAL ════ */}
@@ -30982,7 +31009,7 @@ export default function AgencyOS(){
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
       case "gestao":
-      case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p}/>:<NoPerm/>;
+      case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_enps":           return <PageGestaoENPS {...p}/>;
