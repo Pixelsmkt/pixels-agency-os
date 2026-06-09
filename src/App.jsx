@@ -42020,20 +42020,84 @@ function PageGestaoENPS(props){
       </section>
     </>}
 
-    {/* ═══ HISTÓRICO PESSOAL — colaborador comum ═══ */}
-    {!canAll && !loading && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-      <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,marginBottom:4,fontFamily:_NPS_FF}}>Seu histórico</div>
-      <div style={{color:"#64748b",fontSize:12,marginBottom:12,fontFamily:_NPS_FF}}>Suas respostas ficam privadas. Apenas sócios e coordenação acessam o consolidado.</div>
-      {rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).length===0
-        ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"28px 20px",textAlign:"center",fontFamily:_NPS_FF}}>
-            <div style={{color:"#94a3b8",fontSize:12.5,fontFamily:_NPS_FF}}>Você ainda não respondeu nenhum ENPS.</div>
+    {/* ═══ MINHA EVOLUÇÃO + HISTÓRICO — só pra colaborador comum, dados próprios apenas ═══ */}
+    {!canAll && !loading && (function(){
+      const minhasRows = rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).slice().sort(function(a,b){return (a.cycle_month||"").localeCompare(b.cycle_month||"");});
+      const minhaMedia = minhasRows.length>0 ? (minhasRows.reduce(function(s,r){return s+r.score;},0)/minhasRows.length) : null;
+      const ultima = minhasRows.length>0 ? minhasRows[minhasRows.length-1] : null;
+      const ultimaCl = ultima ? _npsClassify(ultima.score) : null;
+      return <>
+        {/* Minha evolução mensal — gráfico só com as respostas dele */}
+        <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,fontFamily:_NPS_FF}}>Minha evolução mensal</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_NPS_FF}}>Suas notas ao longo dos ciclos — só você (e a liderança) vê esse histórico.</div>
+            </div>
+            {minhasRows.length>0 && <div style={{display:"flex",gap:8}}>
+              <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"8px 12px",fontFamily:_NPS_FF,textAlign:"center",minWidth:78}}>
+                <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase"}}>Média</div>
+                <div style={{color:"#0f172a",fontSize:18,fontWeight:800,fontFeatureSettings:"'tnum'",marginTop:2,lineHeight:1}}>{minhaMedia.toFixed(1)}</div>
+              </div>
+              {ultima && <div style={{background:ultimaCl.bg,border:"1px solid "+ultimaCl.bg,borderRadius:10,padding:"8px 12px",fontFamily:_NPS_FF,textAlign:"center",minWidth:78}}>
+                <div style={{color:ultimaCl.color,fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",opacity:.85}}>Última</div>
+                <div style={{color:ultimaCl.color,fontSize:18,fontWeight:800,fontFeatureSettings:"'tnum'",marginTop:2,lineHeight:1}}>{ultima.score}</div>
+              </div>}
+            </div>}
           </div>
-        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {rows.filter(function(r){return r.user_id===CURRENT_USER.id;}).map(function(r){
+          {minhasRows.length===0
+            ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"32px 20px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontFamily:_NPS_FF}}>Você ainda não respondeu nenhum ENPS.<br/><span style={{color:"#cbd5e1",fontSize:11}}>Suas respostas aparecem aqui ciclo a ciclo.</span></div>
+            : (function(){
+                // Mini chart SVG — linha das notas (0-10) por mês
+                const W=720, H=180, PL=40, PR=14, PT=18, PB=36;
+                const innerW = W-PL-PR, innerH = H-PT-PB;
+                const data = minhasRows.map(function(r){return {m:r.cycle_month, score:r.score};});
+                const yScale = function(v){return PT + innerH - (v/10)*innerH;};
+                const xScale = function(i){return data.length===1 ? PL+innerW/2 : PL + (i/(data.length-1))*innerW;};
+                const path = data.map(function(d,i){return (i===0?"M":"L")+xScale(i)+","+yScale(d.score);}).join(" ");
+                return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"6px 4px 0",overflowX:"auto"}}>
+                  <svg viewBox={"0 0 "+W+" "+H} width="100%" style={{minWidth:540,display:"block"}}>
+                    {/* Grid horizontal — linhas de referência */}
+                    {[0,2,4,6,8,10].map(function(v){return <g key={v}>
+                      <line x1={PL} x2={W-PR} y1={yScale(v)} y2={yScale(v)} stroke="#f1f5f9" strokeWidth="1"/>
+                      <text x={PL-8} y={yScale(v)+4} fontSize="10" fill="#94a3b8" textAnchor="end" fontFamily="Inter,sans-serif" fontWeight="600">{v}</text>
+                    </g>;})}
+                    {/* Faixas: detrator <=6 (rosa) | neutro 7-8 (amarelo) | promotor >=9 (verde) */}
+                    <rect x={PL} y={yScale(10)} width={innerW} height={yScale(9)-yScale(10)} fill="#22c55e" opacity=".06"/>
+                    <rect x={PL} y={yScale(9)} width={innerW} height={yScale(7)-yScale(9)} fill="#eab308" opacity=".06"/>
+                    {/* Linha */}
+                    <path d={path} stroke="#9F43F6" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                    {/* Pontos */}
+                    {data.map(function(d,i){
+                      const cl = _npsClassify(d.score);
+                      return <g key={i}>
+                        <circle cx={xScale(i)} cy={yScale(d.score)} r="5" fill="#fff" stroke={cl.color} strokeWidth="2.5"/>
+                        <text x={xScale(i)} y={yScale(d.score)-12} fontSize="11" fill={cl.color} textAnchor="middle" fontFamily="Inter,sans-serif" fontWeight="800">{d.score}</text>
+                      </g>;
+                    })}
+                    {/* Labels X (mês) */}
+                    {data.map(function(d,i){
+                      const parts = (d.m||"").split("-");
+                      const names = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+                      const lbl = parts.length>=2 ? (names[parseInt(parts[1],10)-1]||"")+"/"+parts[0].slice(-2) : d.m;
+                      return <text key={i} x={xScale(i)} y={H-PB+18} fontSize="10.5" fill="#64748b" textAnchor="middle" fontFamily="Inter,sans-serif" fontWeight="600">{lbl}</text>;
+                    })}
+                  </svg>
+                </div>;
+              })()
+          }
+        </section>
+
+        {/* Lista detalhada das próprias respostas */}
+        {minhasRows.length>0 && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,marginBottom:4,fontFamily:_NPS_FF}}>Suas respostas</div>
+          <div style={{color:"#64748b",fontSize:12,marginBottom:12,fontFamily:_NPS_FF}}>Histórico mês a mês com sugestões que você enviou.</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {minhasRows.slice().reverse().map(function(r){
               const cl = _npsClassify(r.score);
               return <div key={r.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"12px 14px",borderRadius:11,background:"#fafbfc",border:"1px solid #f1f5f9",fontFamily:_NPS_FF}}>
                 <div>
-                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF}}>Ciclo {r.cycle_month}</div>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF}}>{_enpsFmtCycleLabel(r.cycle_month)}</div>
                   <div style={{color:"#64748b",fontSize:11,marginTop:2,fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)}</div>
                   {r.suggestion && <div style={{color:"#475569",fontSize:11.5,marginTop:6,lineHeight:1.5,fontFamily:_NPS_FF,whiteSpace:"pre-wrap"}}>{r.suggestion}</div>}
                 </div>
@@ -42041,8 +42105,9 @@ function PageGestaoENPS(props){
               </div>;
             })}
           </div>
-      }
-    </section>}
+        </section>}
+      </>;
+    })()}
 
   </div>;
 }
