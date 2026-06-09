@@ -41201,7 +41201,40 @@ function PagePortfolio(props){
     {id:"projetos",    label:"Projetos"},
     {id:"ia",          label:"Soluções IA"},
     {id:"starter",     label:"Starter 90 dias"},
+    {id:"calculadora", label:"Calculadora"},
   ];
+
+  // === Estado da calculadora (modular) ===
+  const [calcRedes,setCalcRedes]=useState(null);
+  const [calcTrafego,setCalcTrafego]=useState(null);
+  const [calcExtras,setCalcExtras]=useState({});
+  const _CALC_REDES=[
+    {id:"2pw", label:"2 posts/semana", desc:"8 por mês", valor:3000},
+    {id:"3pw", label:"3 posts/semana", desc:"12 por mês", valor:4000},
+    {id:"4pw", label:"4 posts/semana", desc:"16 por mês", valor:5000},
+  ];
+  const _CALC_TRAFEGO=[
+    {id:"none", label:"Sem tráfego pago", desc:"Apenas orgânico", valor:0},
+    {id:"meta", label:"Meta Ads", desc:"Facebook + Instagram", valor:2000},
+    {id:"google", label:"Google Ads", desc:"Search + Display", valor:2000},
+    {id:"ambos", label:"Meta + Google", desc:"Pacote combinado", valor:3000, combo:true},
+  ];
+  const _CALC_EXTRAS=[
+    {id:"lp",       label:"Landing Page",                  valor:1500, fixo:true},
+    {id:"gmb",      label:"Google Perfil de Empresa",      valor:1000, fixo:true},
+    {id:"id",       label:"Logo e Identidade Visual",      valor:2000, fixo:true},
+    {id:"starter",  label:"Starter 90 dias",               valor:9000, fixo:true},
+    {id:"siteIA",   label:"Sites / Landing Pages com IA",  valor:2500, fixo:false},
+    {id:"chatbot",  label:"Chatbot / Automações com IA",   valor:2500, fixo:false},
+    {id:"sistemas", label:"Sistemas personalizados",       valor:7000, fixo:false},
+  ];
+  const _calcRedesObj=_CALC_REDES.find(function(r){return r.id===calcRedes;});
+  const _calcTrafObj=_CALC_TRAFEGO.find(function(t){return t.id===calcTrafego;});
+  const _calcExtrasSel=_CALC_EXTRAS.filter(function(e){return calcExtras[e.id];});
+  const _calcMensal=(_calcRedesObj?_calcRedesObj.valor:0)+(_calcTrafObj?_calcTrafObj.valor:0);
+  const _calcPontual=_calcExtrasSel.reduce(function(s,e){return s+e.valor;},0);
+  const _calcPacoteCompleto=calcRedes==="2pw"&&calcTrafego==="ambos";
+  const _calcFmt=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR");};
 
   /* ───── Visão geral: 4 cards de categoria ───── */
   function _OverviewCard({icon, ac, title, sub, tabId, count, footer}){
@@ -41382,6 +41415,150 @@ function PagePortfolio(props){
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
           Copiar resumo do Starter
         </button>
+      </div>
+    </section>}
+
+    {/* ════ CALCULADORA DE SERVIÇOS ════ */}
+    {view==="calculadora" && <section style={{background:"linear-gradient(160deg,#0f172a,#1e1b4b 60%,#0f172a)",borderRadius:18,padding:isMob?"22px 18px":"30px 32px",fontFamily:_PORTF_FF,color:"#fff",position:"relative",overflow:"hidden",border:"1px solid #312e81"}}>
+      {/* Decoração de fundo */}
+      <div style={{position:"absolute",top:-80,right:-60,width:280,height:280,borderRadius:"50%",background:"radial-gradient(circle at 30% 30%,rgba(159,67,246,0.25),transparent 65%)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:-100,left:-40,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,0.18),transparent 70%)",pointerEvents:"none"}}/>
+
+      <div style={{position:"relative",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 340px",gap:24,alignItems:"start"}}>
+        {/* ──────── COLUNA ESQUERDA: módulos ──────── */}
+        <div style={{display:"flex",flexDirection:"column",gap:24}}>
+          {/* Header */}
+          <div>
+            <div style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(159,67,246,0.18)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",fontSize:10.5,fontWeight:800,padding:"5px 12px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Estimativa modular
+            </div>
+            <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:28,letterSpacing:-.8,lineHeight:1.15,marginTop:10,fontFamily:_PORTF_FF}}>Monte uma estimativa para o seu momento</div>
+            <div style={{color:"#94a3b8",fontSize:13.5,marginTop:8,lineHeight:1.55,maxWidth:560,fontFamily:_PORTF_FF}}>Escolha os módulos que fazem sentido para a sua empresa e veja uma estimativa inicial de investimento.</div>
+          </div>
+
+          {/* MÓDULO 1: Redes Sociais */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:28,height:28,borderRadius:8,background:"rgba(159,67,246,0.2)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>1</div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15.5,letterSpacing:-.2,fontFamily:_PORTF_FF}}>Redes sociais</div>
+              <span style={{color:"#64748b",fontSize:11,fontWeight:600,fontFamily:_PORTF_FF}}>· escolha 1</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+              {_CALC_REDES.map(function(r){
+                const sel=calcRedes===r.id;
+                return <button key={r.id} type="button" onClick={function(){setCalcRedes(sel?null:r.id);}}
+                  style={{background:sel?"linear-gradient(135deg,rgba(159,67,246,0.18),rgba(124,58,237,0.10))":"rgba(30,41,59,0.55)",border:"1px solid "+(sel?"#9F43F6":"#334155"),borderRadius:13,padding:"14px 16px",cursor:"pointer",fontFamily:_PORTF_FF,textAlign:"left",transition:"all .18s",position:"relative",boxShadow:sel?"0 8px 24px rgba(159,67,246,0.25)":"none"}}
+                  onMouseEnter={function(e){if(!sel){e.currentTarget.style.borderColor="#475569";e.currentTarget.style.background="rgba(30,41,59,0.85)";}}}
+                  onMouseLeave={function(e){if(!sel){e.currentTarget.style.borderColor="#334155";e.currentTarget.style.background="rgba(30,41,59,0.55)";}}}>
+                  {sel&&<div style={{position:"absolute",top:10,right:10,width:18,height:18,borderRadius:"50%",background:"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>}
+                  <div style={{color:sel?"#fff":"#cbd5e1",fontSize:13.5,fontWeight:700,letterSpacing:-.1,fontFamily:_PORTF_FF}}>{r.label}</div>
+                  <div style={{color:"#94a3b8",fontSize:11,marginTop:3,fontFamily:_PORTF_FF}}>{r.desc}</div>
+                  <div style={{color:sel?"#c4b5fd":"#cbd5e1",fontWeight:800,fontSize:18,marginTop:10,letterSpacing:-.4,fontFeatureSettings:"\'tnum\'",fontFamily:_PORTF_FF}}>{_calcFmt(r.valor)}<span style={{color:"#64748b",fontSize:11,fontWeight:600,marginLeft:4}}>/mês</span></div>
+                </button>;
+              })}
+            </div>
+          </div>
+
+          {/* MÓDULO 2: Tráfego Pago */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:28,height:28,borderRadius:8,background:"rgba(159,67,246,0.2)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>2</div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15.5,letterSpacing:-.2,fontFamily:_PORTF_FF}}>Tráfego pago</div>
+              <span style={{color:"#64748b",fontSize:11,fontWeight:600,fontFamily:_PORTF_FF}}>· escolha 1</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,1fr)",gap:10}}>
+              {_CALC_TRAFEGO.map(function(t){
+                const sel=calcTrafego===t.id;
+                return <button key={t.id} type="button" onClick={function(){setCalcTrafego(sel?null:t.id);}}
+                  style={{background:sel?"linear-gradient(135deg,rgba(159,67,246,0.18),rgba(124,58,237,0.10))":"rgba(30,41,59,0.55)",border:"1px solid "+(sel?"#9F43F6":"#334155"),borderRadius:13,padding:"13px 14px",cursor:"pointer",fontFamily:_PORTF_FF,textAlign:"left",transition:"all .18s",position:"relative",boxShadow:sel?"0 8px 24px rgba(159,67,246,0.25)":"none"}}
+                  onMouseEnter={function(e){if(!sel){e.currentTarget.style.borderColor="#475569";e.currentTarget.style.background="rgba(30,41,59,0.85)";}}}
+                  onMouseLeave={function(e){if(!sel){e.currentTarget.style.borderColor="#334155";e.currentTarget.style.background="rgba(30,41,59,0.55)";}}}>
+                  {sel&&<div style={{position:"absolute",top:8,right:8,width:16,height:16,borderRadius:"50%",background:"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>}
+                  {t.combo&&<div style={{position:"absolute",top:-8,left:10,background:"linear-gradient(90deg,#f59e0b,#d97706)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",boxShadow:"0 4px 10px rgba(245,158,11,0.35)"}}>Combo</div>}
+                  <div style={{color:sel?"#fff":"#cbd5e1",fontSize:13,fontWeight:700,letterSpacing:-.1,fontFamily:_PORTF_FF}}>{t.label}</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:3,fontFamily:_PORTF_FF}}>{t.desc}</div>
+                  <div style={{color:sel?"#c4b5fd":"#cbd5e1",fontWeight:800,fontSize:t.valor===0?13:16,marginTop:8,letterSpacing:-.3,fontFeatureSettings:"\'tnum\'",fontFamily:_PORTF_FF}}>{t.valor===0?"Grátis":"+ "+_calcFmt(t.valor)}{t.valor>0&&<span style={{color:"#64748b",fontSize:10,fontWeight:600,marginLeft:4}}>/mês</span>}</div>
+                </button>;
+              })}
+            </div>
+          </div>
+
+          {/* MÓDULO 3: Projetos extras */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <div style={{width:28,height:28,borderRadius:8,background:"rgba(159,67,246,0.2)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>3</div>
+              <div style={{color:"#fff",fontWeight:800,fontSize:15.5,letterSpacing:-.2,fontFamily:_PORTF_FF}}>Projetos pontuais</div>
+              <span style={{color:"#64748b",fontSize:11,fontWeight:600,fontFamily:_PORTF_FF}}>· marque os que quiser</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+              {_CALC_EXTRAS.map(function(e){
+                const sel=!!calcExtras[e.id];
+                return <button key={e.id} type="button" onClick={function(){setCalcExtras(function(p){return Object.assign({},p,{[e.id]:!sel});});}}
+                  style={{background:sel?"linear-gradient(135deg,rgba(159,67,246,0.18),rgba(124,58,237,0.08))":"rgba(30,41,59,0.45)",border:"1px solid "+(sel?"#9F43F6":"#334155"),borderRadius:11,padding:"11px 13px",cursor:"pointer",fontFamily:_PORTF_FF,textAlign:"left",transition:"all .15s",display:"flex",alignItems:"center",gap:10,minHeight:54}}
+                  onMouseEnter={function(ev){if(!sel){ev.currentTarget.style.borderColor="#475569";}}}
+                  onMouseLeave={function(ev){if(!sel){ev.currentTarget.style.borderColor="#334155";}}}>
+                  <div style={{width:18,height:18,borderRadius:5,background:sel?"#9F43F6":"transparent",border:"1.5px solid "+(sel?"#9F43F6":"#475569"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .15s"}}>
+                    {sel&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:sel?"#fff":"#cbd5e1",fontSize:12.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_PORTF_FF}}>{e.label}</div>
+                    <div style={{color:sel?"#c4b5fd":"#94a3b8",fontSize:11,fontWeight:700,marginTop:2,fontFeatureSettings:"\'tnum\'",fontFamily:_PORTF_FF}}>{e.fixo?"":"a partir de "}{_calcFmt(e.valor)}</div>
+                  </div>
+                </button>;
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* ──────── COLUNA DIREITA: resumo sticky ──────── */}
+        <div style={{position:isMob?"static":"sticky",top:20,display:"flex",flexDirection:"column",gap:14}}>
+          <div style={{background:"linear-gradient(160deg,#1e1b4b,#0f172a)",border:"1px solid #4338ca44",borderRadius:16,padding:"20px 22px",boxShadow:"0 16px 48px rgba(67,56,202,0.25)"}}>
+            {_calcPacoteCompleto&&<div style={{background:"linear-gradient(90deg,#f59e0b,#d97706)",color:"#fff",fontSize:10,fontWeight:800,padding:"4px 12px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5,marginBottom:12,boxShadow:"0 6px 16px rgba(245,158,11,0.35)",fontFamily:_PORTF_FF}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3 7 7 1-5 5 1 7-6-3-6 3 1-7-5-5 7-1z"/></svg>
+              Pacote Completo
+            </div>}
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Investimento mensal</div>
+            <div style={{color:"#fff",fontWeight:900,fontSize:34,letterSpacing:-1.2,lineHeight:1.05,marginTop:5,fontFeatureSettings:"\'tnum\'",fontFamily:_PORTF_FF}}>{_calcFmt(_calcMensal)}<span style={{color:"#94a3b8",fontSize:13,fontWeight:700,marginLeft:6}}>/mês</span></div>
+
+            {_calcPontual>0&&<div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #334155"}}>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Projetos pontuais</div>
+              <div style={{color:"#c4b5fd",fontWeight:800,fontSize:20,letterSpacing:-.6,marginTop:4,fontFeatureSettings:"\'tnum\'",fontFamily:_PORTF_FF}}>{_calcFmt(_calcPontual)}<span style={{color:"#64748b",fontSize:11,fontWeight:600,marginLeft:5}}>· pagamento único</span></div>
+            </div>}
+
+            {/* Resumo dos módulos */}
+            {(_calcRedesObj||_calcTrafObj||_calcExtrasSel.length>0)&&<div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #334155",display:"flex",flexDirection:"column",gap:8}}>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Resumo</div>
+              {_calcRedesObj&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#cbd5e1",gap:8,fontFamily:_PORTF_FF}}>
+                <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· {_calcRedesObj.label}</span>
+                <span style={{color:"#fff",fontWeight:700,fontFeatureSettings:"\'tnum\'",whiteSpace:"nowrap"}}>{_calcFmt(_calcRedesObj.valor)}</span>
+              </div>}
+              {_calcTrafObj&&_calcTrafObj.valor>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#cbd5e1",gap:8,fontFamily:_PORTF_FF}}>
+                <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· {_calcTrafObj.label}</span>
+                <span style={{color:"#fff",fontWeight:700,fontFeatureSettings:"\'tnum\'",whiteSpace:"nowrap"}}>{_calcFmt(_calcTrafObj.valor)}</span>
+              </div>}
+              {_calcExtrasSel.map(function(e){
+                return <div key={e.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#cbd5e1",gap:8,fontFamily:_PORTF_FF}}>
+                  <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· {e.label}</span>
+                  <span style={{color:"#fff",fontWeight:700,fontFeatureSettings:"\'tnum\'",whiteSpace:"nowrap"}}>{_calcFmt(e.valor)}</span>
+                </div>;
+              })}
+            </div>}
+
+            {/* CTA */}
+            <button onClick={function(){if(typeof pixelsToast!=="undefined")pixelsToast.success("Estimativa registrada — em breve geração automática de proposta.",4000);}}
+              disabled={!_calcRedesObj&&!_calcTrafObj&&_calcExtrasSel.length===0}
+              style={{marginTop:18,width:"100%",background:(!_calcRedesObj&&!_calcTrafObj&&_calcExtrasSel.length===0)?"#334155":"linear-gradient(135deg,#9F43F6,#7c3aed)",color:"#fff",border:"none",borderRadius:11,padding:"13px 18px",fontWeight:800,fontSize:13.5,cursor:(!_calcRedesObj&&!_calcTrafObj&&_calcExtrasSel.length===0)?"not-allowed":"pointer",fontFamily:_PORTF_FF,boxShadow:(!_calcRedesObj&&!_calcTrafObj&&_calcExtrasSel.length===0)?"none":"0 10px 28px rgba(159,67,246,0.45)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .15s",letterSpacing:-.1}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Gerar proposta
+            </button>
+            <div style={{color:"#64748b",fontSize:10.5,marginTop:11,lineHeight:1.5,fontFamily:_PORTF_FF}}>Esta é uma estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
+          </div>
+        </div>
       </div>
     </section>}
 
