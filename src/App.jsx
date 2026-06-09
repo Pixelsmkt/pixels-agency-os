@@ -25429,12 +25429,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Ico n="image" size={12} color="#94a3b8"/> Tipo de conteúdo</span>
               {!canEditContentType&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios e edição</span>}
             </label>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4}}>
               {[
+                /* Linha 1: Design (4) */
                 {id:"arte",label:"Arte única",icon:"image"},
                 {id:"carrossel",label:"Carrossel",icon:"layers"},
                 {id:"folder",label:"Folder",icon:"file-text"},
                 {id:"foto",label:"Foto de obra",icon:"camera"},
+                /* Linha 2: Vídeo (4) */
                 {id:"video",label:"Vídeo",icon:"play"},
                 {id:"video_complexo",label:"Vídeo dinâmico",icon:"film"},
                 {id:"video_feira",label:"Vídeo feira",icon:"flag"},
@@ -25443,9 +25445,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 const isSel=contentType===opt.id;
                 const _canPick=canEdit&&canEditContentType;
                 return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;setContentType(isSel?"":opt.id);}} disabled={!_canPick}
-                  style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:5,padding:"8px 6px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:9,cursor:_canPick?"pointer":"not-allowed",fontSize:11,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?600:500,transition:"all .12s",lineHeight:1.2,textAlign:"center",height:72,boxSizing:"border-box",opacity:_canPick?1:.7}}>
-                  <Ico n={opt.icon} size={16}/>
-                  <span>{opt.label}</span>
+                  style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,padding:"6px 3px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:8,cursor:_canPick?"pointer":"not-allowed",fontSize:9.5,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?600:500,transition:"all .12s",lineHeight:1.15,textAlign:"center",height:54,boxSizing:"border-box",opacity:_canPick?1:.7}}>
+                  <Ico n={opt.icon} size={14}/>
+                  <span style={{wordBreak:"break-word"}}>{opt.label}</span>
                 </button>;
               })}
             </div>
