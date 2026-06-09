@@ -41665,13 +41665,22 @@ function useENPS(){
     }
     return Promise.resolve();
   }
-  return { rows, add, loading };
+  function remove(rowId){
+    setRows(function(p){return p.filter(function(r){return r.id!==rowId;});});
+    if(window._sb){
+      return window._sb.from("enps_responses").delete().eq("id",rowId);
+    }
+    return Promise.resolve();
+  }
+  return { rows, add, remove, loading };
 }
 
 function PageGestaoENPS(props){
   const isMob = props.isMob;
   const canAll = _enpsCanSeeAll();
-  const { rows, add, loading } = useENPS();
+  const { rows, add, remove, loading } = useENPS();
+  // Sócios (level 1) não respondem ENPS — só acompanham resultados
+  const isSocio = (typeof CURRENT_USER!=="undefined" && CURRENT_USER.level===1);
   const cycle = _npsCurrentCycle();
 
   const [score, setScore] = useState(null);
@@ -41696,15 +41705,25 @@ function PageGestaoENPS(props){
 
   // Cálculos do mês
   const rowsThisMonth = rows.filter(function(r){return r.cycle_month===cycle;});
-  const promotores = rowsThisMonth.filter(function(r){return r.score>=9;}).length;
-  const neutros    = rowsThisMonth.filter(function(r){return r.score>=7&&r.score<=8;}).length;
-  const detratores = rowsThisMonth.filter(function(r){return r.score<=6;}).length;
-  const totalResp  = rowsThisMonth.length;
+  // _rowsTeamThisMonth definido logo abaixo (filtra sócios)
+  // Stats são calculadas com base no team (sem sócios)
+  const _calcRows = rowsThisMonth.filter(function(r){
+    const _sIds = (typeof TEAM!=="undefined") ? TEAM.filter(function(u){return u.level===1;}).map(function(u){return u.id;}) : [];
+    return _sIds.indexOf(r.user_id)<0;
+  });
+  const promotores = _calcRows.filter(function(r){return r.score>=9;}).length;
+  const neutros    = _calcRows.filter(function(r){return r.score>=7&&r.score<=8;}).length;
+  const detratores = _calcRows.filter(function(r){return r.score<=6;}).length;
+  const totalResp  = _calcRows.length;
   const enpsScore  = totalResp>0 ? Math.round(((promotores-detratores)/totalResp)*100) : null;
-  const mediaNota  = totalResp>0 ? (rowsThisMonth.reduce(function(s,r){return s+r.score;},0)/totalResp) : null;
+  const mediaNota  = totalResp>0 ? (_calcRows.reduce(function(s,r){return s+r.score;},0)/totalResp) : null;
 
-  const team = (typeof TEAM!=="undefined") ? TEAM.filter(function(u){return u.status!=="inativo";}) : [];
-  const respondidos = rowsThisMonth.map(function(r){return r.user_id;});
+  // Time elegível pra ENPS = colaboradores (sem sócios, sem inativos)
+  const team = (typeof TEAM!=="undefined") ? TEAM.filter(function(u){return u.status!=="inativo" && u.level!==1;}) : [];
+  // Filtra rowsThisMonth também — respostas de sócios não contam pros totais
+  const _socioIds = (typeof TEAM!=="undefined") ? TEAM.filter(function(u){return u.level===1;}).map(function(u){return u.id;}) : [];
+  const _rowsTeamThisMonth = rowsThisMonth.filter(function(r){return _socioIds.indexOf(r.user_id)<0;});
+  const respondidos = _rowsTeamThisMonth.map(function(r){return r.user_id;});
   const pendentes = team.filter(function(u){return respondidos.indexOf(u.id)<0;});
 
   // Helper avatar inline (foto ou iniciais)
@@ -41757,7 +41776,23 @@ function PageGestaoENPS(props){
         </div>
       </div>
 
-      {respondidoEsseMes
+      {isSocio
+        ? <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",border:"1px solid #ddd6fe",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
+            <div style={{width:44,height:44,borderRadius:11,background:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px rgba(124,58,237,0.30)"}}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#581c87",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_NPS_FF}}>Você é sócio — não precisa responder</div>
+              <div style={{color:"#7c3aed",fontSize:12.5,marginTop:3,fontFamily:_NPS_FF}}>Acompanhe abaixo as respostas e o resumo dos colaboradores deste ciclo.</div>
+            </div>
+            {myRow && <button onClick={function(){
+              if(!confirm("Apagar sua resposta antiga do ENPS? Como sócio, ela não deveria estar contando.")) return;
+              remove(myRow.id).then(function(){
+                if(typeof pixelsToast!=="undefined") pixelsToast.success("Resposta apagada.",3500);
+              });
+            }} style={{background:"#fff",color:"#7c3aed",border:"1px solid #c4b5fd",borderRadius:8,padding:"8px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_NPS_FF,whiteSpace:"nowrap"}}>Apagar resposta antiga</button>}
+          </div>
+        : respondidoEsseMes
         ? <div style={{background:"linear-gradient(135deg,#dcfce7,#bbf7d0)",border:"1px solid #86efac",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
             <div style={{width:44,height:44,borderRadius:11,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px rgba(22,163,74,0.30)"}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
