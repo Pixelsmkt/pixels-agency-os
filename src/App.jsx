@@ -23148,7 +23148,7 @@ const SECTOR_LABELS={
   outro:"Outro",
 };
 const SI={width:"100%",background:"#f8fafc",border:"1px solid #e8edf2",borderRadius:10,padding:"9px 12px",color:"#0f172a",fontSize:12,fontWeight:500,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s, background .15s"};
-const LB={color:"#9F43F6",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit"};
+const LB={color:"#475569",fontSize:10.5,fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:8,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Inter',system-ui,sans-serif"};
 const LB_DOT={width:5,height:5,borderRadius:"50%",background:"#9F43F6",flexShrink:0,boxShadow:"0 0 0 2px #9F43F622"};
 // FILES_TABS removido — tinha só Lista + Ordenar carrossel, ficou inline só Lista
 const TIMELINE_ICONS={
@@ -25095,7 +25095,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* ══ SLA + PUBLICAÇÃO (admin/coordinator) ══ */}
           {canEditSLAandPub&&!isAgendado&&(
             <div>
-              <label style={LB}><Ico n="calendar" size={11} color="#9F43F6"/> Data/hora de publicação</label>
+              <label style={LB}><Ico n="calendar" size={12} color="#94a3b8"/> Data/hora de publicação</label>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
                 <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
                   style={{...SI,fontSize:12}}/>
@@ -25118,7 +25118,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             return <>
             {/* Chip de status — pequeno, discreto, mesmo padrão de outras tags do modal */}
             <div>
-              <label style={LB}><Ico n="flag" size={11} color="#9F43F6"/> Status</label>
+              <label style={LB}><Ico n="flag" size={12} color="#94a3b8"/> Status</label>
               <div style={{display:"inline-flex",alignItems:"center",gap:6,background:accentSoft,color:accent,borderRadius:99,padding:"5px 11px",fontSize:11,fontWeight:700}}>
                 <Ico n={isPub?"check":"calendar"} size={12}/> {statusLabel}
               </div>
@@ -25126,7 +25126,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
             {/* Data de publicação — usa SI/LB padrão */}
             <div>
-              <label style={LB}><Ico n="calendar" size={11} color="#9F43F6"/> {isPub?"Data publicada":"Data de publicação"}</label>
+              <label style={LB}><Ico n="calendar" size={12} color="#94a3b8"/> {isPub?"Data publicada":"Data de publicação"}</label>
               <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit||isPub}
                 style={{...SI,borderColor:!publishDate&&!isPub?"#fca5a5":undefined,background:!publishDate&&!isPub?"#fff7f7":undefined}}/>
               {publishDate&&<div style={{color:"#94a3b8",fontSize:10,marginTop:4}}>
@@ -25136,7 +25136,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
             {/* Horário de publicação — mesmo estilo */}
             <div>
-              <label style={LB}><Ico n="clock" size={11} color="#9F43F6"/> {isPub?"Horário publicado":"Horário de publicação"}</label>
+              <label style={LB}><Ico n="clock" size={12} color="#94a3b8"/> {isPub?"Horário publicado":"Horário de publicação"}</label>
               <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit||isPub}
                 style={SI}/>
               {publishDate&&publishTime&&<div style={{color:"#94a3b8",fontSize:10,marginTop:4}}>
@@ -25152,7 +25152,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
             {/* Ações Rápidas — caixas brancas com borda fina (mesmo padrão SI/LB) */}
             <div>
-              <label style={LB}><Ico n="zap" size={11} color="#9F43F6"/> Ações rápidas</label>
+              <label style={LB}><Ico n="zap" size={12} color="#94a3b8"/> Ações rápidas</label>
               <div style={{display:"flex",flexDirection:"column",gap:6}}>
                 <button
                   onClick={()=>pixelsToast.info("Em breve! Vai fazer upload da arte final pra pasta do cliente no Google Drive.",5000)}
@@ -25188,7 +25188,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* ══ FIM AGENDADO ══ */}
 
           {!isAgendado&&<div>
-            <label style={LB}><Ico n="tag" size={11} color="#9F43F6"/> Setor</label>
+            <label style={LB}><Ico n="tag" size={12} color="#94a3b8"/> Setor</label>
             <select value={sector} onChange={e=>setSector(e.target.value)} disabled={!canEdit}
               style={{...SI,borderColor:!sector?"#fca5a5":undefined,background:!sector?"#fff7f7":undefined}}>
               <option value="">Selecione o setor</option>
@@ -25197,7 +25197,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           </div>}
 
           {!isAgendado&&<div style={{position:"relative"}}>
-            <label style={LB}><Ico n="users" size={11} color="#9F43F6"/> Responsáveis</label>
+            <label style={LB}><Ico n="users" size={12} color="#94a3b8"/> Responsáveis</label>
             <button onClick={()=>{if(canEdit){setShowAssigneesPicker(v=>!v);}}}
               style={{...SI,display:"flex",alignItems:"center",gap:6,cursor:canEdit?"pointer":"default",textAlign:"left",padding:"7px 10px"}}>
               {assignees.length===0
@@ -25267,7 +25267,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               setBioterUnit(next.join(","));
             };
             return <div>
-              <label style={LB}><Ico n="building" size={11} color="#9F43F6"/> Cliente</label>
+              <label style={LB}><Ico n="building" size={12} color="#94a3b8"/> Cliente</label>
               <select value={client} onChange={e=>{
                 setClient(e.target.value);
                 if(e.target.value!=="bioter")setBioterUnit("");
@@ -25326,7 +25326,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* Tipo de Conteúdo — pílulas selecionáveis (5 opções) — tudo em roxo */}
           <div>
             <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
-              <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Ico n="image" size={11} color="#9F43F6"/> Tipo de conteúdo</span>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5}}><Ico n="image" size={12} color="#94a3b8"/> Tipo de conteúdo</span>
               {!canEditContentType&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios e edição</span>}
             </label>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:5}}>
@@ -25363,7 +25363,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* Prioridade+Prazo */}
           {!isAgendado&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
             <div>
-              <label style={LB}><Ico n="flame" size={11} color="#9F43F6"/> Prioridade</label>
+              <label style={LB}><Ico n="flame" size={12} color="#94a3b8"/> Prioridade</label>
               <select value={priority} onChange={e=>setPriority(e.target.value)} disabled={!canEdit}
                 style={{...SI,borderColor:priority==="alta"?"#fecaca":priority==="media"?"#fef08a":priority==="baixa"?"#bbf7d0":undefined,background:priority==="alta"?"#fff1f2":priority==="media"?"#fefce8":priority==="baixa"?"#f0fdf4":undefined,color:!priority?"#94a3b8":priority==="alta"?"#be123c":priority==="media"?"#854d0e":"#15803d",fontWeight:700}}>
                 <option value="">Selecione a prioridade</option>
@@ -25373,7 +25373,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </select>
             </div>
             <div>
-              <label style={LB}><Ico n="clock" size={11} color="#9F43F6"/> Prazo</label>
+              <label style={LB}><Ico n="clock" size={12} color="#94a3b8"/> Prazo</label>
               {(()=>{
                 const MESES=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
                 const DIAS_SEMANA=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
