@@ -23468,6 +23468,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     return autoLinkifyHTML(cleaned);
   };
   // Inicializa contenteditable com conteúdo SANITIZADO (sem XSS)
+  // Roda em task.id (modal abriu/trocou cartão) E em activeTab (tab montou de novo)
+  // — fix: quando troca de Briefing pra Legenda e volta, o div<contentEditable> remonta
+  //   vazio; este effect repopula a partir do state `desc`/`caption`.
   useEffect(()=>{
     if(descRef.current&&desc&&!descRef.current.innerHTML){
       descRef.current.innerHTML=sanitizeRichText(desc);
@@ -23475,7 +23478,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(captionRef.current&&caption&&!captionRef.current.innerHTML){
       captionRef.current.innerHTML=sanitizeRichText(caption);
     }
-  },[task.id]);
+  },[task.id,activeTab]);
   const isAssigned=(Array.isArray(task.assignees)?task.assignees:task.assignee?[task.assignee]:[]).includes(user.id);
   // Usa cardPerms (livePerms injetado pelo pai) — sempre atualizado em tempo real
   const userPerms=cardPerms&&Object.keys(cardPerms).length>0?{...DEFAULT_PERMS,...cardPerms}:(ACCESS_STORE[user.id]||DEFAULT_PERMS);
