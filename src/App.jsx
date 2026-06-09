@@ -23098,8 +23098,6 @@ function PageRadarEntrega({ tasks, isMob }) {
   );
 }
 
-// ======= 11_cardmodal.jsx =======
-
 function RichToolbar({elRef}){
   const exec=(cmd,val)=>{
     if(elRef.current){elRef.current.focus();}
@@ -24243,11 +24241,11 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       <div style={{padding:"18px 22px 0"}}>
         <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
           <div style={{flex:1}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
-              {col&&<span style={{background:col.color+"18",color:col.color,borderRadius:6,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:.5}}>{col.label}</span>}
-              {assignees.length>0&&<div style={{display:"flex",gap:-4}}>
-                {assignees.map((aid,i)=>{const au=TEAM.find(u=>u.id===aid);return au?<UserAvatar key={aid} user={au} size={22} style={{marginLeft:i===0?0:-6,border:"2px solid #fff",zIndex:assignees.length-i}}/>:null;})}
-                <span style={{color:"#94a3b8",fontSize:11,marginLeft:8,alignSelf:"center"}}>{assignees.map(aid=>TEAM.find(u=>u.id===aid)?.name).filter(Boolean).join(", ")}</span>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
+              {col&&<span style={{background:col.color+"1e",color:col.color,borderRadius:7,padding:"5px 12px",fontSize:11.5,fontWeight:700,letterSpacing:.1,fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center"}}>{col.label}</span>}
+              {assignees.length>0&&<div style={{display:"flex",alignItems:"center",gap:0}}>
+                {assignees.map((aid,i)=>{const au=TEAM.find(u=>u.id===aid);return au?<UserAvatar key={aid} user={au} size={28} style={{marginLeft:i===0?0:-8,border:"2px solid #fff",zIndex:assignees.length-i,boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}/>:null;})}
+                <span style={{color:"#475569",fontSize:13,fontWeight:600,marginLeft:10,alignSelf:"center",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1}}>{assignees.map(aid=>TEAM.find(u=>u.id===aid)?.name).filter(Boolean).join(", ")}</span>
               </div>}
             </div>
             <input value={title} onChange={e=>setTitle(e.target.value)} disabled={!canEdit}
@@ -24321,10 +24319,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         </div>
 
         {/* TABS */}
-        <div style={{display:"flex",gap:0,borderBottom:"1px solid #f1f5f9"}}>
-          {([["desc","Descrição"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
+        <div style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0"}}>
+          {([["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
-              style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"10px 16px",fontSize:12,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#94a3b8",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1}}>
+              style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"12px 18px",fontSize:13.5,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#64748b",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"color .12s"}}>
               {lbl}
             </button>
           ))}
