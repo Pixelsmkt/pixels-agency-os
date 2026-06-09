@@ -18964,21 +18964,22 @@ function PageGestaoFinanceiro({isMob,tasks}){
           <div style={{color:"#475569",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{_brlF(custoFixoTotal)}</div>
           <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoFixoTotal/clientesAtivos)} por cliente</div>
         </div>}/>
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {Object.entries(GF_CUSTO_FIXO).map(function(arr){
+      <div style={{display:"flex",flexDirection:"column"}}>
+        {Object.entries(GF_CUSTO_FIXO).map(function(arr,idx){
           const [cat,items]=arr;
           const subtotal=items.reduce(function(s,it){return s+it.valor;},0);
-          return <div key={cat}>
-            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:8,paddingBottom:6,borderBottom:"1px solid #f1f5f9"}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:12,letterSpacing:-.1}}>{cat}</div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:13,fontFeatureSettings:"'tnum'"}}>{_brlF(subtotal)}</div>
+          return <div key={cat} style={{marginTop:idx===0?0:18}}>
+            {/* Cabeçalho discreto da categoria */}
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",gap:8,marginBottom:6,paddingBottom:4,borderBottom:"1px solid #f1f5f9"}}>
+              <div style={{color:"#475569",fontWeight:700,fontSize:10.5,letterSpacing:.5,textTransform:"uppercase"}}>{cat}</div>
+              <div style={{color:"#94a3b8",fontWeight:600,fontSize:11,fontFeatureSettings:"'tnum'"}}>{_brlF(subtotal)}</div>
             </div>
-            {/* Chips compactos em grid auto-fill */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:6}}>
+            {/* Linhas plain — 2 colunas em desktop */}
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",columnGap:32,rowGap:0}}>
               {items.map(function(it,i){
-                return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:7,padding:"7px 10px",display:"flex",flexDirection:"column",gap:2}}>
-                  <span style={{color:"#64748b",fontSize:10.5,fontWeight:500,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{it.label}</span>
-                  <span style={{color:"#0f172a",fontWeight:700,fontSize:12.5,fontFeatureSettings:"'tnum'"}}>{_brlF(it.valor)}</span>
+                return <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"5px 0",borderBottom:i<items.length-1?"1px dashed #f1f5f9":"none"}}>
+                  <span style={{color:"#475569",fontSize:12.5,fontWeight:500}}>{it.label}</span>
+                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{_brlF(it.valor)}</span>
                 </div>;
               })}
             </div>
@@ -18994,14 +18995,16 @@ function PageGestaoFinanceiro({isMob,tasks}){
           <div style={{color:"#0891b2",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",letterSpacing:-.4}}>{_brlF(custoServirFixoTotal)}</div>
           <div style={{color:"#94a3b8",fontSize:11}}>{_brlF(custoServirFixoTotal/clientesAtivos)} por cliente</div>
         </div>}/>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
-        {Object.entries(GF_CUSTO_SERVIR).map(function(arr){
+      <div style={{display:"flex",flexDirection:"column"}}>
+        {Object.entries(GF_CUSTO_SERVIR).map(function(arr,idx){
           const [area,items]=arr;
           const subtotal=items.reduce(function(s,it){return s+it.valor;},0);
-          return <div key={area} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:7,padding:"8px 11px",display:"flex",flexDirection:"column",gap:2}}>
-            <span style={{color:"#0891b2",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{area}</span>
-            <span style={{color:"#64748b",fontSize:11.5,fontWeight:500}}>{items.map(function(i){return i.label;}).join(", ")}</span>
-            <span style={{color:"#0f172a",fontWeight:800,fontSize:13.5,fontFeatureSettings:"'tnum'",marginTop:2}}>{_brlF(subtotal)}</span>
+          return <div key={area} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",padding:"7px 0",borderBottom:idx<Object.keys(GF_CUSTO_SERVIR).length-1?"1px dashed #f1f5f9":"none"}}>
+            <div style={{display:"flex",flexDirection:"column",gap:2}}>
+              <span style={{color:"#0891b2",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{area}</span>
+              <span style={{color:"#475569",fontSize:12.5,fontWeight:500}}>{items.map(function(i){return i.label;}).join(", ")}</span>
+            </div>
+            <span style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{_brlF(subtotal)}</span>
           </div>;
         })}
       </div>
