@@ -1814,6 +1814,7 @@ const NAV=[
   {id:"gestaomidia",icon:"◎", label:"Gestão de mídia"},
   {id:"comercial",  icon:"◈", label:"Comercial"},
   {id:"chat",       icon:"◐", label:"Chat"},
+  {id:"gestao_enps",icon:"◇", label:"ENPS"},
   {type:"divider",label:"ESTRATÉGIA"},
   {id:"clientes",   icon:"◉", label:"Clientes"},
   {id:"planejamento",icon:"◬", label:"Planejamento"},
@@ -1830,7 +1831,6 @@ const NAV=[
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
-    {id:"gestao_enps",          icon:"◐", label:"ENPS"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
