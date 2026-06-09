@@ -41721,6 +41721,17 @@ function PageGestaoENPS(props){
   const [saving, setSaving] = useState(false);
   const [drawerUser, setDrawerUser] = useState(null); // sócio clica num card pra ver histórico daquela pessoa
 
+  // Auto-limpeza silenciosa: sócios não devem ter respostas registradas.
+  // Se um sócio (Vinicius/Gustavo) tem uma row, apaga em background quando a página carrega.
+  useEffect(function(){
+    if(!isSocio || loading || !rows || rows.length===0) return;
+    const minhasRows = rows.filter(function(r){return r.user_id===CURRENT_USER.id;});
+    if(minhasRows.length===0) return;
+    minhasRows.forEach(function(r){
+      try{ remove(r.id); }catch(e){}
+    });
+  },[isSocio, loading, rows.length]);
+
   const myRow = rows.find(function(r){return r.user_id===CURRENT_USER.id && r.cycle_month===cycle;});
   const respondidoEsseMes = !!myRow;
 
@@ -41841,16 +41852,6 @@ function PageGestaoENPS(props){
           </>
       }
     </section>}
-
-    {/* Para sócios que tem resposta legada → pequeno alerta discreto pra limpar */}
-    {isSocio && myRow && <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,fontFamily:_NPS_FF}}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      <span style={{color:"#9a3412",fontSize:12,fontWeight:600,flex:1}}>Você tem uma resposta antiga registrada que não conta nos totais. Pode apagar.</span>
-      <button onClick={function(){
-        if(!confirm("Apagar sua resposta antiga do ENPS?")) return;
-        remove(myRow.id).then(function(){if(typeof pixelsToast!=="undefined") pixelsToast.success("Resposta apagada.",3000);});
-      }} style={{background:"#fff",color:"#9a3412",border:"1px solid #fed7aa",borderRadius:7,padding:"5px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_NPS_FF}}>Apagar</button>
-    </div>}
 
     {loading && <div style={{padding:20,color:"#94a3b8",textAlign:"center",fontFamily:_NPS_FF}}>Carregando...</div>}
 
