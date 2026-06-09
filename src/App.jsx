@@ -41717,6 +41717,7 @@ function PageGestaoENPS(props){
   const [score, setScore] = useState(null);
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
+  const [drawerUser, setDrawerUser] = useState(null); // sócio clica num card pra ver histórico daquela pessoa
 
   const myRow = rows.find(function(r){return r.user_id===CURRENT_USER.id && r.cycle_month===cycle;});
   const respondidoEsseMes = !!myRow;
@@ -41796,8 +41797,8 @@ function PageGestaoENPS(props){
       </div>
     </div>
 
-    {/* ═══ CARD PRINCIPAL DE RESPOSTA ═══ */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"28px 32px",display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.03)"}}>
+    {/* ═══ CARD PRINCIPAL DE RESPOSTA — só pra colaboradores ═══ */}
+    {!isSocio && <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"28px 32px",display:"flex",flexDirection:"column",gap:18,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04), 0 8px 24px rgba(15,23,42,0.03)"}}>
       <div>
         <div style={{color:"#9F43F6",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",fontFamily:_NPS_FF}}>Pergunta do mês</div>
         <div style={{color:"#0f172a",fontSize:isMob?17:20,fontWeight:700,letterSpacing:-.4,lineHeight:1.3,marginTop:6,fontFamily:_NPS_FF,maxWidth:760}}>De 0 a 10, o quanto você recomendaria a Pixels como lugar para trabalhar?</div>
@@ -41807,23 +41808,7 @@ function PageGestaoENPS(props){
         </div>
       </div>
 
-      {isSocio
-        ? <div style={{background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",border:"1px solid #ddd6fe",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
-            <div style={{width:44,height:44,borderRadius:11,background:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px rgba(124,58,237,0.30)"}}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:"#581c87",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_NPS_FF}}>Você é sócio — não precisa responder</div>
-              <div style={{color:"#7c3aed",fontSize:12.5,marginTop:3,fontFamily:_NPS_FF}}>Acompanhe abaixo as respostas e o resumo dos colaboradores deste ciclo.</div>
-            </div>
-            {myRow && <button onClick={function(){
-              if(!confirm("Apagar sua resposta antiga do ENPS? Como sócio, ela não deveria estar contando.")) return;
-              remove(myRow.id).then(function(){
-                if(typeof pixelsToast!=="undefined") pixelsToast.success("Resposta apagada.",3500);
-              });
-            }} style={{background:"#fff",color:"#7c3aed",border:"1px solid #c4b5fd",borderRadius:8,padding:"8px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:_NPS_FF,whiteSpace:"nowrap"}}>Apagar resposta antiga</button>}
-          </div>
-        : respondidoEsseMes
+      {respondidoEsseMes
         ? <div style={{background:"linear-gradient(135deg,#dcfce7,#bbf7d0)",border:"1px solid #86efac",borderRadius:12,padding:"18px 22px",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
             <div style={{width:44,height:44,borderRadius:11,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px rgba(22,163,74,0.30)"}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -41853,7 +41838,17 @@ function PageGestaoENPS(props){
             </div>
           </>
       }
-    </section>
+    </section>}
+
+    {/* Para sócios que tem resposta legada → pequeno alerta discreto pra limpar */}
+    {isSocio && myRow && <div style={{background:"#fff7ed",border:"1px solid #fed7aa",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10,fontFamily:_NPS_FF}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span style={{color:"#9a3412",fontSize:12,fontWeight:600,flex:1}}>Você tem uma resposta antiga registrada que não conta nos totais. Pode apagar.</span>
+      <button onClick={function(){
+        if(!confirm("Apagar sua resposta antiga do ENPS?")) return;
+        remove(myRow.id).then(function(){if(typeof pixelsToast!=="undefined") pixelsToast.success("Resposta apagada.",3000);});
+      }} style={{background:"#fff",color:"#9a3412",border:"1px solid #fed7aa",borderRadius:7,padding:"5px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:_NPS_FF}}>Apagar</button>
+    </div>}
 
     {loading && <div style={{padding:20,color:"#94a3b8",textAlign:"center",fontFamily:_NPS_FF}}>Carregando...</div>}
 
@@ -41910,6 +41905,15 @@ function PageGestaoENPS(props){
         </> : <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_NPS_FF}}>Sem respostas no ciclo atual ainda.</div>}
       </section>
 
+      {/* ═══ EVOLUÇÃO MENSAL — gráfico de linha ═══ */}
+      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,fontFamily:_NPS_FF}}>Evolução mensal</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_NPS_FF}}>ENPS médio e nota média ao longo dos ciclos — só conta respostas de colaboradores.</div>
+        </div>
+        <_ENPSChart rows={rows} socioIds={_socioIds}/>
+      </section>
+
       {/* Equipe com avatares */}
       <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
         <div>
@@ -41920,7 +41924,7 @@ function PageGestaoENPS(props){
           {team.map(function(u){
             const r = rowsThisMonth.find(function(x){return x.user_id===u.id;});
             const cl = r ? _npsClassify(r.score) : null;
-            return <div key={u.id} style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderRadius:11,background:r?"#fafbfc":"#fff7ed",border:"1px solid "+(r?"#f1f5f9":"#fed7aa"),fontFamily:_NPS_FF}}>
+            return <div key={u.id} onClick={function(){setDrawerUser(u);}} title="Clique pra ver o histórico" style={{display:"flex",alignItems:"center",gap:11,padding:"12px 14px",borderRadius:11,background:r?"#fafbfc":"#fff7ed",border:"1px solid "+(r?"#f1f5f9":"#fed7aa"),fontFamily:_NPS_FF,cursor:"pointer",transition:"all .15s"}} onMouseEnter={function(e){e.currentTarget.style.borderColor=r?"#c4b5fd":"#fdba74";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.08)";}} onMouseLeave={function(e){e.currentTarget.style.borderColor=r?"#f1f5f9":"#fed7aa";e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
               {_avUser(u, 42)}
               <div style={{minWidth:0,flex:1}}>
                 <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{u.name}</div>
@@ -42159,6 +42163,10 @@ function CClienteNPS(props){
       }
     </section>
     </>}
+
+    {/* ═══ DRAWER HISTÓRICO POR PESSOA — sócios clicam em card da equipe ═══ */}
+    {drawerUser && <_ENPSDrawer user={drawerUser} rows={rows} onClose={function(){setDrawerUser(null);}}/>}
+
   </div>;
 }
 
@@ -42269,6 +42277,142 @@ function PortalNPS(props){
         })}
       </div>
     </section>}
+  </div>;
+}
+
+/* ─── Componente: gráfico SVG de evolução mensal do ENPS ─── */
+function _ENPSChart({rows, socioIds}){
+  // Agrupa rows por cycle_month (filtra sócios)
+  const _filtered = (rows||[]).filter(function(r){return !socioIds || socioIds.indexOf(r.user_id)<0;});
+  const _byMonth = {};
+  _filtered.forEach(function(r){
+    if(!r.cycle_month) return;
+    if(!_byMonth[r.cycle_month]) _byMonth[r.cycle_month] = [];
+    _byMonth[r.cycle_month].push(r);
+  });
+  const months = Object.keys(_byMonth).sort();
+  if(months.length===0) return <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"32px 20px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontFamily:_NPS_FF}}>Ainda não há histórico mensal pra exibir.<br/><span style={{color:"#cbd5e1",fontSize:11}}>Quando os colaboradores responderem ao longo dos meses, a evolução aparece aqui.</span></div>;
+  // Pega os últimos 12 ciclos
+  const lastMonths = months.slice(-12);
+  // Calcula ENPS e nota média por mês
+  const data = lastMonths.map(function(m){
+    const arr = _byMonth[m]||[];
+    const promo = arr.filter(function(r){return r.score>=9;}).length;
+    const detr  = arr.filter(function(r){return r.score<=6;}).length;
+    const total = arr.length;
+    const enps  = total>0 ? Math.round(((promo-detr)/total)*100) : 0;
+    const avg   = total>0 ? (arr.reduce(function(s,r){return s+r.score;},0)/total) : 0;
+    return {month:m, enps:enps, avg:avg, total:total};
+  });
+  const W = 760, H = 220, PAD_L=48, PAD_R=20, PAD_T=20, PAD_B=44;
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+  // Y: ENPS -100 a 100
+  const yScale = function(v){return PAD_T + innerH - ((v+100)/200)*innerH;};
+  const xScale = function(i){return data.length===1 ? PAD_L+innerW/2 : PAD_L + (i/(data.length-1))*innerW;};
+  // Linha do zero
+  const y0 = yScale(0);
+  // Pontos pra polyline
+  const points = data.map(function(d,i){return xScale(i)+","+yScale(d.enps);}).join(" ");
+  return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"16px 18px",fontFamily:_NPS_FF}}>
+    <svg viewBox={"0 0 "+W+" "+H} style={{width:"100%",height:"auto",display:"block"}}>
+      {/* Grid horizontal */}
+      {[100,50,0,-50,-100].map(function(v,i){
+        const y = yScale(v);
+        return <g key={i}>
+          <line x1={PAD_L} y1={y} x2={W-PAD_R} y2={y} stroke="#e2e8f0" strokeWidth="1" strokeDasharray={v===0?"0":"3 4"}/>
+          <text x={PAD_L-8} y={y+4} textAnchor="end" style={{fontSize:9,fill:"#94a3b8",fontWeight:600,fontFamily:_NPS_FF}}>{v>0?"+"+v:v}</text>
+        </g>;
+      })}
+      {/* Eixo Y label */}
+      <text x={12} y={PAD_T+innerH/2} textAnchor="middle" transform={"rotate(-90 12 "+(PAD_T+innerH/2)+")"} style={{fontSize:9.5,fill:"#94a3b8",fontWeight:700,letterSpacing:.5,fontFamily:_NPS_FF}}>ENPS</text>
+      {/* Linha do ENPS */}
+      <polyline fill="none" stroke="#9F43F6" strokeWidth="2.5" points={points} strokeLinecap="round" strokeLinejoin="round"/>
+      {/* Pontos */}
+      {data.map(function(d,i){
+        const x = xScale(i), y = yScale(d.enps);
+        const cor = d.enps>=50?"#16a34a":d.enps>=0?"#a16207":"#dc2626";
+        return <g key={i}>
+          <circle cx={x} cy={y} r="5" fill="#fff" stroke={cor} strokeWidth="2.5"/>
+          <text x={x} y={y-12} textAnchor="middle" style={{fontSize:10,fill:cor,fontWeight:800,fontFamily:_NPS_FF}}>{d.enps>0?"+"+d.enps:d.enps}</text>
+        </g>;
+      })}
+      {/* X labels */}
+      {data.map(function(d,i){
+        return <text key={i} x={xScale(i)} y={H-PAD_B+18} textAnchor="middle" style={{fontSize:9.5,fill:"#64748b",fontWeight:600,fontFamily:_NPS_FF}}>{d.month.slice(5,7)+"/"+d.month.slice(2,4)}</text>;
+      })}
+      {/* X labels secundários: total respostas */}
+      {data.map(function(d,i){
+        return <text key={i} x={xScale(i)} y={H-PAD_B+32} textAnchor="middle" style={{fontSize:8.5,fill:"#94a3b8",fontWeight:500,fontFamily:_NPS_FF}}>{d.total} resp.</text>;
+      })}
+    </svg>
+    {/* Legenda */}
+    <div style={{display:"flex",gap:14,marginTop:6,fontSize:11,color:"#64748b",fontFamily:_NPS_FF,flexWrap:"wrap"}}>
+      <span style={{display:"inline-flex",alignItems:"center",gap:5}}><span style={{width:14,height:3,background:"#9F43F6",borderRadius:2,display:"inline-block"}}/>ENPS por mês</span>
+      <span style={{color:"#94a3b8"}}>· últimos {data.length} ciclo{data.length===1?"":"s"}</span>
+    </div>
+  </div>;
+}
+
+/* ─── Drawer: histórico de uma pessoa específica ─── */
+function _ENPSDrawer({user, rows, onClose}){
+  const userRows = (rows||[]).filter(function(r){return r.user_id===user.id;}).sort(function(a,b){return (b.cycle_month||"").localeCompare(a.cycle_month||"");});
+  const avgScore = userRows.length>0 ? (userRows.reduce(function(s,r){return s+r.score;},0)/userRows.length) : null;
+  const lastScore = userRows[0]?.score;
+  const lastClass = lastScore!=null ? _npsClassify(lastScore) : null;
+  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",justifyContent:"flex-end",fontFamily:_NPS_FF}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",width:"min(520px,100%)",height:"100%",overflowY:"auto",boxShadow:"-16px 0 48px rgba(0,0,0,0.18)",display:"flex",flexDirection:"column"}}>
+      {/* Header */}
+      <div style={{padding:"22px 24px",borderBottom:"1px solid #e2e8f0",display:"flex",alignItems:"center",gap:14,fontFamily:_NPS_FF}}>
+        <div style={{width:54,height:54,borderRadius:"50%",background:user.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,flexShrink:0,overflow:"hidden"}}>
+          {(function(){
+            try{var raw=localStorage.getItem("pixels-selfprofile-"+user.id);if(raw){var p=JSON.parse(raw);if(p&&p.photo)return <img src={p.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>;}}catch(e){}
+            return <span>{(user.name||"?").split(" ").map(function(x){return x[0];}).slice(0,2).join("").toUpperCase()}</span>;
+          })()}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:_NPS_FF}}>{user.name}</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:2,fontFamily:_NPS_FF}}>{user.role||""}</div>
+        </div>
+        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:32,height:32,cursor:"pointer",color:"#475569",fontSize:18,lineHeight:1,fontFamily:_NPS_FF}}>×</button>
+      </div>
+      {/* Resumo */}
+      <div style={{padding:"18px 24px",background:"#fafbfc",borderBottom:"1px solid #e2e8f0",display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,fontFamily:_NPS_FF}}>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_NPS_FF}}>Última nota</div>
+          <div style={{color:lastClass?lastClass.color:"#94a3b8",fontWeight:800,fontSize:22,letterSpacing:-.5,marginTop:3,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{lastScore!=null?lastScore:"—"}</div>
+          {lastClass && <div style={{color:lastClass.color,fontSize:10.5,fontWeight:700,marginTop:1,fontFamily:_NPS_FF}}>{lastClass.label}</div>}
+        </div>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_NPS_FF}}>Média histórica</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,marginTop:3,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{avgScore!=null?avgScore.toFixed(1):"—"}</div>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1,fontFamily:_NPS_FF}}>de 0 a 10</div>
+        </div>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_NPS_FF}}>Respostas</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,marginTop:3,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{userRows.length}</div>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1,fontFamily:_NPS_FF}}>ciclo{userRows.length===1?"":"s"} preenchido{userRows.length===1?"":"s"}</div>
+        </div>
+      </div>
+      {/* Lista de respostas */}
+      <div style={{flex:1,padding:"18px 24px",display:"flex",flexDirection:"column",gap:10,fontFamily:_NPS_FF}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,fontFamily:_NPS_FF}}>Histórico de respostas</div>
+        {userRows.length===0 ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"20px 0",fontFamily:_NPS_FF}}>Esta pessoa ainda não respondeu nenhum ciclo.</div>
+          : userRows.map(function(r){
+              const cls = _npsClassify(r.score);
+              return <div key={r.id} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"13px 15px",fontFamily:_NPS_FF}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:r.suggestion?8:0,flexWrap:"wrap"}}>
+                  <span style={{background:cls.color,color:"#fff",fontSize:13,fontWeight:800,padding:"5px 10px",borderRadius:8,fontFeatureSettings:"'tnum'",letterSpacing:-.2,minWidth:36,textAlign:"center",fontFamily:_NPS_FF}}>{r.score}</span>
+                  <span style={{background:cls.bg,color:cls.color,fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:5,textTransform:"uppercase",letterSpacing:.3,fontFamily:_NPS_FF}}>{cls.label}</span>
+                  <span style={{color:"#0f172a",fontSize:12,fontWeight:700,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{r.cycle_month}</span>
+                  <span style={{color:"#94a3b8",fontSize:10.5,marginLeft:"auto",fontFamily:_NPS_FF}}>{_npsFmtData(r.created_at)}</span>
+                </div>
+                {r.suggestion && <div style={{color:"#475569",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",background:"#fff",border:"1px solid #f1f5f9",borderRadius:8,padding:"9px 11px",fontFamily:_NPS_FF}}>{r.suggestion}</div>}
+              </div>;
+            })
+        }
+      </div>
+    </div>
   </div>;
 }
 
