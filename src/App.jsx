@@ -41722,6 +41722,25 @@ function PageGestaoENPS(props){
   // Sócios (level 1) não respondem ENPS — só acompanham resultados
   const isSocio = (typeof CURRENT_USER!=="undefined" && CURRENT_USER.level===1);
   const cycle = _npsCurrentCycle();
+  // viewCycle = ciclo que o gestor está olhando (default = atual). Setas prev/next navegam histórico.
+  const [viewCycle, setViewCycle] = useState(cycle);
+  const isCurrentCycle = viewCycle === cycle;
+
+  // Helpers de navegação por mês
+  function _enpsShiftCycle(c, delta){
+    const parts = String(c||"").split("-");
+    if(parts.length<2) return c;
+    const y = parseInt(parts[0],10), m = parseInt(parts[1],10);
+    const d = new Date(y, m-1+delta, 1);
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  }
+  function _enpsFmtCycleLabel(c){
+    const parts = String(c||"").split("-");
+    if(parts.length<2) return "—";
+    const names = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const mi = parseInt(parts[1],10)-1;
+    return (names[mi]||"—")+" "+parts[0];
+  }
 
   const [score, setScore] = useState(null);
   const [comment, setComment] = useState("");
@@ -41755,8 +41774,8 @@ function PageGestaoENPS(props){
     });
   }
 
-  // Cálculos do mês
-  const rowsThisMonth = rows.filter(function(r){return r.cycle_month===cycle;});
+  // Cálculos do mês — agora baseados no viewCycle (mês que o gestor está olhando)
+  const rowsThisMonth = rows.filter(function(r){return r.cycle_month===viewCycle;});
   // _rowsTeamThisMonth definido logo abaixo (filtra sócios)
   // Stats são calculadas com base no team (sem sócios)
   const _calcRows = rowsThisMonth.filter(function(r){
@@ -41807,13 +41826,32 @@ function PageGestaoENPS(props){
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-        <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 12px",fontFamily:_NPS_FF}}>
-          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_NPS_FF}}>Ciclo atual</div>
-          <div style={{color:"#0f172a",fontSize:13,fontWeight:700,fontFamily:_NPS_FF,fontFeatureSettings:"'tnum'"}}>{cycle}</div>
-        </div>
-        <span style={{background:respondidoEsseMes?"#dcfce7":"#ede9fe",color:respondidoEsseMes?"#15803d":"#7c3aed",fontSize:10.5,fontWeight:800,padding:"6px 12px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_NPS_FF}}>
+        {/* Navegador de mês — gestor passa pelos ciclos (próximo só até o atual) */}
+        {canAll && <div style={{display:"flex",alignItems:"center",gap:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"4px",fontFamily:_NPS_FF,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+          <button onClick={function(){setViewCycle(_enpsShiftCycle(viewCycle,-1));}} title="Mês anterior"
+            style={{background:"transparent",border:"none",borderRadius:7,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .15s",padding:0}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{padding:"0 10px",display:"flex",flexDirection:"column",alignItems:"center",lineHeight:1.1,minWidth:120}}>
+            <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_NPS_FF}}>Ciclo</div>
+            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,fontFamily:_NPS_FF,letterSpacing:-.1,marginTop:2}}>{_enpsFmtCycleLabel(viewCycle)}</div>
+          </div>
+          <button onClick={function(){if(!isCurrentCycle) setViewCycle(_enpsShiftCycle(viewCycle,1));}} disabled={isCurrentCycle} title={isCurrentCycle?"Você já está no ciclo atual":"Próximo mês"}
+            style={{background:"transparent",border:"none",borderRadius:7,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",cursor:isCurrentCycle?"not-allowed":"pointer",color:isCurrentCycle?"#cbd5e1":"#64748b",transition:"all .15s",padding:0,opacity:isCurrentCycle?.5:1}}
+            onMouseEnter={function(e){if(!isCurrentCycle){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}}
+            onMouseLeave={function(e){if(!isCurrentCycle){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>}
+        {/* Pill de estado: pra colaborador mostra "Respondido/Aberto" do mês atual; pra sócio mostra "Atual/Encerrado" do viewCycle */}
+        {!canAll && <span style={{background:respondidoEsseMes?"#dcfce7":"#ede9fe",color:respondidoEsseMes?"#15803d":"#7c3aed",fontSize:10.5,fontWeight:800,padding:"6px 12px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_NPS_FF}}>
           {respondidoEsseMes?"Respondido":"Aberto"}
-        </span>
+        </span>}
+        {canAll && <span style={{background:isCurrentCycle?"#ede9fe":"#f1f5f9",color:isCurrentCycle?"#7c3aed":"#64748b",fontSize:10.5,fontWeight:800,padding:"6px 12px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",fontFamily:_NPS_FF}}>
+          {isCurrentCycle?"Aberto":"Encerrado"}
+        </span>}
       </div>
     </div>
 
@@ -41887,7 +41925,7 @@ function PageGestaoENPS(props){
       <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_NPS_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
         <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,fontFamily:_NPS_FF}}>Distribuição do mês</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_NPS_FF}}>Promotores, neutros e detratores no ciclo atual.</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_NPS_FF}}>Promotores, neutros e detratores em {_enpsFmtCycleLabel(viewCycle)}.</div>
         </div>
         {totalResp>0 ? <>
           {/* Barra segmentada */}
@@ -41912,7 +41950,7 @@ function PageGestaoENPS(props){
               </div>;
             })}
           </div>
-        </> : <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_NPS_FF}}>Sem respostas no ciclo atual ainda.</div>}
+        </> : <div style={{color:"#94a3b8",fontSize:12.5,padding:"10px 0",fontFamily:_NPS_FF}}>Sem respostas em {_enpsFmtCycleLabel(viewCycle)} ainda.</div>}
       </section>
 
       {/* ═══ EVOLUÇÃO MENSAL — gráfico de linha ═══ */}
