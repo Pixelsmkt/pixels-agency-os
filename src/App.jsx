@@ -1264,8 +1264,7 @@ function formatRefMonth(refMonth){
 }
 
 
-/* ─── FreelancerPaymentsBlock — card consolidado com pagamentos de todos os freelancers
-       (André + Maria + Guilherme) por tipo de conteúdo no mês de referência selecionado.
+/* ─── FreelancerPaymentsBlock — cards GRANDES coloridos com foto de cada freelancer.
        Reutilizado em DashPartner e em PageGestaoFinanceiro.                        ─── */
 function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact}){
   const fmtBRL=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
@@ -1276,66 +1275,74 @@ function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact
   });
   const total=rows.reduce(function(s,r){return s+r.calc.total;},0);
 
-  const ChipBreak=function(props){
-    const label=props.label,count=props.count,price=props.price;
-    if(!count) return null;
-    return <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f1f5f9",color:"#475569",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:6,fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <strong style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{count}</strong>
-      <span style={{color:"#94a3b8",fontSize:10}}>×</span>
-      <span>{label}</span>
-      <span style={{color:"#9F43F6",fontWeight:700,marginLeft:2,fontFeatureSettings:"'tnum'"}}>{fmtBRL(count*price).replace(",00","")}</span>
-    </span>;
-  };
-
-  return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:compact?"14px 16px":"16px 20px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
       <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>Pagamentos por demanda</div>
-        <div style={{color:"#64748b",fontSize:11,marginTop:2}}>Calculado pelos cards aprovados no mês de referência</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pagamentos por demanda</div>
+        <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Calculado pelos cards aprovados no mês de referência</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <input type="month" value={refMonth||""} onChange={function(e){onChangeMonth&&onChangeMonth(e.target.value);}}
-          style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer",fontFamily:"inherit"}}/>
+          style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"7px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer",fontFamily:"inherit"}}/>
         <div style={{textAlign:"right"}}>
           <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
-          <div style={{color:"#7c3aed",fontWeight:900,fontSize:20,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{fmtBRL(total)}</div>
+          <div style={{color:"#7c3aed",fontWeight:900,fontSize:22,letterSpacing:-.5,fontFeatureSettings:"\'tnum\'",lineHeight:1}}>{fmtBRL(total)}</div>
         </div>
       </div>
     </div>
 
-    {/* Linhas por freelancer */}
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    {/* Cards verticais grandes com foto */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
       {rows.map(function(r){
         const fr=r.fr,c=r.calc;
-        return <div key={fr.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"160px 1fr 110px",gap:12,alignItems:"center",padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
-          {/* Identidade */}
-          <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
-            {typeof UserAvatar!=="undefined"?<UserAvatar user={fr} size={30}/>:<div style={{width:30,height:30,borderRadius:"50%",background:fr.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>{fr.av||(fr.name||"?")[0]}</div>}
-            <div style={{minWidth:0}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,letterSpacing:-.1}}>{fr.name}</div>
-              <div style={{color:"#94a3b8",fontSize:10}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
+        const _photoUrl=(function(){
+          try{var raw=typeof localStorage!=="undefined"?localStorage.getItem("pixels-selfprofile-"+fr.id):null;if(!raw)return null;var p=JSON.parse(raw);return p&&p.photo?p.photo:null;}catch(e){return null;}
+        })();
+        const types=r.isEditor?[
+          {k:"video",label:"Vídeo",count:c.video,price:DESIGNER_PRICES.video},
+          {k:"corte",label:"Corte",count:c.corte,price:DESIGNER_PRICES.corte},
+          {k:"vc",label:"V. dinâmico",count:c.videoComplexo,price:DESIGNER_PRICES.videoComplexo},
+          {k:"vf",label:"V. feira",count:c.videoFeira,price:DESIGNER_PRICES.videoFeira},
+        ]:[
+          {k:"foto",label:"Foto obra",count:c.fotoObra,price:DESIGNER_PRICES.fotoObra},
+          {k:"arte",label:"Arte única",count:c.arte,price:DESIGNER_PRICES.arte},
+          {k:"carr",label:"Carrossel",count:c.carrossel,price:DESIGNER_PRICES.carrossel},
+        ];
+        const activeTypes=types.filter(function(t){return t.count>0;});
+        return <div key={fr.id} style={{background:"linear-gradient(160deg,"+fr.color+"10,"+fr.color+"04 60%,#fff)",border:"1px solid "+fr.color+"33",borderRadius:16,padding:"16px 18px 14px",display:"flex",flexDirection:"column",gap:12,position:"relative",overflow:"hidden",transition:"transform .15s, box-shadow .15s"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 28px "+fr.color+"22";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
+          {/* Decoração de fundo */}
+          <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:fr.color+"18",pointerEvents:"none"}}/>
+          {/* Header com foto grande */}
+          <div style={{display:"flex",alignItems:"center",gap:12,position:"relative"}}>
+            <div style={{width:60,height:60,borderRadius:"50%",background:fr.color,color:"#fff",fontSize:24,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 14px "+fr.color+"55",overflow:"hidden",border:"3px solid #fff"}}>
+              {_photoUrl?<img src={_photoUrl} alt={fr.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(fr.av||(fr.name||"?").charAt(0))}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{fr.name}</div>
+              <div style={{color:fr.color,fontSize:10.5,fontWeight:700,marginTop:2,textTransform:"uppercase",letterSpacing:.4}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
             </div>
           </div>
+          {/* Total grande */}
+          <div style={{display:"flex",alignItems:"baseline",gap:6,position:"relative"}}>
+            <span style={{color:fr.color,fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"\'tnum\'",lineHeight:1}}>{fmtBRL(c.total)}</span>
+            <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês ref</span>
+          </div>
           {/* Breakdown por tipo */}
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            {r.isEditor?<>
-              <ChipBreak label="Vídeo" count={c.video} price={DESIGNER_PRICES.video}/>
-              <ChipBreak label="Corte" count={c.corte} price={DESIGNER_PRICES.corte}/>
-              <ChipBreak label="V. dinâmico" count={c.videoComplexo} price={DESIGNER_PRICES.videoComplexo}/>
-              <ChipBreak label="V. feira" count={c.videoFeira} price={DESIGNER_PRICES.videoFeira}/>
-            </>:<>
-              <ChipBreak label="Foto" count={c.fotoObra} price={DESIGNER_PRICES.fotoObra}/>
-              <ChipBreak label="Arte" count={c.arte} price={DESIGNER_PRICES.arte}/>
-              <ChipBreak label="Carrossel" count={c.carrossel} price={DESIGNER_PRICES.carrossel}/>
-            </>}
-            {c.total===0&&<span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>Sem pagamentos no mês.</span>}
-          </div>
-          {/* Total individual */}
-          <div style={{textAlign:"right"}}>
-            <div style={{color:"#16a34a",fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{fmtBRL(c.total)}</div>
-            {c.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:9.5,marginTop:2}}>{c.naoClassificado} s/ tipo</div>}
-          </div>
+          {activeTypes.length>0?<div style={{display:"flex",flexDirection:"column",gap:5,position:"relative"}}>
+            {activeTypes.map(function(t){
+              return <div key={t.k} style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:11.5,padding:"5px 9px",background:"rgba(255,255,255,0.7)",borderRadius:7,border:"1px solid "+fr.color+"15"}}>
+                <span style={{color:"#475569",fontWeight:600}}>{t.label}</span>
+                <span style={{display:"inline-flex",alignItems:"baseline",gap:4}}>
+                  <strong style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"\'tnum\'"}}>{t.count}×{fmtBRL(t.price).replace(",00","").replace("R$ ","")}</strong>
+                  <span style={{color:fr.color,fontWeight:700,fontSize:11,fontFeatureSettings:"\'tnum\'"}}>= {fmtBRL(t.count*t.price).replace(",00","")}</span>
+                </span>
+              </div>;
+            })}
+          </div>:<div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",textAlign:"center",padding:"10px 0",position:"relative"}}>Sem pagamentos no mês.</div>}
+          {c.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:10,position:"relative",textAlign:"right"}}>{c.naoClassificado} demanda(s) sem tipo</div>}
         </div>;
       })}
     </div>
@@ -18885,7 +18892,7 @@ function PageGestaoFinanceiro({isMob,tasks}){
 
   // ── Helpers visuais ──
   const Block=function(props){
-    return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,...(props.style||{})}}>
+    return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 18px",display:"flex",flexDirection:"column",gap:10,...(props.style||{})}}>
       {props.children}
     </section>;
   };
@@ -18912,7 +18919,7 @@ function PageGestaoFinanceiro({isMob,tasks}){
     </div>;
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif",width:"100%"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',system-ui,sans-serif",width:"100%"}}>
 
     {/* Header simples */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
@@ -19015,16 +19022,35 @@ function PageGestaoFinanceiro({isMob,tasks}){
       <FreelancerPaymentsBlock tasks={tasks||[]} refMonth={payMonth} onChangeMonth={setPayMonth} isMob={isMob}/>
     </Block>
 
-    {/* ════ 5. CUSTO OPERACIONAL TOTAL ════ */}
-    <div style={{background:"linear-gradient(135deg,#475569,#334155)",borderRadius:14,padding:"20px 26px",color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",gap:18,flexWrap:"wrap"}}>
-      <div>
-        <div style={{fontSize:11,fontWeight:700,letterSpacing:.7,textTransform:"uppercase",opacity:.8}}>Custo operacional total</div>
-        <div style={{fontSize:30,fontWeight:800,letterSpacing:-1,lineHeight:1.1,fontFeatureSettings:"'tnum'",marginTop:4}}>{_brlF(custoOperacional)}<span style={{fontSize:13,fontWeight:600,opacity:.7,marginLeft:8}}>/mês</span></div>
-        <div style={{fontSize:12,opacity:.75,marginTop:6}}>Custo fixo {_brlF(custoFixoTotal)} + Custo de servir {_brlF(custoServirTotal)}</div>
-      </div>
-      <div style={{display:"flex",gap:24}}>
-        <BigStat label="Por cliente"   value={_brlF(custoOperacional/clientesAtivos)} color="#fff" size={20}/>
-        <BigStat label="% da receita"  value={mrr>0?_pct((custoOperacional/mrr)*100):"-"} color="#fff" size={20}/>
+    {/* ════ 5. CUSTO OPERACIONAL TOTAL — destacado com custo por cliente ════ */}
+    <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b 60%,#334155)",borderRadius:14,padding:"18px 22px",color:"#fff",position:"relative",overflow:"hidden"}}>
+      {/* Decoração: anel atrás */}
+      <div style={{position:"absolute",top:-40,right:-40,width:180,height:180,borderRadius:"50%",background:"radial-gradient(circle at 30% 30%,rgba(159,67,246,0.25),transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"relative",display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"2fr 1fr 1fr 1fr",gap:20,alignItems:"center"}}>
+        {/* Total */}
+        <div>
+          <div style={{fontSize:10.5,fontWeight:700,letterSpacing:.6,textTransform:"uppercase",opacity:.7}}>Custo operacional total</div>
+          <div style={{fontSize:32,fontWeight:900,letterSpacing:-1,lineHeight:1.05,fontFeatureSettings:"'tnum'",marginTop:4}}>{_brlF(custoOperacional)}<span style={{fontSize:13,fontWeight:600,opacity:.6,marginLeft:6}}>/mês</span></div>
+          <div style={{fontSize:11,opacity:.65,marginTop:6,letterSpacing:.1}}>{_brlF(custoFixoTotal)} fixo + {_brlF(custoServirTotal)} servir</div>
+        </div>
+        {/* Por cliente */}
+        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"10px 12px",border:"1px solid rgba(255,255,255,0.08)"}}>
+          <div style={{fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",opacity:.6}}>Custo por cliente</div>
+          <div style={{fontSize:18,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.4,marginTop:3}}>{_brlF(custoOperacional/clientesAtivos)}</div>
+          <div style={{fontSize:10,opacity:.55,marginTop:3}}>fixo + servir ÷ {clientesAtivos}</div>
+        </div>
+        {/* % receita */}
+        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"10px 12px",border:"1px solid rgba(255,255,255,0.08)"}}>
+          <div style={{fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",opacity:.6}}>% da receita</div>
+          <div style={{fontSize:18,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.4,marginTop:3,color:mrr>0&&(custoOperacional/mrr)>0.7?"#fecaca":"#fff"}}>{mrr>0?_pct((custoOperacional/mrr)*100):"—"}</div>
+          <div style={{fontSize:10,opacity:.55,marginTop:3}}>do MRR</div>
+        </div>
+        {/* Reserva sobrando */}
+        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"10px 12px",border:"1px solid rgba(255,255,255,0.08)"}}>
+          <div style={{fontSize:9.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",opacity:.6}}>Sobra mensal</div>
+          <div style={{fontSize:18,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.4,marginTop:3,color:(mrr-custoOperacional)>=0?"#86efac":"#fca5a5"}}>{_brlF(mrr-custoOperacional)}</div>
+          <div style={{fontSize:10,opacity:.55,marginTop:3}}>antes de impostos</div>
+        </div>
       </div>
     </div>
 
@@ -19212,54 +19238,73 @@ function PageGestaoFinanceiro({isMob,tasks}){
       </div>
     </section>
 
-    {/* ════ 9. CONTRATOS ATIVOS — expansível ════ */}
+    {/* ════ 9. CONTRATOS ATIVOS — cards grandes coloridos com logo ════ */}
     <Block>
       <BlockHeader ico="fileText" color="#475569" title="Contratos ativos" subtitle={clientesAtivos+" clientes · MRR consolidado "+_brl(mrr)}/>
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
         {GF_CONTRATOS.map(function(c,idx){
+          // Resolve cliente real pra pegar logo
+          const clKey=(c.grupo||"").toLowerCase().split(" ")[0];
+          const realCl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===clKey||(x.name||"").toLowerCase().startsWith(clKey);});
+          const logoUrl=realCl&&typeof CLIENT_LOGOS!=="undefined"?CLIENT_LOGOS[realCl.id]:null;
+
           if(c.grupoEcon&&c.unidades){
             const totalGrupo=c.unidades.reduce(function(s,u){return s+u.valor;},0);
             const ativosGrupo=c.unidades.filter(function(u){return u.valor>0;}).length;
             const expanded=contratosExpand[c.grupo]!==false;
-            return <div key={idx} style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:11,overflow:"hidden"}}>
+            return <div key={idx} style={{background:"linear-gradient(135deg,"+c.cor+"06,"+c.cor+"12)",border:"1px solid "+c.cor+"33",borderRadius:14,overflow:"hidden",display:"flex",flexDirection:"column",transition:"transform .15s, box-shadow .15s"}}
+              onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px "+c.cor+"22";}}
+              onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
               <div onClick={function(){setContratosExpand(function(p){return Object.assign({},p,{[c.grupo]:!expanded});});}}
-                style={{padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",cursor:"pointer",background:expanded?"#fff":"#fafbfc",borderBottom:expanded?"1px solid #e2e8f0":"none"}}>
+                style={{padding:"14px 16px",cursor:"pointer",display:"flex",flexDirection:"column",gap:10}}>
+                {/* Linha topo: logo + nome + chevron */}
                 <div style={{display:"flex",alignItems:"center",gap:11}}>
-                  <div style={{width:8,height:30,borderRadius:3,background:c.cor}}/>
-                  <div>
-                    <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>{c.grupo} <span style={{color:"#94a3b8",fontWeight:500,fontSize:11,marginLeft:4}}>· grupo econômico</span></div>
-                    <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>{ativosGrupo} unidades faturadas</div>
+                  <div style={{width:48,height:48,borderRadius:12,background:"#fff",border:"1px solid "+c.cor+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 1px 4px rgba(15,23,42,0.06)"}}>
+                    {logoUrl?<img src={logoUrl} alt={c.grupo} style={{maxWidth:38,maxHeight:38,objectFit:"contain"}}/>:<span style={{color:c.cor,fontWeight:900,fontSize:18,letterSpacing:-.4}}>{c.grupo.charAt(0)}</span>}
                   </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.grupo}</div>
+                    <div style={{color:c.cor,fontSize:10.5,fontWeight:700,marginTop:1,textTransform:"uppercase",letterSpacing:.4}}>Grupo · {ativosGrupo} unidades</div>
+                  </div>
+                  <span style={{color:c.cor,fontSize:14,fontWeight:800,transform:expanded?"rotate(90deg)":"rotate(0)",transition:"transform .2s"}}>›</span>
                 </div>
-                <div style={{display:"flex",alignItems:"center",gap:14}}>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{color:c.cor,fontWeight:800,fontSize:17,fontFeatureSettings:"'tnum'"}}>{_brl(totalGrupo)}<span style={{fontSize:11,opacity:.75,marginLeft:4}}>/mês</span></div>
-                    <div style={{color:"#94a3b8",fontSize:10.5}}>MRR consolidado</div>
-                  </div>
-                  <span style={{color:"#94a3b8",fontSize:14,transform:expanded?"rotate(90deg)":"rotate(0)",transition:"transform .2s"}}>›</span>
+                {/* MRR grande */}
+                <div style={{display:"flex",alignItems:"baseline",gap:6,paddingTop:6,borderTop:"1px solid "+c.cor+"1c"}}>
+                  <span style={{color:c.cor,fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(totalGrupo)}</span>
+                  <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês</span>
                 </div>
               </div>
-              {expanded&&<div style={{padding:"4px 18px 12px 38px"}}>
+              {expanded&&<div style={{padding:"4px 16px 12px",background:"rgba(255,255,255,0.6)"}}>
                 {c.unidades.map(function(u,j){
-                  return <div key={j} style={{padding:"9px 0",borderBottom:j<c.unidades.length-1?"1px solid #f1f5f9":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                    <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                  return <div key={j} style={{padding:"7px 0",borderBottom:j<c.unidades.length-1?"1px dashed "+c.cor+"22":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
                       <div style={{width:6,height:6,borderRadius:"50%",background:u.valor>0?c.cor:"#cbd5e1",flexShrink:0}}/>
-                      <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600}}>Bioter {u.nome}</span>
-                      {u.valor===0&&<span style={{background:"#f1f5f9",color:"#94a3b8",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Sem cobrança</span>}
+                      <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{u.nome}</span>
+                      {u.valor===0&&<span style={{background:"#f1f5f9",color:"#94a3b8",fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>—</span>}
                     </div>
-                    <div style={{color:u.valor>0?"#0f172a":"#94a3b8",fontWeight:700,fontSize:13,fontFeatureSettings:"'tnum'"}}>{u.valor>0?_brl(u.valor)+"/mês":"—"}</div>
+                    <div style={{color:u.valor>0?"#0f172a":"#94a3b8",fontWeight:700,fontSize:12,fontFeatureSettings:"'tnum'"}}>{u.valor>0?_brl(u.valor):"—"}</div>
                   </div>;
                 })}
               </div>}
             </div>;
           }
           // Cliente individual (sem unidades)
-          return <div key={idx} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+          return <div key={idx} style={{background:"linear-gradient(135deg,"+c.cor+"06,"+c.cor+"12)",border:"1px solid "+c.cor+"33",borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,transition:"transform .15s, box-shadow .15s"}}
+            onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px "+c.cor+"22";}}
+            onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
             <div style={{display:"flex",alignItems:"center",gap:11}}>
-              <div style={{width:8,height:30,borderRadius:3,background:c.cor}}/>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>{c.grupo}</div>
+              <div style={{width:48,height:48,borderRadius:12,background:"#fff",border:"1px solid "+c.cor+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 1px 4px rgba(15,23,42,0.06)"}}>
+                {logoUrl?<img src={logoUrl} alt={c.grupo} style={{maxWidth:38,maxHeight:38,objectFit:"contain"}}/>:<span style={{color:c.cor,fontWeight:900,fontSize:18,letterSpacing:-.4}}>{c.grupo.charAt(0)}</span>}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.grupo}</div>
+                <div style={{color:c.cor,fontSize:10.5,fontWeight:700,marginTop:1,textTransform:"uppercase",letterSpacing:.4}}>Cliente único</div>
+              </div>
             </div>
-            <div style={{color:c.cor,fontWeight:800,fontSize:17,fontFeatureSettings:"'tnum'"}}>{_brl(c.valor)}<span style={{fontSize:11,opacity:.75,marginLeft:4}}>/mês</span></div>
+            <div style={{display:"flex",alignItems:"baseline",gap:6,paddingTop:6,borderTop:"1px solid "+c.cor+"1c"}}>
+              <span style={{color:c.cor,fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(c.valor)}</span>
+              <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês</span>
+            </div>
           </div>;
         })}
       </div>
