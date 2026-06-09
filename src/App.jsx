@@ -1264,7 +1264,8 @@ function formatRefMonth(refMonth){
 }
 
 
-/* ─── FreelancerPaymentsBlock — cards GRANDES coloridos com foto de cada freelancer.
+/* ─── FreelancerPaymentsBlock — card consolidado com pagamentos de todos os freelancers
+       (André + Maria + Guilherme) por tipo de conteúdo no mês de referência selecionado.
        Reutilizado em DashPartner e em PageGestaoFinanceiro.                        ─── */
 function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact}){
   const fmtBRL=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
@@ -1275,74 +1276,66 @@ function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact
   });
   const total=rows.reduce(function(s,r){return s+r.calc.total;},0);
 
-  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  const ChipBreak=function(props){
+    const label=props.label,count=props.count,price=props.price;
+    if(!count) return null;
+    return <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f1f5f9",color:"#475569",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:6,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <strong style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{count}</strong>
+      <span style={{color:"#94a3b8",fontSize:10}}>×</span>
+      <span>{label}</span>
+      <span style={{color:"#9F43F6",fontWeight:700,marginLeft:2,fontFeatureSettings:"'tnum'"}}>{fmtBRL(count*price).replace(",00","")}</span>
+    </span>;
+  };
+
+  return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:compact?"14px 16px":"16px 20px",fontFamily:"'Inter',system-ui,sans-serif"}}>
     {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,flexWrap:"wrap"}}>
       <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pagamentos por demanda</div>
-        <div style={{color:"#64748b",fontSize:11.5,marginTop:1}}>Calculado pelos cards aprovados no mês de referência</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>Pagamentos por demanda</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:2}}>Calculado pelos cards aprovados no mês de referência</div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <input type="month" value={refMonth||""} onChange={function(e){onChangeMonth&&onChangeMonth(e.target.value);}}
-          style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"7px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer",fontFamily:"inherit"}}/>
+          style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer",fontFamily:"inherit"}}/>
         <div style={{textAlign:"right"}}>
           <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
-          <div style={{color:"#7c3aed",fontWeight:900,fontSize:22,letterSpacing:-.5,fontFeatureSettings:"\'tnum\'",lineHeight:1}}>{fmtBRL(total)}</div>
+          <div style={{color:"#7c3aed",fontWeight:900,fontSize:20,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{fmtBRL(total)}</div>
         </div>
       </div>
     </div>
 
-    {/* Cards verticais grandes com foto */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
+    {/* Linhas por freelancer */}
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
       {rows.map(function(r){
         const fr=r.fr,c=r.calc;
-        const _photoUrl=(function(){
-          try{var raw=typeof localStorage!=="undefined"?localStorage.getItem("pixels-selfprofile-"+fr.id):null;if(!raw)return null;var p=JSON.parse(raw);return p&&p.photo?p.photo:null;}catch(e){return null;}
-        })();
-        const types=r.isEditor?[
-          {k:"video",label:"Vídeo",count:c.video,price:DESIGNER_PRICES.video},
-          {k:"corte",label:"Corte",count:c.corte,price:DESIGNER_PRICES.corte},
-          {k:"vc",label:"V. dinâmico",count:c.videoComplexo,price:DESIGNER_PRICES.videoComplexo},
-          {k:"vf",label:"V. feira",count:c.videoFeira,price:DESIGNER_PRICES.videoFeira},
-        ]:[
-          {k:"foto",label:"Foto obra",count:c.fotoObra,price:DESIGNER_PRICES.fotoObra},
-          {k:"arte",label:"Arte única",count:c.arte,price:DESIGNER_PRICES.arte},
-          {k:"carr",label:"Carrossel",count:c.carrossel,price:DESIGNER_PRICES.carrossel},
-        ];
-        const activeTypes=types.filter(function(t){return t.count>0;});
-        return <div key={fr.id} style={{background:"linear-gradient(160deg,"+fr.color+"10,"+fr.color+"04 60%,#fff)",border:"1px solid "+fr.color+"33",borderRadius:16,padding:"16px 18px 14px",display:"flex",flexDirection:"column",gap:12,position:"relative",overflow:"hidden",transition:"transform .15s, box-shadow .15s"}}
-          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 28px "+fr.color+"22";}}
-          onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
-          {/* Decoração de fundo */}
-          <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:fr.color+"18",pointerEvents:"none"}}/>
-          {/* Header com foto grande */}
-          <div style={{display:"flex",alignItems:"center",gap:12,position:"relative"}}>
-            <div style={{width:60,height:60,borderRadius:"50%",background:fr.color,color:"#fff",fontSize:24,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 14px "+fr.color+"55",overflow:"hidden",border:"3px solid #fff"}}>
-              {_photoUrl?<img src={_photoUrl} alt={fr.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>:(fr.av||(fr.name||"?").charAt(0))}
+        return <div key={fr.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"160px 1fr 110px",gap:12,alignItems:"center",padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
+          {/* Identidade */}
+          <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+            {typeof UserAvatar!=="undefined"?<UserAvatar user={fr} size={30}/>:<div style={{width:30,height:30,borderRadius:"50%",background:fr.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>{fr.av||(fr.name||"?")[0]}</div>}
+            <div style={{minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,letterSpacing:-.1}}>{fr.name}</div>
+              <div style={{color:"#94a3b8",fontSize:10}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
             </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{fr.name}</div>
-              <div style={{color:fr.color,fontSize:10.5,fontWeight:700,marginTop:2,textTransform:"uppercase",letterSpacing:.4}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
-            </div>
-          </div>
-          {/* Total grande */}
-          <div style={{display:"flex",alignItems:"baseline",gap:6,position:"relative"}}>
-            <span style={{color:fr.color,fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"\'tnum\'",lineHeight:1}}>{fmtBRL(c.total)}</span>
-            <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês ref</span>
           </div>
           {/* Breakdown por tipo */}
-          {activeTypes.length>0?<div style={{display:"flex",flexDirection:"column",gap:5,position:"relative"}}>
-            {activeTypes.map(function(t){
-              return <div key={t.k} style={{display:"flex",alignItems:"center",justifyContent:"space-between",fontSize:11.5,padding:"5px 9px",background:"rgba(255,255,255,0.7)",borderRadius:7,border:"1px solid "+fr.color+"15"}}>
-                <span style={{color:"#475569",fontWeight:600}}>{t.label}</span>
-                <span style={{display:"inline-flex",alignItems:"baseline",gap:4}}>
-                  <strong style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"\'tnum\'"}}>{t.count}×{fmtBRL(t.price).replace(",00","").replace("R$ ","")}</strong>
-                  <span style={{color:fr.color,fontWeight:700,fontSize:11,fontFeatureSettings:"\'tnum\'"}}>= {fmtBRL(t.count*t.price).replace(",00","")}</span>
-                </span>
-              </div>;
-            })}
-          </div>:<div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",textAlign:"center",padding:"10px 0",position:"relative"}}>Sem pagamentos no mês.</div>}
-          {c.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:10,position:"relative",textAlign:"right"}}>{c.naoClassificado} demanda(s) sem tipo</div>}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+            {r.isEditor?<>
+              <ChipBreak label="Vídeo" count={c.video} price={DESIGNER_PRICES.video}/>
+              <ChipBreak label="Corte" count={c.corte} price={DESIGNER_PRICES.corte}/>
+              <ChipBreak label="V. dinâmico" count={c.videoComplexo} price={DESIGNER_PRICES.videoComplexo}/>
+              <ChipBreak label="V. feira" count={c.videoFeira} price={DESIGNER_PRICES.videoFeira}/>
+            </>:<>
+              <ChipBreak label="Foto" count={c.fotoObra} price={DESIGNER_PRICES.fotoObra}/>
+              <ChipBreak label="Arte" count={c.arte} price={DESIGNER_PRICES.arte}/>
+              <ChipBreak label="Carrossel" count={c.carrossel} price={DESIGNER_PRICES.carrossel}/>
+            </>}
+            {c.total===0&&<span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>Sem pagamentos no mês.</span>}
+          </div>
+          {/* Total individual */}
+          <div style={{textAlign:"right"}}>
+            <div style={{color:"#16a34a",fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{fmtBRL(c.total)}</div>
+            {c.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:9.5,marginTop:2}}>{c.naoClassificado} s/ tipo</div>}
+          </div>
         </div>;
       })}
     </div>
@@ -1834,7 +1827,6 @@ const NAV=[
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
-    {id:"gestao_portfolio",     icon:"◇", label:"Portfólio"},
     {id:"gestao_enps",          icon:"◐", label:"ENPS"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
@@ -1857,14 +1849,14 @@ const NAV=[
  * Re-renderiza instantâneo quando dispara event "pixels:photo-updated".
  */
 function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyle, title}){
-  // user pode ser objeto TEAM completo OU só id string
   const u=typeof user==="string"?(TEAM.find(t=>t.id===user)||{id:user,name:user,av:"?",color:"#94a3b8"}):user;
   const [photo,setPhoto]=useState(()=>getProfilePhoto(u.id));
+  const [broken,setBroken]=useState(false);
   useEffect(function(){
     const handler=function(e){
-      // Re-checa só se o evento é pro usuário relevante (ou broadcast geral)
       if(!e||!e.detail||!e.detail.userId||e.detail.userId===u.id){
         setPhoto(getProfilePhoto(u.id));
+        setBroken(false);
       }
     };
     window.addEventListener("pixels:photo-updated",handler);
@@ -1877,12 +1869,30 @@ function UserAvatar({user, size=18, fontWeight=600, border=true, style:extraStyl
     flexShrink:0,overflow:"hidden",display:"inline-flex",alignItems:"center",justifyContent:"center"
   };
   const merged=Object.assign({},base,extraStyle||{});
-  if(photo){
-    return <img src={photo} alt={u.name||""} title={title||u.name||""} loading="lazy"
+  const safePhoto = photo ? (typeof fixLegacyUrl==="function" ? fixLegacyUrl(photo) : photo) : null;
+  if(safePhoto && !broken){
+    return <img src={safePhoto} alt={u.name||""} title={title||u.name||""} loading="lazy"
       style={Object.assign({},merged,{objectFit:"cover"})}
-      onError={function(e){e.currentTarget.style.display="none";}}/>;
+      onError={function(){
+        setBroken(true);
+        try{
+          if(window._sb){
+            window._sb.from("profiles").select("profile_data").eq("team_id",u.id).single().then(function(r){
+              if(r&&r.data&&r.data.profile_data&&r.data.profile_data.photo){
+                const fresh=r.data.profile_data.photo;
+                try{
+                  const cur=localStorage.getItem("pixels-selfprofile-"+u.id);
+                  const parsed=cur?JSON.parse(cur):{};
+                  parsed.photo=fresh;
+                  localStorage.setItem("pixels-selfprofile-"+u.id,JSON.stringify(parsed));
+                  window.dispatchEvent(new CustomEvent("pixels:photo-updated",{detail:{userId:u.id}}));
+                }catch(e){}
+              }
+            }).catch(function(){});
+          }
+        }catch(e){}
+      }}/>;
   }
-  // Fallback: letra colorida
   return <div title={title||u.name||""} style={Object.assign({},merged,{
     background:u.color||"#94a3b8",
     color:"#fff",fontWeight:fontWeight,
@@ -37954,6 +37964,7 @@ function PageComercial({isMob, perms, effectiveUser}){
     {id:"oportun",   label:"Oportunidades / upsell"},
     {id:"propostas", label:"Propostas"},
     {id:"followups", label:"Follow-ups"},
+    {id:"portfolio", label:"Portfólio"},
     {id:"historico", label:"Histórico"},
   ];
 
@@ -37983,6 +37994,7 @@ function PageComercial({isMob, perms, effectiveUser}){
     {tab==="oportun"&&<ComOportunidades store={store} update={update} log={log} canEdit={canEdit}/>}
     {tab==="propostas"&&<ComPropostas store={store} update={update} log={log} canEdit={canEdit}/>}
     {tab==="followups"&&<ComFollowUps store={store} update={update} log={log} canEdit={canEdit}/>}
+    {tab==="portfolio"&&typeof PagePortfolio==="function"&&<PagePortfolio isMob={isMob}/>}
     {tab==="historico"&&<ComHistorico store={store}/>}
   </div>;
 }
