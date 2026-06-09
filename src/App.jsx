@@ -44133,6 +44133,10 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     const newStatus = m.status==="concluida"?"em_andamento":"concluida";
     planUpsert(Object.assign({},m,{status:newStatus,updated_at:new Date().toISOString()}));
   };
+  // ── Excluir meta ──
+  const _deleteMeta = (m) => {
+    if(typeof planRemove==="function") planRemove(m.id);
+  };
 
   return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:DG_INTER}}>
 
@@ -44166,13 +44170,18 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             </button>}/>
         {metasHoje.length>0&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'",marginBottom:8}}>{hojeConcluidas}/{metasHoje.length} concluídas</div>}
         {metasHoje.length===0?<_DGEmpty icon="check" title="Nenhuma meta cadastrada para hoje." desc="Use o botão acima ou as colunas do Planejamento da semana."/>:<div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {metasHoje.map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta}/>)}
+          {metasHoje.map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
         </div>}
       </div>
 
       {/* METAS DA SEMANA */}
       <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-        <_DGSec icon="flag" title="Metas da semana" sub={"Resumo geral · Semana "+weekKey.slice(-3)}/>
+        <_DGSec icon="flag" title="Metas da semana" sub={"Resumo geral · Semana "+weekKey.slice(-3)}
+          right={<button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
+            style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Adicionar
+          </button>}/>
         {/* Progress bar */}
         <div style={{height:8,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:10}}>
           <div style={{height:"100%",width:weekProgresso+"%",background:"linear-gradient(90deg,"+DG_PURPLE+",#7c3aed)",borderRadius:99,transition:"width .3s"}}/>
@@ -44190,7 +44199,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
           </div>)}
         </div>
         {/* Próximas 3 a vencer */}
-        {metasWeek.filter(m=>m.status!=="concluida"&&m.deadline).sort((a,b)=>(a.deadline||"").localeCompare(b.deadline||"")).slice(0,3).map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} compact/>)}
+        {metasWeek.filter(m=>m.status!=="concluida"&&m.deadline).sort((a,b)=>(a.deadline||"").localeCompare(b.deadline||"")).slice(0,3).map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta} compact/>)}
         {metasWeek.length===0&&<_DGEmpty icon="flag" title="Sem metas cadastradas." desc="Use o botão Adicionar nas colunas da semana."/>}
       </div>
     </div>
@@ -44228,8 +44237,8 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             {/* Header do dia */}
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
               <div style={{minWidth:0}}>
-                <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.1,display:"flex",alignItems:"center",gap:5}}>
-                  {d.short}{isHoje&&<span style={{fontSize:8.5,fontWeight:700,color:DG_PURPLE,background:DG_PURPLE+"22",padding:"1px 5px",borderRadius:99,letterSpacing:.4}}>HOJE</span>}
+                <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:15,fontWeight:900,letterSpacing:-.3,display:"flex",alignItems:"center",gap:6,textTransform:"uppercase"}}>
+                  {d.label}{isHoje&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:DG_PURPLE,padding:"2px 7px",borderRadius:99,letterSpacing:.5,boxShadow:"0 4px 12px "+DG_PURPLE+"55"}}>HOJE</span>}
                 </div>
                 {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:10,marginTop:2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
               </div>
@@ -44246,7 +44255,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 
             {/* Metas custom */}
             {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
-              {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta}/>)}
+              {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
             </div>}
 
             {/* Empty state se nada */}
@@ -44322,7 +44331,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 }
 
 // ── Item meta linha simples ──────────────────────────────────
-function _DGMetaItem({meta, onToggle, compact}){
+function _DGMetaItem({meta, onToggle, onDelete, compact}){
   const isOk = meta.status==="concluida";
   const isLate = !isOk && meta.deadline && _dgDays(meta.deadline)<0;
   const cat = _dgCatOf(meta);
@@ -44336,23 +44345,37 @@ function _DGMetaItem({meta, onToggle, compact}){
       {cat&&<span style={{background:cat.color+"18",color:cat.color,borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
     </div>
     {isLate&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>Atras.</span>}
+    {onDelete&&<button onClick={()=>{if(confirm("Excluir esta meta?"))onDelete(meta);}} title="Excluir meta"
+      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",transition:"color .12s"}}
+      onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
+      onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 012-2h2a2 2 0 012 2v2"/></svg>
+    </button>}
   </div>;
 }
 
 // ── Mini meta (grade semanal) ─────────────────────────────────
-function _DGMetaMini({meta, onToggle}){
+function _DGMetaMini({meta, onToggle, onDelete}){
   const isOk = meta.status==="concluida";
   const isLate = !isOk && meta.deadline && _dgDays(meta.deadline)<0;
   const cat = _dgCatOf(meta);
-  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:7,padding:"6px 8px",display:"flex",alignItems:"flex-start",gap:6,fontFamily:DG_INTER,transition:"all .12s"}}>
+  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:7,padding:"6px 8px",display:"flex",alignItems:"flex-start",gap:6,fontFamily:DG_INTER,transition:"all .12s",position:"relative"}}
+    onMouseEnter={e=>{const x=e.currentTarget.querySelector("._delBtn");if(x)x.style.opacity="1";}}
+    onMouseLeave={e=>{const x=e.currentTarget.querySelector("._delBtn");if(x)x.style.opacity="0";}}>
     <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Concluir"}
       style={{width:14,height:14,borderRadius:4,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,padding:0,transition:"all .12s"}}>
       {isOk&&<svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </button>
     <div style={{flex:1,minWidth:0}}>
-      <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11,fontWeight:600,lineHeight:1.3,textDecoration:isOk?"line-through":"none",wordBreak:"break-word"}}>{meta.title||"(sem título)"}</div>
+      <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11,fontWeight:600,lineHeight:1.3,textDecoration:isOk?"line-through":"none",wordBreak:"break-word",paddingRight:onDelete?14:0}}>{meta.title||"(sem título)"}</div>
       {cat&&<span style={{display:"inline-block",background:cat.color+"15",color:cat.color,borderRadius:3,padding:"1px 5px",fontSize:8.5,fontWeight:700,marginTop:2,letterSpacing:.2}}>{cat.label}</span>}
     </div>
+    {onDelete&&<button className="_delBtn" onClick={(e)=>{e.stopPropagation();if(confirm("Excluir esta meta?"))onDelete(meta);}} title="Excluir"
+      style={{position:"absolute",top:3,right:3,background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,opacity:0,transition:"opacity .12s, color .12s"}}
+      onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
+      onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>}
   </div>;
 }
 
@@ -44443,6 +44466,10 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
   const [category, setCategory] = useState("");
   const [clientId, setClientId] = useState("");
   const [saving, setSaving] = useState(false);
+  // ESC fecha o modal
+  if(typeof useEscToClose==="function") useEscToClose(true, onClose);
+  // ESC fecha
+  if(typeof useEscToClose==="function") useEscToClose(true, onClose);
 
   const _save = ()=>{
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
@@ -44480,6 +44507,7 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
         <div>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Título</div>
           <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Revisar campanhas em atenção"
+            onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();_save();}}}
             style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
         </div>
         <div>
