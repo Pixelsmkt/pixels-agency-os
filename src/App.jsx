@@ -2708,7 +2708,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
     _migratedRef.current=true;
   },[allTasks.length]);
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto",width:"100%",padding:isMob?"0 4px":0}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",width:"100%",padding:isMob?"0 4px":0}}>
     {openCard&&<CardModal task={openCard} tasks={allTasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={CURRENT_USER} cardPerms={adminCardPerms}/>}
     {isViewing&&<div style={{background:"#a140ff",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:8}}>
       👁 Visualizando dashboard de <strong>{user.name}</strong>
@@ -3436,7 +3436,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
 
   const lateMes=late.filter(t=>isCEO||(t.assignees||[t.assignee]).includes(effectiveUser.id));
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1100,margin:"0 auto",width:"100%"}}>
+  return <div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",width:"100%"}}>
     {/* ── CAPA: foto grande + nome + cargo + data + demandas + sino ── */}
     <div style={{position:"relative",borderRadius:14,overflow:"hidden",background:`linear-gradient(135deg,${coverColor},${coverColor}cc)`,padding:isMob?"14px 14px":"18px 22px",display:"flex",alignItems:"center",gap:isMob?12:18,flexWrap:"wrap"}}>
       {/* Foto grande */}
