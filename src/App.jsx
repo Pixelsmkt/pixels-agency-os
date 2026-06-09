@@ -35,7 +35,7 @@ const CLIENTS = [
     social:{followers:2980,growth:9.4,reach:12400,eng:6.8,posts:34,stories:68,reels:12,saved:892,likes:2180},
     history:[{m:"Jan",mr:5.0,gr:5.2,leads:71},{m:"Fev",mr:5.2,gr:5.5,leads:81},{m:"Mar",mr:5.6,gr:5.9,leads:92}],
     since:"Jun 2024", manager:"vinicius", connected:true, metaId:"act_5556667778", googleId:"555-666-7778", upsell:["WhatsApp Ads"], driveUrl:"" },
-  { id:"climaves", name:"Climaves", abbr:"CV", color:"#659645", sector:"Climatizacao / HVAC", contract:5500, health:62, nps:58, status:"atencao",
+  { id:"climaves", name:"Climaves", abbr:"CV", color:"#B4D137", sector:"Climatizacao / HVAC", contract:5500, health:62, nps:58, status:"atencao",
     payment:{status:"atrasado",date:"28/02/2026"}, lastMeeting:"10/03/2026", nextMeeting:"08/04/2026", contractType:"mensal",
     contacts:[{name:"Joao Climaves",role:"Dono",phone:"(49) 99904-1111",email:"joao@climaves.com.br"}],
     goals:[{title:"Leads Meta",target:100,current:72,unit:"leads"},{title:"ROAS",target:3.5,current:2.6,unit:"x"}], meetingNotes:[],
