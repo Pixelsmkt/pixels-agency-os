@@ -41235,7 +41235,7 @@ function _npsAddMonths(months){
 }
 function _npsClassify(score){
   if(score>=9) return {tipo:"promotor", label:"Promotor", color:"#16a34a", bg:"#dcfce7"};
-  if(score>=7) return {tipo:"neutro",   label:"Neutro",   color:"#a16207", bg:"#fef3c7"};
+  if(score>=7) return {tipo:"neutro",   label:"Neutro",   color:"#0284c7", bg:"#e0f2fe"};
   return       {tipo:"detrator", label:"Detrator", color:"#dc2626", bg:"#fee2e2"};
 }
 function _npsFmtData(iso){
@@ -41295,7 +41295,7 @@ function _NotaScale(props){
     {/* Legenda discreta */}
     <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:10.5,color:"#94a3b8",fontWeight:600,fontFamily:_NPS_FF}}>
       <span><span style={{color:"#dc2626"}}>●</span> 0–6 detrator</span>
-      <span><span style={{color:"#a16207"}}>●</span> 7–8 neutro</span>
+      <span><span style={{color:"#0284c7"}}>●</span> 7–8 neutro</span>
       <span><span style={{color:"#16a34a"}}>●</span> 9–10 promotor</span>
     </div>
   </div>;
@@ -41622,7 +41622,14 @@ function useClientNPS(clientId){
     }
     return Promise.resolve();
   }
-  return { rows, add, loading };
+  function remove(id){
+    setRows(function(p){return p.filter(function(r){return r.id!==id;});});
+    if(window._sb){
+      return window._sb.from("nps_responses").delete().eq("id",id);
+    }
+    return Promise.resolve();
+  }
+  return { rows, add, remove, loading };
 }
 
 // Componente: aba "NPS" dentro do ClienteDetail
@@ -41756,7 +41763,7 @@ function CClienteNPS(props){
 // Componente: tab "NPS" no Portal Cliente — cliente preenche
 function PortalNPS(props){
   const { cl, isMob } = props;
-  const { rows, add, loading } = useClientNPS(cl.id);
+  const { rows, add, remove, loading } = useClientNPS(cl.id);
   const [score, setScore] = useState(null);
   const [reason, setReason] = useState("");
   const [improvement, setImprovement] = useState("");
@@ -41832,13 +41839,14 @@ function PortalNPS(props){
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         {rows.map(function(r){
           const cls = _npsClassify(r.score);
-          return <div key={r.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",display:"flex",gap:14,fontFamily:_NPS_FF}}>
+          const canDelete = respondent.trim() && r.respondent_name && r.respondent_name.trim().toLowerCase()===respondent.trim().toLowerCase();
+          return <div key={r.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",display:"flex",gap:14,fontFamily:_NPS_FF,position:"relative"}}>
             <div style={{width:46,height:46,borderRadius:11,background:cls.color,color:"#fff",fontSize:18,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontFamily:_NPS_FF,boxShadow:"0 4px 10px "+cls.color+"35"}}>{r.score}</div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
                 <span style={{background:cls.bg,color:cls.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:5,textTransform:"uppercase",letterSpacing:.4,fontFamily:_NPS_FF}}>{cls.label}</span>
                 <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,fontFamily:_NPS_FF}}>{r.respondent_name||"—"}</span>
-                <span style={{color:"#94a3b8",fontSize:11,fontFamily:_NPS_FF,marginLeft:"auto"}}>{_npsFmtData(r.created_at)}</span>
+                <span style={{color:"#94a3b8",fontSize:11,fontFamily:_NPS_FF,marginLeft:"auto",paddingRight:canDelete?22:0}}>{_npsFmtData(r.created_at)}</span>
               </div>
               {r.reason && <div style={{color:"#475569",fontSize:12.5,marginTop:4,lineHeight:1.5,fontFamily:_NPS_FF}}>
                 <span style={{color:"#94a3b8",fontWeight:600,marginRight:6,fontFamily:_NPS_FF}}>Motivo:</span>{r.reason}
@@ -41847,6 +41855,14 @@ function PortalNPS(props){
                 <span style={{color:"#94a3b8",fontWeight:600,marginRight:6,fontFamily:_NPS_FF}}>Sugestão:</span>{r.improvement_suggestion}
               </div>}
             </div>
+            {canDelete && <button onClick={function(){
+              if(!confirm("Apagar esta avaliação? Não dá pra recuperar.")) return;
+              remove(r.id).then(function(){
+                if(typeof pixelsToast!=="undefined") pixelsToast.success("Avaliação apagada.",3000);
+              });
+            }} title="Apagar minha avaliação" style={{position:"absolute",top:10,right:10,background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 012-2h2a2 2 0 012 2v2"/></svg>
+            </button>}
           </div>;
         })}
       </div>
