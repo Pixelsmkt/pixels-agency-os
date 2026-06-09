@@ -1776,7 +1776,7 @@ function NavIcon({id,size=18,color}){
   if(id==="gestao_financeiro")  return <svg {...p}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
   if(id==="gestao_portfolio")   return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
-  if(id==="gestao_enps")        return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
+  if(id==="gestao_enps")        return <svg {...p}><path d="M3 12a9 9 0 1118 0"/><line x1="12" y1="12" x2="16" y2="8"/><circle cx="12" cy="12" r="1.5"/></svg>;
   if(id==="planejamento_mensal")return <svg {...p}><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><path d="M9 12h6M9 16h4"/></svg>;
   if(id==="contratos_lista")    return <svg {...p}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg>;
   if(id==="contratos_ltv")      return <svg {...p}><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg>;
@@ -12895,6 +12895,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       const types={
                         arte:{label:"Arte única",icon:"image"},
                         carrossel:{label:"Carrossel",icon:"layers"},
+                        folder:{label:"Folder",icon:"file-text"},
                         video:{label:"Vídeo",icon:"play"},
                         video_complexo:{label:"Vídeo dinâmico",icon:"film"},
                         video_feira:{label:"Vídeo feira",icon:"flag"},
@@ -12913,6 +12914,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                           {ct.icon==="scissors"&&<><circle cx="6" cy="7" r="3"/><circle cx="6" cy="17" r="3"/><line x1="8.5" y1="8.5" x2="19" y2="19"/><line x1="8.5" y1="15.5" x2="19" y2="5"/></>}
                           {ct.icon==="film"&&<><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></>}
                           {ct.icon==="flag"&&<><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></>}
+                          {ct.icon==="file-text"&&<><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></>}
                         </svg>
                         {ct.label}
                       </span>;
