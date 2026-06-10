@@ -44137,10 +44137,22 @@ const DG_SPRINT_STATUS = [
   {id:"concluido", label:"Concluído",       color:"#16a34a", bg:"#dcfce7"},
 ];
 const DG_SPRINT_PRIO = [
-  {id:"baixa", label:"Baixa",  color:"#94a3b8"},
-  {id:"media", label:"Média",  color:"#f59e0b"},
-  {id:"alta",  label:"Alta",   color:"#ef4444"},
+  {id:"baixa",   label:"Baixa",   color:"#64748b", bg:"#f1f5f9", dias:30},
+  {id:"media",   label:"Média",   color:"#f59e0b", bg:"#fef3c7", dias:14},
+  {id:"alta",    label:"Alta",    color:"#ef4444", bg:"#fee2e2", dias:5},
+  {id:"urgente", label:"Urgente", color:"#dc2626", bg:"#fecaca", dias:1},
 ];
+// Adiciona N dias úteis a partir de hoje (pula sáb/dom)
+function _dgAddBusinessDays(n){
+  let d = new Date();
+  let added = 0;
+  while(added<n){
+    d.setDate(d.getDate()+1);
+    const w = d.getDay();
+    if(w!==0 && w!==6) added++;
+  }
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
 
 // ── Helpers ─────────────────────────────────────────────────
 const _dgFmtBRL  = n => "R$ " + Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
@@ -44343,7 +44355,14 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:DG_INTER}}>
 
-    {/* ══════════ INDICADORES COMPACTOS — saudação já está no Topbar ══════════ */}
+    {/* ══════════ TÍTULO + INDICADORES ══════════ */}
+    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:14,flexWrap:"wrap",marginBottom:2}}>
+      <div>
+        <div style={{color:DG_PURPLE,fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Central de comando</div>
+        <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.6,marginTop:4,lineHeight:1.15}}>Sua semana num só lugar</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:5,fontWeight:500}}>{_dgDateLong()} · Semana {weekKey.slice(-3)}</div>
+      </div>
+    </div>
     <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(3,minmax(0,1fr))",gap:10}}>
       {[
         {label:"Demandas abertas", value:demandasAbertas.length,   color:"#0f172a", accent:"#7c3aed"},
@@ -44599,25 +44618,119 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.2,marginBottom:4}}>Sem clientes ativos.</div>
             <div style={{color:"#94a3b8",fontSize:11.5}}>Adicione clientes na aba Comercial para planejar sprints.</div>
           </div>;
-          return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+          // Solicitações pendentes do PORTAL — aparecem como "demandas a planejar"
+          // origem="portal" e status ainda aberto (não aprovado/publicado/concluído)
+          const portalAbertasPorCli = {};
+          (allTasks||[]).forEach(t=>{
+            if(t.origem!=="portal") return;
+            if(["aprovado","publicado","interno_executado","interno_aprovado","interno_publicado"].indexOf(t.status)>=0) return;
+            const cid = t.client;
+            if(!cid) return;
+            if(!portalAbertasPorCli[cid]) portalAbertasPorCli[cid]=[];
+            portalAbertasPorCli[cid].push(t);
+          });
+          // Converter task do portal em sprint_item (puxar pro planejamento da semana)
+          const _puxarPraSprint = (task, cl) => {
+            const _prio = task.priority||"media";
+            const _prioCfg = DG_SPRINT_PRIO.find(p=>p.id===_prio) || DG_SPRINT_PRIO[1];
+            planUpsert({
+              id:"sprint-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+              type:"sprint_item",
+              week_key:sprintWk,
+              deadline: task.deadline || _dgAddBusinessDays(_prioCfg.dias),
+              title: task.title,
+              tipo: task.tipo_solicitacao || task.contentType || "arte",
+              status: "planejado",
+              priority: _prio,
+              client_id: cl.id,
+              source_task_id: task.id,
+              assignees: [user.id],
+              author_id: user.id,
+              author_name: user.name,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+            if(typeof pixelsToast!=="undefined") pixelsToast.success("Demanda do cliente puxada pra esse sprint.",3500);
+          };
+          // IDs de tasks já puxadas (pra não repetir)
+          const puxadasIds = new Set(sprintItems.map(it=>it.source_task_id).filter(Boolean));
+          // Adicionar clientes que TÊM solicitações do portal mas não estão na lista (caso ativo=false)
+          Object.keys(portalAbertasPorCli).forEach(cid=>{
+            if(!clientesShown.find(c=>c.id===cid)){
+              const c = (CLIENTS||[]).find(x=>x.id===cid);
+              if(c) clientesShown.push(c);
+            }
+          });
+
+          return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(290px,1fr))",gap:14}}>
             {clientesShown.map(cl=>{
               const itensCl = sprintItems.filter(it=>it.client_id===cl.id);
               const okCl = itensCl.filter(it=>it.status==="concluido").length;
-              return <div key={cl.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:0,display:"flex",flexDirection:"column",minHeight:180,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-                <div style={{padding:"11px 13px",borderBottom:"1px solid #f5f7fa",display:"flex",alignItems:"center",gap:10,background:"linear-gradient(180deg,"+(cl.color||"#94a3b8")+"08,#fff)"}}>
-                  <ClientLogo clientId={cl.id} size="sm"/>
+              const lateCl = itensCl.filter(it=>it.status!=="concluido"&&it.deadline&&_dgDays(it.deadline)<0).length;
+              const portalAbertas = (portalAbertasPorCli[cl.id]||[]).filter(t=>!puxadasIds.has(t.id));
+              const pctCl = itensCl.length>0 ? Math.round((okCl/itensCl.length)*100) : 0;
+              const clColor = cl.color || "#64748b";
+              return <div key={cl.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:0,display:"flex",flexDirection:"column",minHeight:200,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,0.04)",transition:"all .15s"}}>
+                {/* Header do cliente — barra colorida vertical + logo grande */}
+                <div style={{padding:"14px 16px",borderBottom:"1px solid #f5f7fa",display:"flex",alignItems:"center",gap:12,background:"linear-gradient(180deg,"+clColor+"0d,#fff)",position:"relative"}}>
+                  <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:clColor}}/>
+                  <div style={{marginLeft:6}}><ClientLogo clientId={cl.id} size="sm"/></div>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-                    <div style={{color:itensCl.length>0?(cl.color||"#64748b"):"#cbd5e1",fontSize:10.5,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>
-                      {itensCl.length>0 ? (okCl+"/"+itensCl.length+" entregue"+(itensCl.length>1?"s":"")) : "Sem entregas"}
+                    <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3,flexWrap:"wrap"}}>
+                      <span style={{color:itensCl.length>0?clColor:"#cbd5e1",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
+                        {itensCl.length>0 ? (okCl+"/"+itensCl.length+" entrega"+(itensCl.length>1?"s":"")) : "Sem entregas"}
+                      </span>
+                      {lateCl>0&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"1px 7px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>{lateCl} atrasada{lateCl>1?"s":""}</span>}
+                      {portalAbertas.length>0&&<span style={{background:"#fef3c7",color:"#a16207",borderRadius:5,padding:"1px 7px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:3}}>
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                        {portalAbertas.length} pedido{portalAbertas.length>1?"s":""}
+                      </span>}
                     </div>
                   </div>
                 </div>
-                <div style={{padding:"11px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
-                  {itensCl.length===0&&<div style={{color:"#cbd5e1",fontSize:11,textAlign:"center",padding:"14px 4px",lineHeight:1.4,fontWeight:500}}>Nada planejado ainda</div>}
+
+                {/* Progress bar */}
+                {itensCl.length>0&&<div style={{padding:"0 16px",marginTop:11}}>
+                  <div style={{height:4,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                    <div style={{width:pctCl+"%",height:"100%",background:pctCl===100?"#16a34a":clColor,borderRadius:99,transition:"width .3s"}}/>
+                  </div>
+                </div>}
+
+                {/* Corpo: solicitações do portal (em destaque) + entregas planejadas */}
+                <div style={{padding:"12px 14px 14px",display:"flex",flexDirection:"column",gap:8,flex:1}}>
+                  {/* Solicitações do portal aguardando planejamento */}
+                  {portalAbertas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:itensCl.length>0?4:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <div style={{height:1,background:"#fde68a",flex:1}}/>
+                      <span style={{color:"#a16207",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Pedidos do cliente</span>
+                      <div style={{height:1,background:"#fde68a",flex:1}}/>
+                    </div>
+                    {portalAbertas.slice(0,3).map(t=>{
+                      const _prioCfg = DG_SPRINT_PRIO.find(p=>p.id===t.priority) || null;
+                      return <div key={t.id} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"9px 11px",display:"flex",alignItems:"flex-start",gap:8,fontFamily:DG_INTER,transition:"all .12s"}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{color:"#0f172a",fontSize:12,fontWeight:700,lineHeight:1.35,letterSpacing:-.1,wordBreak:"break-word"}}>{t.title}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4,flexWrap:"wrap"}}>
+                            {_prioCfg&&<span style={{background:_prioCfg.bg,color:_prioCfg.color,borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>{_prioCfg.label}</span>}
+                            {t.deadline&&<span style={{color:"#a16207",fontSize:9.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>prazo {_dgFmtPrazoBR(t.deadline)}</span>}
+                          </div>
+                        </div>
+                        <button onClick={()=>_puxarPraSprint(t,cl)} title="Puxar pra esse sprint"
+                          style={{background:"#a16207",color:"#fff",border:"none",borderRadius:7,padding:"5px 9px",fontSize:10,fontWeight:800,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
+                          + Puxar
+                        </button>
+                      </div>;
+                    })}
+                    {portalAbertas.length>3&&<div style={{color:"#a16207",fontSize:10,fontWeight:600,textAlign:"center",fontStyle:"italic"}}>+{portalAbertas.length-3} mais</div>}
+                  </div>}
+
+                  {/* Entregas planejadas */}
+                  {itensCl.length===0&&portalAbertas.length===0&&<div style={{color:"#cbd5e1",fontSize:11.5,textAlign:"center",padding:"16px 4px",lineHeight:1.4,fontWeight:500}}>Nada planejado ainda</div>}
                   {itensCl.map(it=><_DGSprintCard key={it.id} item={it} onEdit={()=>setNovoSprint({clientId:cl.id, item:it})} onUpdate={(patch)=>planUpsert(Object.assign({},it,patch,{updated_at:new Date().toISOString()}))} onDelete={()=>{if(window.confirm("Excluir esta entrega?"))planRemove(it.id);}}/>)}
+
                   <button onClick={()=>setNovoSprint({clientId:cl.id, item:null})}
-                    style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
+                    style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:9,padding:"8px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
                     onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#7dd3fc";e.currentTarget.style.color="#0ea5e9";}}
                     onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
@@ -44883,7 +44996,10 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
   const [tipo, setTipo]     = useState(item?.tipo||"arte");
   const [status, setStatus] = useState(item?.status||"planejado");
   const [priority, setPriority] = useState(item?.priority||"media");
-  const [deadline, setDeadline] = useState(item?.deadline||sextaIso);
+  // Prazo: se já tem item, usa o dele. Se é novo, calcula automático pela prioridade default ("media" = 14 dias úteis)
+  const _defaultPrio = item?.priority || "media";
+  const _defaultPrioCfg = DG_SPRINT_PRIO.find(x=>x.id===_defaultPrio) || DG_SPRINT_PRIO[1];
+  const [deadline, setDeadline] = useState(item?.deadline || _dgAddBusinessDays(_defaultPrioCfg.dias));
   const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius") : [];
   const initResp = Array.isArray(item?.assignees)&&item.assignees.length>0 ? item.assignees : [user.id];
   const [responsaveis, setResponsaveis] = useState(initResp);
@@ -44952,30 +45068,33 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
           </div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div>
-            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Status</div>
-            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-              {DG_SPRINT_STATUS.map(s=>{
-                const a = status===s.id;
-                return <button key={s.id} type="button" onClick={()=>setStatus(s.id)}
-                  style={{background:a?s.color:s.bg,color:a?"#fff":s.color,border:"1px solid "+(a?s.color:s.color+"33"),padding:"6px 11px",borderRadius:99,fontSize:10.5,fontWeight:a?800:700,cursor:"pointer",fontFamily:DG_INTER,textTransform:"uppercase",letterSpacing:.3,transition:"all .12s"}}>
-                  {s.label}
-                </button>;
-              })}
-            </div>
+        <div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Status</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {DG_SPRINT_STATUS.map(s=>{
+              const a = status===s.id;
+              return <button key={s.id} type="button" onClick={()=>setStatus(s.id)}
+                style={{background:a?s.color:s.bg,color:a?"#fff":s.color,border:"1px solid "+(a?s.color:s.color+"33"),padding:"7px 13px",borderRadius:99,fontSize:11,fontWeight:a?800:700,cursor:"pointer",fontFamily:DG_INTER,textTransform:"uppercase",letterSpacing:.3,transition:"all .12s"}}>
+                {s.label}
+              </button>;
+            })}
           </div>
-          <div>
-            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prioridade</div>
-            <div style={{display:"flex",gap:5}}>
-              {DG_SPRINT_PRIO.map(p=>{
-                const a = priority===p.id;
-                return <button key={p.id} type="button" onClick={()=>setPriority(p.id)}
-                  style={{flex:1,background:a?p.color:"#fff",color:a?"#fff":p.color,border:"1px solid "+(a?p.color:p.color+"55"),padding:"8px 6px",borderRadius:8,fontSize:11.5,fontWeight:a?800:700,cursor:"pointer",fontFamily:DG_INTER,textTransform:"uppercase",letterSpacing:.3}}>
-                  {p.label}
-                </button>;
-              })}
-            </div>
+        </div>
+
+        <div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prioridade <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(define o prazo automaticamente)</span></div>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:6}}>
+            {DG_SPRINT_PRIO.map(p=>{
+              const a = priority===p.id;
+              return <button key={p.id} type="button" onClick={()=>{setPriority(p.id);setDeadline(_dgAddBusinessDays(p.dias));}}
+                style={{background:a?p.color:p.bg,color:a?"#fff":p.color,border:"1px solid "+(a?p.color:p.color+"44"),padding:"10px 12px",borderRadius:11,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s",textAlign:"left"}}>
+                <div style={{fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,marginBottom:3}}>{p.label}</div>
+                <div style={{fontSize:10.5,fontWeight:600,opacity:a?.9:.85,display:"inline-flex",alignItems:"center",gap:4}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  {p.dias} {p.dias===1?"dia útil":"dias úteis"}
+                </div>
+              </button>;
+            })}
           </div>
         </div>
 
