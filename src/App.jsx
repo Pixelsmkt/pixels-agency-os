@@ -3491,8 +3491,9 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
       </div>
     </div>
 
-    {/* ── ALERTAS URGENTES — criados por admins/social media ── */}
-    <DashboardAlerts userId={effectiveUser.id} isMob={isMob}/>
+    {/* ── ALERTAS URGENTES — criados por admins/social media ──
+         Escondido pros sócios (Vinicius+Gustavo) pra dash começar direto com metas. */}
+    {effectiveUser.id!=="vinicius"&&effectiveUser.id!=="gustavo"&&<DashboardAlerts userId={effectiveUser.id} isMob={isMob}/>}
 
     <RenderDash user={effectiveUser} isViewing={isViewingOther} tasks={propTasks||[]} setTasks={propSetTasks} notifs={notifs} isMob={isMob}/>
   </div>;
@@ -44341,24 +44342,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 
   return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:DG_INTER}}>
 
-    {/* ══════════ STATS DA CENTRAL DE COMANDO (sem duplicar foto/nome) ══════════ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
-      {[
-        {label:"Aprovações pendentes",value:apvTotal,color:apvTotal>0?"#f59e0b":"#16a34a",bg:apvTotal>0?"#fffbeb":"#f0fdf4",icon:"check"},
-        {label:"Clientes em atenção", value:clientesAtencao.length,color:clientesAtencao.length>0?"#ef4444":"#16a34a",bg:clientesAtencao.length>0?"#fef2f2":"#f0fdf4",icon:"alert"},
-        {label:"Metas pra hoje",       value:metasHoje.length,color:metasHoje.length>0?DG_PURPLE:"#16a34a",bg:metasHoje.length>0?DG_PURPLE+"14":"#f0fdf4",icon:"target"},
-        {label:"Demandas atrasadas",   value:demandasAtrasadas.length,color:demandasAtrasadas.length>0?"#ef4444":"#16a34a",bg:demandasAtrasadas.length>0?"#fef2f2":"#f0fdf4",icon:"clock"},
-      ].map((s,i)=><div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-        <div style={{width:38,height:38,borderRadius:10,background:s.bg,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <Ico n={s.icon} size={16} color={s.color}/>
-        </div>
-        <div style={{minWidth:0,flex:1}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>{s.label}</div>
-          <div style={{color:s.color,fontSize:22,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"\'tnum\'"}}>{s.value}</div>
-        </div>
-      </div>)}
-    </div>
-
+    {/* Sócios começam direto com as metas — sem stats genéricas no topo */}
     {/* ══════════ LINHA: METAS DO DIA + METAS DA SEMANA (horizontal) ══════════ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
       {/* METAS DO DIA */}
@@ -44405,77 +44389,227 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       </div>
     </div>
 
-    {/* ══════════ PLANEJAMENTO DA SEMANA — Rotina + Metas custom ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-      <_DGSec icon="calendar" title="Planejamento da semana" sub="Sua rotina personalizada + metas adicionadas. Marque o que foi feito."
-        right={<div style={{display:"inline-flex",background:"#f1f5f9",borderRadius:8,padding:2}}>
-          {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
-            const a = filtroStatus===f.id;
-            return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
-              style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:6,padding:"5px 11px",fontSize:11,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none"}}>
-              {f.l}
-            </button>;
-          })}
-        </div>}/>
+    {/* ══════════ PLANEJAMENTO DA SEMANA — design moderno ══════════ */}
+    <div style={{background:"linear-gradient(180deg,#fafbff,#fff)",border:"1px solid #e9d5ff",borderRadius:16,padding:"18px 20px",boxShadow:"0 4px 20px rgba(124,58,237,0.05)"}}>
+      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+          <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 20px rgba(124,58,237,0.30)"}}>
+            <Ico n="calendar" size={17} color="#fff"/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Planejamento da semana</div>
+            <div style={{color:"#7c3aed",fontSize:12,marginTop:2,fontWeight:600,letterSpacing:-.1}}>Rotina personalizada + metas marcadas pra você</div>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{display:"inline-flex",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:3,boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}>
+            {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"OK"}].map(f=>{
+              const a = filtroStatus===f.id;
+              return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
+                style={{background:a?"linear-gradient(135deg,#a78bfa,#7c3aed)":"transparent",color:a?"#fff":"#64748b",border:"none",borderRadius:7,padding:"6px 14px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 4px 10px rgba(124,58,237,0.25)":"none",transition:"all .15s",letterSpacing:-.1}}>
+                {f.l}
+              </button>;
+            })}
+          </div>
+        </div>
+      </div>
 
-      {/* Grade Seg-Sex FULL WIDTH */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:10}}>
+      {/* Grade Seg-Sex FULL WIDTH com design moderno */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12}}>
         {DG_DAYS.map(d=>{
           const metasDia = _filtrar(metasPorDia[d.key]||[]);
           const totalMetas = (metasPorDia[d.key]||[]).length;
           const concMetas = (metasPorDia[d.key]||[]).filter(m=>m.status==="concluida").length;
           const isHoje = _dgWeekDate(d.idx)===hoje;
+          const dayDate = _dgWeekDate(d.idx);
+          const dayNum = dayDate ? parseInt(dayDate.split("-")[2],10) : "";
           // Rotina hardcoded do dia
           const rotinaDia = _rotinaDias.find(r=>r.id===d.key);
           const rotinaItens = rotinaDia?.itens||[];
-          // Filtros aplicados também à rotina
           const rotinaFiltered = filtroStatus==="todas"?rotinaItens:
             (filtroStatus==="concluidas"?rotinaItens.filter(it=>rotinaChecks[it.id]):rotinaItens.filter(it=>!rotinaChecks[it.id]));
           const rotinaConc = rotinaItens.filter(it=>rotinaChecks[it.id]).length;
           const dayConc = concMetas + rotinaConc;
           const dayTotal = totalMetas + rotinaItens.length;
-          return <div key={d.key} style={{background:isHoje?"#f5f3ff":"#fafbfc",border:"1px solid "+(isHoje?"#ddd6fe":"#e2e8f0"),borderRadius:11,padding:"10px 11px",display:"flex",flexDirection:"column",gap:8,minHeight:200}}>
-            {/* Header do dia */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
-              <div style={{minWidth:0}}>
-                <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:15,fontWeight:900,letterSpacing:-.3,display:"flex",alignItems:"center",gap:6,textTransform:"uppercase"}}>
-                  {d.label}{isHoje&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:DG_PURPLE,padding:"2px 7px",borderRadius:99,letterSpacing:.5,boxShadow:"0 4px 12px "+DG_PURPLE+"55"}}>HOJE</span>}
+          const pct = dayTotal>0 ? Math.round((dayConc/dayTotal)*100) : 0;
+          return <div key={d.key} style={{background:"#fff",border:"1px solid "+(isHoje?"#a78bfa":"#e9d5ff"),borderRadius:13,padding:0,display:"flex",flexDirection:"column",minHeight:240,overflow:"hidden",boxShadow:isHoje?"0 6px 20px rgba(124,58,237,0.18)":"0 1px 3px rgba(15,23,42,0.04)",transition:"all .15s",position:"relative"}}>
+            {/* Header do dia — strip lateral colorida */}
+            <div style={{background:isHoje?"linear-gradient(135deg,#a78bfa,#7c3aed)":"linear-gradient(180deg,#fafbff,#fff)",padding:"10px 12px 8px",borderBottom:"1px solid "+(isHoje?"transparent":"#f1f5f9"),position:"relative"}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+                    <div style={{color:isHoje?"#fff":"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,textTransform:"uppercase"}}>
+                      {d.label}
+                    </div>
+                    {dayNum&&<div style={{color:isHoje?"#fff":"#cbd5e1",fontSize:10.5,fontWeight:700,opacity:isHoje?.85:1,fontFeatureSettings:"'tnum'"}}>{String(dayNum).padStart(2,"0")}</div>}
+                  </div>
+                  {rotinaDia?.titulo&&<div style={{color:isHoje?"#fff":"#7c3aed",opacity:isHoje?.9:1,fontSize:10,marginTop:2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
                 </div>
-                {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:10,marginTop:2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
+                {isHoje&&<span style={{fontSize:8.5,fontWeight:800,color:"#7c3aed",background:"#fff",padding:"2px 7px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
               </div>
-              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0}}>{dayConc}/{dayTotal}</div>
+              {/* Mini progress */}
+              {dayTotal>0&&<div style={{marginTop:7}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                  <span style={{color:isHoje?"#fff":"#94a3b8",fontSize:9,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",opacity:isHoje?.9:1}}>{dayConc} de {dayTotal}</span>
+                  <span style={{color:isHoje?"#fff":(pct===100?"#16a34a":"#7c3aed"),fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",opacity:isHoje?.9:1}}>{pct}%</span>
+                </div>
+                <div style={{height:3,background:isHoje?"rgba(255,255,255,0.25)":"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:pct+"%",height:"100%",background:isHoje?"#fff":(pct===100?"#16a34a":"#7c3aed"),borderRadius:99,transition:"width .3s"}}/>
+                </div>
+              </div>}
             </div>
 
-            {/* Rotina hardcoded */}
-            {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
-              {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)}/>)}
-            </div>}
+            {/* Corpo */}
+            <div style={{padding:"10px 11px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
+              {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)}/>)}
+              </div>}
 
-            {/* Divisor se tem rotina E metas */}
-            {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#e2e8f0",margin:"3px 0"}}/>}
+              {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#f1f5f9",margin:"3px 0"}}/>}
 
-            {/* Metas custom */}
-            {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
-              {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
-            </div>}
+              {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
+              </div>}
 
-            {/* Empty state se nada */}
-            {rotinaFiltered.length===0&&metasDia.length===0&&<div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",textAlign:"center",padding:"10px 4px",lineHeight:1.4}}>
-              {filtroStatus==="todas"?"Sem itens":"Sem "+filtroStatus.toLowerCase()}
-            </div>}
+              {rotinaFiltered.length===0&&metasDia.length===0&&<div style={{color:"#cbd5e1",fontSize:10.5,textAlign:"center",padding:"14px 4px",lineHeight:1.4,fontWeight:500}}>
+                {filtroStatus==="todas"?"Dia livre":"Sem "+filtroStatus.toLowerCase()}
+              </div>}
 
-            {/* Botão + sempre no fim */}
-            <button onClick={()=>setNovaMeta({day:d})}
-              style={{marginTop:"auto",background:"transparent",color:"#64748b",border:"1px dashed #cbd5e1",borderRadius:7,padding:"5px 8px",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4,transition:"all .12s"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor=DG_PURPLE;e.currentTarget.style.color=DG_PURPLE;}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
-              Adicionar
-            </button>
+              <button onClick={()=>setNovaMeta({day:d})}
+                style={{marginTop:"auto",background:"#faf5ff",color:"#7c3aed",border:"1px dashed #c4b5fd",borderRadius:8,padding:"7px 8px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s",letterSpacing:-.1}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#7c3aed";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#c4b5fd";}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                Adicionar meta
+              </button>
+            </div>
           </div>;
         })}
       </div>
     </div>
+
+    {/* ══════════ SPRINTS — entregas até sexta da próxima semana, por cliente ══════════ */}
+    {(function(){
+      // Janela: a partir de hoje até sexta da próxima semana
+      const _proxSextaIso = (function(){
+        const today = new Date();
+        const todayIdx = today.getDay()===0?7:today.getDay();
+        const diff = (5 - todayIdx) + 7; // próxima sexta
+        const d = new Date(today);
+        d.setDate(d.getDate()+diff);
+        return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+      })();
+      const _sprintWeekKey = _dgWeekKey(new Date(_proxSextaIso+"T00:00:00"));
+      // Sprint items dessa janela onde o sócio logado é assignee
+      const sprintItems = planEntries.filter(e=>e.type==="sprint_item"&&e.week_key===_sprintWeekKey&&_isMineMeta(e));
+      // Clientes a mostrar: ativos com contract>0 + os que já tem item
+      const clientesAtivos = (CLIENTS||[]).filter(c=>c.status!=="interno"&&Number(c.contract||0)>0);
+      const clientesComItem = Array.from(new Set(sprintItems.map(it=>it.client_id).filter(Boolean)));
+      const clientesShown = clientesAtivos.filter(c=>true);
+      clientesComItem.forEach(cid=>{
+        if(!clientesShown.find(c=>c.id===cid)){
+          const c = (CLIENTS||[]).find(x=>x.id===cid);
+          if(c) clientesShown.push(c);
+        }
+      });
+
+      const _addSprintItem = (cl) => {
+        const title = window.prompt("Nova entrega de sprint pra "+cl.name+":");
+        if(!title||!title.trim()) return;
+        planUpsert({
+          id:"sprint-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+          type:"sprint_item",
+          week_key:_sprintWeekKey,
+          deadline:_proxSextaIso,
+          title:title.trim(),
+          client_id:cl.id,
+          assignees:[user.id],
+          author_id:user.id,
+          author_name:user.name,
+          status:"em_andamento",
+          created_at:new Date().toISOString(),
+          updated_at:new Date().toISOString(),
+        });
+      };
+      const _toggleSprint = (m) => {
+        const newStatus = m.status==="concluida"?"em_andamento":"concluida";
+        planUpsert(Object.assign({},m,{status:newStatus,updated_at:new Date().toISOString()}));
+      };
+      const _delSprint = (m) => {
+        if(window.confirm("Excluir esta entrega?")&&typeof planRemove==="function") planRemove(m.id);
+      };
+
+      const sprintTotal = sprintItems.length;
+      const sprintOk = sprintItems.filter(it=>it.status==="concluida").length;
+
+      return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+            <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#06b6d4,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 20px rgba(14,165,233,0.25)"}}>
+              <Ico n="flag" size={17} color="#fff"/>
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Sprint da próxima semana</div>
+              <div style={{color:"#0ea5e9",fontSize:12,marginTop:2,fontWeight:600,letterSpacing:-.1}}>O que precisa entregar até sexta {(()=>{const d=new Date(_proxSextaIso+"T00:00:00");return d.getDate()+"/"+String(d.getMonth()+1).padStart(2,"0");})()} — por cliente</div>
+            </div>
+          </div>
+          {sprintTotal>0&&<div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"7px 12px",fontFamily:DG_INTER}}>
+            <span style={{color:"#0369a1",fontSize:11,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginRight:6}}>Progresso</span>
+            <span style={{color:"#0c4a6e",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{sprintOk}/{sprintTotal}</span>
+          </div>}
+        </div>
+
+        {clientesShown.length===0 ? <_DGEmpty icon="flag" title="Sem clientes ativos." desc="Adicione clientes na aba Comercial para planejar sprints."/> :
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
+            {clientesShown.map(cl=>{
+              const itensCl = sprintItems.filter(it=>it.client_id===cl.id);
+              const okCl = itensCl.filter(it=>it.status==="concluida").length;
+              return <div key={cl.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:0,display:"flex",flexDirection:"column",minHeight:160,overflow:"hidden",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+                {/* Header da coluna do cliente */}
+                <div style={{padding:"10px 12px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:9,background:"linear-gradient(180deg,"+(cl.color||"#94a3b8")+"0a,#fff)"}}>
+                  <ClientLogo clientId={cl.id} size="sm"/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                    {itensCl.length>0&&<div style={{color:cl.color||"#64748b",fontSize:10,fontWeight:700,marginTop:1,fontFeatureSettings:"'tnum'"}}>{okCl}/{itensCl.length} entregue{itensCl.length>1?"s":""}</div>}
+                  </div>
+                </div>
+                {/* Corpo da coluna */}
+                <div style={{padding:"10px 11px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
+                  {itensCl.length===0&&<div style={{color:"#cbd5e1",fontSize:10.5,textAlign:"center",padding:"12px 4px",lineHeight:1.4,fontWeight:500}}>Nenhuma entrega prevista</div>}
+                  {itensCl.map(it=>{
+                    const isOk = it.status==="concluida";
+                    return <div key={it.id} style={{background:isOk?"#f0fdf4":"#fafbfc",border:"1px solid "+(isOk?"#bbf7d0":"#f1f5f9"),borderRadius:8,padding:"7px 9px",display:"flex",alignItems:"flex-start",gap:7,fontFamily:DG_INTER,transition:"all .12s",position:"relative"}}
+                      onMouseEnter={e=>{const x=e.currentTarget.querySelector("._sprDel");if(x)x.style.opacity="1";}}
+                      onMouseLeave={e=>{const x=e.currentTarget.querySelector("._sprDel");if(x)x.style.opacity="0";}}>
+                      <button onClick={()=>_toggleSprint(it)} title={isOk?"Desmarcar":"Marcar como entregue"}
+                        style={{width:15,height:15,borderRadius:5,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,padding:0,transition:"all .12s"}}>
+                        {isOk&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      </button>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:isOk?"#166534":"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,textDecoration:isOk?"line-through":"none",wordBreak:"break-word",paddingRight:14}}>{it.title}</div>
+                      </div>
+                      <button className="_sprDel" onClick={(e)=>{e.stopPropagation();_delSprint(it);}} title="Excluir"
+                        style={{position:"absolute",top:4,right:4,background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,opacity:0,transition:"opacity .12s, color .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
+                        onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>;
+                  })}
+                  <button onClick={()=>_addSprintItem(cl)}
+                    style={{marginTop:"auto",background:"transparent",color:"#0ea5e9",border:"1px dashed #bae6fd",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s",letterSpacing:-.1}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#0ea5e9";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#0ea5e9";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#0ea5e9";e.currentTarget.style.borderColor="#bae6fd";}}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                    Adicionar entrega
+                  </button>
+                </div>
+              </div>;
+            })}
+          </div>
+        }
+      </div>;
+    })()}
 
     {/* ══════════ APROVAÇÕES + CLIENTES EM ATENÇÃO (lado a lado) ══════════ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1.5fr",gap:12}}>
