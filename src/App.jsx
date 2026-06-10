@@ -12607,7 +12607,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         const canSeeAll=myPerms.verTodosKanban;
         const canSeeSocios=myPerms.verKanbanSocios;
         // Colaboradores que aparecem no filtro — exclui Erick (gestor de mídia, não faz parte do fluxo de demandas)
-        const FLUXO_USERS=["vinicius","gustavo","ellen","andre","guilherme"];
+        const FLUXO_USERS=["vinicius","gustavo","ellen","andre","maria","guilherme"];
         const allowedUsers=canSeeAll
           ?["todos",...TEAM.filter(u=>{
               if(!FLUXO_USERS.includes(u.id))return false;
