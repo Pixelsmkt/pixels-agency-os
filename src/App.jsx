@@ -44578,17 +44578,18 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             </button>}
           </div>}/>
 
-        {/* Resumo do sprint */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:16}}>
+        {/* Resumo do sprint — stats modernos com ícones */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:12,marginBottom:18}}>
           {[
-            {l:"Total",       v:sprintTotal,     c:"#0f172a"},
-            {l:"Em andamento",v:sprintEmAnd,     c:"#0ea5e9"},
-            {l:"Atrasadas",   v:sprintAtrasado,  c:sprintAtrasado>0?"#ef4444":"#94a3b8"},
-            {l:"Concluídas",  v:sprintConcluido, c:"#16a34a"},
-          ].map((s,i)=><div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <div>
-              <div style={{color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{s.l}</div>
-              <div style={{color:s.c,fontSize:22,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
+            {l:"Total",       v:sprintTotal,     c:"#0f172a", bg:"#f8fafc", rb:"#eef0f3", svg:"<rect x='3' y='3' width='7' height='7'/><rect x='14' y='3' width='7' height='7'/><rect x='3' y='14' width='7' height='7'/><rect x='14' y='14' width='7' height='7'/>"},
+            {l:"Em andamento",v:sprintEmAnd,     c:"#0ea5e9", bg:"#f0f9ff", rb:"#dbeafe", svg:"<circle cx='12' cy='12' r='9'/><polyline points='12 7 12 12 15 14'/>"},
+            {l:"Atrasadas",   v:sprintAtrasado,  c:sprintAtrasado>0?"#ef4444":"#94a3b8", bg:sprintAtrasado>0?"#fef2f2":"#f8fafc", rb:sprintAtrasado>0?"#fecaca":"#eef0f3", svg:"<path d='M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/>"},
+            {l:"Concluídas",  v:sprintConcluido, c:"#16a34a", bg:"#f0fdf4", rb:"#bbf7d0", svg:"<polyline points='20 6 9 17 4 12'/>"},
+          ].map((s,i)=><div key={i} style={{background:"#fff",border:"1px solid "+s.rb,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 2px rgba(15,23,42,0.025)",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.08)";}} onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.025)";}}>
+            <div style={{width:36,height:36,borderRadius:10,background:s.bg,color:s.c,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}} dangerouslySetInnerHTML={{__html:"<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'>"+s.svg+"</svg>"}}/>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#64748b",fontSize:11,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginBottom:3,lineHeight:1}}>{s.l}</div>
+              <div style={{color:s.c,fontSize:23,fontWeight:800,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
             </div>
           </div>)}
         </div>
