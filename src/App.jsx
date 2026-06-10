@@ -25388,7 +25388,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </select>
           </div>}
 
-          {!isAgendado&&<div style={{position:"relative"}}>
+          {(!isAgendado||isAdmin)&&<div style={{position:"relative"}}>
             <label style={LB}><Ico n="users" size={12} color="#94a3b8"/> Responsáveis</label>
             <button onClick={()=>{if(canEdit){setShowAssigneesPicker(v=>!v);}}}
               style={{...SI,display:"flex",alignItems:"center",gap:6,cursor:canEdit?"pointer":"default",textAlign:"left",padding:"7px 10px"}}>
