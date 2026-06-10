@@ -1277,7 +1277,7 @@ function formatRefMonth(refMonth){
 /* ─── FreelancerPaymentsBlock — card consolidado com pagamentos de todos os freelancers
        (André + Maria + Guilherme) por tipo de conteúdo no mês de referência selecionado.
        Reutilizado em DashPartner e em PageGestaoFinanceiro.                        ─── */
-function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact}){
+function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMob, compact}){
   const fmtBRL=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
   const freelancers=(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.pagamentoPorDemanda;});
   const rows=freelancers.map(function(fr){
@@ -1285,6 +1285,44 @@ function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact
     return {fr:fr,calc:calc,isEditor:fr.dash==="editor"};
   });
   const total=rows.reduce(function(s,r){return s+r.calc.total;},0);
+  // ── Rollover de cards pendentes pro próximo mês ────────────────────
+  const [_rolModal, _setRolModal] = useState(null);
+  function _abrirRollover(){
+    if(!refMonth){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Selecione um mês primeiro."); return; }
+    if(!setTasks){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Função de atualização indisponível."); return; }
+    const PAID=["aprovado","agendado","publicado"];
+    const pendentes=(tasks||[]).filter(function(t){
+      if(!t||t.deletedAt) return false;
+      if(t.referenceMonth!==refMonth) return false;
+      if(PAID.indexOf(t.status)>=0) return false;
+      // só tarefas com algum responsável freelancer (André, Maria, Guilherme, etc)
+      const fids=freelancers.map(function(f){return f.id;});
+      const assigned=t.assignee||(Array.isArray(t.assignees)&&t.assignees[0])||"";
+      const assignees=Array.isArray(t.assignees)?t.assignees:[assigned].filter(Boolean);
+      return assignees.some(function(aid){return fids.indexOf(aid)>=0;});
+    });
+    if(pendentes.length===0){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nenhum card pendente de freelancer nesse mês."); return; }
+    const parts=refMonth.split("-");
+    let y=parseInt(parts[0]); let m=parseInt(parts[1])+1;
+    if(m>12){ m=1; y++; }
+    const nextMonth=y+"-"+String(m).padStart(2,"0");
+    _setRolModal({cards:pendentes, nextMonth:nextMonth});
+  }
+  function _confirmarRollover(){
+    if(!_rolModal) return;
+    const nextMonth=_rolModal.nextMonth;
+    const ids={};
+    _rolModal.cards.forEach(function(t){ ids[t.id]=true; });
+    setTasks(function(prev){
+      return (prev||[]).map(function(t){
+        if(!ids[t.id]) return t;
+        return Object.assign({},t,{referenceMonth:nextMonth, updated_at:new Date().toISOString()});
+      });
+    });
+    const n=_rolModal.cards.length;
+    _setRolModal(null);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" card(s) movido(s) pra "+nextMonth);
+  }
 
   const ChipBreak=function(props){
     const label=props.label,count=props.count,price=props.price;
@@ -1307,6 +1345,7 @@ function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <input type="month" value={refMonth||""} onChange={function(e){onChangeMonth&&onChangeMonth(e.target.value);}}
           style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer",fontFamily:"inherit"}}/>
+        <button type="button" onClick={_abrirRollover} title="Move cards não-aprovados desse mês pro próximo mês de pagamento" style={{background:"#fef3c7",color:"#a16207",border:"1px solid #fde68a",borderRadius:8,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,transition:"all .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#fde68a";}} onMouseLeave={function(e){e.currentTarget.style.background="#fef3c7";}}>⟳ Rolar pendentes</button>
         <div style={{textAlign:"right"}}>
           <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
           <div style={{color:"#7c3aed",fontWeight:900,fontSize:20,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{fmtBRL(total)}</div>
@@ -1350,6 +1389,26 @@ function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact
         </div>;
       })}
     </div>
+    {_rolModal&&<div onClick={function(){_setRolModal(null);}} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:10000,display:"flex",alignItems:"center",justifyContent:"center",padding:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,padding:"22px 24px",maxWidth:480,width:"100%",maxHeight:"80vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.3)"}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3,marginBottom:6}}>Rolar pendentes pro próximo mês</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginBottom:16,lineHeight:1.5}}><strong style={{color:"#a16207"}}>{_rolModal.cards.length} card(s)</strong> serão movidos de <strong>{refMonth}</strong> → <strong>{_rolModal.nextMonth}</strong>. Apenas cards NÃO aprovados/publicados são considerados.</div>
+        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,padding:"10px 12px",maxHeight:240,overflow:"auto",marginBottom:18}}>
+          {_rolModal.cards.map(function(t){
+            const a=Array.isArray(t.assignees)?t.assignees[0]:t.assignee;
+            const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===a;});
+            return <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderBottom:"1px dashed #e5e7eb",fontSize:12}}>
+              <span style={{color:"#0f172a",fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"Sem título"}</span>
+              <span style={{color:"#94a3b8",fontSize:11,whiteSpace:"nowrap"}}>{u?u.name:(a||"—")}</span>
+            </div>;
+          })}
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+          <button type="button" onClick={function(){_setRolModal(null);}} style={{background:"#fff",color:"#64748b",border:"1px solid #e5e7eb",borderRadius:9,padding:"9px 16px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+          <button type="button" onClick={_confirmarRollover} style={{background:"#a16207",color:"#fff",border:"none",borderRadius:9,padding:"9px 18px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Confirmar — mover pra {_rolModal.nextMonth}</button>
+        </div>
+      </div>
+    </div>}
   </div>;
 }
 
@@ -18901,7 +18960,7 @@ const GF_RESERVA_CAIXA_PCT = 0.10;
 // Meta de margem (configurável)
 const GF_META_MARGEM_PCT = 0.50;
 
-function PageGestaoFinanceiro({isMob,tasks}){
+function PageGestaoFinanceiro({isMob,tasks,setTasks}){
   const [payMonth,setPayMonth]=useState(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
   const [contratosExpand,setContratosExpand]=useState({Bioter:true});
   const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
@@ -19090,7 +19149,7 @@ function PageGestaoFinanceiro({isMob,tasks}){
 
     {/* ════ 4b. PAGAMENTOS POR DEMANDA — Design + Edição de vídeo (cálculo auto) ════ */}
     <Block>
-      <FreelancerPaymentsBlock tasks={tasks||[]} refMonth={payMonth} onChangeMonth={setPayMonth} isMob={isMob}/>
+      <FreelancerPaymentsBlock tasks={tasks||[]} setTasks={setTasks} refMonth={payMonth} onChangeMonth={setPayMonth} isMob={isMob}/>
     </Block>
 
     {/* ════ 4c. TABELA DE PREÇOS POR TIPO DE CONTEÚDO (referência pros sócios) ════ */}
@@ -25536,7 +25595,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               ].map(opt=>{
                 const isSel=contentType===opt.id;
                 const _canPick=canEdit&&canEditContentType;
-                return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;setContentType(isSel?"":opt.id);}} disabled={!_canPick}
+                return <button key={opt.id} type="button" onClick={()=>{if(!_canPick)return;const _newType=isSel?"":opt.id;setContentType(_newType);if(_newType==="video"||_newType==="corte"||_newType==="video_complexo"||_newType==="video_feira"){setAssignees(p=>p.includes("guilherme")?p:ensureSupervisors([...p,"guilherme"]));}}} disabled={!_canPick}
                   style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,padding:"6px 3px",background:isSel?"#7c3aed18":"#fff",border:`1px solid ${isSel?"#7c3aed":"#e2e8f0"}`,borderRadius:8,cursor:_canPick?"pointer":"not-allowed",fontSize:9.5,color:isSel?"#7c3aed":"#475569",fontWeight:isSel?600:500,transition:"all .12s",lineHeight:1.15,textAlign:"center",height:54,boxSizing:"border-box",opacity:_canPick?1:.7}}>
                   <Ico n={opt.icon} size={14}/>
                   <span style={{wordBreak:"break-word"}}>{opt.label}</span>
