@@ -39694,7 +39694,7 @@ function useOpRotinaChecks(weekKey, userId){
   function toggle(itemId){
     const cur = checks[itemId];
     if(cur && cur.completed){
-      if(!window.confirm("Desmarcar este item? A data de conclusão será removida.")) return;
+      // Desfaz direto, sem confirm — UX limpa pra checklists curtos
       const next = Object.assign({}, checks); delete next[itemId];
       setChecks(next);
       if(window._sb){
@@ -44343,47 +44343,56 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:DG_INTER}}>
 
-    {/* ══════════ HEADER — saudação + indicadores ══════════ */}
-    <div style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",borderRadius:18,padding:isMob?"18px 18px":"22px 26px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 12px 36px rgba(124,58,237,0.18)"}}>
-      <div style={{position:"absolute",inset:0,opacity:.15,backgroundImage:"radial-gradient(circle at 90% 20%, rgba(255,255,255,0.4), transparent 50%), radial-gradient(circle at 20% 80%, rgba(255,255,255,0.25), transparent 60%)"}}/>
-      <div style={{position:"relative",display:"flex",justifyContent:"space-between",alignItems:"center",gap:18,flexWrap:"wrap"}}>
-        <div>
-          <div style={{fontSize:12,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",opacity:.85}}>{_dgSaudacao()}, {user.name.split(" ")[0]}</div>
-          <div style={{fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:5,lineHeight:1.2}}>Central de comando da semana</div>
-          <div style={{fontSize:12.5,opacity:.85,marginTop:5,fontWeight:500}}>{_dgDateLong()} · Semana {weekKey.slice(-3)}</div>
+    {/* ══════════ INDICADORES COMPACTOS — saudação já está no Topbar ══════════ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(3,minmax(0,1fr))",gap:10}}>
+      {[
+        {label:"Demandas abertas", value:demandasAbertas.length,   color:"#0f172a", accent:"#7c3aed"},
+        {label:"Atrasadas",        value:demandasAtrasadas.length, color:demandasAtrasadas.length>0?"#dc2626":"#16a34a", accent:demandasAtrasadas.length>0?"#fee2e2":"#dcfce7"},
+        {label:"Notificações",     value:notifNaoLidas,            color:"#0f172a", accent:"#fef3c7"},
+      ].map((k,i)=><div key={i} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"14px 18px",display:"flex",alignItems:"center",gap:13,boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <div style={{width:8,height:38,borderRadius:99,background:k.accent,flexShrink:0}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:3}}>{k.label}</div>
+          <div style={{color:k.color,fontSize:24,fontWeight:800,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{k.value}</div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(3,minmax(110px,1fr))",gap:8,width:isMob?"100%":"auto"}}>
-          {[
-            {label:"Demandas abertas", value:demandasAbertas.length},
-            {label:"Atrasadas",        value:demandasAtrasadas.length, urgent:demandasAtrasadas.length>0},
-            {label:"Notificações",     value:notifNaoLidas},
-          ].map((k,i)=><div key={i} style={{background:"rgba(255,255,255,0.12)",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:13,padding:"10px 14px",textAlign:"left"}}>
-            <div style={{fontSize:10,fontWeight:700,letterSpacing:.6,textTransform:"uppercase",opacity:.85,whiteSpace:"nowrap"}}>{k.label}</div>
-            <div style={{fontSize:22,fontWeight:800,letterSpacing:-.4,marginTop:3,fontFeatureSettings:"'tnum'",color:k.urgent?"#fecaca":"#fff"}}>{k.value}</div>
-          </div>)}
-        </div>
-      </div>
+      </div>)}
     </div>
 
-    {/* ══════════ METAS DO DIA + METAS DA SEMANA ══════════ */}
+    {/* ══════════ METAS DO DIA + METAS DA SEMANA — visual unificado ══════════ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
       {/* METAS DO DIA */}
-      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <_DGSec icon="target" title="Metas do dia" sub="O que precisa sair hoje."
-          right={<button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
-              style={{background:"#f5f3ff",color:DG_PURPLE,border:"1px solid #ede9fe",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background=DG_PURPLE;e.currentTarget.style.color="#fff";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color=DG_PURPLE;}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-              Nova meta
-            </button>}/>
-        {metasHoje.length>0&&<div style={{color:"#64748b",fontSize:12,fontWeight:600,fontFeatureSettings:"'tnum'",marginBottom:10}}>{hojeConcluidas} de {metasHoje.length} concluídas</div>}
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+            <div style={{width:34,height:34,borderRadius:10,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
+              <Ico n="target" size={15} color={DG_PURPLE}/>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Metas do dia</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>O que precisa sair hoje</div>
+            </div>
+          </div>
+          <button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
+            style={{background:"#f5f3ff",color:DG_PURPLE,border:"1px solid #ede9fe",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background=DG_PURPLE;e.currentTarget.style.color="#fff";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color=DG_PURPLE;}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Nova meta
+          </button>
+        </div>
+        {/* Resumo do dia (alinha visual com semana) */}
+        {metasHoje.length>0&&<div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <div style={{flex:1,height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+            <div style={{height:"100%",width:(metasHoje.length>0?Math.round((hojeConcluidas/metasHoje.length)*100):0)+"%",background:DG_PURPLE,borderRadius:99,transition:"width .3s"}}/>
+          </div>
+          <span style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",minWidth:48,textAlign:"right"}}>{hojeConcluidas}/{metasHoje.length}</span>
+        </div>}
         {metasHoje.length===0
-          ? <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
+          ? <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"30px 18px",textAlign:"center",flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:180}}>
               <div style={{display:"inline-flex",width:44,height:44,borderRadius:12,background:"#f1f5f9",color:"#94a3b8",alignItems:"center",justifyContent:"center",marginBottom:10}}>
                 <Ico n="target" size={18} color="#94a3b8"/>
               </div>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:4,letterSpacing:-.2}}>Nenhuma prioridade cadastrada para hoje.</div>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:4,letterSpacing:-.2}}>Nenhuma prioridade pra hoje</div>
               <div style={{color:"#94a3b8",fontSize:12,lineHeight:1.55,maxWidth:320,margin:"0 auto"}}>Adicione uma meta ou puxe uma entrega do planejamento da semana.</div>
             </div>
           : <div style={{display:"flex",flexDirection:"column",gap:7}}>
@@ -44391,40 +44400,49 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             </div>}
       </div>
 
-      {/* METAS DA SEMANA */}
-      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <_DGSec icon="flag" title="Metas da semana" sub={"Resumo geral · Semana "+weekKey.slice(-3)}
-          right={<button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
+      {/* METAS DA SEMANA — espelha visual do Metas do dia */}
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:18,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+            <div style={{width:34,height:34,borderRadius:10,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
+              <Ico n="flag" size={15} color={DG_PURPLE}/>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Metas da semana</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Resumo geral · Semana {weekKey.slice(-3)}</div>
+            </div>
+          </div>
+          <button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
             style={{background:"#f5f3ff",color:DG_PURPLE,border:"1px solid #ede9fe",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,transition:"all .15s"}}
             onMouseEnter={e=>{e.currentTarget.style.background=DG_PURPLE;e.currentTarget.style.color="#fff";}}
             onMouseLeave={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color=DG_PURPLE;}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
             Nova meta
-          </button>}/>
-        {/* Progress bar discreta */}
+          </button>
+        </div>
+        {/* Progress bar idêntico ao Metas do dia */}
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
           <div style={{flex:1,height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
             <div style={{height:"100%",width:weekProgresso+"%",background:DG_PURPLE,borderRadius:99,transition:"width .3s"}}/>
           </div>
-          <span style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",minWidth:36,textAlign:"right"}}>{weekProgresso}%</span>
+          <span style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",minWidth:48,textAlign:"right"}}>{weekConcluidas}/{metasWeek.length}</span>
         </div>
-        {/* 4 mini-stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:metasWeek.length>0?14:0}}>
+        {/* 3 stats principais (Total fica como subtexto) — visual mais limpo */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:metasWeek.length>0?14:0}}>
           {[
-            {l:"Total",      v:metasWeek.length,  c:"#0f172a"},
-            {l:"Concluídas", v:weekConcluidas,    c:"#16a34a"},
-            {l:"Pendentes",  v:weekPendentes,     c:"#f59e0b"},
-            {l:"Atrasadas",  v:weekAtrasadas,     c:weekAtrasadas>0?"#ef4444":"#94a3b8"},
-          ].map((s,i)=><div key={i} style={{textAlign:"center",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 4px"}}>
-            <div style={{color:s.c,fontSize:20,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
-            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:5}}>{s.l}</div>
+            {l:"Concluídas", v:weekConcluidas, c:"#16a34a", bg:"#dcfce7"},
+            {l:"Pendentes",  v:weekPendentes,  c:"#a16207", bg:"#fef3c7"},
+            {l:"Atrasadas",  v:weekAtrasadas,  c:weekAtrasadas>0?"#dc2626":"#94a3b8", bg:weekAtrasadas>0?"#fee2e2":"#f1f5f9"},
+          ].map((stat,i)=><div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:9}}>
+            <div style={{width:34,height:34,borderRadius:9,background:stat.bg,color:stat.c,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'",flexShrink:0,fontFamily:DG_INTER}}>{stat.v}</div>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,letterSpacing:.2,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stat.l}</div>
           </div>)}
         </div>
         {/* Próximas 3 a vencer */}
         {metasWeek.filter(m=>m.status!=="concluida"&&m.deadline).sort((a,b)=>(a.deadline||"").localeCompare(b.deadline||"")).slice(0,3).map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta} compact/>)}
-        {metasWeek.length===0&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"24px 18px",textAlign:"center"}}>
-          <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:4,letterSpacing:-.2}}>Sem metas cadastradas.</div>
-          <div style={{color:"#94a3b8",fontSize:11.5}}>Use o botão "Nova meta" pra começar.</div>
+        {metasWeek.length===0&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"30px 18px",textAlign:"center",flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:140}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:4,letterSpacing:-.2}}>Sem metas cadastradas</div>
+          <div style={{color:"#94a3b8",fontSize:12}}>Use o botão "Nova meta" pra começar.</div>
         </div>}
       </div>
     </div>
@@ -44512,20 +44530,43 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       </div>
     </div>
 
-    {/* ══════════ SPRINT — atual ou próxima semana ══════════ */}
+    {/* ══════════ SPRINT — navegação livre por semanas ══════════ */}
     {(function(){
-      const sextaLbl = _dgFmtPrazoBR(sprintSextaIso);
-      const wkLabel  = sprintWeekOffset===0?"Sprint da semana atual":"Sprint da próxima semana";
+      const _segIso  = _dgWeekDate(1, sprintWeekOffset);
+      const _sexIso  = _dgWeekDate(5, sprintWeekOffset);
+      const sextaLbl = _dgFmtPrazoBR(_sexIso);
+      const segLbl   = _dgFmtPrazoBR(_segIso);
+      let wkLabel;
+      if(sprintWeekOffset===0)      wkLabel = "Sprint da semana atual";
+      else if(sprintWeekOffset===1) wkLabel = "Sprint da próxima semana";
+      else if(sprintWeekOffset<0)   wkLabel = "Sprint anterior";
+      else                          wkLabel = "Sprint da semana de "+segLbl+" a "+sextaLbl;
+      const _hoje = sprintWeekOffset===0;
       return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <_DGSec icon="flag" title={wkLabel} sub={"Entregas até sexta " + sextaLbl + " — por cliente"} accent="#0ea5e9"
-          right={<div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
-            {[{id:0,l:"Atual"},{id:1,l:"Próxima"}].map(o=>{
-              const a = sprintWeekOffset===o.id;
-              return <button key={o.id} onClick={()=>setSprintWeekOffset(o.id)}
-                style={{background:a?"#fff":"transparent",color:a?"#0ea5e9":"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
-                {o.l}
-              </button>;
-            })}
+        <_DGSec icon="flag" title={wkLabel} sub={"Entregas de "+segLbl+" a "+sextaLbl+" — por cliente"} accent="#0ea5e9"
+          right={<div style={{display:"inline-flex",alignItems:"center",gap:6}}>
+            <button onClick={()=>setSprintWeekOffset(sprintWeekOffset-1)} title="Semana anterior"
+              style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:9,width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .15s",padding:0}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:9,padding:"6px 12px",minWidth:isMob?100:140,textAlign:"center"}}>
+              <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",lineHeight:1}}>Semana</div>
+              <div style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFamily:DG_INTER,marginTop:3,fontFeatureSettings:"'tnum'",letterSpacing:-.1}}>{segLbl} — {sextaLbl}</div>
+            </div>
+            <button onClick={()=>setSprintWeekOffset(sprintWeekOffset+1)} title="Próxima semana"
+              style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:9,width:32,height:32,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .15s",padding:0}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            {sprintWeekOffset!==0&&<button onClick={()=>setSprintWeekOffset(0)} title="Voltar pra semana atual"
+              style={{background:"#7c3aed14",color:"#7c3aed",border:"1px solid #ede9fe",borderRadius:9,padding:"7px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:-.1,transition:"all .15s",whiteSpace:"nowrap"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#7c3aed14";e.currentTarget.style.color="#7c3aed";}}>
+              Hoje
+            </button>}
           </div>}/>
 
         {/* Resumo do sprint */}
