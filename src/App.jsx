@@ -1326,6 +1326,12 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
       if(ass.some(function(aid){return fids.indexOf(aid)>=0;})){ paidIds[t.id]=true; }
     });
     const paidCount=Object.keys(paidIds).length;
+    // Persistir paidIds também em localStorage (backup contra polling do Supabase)
+    try{
+      const lp=JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}");
+      Object.keys(paidIds).forEach(function(k){ lp[k]=nowIso; });
+      localStorage.setItem("pixels-paid-tasks",JSON.stringify(lp));
+    }catch(e){}
     setTasks(function(prev){
       return (prev||[]).map(function(t){
         if(!t) return t;
@@ -1350,19 +1356,46 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
     </span>;
   };
 
-  return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,padding:compact?"14px 16px":"16px 20px",fontFamily:"'Inter',system-ui,sans-serif"}}>
+  function _shiftMonth(delta){
+    if(!refMonth){ onChangeMonth&&onChangeMonth(new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0")); return; }
+    const parts=refMonth.split("-");
+    let y=parseInt(parts[0]); let m=parseInt(parts[1])+delta;
+    while(m<1){ m+=12; y--; }
+    while(m>12){ m-=12; y++; }
+    onChangeMonth&&onChangeMonth(y+"-"+String(m).padStart(2,"0"));
+  }
+  const _monthLabel=(function(){
+    if(!refMonth) return "Selecione um mês";
+    const parts=refMonth.split("-");
+    if(parts.length<2) return refMonth;
+    const mnames=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    return (mnames[parseInt(parts[1],10)-1]||"?")+" de "+parts[0];
+  })();
+  return <div style={{background:"linear-gradient(135deg,#fff 0%,#fafbfc 100%)",border:"1px solid #e5e7eb",borderRadius:16,padding:compact?"20px 22px":"24px 28px",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 16px rgba(15,23,42,0.04),0 1px 2px rgba(15,23,42,0.025)"}}>
     {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>Pagamentos por demanda</div>
-        <div style={{color:"#64748b",fontSize:11,marginTop:2}}>Calculado pelos cards aprovados no mês de referência</div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,marginBottom:20,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:13}}>
+        <div style={{width:42,height:42,borderRadius:11,background:"linear-gradient(135deg,#7c3aed,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 4px 12px rgba(124,58,237,0.35)"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4}}>Pagamentos por demanda</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Conta cards aprovados, agendados e publicados no mês</div>
+        </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <input type="month" value={refMonth||""} onChange={function(e){onChangeMonth&&onChangeMonth(e.target.value);}}
-          style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer",fontFamily:"inherit"}}/>
-        <div style={{textAlign:"right"}}>
-          <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
-          <div style={{color:"#7c3aed",fontWeight:900,fontSize:20,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{fmtBRL(total)}</div>
+      <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+        <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e5e7eb",borderRadius:11,padding:3,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+          <button type="button" onClick={function(){_shiftMonth(-1);}} title="Mês anterior" style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{padding:"0 14px",minWidth:130,textAlign:"center",fontSize:12.5,fontWeight:700,color:"#7c3aed",letterSpacing:-.1,fontFamily:"inherit",fontFeatureSettings:"'tnum'"}}>{_monthLabel}</div>
+          <button type="button" onClick={function(){_shiftMonth(1);}} title="Próximo mês" style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+        <div style={{textAlign:"right",paddingLeft:6,borderLeft:"1px solid #e5e7eb"}}>
+          <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Total</div>
+          <div style={{background:"linear-gradient(135deg,#7c3aed,#a855f7)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",fontWeight:900,fontSize:24,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{fmtBRL(total)}</div>
         </div>
       </div>
     </div>
@@ -13028,10 +13061,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         {mn}/{yy}
                       </span>;
                     })()}
-                    {/* Pago — chip clicável (toggle) */}
+                    {/* Pago — chip clicável (só Gustavo) */}
                     {(function(){
-                      const isPaid=!!t.paidAt;
-                      return <span onClick={function(e){e.stopPropagation();if(typeof setTasks==="function"){setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{paidAt:isPaid?null:new Date().toISOString()}):x;});});}}} title={isPaid?"Clique pra desmarcar pago":"Clique pra marcar como pago"} style={{display:"inline-flex",alignItems:"center",gap:3,background:isPaid?"#dcfce7":"#f1f5f9",color:isPaid?"#15803d":"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",cursor:"pointer",border:isPaid?"1px solid #bbf7d0":"1px dashed #cbd5e1",transition:"all .12s"}}>
+                      const canEditPaid=(typeof CURRENT_USER!=="undefined")&&CURRENT_USER&&CURRENT_USER.id==="gustavo";
+                      let paidLocal=false;
+                      try{paidLocal=!!(JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}")[t.id]);}catch(e){}
+                      const isPaid=!!t.paidAt||paidLocal;
+                      return <span onClick={function(e){e.stopPropagation();if(!canEditPaid)return;const wasPaid=isPaid;try{const lp=JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}");if(wasPaid){delete lp[t.id];}else{lp[t.id]=new Date().toISOString();}localStorage.setItem("pixels-paid-tasks",JSON.stringify(lp));}catch(e){}if(typeof setTasks==="function"){setTasks(function(prev){return (prev||[]).map(function(x){if(x.id!==t.id)return x;return Object.assign({},x,{paidAt:wasPaid?null:new Date().toISOString()});});});}}} title={canEditPaid?(isPaid?"Clique pra desmarcar pago":"Clique pra marcar como pago"):"Só Gustavo pode marcar pago"} style={{display:"inline-flex",alignItems:"center",gap:3,background:isPaid?"#dcfce7":"#f1f5f9",color:isPaid?"#15803d":"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",cursor:canEditPaid?"pointer":"not-allowed",border:isPaid?"1px solid #bbf7d0":"1px dashed #cbd5e1",transition:"all .12s",opacity:canEditPaid?1:0.7}}>
                         {isPaid
                           ?<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                           :<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>}
