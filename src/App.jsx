@@ -1287,21 +1287,20 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
   const total=rows.reduce(function(s,r){return s+r.calc.total;},0);
   // ── Rollover de cards pendentes pro próximo mês ────────────────────
   const [_rolModal, _setRolModal] = useState(null);
-  function _abrirRollover(){
+  function _abrirRollover(filterFreelancerId){
     if(!refMonth){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Selecione um mês primeiro."); return; }
     if(!setTasks){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Função de atualização indisponível."); return; }
     const PAID=["aprovado","agendado","publicado"];
+    const targetIds = filterFreelancerId?[filterFreelancerId]:freelancers.map(function(f){return f.id;});
     const pendentes=(tasks||[]).filter(function(t){
       if(!t||t.deletedAt) return false;
       if(t.referenceMonth!==refMonth) return false;
       if(PAID.indexOf(t.status)>=0) return false;
-      // só tarefas com algum responsável freelancer (André, Maria, Guilherme, etc)
-      const fids=freelancers.map(function(f){return f.id;});
       const assigned=t.assignee||(Array.isArray(t.assignees)&&t.assignees[0])||"";
       const assignees=Array.isArray(t.assignees)?t.assignees:[assigned].filter(Boolean);
-      return assignees.some(function(aid){return fids.indexOf(aid)>=0;});
+      return assignees.some(function(aid){return targetIds.indexOf(aid)>=0;});
     });
-    if(pendentes.length===0){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nenhum card pendente de freelancer nesse mês."); return; }
+    if(pendentes.length===0){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nenhum card pendente nesse mês."); return; }
     const parts=refMonth.split("-");
     let y=parseInt(parts[0]); let m=parseInt(parts[1])+1;
     if(m>12){ m=1; y++; }
@@ -1313,15 +1312,30 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
     const nextMonth=_rolModal.nextMonth;
     const ids={};
     _rolModal.cards.forEach(function(t){ ids[t.id]=true; });
+    // Cards pagos do mês = aprovado/agendado/publicado COM freelancer assigned no mês selecionado
+    const PAID2=["aprovado","agendado","publicado"];
+    const fids=freelancers.map(function(f){return f.id;});
+    const nowIso=new Date().toISOString();
     setTasks(function(prev){
       return (prev||[]).map(function(t){
-        if(!ids[t.id]) return t;
-        return Object.assign({},t,{referenceMonth:nextMonth, updated_at:new Date().toISOString()});
+        if(!t) return t;
+        if(ids[t.id]){
+          // 1) Pendentes: rola pro próximo mês
+          return Object.assign({},t,{referenceMonth:nextMonth, updated_at:nowIso});
+        }
+        // 2) Pagos: marca paidAt nos que estão no mês selecionado, aprovados/etc, com freelancer
+        if(t.referenceMonth===refMonth && PAID2.indexOf(t.status)>=0 && !t.paidAt){
+          const ass=Array.isArray(t.assignees)?t.assignees:[t.assignee].filter(Boolean);
+          if(ass.some(function(aid){return fids.indexOf(aid)>=0;})){
+            return Object.assign({},t,{paidAt:nowIso, updated_at:nowIso});
+          }
+        }
+        return t;
       });
     });
     const n=_rolModal.cards.length;
     _setRolModal(null);
-    if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" card(s) movido(s) pra "+nextMonth);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" card(s) movido(s) pra "+nextMonth+". Pagos do mês marcados ✓");
   }
 
   const ChipBreak=function(props){
@@ -1345,7 +1359,6 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <input type="month" value={refMonth||""} onChange={function(e){onChangeMonth&&onChangeMonth(e.target.value);}}
           style={{background:"#f8fafc",border:"1px solid #e5e7eb",borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#7c3aed",outline:"none",cursor:"pointer",fontFamily:"inherit"}}/>
-        <button type="button" onClick={_abrirRollover} title="Move cards não-aprovados desse mês pro próximo mês de pagamento" style={{background:"#fef3c7",color:"#a16207",border:"1px solid #fde68a",borderRadius:8,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,transition:"all .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#fde68a";}} onMouseLeave={function(e){e.currentTarget.style.background="#fef3c7";}}>⟳ Rolar pendentes</button>
         <div style={{textAlign:"right"}}>
           <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</div>
           <div style={{color:"#7c3aed",fontWeight:900,fontSize:20,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{fmtBRL(total)}</div>
@@ -1353,39 +1366,50 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
       </div>
     </div>
 
-    {/* Linhas por freelancer */}
-    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+    {/* Cards verticais grandes — 1 por colaborador */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(260px,1fr))",gap:14}}>
       {rows.map(function(r){
         const fr=r.fr,c=r.calc;
-        return <div key={fr.id} style={{display:"grid",gridTemplateColumns:isMob?"1fr":"160px 1fr 110px",gap:12,alignItems:"center",padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
-          {/* Identidade */}
-          <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
-            {typeof UserAvatar!=="undefined"?<UserAvatar user={fr} size={30}/>:<div style={{width:30,height:30,borderRadius:"50%",background:fr.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800}}>{fr.av||(fr.name||"?")[0]}</div>}
-            <div style={{minWidth:0}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,letterSpacing:-.1}}>{fr.name}</div>
-              <div style={{color:"#94a3b8",fontSize:10}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
+        const accent=fr.color||"#7c3aed";
+        const photo=(typeof getProfilePhoto!=="undefined")?getProfilePhoto(fr.id):null;
+        const items=r.isEditor
+          ?[{l:"Vídeo",n:c.video,p:DESIGNER_PRICES.video},{l:"Corte",n:c.corte,p:DESIGNER_PRICES.corte},{l:"V. dinâmico",n:c.videoComplexo,p:DESIGNER_PRICES.videoComplexo},{l:"V. feira",n:c.videoFeira,p:DESIGNER_PRICES.videoFeira}]
+          :[{l:"Foto",n:c.fotoObra,p:DESIGNER_PRICES.fotoObra},{l:"Arte",n:c.arte,p:DESIGNER_PRICES.arte},{l:"Carrossel",n:c.carrossel,p:DESIGNER_PRICES.carrossel},{l:"Folder",n:c.folder,p:DESIGNER_PRICES.folder}];
+        const active=items.filter(function(it){return it.n>0;});
+        return <div key={fr.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=accent+"55";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#eef0f3";}}>
+          <div style={{background:"linear-gradient(180deg,"+accent+"15,#fff 90%)",padding:"18px 16px 14px",display:"flex",flexDirection:"column",alignItems:"center",gap:9,borderBottom:"1px solid #f5f7fa"}}>
+            <div style={{width:72,height:72,borderRadius:"50%",border:"3px solid #fff",overflow:"hidden",background:accent,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px "+accent+"40",flexShrink:0}}>
+              {photo
+                ?<img src={photo} alt={fr.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+                :<span style={{color:"#fff",fontWeight:800,fontSize:30,letterSpacing:-.5}}>{fr.av||(fr.name||"?")[0]}</span>}
+            </div>
+            <div style={{textAlign:"center"}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,lineHeight:1.2}}>{fr.name}</div>
+              <div style={{color:"#64748b",fontSize:11,fontWeight:600,marginTop:2}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
             </div>
           </div>
-          {/* Breakdown por tipo */}
-          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            {r.isEditor?<>
-              <ChipBreak label="Vídeo" count={c.video} price={DESIGNER_PRICES.video}/>
-              <ChipBreak label="Corte" count={c.corte} price={DESIGNER_PRICES.corte}/>
-              <ChipBreak label="V. dinâmico" count={c.videoComplexo} price={DESIGNER_PRICES.videoComplexo}/>
-              <ChipBreak label="V. feira" count={c.videoFeira} price={DESIGNER_PRICES.videoFeira}/>
-            </>:<>
-              <ChipBreak label="Foto" count={c.fotoObra} price={DESIGNER_PRICES.fotoObra}/>
-              <ChipBreak label="Arte" count={c.arte} price={DESIGNER_PRICES.arte}/>
-              <ChipBreak label="Carrossel" count={c.carrossel} price={DESIGNER_PRICES.carrossel}/>
-              <ChipBreak label="Folder" count={c.folder} price={DESIGNER_PRICES.folder}/>
-            </>}
-            {c.total===0&&(c.naoClassificado>0?<span style={{color:"#f59e0b",fontSize:11,fontStyle:"italic",fontWeight:600}}>{c.naoClassificado} card(s) atribuído(s) mas sem tipo de conteúdo definido</span>:<span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>Sem pagamentos no mês.</span>)}
+          <div style={{padding:"14px 14px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
+            {active.length===0
+              ?(c.naoClassificado>0
+                ?<div style={{color:"#a16207",fontSize:11.5,textAlign:"center",fontStyle:"italic",padding:"10px 4px",fontWeight:600,background:"#fef3c7",borderRadius:8,border:"1px solid #fde68a"}}>{c.naoClassificado} card(s) atribuído(s) mas sem tipo definido</div>
+                :<div style={{color:"#cbd5e1",fontSize:11.5,textAlign:"center",fontStyle:"italic",padding:"10px 0"}}>Sem pagamentos no mês.</div>)
+              :active.map(function(it,i){return <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"7px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+                  <span style={{background:accent+"18",color:accent,fontWeight:800,fontSize:11,padding:"2px 7px",borderRadius:5,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0}}>{it.n}×</span>
+                  <span style={{color:"#475569",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span>
+                </div>
+                <span style={{color:"#16a34a",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0}}>{fmtBRL(it.n*it.p).replace(",00","")}</span>
+              </div>;})}
           </div>
-          {/* Total individual */}
-          <div style={{textAlign:"right"}}>
-            <div style={{color:"#16a34a",fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{fmtBRL(c.total)}</div>
-            {c.naoClassificado>0&&<div style={{color:"#94a3b8",fontSize:9.5,marginTop:2}}>{c.naoClassificado} s/ tipo</div>}
+          <div style={{padding:"12px 16px",background:"#fafbfc",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</span>
+            <div style={{textAlign:"right"}}>
+              <div style={{color:c.total>0?"#16a34a":"#94a3b8",fontWeight:800,fontSize:18,fontFeatureSettings:"'tnum'",letterSpacing:-.3,lineHeight:1}}>{fmtBRL(c.total)}</div>
+            </div>
           </div>
+          <button type="button" onClick={function(){_abrirRollover(fr.id);}} title={"Rolar pendentes do "+fr.name+" pro próximo mês"} style={{background:"#fef3c7",color:"#a16207",border:"none",borderTop:"1px solid #fde68a",padding:"10px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:5,letterSpacing:-.1,transition:"background .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#fde68a";}} onMouseLeave={function(e){e.currentTarget.style.background="#fef3c7";}}>⟳ Rolar pendentes do {fr.name.split(" ")[0]}</button>
         </div>;
       })}
     </div>
@@ -13001,6 +13025,16 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       return <span title={"Mês de pagamento: "+mn+"/20"+yy} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#7c3aed18",color:"#7c3aed",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01"/><path d="M18 12h.01"/></svg>
                         {mn}/{yy}
+                      </span>;
+                    })()}
+                    {/* Pago — chip clicável (toggle) */}
+                    {(function(){
+                      const isPaid=!!t.paidAt;
+                      return <span onClick={function(e){e.stopPropagation();if(typeof setTasks==="function"){setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{paidAt:isPaid?null:new Date().toISOString()}):x;});});}}} title={isPaid?"Clique pra desmarcar pago":"Clique pra marcar como pago"} style={{display:"inline-flex",alignItems:"center",gap:3,background:isPaid?"#dcfce7":"#f1f5f9",color:isPaid?"#15803d":"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",cursor:"pointer",border:isPaid?"1px solid #bbf7d0":"1px dashed #cbd5e1",transition:"all .12s"}}>
+                        {isPaid
+                          ?<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          :<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>}
+                        {isPaid?"Pago":"Não pago"}
                       </span>;
                     })()}
                   </div>}
@@ -31319,7 +31353,7 @@ export default function AgencyOS(){
       case "comercial":            return (effectivePerms.verComercial||isSocio)?<PageComercial {...p} perms={effectivePerms} effectiveUser={CURRENT_USER}/>:<NoPerm/>;
       case "analises":
       case "gestao":
-      case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p} tasks={tasks}/>:<NoPerm/>;
+      case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_enps":           return <PageGestaoENPS {...p}/>;
