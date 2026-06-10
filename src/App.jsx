@@ -16725,6 +16725,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [editAnnot,setEditAnnot]=useState(null);
   const [editCopy,setEditCopy]=useState(null);
   const [lastApproved,setLastApproved]=useState(null);
+  // Modal pra enviar pra Alteração de copy com direcionamento rápido
+  const [copyDirectionTask,setCopyDirectionTask]=useState(null);
+  const [copyDirectionText,setCopyDirectionText]=useState("");
 
   // FIX 1: reset cardIdx, imgIdx, lastApproved e modais ao trocar de aba
   useEffect(()=>{
@@ -16988,24 +16991,56 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // 2) Aprovou por engano um card que tinha problema na copy — quer reverter
   // Pula todas as etapas intermediárias e vai direto pra "alteracao_copy" da Hellen.
   // Notif vai DIRETO pra Hellen (não broadcast).
+  //
+  // UX: agora abre um mini-modal pra você digitar um direcionamento rápido
+  // antes de enviar (em vez de mandar seco pra Hellen ficar adivinhando).
   const sendBackToCopy=(task)=>{
     if(!isApprover)return;
-    const ok=window.confirm("Mandar \""+(task.title||"este cartão")+"\" pra Hellen ajustar a copy?\n\nO card vai voltar pra coluna 'Alteração de copy', pulando as etapas intermediárias. Use quando o ajuste de copy é grande ou quando aprovou por engano.");
-    if(!ok)return;
+    setCopyDirectionTask(task);
+    setCopyDirectionText("");
+  };
+  // Confirma o envio: registra o direcionamento como comentário tipo "client_request"
+  // (que aparece destacado pra Hellen no painel de Alteração de copy) e move o card.
+  const confirmSendBackToCopy=()=>{
+    const task=copyDirectionTask;
+    if(!task)return;
+    const direction=(copyDirectionText||"").trim();
     const actor=effectiveUser?.name||CURRENT_USER.name;
     const fromLabel=task.status==="avaliacao"?"Concluídas para avaliação":(task.status==="aprovado"?"Aprovado":task.status);
-    const tl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel:"Alteração de copy",from:task.status,to:"alteracao_copy",at:new Date().toISOString(),atFmt:nowFmt(),user:actor,note:"Devolvido pra Hellen ajustar a copy (via aprovação)"}];
+    const nowIso=new Date().toISOString();
+    const tl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel:"Alteração de copy",from:task.status,to:"alteracao_copy",at:nowIso,atFmt:nowFmt(),user:actor,note:direction?("Devolvido pra Hellen ajustar a copy: "+direction):"Devolvido pra Hellen ajustar a copy (via aprovação)"}];
+    // Cria comentário tipo "client_request" — aparece em destaque no painel de ajustes da Hellen
+    const newComments=[...(task.comments||[])];
+    if(direction){
+      newComments.unshift({
+        id:"dir-"+Date.now()+"-"+Math.random().toString(36).slice(2,6),
+        type:"client_request",
+        user:actor,
+        av:(actor||"?").charAt(0).toUpperCase(),
+        color:"#7c3aed",
+        text:direction,
+        time:nowFmt(),
+        at:nowIso,
+        atFmt:nowFmt(),
+      });
+    }
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{
       ...t,
       status:"alteracao_copy",
       ajustar:true,
       isAlteracao:true,
-      colEnteredAt:new Date().toISOString(),
+      colEnteredAt:nowIso,
       timeline:tl,
+      comments:newComments,
     }:t));
-    // Notificação DIRECIONADA: alvo Hellen ("ellen") em vez de broadcast
-    pushNotif({type:"urgente",icon:"📝",title:"Copy precisa ajuste",body:'"'+task.title+'" voltou pra Alteração de copy. '+actor+' pediu ajuste grande na copy.',user:actor,at:"Agora",targetUsers:["ellen"],taskId:task.id});
+    // Notificação DIRECIONADA: alvo Hellen ("ellen") — mostra o direcionamento no corpo
+    const notifBody=direction
+      ? '"'+task.title+'" voltou pra Alteração de copy. '+actor+' pediu: "'+(direction.length>120?direction.slice(0,120)+"…":direction)+'"'
+      : '"'+task.title+'" voltou pra Alteração de copy. '+actor+' pediu ajuste grande na copy.';
+    pushNotif({type:"urgente",icon:"📝",title:"Copy precisa ajuste",body:notifBody,user:actor,at:"Agora",targetUsers:["ellen"],taskId:task.id});
     setCardIdx(0);setImgIdx(0);
+    setCopyDirectionTask(null);
+    setCopyDirectionText("");
     if(typeof pixelsToast!=="undefined")pixelsToast.info("Card mandado pra Hellen ajustar a copy.",4500);
   };
 
@@ -17093,6 +17128,45 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       }}
       cardPerms={perms}/>)}
     {editAnnot&&(<PublicacaoEditModal task={editAnnot} onClose={()=>setEditAnnot(null)} onReject={(task,fb,df,af,cmts)=>requestAdjust(task,fb,df,af,cmts)}/>)}
+
+    {/* Mini-modal: direcionamento rápido pra Hellen ao enviar pra Alteração de copy */}
+    {copyDirectionTask&&(()=>{
+      const _cl=CLIENTS.find(c=>c.id===copyDirectionTask.client);
+      const _close=()=>{setCopyDirectionTask(null);setCopyDirectionText("");};
+      return <div onClick={_close} style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(3px)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        <div onClick={e=>e.stopPropagation()} onKeyDown={e=>{if(e.key==="Escape"){_close();}else if(e.key==="Enter"&&(e.ctrlKey||e.metaKey)){confirmSendBackToCopy();}}}
+          style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:520,boxShadow:"0 24px 80px rgba(15,23,42,0.35)",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+          <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"flex-start",gap:13}}>
+            <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px rgba(124,58,237,0.30)"}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.7,textTransform:"uppercase"}}>Voltar pra alteração de copy</div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,marginTop:3,lineHeight:1.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{copyDirectionTask.title||"este cartão"}</div>
+              {_cl&&<div style={{color:"#7c3aed",fontSize:11.5,fontWeight:600,marginTop:3}}>{_cl.name}</div>}
+            </div>
+            <button onClick={_close} style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,borderRadius:8,fontSize:18,lineHeight:1,flexShrink:0}} title="Cancelar (Esc)">×</button>
+          </div>
+          <div style={{padding:"18px 24px 8px"}}>
+            <label style={{color:"#475569",fontSize:12.5,fontWeight:600,display:"block",marginBottom:8}}>Direcionamento pra Hellen <span style={{color:"#94a3b8",fontWeight:500}}>(opcional, mas ajuda muito)</span></label>
+            <textarea autoFocus value={copyDirectionText} onChange={e=>setCopyDirectionText(e.target.value)} rows={4}
+              placeholder="Ex: trocar o gancho de abertura, reduzir o CTA, mudar o tom pra mais leve…"
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 13px",fontSize:13,color:"#0f172a",outline:"none",resize:"vertical",boxSizing:"border-box",background:"#fafbfc",lineHeight:1.55,fontFamily:"inherit",transition:"border-color .15s, background .15s"}}
+              onFocus={e=>{e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.background="#fff";}}
+              onBlur={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}/>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:8,lineHeight:1.5}}>O texto vira um comentário destacado no painel de ajuste da Hellen e aparece na notificação dela.</div>
+          </div>
+          <div style={{padding:"14px 24px 18px",display:"flex",justifyContent:"flex-end",gap:8,borderTop:"1px solid #f8fafc",background:"#fafbfc"}}>
+            <button onClick={_close} style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
+            <button onClick={confirmSendBackToCopy}
+              style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",boxShadow:"0 6px 16px rgba(124,58,237,0.30)",display:"inline-flex",alignItems:"center",gap:6,letterSpacing:-.1}}>
+              Enviar pra Hellen
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>;
+    })()}
 
     {/* Drive toast — aparece apos aprovar publicacao */}
     {lastApproved&&(()=>{
