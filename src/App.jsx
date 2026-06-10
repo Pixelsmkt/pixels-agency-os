@@ -1240,7 +1240,12 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     const assigned=t.assignee===designerId||(Array.isArray(t.assignees)&&t.assignees.includes(designerId));
     if(!assigned)return;
     if(!PAID_STATUSES.includes(t.status))return;
-    if(refMonth&&t.referenceMonth!==refMonth)return;
+    // Fallback: se referenceMonth não foi setado, deduz do publishDate / completedAt / deadline
+    const effectiveMonth = t.referenceMonth
+      || (t.publishDate ? String(t.publishDate).slice(0,7) : null)
+      || (t.completedAt ? String(t.completedAt).slice(0,7) : null)
+      || (t.deadline ? String(t.deadline).slice(0,7) : null);
+    if(refMonth&&effectiveMonth!==refMonth)return;
     if(t.contentType==="foto"){out.fotoObra++;out.tasksFotoObra.push(t);}
     else if(t.contentType==="carrossel"){out.carrossel++;out.tasksCarrossel.push(t);}
     else if(t.contentType==="folder"){out.folder++;out.tasksFolder.push(t);}
@@ -1335,7 +1340,7 @@ function FreelancerPaymentsBlock({tasks, refMonth, onChangeMonth, isMob, compact
               <ChipBreak label="Carrossel" count={c.carrossel} price={DESIGNER_PRICES.carrossel}/>
               <ChipBreak label="Folder" count={c.folder} price={DESIGNER_PRICES.folder}/>
             </>}
-            {c.total===0&&<span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>Sem pagamentos no mês.</span>}
+            {c.total===0&&(c.naoClassificado>0?<span style={{color:"#f59e0b",fontSize:11,fontStyle:"italic",fontWeight:600}}>{c.naoClassificado} card(s) atribuído(s) mas sem tipo de conteúdo definido</span>:<span style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>Sem pagamentos no mês.</span>)}
           </div>
           {/* Total individual */}
           <div style={{textAlign:"right"}}>
