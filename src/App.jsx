@@ -14141,7 +14141,6 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
                 </select>
               </div>
             ))}
-            ))}
             <div style={{display:"flex",alignItems:"flex-end"}}>
               <button onClick={()=>setFiltros({cliente:"",responsavel:"",prioridade:"",tipo:"",origem:""})}
                 style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:8,padding:"7px 14px",color:C.ts,fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Limpar filtros</button>
