@@ -44551,7 +44551,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       else if(sprintWeekOffset<0)   wkLabel = "Sprint anterior";
       else                          wkLabel = "Sprint da semana de "+segLbl+" a "+sextaLbl;
       const _hoje = sprintWeekOffset===0;
-      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      return <div style={{background:"linear-gradient(180deg,#ffffff 0%,#fafbfc 100%)",border:"1px solid #eef0f3",borderRadius:20,padding:"26px 28px",boxShadow:"0 8px 24px rgba(15,23,42,0.05),0 1px 2px rgba(15,23,42,0.04)"}}>
         <_DGSec icon="flag" title={wkLabel} sub={"Entregas de "+segLbl+" a "+sextaLbl+" — por cliente"} accent="#0ea5e9"
           right={<div style={{display:"inline-flex",alignItems:"center",gap:6}}>
             <button onClick={()=>setSprintWeekOffset(sprintWeekOffset-1)} title="Semana anterior"
@@ -44661,15 +44661,15 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
               const portalAbertas = (portalAbertasPorCli[cl.id]||[]).filter(t=>!puxadasIds.has(t.id));
               const pctCl = itensCl.length>0 ? Math.round((okCl/itensCl.length)*100) : 0;
               const clColor = cl.color || "#64748b";
-              return <div key={cl.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:0,display:"flex",flexDirection:"column",minHeight:200,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,0.04)",transition:"all .15s"}}>
-                {/* Header do cliente — barra colorida vertical + logo grande */}
-                <div style={{padding:"14px 16px",borderBottom:"1px solid #f5f7fa",display:"flex",alignItems:"center",gap:12,background:"linear-gradient(180deg,"+clColor+"0d,#fff)",position:"relative"}}>
-                  <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:clColor}}/>
-                  <div style={{marginLeft:6}}><ClientLogo clientId={cl.id} size="sm"/></div>
+              return <div key={cl.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:0,display:"flex",flexDirection:"column",minHeight:220,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)",cursor:"default"}} onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=clColor+"55";}} onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#eef0f3";}}>
+                {/* Header do cliente — logo grande + nome destacado + badges */}
+                <div style={{padding:"16px 18px",display:"flex",alignItems:"center",gap:13,background:"linear-gradient(180deg,"+clColor+"10,#fff 80%)",position:"relative",borderBottom:"1px solid #f5f7fa"}}>
+                  <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:clColor,borderRadius:"0 2px 2px 0"}}/>
+                  <div style={{marginLeft:5,padding:6,background:"#fff",border:"1px solid #f1f5f9",borderRadius:10,boxShadow:"0 1px 3px rgba(15,23,42,0.05)",display:"flex",alignItems:"center",justifyContent:"center"}}><ClientLogo clientId={cl.id} size="sm"/></div>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3,flexWrap:"wrap"}}>
-                      <span style={{color:itensCl.length>0?clColor:"#cbd5e1",fontSize:11.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
+                    <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.2}}>{cl.name}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginTop:5,flexWrap:"wrap"}}>
+                      <span style={{color:itensCl.length>0?clColor:"#94a3b8",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.1}}>
                         {itensCl.length>0 ? (okCl+"/"+itensCl.length+" entrega"+(itensCl.length>1?"s":"")) : "Sem entregas"}
                       </span>
                       {lateCl>0&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"1px 7px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>{lateCl} atrasada{lateCl>1?"s":""}</span>}
@@ -44717,14 +44717,17 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                   </div>}
 
                   {/* Entregas planejadas */}
-                  {itensCl.length===0&&portalAbertas.length===0&&<div style={{color:"#cbd5e1",fontSize:11.5,textAlign:"center",padding:"16px 4px",lineHeight:1.4,fontWeight:500}}>Nada planejado ainda</div>}
+                  {itensCl.length===0&&portalAbertas.length===0&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"22px 8px 14px",gap:9}}>
+                    <div style={{width:42,height:42,borderRadius:11,background:"#f8fafc",border:"1px dashed #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}} dangerouslySetInnerHTML={{__html:"<svg xmlns='http://www.w3.org/2000/svg' width='19' height='19' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='3' y='4' width='18' height='18' rx='2' ry='2'/><line x1='16' y1='2' x2='16' y2='6'/><line x1='8' y1='2' x2='8' y2='6'/><line x1='3' y1='10' x2='21' y2='10'/></svg>"}}/>
+                    <div style={{fontSize:12,fontWeight:600,letterSpacing:-.1,color:"#94a3b8"}}>Nada planejado ainda</div>
+                  </div>}
                   {itensCl.map(it=><_DGSprintCard key={it.id} item={it} onEdit={()=>setNovoSprint({clientId:cl.id, item:it})} onUpdate={(patch)=>planUpsert(Object.assign({},it,patch,{updated_at:new Date().toISOString()}))} onDelete={()=>{planRemove(it.id);}}/>)}
 
                   <button onClick={()=>setNovoSprint({clientId:cl.id, item:null})}
-                    style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:9,padding:"8px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
-                    onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#7dd3fc";e.currentTarget.style.color="#0ea5e9";}}
-                    onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                    style={{marginTop:"auto",background:"#f8fafc",color:"#64748b",border:"1px dashed #cbd5e1",borderRadius:10,padding:"10px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .18s",letterSpacing:-.1}}
+                    onMouseEnter={e=>{e.currentTarget.style.background=clColor+"15";e.currentTarget.style.borderColor=clColor;e.currentTarget.style.color=clColor;}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
                     Nova entrega
                   </button>
                 </div>
