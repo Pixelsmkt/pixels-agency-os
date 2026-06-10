@@ -44970,31 +44970,6 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
     </div>
   </div>;
 }
-ontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {_DG_SOCIOS.map(t=>{
-                const a = responsaveis.indexOf(t.id)>=0;
-                return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
-                  style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"4px 10px 4px 4px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6}}>
-                  <_DGAvatar userId={t.id} size={20}/>
-                  {t.name.split(" ")[0]}
-                </button>;
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:22}}>
-        {isEdit&&onDelete?<button onClick={()=>{if(window.confirm("Excluir esta entrega?"))onDelete(item.id);}} style={{background:"#fff",color:"#ef4444",border:"1px solid #fecaca",borderRadius:9,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER}}>Excluir</button>:<span/>}
-        <div style={{display:"flex",gap:8}}>
-          <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
-          <button onClick={_save} disabled={saving} style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER,boxShadow:"0 6px 16px rgba(14,165,233,0.30)"}}>{saving?"Salvando...":(isEdit?"Salvar":"Adicionar entrega")}</button>
-        </div>
-      </div>
-    </div>
-  </div>;
-}
 
 // ======= 27_playbooks.jsx =======
 // Playbooks por cliente — Design / Edição de Vídeo / Gestão de Mídia.
