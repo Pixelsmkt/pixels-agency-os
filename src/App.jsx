@@ -1312,30 +1312,31 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
     const nextMonth=_rolModal.nextMonth;
     const ids={};
     _rolModal.cards.forEach(function(t){ ids[t.id]=true; });
-    // Cards pagos do mês = aprovado/agendado/publicado COM freelancer assigned no mês selecionado
     const PAID2=["aprovado","agendado","publicado"];
     const fids=freelancers.map(function(f){return f.id;});
     const nowIso=new Date().toISOString();
+    // Pré-contar pagos (debug + toast)
+    const paidIds={};
+    (tasks||[]).forEach(function(t){
+      if(!t||ids[t.id]) return;
+      if(t.referenceMonth!==refMonth) return;
+      if(PAID2.indexOf(t.status)<0) return;
+      if(t.paidAt) return;
+      const ass=Array.isArray(t.assignees)?t.assignees:[t.assignee].filter(Boolean);
+      if(ass.some(function(aid){return fids.indexOf(aid)>=0;})){ paidIds[t.id]=true; }
+    });
+    const paidCount=Object.keys(paidIds).length;
     setTasks(function(prev){
       return (prev||[]).map(function(t){
         if(!t) return t;
-        if(ids[t.id]){
-          // 1) Pendentes: rola pro próximo mês
-          return Object.assign({},t,{referenceMonth:nextMonth, updated_at:nowIso});
-        }
-        // 2) Pagos: marca paidAt nos que estão no mês selecionado, aprovados/etc, com freelancer
-        if(t.referenceMonth===refMonth && PAID2.indexOf(t.status)>=0 && !t.paidAt){
-          const ass=Array.isArray(t.assignees)?t.assignees:[t.assignee].filter(Boolean);
-          if(ass.some(function(aid){return fids.indexOf(aid)>=0;})){
-            return Object.assign({},t,{paidAt:nowIso, updated_at:nowIso});
-          }
-        }
+        if(ids[t.id]) return Object.assign({},t,{referenceMonth:nextMonth, updated_at:nowIso});
+        if(paidIds[t.id]) return Object.assign({},t,{paidAt:nowIso, updated_at:nowIso});
         return t;
       });
     });
     const n=_rolModal.cards.length;
     _setRolModal(null);
-    if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" card(s) movido(s) pra "+nextMonth+". Pagos do mês marcados ✓");
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" rolado(s) pra "+nextMonth+" | "+paidCount+" marcado(s) como pago(s)");
   }
 
   const ChipBreak=function(props){
