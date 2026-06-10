@@ -44099,14 +44099,15 @@ function _PlEmptyState({title,desc}){
 }
 
 // ======= 26_dash_gustavo.jsx =======
-// Dashboard estratégico do Gustavo Vedovatto — Gestor de Performance + sócio.
-// v3 (2026-06): visual horizontalizado, Metas do dia + semana lado a lado,
-// Planejamento da semana com rotina hardcoded (OP_ROTINAS_POR_USER) + metas custom,
-// Clientes em atenção com dados reais (atrasos, health, MRR, próx. reunião),
-// Aprovações limpas, Mídia/Financeiro 2 colunas, estados vazios bonitos.
+// DashSocio v5 (2026-06-10):
+// - Header com saudação + indicadores compactos (demandas/atrasadas/notif)
+// - Avatars estilo Asana nos cards (foto/iniciais, empilhamento p/ múltiplos)
+// - Metas do dia + semana refinadas (empty state natural, tipografia forte)
+// - Planejamento da semana: checklists mais bonitos, botões discretos
+// - Sprint: resumo + toggle Atual/Próxima, cards com tipo/prazo/status/prioridade
 
-const DG_INTER = "'Inter', system-ui, -apple-system, sans-serif";
-const DG_PURPLE = "#9F43F6";
+const DG_INTER  = "'Inter', system-ui, -apple-system, sans-serif";
+const DG_PURPLE = "#7c3aed";
 const DG_DAYS = [
   {key:"seg", label:"Segunda", short:"Seg", idx:1},
   {key:"ter", label:"Terça",   short:"Ter", idx:2},
@@ -44115,16 +44116,36 @@ const DG_DAYS = [
   {key:"sex", label:"Sexta",   short:"Sex", idx:5},
 ];
 const DG_CATEGORIAS = [
-  {id:"performance", label:"Performance", color:"#9F43F6"},
+  {id:"performance", label:"Performance", color:"#7c3aed"},
   {id:"criacao",     label:"Criação",     color:"#ec4899"},
   {id:"atendimento", label:"Atendimento", color:"#0ea5e9"},
   {id:"estrategia",  label:"Estratégia",  color:"#f59e0b"},
   {id:"operacao",    label:"Operação",    color:"#64748b"},
 ];
+const DG_SPRINT_TIPOS = [
+  {id:"arte",      label:"Arte",      color:"#7c3aed", icon:"image"},
+  {id:"video",     label:"Vídeo",     color:"#ec4899", icon:"play"},
+  {id:"copy",      label:"Copy",      color:"#0ea5e9", icon:"fileText"},
+  {id:"trafego",   label:"Tráfego",   color:"#f59e0b", icon:"trending-up"},
+  {id:"relatorio", label:"Relatório", color:"#10b981", icon:"chart"},
+  {id:"reuniao",   label:"Reunião",   color:"#64748b", icon:"users"},
+];
+const DG_SPRINT_STATUS = [
+  {id:"planejado", label:"Planejado",       color:"#64748b", bg:"#f1f5f9"},
+  {id:"producao",  label:"Em produção",     color:"#0ea5e9", bg:"#e0f2fe"},
+  {id:"apv_int",   label:"Aprov. interna",  color:"#f59e0b", bg:"#fef3c7"},
+  {id:"apv_cli",   label:"Aprov. cliente",  color:"#7c3aed", bg:"#ede9fe"},
+  {id:"concluido", label:"Concluído",       color:"#16a34a", bg:"#dcfce7"},
+];
+const DG_SPRINT_PRIO = [
+  {id:"baixa", label:"Baixa",  color:"#94a3b8"},
+  {id:"media", label:"Média",  color:"#f59e0b"},
+  {id:"alta",  label:"Alta",   color:"#ef4444"},
+];
 
 // ── Helpers ─────────────────────────────────────────────────
-const _dgFmtBRL = n => "R$ " + Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
-const _dgToday  = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const _dgFmtBRL  = n => "R$ " + Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+const _dgToday   = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const _dgWeekKey = (d) => {
   const dt = d ? new Date(d) : new Date();
   const t = new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()));
@@ -44145,10 +44166,10 @@ const _dgDays = (deadline) => {
   if(!deadline) return null;
   return Math.ceil((new Date(deadline+"T00:00:00")-new Date())/86400000);
 };
-function _dgWeekDate(dayIdx){
+function _dgWeekDate(dayIdx, offsetWeeks=0){
   const today = new Date();
   const todayIdx = today.getDay()===0 ? 7 : today.getDay();
-  const diff = dayIdx - todayIdx;
+  const diff = dayIdx - todayIdx + (offsetWeeks*7);
   const d = new Date(today);
   d.setDate(d.getDate()+diff);
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
@@ -44162,17 +44183,66 @@ function _dgDiasDesde(iso){
   const d = new Date(iso); if(isNaN(d.getTime())) return null;
   return Math.floor((new Date()-d)/86400000);
 }
+function _dgFmtPrazoBR(iso){
+  if(!iso) return "";
+  const parts = iso.split("-");
+  if(parts.length<3) return iso;
+  return parts[2]+"/"+parts[1];
+}
+function _dgGetUserPhoto(u){
+  if(!u) return null;
+  const p1 = u.profile_data && u.profile_data.photo;
+  if(p1) return p1;
+  if(typeof localStorage!=="undefined"){
+    try{
+      const raw = localStorage.getItem("pixels-selfprofile-"+u.id);
+      if(raw){const o=JSON.parse(raw); if(o&&o.photo) return o.photo;}
+    }catch(e){}
+  }
+  return null;
+}
+function _dgInitials(name){
+  return (name||"?").split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase();
+}
+
+// ── Avatar único (foto ou iniciais) ──────────────────────────
+function _DGAvatar({userId, size=22}){
+  const u = (typeof TEAM!=="undefined") ? TEAM.find(x=>x.id===userId) : null;
+  if(!u) return null;
+  const photo = _dgGetUserPhoto(u);
+  const fz = Math.max(8, Math.floor(size*0.4));
+  if(photo){
+    return <img src={photo} alt={u.name}
+      style={{width:size,height:size,borderRadius:"50%",objectFit:"cover",border:"1.5px solid #fff",boxShadow:"0 0 0 1px #e2e8f0",flexShrink:0}}/>;
+  }
+  return <span style={{width:size,height:size,borderRadius:"50%",background:u.color||DG_PURPLE,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:fz,fontFamily:DG_INTER,border:"1.5px solid #fff",boxShadow:"0 0 0 1px #e2e8f0",flexShrink:0}}>{_dgInitials(u.name)}</span>;
+}
+
+// ── Stack de avatars (estilo Asana) ──────────────────────────
+function _DGAssignees({ids, size=22, maxShown=3}){
+  const arr = (Array.isArray(ids)?ids:[ids]).filter(Boolean);
+  if(arr.length===0) return null;
+  const shown = arr.slice(0, maxShown);
+  const overflow = arr.length - shown.length;
+  return <div style={{display:"inline-flex",alignItems:"center"}}>
+    {shown.map((uid,i)=><div key={uid} style={{marginLeft:i===0?0:-Math.floor(size*0.35),zIndex:shown.length-i}}>
+      <_DGAvatar userId={uid} size={size}/>
+    </div>)}
+    {overflow>0&&<span style={{marginLeft:-Math.floor(size*0.35),width:size,height:size,borderRadius:"50%",background:"#0f172a",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.max(8,Math.floor(size*0.36)),fontFamily:DG_INTER,border:"1.5px solid #fff"}}>+{overflow}</span>}
+  </div>;
+}
 
 // ── Section Title ─────────────────────────────────────────────
-function _DGSec({title, sub, right, icon}){
-  return <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:12}}>
-    <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0}}>
-      {icon&&<div style={{width:32,height:32,borderRadius:9,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
-        <Ico n={icon} size={15} color={DG_PURPLE}/>
+function _DGSec({title, sub, right, icon, accent}){
+  const c = accent || DG_PURPLE;
+  return <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:14}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+      {icon&&<div style={{width:34,height:34,borderRadius:10,background:c+"14",display:"flex",alignItems:"center",justifyContent:"center",color:c,flexShrink:0}}>
+        <Ico n={icon} size={15} color={c}/>
       </div>}
       <div style={{minWidth:0}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>{title}</div>
-        {sub&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,fontWeight:500}}>{sub}</div>}
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>{title}</div>
+        {sub&&<div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>{sub}</div>}
       </div>
     </div>
     {right}
@@ -44180,7 +44250,7 @@ function _DGSec({title, sub, right, icon}){
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  DashGustavo — Central de comando do Gestor de Performance
+//  DashGustavo (= DashSocio) — central de comando dos sócios
 // ═══════════════════════════════════════════════════════════════
 function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob}){
   const tasks = propTasks || [];
@@ -44197,26 +44267,27 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const hoje     = _dgToday();
   const {checks: rotinaChecks, toggle: rotinaToggle} = (typeof useOpRotinaChecks==="function") ? useOpRotinaChecks(weekKey, user.id) : {checks:{}, toggle:()=>{}};
 
-  // Todas metas desta semana QUE INCLUEM o sócio logado nos assignees
-  // (retrocompat: se a entry antiga só tem responsible_id, conta como dele)
-  const _isMineMeta = (e) => {
+  // ── Filtro: metas/itens onde o sócio logado é assignee ──
+  const _isMine = (e) => {
     if(!e) return false;
     if(Array.isArray(e.assignees) && e.assignees.length>0) return e.assignees.indexOf(user.id) >= 0;
     if(e.responsible_id) return e.responsible_id === user.id;
     if(e.author_id) return e.author_id === user.id;
     return false;
   };
-  const metasWeek = planEntries.filter(e=>e.type==="meta_semana"&&e.week_key===weekKey&&_isMineMeta(e));
+
+  // Metas da semana — só do user logado
+  const metasWeek = planEntries.filter(e=>e.type==="meta_semana"&&e.week_key===weekKey&&_isMine(e));
   const weekConcluidas = metasWeek.filter(m=>m.status==="concluida").length;
   const weekPendentes  = metasWeek.filter(m=>m.status!=="concluida").length;
   const weekAtrasadas  = metasWeek.filter(m=>m.status!=="concluida" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<0).length;
   const weekProgresso  = metasWeek.length>0 ? Math.round((weekConcluidas/metasWeek.length)*100) : 0;
 
-  // Metas do DIA (deadline === hoje)
+  // Metas do DIA
   const metasHoje = metasWeek.filter(m=>m.deadline===hoje);
   const hojeConcluidas = metasHoje.filter(m=>m.status==="concluida").length;
 
-  // Metas distribuídas por dia da semana
+  // Metas por dia da semana
   const metasPorDia = {};
   DG_DAYS.forEach(d=>{ metasPorDia[d.key] = []; });
   metasWeek.forEach(m=>{
@@ -44227,194 +44298,152 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     if(day) metasPorDia[day.key].push(m);
   });
 
-  // ── Aprovações ──
+  // ── Indicadores do header ──
   const apvDesign = allTasks.filter(t=>t.status==="avaliacao");
   const apvCopys  = allTasks.filter(t=>t.status==="demanda" && !t.ajustar);
   const apvInternas = allTasks.filter(t=>t.status==="interno_avaliacao");
-  const apvDesignAtrasadas = apvDesign.filter(t=>{
-    if(!t.colEnteredAt) return false;
-    return Math.floor((new Date()-new Date(t.colEnteredAt))/86400000) >= 2;
-  });
   const apvTotal = apvDesign.length + apvCopys.length + apvInternas.length;
-
-  // ── Demandas atrasadas ──
+  const demandasAbertas = allTasks.filter(t=>!["aprovado","publicado","interno_executado","interno_aprovado"].includes(t.status));
   const demandasAtrasadas = allTasks.filter(t=>{
     if(["aprovado","publicado","interno_executado","interno_aprovado"].includes(t.status)) return false;
     return t.deadline && _dgDays(t.deadline)!==null && _dgDays(t.deadline)<0;
   });
-
-  // ── Clientes em atenção (DADOS REAIS) ──
-  // Considera: health<60, nps<7, demandas atrasadas, próx. reunião distante, status="atencao"
-  const clientesAtencaoRaw = (CLIENTS||[]).filter(c=>c.status!=="interno").map(c=>{
-    const clTasks = allTasks.filter(t=>t.client===c.id);
-    const lateCount = clTasks.filter(t=>t.deadline && _dgDays(t.deadline)<0 && t.status!=="aprovado" && t.status!=="publicado").length;
-    const tasksAbertas = clTasks.filter(t=>!["aprovado","publicado","interno_executado","interno_aprovado"].includes(t.status)).length;
-    const tasksApvDesign = clTasks.filter(t=>t.status==="avaliacao").length;
-    const tasksApvCopy   = clTasks.filter(t=>t.status==="demanda"&&!t.ajustar).length;
-    const lowHealth = (Number(c.health||100)) < 60;
-    const lowNps    = (Number(c.nps||100))    < 70; // nps usado em escala 0-100 nos dados
-    const isAtencao = c.status==="atencao"||c.status==="critico";
-    const diasReuniao = c.nextMeeting ? _dgDiasDesde(c.nextMeeting) : null;
-    const ultReuniaoDistante = c.lastMeeting ? (_dgDiasDesde(c.lastMeeting) > 30) : false;
-    // Filtro: precisa ter pelo menos UM sinal real
-    if(!(lowHealth || lowNps || isAtencao || lateCount>=3 || ultReuniaoDistante)) return null;
-    // Score de prioridade
-    let score = 0;
-    if(lateCount>=10) score+=4; else if(lateCount>=5) score+=3; else if(lateCount>=3) score+=2;
-    if(lowHealth) score+=2;
-    if(isAtencao) score+=2;
-    if(lowNps) score+=1;
-    if(ultReuniaoDistante) score+=1;
-    let prio = "Baixa";
-    if(score>=5) prio = "Alta";
-    else if(score>=3) prio = "Média";
-    // Determina motivo principal (acionável)
-    const motivos = [];
-    if(lateCount>0) motivos.push(lateCount+" demanda"+(lateCount>1?"s":"")+" atrasada"+(lateCount>1?"s":""));
-    if(lowHealth) motivos.push("Health "+Math.round(c.health)+"%");
-    if(lowNps && c.nps) motivos.push("NPS "+Math.round(c.nps)+"/100");
-    if(tasksApvDesign+tasksApvCopy>0) motivos.push((tasksApvDesign+tasksApvCopy)+" aguardando aprovação");
-    if(ultReuniaoDistante) motivos.push("Sem reunião há +30 dias");
-    // Próxima ação real
-    let proxAcao;
-    if(lateCount>0) proxAcao = "Revisar entregas atrasadas";
-    else if(tasksApvDesign>0) proxAcao = "Aprovar designs pendentes";
-    else if(tasksApvCopy>0) proxAcao = "Revisar copys pendentes";
-    else if(ultReuniaoDistante) proxAcao = "Agendar reunião de alinhamento";
-    else if(lowHealth) proxAcao = "Reverter queda de health";
-    else proxAcao = null;
-    return {cl:c, lateCount, lowHealth, lowNps, motivos, proxAcao, prio, score, tasksAbertas, diasReuniao};
-  }).filter(Boolean).sort((a,b)=>b.score-a.score);
-  const clientesAtencao = clientesAtencaoRaw.slice(0,4);
-
-  // ── Gestão de Mídia ──
-  const mediaStore = (typeof useMediaStore==="function") ? useMediaStore() : {store:{clients:[]}};
-  const _refDate = new Date();
-  const mediaConsol = (typeof useMediaConsolidated==="function") ? useMediaConsolidated(mediaStore.store.clients||[], _refDate.getFullYear(), _refDate.getMonth()+1) : {funnels:{},roi:{},loading:false};
-  const mediaClients = mediaStore.store.clients||[];
-  const mediaTotalInvest = mediaClients.reduce((s,c)=>s+(Number(c.investimento_mensal)||0),0);
-  let mediaTotalRetorno = 0, mediaTotalRoiInv = 0;
-  mediaClients.forEach(c=>{
-    const r = (mediaConsol.roi||{})[c.client_id];
-    if(r && Array.isArray(r.sales)){
-      mediaTotalRetorno += r.sales.reduce((s,v)=>s+Number(v.value||0),0);
-    }
-    if(Number(c.investimento_mensal)>0) mediaTotalRoiInv += Number(c.investimento_mensal);
-  });
-  const mediaTemDado = mediaTotalRetorno > 0;
-  const mediaRoiGeral = mediaTemDado ? Math.round(((mediaTotalRetorno-mediaTotalRoiInv)/mediaTotalRoiInv)*1000)/10 : null;
-  const mediaSemFunil = mediaClients.filter(c=>{
-    const f = (mediaConsol.funnels||{})[c.client_id];
-    return !f || !Array.isArray(f.stages) || !f.stages.some(s=>Number(s.quantity||0)>0);
-  }).length;
-  const mediaAtivos = mediaClients.filter(c=>c.status==="ativa"||c.status==="em_dia").length;
-  const mediaEmAtencao = mediaClients.filter(c=>c.status==="atencao"||c.status==="critico").length;
-
-  // ── Financeiro ──
-  const finStore = (()=>{ try{const raw=localStorage.getItem("pixels-financeiro-v1"); return raw?JSON.parse(raw):null;}catch{return null;} })();
-  const contratos = (finStore?.contratos)||[];
-  const mrrAtual = contratos.filter(c=>c.statusContrato==="ativo").reduce((s,c)=>s+(Number(c.mrr)||0),0);
-  const contratosAtivos = contratos.filter(c=>c.statusContrato==="ativo").length;
-  const projetosAbertos = contratos.filter(c=>c.statusContrato==="ativo" && c.tipo==="projeto").length;
-  const totalPrevisto = mrrAtual + contratos.filter(c=>c.statusContrato==="ativo" && c.tipo==="projeto").reduce((s,c)=>s+(Number(c.valorProjeto)||0),0);
-  // Fallback: se não tem financeiro local, usa CLIENTS.contract
-  const mrrFallback = mrrAtual===0 ? (CLIENTS||[]).filter(c=>c.status!=="interno").reduce((s,c)=>s+(Number(c.contract)||0),0) : mrrAtual;
-  const clientesFallback = contratosAtivos===0 ? (CLIENTS||[]).filter(c=>c.status!=="interno"&&Number(c.contract)>0).length : contratosAtivos;
+  const notifNaoLidas = (notifs||[]).filter(n=>!n.read).length;
 
   // ── Filtros UI ──
   const [filtroStatus, setFiltroStatus] = useState("todas");
-  const [novaMeta, setNovaMeta] = useState(null);
+  const [novaMeta, setNovaMeta]         = useState(null);
+  const [novoSprint, setNovoSprint]     = useState(null);   // {clientId?, item?}
+  const [sprintWeekOffset, setSprintWeekOffset] = useState(1); // 0=atual, 1=próxima
+
   const _filtrar = (arr) => {
     if(filtroStatus==="pendentes") return arr.filter(m=>m.status!=="concluida");
     if(filtroStatus==="concluidas") return arr.filter(m=>m.status==="concluida");
     return arr;
   };
 
-  // ── Toggle status meta ──
   const _toggleMeta = (m) => {
     const newStatus = m.status==="concluida"?"em_andamento":"concluida";
     planUpsert(Object.assign({},m,{status:newStatus,updated_at:new Date().toISOString()}));
   };
-  // ── Excluir meta ──
   const _deleteMeta = (m) => {
     if(typeof planRemove==="function") planRemove(m.id);
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:DG_INTER}}>
+  // ── SPRINT ──────────────────────────────────────────────────
+  // Janela do sprint baseada no offset (0=semana atual, 1=próxima)
+  const _sprintWeekKey = (offset) => _dgWeekKey(new Date(_dgWeekDate(5, offset)+"T00:00:00"));
+  const sprintWk        = _sprintWeekKey(sprintWeekOffset);
+  const sprintSextaIso  = _dgWeekDate(5, sprintWeekOffset);
+  const sprintItems = planEntries.filter(e=>e.type==="sprint_item"&&e.week_key===sprintWk&&_isMine(e));
 
-    {/* Sócios começam direto com as metas — sem stats genéricas no topo */}
-    {/* ══════════ LINHA: METAS DO DIA + METAS DA SEMANA (horizontal) ══════════ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+  const sprintTotal     = sprintItems.length;
+  const sprintConcluido = sprintItems.filter(it=>it.status==="concluido").length;
+  const sprintAtrasado  = sprintItems.filter(it=>it.status!=="concluido" && it.deadline && _dgDays(it.deadline)!==null && _dgDays(it.deadline)<0).length;
+  const sprintEmAnd     = sprintItems.filter(it=>["producao","apv_int","apv_cli"].includes(it.status)).length;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:DG_INTER}}>
+
+    {/* ══════════ HEADER — saudação + indicadores ══════════ */}
+    <div style={{background:"linear-gradient(135deg,#7c3aed,#5b21b6)",borderRadius:18,padding:isMob?"18px 18px":"22px 26px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 12px 36px rgba(124,58,237,0.18)"}}>
+      <div style={{position:"absolute",inset:0,opacity:.15,backgroundImage:"radial-gradient(circle at 90% 20%, rgba(255,255,255,0.4), transparent 50%), radial-gradient(circle at 20% 80%, rgba(255,255,255,0.25), transparent 60%)"}}/>
+      <div style={{position:"relative",display:"flex",justifyContent:"space-between",alignItems:"center",gap:18,flexWrap:"wrap"}}>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,letterSpacing:.8,textTransform:"uppercase",opacity:.85}}>{_dgSaudacao()}, {user.name.split(" ")[0]}</div>
+          <div style={{fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.5,marginTop:5,lineHeight:1.2}}>Central de comando da semana</div>
+          <div style={{fontSize:12.5,opacity:.85,marginTop:5,fontWeight:500}}>{_dgDateLong()} · Semana {weekKey.slice(-3)}</div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(3,minmax(110px,1fr))",gap:8,width:isMob?"100%":"auto"}}>
+          {[
+            {label:"Demandas abertas", value:demandasAbertas.length},
+            {label:"Atrasadas",        value:demandasAtrasadas.length, urgent:demandasAtrasadas.length>0},
+            {label:"Notificações",     value:notifNaoLidas},
+          ].map((k,i)=><div key={i} style={{background:"rgba(255,255,255,0.12)",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:13,padding:"10px 14px",textAlign:"left"}}>
+            <div style={{fontSize:10,fontWeight:700,letterSpacing:.6,textTransform:"uppercase",opacity:.85,whiteSpace:"nowrap"}}>{k.label}</div>
+            <div style={{fontSize:22,fontWeight:800,letterSpacing:-.4,marginTop:3,fontFeatureSettings:"'tnum'",color:k.urgent?"#fecaca":"#fff"}}>{k.value}</div>
+          </div>)}
+        </div>
+      </div>
+    </div>
+
+    {/* ══════════ METAS DO DIA + METAS DA SEMANA ══════════ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
       {/* METAS DO DIA */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-        <_DGSec icon="target" title="Metas do dia" sub="Prioridades que precisam sair hoje."
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <_DGSec icon="target" title="Metas do dia" sub="O que precisa sair hoje."
           right={<button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
-              style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4}}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-              Adicionar
+              style={{background:"#f5f3ff",color:DG_PURPLE,border:"1px solid #ede9fe",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background=DG_PURPLE;e.currentTarget.style.color="#fff";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color=DG_PURPLE;}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+              Nova meta
             </button>}/>
-        {metasHoje.length>0&&<div style={{color:"#64748b",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'",marginBottom:8}}>{hojeConcluidas}/{metasHoje.length} concluídas</div>}
-        {metasHoje.length===0?<_DGEmpty icon="check" title="Nenhuma meta cadastrada para hoje." desc="Use o botão acima ou as colunas do Planejamento da semana."/>:<div style={{display:"flex",flexDirection:"column",gap:6}}>
-          {metasHoje.map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
-        </div>}
+        {metasHoje.length>0&&<div style={{color:"#64748b",fontSize:12,fontWeight:600,fontFeatureSettings:"'tnum'",marginBottom:10}}>{hojeConcluidas} de {metasHoje.length} concluídas</div>}
+        {metasHoje.length===0
+          ? <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
+              <div style={{display:"inline-flex",width:44,height:44,borderRadius:12,background:"#f1f5f9",color:"#94a3b8",alignItems:"center",justifyContent:"center",marginBottom:10}}>
+                <Ico n="target" size={18} color="#94a3b8"/>
+              </div>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:4,letterSpacing:-.2}}>Nenhuma prioridade cadastrada para hoje.</div>
+              <div style={{color:"#94a3b8",fontSize:12,lineHeight:1.55,maxWidth:320,margin:"0 auto"}}>Adicione uma meta ou puxe uma entrega do planejamento da semana.</div>
+            </div>
+          : <div style={{display:"flex",flexDirection:"column",gap:7}}>
+              {metasHoje.map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
+            </div>}
       </div>
 
       {/* METAS DA SEMANA */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
         <_DGSec icon="flag" title="Metas da semana" sub={"Resumo geral · Semana "+weekKey.slice(-3)}
           right={<button onClick={()=>setNovaMeta({day:DG_DAYS.find(d=>d.idx===(new Date().getDay()===0?7:new Date().getDay()))||DG_DAYS[0]})}
-            style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:7,padding:"5px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4}}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-            Adicionar
+            style={{background:"#f5f3ff",color:DG_PURPLE,border:"1px solid #ede9fe",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1,transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background=DG_PURPLE;e.currentTarget.style.color="#fff";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color=DG_PURPLE;}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            Nova meta
           </button>}/>
-        {/* Progress bar */}
-        <div style={{height:8,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:10}}>
-          <div style={{height:"100%",width:weekProgresso+"%",background:"linear-gradient(90deg,"+DG_PURPLE+",#7c3aed)",borderRadius:99,transition:"width .3s"}}/>
+        {/* Progress bar discreta */}
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <div style={{flex:1,height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+            <div style={{height:"100%",width:weekProgresso+"%",background:DG_PURPLE,borderRadius:99,transition:"width .3s"}}/>
+          </div>
+          <span style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFeatureSettings:"'tnum'",minWidth:36,textAlign:"right"}}>{weekProgresso}%</span>
         </div>
         {/* 4 mini-stats */}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:10}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:metasWeek.length>0?14:0}}>
           {[
-            {l:"Total",v:metasWeek.length,c:"#0f172a"},
-            {l:"OK",v:weekConcluidas,c:"#16a34a"},
-            {l:"Pend.",v:weekPendentes,c:"#f59e0b"},
-            {l:"Atras.",v:weekAtrasadas,c:weekAtrasadas>0?"#ef4444":"#94a3b8"},
-          ].map((s,i)=><div key={i} style={{textAlign:"center",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:8,padding:"7px 4px"}}>
-            <div style={{color:s.c,fontSize:18,fontWeight:800,letterSpacing:-.3,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
-            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>{s.l}</div>
+            {l:"Total",      v:metasWeek.length,  c:"#0f172a"},
+            {l:"Concluídas", v:weekConcluidas,    c:"#16a34a"},
+            {l:"Pendentes",  v:weekPendentes,     c:"#f59e0b"},
+            {l:"Atrasadas",  v:weekAtrasadas,     c:weekAtrasadas>0?"#ef4444":"#94a3b8"},
+          ].map((s,i)=><div key={i} style={{textAlign:"center",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 4px"}}>
+            <div style={{color:s.c,fontSize:20,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:5}}>{s.l}</div>
           </div>)}
         </div>
         {/* Próximas 3 a vencer */}
         {metasWeek.filter(m=>m.status!=="concluida"&&m.deadline).sort((a,b)=>(a.deadline||"").localeCompare(b.deadline||"")).slice(0,3).map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta} compact/>)}
-        {metasWeek.length===0&&<_DGEmpty icon="flag" title="Sem metas cadastradas." desc="Use o botão Adicionar nas colunas da semana."/>}
+        {metasWeek.length===0&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"24px 18px",textAlign:"center"}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:4,letterSpacing:-.2}}>Sem metas cadastradas.</div>
+          <div style={{color:"#94a3b8",fontSize:11.5}}>Use o botão "Nova meta" pra começar.</div>
+        </div>}
       </div>
     </div>
 
-    {/* ══════════ PLANEJAMENTO DA SEMANA — design moderno ══════════ */}
-    <div style={{background:"linear-gradient(180deg,#fafbff,#fff)",border:"1px solid #e9d5ff",borderRadius:16,padding:"18px 20px",boxShadow:"0 4px 20px rgba(124,58,237,0.05)"}}>
-      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-          <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 20px rgba(124,58,237,0.30)"}}>
-            <Ico n="calendar" size={17} color="#fff"/>
-          </div>
-          <div style={{minWidth:0}}>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Planejamento da semana</div>
-            <div style={{color:"#7c3aed",fontSize:12,marginTop:2,fontWeight:600,letterSpacing:-.1}}>Rotina personalizada + metas marcadas pra você</div>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          <div style={{display:"inline-flex",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:3,boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}>
-            {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"OK"}].map(f=>{
-              const a = filtroStatus===f.id;
-              return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
-                style={{background:a?"linear-gradient(135deg,#a78bfa,#7c3aed)":"transparent",color:a?"#fff":"#64748b",border:"none",borderRadius:7,padding:"6px 14px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 4px 10px rgba(124,58,237,0.25)":"none",transition:"all .15s",letterSpacing:-.1}}>
-                {f.l}
-              </button>;
-            })}
-          </div>
-        </div>
-      </div>
+    {/* ══════════ PLANEJAMENTO DA SEMANA — refinado ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <_DGSec icon="calendar" title="Planejamento da semana" sub="Sua rotina personalizada + metas adicionadas"
+        right={<div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
+          {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
+            const a = filtroStatus===f.id;
+            return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
+              style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
+              {f.l}
+            </button>;
+          })}
+        </div>}/>
 
-      {/* Grade Seg-Sex FULL WIDTH com design moderno */}
+      {/* Grade Seg-Sex */}
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12}}>
         {DG_DAYS.map(d=>{
           const metasDia = _filtrar(metasPorDia[d.key]||[]);
@@ -44423,7 +44452,6 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
           const isHoje = _dgWeekDate(d.idx)===hoje;
           const dayDate = _dgWeekDate(d.idx);
           const dayNum = dayDate ? parseInt(dayDate.split("-")[2],10) : "";
-          // Rotina hardcoded do dia
           const rotinaDia = _rotinaDias.find(r=>r.id===d.key);
           const rotinaItens = rotinaDia?.itens||[];
           const rotinaFiltered = filtroStatus==="todas"?rotinaItens:
@@ -44432,55 +44460,52 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
           const dayConc = concMetas + rotinaConc;
           const dayTotal = totalMetas + rotinaItens.length;
           const pct = dayTotal>0 ? Math.round((dayConc/dayTotal)*100) : 0;
-          return <div key={d.key} style={{background:"#fff",border:"1px solid "+(isHoje?"#a78bfa":"#e9d5ff"),borderRadius:13,padding:0,display:"flex",flexDirection:"column",minHeight:240,overflow:"hidden",boxShadow:isHoje?"0 6px 20px rgba(124,58,237,0.18)":"0 1px 3px rgba(15,23,42,0.04)",transition:"all .15s",position:"relative"}}>
-            {/* Header do dia — strip lateral colorida */}
-            <div style={{background:isHoje?"linear-gradient(135deg,#a78bfa,#7c3aed)":"linear-gradient(180deg,#fafbff,#fff)",padding:"10px 12px 8px",borderBottom:"1px solid "+(isHoje?"transparent":"#f1f5f9"),position:"relative"}}>
+          return <div key={d.key} style={{background:"#fff",border:"1px solid "+(isHoje?"#c4b5fd":"#eef0f3"),borderRadius:13,padding:0,display:"flex",flexDirection:"column",minHeight:230,overflow:"hidden",boxShadow:isHoje?"0 8px 24px rgba(124,58,237,0.10)":"none",transition:"all .15s"}}>
+            {/* Header */}
+            <div style={{padding:"12px 13px 10px",borderBottom:"1px solid "+(isHoje?"#ede9fe":"#f5f7fa"),background:isHoje?"#faf5ff":"#fff"}}>
               <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6}}>
                 <div style={{minWidth:0,flex:1}}>
-                  <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-                    <div style={{color:isHoje?"#fff":"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,textTransform:"uppercase"}}>
-                      {d.label}
-                    </div>
-                    {dayNum&&<div style={{color:isHoje?"#fff":"#cbd5e1",fontSize:10.5,fontWeight:700,opacity:isHoje?.85:1,fontFeatureSettings:"'tnum'"}}>{String(dayNum).padStart(2,"0")}</div>}
+                  <div style={{display:"flex",alignItems:"baseline",gap:7}}>
+                    <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:.2,textTransform:"uppercase"}}>{d.label}</div>
+                    {dayNum&&<div style={{color:"#cbd5e1",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{String(dayNum).padStart(2,"0")}</div>}
                   </div>
-                  {rotinaDia?.titulo&&<div style={{color:isHoje?"#fff":"#7c3aed",opacity:isHoje?.9:1,fontSize:10,marginTop:2,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
+                  {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
                 </div>
-                {isHoje&&<span style={{fontSize:8.5,fontWeight:800,color:"#7c3aed",background:"#fff",padding:"2px 7px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
+                {isHoje&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:DG_PURPLE,padding:"3px 8px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
               </div>
-              {/* Mini progress */}
-              {dayTotal>0&&<div style={{marginTop:7}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
-                  <span style={{color:isHoje?"#fff":"#94a3b8",fontSize:9,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",opacity:isHoje?.9:1}}>{dayConc} de {dayTotal}</span>
-                  <span style={{color:isHoje?"#fff":(pct===100?"#16a34a":"#7c3aed"),fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",opacity:isHoje?.9:1}}>{pct}%</span>
+              {/* Progress bar SEM porcentagem (discreta) */}
+              {dayTotal>0&&<div style={{marginTop:9}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,letterSpacing:.3}}>{dayConc}/{dayTotal} feitos</span>
                 </div>
-                <div style={{height:3,background:isHoje?"rgba(255,255,255,0.25)":"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
-                  <div style={{width:pct+"%",height:"100%",background:isHoje?"#fff":(pct===100?"#16a34a":"#7c3aed"),borderRadius:99,transition:"width .3s"}}/>
+                <div style={{height:3,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:pct+"%",height:"100%",background:pct===100?"#16a34a":DG_PURPLE,borderRadius:99,transition:"width .3s"}}/>
                 </div>
               </div>}
             </div>
 
             {/* Corpo */}
-            <div style={{padding:"10px 11px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
-              {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
+            <div style={{padding:"11px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
+              {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)}/>)}
               </div>}
 
-              {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#f1f5f9",margin:"3px 0"}}/>}
+              {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#f5f7fa",margin:"4px 0"}}/>}
 
-              {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:5}}>
+              {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
                 {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
               </div>}
 
-              {rotinaFiltered.length===0&&metasDia.length===0&&<div style={{color:"#cbd5e1",fontSize:10.5,textAlign:"center",padding:"14px 4px",lineHeight:1.4,fontWeight:500}}>
+              {rotinaFiltered.length===0&&metasDia.length===0&&<div style={{color:"#cbd5e1",fontSize:11,textAlign:"center",padding:"16px 4px",lineHeight:1.4,fontWeight:500}}>
                 {filtroStatus==="todas"?"Dia livre":"Sem "+filtroStatus.toLowerCase()}
               </div>}
 
               <button onClick={()=>setNovaMeta({day:d})}
-                style={{marginTop:"auto",background:"#faf5ff",color:"#7c3aed",border:"1px dashed #c4b5fd",borderRadius:8,padding:"7px 8px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s",letterSpacing:-.1}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#7c3aed";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#c4b5fd";}}>
+                style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color=DG_PURPLE;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
-                Adicionar meta
+                Adicionar
               </button>
             </div>
           </div>;
@@ -44488,179 +44513,92 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       </div>
     </div>
 
-    {/* ══════════ SPRINTS — entregas até sexta da próxima semana, por cliente ══════════ */}
+    {/* ══════════ SPRINT — atual ou próxima semana ══════════ */}
     {(function(){
-      // Janela: a partir de hoje até sexta da próxima semana
-      const _proxSextaIso = (function(){
-        const today = new Date();
-        const todayIdx = today.getDay()===0?7:today.getDay();
-        const diff = (5 - todayIdx) + 7; // próxima sexta
-        const d = new Date(today);
-        d.setDate(d.getDate()+diff);
-        return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
-      })();
-      const _sprintWeekKey = _dgWeekKey(new Date(_proxSextaIso+"T00:00:00"));
-      // Sprint items dessa janela onde o sócio logado é assignee
-      const sprintItems = planEntries.filter(e=>e.type==="sprint_item"&&e.week_key===_sprintWeekKey&&_isMineMeta(e));
-      // Clientes a mostrar: ativos com contract>0 + os que já tem item
-      const clientesAtivos = (CLIENTS||[]).filter(c=>c.status!=="interno"&&Number(c.contract||0)>0);
-      const clientesComItem = Array.from(new Set(sprintItems.map(it=>it.client_id).filter(Boolean)));
-      const clientesShown = clientesAtivos.filter(c=>true);
-      clientesComItem.forEach(cid=>{
-        if(!clientesShown.find(c=>c.id===cid)){
-          const c = (CLIENTS||[]).find(x=>x.id===cid);
-          if(c) clientesShown.push(c);
-        }
-      });
+      const sextaLbl = _dgFmtPrazoBR(sprintSextaIso);
+      const wkLabel  = sprintWeekOffset===0?"Sprint da semana atual":"Sprint da próxima semana";
+      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <_DGSec icon="flag" title={wkLabel} sub={"Entregas até sexta " + sextaLbl + " — por cliente"} accent="#0ea5e9"
+          right={<div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
+            {[{id:0,l:"Atual"},{id:1,l:"Próxima"}].map(o=>{
+              const a = sprintWeekOffset===o.id;
+              return <button key={o.id} onClick={()=>setSprintWeekOffset(o.id)}
+                style={{background:a?"#fff":"transparent",color:a?"#0ea5e9":"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
+                {o.l}
+              </button>;
+            })}
+          </div>}/>
 
-      const _addSprintItem = (cl) => {
-        const title = window.prompt("Nova entrega de sprint pra "+cl.name+":");
-        if(!title||!title.trim()) return;
-        planUpsert({
-          id:"sprint-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
-          type:"sprint_item",
-          week_key:_sprintWeekKey,
-          deadline:_proxSextaIso,
-          title:title.trim(),
-          client_id:cl.id,
-          assignees:[user.id],
-          author_id:user.id,
-          author_name:user.name,
-          status:"em_andamento",
-          created_at:new Date().toISOString(),
-          updated_at:new Date().toISOString(),
-        });
-      };
-      const _toggleSprint = (m) => {
-        const newStatus = m.status==="concluida"?"em_andamento":"concluida";
-        planUpsert(Object.assign({},m,{status:newStatus,updated_at:new Date().toISOString()}));
-      };
-      const _delSprint = (m) => {
-        if(window.confirm("Excluir esta entrega?")&&typeof planRemove==="function") planRemove(m.id);
-      };
-
-      const sprintTotal = sprintItems.length;
-      const sprintOk = sprintItems.filter(it=>it.status==="concluida").length;
-
-      return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"18px 20px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-            <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#06b6d4,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 20px rgba(14,165,233,0.25)"}}>
-              <Ico n="flag" size={17} color="#fff"/>
+        {/* Resumo do sprint */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:16}}>
+          {[
+            {l:"Total",       v:sprintTotal,     c:"#0f172a"},
+            {l:"Em andamento",v:sprintEmAnd,     c:"#0ea5e9"},
+            {l:"Atrasadas",   v:sprintAtrasado,  c:sprintAtrasado>0?"#ef4444":"#94a3b8"},
+            {l:"Concluídas",  v:sprintConcluido, c:"#16a34a"},
+          ].map((s,i)=><div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>{s.l}</div>
+              <div style={{color:s.c,fontSize:22,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
             </div>
-            <div style={{minWidth:0}}>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Sprint da próxima semana</div>
-              <div style={{color:"#0ea5e9",fontSize:12,marginTop:2,fontWeight:600,letterSpacing:-.1}}>O que precisa entregar até sexta {(()=>{const d=new Date(_proxSextaIso+"T00:00:00");return d.getDate()+"/"+String(d.getMonth()+1).padStart(2,"0");})()} — por cliente</div>
-            </div>
-          </div>
-          {sprintTotal>0&&<div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:10,padding:"7px 12px",fontFamily:DG_INTER}}>
-            <span style={{color:"#0369a1",fontSize:11,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginRight:6}}>Progresso</span>
-            <span style={{color:"#0c4a6e",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{sprintOk}/{sprintTotal}</span>
-          </div>}
+          </div>)}
         </div>
 
-        {clientesShown.length===0 ? <_DGEmpty icon="flag" title="Sem clientes ativos." desc="Adicione clientes na aba Comercial para planejar sprints."/> :
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
+        {/* Grid por cliente */}
+        {(function(){
+          const clientesAtivos = (CLIENTS||[]).filter(c=>c.status!=="interno"&&Number(c.contract||0)>0);
+          const clientesComItem = Array.from(new Set(sprintItems.map(it=>it.client_id).filter(Boolean)));
+          const clientesShown = clientesAtivos.slice();
+          clientesComItem.forEach(cid=>{
+            if(!clientesShown.find(c=>c.id===cid)){
+              const c = (CLIENTS||[]).find(x=>x.id===cid);
+              if(c) clientesShown.push(c);
+            }
+          });
+          if(clientesShown.length===0) return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.2,marginBottom:4}}>Sem clientes ativos.</div>
+            <div style={{color:"#94a3b8",fontSize:11.5}}>Adicione clientes na aba Comercial para planejar sprints.</div>
+          </div>;
+          return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
             {clientesShown.map(cl=>{
               const itensCl = sprintItems.filter(it=>it.client_id===cl.id);
-              const okCl = itensCl.filter(it=>it.status==="concluida").length;
-              return <div key={cl.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:0,display:"flex",flexDirection:"column",minHeight:160,overflow:"hidden",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-                {/* Header da coluna do cliente */}
-                <div style={{padding:"10px 12px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:9,background:"linear-gradient(180deg,"+(cl.color||"#94a3b8")+"0a,#fff)"}}>
+              const okCl = itensCl.filter(it=>it.status==="concluido").length;
+              return <div key={cl.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:0,display:"flex",flexDirection:"column",minHeight:180,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+                <div style={{padding:"11px 13px",borderBottom:"1px solid #f5f7fa",display:"flex",alignItems:"center",gap:10,background:"linear-gradient(180deg,"+(cl.color||"#94a3b8")+"08,#fff)"}}>
                   <ClientLogo clientId={cl.id} size="sm"/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-                    {itensCl.length>0&&<div style={{color:cl.color||"#64748b",fontSize:10,fontWeight:700,marginTop:1,fontFeatureSettings:"'tnum'"}}>{okCl}/{itensCl.length} entregue{itensCl.length>1?"s":""}</div>}
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                    <div style={{color:itensCl.length>0?(cl.color||"#64748b"):"#cbd5e1",fontSize:10.5,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>
+                      {itensCl.length>0 ? (okCl+"/"+itensCl.length+" entregue"+(itensCl.length>1?"s":"")) : "Sem entregas"}
+                    </div>
                   </div>
                 </div>
-                {/* Corpo da coluna */}
-                <div style={{padding:"10px 11px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
-                  {itensCl.length===0&&<div style={{color:"#cbd5e1",fontSize:10.5,textAlign:"center",padding:"12px 4px",lineHeight:1.4,fontWeight:500}}>Nenhuma entrega prevista</div>}
-                  {itensCl.map(it=>{
-                    const isOk = it.status==="concluida";
-                    return <div key={it.id} style={{background:isOk?"#f0fdf4":"#fafbfc",border:"1px solid "+(isOk?"#bbf7d0":"#f1f5f9"),borderRadius:8,padding:"7px 9px",display:"flex",alignItems:"flex-start",gap:7,fontFamily:DG_INTER,transition:"all .12s",position:"relative"}}
-                      onMouseEnter={e=>{const x=e.currentTarget.querySelector("._sprDel");if(x)x.style.opacity="1";}}
-                      onMouseLeave={e=>{const x=e.currentTarget.querySelector("._sprDel");if(x)x.style.opacity="0";}}>
-                      <button onClick={()=>_toggleSprint(it)} title={isOk?"Desmarcar":"Marcar como entregue"}
-                        style={{width:15,height:15,borderRadius:5,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,padding:0,transition:"all .12s"}}>
-                        {isOk&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                      </button>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{color:isOk?"#166534":"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.35,textDecoration:isOk?"line-through":"none",wordBreak:"break-word",paddingRight:14}}>{it.title}</div>
-                      </div>
-                      <button className="_sprDel" onClick={(e)=>{e.stopPropagation();_delSprint(it);}} title="Excluir"
-                        style={{position:"absolute",top:4,right:4,background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,opacity:0,transition:"opacity .12s, color .12s"}}
-                        onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
-                        onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
-                    </div>;
-                  })}
-                  <button onClick={()=>_addSprintItem(cl)}
-                    style={{marginTop:"auto",background:"transparent",color:"#0ea5e9",border:"1px dashed #bae6fd",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .12s",letterSpacing:-.1}}
-                    onMouseEnter={e=>{e.currentTarget.style.background="#0ea5e9";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#0ea5e9";}}
-                    onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#0ea5e9";e.currentTarget.style.borderColor="#bae6fd";}}>
+                <div style={{padding:"11px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
+                  {itensCl.length===0&&<div style={{color:"#cbd5e1",fontSize:11,textAlign:"center",padding:"14px 4px",lineHeight:1.4,fontWeight:500}}>Nada planejado ainda</div>}
+                  {itensCl.map(it=><_DGSprintCard key={it.id} item={it} onEdit={()=>setNovoSprint({clientId:cl.id, item:it})} onUpdate={(patch)=>planUpsert(Object.assign({},it,patch,{updated_at:new Date().toISOString()}))} onDelete={()=>{if(window.confirm("Excluir esta entrega?"))planRemove(it.id);}}/>)}
+                  <button onClick={()=>setNovoSprint({clientId:cl.id, item:null})}
+                    style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:8,padding:"7px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#7dd3fc";e.currentTarget.style.color="#0ea5e9";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
-                    Adicionar entrega
+                    Nova entrega
                   </button>
                 </div>
               </div>;
             })}
-          </div>
-        }
+          </div>;
+        })()}
       </div>;
     })()}
 
-    {/* ══════════ APROVAÇÕES + CLIENTES EM ATENÇÃO (lado a lado) ══════════ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1.5fr",gap:12}}>
-      {/* Aprovações */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-        <_DGSec icon="check" title="Pendências para minha aprovação" sub="Demandas que aguardam sua revisão."/>
-        {apvTotal===0?<_DGEmpty icon="check" title="Nenhuma aprovação pendente." desc="Tudo em dia por aqui."/>:<div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <_DGApvCard label="Copys para revisar" count={apvCopys.length} color="#9F43F6" icon="message"/>
-          <_DGApvCard label="Designs para aprovar" count={apvDesign.length} sub={apvDesignAtrasadas.length>0?(apvDesignAtrasadas.length+" atrasada"+(apvDesignAtrasadas.length>1?"s":"")):""} color="#0ea5e9" icon="image" urgent={apvDesignAtrasadas.length>0}/>
-          <_DGApvCard label="Demandas internas" count={apvInternas.length} color="#f97316" icon="inbox"/>
-        </div>}
-      </div>
-
-      {/* Clientes em atenção */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-        <_DGSec icon="alert" title="Clientes que precisam de atenção" sub="Atrasos reais, gargalos e clientes em risco."
-          right={clientesAtencaoRaw.length>4?<span style={{color:DG_PURPLE,fontSize:11.5,fontWeight:700,cursor:"pointer"}}>Ver todos ({clientesAtencaoRaw.length})</span>:null}/>
-        {clientesAtencao.length===0?<_DGEmpty icon="check" title="Tudo certo por aqui." desc="Nenhum cliente crítico no momento."/>:<div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
-          {clientesAtencao.map(item=><_DGClienteAtencao key={item.cl.id} item={item}/>)}
-        </div>}
-      </div>
-    </div>
-
-    {/* ══════════ MÍDIA + FINANCEIRO (lado a lado) ══════════ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1.6fr 1fr",gap:12}}>
-      {/* Mídia */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-        <_DGSec icon="trending-up" title="Gestão de mídia paga" sub="Resumo das campanhas, investimento e estruturação."/>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(150px,1fr))",gap:8}}>
-          <_DGKpi label="Orçamento gerido" value={mediaTotalInvest>0?_dgFmtBRL(mediaTotalInvest):"—"} sub={mediaTotalInvest>0?"/mês":""} icon="dollar" color={mediaTotalInvest>0?DG_PURPLE:"#94a3b8"} bg={mediaTotalInvest>0?DG_PURPLE+"14":"#f8fafc"} muted={mediaTotalInvest===0} highlight/>
-          <_DGKpi label="Clientes ativos" value={mediaAtivos} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
-          <_DGKpi label="Funil digital" value={(mediaClients.length-mediaSemFunil)+"/"+mediaClients.length} sub={mediaSemFunil>0?"Aguardando preenchimento":"Todos estruturados"} icon="trending-up" color={mediaSemFunil>0?"#f97316":"#16a34a"} bg={mediaSemFunil>0?"#fff7ed":"#dcfce7"}/>
-          <_DGKpi label="Em atenção" value={mediaEmAtencao} icon="alert" color={mediaEmAtencao>0?"#ef4444":"#94a3b8"} bg={mediaEmAtencao>0?"#fef2f2":"#f8fafc"} muted={mediaEmAtencao===0}/>
-          <_DGKpi label="ROI geral" value={mediaTemDado?(mediaRoiGeral>=0?"+":"")+mediaRoiGeral.toFixed(1)+"%":"—"} sub={mediaTemDado?"":"ROI aguardando dados"} icon="chart" color={mediaTemDado?(mediaRoiGeral>=0?"#16a34a":"#ef4444"):"#94a3b8"} bg={mediaTemDado?(mediaRoiGeral>=0?"#dcfce7":"#fef2f2"):"#f8fafc"} muted={!mediaTemDado}/>
-        </div>
-      </div>
-
-      {/* Financeiro */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-        <_DGSec icon="dollar" title="Resumo financeiro" sub="Operação comercial e recorrência."/>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          <_DGKpi label="Receita recorrente" value={mrrFallback>0?_dgFmtBRL(mrrFallback):"—"} sub={mrrFallback>0?"/mês":""} icon="trending-up" color={mrrFallback>0?"#16a34a":"#94a3b8"} bg={mrrFallback>0?"#dcfce7":"#f8fafc"} muted={mrrFallback===0}/>
-          <_DGKpi label="Clientes ativos" value={clientesFallback} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
-          <_DGKpi label="Projetos abertos" value={projetosAbertos} icon="file-text" color={DG_PURPLE} bg={DG_PURPLE+"14"}/>
-          <_DGKpi label="Total previsto" value={totalPrevisto>0?_dgFmtBRL(totalPrevisto):"—"} icon="dollar" color={totalPrevisto>0?"#0f172a":"#94a3b8"} bg="#f8fafc" muted={totalPrevisto===0}/>
-        </div>
-      </div>
-    </div>
-
     {/* MODAL NOVA META */}
     {novaMeta && <_DGNovaMeta day={novaMeta.day} user={user} weekKey={weekKey} onClose={()=>setNovaMeta(null)} onSave={(payload)=>{planUpsert(payload);setNovaMeta(null);}}/>}
+
+    {/* MODAL NOVA/EDITAR ENTREGA DO SPRINT */}
+    {novoSprint && <_DGNovoSprint user={user} clientId={novoSprint.clientId} item={novoSprint.item} weekKey={sprintWk} sextaIso={sprintSextaIso}
+      onClose={()=>setNovoSprint(null)}
+      onSave={(payload)=>{planUpsert(payload);setNovoSprint(null);}}
+      onDelete={(id)=>{if(typeof planRemove==="function")planRemove(id);setNovoSprint(null);}}/>}
 
   </div>;
 }
@@ -44670,18 +44608,20 @@ function _DGMetaItem({meta, onToggle, onDelete, compact}){
   const isOk = meta.status==="concluida";
   const isLate = !isOk && meta.deadline && _dgDays(meta.deadline)<0;
   const cat = _dgCatOf(meta);
-  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:9,padding:compact?"7px 9px":"9px 11px",display:"flex",alignItems:"center",gap:9,fontFamily:DG_INTER,transition:"all .12s",marginBottom:compact?5:0}}>
+  const assigneeIds = Array.isArray(meta.assignees)&&meta.assignees.length>0 ? meta.assignees : (meta.responsible_id?[meta.responsible_id]:[]);
+  return <div style={{background:"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#eef0f3"),borderRadius:11,padding:compact?"8px 12px":"11px 13px",display:"flex",alignItems:"center",gap:10,fontFamily:DG_INTER,transition:"all .15s",marginBottom:compact?6:0,boxShadow:isOk?"none":"0 1px 2px rgba(15,23,42,0.02)"}}>
     <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Concluir"}
-      style={{width:18,height:18,borderRadius:5,border:"2px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,padding:0,transition:"all .12s"}}>
-      {isOk&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+      style={{width:18,height:18,borderRadius:6,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,padding:0,transition:"all .15s"}}>
+      {isOk&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </button>
-    <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
-      <span style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:12,fontWeight:700,textDecoration:isOk?"line-through":"none",minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
-      {cat&&<span style={{background:cat.color+"18",color:cat.color,borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
+    <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      <span style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:13,fontWeight:700,textDecoration:isOk?"line-through":"none",letterSpacing:-.1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
+      {cat&&<span style={{background:cat.color+"14",color:cat.color,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
     </div>
-    {isLate&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>Atras.</span>}
-    {onDelete&&<button onClick={()=>{if(confirm("Excluir esta meta?"))onDelete(meta);}} title="Excluir meta"
-      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,borderRadius:5,display:"flex",alignItems:"center",justifyContent:"center",transition:"color .12s"}}
+    {assigneeIds.length>0&&<_DGAssignees ids={assigneeIds} size={22}/>}
+    {isLate&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>Atrasada</span>}
+    {onDelete&&<button onClick={()=>{if(window.confirm("Excluir esta meta?"))onDelete(meta);}} title="Excluir meta"
+      style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",transition:"color .12s"}}
       onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
       onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 012-2h2a2 2 0 012 2v2"/></svg>
@@ -44694,19 +44634,23 @@ function _DGMetaMini({meta, onToggle, onDelete}){
   const isOk = meta.status==="concluida";
   const isLate = !isOk && meta.deadline && _dgDays(meta.deadline)<0;
   const cat = _dgCatOf(meta);
-  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#e2e8f0"),borderRadius:7,padding:"6px 8px",display:"flex",alignItems:"flex-start",gap:6,fontFamily:DG_INTER,transition:"all .12s",position:"relative"}}
+  const assigneeIds = Array.isArray(meta.assignees)&&meta.assignees.length>0 ? meta.assignees : (meta.responsible_id?[meta.responsible_id]:[]);
+  return <div style={{background:"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#eef0f3"),borderRadius:9,padding:"8px 9px",display:"flex",alignItems:"flex-start",gap:7,fontFamily:DG_INTER,transition:"all .12s",position:"relative"}}
     onMouseEnter={e=>{const x=e.currentTarget.querySelector("._delBtn");if(x)x.style.opacity="1";}}
     onMouseLeave={e=>{const x=e.currentTarget.querySelector("._delBtn");if(x)x.style.opacity="0";}}>
     <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Concluir"}
-      style={{width:14,height:14,borderRadius:4,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:1,padding:0,transition:"all .12s"}}>
+      style={{width:14,height:14,borderRadius:5,border:"1.5px solid "+(isOk?"#16a34a":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,marginTop:2,padding:0,transition:"all .12s"}}>
       {isOk&&<svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </button>
     <div style={{flex:1,minWidth:0}}>
-      <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11,fontWeight:600,lineHeight:1.3,textDecoration:isOk?"line-through":"none",wordBreak:"break-word",paddingRight:onDelete?14:0}}>{meta.title||"(sem título)"}</div>
-      {cat&&<span style={{display:"inline-block",background:cat.color+"15",color:cat.color,borderRadius:3,padding:"1px 5px",fontSize:8.5,fontWeight:700,marginTop:2,letterSpacing:.2}}>{cat.label}</span>}
+      <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11.5,fontWeight:600,lineHeight:1.35,textDecoration:isOk?"line-through":"none",wordBreak:"break-word",paddingRight:onDelete?14:0,letterSpacing:-.1}}>{meta.title||"(sem título)"}</div>
+      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:5,flexWrap:"wrap"}}>
+        {cat&&<span style={{background:cat.color+"15",color:cat.color,borderRadius:4,padding:"1px 6px",fontSize:8.5,fontWeight:700,letterSpacing:.2}}>{cat.label}</span>}
+        {assigneeIds.length>0&&<_DGAssignees ids={assigneeIds} size={16}/>}
+      </div>
     </div>
-    {onDelete&&<button className="_delBtn" onClick={(e)=>{e.stopPropagation();if(confirm("Excluir esta meta?"))onDelete(meta);}} title="Excluir"
-      style={{position:"absolute",top:3,right:3,background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,opacity:0,transition:"opacity .12s, color .12s"}}
+    {onDelete&&<button className="_delBtn" onClick={(e)=>{e.stopPropagation();if(window.confirm("Excluir esta meta?"))onDelete(meta);}} title="Excluir"
+      style={{position:"absolute",top:4,right:4,background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,opacity:0,transition:"opacity .12s, color .12s"}}
       onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
       onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -44716,80 +44660,73 @@ function _DGMetaMini({meta, onToggle, onDelete}){
 
 // ── Item rotina hardcoded ────────────────────────────────────
 function _DGRotinaItem({item, checked, onToggle}){
-  return <div onClick={onToggle} style={{cursor:"pointer",background:checked?"#f0fdf4":"#fff",border:"1px solid "+(checked?"#bbf7d0":"#e2e8f0"),borderRadius:7,padding:"6px 8px",display:"flex",alignItems:"center",gap:6,fontFamily:DG_INTER,transition:"all .12s"}}>
-    <div style={{width:14,height:14,borderRadius:4,border:"1.5px solid "+(checked?"#16a34a":"#cbd5e1"),background:checked?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-      {checked&&<svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
+  return <div onClick={onToggle} style={{cursor:"pointer",background:checked?"#f0fdf4":"#fafbfc",border:"1px solid "+(checked?"#bbf7d0":"#f1f5f9"),borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:8,fontFamily:DG_INTER,transition:"all .15s"}}>
+    <div style={{width:15,height:15,borderRadius:5,border:"1.5px solid "+(checked?"#16a34a":"#cbd5e1"),background:checked?"#16a34a":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      {checked&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </div>
-    <span style={{color:checked?"#166534":"#475569",fontSize:11,fontWeight:600,lineHeight:1.3,textDecoration:checked?"line-through":"none",flex:1,minWidth:0}}>{item.label}</span>
+    <span style={{color:checked?"#166534":"#475569",fontSize:11.5,fontWeight:600,lineHeight:1.35,textDecoration:checked?"line-through":"none",flex:1,minWidth:0,letterSpacing:-.1}}>{item.label}</span>
   </div>;
 }
 
-// ── KPI ──────────────────────────────────────────────────────
-function _DGKpi({label, value, sub, icon, color, bg, muted, highlight}){
-  const c = color || "#0f172a";
-  return <div style={{background:highlight?bg:"#fff",border:"1px solid "+(highlight?color+"33":"#e2e8f0"),borderRadius:11,padding:"11px 13px",position:"relative",overflow:"hidden",fontFamily:DG_INTER,transition:"all .15s"}}>
-    <div style={{position:"absolute",top:0,right:0,width:30,height:30,background:highlight?"#fff":(bg||"#f8fafc"),borderBottomLeftRadius:11,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <Ico n={icon} size={13} color={c}/>
-    </div>
-    <div style={{color:muted?"#94a3b8":c,fontSize:highlight?20:17,fontWeight:800,lineHeight:1.1,letterSpacing:-.4,marginBottom:3,paddingRight:26,fontFeatureSettings:"'tnum'"}}>{value}</div>
-    <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
-    {sub&&<div style={{color:"#64748b",fontSize:10,marginTop:2,fontWeight:500}}>{sub}</div>}
-  </div>;
-}
-
-// ── Card de aprovação ────────────────────────────────────────
-function _DGApvCard({label, count, sub, color, icon, urgent}){
-  const neutral = count===0;
-  return <div style={{background:"#fff",border:"1px solid "+(neutral?"#e2e8f0":urgent?"#fecaca":"#e2e8f0"),borderRadius:10,padding:"10px 12px",fontFamily:DG_INTER,display:"flex",alignItems:"center",gap:10}}>
-    <div style={{width:34,height:34,borderRadius:8,background:neutral?"#f8fafc":color+"14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-      <Ico n={icon} size={15} color={neutral?"#94a3b8":color}/>
-    </div>
-    <div style={{flex:1,minWidth:0}}>
-      <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
-      <div style={{color:neutral?"#94a3b8":urgent?"#dc2626":"#64748b",fontSize:11,fontWeight:600,marginTop:2}}>
-        {neutral?"Nenhuma pendente":(count+" pendente"+(count>1?"s":"")+(sub?" · "+sub:""))}
+// ── Card de entrega do Sprint ─────────────────────────────────
+function _DGSprintCard({item, onEdit, onUpdate, onDelete}){
+  const tipo = DG_SPRINT_TIPOS.find(t=>t.id===item.tipo) || DG_SPRINT_TIPOS[0];
+  const status = DG_SPRINT_STATUS.find(s=>s.id===item.status) || DG_SPRINT_STATUS[0];
+  const prio = DG_SPRINT_PRIO.find(p=>p.id===item.priority) || null;
+  const assigneeIds = Array.isArray(item.assignees)&&item.assignees.length>0 ? item.assignees : (item.responsible_id?[item.responsible_id]:[]);
+  const isOk = item.status==="concluido";
+  const isLate = !isOk && item.deadline && _dgDays(item.deadline)<0;
+  return <div style={{background:isOk?"#f0fdf4":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#eef0f3"),borderRadius:11,padding:"11px 12px",display:"flex",flexDirection:"column",gap:8,fontFamily:DG_INTER,transition:"all .15s",position:"relative",cursor:"pointer"}}
+    onClick={()=>onEdit&&onEdit()}
+    onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 14px rgba(15,23,42,0.08)";e.currentTarget.style.transform="translateY(-1px)";}}
+    onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}>
+    {/* Linha 1: tipo + prioridade + delete */}
+    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+      <span style={{display:"inline-flex",alignItems:"center",gap:4,background:tipo.color+"15",color:tipo.color,borderRadius:5,padding:"2px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>
+        <Ico n={tipo.icon} size={10} color={tipo.color}/>
+        {tipo.label}
+      </span>
+      {prio&&<span style={{background:prio.color+"15",color:prio.color,border:"1px solid "+prio.color+"33",borderRadius:5,padding:"1px 7px",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{prio.label}</span>}
+      <div style={{marginLeft:"auto",display:"flex",gap:3}}>
+        {onDelete&&<button onClick={(e)=>{e.stopPropagation();onDelete();}} title="Excluir"
+          style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,display:"flex",alignItems:"center"}}
+          onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
+          onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>}
       </div>
     </div>
-    <div style={{color:neutral?"#cbd5e1":color,fontSize:24,fontWeight:800,letterSpacing:-.5,lineHeight:1,flexShrink:0}}>{count}</div>
-  </div>;
-}
-
-// ── Cliente em atenção (DADOS REAIS) ─────────────────────────
-function _DGClienteAtencao({item}){
-  const cl = item.cl;
-  const prioColor = item.prio==="Alta"?"#dc2626":item.prio==="Média"?"#f59e0b":"#64748b";
-  const prioBg    = item.prio==="Alta"?"#fef2f2":item.prio==="Média"?"#fffbeb":"#f8fafc";
-  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 13px",fontFamily:DG_INTER,transition:"all .15s",display:"flex",flexDirection:"column",gap:7}}>
-    <div style={{display:"flex",alignItems:"center",gap:9}}>
-      <ClientLogo clientId={cl.id} size="sm"/>
-      <div style={{minWidth:0,flex:1}}>
-        <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-        <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}{cl.contract?" · "+_dgFmtBRL(cl.contract)+"/mês":""}</div>
-      </div>
-      <span style={{background:prioBg,color:prioColor,border:"1px solid "+prioColor+"33",borderRadius:5,padding:"2px 7px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,whiteSpace:"nowrap"}}>{item.prio}</span>
+    {/* Linha 2: título */}
+    <div style={{color:isOk?"#166534":"#0f172a",fontSize:12.5,fontWeight:700,lineHeight:1.4,textDecoration:isOk?"line-through":"none",letterSpacing:-.1,wordBreak:"break-word"}}>{item.title||"(sem título)"}</div>
+    {/* Linha 3: status + prazo + assignees */}
+    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+      <button onClick={(e)=>{
+          e.stopPropagation();
+          // Avança ciclicamente pro próximo status
+          const idx = DG_SPRINT_STATUS.findIndex(s=>s.id===status.id);
+          const nxt = DG_SPRINT_STATUS[(idx+1)%DG_SPRINT_STATUS.length];
+          onUpdate&&onUpdate({status:nxt.id});
+        }} title="Avançar status"
+        style={{background:status.bg,color:status.color,border:"1px solid "+status.color+"33",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4,transition:"all .12s"}}>
+        {status.label}
+      </button>
+      {item.deadline&&<span style={{display:"inline-flex",alignItems:"center",gap:4,color:isLate?"#dc2626":"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        {_dgFmtPrazoBR(item.deadline)}
+      </span>}
+      {assigneeIds.length>0&&<div style={{marginLeft:"auto"}}><_DGAssignees ids={assigneeIds} size={20}/></div>}
     </div>
-    {/* Motivos reais */}
-    {item.motivos.length>0&&<div style={{display:"flex",flexDirection:"column",gap:2}}>
-      {item.motivos.slice(0,3).map((m,i)=><div key={i} style={{color:"#475569",fontSize:11,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
-        <span style={{color:prioColor,fontSize:9}}>●</span>{m}
-      </div>)}
-    </div>}
-    {/* Próxima ação */}
-    {item.proxAcao&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:7,padding:"6px 9px",marginTop:3}}>
-      <div style={{color:"#94a3b8",fontSize:8.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Próxima ação</div>
-      <div style={{color:"#0f172a",fontSize:11,fontWeight:600,marginTop:1,lineHeight:1.3}}>{item.proxAcao}</div>
-    </div>}
   </div>;
 }
 
 // ── Empty state ──────────────────────────────────────────────
 function _DGEmpty({icon, title, desc}){
-  return <div style={{background:"#fafafa",border:"1px dashed #e2e8f0",borderRadius:11,padding:"18px 14px",textAlign:"center"}}>
-    <div style={{display:"inline-flex",width:36,height:36,borderRadius:10,background:DG_PURPLE+"14",color:DG_PURPLE,alignItems:"center",justifyContent:"center",marginBottom:7}}>
-      <Ico n={icon} size={16} color={DG_PURPLE}/>
+  return <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"22px 16px",textAlign:"center"}}>
+    <div style={{display:"inline-flex",width:40,height:40,borderRadius:11,background:"#f1f5f9",color:"#94a3b8",alignItems:"center",justifyContent:"center",marginBottom:9}}>
+      <Ico n={icon} size={16} color="#94a3b8"/>
     </div>
-    <div style={{color:"#0f172a",fontWeight:700,fontSize:12.5,marginBottom:2}}>{title}</div>
-    {desc&&<div style={{color:"#64748b",fontSize:11,maxWidth:320,margin:"0 auto",lineHeight:1.5}}>{desc}</div>}
+    <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:3,letterSpacing:-.2}}>{title}</div>
+    {desc&&<div style={{color:"#94a3b8",fontSize:11.5,maxWidth:320,margin:"0 auto",lineHeight:1.5}}>{desc}</div>}
   </div>;
 }
 
@@ -44797,16 +44734,12 @@ function _DGEmpty({icon, title, desc}){
 function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
   const [title, setTitle] = useState("");
   const [selDay, setSelDay] = useState(day?day.key:DG_DAYS[0].key);
-  // Multi-select de responsáveis (sócios) — default: quem criou
   const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius") : [];
   const [responsaveis, setResponsaveis] = useState([user.id]);
   const _toggleResp = (rid) => setResponsaveis(p => p.indexOf(rid)>=0 ? (p.length>1?p.filter(x=>x!==rid):p) : p.concat([rid]));
   const [category, setCategory] = useState("");
   const [clientId, setClientId] = useState("");
   const [saving, setSaving] = useState(false);
-  // ESC fecha o modal
-  if(typeof useEscToClose==="function") useEscToClose(true, onClose);
-  // ESC fecha
   if(typeof useEscToClose==="function") useEscToClose(true, onClose);
 
   const _save = ()=>{
@@ -44816,8 +44749,6 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
     const deadline = _dgWeekDate(dayObj.idx);
     const firstId = responsaveis[0]||user.id;
     const firstResp = TEAM.find(t=>t.id===firstId);
-    // assignees: array de ids dos sócios marcados (sincroniza entre os dashboards)
-    // responsible_id/responsible_name mantidos por retrocompat com entries antigas
     const payload = {
       id: "meta-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
       type: "meta_semana",
@@ -44841,69 +44772,226 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
   };
 
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,width:"min(520px,92%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
-      <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.2}}>Nova meta semanal</div>
-      <div style={{fontSize:12,color:"#94a3b8",marginBottom:18}}>Cadastre uma meta e marque o dia em que ela vence.</div>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(560px,92%)",padding:"24px 26px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
+      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>Nova meta semanal</div>
+      <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20}}>Cadastre uma meta e marque o dia em que ela vence.</div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:13}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
-          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Título</div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Título</div>
           <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Revisar campanhas em atenção"
             onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();_save();}}}
-            style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
+            style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
         </div>
         <div>
-          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Dia da semana</div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Dia da semana</div>
           <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
             {DG_DAYS.map(d=>{
               const a = selDay===d.key;
-              return <button key={d.key} onClick={()=>setSelDay(d.key)} style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"7px 13px",borderRadius:7,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER}}>
+              return <button key={d.key} onClick={()=>setSelDay(d.key)} style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER}}>
                 {d.label}
               </button>;
             })}
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div>
-            <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Responsáveis <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(toque para marcar)</span></div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {_DG_SOCIOS.map(t=>{
                 const a = responsaveis.indexOf(t.id)>=0;
-                const photo = (t.profile_data&&t.profile_data.photo) || (typeof localStorage!=="undefined" && (function(){try{const raw=localStorage.getItem("pixels-selfprofile-"+t.id);return raw?JSON.parse(raw).photo:null;}catch{return null;}})());
                 return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
                   style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"5px 11px 5px 5px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7}}>
-                  {photo
-                    ? <img src={photo} alt={t.name} style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",border:a?"1.5px solid #fff":"1.5px solid #e2e8f0",flexShrink:0}}/>
-                    : <span style={{width:22,height:22,borderRadius:"50%",background:t.color||DG_PURPLE,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:9.5,flexShrink:0}}>{(t.name||"?").split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}</span>
-                  }
+                  <_DGAvatar userId={t.id} size={22}/>
                   {t.name.split(" ")[0]}
-                  {a && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2}}><polyline points="20 6 9 17 4 12"/></svg>}
+                  {a&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2}}><polyline points="20 6 9 17 4 12"/></svg>}
                 </button>;
               })}
             </div>
           </div>
           <div>
-            <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Categoria <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Categoria <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
             <select value={category} onChange={e=>setCategory(e.target.value)}
-              style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
+              style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
               <option value="">—</option>
               {DG_CATEGORIAS.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
           </div>
         </div>
         <div>
-          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Cliente <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Cliente <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
           <select value={clientId} onChange={e=>setClientId(e.target.value)}
-            style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
+            style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
             <option value="">— (interno)</option>
             {(CLIENTS||[]).filter(c=>c.status!=="interno").map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
       </div>
 
-      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:20}}>
-        <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
-        <button onClick={_save} disabled={saving} style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER}}>{saving?"Salvando...":"Salvar meta"}</button>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:22}}>
+        <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
+        <button onClick={_save} disabled={saving} style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER,boxShadow:"0 6px 16px rgba(124,58,237,0.30)"}}>{saving?"Salvando...":"Salvar meta"}</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── Modal Nova/Editar Entrega do Sprint ──────────────────────
+function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave, onDelete}){
+  const isEdit = !!item;
+  const [title, setTitle]   = useState(item?.title||"");
+  const [tipo, setTipo]     = useState(item?.tipo||"arte");
+  const [status, setStatus] = useState(item?.status||"planejado");
+  const [priority, setPriority] = useState(item?.priority||"media");
+  const [deadline, setDeadline] = useState(item?.deadline||sextaIso);
+  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius") : [];
+  const initResp = Array.isArray(item?.assignees)&&item.assignees.length>0 ? item.assignees : [user.id];
+  const [responsaveis, setResponsaveis] = useState(initResp);
+  const _toggleResp = (rid) => setResponsaveis(p => p.indexOf(rid)>=0 ? (p.length>1?p.filter(x=>x!==rid):p) : p.concat([rid]));
+  const [saving, setSaving] = useState(false);
+  if(typeof useEscToClose==="function") useEscToClose(true, onClose);
+
+  const cl = (CLIENTS||[]).find(c=>c.id===clientId);
+
+  const _save = ()=>{
+    if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
+    setSaving(true);
+    const firstId = responsaveis[0]||user.id;
+    const firstResp = TEAM.find(t=>t.id===firstId);
+    const payload = Object.assign({}, item||{}, {
+      id: item?.id || ("sprint-"+Date.now()+"-"+Math.random().toString(36).slice(2,7)),
+      type: "sprint_item",
+      week_key: weekKey,
+      title: title.trim(),
+      tipo: tipo,
+      status: status,
+      priority: priority,
+      deadline: deadline,
+      client_id: clientId,
+      assignees: responsaveis,
+      responsible_id: firstId,
+      responsible_name: firstResp?firstResp.name:user.name,
+      author_id: item?.author_id || user.id,
+      author_name: item?.author_name || user.name,
+      created_at: item?.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    onSave(payload);
+    setSaving(false);
+  };
+
+  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,fontFamily:DG_INTER}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(620px,94%)",padding:"24px 28px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)",maxHeight:"calc(100vh - 90px)",overflowY:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:18}}>
+        {cl&&<ClientLogo clientId={cl.id} size="sm"/>}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,color:"#0ea5e9",fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{isEdit?"Editar entrega":"Nova entrega"}</div>
+          <div style={{fontSize:17,fontWeight:800,color:"#0f172a",letterSpacing:-.3,marginTop:2}}>{cl?cl.name:"Sprint"}</div>
+        </div>
+      </div>
+
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>O que vai ser entregue</div>
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Carrossel sobre lançamento da campanha"
+            onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();_save();}}}
+            style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
+        </div>
+
+        <div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Tipo</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {DG_SPRINT_TIPOS.map(t=>{
+              const a = tipo===t.id;
+              return <button key={t.id} type="button" onClick={()=>setTipo(t.id)}
+                style={{background:a?t.color:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?t.color:"#e2e8f0"),padding:"7px 12px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1}}>
+                <Ico n={t.icon} size={11} color={a?"#fff":t.color}/>
+                {t.label}
+              </button>;
+            })}
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Status</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {DG_SPRINT_STATUS.map(s=>{
+                const a = status===s.id;
+                return <button key={s.id} type="button" onClick={()=>setStatus(s.id)}
+                  style={{background:a?s.color:s.bg,color:a?"#fff":s.color,border:"1px solid "+(a?s.color:s.color+"33"),padding:"6px 11px",borderRadius:99,fontSize:10.5,fontWeight:a?800:700,cursor:"pointer",fontFamily:DG_INTER,textTransform:"uppercase",letterSpacing:.3,transition:"all .12s"}}>
+                  {s.label}
+                </button>;
+              })}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prioridade</div>
+            <div style={{display:"flex",gap:5}}>
+              {DG_SPRINT_PRIO.map(p=>{
+                const a = priority===p.id;
+                return <button key={p.id} type="button" onClick={()=>setPriority(p.id)}
+                  style={{flex:1,background:a?p.color:"#fff",color:a?"#fff":p.color,border:"1px solid "+(a?p.color:p.color+"55"),padding:"8px 6px",borderRadius:8,fontSize:11.5,fontWeight:a?800:700,cursor:"pointer",fontFamily:DG_INTER,textTransform:"uppercase",letterSpacing:.3}}>
+                  {p.label}
+                </button>;
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prazo</div>
+            <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
+              style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {_DG_SOCIOS.map(t=>{
+                const a = responsaveis.indexOf(t.id)>=0;
+                return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
+                  style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"4px 10px 4px 4px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6}}>
+                  <_DGAvatar userId={t.id} size={20}/>
+                  {t.name.split(" ")[0]}
+                </button>;
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:22}}>
+        {isEdit&&onDelete?<button onClick={()=>{if(window.confirm("Excluir esta entrega?"))onDelete(item.id);}} style={{background:"#fff",color:"#ef4444",border:"1px solid #fecaca",borderRadius:9,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER}}>Excluir</button>:<span/>}
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
+          <button onClick={_save} disabled={saving} style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER,boxShadow:"0 6px 16px rgba(14,165,233,0.30)"}}>{saving?"Salvando...":(isEdit?"Salvar":"Adicionar entrega")}</button>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+ontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {_DG_SOCIOS.map(t=>{
+                const a = responsaveis.indexOf(t.id)>=0;
+                return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
+                  style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"4px 10px 4px 4px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6}}>
+                  <_DGAvatar userId={t.id} size={20}/>
+                  {t.name.split(" ")[0]}
+                </button>;
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:22}}>
+        {isEdit&&onDelete?<button onClick={()=>{if(window.confirm("Excluir esta entrega?"))onDelete(item.id);}} style={{background:"#fff",color:"#ef4444",border:"1px solid #fecaca",borderRadius:9,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER}}>Excluir</button>:<span/>}
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
+          <button onClick={_save} disabled={saving} style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER,boxShadow:"0 6px 16px rgba(14,165,233,0.30)"}}>{saving?"Salvando...":(isEdit?"Salvar":"Adicionar entrega")}</button>
+        </div>
       </div>
     </div>
   </div>;
