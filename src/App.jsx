@@ -3335,8 +3335,9 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 }
 
 function RenderDash({user,isViewing=false,tasks,setTasks,notifs,isMob}){
-  // Gustavo (Gestor de Performance) usa dashboard estratégico próprio
-  if(user.id==="gustavo"&&typeof DashGustavo==="function"){
+  // Sócios (Vinicius + Gustavo) usam o dashboard estratégico compartilhado (DashGustavo = DashSocio).
+  // As metas multi-marcadas pra ambos sincronizam entre os dois (filtragem por assignees).
+  if((user.id==="gustavo"||user.id==="vinicius")&&typeof DashGustavo==="function"){
     return <DashGustavo user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
   }
   switch(user.dash){
@@ -44195,8 +44196,16 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const hoje     = _dgToday();
   const {checks: rotinaChecks, toggle: rotinaToggle} = (typeof useOpRotinaChecks==="function") ? useOpRotinaChecks(weekKey, user.id) : {checks:{}, toggle:()=>{}};
 
-  // Todas metas desta semana
-  const metasWeek = planEntries.filter(e=>e.type==="meta_semana"&&e.week_key===weekKey);
+  // Todas metas desta semana QUE INCLUEM o sócio logado nos assignees
+  // (retrocompat: se a entry antiga só tem responsible_id, conta como dele)
+  const _isMineMeta = (e) => {
+    if(!e) return false;
+    if(Array.isArray(e.assignees) && e.assignees.length>0) return e.assignees.indexOf(user.id) >= 0;
+    if(e.responsible_id) return e.responsible_id === user.id;
+    if(e.author_id) return e.author_id === user.id;
+    return false;
+  };
+  const metasWeek = planEntries.filter(e=>e.type==="meta_semana"&&e.week_key===weekKey&&_isMineMeta(e));
   const weekConcluidas = metasWeek.filter(m=>m.status==="concluida").length;
   const weekPendentes  = metasWeek.filter(m=>m.status!=="concluida").length;
   const weekAtrasadas  = metasWeek.filter(m=>m.status!=="concluida" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<0).length;
@@ -44654,7 +44663,10 @@ function _DGEmpty({icon, title, desc}){
 function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
   const [title, setTitle] = useState("");
   const [selDay, setSelDay] = useState(day?day.key:DG_DAYS[0].key);
-  const [responsavelId, setResponsavelId] = useState(user.id);
+  // Multi-select de responsáveis (sócios) — default: quem criou
+  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius") : [];
+  const [responsaveis, setResponsaveis] = useState([user.id]);
+  const _toggleResp = (rid) => setResponsaveis(p => p.indexOf(rid)>=0 ? (p.length>1?p.filter(x=>x!==rid):p) : p.concat([rid]));
   const [category, setCategory] = useState("");
   const [clientId, setClientId] = useState("");
   const [saving, setSaving] = useState(false);
@@ -44668,7 +44680,10 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
     setSaving(true);
     const dayObj = DG_DAYS.find(d=>d.key===selDay)||DG_DAYS[0];
     const deadline = _dgWeekDate(dayObj.idx);
-    const resp = TEAM.find(t=>t.id===responsavelId);
+    const firstId = responsaveis[0]||user.id;
+    const firstResp = TEAM.find(t=>t.id===firstId);
+    // assignees: array de ids dos sócios marcados (sincroniza entre os dashboards)
+    // responsible_id/responsible_name mantidos por retrocompat com entries antigas
     const payload = {
       id: "meta-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
       type: "meta_semana",
@@ -44680,8 +44695,9 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
       client_id: clientId||null,
       author_id: user.id,
       author_name: user.name,
-      responsible_id: responsavelId,
-      responsible_name: resp?resp.name:user.name,
+      assignees: responsaveis,
+      responsible_id: firstId,
+      responsible_name: firstResp?firstResp.name:user.name,
       status: "em_andamento",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -44715,11 +44731,22 @@ function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
           <div>
-            <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Responsável</div>
-            <select value={responsavelId} onChange={e=>setResponsavelId(e.target.value)}
-              style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:12.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
-              {TEAM.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
+            <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Responsáveis <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(toque para marcar)</span></div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {_DG_SOCIOS.map(t=>{
+                const a = responsaveis.indexOf(t.id)>=0;
+                const photo = (t.profile_data&&t.profile_data.photo) || (typeof localStorage!=="undefined" && (function(){try{const raw=localStorage.getItem("pixels-selfprofile-"+t.id);return raw?JSON.parse(raw).photo:null;}catch{return null;}})());
+                return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
+                  style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"5px 11px 5px 5px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7}}>
+                  {photo
+                    ? <img src={photo} alt={t.name} style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",border:a?"1.5px solid #fff":"1.5px solid #e2e8f0",flexShrink:0}}/>
+                    : <span style={{width:22,height:22,borderRadius:"50%",background:t.color||DG_PURPLE,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:9.5,flexShrink:0}}>{(t.name||"?").split(" ").map(x=>x[0]).slice(0,2).join("").toUpperCase()}</span>
+                  }
+                  {t.name.split(" ")[0]}
+                  {a && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2}}><polyline points="20 6 9 17 4 12"/></svg>}
+                </button>;
+              })}
+            </div>
           </div>
           <div>
             <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:6}}>Categoria <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
