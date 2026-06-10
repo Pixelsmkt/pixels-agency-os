@@ -1,4 +1,7 @@
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
+// Modulos: 29/29 | Nao editar diretamente
+
+// Pixels Agency OS - App.jsx (gerado por juntar.py)
 // Modulos: 40/40 | Nao editar diretamente
 
 // Pixels Agency OS - App.jsx (gerado por juntar.py)
@@ -3466,8 +3469,10 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
         <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:28,letterSpacing:-.6,lineHeight:1.1}}>{displayName}</div>
         <div style={{color:"rgba(255,255,255,0.78)",fontSize:13,fontWeight:500,marginTop:4}}>{displayRole}</div>
       </div>
-      {/* Demandas + sino à direita */}
-      <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:14}}>
+      {/* Demandas + sino à direita —
+           Escondido pros sócios (Vinicius+Gustavo). User pediu dash limpo, sem
+           números genéricos. Os dados ficam nas seções específicas do dash. */}
+      {effectiveUser.id!=="vinicius"&&effectiveUser.id!=="gustavo"&&<div style={{flexShrink:0,display:"flex",alignItems:"center",gap:isMob?8:14}}>
         <div style={{background:"rgba(255,255,255,0.15)",borderRadius:10,padding:"8px 14px",display:"flex",flexDirection:"column",alignItems:"center",backdropFilter:"blur(6px)"}}>
           <div style={{display:"flex",alignItems:"baseline",gap:4}}>
             <span style={{color:"#bbf7d0",fontWeight:800,fontSize:isMob?18:22,lineHeight:1}}>{conclMes}</span>
@@ -3488,7 +3493,7 @@ function PageDashboard({isMob,onClient,tasks:propTasks,setTasks:propSetTasks,not
           </svg>
           {unread>0&&<span style={{color:"#fff",fontSize:13,fontWeight:700,lineHeight:1}}>{unread}</span>}
         </button>
-      </div>
+      </div>}
     </div>
 
     {/* ── ALERTAS URGENTES — criados por admins/social media ──
@@ -44355,26 +44360,11 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:DG_INTER}}>
 
-    {/* ══════════ TÍTULO + INDICADORES ══════════ */}
-    <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:14,flexWrap:"wrap",marginBottom:2}}>
-      <div>
-        <div style={{color:DG_PURPLE,fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Central de comando</div>
-        <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.6,marginTop:4,lineHeight:1.15}}>Sua semana num só lugar</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:5,fontWeight:500}}>{_dgDateLong()} · Semana {weekKey.slice(-3)}</div>
-      </div>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(3,1fr)":"repeat(3,minmax(0,1fr))",gap:10}}>
-      {[
-        {label:"Demandas abertas", value:demandasAbertas.length,   color:"#0f172a", accent:"#7c3aed"},
-        {label:"Atrasadas",        value:demandasAtrasadas.length, color:demandasAtrasadas.length>0?"#dc2626":"#16a34a", accent:demandasAtrasadas.length>0?"#fee2e2":"#dcfce7"},
-        {label:"Notificações",     value:notifNaoLidas,            color:"#0f172a", accent:"#fef3c7"},
-      ].map((k,i)=><div key={i} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"14px 18px",display:"flex",alignItems:"center",gap:13,boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <div style={{width:8,height:38,borderRadius:99,background:k.accent,flexShrink:0}}/>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:3}}>{k.label}</div>
-          <div style={{color:k.color,fontSize:24,fontWeight:800,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{k.value}</div>
-        </div>
-      </div>)}
+    {/* ══════════ TÍTULO ÚNICO — sem indicadores genéricos ══════════ */}
+    <div>
+      <div style={{color:DG_PURPLE,fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase"}}>Central de comando</div>
+      <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.6,marginTop:4,lineHeight:1.15}}>Sua semana num só lugar</div>
+      <div style={{color:"#64748b",fontSize:12.5,marginTop:5,fontWeight:500}}>{_dgDateLong()} · Semana {weekKey.slice(-3)}</div>
     </div>
 
     {/* ══════════ METAS DO DIA + METAS DA SEMANA — visual unificado ══════════ */}
@@ -44505,14 +44495,14 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                     <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:.2,textTransform:"uppercase"}}>{d.label}</div>
                     {dayNum&&<div style={{color:"#cbd5e1",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{String(dayNum).padStart(2,"0")}</div>}
                   </div>
-                  {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
+                  {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
                 </div>
-                {isHoje&&<span style={{fontSize:9,fontWeight:800,color:"#fff",background:DG_PURPLE,padding:"3px 8px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
+                {isHoje&&<span style={{fontSize:11,fontWeight:800,color:"#fff",background:DG_PURPLE,padding:"3px 8px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
               </div>
               {/* Progress bar SEM porcentagem (discreta) */}
               {dayTotal>0&&<div style={{marginTop:9}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,letterSpacing:.3}}>{dayConc}/{dayTotal} feitos</span>
+                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.3}}>{dayConc}/{dayTotal} feitos</span>
                 </div>
                 <div style={{height:3,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
                   <div style={{width:pct+"%",height:"100%",background:pct===100?"#16a34a":DG_PURPLE,borderRadius:99,transition:"width .3s"}}/>
@@ -44571,7 +44561,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
             <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:9,padding:"6px 12px",minWidth:isMob?100:140,textAlign:"center"}}>
-              <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",lineHeight:1}}>Semana</div>
+              <div style={{color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",lineHeight:1}}>Semana</div>
               <div style={{color:"#0f172a",fontSize:12,fontWeight:800,fontFamily:DG_INTER,marginTop:3,fontFeatureSettings:"'tnum'",letterSpacing:-.1}}>{segLbl} — {sextaLbl}</div>
             </div>
             <button onClick={()=>setSprintWeekOffset(sprintWeekOffset+1)} title="Próxima semana"
@@ -44597,7 +44587,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             {l:"Concluídas",  v:sprintConcluido, c:"#16a34a"},
           ].map((s,i)=><div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>{s.l}</div>
+              <div style={{color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{s.l}</div>
               <div style={{color:s.c,fontSize:22,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
             </div>
           </div>)}
@@ -44678,11 +44668,11 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
                     <div style={{display:"flex",alignItems:"center",gap:6,marginTop:3,flexWrap:"wrap"}}>
-                      <span style={{color:itensCl.length>0?clColor:"#cbd5e1",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
+                      <span style={{color:itensCl.length>0?clColor:"#cbd5e1",fontSize:11.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
                         {itensCl.length>0 ? (okCl+"/"+itensCl.length+" entrega"+(itensCl.length>1?"s":"")) : "Sem entregas"}
                       </span>
-                      {lateCl>0&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"1px 7px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>{lateCl} atrasada{lateCl>1?"s":""}</span>}
-                      {portalAbertas.length>0&&<span style={{background:"#fef3c7",color:"#a16207",borderRadius:5,padding:"1px 7px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:3}}>
+                      {lateCl>0&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"1px 7px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>{lateCl} atrasada{lateCl>1?"s":""}</span>}
+                      {portalAbertas.length>0&&<span style={{background:"#fef3c7",color:"#a16207",borderRadius:5,padding:"1px 7px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:3}}>
                         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
                         {portalAbertas.length} pedido{portalAbertas.length>1?"s":""}
                       </span>}
@@ -44703,7 +44693,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                   {portalAbertas.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:itensCl.length>0?4:0}}>
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
                       <div style={{height:1,background:"#fde68a",flex:1}}/>
-                      <span style={{color:"#a16207",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Pedidos do cliente</span>
+                      <span style={{color:"#a16207",fontSize:11,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Pedidos do cliente</span>
                       <div style={{height:1,background:"#fde68a",flex:1}}/>
                     </div>
                     {portalAbertas.slice(0,3).map(t=>{
@@ -44712,22 +44702,22 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{color:"#0f172a",fontSize:12,fontWeight:700,lineHeight:1.35,letterSpacing:-.1,wordBreak:"break-word"}}>{t.title}</div>
                           <div style={{display:"flex",alignItems:"center",gap:5,marginTop:4,flexWrap:"wrap"}}>
-                            {_prioCfg&&<span style={{background:_prioCfg.bg,color:_prioCfg.color,borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>{_prioCfg.label}</span>}
-                            {t.deadline&&<span style={{color:"#a16207",fontSize:9.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>prazo {_dgFmtPrazoBR(t.deadline)}</span>}
+                            {_prioCfg&&<span style={{background:_prioCfg.bg,color:_prioCfg.color,borderRadius:4,padding:"1px 6px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>{_prioCfg.label}</span>}
+                            {t.deadline&&<span style={{color:"#a16207",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>prazo {_dgFmtPrazoBR(t.deadline)}</span>}
                           </div>
                         </div>
                         <button onClick={()=>_puxarPraSprint(t,cl)} title="Puxar pra esse sprint"
-                          style={{background:"#a16207",color:"#fff",border:"none",borderRadius:7,padding:"5px 9px",fontSize:10,fontWeight:800,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
+                          style={{background:"#a16207",color:"#fff",border:"none",borderRadius:7,padding:"5px 9px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
                           + Puxar
                         </button>
                       </div>;
                     })}
-                    {portalAbertas.length>3&&<div style={{color:"#a16207",fontSize:10,fontWeight:600,textAlign:"center",fontStyle:"italic"}}>+{portalAbertas.length-3} mais</div>}
+                    {portalAbertas.length>3&&<div style={{color:"#a16207",fontSize:11.5,fontWeight:600,textAlign:"center",fontStyle:"italic"}}>+{portalAbertas.length-3} mais</div>}
                   </div>}
 
                   {/* Entregas planejadas */}
                   {itensCl.length===0&&portalAbertas.length===0&&<div style={{color:"#cbd5e1",fontSize:11.5,textAlign:"center",padding:"16px 4px",lineHeight:1.4,fontWeight:500}}>Nada planejado ainda</div>}
-                  {itensCl.map(it=><_DGSprintCard key={it.id} item={it} onEdit={()=>setNovoSprint({clientId:cl.id, item:it})} onUpdate={(patch)=>planUpsert(Object.assign({},it,patch,{updated_at:new Date().toISOString()}))} onDelete={()=>{if(window.confirm("Excluir esta entrega?"))planRemove(it.id);}}/>)}
+                  {itensCl.map(it=><_DGSprintCard key={it.id} item={it} onEdit={()=>setNovoSprint({clientId:cl.id, item:it})} onUpdate={(patch)=>planUpsert(Object.assign({},it,patch,{updated_at:new Date().toISOString()}))} onDelete={()=>{planRemove(it.id);}}/>)}
 
                   <button onClick={()=>setNovoSprint({clientId:cl.id, item:null})}
                     style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:9,padding:"8px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
@@ -44769,11 +44759,11 @@ function _DGMetaItem({meta, onToggle, onDelete, compact}){
     </button>
     <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
       <span style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:13,fontWeight:700,textDecoration:isOk?"line-through":"none",letterSpacing:-.1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
-      {cat&&<span style={{background:cat.color+"14",color:cat.color,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
+      {cat&&<span style={{background:cat.color+"14",color:cat.color,borderRadius:5,padding:"2px 7px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
     </div>
     {assigneeIds.length>0&&<_DGAssignees ids={assigneeIds} size={22}/>}
-    {isLate&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>Atrasada</span>}
-    {onDelete&&<button onClick={()=>{if(window.confirm("Excluir esta meta?"))onDelete(meta);}} title="Excluir meta"
+    {isLate&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"2px 7px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>Atrasada</span>}
+    {onDelete&&<button onClick={()=>{onDelete(meta);}} title="Excluir meta"
       style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",transition:"color .12s"}}
       onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
       onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
@@ -44798,11 +44788,11 @@ function _DGMetaMini({meta, onToggle, onDelete}){
     <div style={{flex:1,minWidth:0}}>
       <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11.5,fontWeight:600,lineHeight:1.35,textDecoration:isOk?"line-through":"none",wordBreak:"break-word",paddingRight:onDelete?14:0,letterSpacing:-.1}}>{meta.title||"(sem título)"}</div>
       <div style={{display:"flex",alignItems:"center",gap:5,marginTop:5,flexWrap:"wrap"}}>
-        {cat&&<span style={{background:cat.color+"15",color:cat.color,borderRadius:4,padding:"1px 6px",fontSize:8.5,fontWeight:700,letterSpacing:.2}}>{cat.label}</span>}
+        {cat&&<span style={{background:cat.color+"15",color:cat.color,borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:700,letterSpacing:.2}}>{cat.label}</span>}
         {assigneeIds.length>0&&<_DGAssignees ids={assigneeIds} size={16}/>}
       </div>
     </div>
-    {onDelete&&<button className="_delBtn" onClick={(e)=>{e.stopPropagation();if(window.confirm("Excluir esta meta?"))onDelete(meta);}} title="Excluir"
+    {onDelete&&<button className="_delBtn" onClick={(e)=>{e.stopPropagation();onDelete(meta);}} title="Excluir"
       style={{position:"absolute",top:4,right:4,background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,opacity:0,transition:"opacity .12s, color .12s"}}
       onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
       onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
@@ -44835,11 +44825,11 @@ function _DGSprintCard({item, onEdit, onUpdate, onDelete}){
     onMouseLeave={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}>
     {/* Linha 1: tipo + prioridade + delete */}
     <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-      <span style={{display:"inline-flex",alignItems:"center",gap:4,background:tipo.color+"15",color:tipo.color,borderRadius:5,padding:"2px 8px",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>
+      <span style={{display:"inline-flex",alignItems:"center",gap:4,background:tipo.color+"15",color:tipo.color,borderRadius:5,padding:"2px 8px",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>
         <Ico n={tipo.icon} size={10} color={tipo.color}/>
         {tipo.label}
       </span>
-      {prio&&<span style={{background:prio.color+"15",color:prio.color,border:"1px solid "+prio.color+"33",borderRadius:5,padding:"1px 7px",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{prio.label}</span>}
+      {prio&&<span style={{background:prio.color+"15",color:prio.color,border:"1px solid "+prio.color+"33",borderRadius:5,padding:"1px 7px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{prio.label}</span>}
       <div style={{marginLeft:"auto",display:"flex",gap:3}}>
         {onDelete&&<button onClick={(e)=>{e.stopPropagation();onDelete();}} title="Excluir"
           style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,display:"flex",alignItems:"center"}}
@@ -44860,10 +44850,10 @@ function _DGSprintCard({item, onEdit, onUpdate, onDelete}){
           const nxt = DG_SPRINT_STATUS[(idx+1)%DG_SPRINT_STATUS.length];
           onUpdate&&onUpdate({status:nxt.id});
         }} title="Avançar status"
-        style={{background:status.bg,color:status.color,border:"1px solid "+status.color+"33",borderRadius:99,padding:"3px 10px",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4,transition:"all .12s"}}>
+        style={{background:status.bg,color:status.color,border:"1px solid "+status.color+"33",borderRadius:99,padding:"3px 10px",fontSize:11.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.4,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4,transition:"all .12s"}}>
         {status.label}
       </button>
-      {item.deadline&&<span style={{display:"inline-flex",alignItems:"center",gap:4,color:isLate?"#dc2626":"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
+      {item.deadline&&<span style={{display:"inline-flex",alignItems:"center",gap:4,color:isLate?"#dc2626":"#64748b",fontSize:11.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         {_dgFmtPrazoBR(item.deadline)}
       </span>}
@@ -44996,7 +44986,6 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
   const [tipo, setTipo]     = useState(item?.tipo||"arte");
   const [status, setStatus] = useState(item?.status||"planejado");
   const [priority, setPriority] = useState(item?.priority||"media");
-  // Prazo: se já tem item, usa o dele. Se é novo, calcula automático pela prioridade default ("media" = 14 dias úteis)
   const _defaultPrio = item?.priority || "media";
   const _defaultPrioCfg = DG_SPRINT_PRIO.find(x=>x.id===_defaultPrio) || DG_SPRINT_PRIO[1];
   const [deadline, setDeadline] = useState(item?.deadline || _dgAddBusinessDays(_defaultPrioCfg.dias));
@@ -45008,6 +44997,7 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
   if(typeof useEscToClose==="function") useEscToClose(true, onClose);
 
   const cl = (CLIENTS||[]).find(c=>c.id===clientId);
+  const clColor = cl?.color || "#7c3aed";
 
   const _save = ()=>{
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
@@ -45036,61 +45026,69 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
     setSaving(false);
   };
 
-  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,fontFamily:DG_INTER}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(620px,94%)",padding:"24px 28px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)",maxHeight:"calc(100vh - 90px)",overflowY:"auto"}}>
-      <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:18}}>
-        {cl&&<ClientLogo clientId={cl.id} size="sm"/>}
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:11,color:"#0ea5e9",fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{isEdit?"Editar entrega":"Nova entrega"}</div>
-          <div style={{fontSize:17,fontWeight:800,color:"#0f172a",letterSpacing:-.3,marginTop:2}}>{cl?cl.name:"Sprint"}</div>
+  // ── Label helper — tipografia uniforme em todos os campos ──
+  const _lab = (txt, sub) => <div style={{fontSize:11.5,color:"#94a3b8",fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:9}}>
+    {txt}{sub&&<span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0,marginLeft:5}}>{sub}</span>}
+  </div>;
+
+  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:48,fontFamily:DG_INTER}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"min(680px,94%)",boxShadow:"0 24px 80px rgba(0,0,0,0.28)",maxHeight:"calc(100vh - 80px)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      {/* ─── HEADER com gradiente sutil da cor do cliente ─── */}
+      <div style={{position:"relative",padding:"22px 26px 18px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,"+clColor+"0a,#fff)"}}>
+        <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:clColor}}/>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          {cl&&<ClientLogo clientId={cl.id} size="sm"/>}
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11.5,color:clColor,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>{isEdit?"Editar entrega":"Nova entrega de sprint"}</div>
+            <div style={{fontSize:19,fontWeight:800,color:"#0f172a",letterSpacing:-.4,marginTop:3,lineHeight:1.2}}>{cl?cl.name:"Sprint"}</div>
+          </div>
+          <button onClick={onClose} title="Fechar" style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,width:34,height:34,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .15s",padding:0,flexShrink:0}}
+            onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
         </div>
       </div>
 
-      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {/* ─── CORPO ─── */}
+      <div style={{padding:"22px 26px 24px",overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:22}}>
+        {/* Título */}
         <div>
-          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>O que vai ser entregue</div>
+          {_lab("O que vai ser entregue")}
           <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Carrossel sobre lançamento da campanha"
             onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();_save();}}}
-            style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
+            style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:11,fontSize:14,boxSizing:"border-box",outline:"none",fontFamily:"inherit",transition:"border-color .15s, background .15s",background:"#fafbfc"}}
+            onFocus={e=>{e.currentTarget.style.borderColor=clColor;e.currentTarget.style.background="#fff";}}
+            onBlur={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}
+            autoFocus/>
         </div>
 
+        {/* Tipo */}
         <div>
-          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Tipo</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {_lab("Tipo de entrega")}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
             {DG_SPRINT_TIPOS.map(t=>{
               const a = tipo===t.id;
               return <button key={t.id} type="button" onClick={()=>setTipo(t.id)}
-                style={{background:a?t.color:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?t.color:"#e2e8f0"),padding:"7px 12px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1}}>
-                <Ico n={t.icon} size={11} color={a?"#fff":t.color}/>
+                style={{background:a?t.color:"#fafbfc",color:a?"#fff":"#475569",border:"1.5px solid "+(a?t.color:"#eef0f3"),padding:"11px 10px",borderRadius:11,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,letterSpacing:-.1,fontSize:12.5,fontWeight:a?700:600,transition:"all .15s"}}>
+                <Ico n={t.icon} size={13} color={a?"#fff":t.color}/>
                 {t.label}
               </button>;
             })}
           </div>
         </div>
 
+        {/* Prioridade — 4 cards em linha — define prazo */}
         <div>
-          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Status</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {DG_SPRINT_STATUS.map(s=>{
-              const a = status===s.id;
-              return <button key={s.id} type="button" onClick={()=>setStatus(s.id)}
-                style={{background:a?s.color:s.bg,color:a?"#fff":s.color,border:"1px solid "+(a?s.color:s.color+"33"),padding:"7px 13px",borderRadius:99,fontSize:11,fontWeight:a?800:700,cursor:"pointer",fontFamily:DG_INTER,textTransform:"uppercase",letterSpacing:.3,transition:"all .12s"}}>
-                {s.label}
-              </button>;
-            })}
-          </div>
-        </div>
-
-        <div>
-          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prioridade <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(define o prazo automaticamente)</span></div>
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:6}}>
+          {_lab("Prioridade", "(define o prazo automaticamente)")}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
             {DG_SPRINT_PRIO.map(p=>{
               const a = priority===p.id;
               return <button key={p.id} type="button" onClick={()=>{setPriority(p.id);setDeadline(_dgAddBusinessDays(p.dias));}}
-                style={{background:a?p.color:p.bg,color:a?"#fff":p.color,border:"1px solid "+(a?p.color:p.color+"44"),padding:"10px 12px",borderRadius:11,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s",textAlign:"left"}}>
-                <div style={{fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,marginBottom:3}}>{p.label}</div>
-                <div style={{fontSize:10.5,fontWeight:600,opacity:a?.9:.85,display:"inline-flex",alignItems:"center",gap:4}}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                style={{background:a?p.color:p.bg,color:a?"#fff":p.color,border:"1.5px solid "+(a?p.color:p.color+"33"),padding:"12px 12px",borderRadius:11,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s",textAlign:"left"}}>
+                <div style={{fontSize:12.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,marginBottom:4}}>{p.label}</div>
+                <div style={{fontSize:11,fontWeight:600,opacity:a?.95:.85,display:"inline-flex",alignItems:"center",gap:4}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                   {p.dias} {p.dias===1?"dia útil":"dias úteis"}
                 </div>
               </button>;
@@ -45098,21 +45096,34 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
           </div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        {/* Status + Prazo lado a lado */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
           <div>
-            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prazo</div>
-            <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
-              style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+            {_lab("Status")}
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {DG_SPRINT_STATUS.map(st=>{
+                const a = status===st.id;
+                return <button key={st.id} type="button" onClick={()=>setStatus(st.id)}
+                  style={{background:a?st.color:st.bg,color:a?"#fff":st.color,border:"1.5px solid "+(a?st.color:st.color+"22"),padding:"9px 12px",borderRadius:9,cursor:"pointer",fontFamily:DG_INTER,fontSize:11.5,fontWeight:a?800:700,textTransform:"uppercase",letterSpacing:.4,transition:"all .15s",textAlign:"left",display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:a?"#fff":st.color,flexShrink:0}}/>
+                  {st.label}
+                </button>;
+              })}
+            </div>
           </div>
           <div>
-            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
+            {_lab("Prazo de entrega")}
+            <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
+              style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:11,fontSize:14,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fafbfc",marginBottom:14}}/>
+            {_lab("Responsáveis")}
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {_DG_SOCIOS.map(t=>{
                 const a = responsaveis.indexOf(t.id)>=0;
                 return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
-                  style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"4px 10px 4px 4px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6}}>
-                  <_DGAvatar userId={t.id} size={20}/>
+                  style={{background:a?DG_PURPLE:"#fafbfc",color:a?"#fff":"#475569",border:"1.5px solid "+(a?DG_PURPLE:"#eef0f3"),padding:"5px 12px 5px 4px",borderRadius:99,fontSize:12,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s"}}>
+                  <_DGAvatar userId={t.id} size={22}/>
                   {t.name.split(" ")[0]}
+                  {a&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:1}}><polyline points="20 6 9 17 4 12"/></svg>}
                 </button>;
               })}
             </div>
@@ -45120,11 +45131,28 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
         </div>
       </div>
 
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:22}}>
-        {isEdit&&onDelete?<button onClick={()=>{if(window.confirm("Excluir esta entrega?"))onDelete(item.id);}} style={{background:"#fff",color:"#ef4444",border:"1px solid #fecaca",borderRadius:9,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER}}>Excluir</button>:<span/>}
+      {/* ─── FOOTER ─── */}
+      <div style={{padding:"16px 26px",borderTop:"1px solid #f1f5f9",background:"#fafbfc",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexShrink:0}}>
+        {isEdit&&onDelete
+          ? <button onClick={()=>{onDelete(item.id);}}
+              style={{background:"#fff",color:"#dc2626",border:"1.5px solid #fecaca",borderRadius:10,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+              Excluir
+            </button>
+          : <span/>}
         <div style={{display:"flex",gap:8}}>
-          <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
-          <button onClick={_save} disabled={saving} style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER,boxShadow:"0 6px 16px rgba(14,165,233,0.30)"}}>{saving?"Salvando...":(isEdit?"Salvar":"Adicionar entrega")}</button>
+          <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"11px 18px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+            Cancelar
+          </button>
+          <button onClick={_save} disabled={saving}
+            style={{background:"linear-gradient(135deg,"+clColor+","+clColor+"dd)",color:"#fff",border:"none",borderRadius:10,padding:"11px 22px",fontSize:13,fontWeight:800,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER,boxShadow:"0 6px 18px "+clColor+"55",display:"inline-flex",alignItems:"center",gap:6,letterSpacing:-.1,transition:"all .15s"}}>
+            {saving?"Salvando...":(isEdit?"Salvar alterações":"Adicionar entrega")}
+            {!saving&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>}
+          </button>
         </div>
       </div>
     </div>
