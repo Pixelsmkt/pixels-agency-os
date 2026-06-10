@@ -1305,7 +1305,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
     let y=parseInt(parts[0]); let m=parseInt(parts[1])+1;
     if(m>12){ m=1; y++; }
     const nextMonth=y+"-"+String(m).padStart(2,"0");
-    _setRolModal({cards:pendentes, nextMonth:nextMonth});
+    _setRolModal({cards:pendentes, nextMonth:nextMonth, filterId:filterFreelancerId||null});
   }
   function _confirmarRollover(){
     if(!_rolModal) return;
@@ -1313,9 +1313,9 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
     const ids={};
     _rolModal.cards.forEach(function(t){ ids[t.id]=true; });
     const PAID2=["aprovado","agendado","publicado"];
-    const fids=freelancers.map(function(f){return f.id;});
+    // Se o rollover foi filtrado por colaborador, marca pago só dele. Senão, todos.
+    const fids=_rolModal.filterId?[_rolModal.filterId]:freelancers.map(function(f){return f.id;});
     const nowIso=new Date().toISOString();
-    // Pré-contar pagos (debug + toast)
     const paidIds={};
     (tasks||[]).forEach(function(t){
       if(!t||ids[t.id]) return;
@@ -1385,11 +1385,11 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
       </div>
       <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
         <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e5e7eb",borderRadius:11,padding:3,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
-          <button type="button" onClick={function(){_shiftMonth(-1);}} title="Mês anterior" style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+          <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();_shiftMonth(-1);}} title="Mês anterior" style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
           <div style={{padding:"0 14px",minWidth:130,textAlign:"center",fontSize:12.5,fontWeight:700,color:"#7c3aed",letterSpacing:-.1,fontFamily:"inherit",fontFeatureSettings:"'tnum'"}}>{_monthLabel}</div>
-          <button type="button" onClick={function(){_shiftMonth(1);}} title="Próximo mês" style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+          <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();_shiftMonth(1);}} title="Próximo mês" style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}} onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}} onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         </div>
@@ -1409,7 +1409,8 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         const items=r.isEditor
           ?[{l:"Vídeo",n:c.video,p:DESIGNER_PRICES.video},{l:"Corte",n:c.corte,p:DESIGNER_PRICES.corte},{l:"V. dinâmico",n:c.videoComplexo,p:DESIGNER_PRICES.videoComplexo},{l:"V. feira",n:c.videoFeira,p:DESIGNER_PRICES.videoFeira}]
           :[{l:"Foto",n:c.fotoObra,p:DESIGNER_PRICES.fotoObra},{l:"Arte",n:c.arte,p:DESIGNER_PRICES.arte},{l:"Carrossel",n:c.carrossel,p:DESIGNER_PRICES.carrossel},{l:"Folder",n:c.folder,p:DESIGNER_PRICES.folder}];
-        const active=items.filter(function(it){return it.n>0;});
+        // Mostra TODOS os tipos (inclusive 0) com preço unitário visível
+        const hasAny=items.some(function(it){return it.n>0;});
         return <div key={fr.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=accent+"55";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#eef0f3";}}>
@@ -1424,18 +1425,19 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               <div style={{color:"#64748b",fontSize:11,fontWeight:600,marginTop:2}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
             </div>
           </div>
-          <div style={{padding:"14px 14px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
-            {active.length===0
-              ?(c.naoClassificado>0
-                ?<div style={{color:"#a16207",fontSize:11.5,textAlign:"center",fontStyle:"italic",padding:"10px 4px",fontWeight:600,background:"#fef3c7",borderRadius:8,border:"1px solid #fde68a"}}>{c.naoClassificado} card(s) atribuído(s) mas sem tipo definido</div>
-                :<div style={{color:"#cbd5e1",fontSize:11.5,textAlign:"center",fontStyle:"italic",padding:"10px 0"}}>Sem pagamentos no mês.</div>)
-              :active.map(function(it,i){return <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"7px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
-                  <span style={{background:accent+"18",color:accent,fontWeight:800,fontSize:11,padding:"2px 7px",borderRadius:5,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0}}>{it.n}×</span>
-                  <span style={{color:"#475569",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span>
+          <div style={{padding:"14px 14px 12px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
+            {items.map(function(it,i){
+              const has=it.n>0;
+              return <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"7px 10px",background:has?"#fafbfc":"#fff",border:"1px solid "+(has?"#f1f5f9":"#f5f7fa"),borderRadius:8,opacity:has?1:0.7}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                  <span style={{background:has?accent+"18":"#f1f5f9",color:has?accent:"#94a3b8",fontWeight:800,fontSize:11,padding:"2px 7px",borderRadius:5,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0,minWidth:24,textAlign:"center"}}>{it.n}×</span>
+                  <span style={{color:has?"#475569":"#94a3b8",fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span>
+                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:600,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>· {fmtBRL(it.p).replace(",00","")}/un</span>
                 </div>
-                <span style={{color:"#16a34a",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0}}>{fmtBRL(it.n*it.p).replace(",00","")}</span>
-              </div>;})}
+                <span style={{color:has?"#16a34a":"#cbd5e1",fontSize:12,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0}}>{fmtBRL(it.n*it.p).replace(",00","")}</span>
+              </div>;
+            })}
+            {c.naoClassificado>0&&<div style={{color:"#a16207",fontSize:10.5,textAlign:"center",fontStyle:"italic",padding:"6px 4px",fontWeight:600,background:"#fef3c7",borderRadius:6,border:"1px solid #fde68a",marginTop:2}}>{c.naoClassificado} card(s) atribuído(s) sem tipo definido</div>}
           </div>
           <div style={{padding:"12px 16px",background:"#fafbfc",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</span>
