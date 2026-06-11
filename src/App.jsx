@@ -9606,8 +9606,81 @@ function CAnalises({cl,isMob,tasks}){
   const proxPubs  = clTasks
     .filter(function(t){return t.publishDate && t.status!=="publicado";})
     .sort(function(a,b){return String(a.publishDate).localeCompare(String(b.publishDate));})
-    .slice(0,6);
+    .slice(0,5);
   const concluidas = clTasks.filter(function(t){return t.status==="aprovado"||t.status==="publicado";});
+
+  // ───── DADOS DAS OUTRAS ABAS (carregados do Supabase em paralelo) ─────
+  const [npsRows, setNpsRows] = useState([]);
+  const [metricsRows, setMetricsRows] = useState([]);
+  const [monthlyPlan, setMonthlyPlan] = useState(null);
+  const [loadingDash, setLoadingDash] = useState(true);
+
+  useEffect(function(){
+    if(!window._sb){ setLoadingDash(false); return; }
+    let active = true;
+    Promise.all([
+      window._sb.from("nps_responses").select("score,created_at,respondent_name,next_due_date").eq("client_id",cl.id).order("created_at",{ascending:false}).limit(8),
+      window._sb.from("client_metrics_monthly").select("*").eq("client_id",cl.id).order("period",{ascending:true}),
+      // Plano mensal (do mês atual)
+      window._sb.from("monthly_plans").select("*").eq("client_id",cl.id).order("period",{ascending:false}).limit(1)
+    ]).then(function(rs){
+      if(!active) return;
+      setNpsRows((rs[0]&&rs[0].data)||[]);
+      setMetricsRows((rs[1]&&rs[1].data)||[]);
+      setMonthlyPlan((rs[2]&&rs[2].data&&rs[2].data[0])||null);
+      setLoadingDash(false);
+    }).catch(function(e){
+      console.warn("[CAnalises dash]",e&&e.message?e.message:e);
+      setLoadingDash(false);
+    });
+    return function(){active=false;};
+  },[cl.id]);
+
+  // ───── NPS RESUMO ─────
+  const lastNps = npsRows[0] || null;
+  const npsMedia = npsRows.length>0 ? (npsRows.reduce(function(s,r){return s+(r.score||0);},0)/npsRows.length) : null;
+  const npsCl = lastNps
+    ? (lastNps.score>=9 ? {label:"Promotor",color:"#16a34a",bg:"#dcfce7"}
+       : lastNps.score>=7 ? {label:"Neutro",color:"#a16207",bg:"#fef3c7"}
+       : {label:"Detrator",color:"#dc2626",bg:"#fee2e2"})
+    : null;
+
+  // ───── EVOLUÇÃO RESUMO ─────
+  const lastMetric = metricsRows[metricsRows.length-1] || {};
+  const prevMetric = metricsRows[metricsRows.length-2] || {};
+  const igNow = lastMetric.instagram_followers;
+  const igPrev = prevMetric.instagram_followers;
+  const igDelta = (igNow!=null && igPrev!=null && igPrev>0) ? Math.round(((igNow-igPrev)/igPrev)*100) : null;
+  const engCalc = function(row){
+    const i = parseFloat(row.interactions);
+    const v = parseFloat(row.views);
+    if(!isFinite(i)||!isFinite(v)||v<=0) return null;
+    return (i/v)*100;
+  };
+  const engNow = engCalc(lastMetric);
+
+  // ───── PLANEJAMENTO MENSAL RESUMO ─────
+  const planTotal = (monthlyPlan && Array.isArray(monthlyPlan.items)) ? monthlyPlan.items.length : 0;
+  const planDone = (monthlyPlan && Array.isArray(monthlyPlan.items)) ? monthlyPlan.items.filter(function(it){return it.done;}).length : 0;
+  const planPct = planTotal>0 ? Math.round((planDone/planTotal)*100) : 0;
+
+  // ───── ÚLTIMA REUNIÃO ─────
+  const lastMeetIso = cl.lastMeeting || null;
+  let lastMeetText = "—", lastMeetDays = null, lastMeetCor = "#64748b", lastMeetBg = "#f1f5f9";
+  if(lastMeetIso){
+    // Formato esperado: DD/MM/YYYY
+    let d=null;
+    const m = String(lastMeetIso).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if(m) d = new Date(parseInt(m[3]), parseInt(m[2])-1, parseInt(m[1]));
+    else d = new Date(lastMeetIso);
+    if(d && !isNaN(d.getTime())){
+      lastMeetDays = Math.floor((Date.now()-d.getTime())/86400000);
+      lastMeetText = d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"2-digit"});
+      if(lastMeetDays>60){ lastMeetCor="#dc2626"; lastMeetBg="#fee2e2"; }
+      else if(lastMeetDays>30){ lastMeetCor="#a16207"; lastMeetBg="#fef3c7"; }
+      else { lastMeetCor="#16a34a"; lastMeetBg="#dcfce7"; }
+    }
+  }
 
   const fmt = function(iso){
     if(!iso) return "—";
@@ -9617,18 +9690,36 @@ function CAnalises({cl,isMob,tasks}){
   };
 
   const KPI = function(props){
-    return <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:14,padding:"16px 18px",fontFamily:"'Inter',system-ui,sans-serif"}}>
-      <div style={{color:props.color||"#9F43F6",fontSize:28,fontWeight:800,letterSpacing:-.5,lineHeight:1}}>{props.value}</div>
-      <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginTop:6}}>{props.label}</div>
-      {props.hint && <div style={{color:"#94a3b8",fontSize:10.5,marginTop:3}}>{props.hint}</div>}
+    return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <div style={{color:props.color||"#9F43F6",fontSize:24,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{props.value}</div>
+      <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:6}}>{props.label}</div>
+      {props.hint && <div style={{color:"#94a3b8",fontSize:10,marginTop:3}}>{props.hint}</div>}
     </div>;
   };
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {/* KPIs */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
+  // Mini gráfico linear pra evolução (últimos pontos)
+  const _miniChart = function(values, color){
+    if(!values || values.length<2) return null;
+    const W=120, H=32;
+    const max = Math.max.apply(null, values);
+    const min = Math.min.apply(null, values);
+    const range = Math.max(1, max-min);
+    const pts = values.map(function(v,i){
+      const x = (i/(values.length-1))*W;
+      const y = H - ((v-min)/range)*H;
+      return x+","+y;
+    }).join(" ");
+    return <svg width={W} height={H} viewBox={"0 0 "+W+" "+H} style={{display:"block"}}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>;
+  };
+  const igSeries = metricsRows.slice(-6).map(function(m){return m.instagram_followers||0;}).filter(function(v){return v>0;});
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* KPIs operacionais */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
       <KPI value={ativas.length}     label="Demandas ativas" color="#9F43F6"/>
-      <KPI value={atrasadas.length}  label="Atrasadas"       color="#ef4444" hint={atrasadas.length>0?"Atenção!":"Em dia"}/>
       <KPI value={pendCopy.length}   label="Copy pendente"   color="#a140ff"/>
       <KPI value={pendApr.length}    label="Aguardando aprovação" color="#eab308"/>
       <KPI value={execucao.length}   label="Em execução"     color="#f97316"/>
@@ -9636,52 +9727,130 @@ function CAnalises({cl,isMob,tasks}){
       <KPI value={concluidas.length} label="Concluídas"      color="#16a34a"/>
     </div>
 
-    {/* Próximas publicações */}
-    <div style={{background:"#fff",border:"1px solid #e5e7eb",borderRadius:14,padding:"16px 18px"}}>
+    {/* DASHBOARD GRID — 4 mini-cards: NPS · Evolução · Planejamento · Última reunião */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
+
+      {/* NPS card */}
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <div style={{width:26,height:26,borderRadius:8,background:"#a855f714",color:"#a855f7",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="sparkles" size={12} color="#a855f7"/></div>
+          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>NPS do cliente</span>
+        </div>
+        {loadingDash ? <div style={{color:"#cbd5e1",fontSize:11}}>Carregando...</div>
+          : !lastNps ? <div style={{color:"#94a3b8",fontSize:11.5,padding:"6px 0"}}>Sem registros ainda</div>
+          : <>
+              <div style={{display:"flex",alignItems:"baseline",gap:7,marginBottom:5}}>
+                <span style={{color:npsCl.color,fontSize:28,fontWeight:900,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{lastNps.score}</span>
+                <span style={{background:npsCl.bg,color:npsCl.color,borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{npsCl.label}</span>
+              </div>
+              <div style={{color:"#64748b",fontSize:10.5,fontWeight:600,display:"flex",justifyContent:"space-between",gap:6}}>
+                <span>Média histórica</span>
+                <span style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{npsMedia!=null?npsMedia.toFixed(1):"—"}</span>
+              </div>
+              {lastNps.respondent_name && <div style={{color:"#94a3b8",fontSize:10,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>por {lastNps.respondent_name}</div>}
+            </>
+        }
+      </div>
+
+      {/* Evolução card */}
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <div style={{width:26,height:26,borderRadius:8,background:"#ec489914",color:"#ec4899",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="trending-up" size={12} color="#ec4899"/></div>
+          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>Evolução</span>
+        </div>
+        {loadingDash ? <div style={{color:"#cbd5e1",fontSize:11}}>Carregando...</div>
+          : metricsRows.length===0 ? <div style={{color:"#94a3b8",fontSize:11.5,padding:"6px 0"}}>Sem métricas registradas</div>
+          : <>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:8,marginBottom:5}}>
+                <div>
+                  <div style={{color:"#0f172a",fontSize:22,fontWeight:900,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{igNow!=null?Number(igNow).toLocaleString("pt-BR"):"—"}</div>
+                  <div style={{color:"#94a3b8",fontSize:10,marginTop:3,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>seguidores IG</div>
+                </div>
+                {igSeries.length>=2 && <div>{_miniChart(igSeries,"#ec4899")}</div>}
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6,marginTop:6}}>
+                {igDelta!=null && <span style={{display:"inline-flex",alignItems:"center",gap:3,background:igDelta>=0?"#dcfce7":"#fee2e2",color:igDelta>=0?"#15803d":"#b91c1c",borderRadius:99,padding:"2px 7px",fontSize:10,fontWeight:800,letterSpacing:.2}}>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">{igDelta>=0?<polyline points="6 15 12 9 18 15"/>:<polyline points="6 9 12 15 18 9"/>}</svg>
+                  {Math.abs(igDelta)}%
+                </span>}
+                {engNow!=null && <span style={{color:"#a855f7",fontSize:10.5,fontWeight:800,letterSpacing:.2}}>{engNow.toFixed(1)}% eng.</span>}
+              </div>
+            </>
+        }
+      </div>
+
+      {/* Planejamento mensal card */}
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <div style={{width:26,height:26,borderRadius:8,background:"#0ea5e914",color:"#0ea5e9",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="layers" size={12} color="#0ea5e9"/></div>
+          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>Planejamento mensal</span>
+        </div>
+        {loadingDash ? <div style={{color:"#cbd5e1",fontSize:11}}>Carregando...</div>
+          : planTotal===0 ? <div style={{color:"#94a3b8",fontSize:11.5,padding:"6px 0"}}>Sem plano definido</div>
+          : <>
+              <div style={{display:"flex",alignItems:"baseline",gap:5,marginBottom:8}}>
+                <span style={{color:planPct>=80?"#16a34a":"#0f172a",fontSize:22,fontWeight:900,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{planDone}</span>
+                <span style={{color:"#94a3b8",fontSize:14,fontWeight:700,fontFeatureSettings:"'tnum'"}}>/ {planTotal}</span>
+                <span style={{marginLeft:"auto",color:planPct>=80?"#16a34a":"#a855f7",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.3}}>{planPct}%</span>
+              </div>
+              <div style={{height:4,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                <div style={{width:planPct+"%",height:"100%",background:planPct>=80?"#16a34a":"#0ea5e9",borderRadius:99,transition:"width .4s ease"}}/>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:10,marginTop:6,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>itens concluídos no mês</div>
+            </>
+        }
+      </div>
+
+      {/* Última reunião card */}
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+          <div style={{width:26,height:26,borderRadius:8,background:lastMeetBg,color:lastMeetCor,display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="calendar" size={12} color={lastMeetCor}/></div>
+          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>Última reunião</span>
+        </div>
+        {!lastMeetIso ? <div style={{color:"#94a3b8",fontSize:11.5,padding:"6px 0"}}>Sem reunião registrada</div>
+          : <>
+              <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.3,lineHeight:1.1,textTransform:"capitalize"}}>{lastMeetText}</div>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,flexWrap:"wrap"}}>
+                <span style={{background:lastMeetBg,color:lastMeetCor,borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  {lastMeetDays} dia{lastMeetDays===1?"":"s"}
+                </span>
+                {cl.nextMeeting && <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>próxima: {cl.nextMeeting}</span>}
+              </div>
+            </>
+        }
+      </div>
+    </div>
+
+    {/* Próximas publicações (mini-calendário) */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"16px 18px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Próximas publicações</div>
+        <div style={{display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:28,height:28,borderRadius:9,background:(cl.color||"#7c3aed")+"14",color:cl.color||"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="calendar" size={13} color={cl.color||"#7c3aed"}/></div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Próximas publicações</div>
+        </div>
         <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 10px",fontSize:10.5,fontWeight:700}}>{proxPubs.length}</span>
       </div>
       {proxPubs.length===0
-        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"14px 0"}}>Sem publicações agendadas.</div>
+        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"14px 0",textAlign:"center"}}>Sem publicações agendadas.</div>
         : <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {proxPubs.map(function(t){
-              return <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#fafafa",borderRadius:10,border:"1px solid #f1f5f9"}}>
-                <div style={{minWidth:56,textAlign:"center",background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,padding:"4px 6px"}}>
-                  <div style={{color:"#9F43F6",fontSize:14,fontWeight:800,lineHeight:1}}>{fmt(t.publishDate).split("/")[0]||"—"}</div>
-                  <div style={{color:"#64748b",fontSize:9.5,fontWeight:600,letterSpacing:.5,textTransform:"uppercase",marginTop:2}}>{fmt(t.publishDate).split("/")[1]||""}</div>
+              return <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#fafbfc",borderRadius:10,border:"1px solid #f1f5f9"}}>
+                <div style={{minWidth:50,textAlign:"center",background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,padding:"4px 6px"}}>
+                  <div style={{color:cl.color||"#7c3aed",fontSize:14,fontWeight:800,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{fmt(t.publishDate).split("/")[0]||"—"}</div>
+                  <div style={{color:"#64748b",fontSize:9,fontWeight:600,letterSpacing:.4,textTransform:"uppercase",marginTop:2}}>{fmt(t.publishDate).split("/")[1]||""}</div>
                 </div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"Sem título"}</div>
-                  <div style={{color:"#64748b",fontSize:11,marginTop:2}}>{t.publishTime||""} · {t.status||""}</div>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{t.title||"Sem título"}</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600,letterSpacing:.2}}>{t.publishTime||""} · {(typeof CARD_STATUS_LABEL!=="undefined"&&CARD_STATUS_LABEL[t.status])||t.status||""}</div>
                 </div>
               </div>;
             })}
           </div>
       }
     </div>
-
-    {/* Atrasos (se houver) */}
-    {atrasadas.length>0 && <div style={{background:"#fff",border:"1px solid #fecaca",borderRadius:14,padding:"16px 18px"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
-        <div style={{width:8,height:8,borderRadius:"50%",background:"#dc2626"}}/>
-        <div style={{color:"#b91c1c",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Demandas atrasadas</div>
-        <span style={{background:"#fef2f2",color:"#b91c1c",borderRadius:99,padding:"2px 10px",fontSize:10.5,fontWeight:700,marginLeft:"auto"}}>{atrasadas.length}</span>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        {atrasadas.slice(0,5).map(function(t){
-          const dias = Math.floor((Date.now() - new Date(t.deadline).getTime())/86400000);
-          return <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"1px solid #fef2f2"}}>
-            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"Sem título"}</div>
-            <span style={{background:"#fef2f2",color:"#b91c1c",borderRadius:6,padding:"2px 9px",fontSize:10.5,fontWeight:700}}>{dias}d atraso</span>
-          </div>;
-        })}
-        {atrasadas.length>5 && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",paddingTop:6,fontStyle:"italic"}}>+ {atrasadas.length-5} demanda(s)</div>}
-      </div>
-    </div>}
   </div>;
 }
-
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   let TASKS=tasks||[];
   cl=getLiveClient(cl.id)||cl;
@@ -9890,39 +10059,6 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
         })}
       </div>
     </div>
-
-    {/* ALERTAS */}
-    {(lateTasks.length>0||pendingCopy.length>0||pendingPub.length>0||
-      (cl.payment&&cl.payment.status==="atrasado")||
-      (lastMeetDays!==null&&lastMeetDays>25))&&(
-      <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
-        {lateTasks.length>0&&(<div style={{background:C.rd+"18",border:"1px solid "+C.rd+"44",
-            borderRadius:8,padding:"5px 12px",fontSize:11,color:C.rd,fontWeight:700,
-            display:"flex",alignItems:"center",gap:5}}>
-          <span>🔥</span>{lateTasks.length} atrasada(s)
-        </div>)}
-        {(cl.payment&&cl.payment.status==="atrasado")&&(<div style={{background:C.rd+"18",
-            border:"1px solid "+C.rd+"44",borderRadius:8,padding:"5px 12px",fontSize:11,
-            color:C.rd,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-          <span>💸</span>Pag. atrasado
-        </div>)}
-        {pendingCopy.length>0&&(<div style={{background:C.a+"18",border:"1px solid "+C.a+"44",
-            borderRadius:8,padding:"5px 12px",fontSize:11,color:C.a,fontWeight:700,
-            display:"flex",alignItems:"center",gap:5}}>
-          <span>📝</span>{pendingCopy.length} copy(ies) p/ aprovar
-        </div>)}
-        {pendingPub.length>0&&(<div style={{background:C.gr+"18",border:"1px solid "+C.gr+"44",
-            borderRadius:8,padding:"5px 12px",fontSize:11,color:C.gr,fontWeight:700,
-            display:"flex",alignItems:"center",gap:5}}>
-          <span>🎨</span>{pendingPub.length} pub. p/ aprovar
-        </div>)}
-        {lastMeetDays!==null&&lastMeetDays>25&&(<div style={{background:C.yw+"18",
-            border:"1px solid "+C.yw+"44",borderRadius:8,padding:"5px 12px",fontSize:11,
-            color:C.yw,fontWeight:700,display:"flex",alignItems:"center",gap:5}}>
-          <span>📅</span>Reunião há {lastMeetDays}d
-        </div>)}
-      </div>
-    )}
 
     {/* TABS PRINCIPAIS — mesmo padrão visual do Portal do Cliente: Ico + cor do cliente */}
     <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,marginBottom:20,overflowX:"auto",flexWrap:"wrap"}}>
@@ -11761,17 +11897,6 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
   const isComplete=pctProduzir>=100&&totalProduzirMeta>0;
   const _pctRef=mode==="publicar"?pctPublicar:pctProduzir;
   const accentMain=_pctRef>=80?"#22c55e":(_pctRef>=50?"#fbbf24":"#ef4444");
-  // Breakdown por tipo — somando direto dos rows (mesma fonte dos cards de baixo).
-  // Garante consistência: o total do header bate exatamente com a soma dos cards.
-  let _doneArte=0,_doneVideo=0,_doneFoto=0,_metaArte=0,_metaVideo=0,_metaFoto=0;
-  rows.forEach(function(r){
-    (r.tipos||[]).forEach(function(t){
-      const l=String(t.l||"").toLowerCase();
-      if(l.indexOf("arte")>=0){ _doneArte+=t.done||0; _metaArte+=t.meta||0; }
-      else if(l.indexOf("vídeo")>=0||l.indexOf("video")>=0){ _doneVideo+=t.done||0; _metaVideo+=t.meta||0; }
-      else if(l.indexOf("foto")>=0){ _doneFoto+=t.done||0; _metaFoto+=t.meta||0; }
-    });
-  });
   return <div style={{borderRadius:18,marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.06),0 8px 24px rgba(15,23,42,0.04)"}}>
     {/* HERO HEADER — gradiente escuro, 3 zonas simétricas (esquerda/centro/direita) */}
     <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",padding:"22px 28px",position:"relative",overflow:"hidden"}}>
@@ -11779,7 +11904,7 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
       <div style={{position:"absolute",right:-40,top:-40,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 70%)",pointerEvents:"none"}}/>
       <div style={{position:"absolute",left:-50,bottom:-50,width:180,height:180,borderRadius:"50%",background:"radial-gradient(circle,rgba(34,197,94,0.10) 0%,transparent 70%)",pointerEvents:"none"}}/>
 
-      <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:24,flexWrap:"wrap"}}>
+      <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between",gap:24,flexWrap:"wrap"}}>
 
         {/* ESQUERDA — header + seletor de mês */}
         <div>
@@ -11800,37 +11925,6 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
             </button>
             {!_isToday&&<button onClick={_goToday} style={{height:32,padding:"0 12px",borderRadius:9,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:11.5,fontWeight:800,letterSpacing:.3,fontFamily:"inherit",marginLeft:2}}>Hoje</button>}
           </div>
-        </div>
-
-        {/* CENTRO — breakdown por tipo (3 mini-stats) */}
-        <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-          {[
-            {label:"Arte",done:_doneArte,meta:_metaArte,color:"#a78bfa",icon:"image"},
-            {label:"Vídeo",done:_doneVideo,meta:_metaVideo,color:"#60a5fa",icon:"play"},
-            {label:"Foto",done:_doneFoto,meta:_metaFoto,color:"#fbbf24",icon:"camera"},
-          ].filter(s=>s.meta>0).map(s=>{
-            const ratio = s.meta>0 ? Math.min(1, s.done/s.meta) : 0;
-            const ok = s.done >= s.meta && s.meta>0;
-            return <div key={s.label} title={s.label+": "+s.done+" de "+s.meta} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:11,padding:"9px 13px",minWidth:88}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                <div style={{width:20,height:20,borderRadius:6,background:s.color+"24",color:s.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    {s.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
-                    {s.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
-                    {s.icon==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
-                  </svg>
-                </div>
-                <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{s.label}</span>
-              </div>
-              <div style={{display:"flex",alignItems:"baseline",gap:2,marginBottom:5}}>
-                <span style={{color:ok?"#22c55e":"#fff",fontSize:18,fontWeight:800,letterSpacing:-.3,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.done}</span>
-                <span style={{color:"#64748b",fontSize:12,fontWeight:700,lineHeight:1}}>/{s.meta}</span>
-              </div>
-              <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
-                <div style={{width:(ratio*100)+"%",height:"100%",background:ok?"#22c55e":s.color,borderRadius:99,transition:"width .4s ease"}}/>
-              </div>
-            </div>;
-          })}
         </div>
 
         {/* DIREITA — número grande + anel */}
