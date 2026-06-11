@@ -25688,7 +25688,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           <div>
             <label style={{...LB,display:"flex",alignItems:"center",gap:6}}>
               <span>Mês de pagamento</span>
-              {!isAdmin&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só sócios editam</span>}
+              {!(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id==="gustavo")&&<span style={{background:"#f1f5f9",color:"#475569",borderRadius:4,padding:"1px 6px",fontSize:8,fontWeight:600,textTransform:"uppercase",letterSpacing:.3}}>só Gustavo edita</span>}
             </label>
             {(()=>{
               // Stepper de mês com setas circulares prev/next + display formatado.
@@ -25702,7 +25702,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 setReferenceMonth(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));
               };
               const _label=referenceMonth?(_MN[parseInt(_cur.split("-")[1])-1]+" "+_cur.split("-")[0]):"Selecione o mês";
-              const _enabled=canEdit&&isAdmin;
+              // Mês de pagamento — só Gustavo edita (é ele quem gerencia a contabilização de pagamento)
+              const _enabled=canEdit&&(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.id==="gustavo");
               const _hidRef=useRef(null);
               const ArrowBtn=function(props){
                 const dir=props.dir;
@@ -30402,6 +30403,7 @@ const rowToTask = (r) => ({
   bioterUnit:   r.bioter_unit  || "",
   contentType:  r.content_type || "",
   referenceMonth: r.reference_month || "",
+  paidAt:       r.paid_at        || null,
   score:        r.score        ?? null,
   ajustar:      !!r.ajustar,
   isAlteracao:  !!r.is_alteracao,
@@ -30451,6 +30453,7 @@ const taskToRow = (t) => ({
   bioter_unit:    t.bioterUnit   || "",
   content_type:   t.contentType  || null,
   reference_month: t.referenceMonth || null,
+  paid_at:        t.paidAt         || null,
   score:          t.score        ?? null,
   ajustar:        !!t.ajustar,
   is_alteracao:   !!t.isAlteracao,
