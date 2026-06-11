@@ -947,6 +947,7 @@ const TEAM = [
   { id:"andre",     name:"André",     role:"Design",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
   { id:"maria",     name:"Maria Clara", role:"Design",             av:"M", color:"#ec4899", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
   { id:"guilherme", name:"Guilherme", role:"Edição de vídeo",        av:"G", color:C.bl,  level:3, status:"ausente", dash:"editor",      canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
+  { id:"ocsana",    name:"Ocsana",    role:"Estagiária",             av:"O", color:"#a855f7", level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
 ];
 
 // Relações de supervisão: quem supervisiona quem.
@@ -1061,6 +1062,7 @@ function withPartnerOverride(perms, userId){
 const ACCESS_STORE={
   vinicius:{...PARTNER_PERMS},
   gustavo: {...PARTNER_PERMS},
+  ocsana:  {...PARTNER_PERMS},
   ellen:   {...DEFAULT_PERMS,verDemandas:true,criarDemanda:true,editarDemanda:true,arrastarCards:true,verTodosKanban:true,verLixeira:true,filtroSetor:true,filtroCliente:true,filtroPerfil:true,colRascunhos:true,colCopys:true,colDemanda:true,colExecucao:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,colPausado:true,colAjustes:true,desfazerCopy:true,verClientes:true,verDadosCliente:true,verMindmap:true,verLinksCliente:true,verAprovacoes:true,verAprCopys:true,verAprAjuste:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verCanalSocial:true,verCanalAlertas:true,verCanalTodosClientes:true,escanear:true,pixelsIA:true,verNotificacoes:true,verAnalises:true,verPortal:true,verCalPub:true,editarSLA:true,verPlaybooks:true},
   erick:   {...DEFAULT_PERMS,verGestaoMidia:true,editarGestaoMidia:true,gerenciarClientesMidia:false,verClientes:true,verDadosCliente:true,verMetricas:true,verConcorrencia:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalTrafego:true,verCanalAlertas:true,pixelsIA:true,verNotificacoes:true,verPortal:true,verPlaybooks:true},
   andre:   {...DEFAULT_PERMS,verDemandas:true,editarDemanda:true,arrastarCards:true,colDemanda:true,colExecucao:true,colAjustes:true,colAvaliacao:true,colAprovado:true,colAprovacaoFinal:true,colAgendado:true,colPublicado:true,verChat:true,enviarMensagem:true,verCanalGeral:true,verCanalDesign:true,verNotificacoes:true,verPlaybooks:true},
@@ -3464,7 +3466,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
 function RenderDash({user,isViewing=false,tasks,setTasks,notifs,isMob}){
   // Sócios (Vinicius + Gustavo) usam o dashboard estratégico compartilhado (DashGustavo = DashSocio).
   // As metas multi-marcadas pra ambos sincronizam entre os dois (filtragem por assignees).
-  if((user.id==="gustavo"||user.id==="vinicius")&&typeof DashGustavo==="function"){
+  if((user.id==="gustavo"||user.id==="vinicius"||user.id==="ocsana")&&typeof DashGustavo==="function"){
     return <DashGustavo user={user} isViewing={isViewing} tasks={tasks} setTasks={setTasks} notifs={notifs} isMob={isMob}/>;
   }
   switch(user.dash){
@@ -44420,17 +44422,35 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const hoje     = _dgToday();
   const {checks: rotinaChecks, toggle: rotinaToggle} = (typeof useOpRotinaChecks==="function") ? useOpRotinaChecks(weekKey, user.id) : {checks:{}, toggle:()=>{}};
 
+  // ── Hidrata meta com campos extras serializados em content (JSON) ──
+  // A tabela team_planning só tem colunas fixas (entry_date/content/status/etc.),
+  // então salvamos deadline/assignees/category/client_id dentro de content como JSON.
+  const _dgHydrateMeta = (e) => {
+    if(!e) return e;
+    let extra = {};
+    if(typeof e.content === "string" && e.content.trim().startsWith("{")){
+      try{ extra = JSON.parse(e.content) || {}; }catch(_){}
+    }
+    return Object.assign({}, e, extra, {
+      deadline: extra.deadline || e.deadline || e.entry_date || null,
+    });
+  };
+
   // ── Filtro: metas/itens onde o sócio logado é assignee ──
   const _isMine = (e) => {
     if(!e) return false;
-    if(Array.isArray(e.assignees) && e.assignees.length>0) return e.assignees.indexOf(user.id) >= 0;
+    const ass = Array.isArray(e.assignees) ? e.assignees : null;
+    if(ass && ass.length>0) return ass.indexOf(user.id) >= 0;
     if(e.responsible_id) return e.responsible_id === user.id;
     if(e.author_id) return e.author_id === user.id;
     return false;
   };
 
-  // Metas da semana — só do user logado
-  const metasWeek = planEntries.filter(e=>e.type==="meta_semana"&&e.week_key===weekKey&&_isMine(e));
+  // Metas da semana — só do user logado (hidrata campos extras de content JSON)
+  const metasWeek = planEntries
+    .filter(e=>e.type==="meta_semana"&&e.week_key===weekKey)
+    .map(_dgHydrateMeta)
+    .filter(_isMine);
   const weekConcluidas = metasWeek.filter(m=>m.status==="concluida").length;
   const weekPendentes  = metasWeek.filter(m=>m.status!=="concluida").length;
   const weekAtrasadas  = metasWeek.filter(m=>m.status!=="concluida" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<0).length;
@@ -44475,9 +44495,40 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     return arr;
   };
 
+  // Reserializa meta (hidratada) pro shape do team_planning antes de fazer upsert.
+  // Mantém só as colunas que existem na tabela; campos extras vão pro content (JSON).
+  const _dgPersistMeta = (m) => {
+    if(!m) return m;
+    const extras = {
+      deadline: m.deadline || null,
+      day_of_week: m.day_of_week || null,
+      category: m.category || null,
+      client_id: m.client_id || null,
+      assignees: Array.isArray(m.assignees)?m.assignees:(m.responsible_id?[m.responsible_id]:[]),
+      responsible_id: m.responsible_id || null,
+      responsible_name: m.responsible_name || null,
+      mode: m.mode || "semanal",
+    };
+    return {
+      id: m.id,
+      type: m.type || "meta_semana",
+      entry_date: m.entry_date || m.deadline || _dgToday(),
+      week_key: m.week_key,
+      month_key: m.month_key || _dgMonthKey(new Date((m.deadline||_dgToday())+"T00:00:00")),
+      meta_scope: m.meta_scope || "semana",
+      title: m.title || "",
+      content: JSON.stringify(extras),
+      status: m.status || "em_andamento",
+      author_id: m.author_id,
+      author_name: m.author_name,
+      created_at: m.created_at,
+      updated_at: new Date().toISOString(),
+    };
+  };
+
   const _toggleMeta = (m) => {
     const newStatus = m.status==="concluida"?"em_andamento":"concluida";
-    planUpsert(Object.assign({},m,{status:newStatus,updated_at:new Date().toISOString()}));
+    planUpsert(_dgPersistMeta(Object.assign({},m,{status:newStatus})));
   };
   const _deleteMeta = (m) => {
     if(typeof planRemove==="function") planRemove(m.id);
@@ -44876,7 +44927,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     })()}
 
     {/* MODAL NOVA META */}
-    {novaMeta && <_DGNovaMeta mode={novaMeta.mode||"semanal"} user={user} weekKey={weekKey} onClose={()=>setNovaMeta(null)} onSave={(payload)=>{planUpsert(payload);setNovaMeta(null);}}/>}
+    {novaMeta && <_DGNovaMeta mode={novaMeta.mode||"semanal"} user={user} weekKey={weekKey} onClose={()=>setNovaMeta(null)} onSave={(payload)=>{planUpsert(_dgPersistMeta(payload));setNovaMeta(null);}}/>}
 
     {/* MODAL NOVA/EDITAR ENTREGA DO SPRINT */}
     {novoSprint && <_DGNovoSprint user={user} clientId={novoSprint.clientId} item={novoSprint.item} weekKey={sprintWk} sextaIso={sprintSextaIso}
@@ -45030,7 +45081,7 @@ function _DGEmpty({icon, title, desc}){
 function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
   const isDiaria = mode==="diaria";
   const [title, setTitle] = useState("");
-  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius") : [];
+  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius"||t.id==="ocsana") : [];
   const [responsaveis, setResponsaveis] = useState([user.id]);
   const _toggleResp = (rid) => setResponsaveis(p => p.indexOf(rid)>=0 ? (p.length>1?p.filter(x=>x!==rid):p) : p.concat([rid]));
   const [category, setCategory] = useState("");
@@ -45038,14 +45089,12 @@ function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
   const [saving, setSaving] = useState(false);
   if(typeof useEscToClose==="function") useEscToClose(true, onClose);
 
-  // Resolve dia da meta automaticamente
+  // Resolve prazo automaticamente
   const _dgHojeIdx = () => { const w=new Date().getDay(); return w===0?7:w; };
   const _autoDayKey = isDiaria
     ? (DG_DAYS.find(d=>d.idx===_dgHojeIdx())?.key || "sex")
     : "sex";
-  const _autoDeadline = isDiaria
-    ? _dgToday()
-    : _dgWeekDate(5); // sexta da semana corrente
+  const _autoDeadline = isDiaria ? _dgToday() : _dgWeekDate(5);
 
   const _save = ()=>{
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
@@ -45067,6 +45116,7 @@ function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
       responsible_id: firstId,
       responsible_name: firstResp?firstResp.name:user.name,
       status: "em_andamento",
+      mode: isDiaria?"diaria":"semanal",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -45086,7 +45136,6 @@ function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
             onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();_save();}}}
             style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
         </div>
-        {/* Prazo: chip informativo, sem picker — meta diária = hoje, meta semanal = sexta */}
         <div>
           <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prazo</div>
           <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#f5f3ff",border:"1px solid #ede9fe",color:DG_PURPLE,borderRadius:9,padding:"8px 14px",fontSize:12.5,fontWeight:700,fontFamily:DG_INTER}}>
@@ -45146,7 +45195,7 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
   const _defaultPrio = item?.priority || "media";
   const _defaultPrioCfg = DG_SPRINT_PRIO.find(x=>x.id===_defaultPrio) || DG_SPRINT_PRIO[1];
   const [deadline, setDeadline] = useState(item?.deadline || _dgAddBusinessDays(_defaultPrioCfg.dias));
-  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius") : [];
+  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius"||t.id==="ocsana") : [];
   const initResp = Array.isArray(item?.assignees)&&item.assignees.length>0 ? item.assignees : [user.id];
   const [responsaveis, setResponsaveis] = useState(initResp);
   const _toggleResp = (rid) => setResponsaveis(p => p.indexOf(rid)>=0 ? (p.length>1?p.filter(x=>x!==rid):p) : p.concat([rid]));
