@@ -1342,6 +1342,20 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         return t;
       });
     });
+    // Persiste no Supabase pra todos os usuários verem (Guilherme, André, etc.).
+    // Dois batches: 1) tasks roladas (mudou reference_month) 2) tasks marcadas pagas em massa.
+    if(window._sb){
+      const rolledIds = Object.keys(ids);
+      const paidIdsList = Object.keys(paidIds);
+      if(rolledIds.length>0){
+        window._sb.from("tasks").update({reference_month:nextMonth}).in("id",rolledIds)
+          .then(function(){}).catch(function(err){console.error("rollover ref_month supabase:",err);});
+      }
+      if(paidIdsList.length>0){
+        window._sb.from("tasks").update({paid_at:nowIso}).in("id",paidIdsList)
+          .then(function(){}).catch(function(err){console.error("rollover paid_at supabase:",err);});
+      }
+    }
     const n=_rolModal.cards.length;
     _setRolModal(null);
     if(typeof pixelsToast!=="undefined") pixelsToast.success(n+" rolado(s) pra "+nextMonth+" | "+paidCount+" marcado(s) como pago(s)");
@@ -13062,7 +13076,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       let paidLocal=false;
                       try{paidLocal=!!(JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}")[t.id]);}catch(e){}
                       const isPaid=!!t.paidAt||paidLocal;
-                      return <span onClick={function(e){e.stopPropagation();if(!canEditPaid)return;const wasPaid=isPaid;try{const lp=JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}");if(wasPaid){delete lp[t.id];}else{lp[t.id]=new Date().toISOString();}localStorage.setItem("pixels-paid-tasks",JSON.stringify(lp));}catch(e){}if(typeof setTasks==="function"){setTasks(function(prev){return (prev||[]).map(function(x){if(x.id!==t.id)return x;return Object.assign({},x,{paidAt:wasPaid?null:new Date().toISOString()});});});}}} title={canEditPaid?(isPaid?"Clique pra desmarcar pago":"Clique pra marcar como pago"):"Só Gustavo pode marcar pago"} style={{display:"inline-flex",alignItems:"center",gap:3,background:isPaid?"#dcfce7":"#f1f5f9",color:isPaid?"#15803d":"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",cursor:canEditPaid?"pointer":"not-allowed",border:isPaid?"1px solid #bbf7d0":"1px dashed #cbd5e1",transition:"all .12s",opacity:canEditPaid?1:0.7}}>
+                      return <span onClick={function(e){e.stopPropagation();if(!canEditPaid)return;const wasPaid=isPaid;const nowIso=new Date().toISOString();const nextPaidAt=wasPaid?null:nowIso;try{const lp=JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}");if(wasPaid){delete lp[t.id];}else{lp[t.id]=nowIso;}localStorage.setItem("pixels-paid-tasks",JSON.stringify(lp));}catch(e){}if(typeof setTasks==="function"){setTasks(function(prev){return (prev||[]).map(function(x){if(x.id!==t.id)return x;return Object.assign({},x,{paidAt:nextPaidAt});});});}if(window._sb){window._sb.from("tasks").update({paid_at:nextPaidAt}).eq("id",t.id).then(function(){}).catch(function(err){console.error("paid sync supabase:",err);});}}} title={canEditPaid?(isPaid?"Clique pra desmarcar pago":"Clique pra marcar como pago"):"Só Gustavo pode marcar pago"} style={{display:"inline-flex",alignItems:"center",gap:3,background:isPaid?"#dcfce7":"#f1f5f9",color:isPaid?"#15803d":"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",cursor:canEditPaid?"pointer":"not-allowed",border:isPaid?"1px solid #bbf7d0":"1px dashed #cbd5e1",transition:"all .12s",opacity:canEditPaid?1:0.7}}>
                         {isPaid
                           ?<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                           :<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>}
@@ -24604,7 +24618,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
         {/* TABS */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0"}}>
-          {([["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],["audio","Áudio"],...(client?[["orientacoes","Orientações"]]:[]),["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
+          {([["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["audio","Áudio"],["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"12px 18px",fontSize:13.5,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#64748b",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"color .12s"}}>
               {lbl}
