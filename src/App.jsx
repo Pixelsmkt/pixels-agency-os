@@ -44407,6 +44407,296 @@ function _DGSec({title, sub, right, icon, accent}){
 // ═══════════════════════════════════════════════════════════════
 //  DashGustavo (= DashSocio) — central de comando dos sócios
 // ═══════════════════════════════════════════════════════════════
+// ── KPIs do DashSocio ────────────────────────────────────────
+// Calcula 4 KPIs operacionais a partir dos dados já existentes:
+//  - MRR ativo (soma contratos ativos na tabela 'contracts')
+//  - Aprovado 1ª rodada (% de tasks aprovadas que nunca passaram em Ajuste)
+//  - Entregas no mês (count de tasks com status publicado/agendado/aprovado no mês corrente)
+//  - ENPS equipe (última pontuação calculada da tabela enps_responses)
+function _useDGKpis(allTasks){
+  const [mrr, setMrr]   = useState(null);
+  const [mrrPrev, setMrrPrev] = useState(null);
+  const [enps, setEnps] = useState(null);
+
+  // MRR — soma valores dos contratos ativos
+  useEffect(()=>{
+    if(!window._sb) return undefined;
+    let active = true;
+    window._sb.from("contracts").select("dados,client_id")
+      .then(function(r){
+        if(!active || !r || !r.data) return;
+        let total = 0;
+        (r.data||[]).forEach(function(row){
+          const lista = (row.dados && row.dados.contratos) || row.dados || [];
+          if(Array.isArray(lista)){
+            lista.forEach(function(ct){
+              if(ct && ct.ativo!==false && ct.valor){
+                const v = typeof ct.valor==="number" ? ct.valor : parseFloat(String(ct.valor).replace(/[^0-9.,-]/g,"").replace(",","."));
+                if(!isNaN(v)) total += v;
+              }
+            });
+          }
+        });
+        setMrr(total);
+      })
+      .catch(function(e){ console.warn("[KPI MRR]",e?.message||e); });
+    return ()=>{ active = false; };
+  }, []);
+
+  // ENPS — último score calculado
+  useEffect(()=>{
+    if(!window._sb) return undefined;
+    let active = true;
+    window._sb.from("enps_responses").select("score,created_at")
+      .gte("created_at", new Date(Date.now()-90*86400000).toISOString())
+      .then(function(r){
+        if(!active || !r || !r.data || r.data.length===0) return;
+        const promotores = r.data.filter(x=>x.score>=9).length;
+        const detratores = r.data.filter(x=>x.score<=6).length;
+        const score = Math.round(((promotores-detratores)/r.data.length)*100);
+        setEnps(score);
+      })
+      .catch(function(e){ console.warn("[KPI ENPS]",e?.message||e); });
+    return ()=>{ active = false; };
+  }, []);
+
+  // Calculados a partir dos tasks (sincronos)
+  const hoje = new Date();
+  const monthPrefix = hoje.getFullYear()+"-"+String(hoje.getMonth()+1).padStart(2,"0");
+  const STATUS_OK = ["aprovado","agendado","publicado"];
+  const tasksOk   = (allTasks||[]).filter(t=>STATUS_OK.indexOf(t.status)>=0);
+  const semAjuste = tasksOk.filter(t=>{
+    if(!Array.isArray(t.timeline)) return true;
+    return !t.timeline.some(ev=>(ev.to==="ajustes"||ev.from==="ajustes"||(ev.label||"").toLowerCase().indexOf("ajuste")>=0));
+  }).length;
+  const aprov1Pct = tasksOk.length>0 ? Math.round((semAjuste/tasksOk.length)*100) : null;
+  const entregasMes = (allTasks||[]).filter(t=>{
+    if(t.status!=="publicado") return false;
+    const d = t.publish_date || t.completed_at || "";
+    return String(d).startsWith(monthPrefix);
+  }).length;
+  const planejadasMes = (allTasks||[]).filter(t=>{
+    const d = t.publish_date || t.deadline || "";
+    return String(d).startsWith(monthPrefix);
+  }).length;
+
+  return {mrr, mrrPrev, enps, aprov1Pct, semAjusteCount:semAjuste, totalOkCount:tasksOk.length, entregasMes, planejadasMes};
+}
+
+function _DGKpiCard({label, value, hint, hintColor}){
+  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"16px 18px",display:"flex",flexDirection:"column",gap:4,minWidth:0,boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+    <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,letterSpacing:.2,textTransform:"uppercase"}}>{label}</div>
+    <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{value}</div>
+    {hint && <div style={{color:hintColor||"#94a3b8",fontSize:11,fontWeight:600,marginTop:2}}>{hint}</div>}
+  </div>;
+}
+
+function _DGKpisSection({allTasks}){
+  const k = _useDGKpis(allTasks);
+  const fmtBRL = n => n==null?"—":("R$ "+(n>=1000?Math.round(n/100)/10+"k":Math.round(n).toLocaleString("pt-BR")));
+  const aprov1Color = k.aprov1Pct==null?"#94a3b8":(k.aprov1Pct>=80?"#16a34a":(k.aprov1Pct>=60?"#a16207":"#dc2626"));
+  const entregasColor = k.planejadasMes>0 && k.entregasMes/k.planejadasMes>=0.8 ? "#16a34a" : "#a16207";
+  const enpsColor = k.enps==null?"#94a3b8":(k.enps>=50?"#16a34a":(k.enps>=0?"#a16207":"#dc2626"));
+
+  return <div>
+    <div style={{color:DG_PURPLE,fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:8}}>Indicadores · este mês</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",gap:12}}>
+      <_DGKpiCard label="MRR ativo" value={fmtBRL(k.mrr)} hint={k.mrr==null?"Sem dados de contrato":"Soma dos contratos ativos"}/>
+      <_DGKpiCard label="Aprovado 1ª rodada" value={k.aprov1Pct==null?"—":k.aprov1Pct+"%"} hint={k.totalOkCount>0?(k.semAjusteCount+" de "+k.totalOkCount+" sem ajuste"):"Aguardando entregas"} hintColor={aprov1Color}/>
+      <_DGKpiCard label="Entregas no mês" value={k.entregasMes} hint={k.planejadasMes>0?("de "+k.planejadasMes+" planejadas"):"Sem planejamento"} hintColor={entregasColor}/>
+      <_DGKpiCard label="ENPS equipe" value={k.enps==null?"—":(k.enps>0?"+"+k.enps:k.enps)} hint={k.enps==null?"Sem respostas em 90d":"Últimos 90 dias"} hintColor={enpsColor}/>
+    </div>
+  </div>;
+}
+
+// ── OKRs do DashSocio ────────────────────────────────────────
+// Storage no team_planning: type="okr_objective" (1) + type="okr_kr" (N)
+// Permissão de edição: só sócios (level===1 dash==="partner")
+function _DGOKRSection({user, planEntries, planUpsert, planRemove}){
+  const isMePartner = !!(user && user.level===1 && user.dash==="partner");
+  const objetivo = planEntries.find(e=>e.type==="okr_objective");
+  const krs = planEntries.filter(e=>e.type==="okr_kr")
+    .sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||""));
+  const [editing, setEditing] = useState(null);
+  // quarter atual
+  const dt = new Date(); const q = Math.floor(dt.getMonth()/3)+1; const qLabel = "Q"+q+" "+dt.getFullYear();
+
+  // % conclusão geral
+  function _krParse(kr){
+    let extra = {};
+    if(typeof kr.content==="string" && kr.content.trim().startsWith("{")){
+      try{ extra = JSON.parse(kr.content)||{}; }catch(_){}
+    }
+    const target = Number(extra.target||0);
+    const current = Number(extra.current||0);
+    const unit = extra.unit || "";
+    const pct = target>0 ? Math.min(100, Math.round((current/target)*100)) : 0;
+    return {target, current, unit, pct};
+  }
+  const krsParsed = krs.map(kr=>({...kr, _p:_krParse(kr)}));
+  const overall = krsParsed.length>0
+    ? Math.round(krsParsed.reduce((acc,kr)=>acc+kr._p.pct,0)/krsParsed.length)
+    : 0;
+
+  function _abrirNovo(){
+    setEditing({_new:true, type:"okr_kr", title:"", target:"", current:"0", unit:""});
+  }
+  function _abrirObjetivo(){
+    setEditing({_objetivo:true, type:"okr_objective", title:objetivo?objetivo.title:""});
+  }
+  function _abrirEditar(kr){
+    setEditing({...kr._p, id:kr.id, type:"okr_kr", title:kr.title, current:String(kr._p.current), target:String(kr._p.target), unit:kr._p.unit});
+  }
+  function _salvarObjetivo(){
+    if(!editing.title.trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Texto do objetivo é obrigatório"); return; }
+    const payload = {
+      id: objetivo ? objetivo.id : ("okrobj-"+Date.now()),
+      type: "okr_objective",
+      entry_date: _dgToday(),
+      week_key: _dgWeekKey(),
+      month_key: _dgMonthKey(),
+      meta_scope: "trimestre",
+      title: editing.title.trim(),
+      content: JSON.stringify({quarter:qLabel}),
+      status: "em_andamento",
+      author_id: user.id, author_name: user.name,
+      created_at: objetivo?objetivo.created_at:new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    planUpsert(payload);
+    setEditing(null);
+  }
+  function _salvarKR(){
+    if(!editing.title.trim()){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Descrição do KR é obrigatória"); return; }
+    const tgt = Number(editing.target||0);
+    const cur = Number(editing.current||0);
+    const payload = {
+      id: editing.id || ("okrkr-"+Date.now()+"-"+Math.random().toString(36).slice(2,5)),
+      type: "okr_kr",
+      entry_date: _dgToday(),
+      week_key: _dgWeekKey(),
+      month_key: _dgMonthKey(),
+      meta_scope: "trimestre",
+      title: editing.title.trim(),
+      content: JSON.stringify({target:tgt, current:cur, unit:editing.unit||""}),
+      status: cur>=tgt && tgt>0 ? "concluida" : "em_andamento",
+      author_id: user.id, author_name: user.name,
+      created_at: editing.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    planUpsert(payload);
+    setEditing(null);
+  }
+  function _excluirKR(kr){
+    if(typeof planRemove==="function") planRemove(kr.id);
+  }
+
+  function _barColor(pct){
+    if(pct>=85) return "#16a34a";
+    if(pct>=60) return "#a16207";
+    return "#dc2626";
+  }
+
+  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <div style={{width:34,height:34,borderRadius:10,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={DG_PURPLE} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>OKR · {qLabel}</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>{krsParsed.length>0?overall+"% concluído":"Defina o objetivo e os resultados-chave"}</div>
+        </div>
+      </div>
+      {isMePartner && <div style={{display:"flex",gap:6}}>
+        <button onClick={_abrirObjetivo} style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER}}>{objetivo?"Editar objetivo":"Definir objetivo"}</button>
+        <button onClick={_abrirNovo} style={{background:"#f5f3ff",color:DG_PURPLE,border:"1px solid #ede9fe",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Novo KR
+        </button>
+      </div>}
+    </div>
+
+    {objetivo && <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 14px",marginBottom:14}}>
+      <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:3}}>Objetivo</div>
+      <div style={{color:"#0f172a",fontSize:14,fontWeight:700,letterSpacing:-.2}}>{objetivo.title}</div>
+    </div>}
+
+    {krsParsed.length===0
+      ? <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"24px 18px",textAlign:"center"}}>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:13,marginBottom:3}}>Nenhum resultado-chave</div>
+          <div style={{color:"#94a3b8",fontSize:11.5}}>{isMePartner?"Defina o objetivo e adicione 2 a 4 KRs mensuráveis.":"Aguardando os sócios definirem."}</div>
+        </div>
+      : <div style={{display:"flex",flexDirection:"column",gap:11}}>
+          {krsParsed.map(kr=>{
+            const p = kr._p;
+            const cor = _barColor(p.pct);
+            return <div key={kr.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 14px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:6}}>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1,flex:1}}>{kr.title}</div>
+                <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  <span style={{color:cor,fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>
+                    {p.current}{p.unit?" "+p.unit:""} / {p.target}{p.unit?" "+p.unit:""}
+                  </span>
+                  {isMePartner && <button onClick={()=>_abrirEditar(kr)} title="Editar" style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"flex"}} onMouseEnter={e=>{e.currentTarget.style.color=DG_PURPLE;}} onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="m18.5 2.5 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>}
+                  {isMePartner && <button onClick={()=>_excluirKR(kr)} title="Excluir" style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:3,display:"flex"}} onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}} onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+                  </button>}
+                </div>
+              </div>
+              <div style={{height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                <div style={{height:"100%",width:p.pct+"%",background:cor,borderRadius:99,transition:"width .3s"}}/>
+              </div>
+            </div>;
+          })}
+        </div>
+    }
+
+    {editing && <_DGOKREditModal editing={editing} setEditing={setEditing} onSaveKR={_salvarKR} onSaveObj={_salvarObjetivo}/>}
+  </div>;
+}
+
+function _DGOKREditModal({editing, setEditing, onSaveKR, onSaveObj}){
+  if(typeof useEscToClose==="function") useEscToClose(true, ()=>setEditing(null));
+  const isObj = !!editing._objetivo;
+  function _close(){ setEditing(null); }
+  return <div onClick={_close} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(520px,92%)",padding:"24px 26px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
+      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{isObj?"Objetivo do trimestre":(editing.id?"Editar resultado-chave":"Novo resultado-chave")}</div>
+      <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20}}>{isObj?"Frase única, ambiciosa e direcional.":"Mensurável: nome do KR + meta numérica + unidade (opcional)."}</div>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>{isObj?"Objetivo":"Descrição"}</div>
+          <input value={editing.title} onChange={e=>setEditing({...editing,title:e.target.value})}
+            placeholder={isObj?"Ex: Virar referência regional em performance pra agro":"Ex: Fechar contratos de Bioter"}
+            onKeyDown={e=>{if(e.key==="Enter" && !isObj){e.preventDefault();onSaveKR();}}}
+            style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
+        </div>
+        {!isObj && <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Atual</div>
+            <input type="number" value={editing.current} onChange={e=>setEditing({...editing,current:e.target.value})} style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Meta</div>
+            <input type="number" value={editing.target} onChange={e=>setEditing({...editing,target:e.target.value})} placeholder="5" style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Unidade</div>
+            <input value={editing.unit||""} onChange={e=>setEditing({...editing,unit:e.target.value})} placeholder="contratos" style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          </div>
+        </div>}
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:22}}>
+        <button onClick={_close} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
+        <button onClick={isObj?onSaveObj:onSaveKR} style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,boxShadow:"0 6px 16px rgba(124,58,237,0.30)"}}>Salvar</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob}){
   const tasks = propTasks || [];
   const allTasks = tasks.filter(t=>!t.deletedAt);
@@ -44446,11 +44736,24 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     return false;
   };
 
+  // ── Auto-ocultar metas concluídas após virar o dia ──
+  // Nada é deletado do Supabase. As metas continuam lá com status="concluida"
+  // e completed_at preenchido — só não são exibidas na UI a partir do dia seguinte.
+  // Para recuperar tudo (audit), basta remover este filtro.
+  const _hojeIso = hoje;
+  const _dgVisivel = (m) => {
+    if(m.status!=="concluida") return true;
+    const c = m.completed_at || m.updated_at || "";
+    if(!c) return true; // sem timestamp, mantém visível por segurança
+    return String(c).slice(0,10) === _hojeIso; // só visível se concluída hoje
+  };
+
   // Metas da semana — só do user logado (hidrata campos extras de content JSON)
   const metasWeek = planEntries
     .filter(e=>e.type==="meta_semana"&&e.week_key===weekKey)
     .map(_dgHydrateMeta)
-    .filter(_isMine);
+    .filter(_isMine)
+    .filter(_dgVisivel);
   const weekConcluidas = metasWeek.filter(m=>m.status==="concluida").length;
   const weekPendentes  = metasWeek.filter(m=>m.status!=="concluida").length;
   const weekAtrasadas  = metasWeek.filter(m=>m.status!=="concluida" && m.deadline && _dgDays(m.deadline)!==null && _dgDays(m.deadline)<0).length;
@@ -44508,6 +44811,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       responsible_id: m.responsible_id || null,
       responsible_name: m.responsible_name || null,
       mode: m.mode || "semanal",
+      completed_at: m.completed_at || null,
     };
     return {
       id: m.id,
@@ -44528,7 +44832,10 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 
   const _toggleMeta = (m) => {
     const newStatus = m.status==="concluida"?"em_andamento":"concluida";
-    planUpsert(_dgPersistMeta(Object.assign({},m,{status:newStatus})));
+    // Marca completed_at quando vira "concluida" para auto-ocultar no dia seguinte.
+    // Limpa quando desmarcada (volta a aparecer normalmente).
+    const completed_at = newStatus==="concluida" ? new Date().toISOString() : null;
+    planUpsert(_dgPersistMeta(Object.assign({},m,{status:newStatus,completed_at})));
   };
   const _deleteMeta = (m) => {
     if(typeof planRemove==="function") planRemove(m.id);
@@ -44643,6 +44950,12 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         </div>}
       </div>
     </div>
+
+    {/* ══════════ KPIs DO MÊS — 4 indicadores operacionais ══════════ */}
+    <_DGKpisSection allTasks={allTasks}/>
+
+    {/* ══════════ OKR · TRIMESTRE — objetivo + KRs ══════════ */}
+    <_DGOKRSection user={user} planEntries={planEntries} planUpsert={planUpsert} planRemove={planRemove}/>
 
     {/* ══════════ PLANEJAMENTO DA SEMANA — refinado ══════════ */}
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
@@ -44952,6 +45265,7 @@ function _DGMetaItem({meta, onToggle, onDelete, compact}){
       {isOk&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </button>
     <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+      {meta.client_id && typeof ClientLogo==="function" && <ClientLogo clientId={meta.client_id} size="xs"/>}
       <span style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:13,fontWeight:700,textDecoration:isOk?"line-through":"none",letterSpacing:-.1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
       {cat&&<span style={{background:cat.color+"14",color:cat.color,borderRadius:5,padding:"2px 7px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
     </div>
@@ -44987,6 +45301,7 @@ function _DGMetaMini({meta, onToggle, onDelete}){
     <div style={{flex:1,minWidth:0}}>
       <div style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:11.5,fontWeight:600,lineHeight:1.35,textDecoration:isOk?"line-through":"none",wordBreak:"break-word",paddingRight:onDelete?14:0,letterSpacing:-.1}}>{meta.title||"(sem título)"}</div>
       <div style={{display:"flex",alignItems:"center",gap:5,marginTop:5,flexWrap:"wrap"}}>
+        {meta.client_id && typeof ClientLogo==="function" && <ClientLogo clientId={meta.client_id} size="xs"/>}
         {isLate&&<span title={"Atrasada há "+diasAtraso+" dia"+(diasAtraso>1?"s":"")} style={{display:"inline-flex",alignItems:"center",gap:3,background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:4,padding:"1px 6px",fontSize:10,fontWeight:800,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>
           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           {diasAtraso}d
@@ -45143,28 +45458,18 @@ function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
             {isDiaria?"Hoje":"Sexta-feira"} · {(()=>{const d=new Date(_autoDeadline+"T00:00:00");return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"long"});})()}
           </div>
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div>
-            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {_DG_SOCIOS.map(t=>{
-                const a = responsaveis.indexOf(t.id)>=0;
-                return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
-                  style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"5px 11px 5px 5px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7}}>
-                  <_DGAvatar userId={t.id} size={22}/>
-                  {t.name.split(" ")[0]}
-                  {a&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2}}><polyline points="20 6 9 17 4 12"/></svg>}
-                </button>;
-              })}
-            </div>
-          </div>
-          <div>
-            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Categoria <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
-            <select value={category} onChange={e=>setCategory(e.target.value)}
-              style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
-              <option value="">—</option>
-              {DG_CATEGORIAS.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
-            </select>
+        <div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {_DG_SOCIOS.map(t=>{
+              const a = responsaveis.indexOf(t.id)>=0;
+              return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
+                style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"5px 11px 5px 5px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7}}>
+                <_DGAvatar userId={t.id} size={22}/>
+                {t.name.split(" ")[0]}
+                {a&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2}}><polyline points="20 6 9 17 4 12"/></svg>}
+              </button>;
+            })}
           </div>
         </div>
         <div>
