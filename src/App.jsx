@@ -11920,21 +11920,21 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
                 </div>
                 {tiposAtivos.length===0
                   ? <div style={{color:"#cbd5e1",fontSize:10,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
-                  : <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                  : <div style={{display:"flex",flexWrap:"wrap",gap:9,rowGap:3}}>
                       {tiposAtivos.map(tt=>{
                         const tOk=tt.meta&&tt.done>=tt.meta;
                         const tPct=tt.meta?Math.round(tt.done/tt.meta*100):0;
                         const tCor=tOk?"#16a34a":(tPct>=70?"#0369a1":(tPct>=40?"#a16207":(tt.done>0?"#dc2626":"#94a3b8")));
                         const tIco=_tipoIcon(tt.l);
-                        return <span key={tt.l} title={tt.l+": "+tt.done+"/"+(tt.meta||0)} style={{display:"inline-flex",alignItems:"center",gap:4,background:tCor+"12",color:tCor,borderRadius:6,padding:"2px 7px 2px 6px",fontSize:10.5,fontWeight:700,letterSpacing:-.1,lineHeight:1.3}}>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                        return <span key={tt.l} title={tt.l+": "+tt.done+"/"+(tt.meta||0)} style={{display:"inline-flex",alignItems:"center",gap:4,color:"#64748b",fontSize:10.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.2}}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={tCor} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
                             {tIco==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
                             {tIco==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
                             {tIco==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
-                            {tIco==="dot"&&<circle cx="12" cy="12" r="5" fill="currentColor"/>}
+                            {tIco==="dot"&&<circle cx="12" cy="12" r="5" fill={tCor}/>}
                           </svg>
-                          <span style={{textTransform:"capitalize"}}>{tt.l}</span>
-                          <span style={{fontWeight:900,fontFeatureSettings:"'tnum'"}}>{tt.done}<span style={{opacity:.55,fontWeight:700}}>/{tt.meta||"-"}</span></span>
+                          <span>{tt.l}</span>
+                          <span style={{color:tCor,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{tt.done}<span style={{color:"#cbd5e1",fontWeight:600}}>/{tt.meta||"-"}</span></span>
                         </span>;
                       })}
                     </div>
