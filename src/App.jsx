@@ -11742,45 +11742,83 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
             const ok=r.totalMeta&&r.totalDone>=r.totalMeta;
             const accent=ok?"#22c55e":(cpct>=70?r.color:(cpct>=40?"#f59e0b":"#ef4444"));
             const tiposAtivos=r.tipos.filter(tt=>tt.meta>0||tt.done>0);
-            const R=24, CIRC=2*Math.PI*R;
-            return <div key={r.id} style={{background:"#fff",borderRadius:14,padding:"14px",border:"1px solid #e5e7eb",boxShadow:"0 1px 2px rgba(15,23,42,0.04)",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.08), 0 2px 4px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#cbd5e1";}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e5e7eb";}}>
-              {/* Header: logo + nome + fracao total muted */}
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,minWidth:0}}>
-                {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]&&<img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:18,maxWidth:54,objectFit:"contain",flexShrink:0}}/>}
-                <span style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1}}>{r.name}</span>
-                <span style={{color:"#64748b",fontSize:11,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
-              </div>
-              {/* Body: anel circular + lista de chips por tipo */}
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <div style={{position:"relative",width:60,height:60,flexShrink:0}}>
-                  <svg width="60" height="60" viewBox="0 0 60 60" style={{transform:"rotate(-90deg)"}}>
-                    <circle cx="30" cy="30" r={R} fill="none" stroke="#f1f5f9" strokeWidth="6"/>
-                    {r.totalMeta>0&&<circle cx="30" cy="30" r={R} fill="none" stroke={accent} strokeWidth="6" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={CIRC*(1-cpct/100)} style={{transition:"stroke-dashoffset .5s ease-out, stroke .3s"}}/>}
-                  </svg>
-                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <span style={{color:accent,fontSize:13,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{cpct}<span style={{fontSize:8,fontWeight:700}}>%</span></span>
-                  </div>
+            // Helper visual: status chip do cliente
+            const statusInfo = !r.totalMeta
+              ? {label:"Sem meta", color:"#64748b", bg:"#f1f5f9"}
+              : ok
+                ? {label:"Pronto", color:"#15803d", bg:"#dcfce7"}
+                : cpct>=70
+                  ? {label:"Quase lá", color:"#0369a1", bg:"#e0f2fe"}
+                  : cpct>=40
+                    ? {label:"Em andamento", color:"#a16207", bg:"#fef3c7"}
+                    : {label:"Atrasado", color:"#b91c1c", bg:"#fee2e2"};
+            // Ícone por tipo (Arte/Vídeo/Foto/etc)
+            const _tipoIcon = (lbl)=>{
+              const l = String(lbl).toLowerCase();
+              if(l.includes("arte"))return "image";
+              if(l.includes("vídeo")||l.includes("video")||l.includes("short")||l.includes("corte"))return "play";
+              if(l.includes("foto"))return "camera";
+              return "dot";
+            };
+            return <div key={r.id} style={{position:"relative",background:`linear-gradient(135deg, ${r.color}06 0%, #fff 55%)`,borderRadius:16,padding:"14px 16px 12px",border:"1px solid #e5e7eb",overflow:"hidden",transition:"transform .15s, box-shadow .15s, border-color .15s",display:"flex",flexDirection:"column",gap:11}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.05)";e.currentTarget.style.borderColor=r.color+"55";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e5e7eb";}}>
+              {/* Faixa colorida no topo — assinatura visual do cliente */}
+              <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:`linear-gradient(90deg, ${r.color}, ${accent})`}}/>
+
+              {/* Header: logo em caixa colorida + nome + chip status */}
+              <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+                <div style={{width:36,height:36,borderRadius:10,background:r.color+"14",border:"1px solid "+r.color+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+                  {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]
+                    ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:22,maxWidth:30,objectFit:"contain"}}/>
+                    : <span style={{color:r.color,fontWeight:800,fontSize:13,letterSpacing:-.3}}>{(r.name||"").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()}</span>}
                 </div>
-                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:5}}>
-                  {tiposAtivos.length===0?
-                    <div style={{color:"#cbd5e1",fontSize:10,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
-                    :tiposAtivos.map(tt=>{
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.15}}>{r.name}</div>
+                  <span style={{display:"inline-flex",alignItems:"center",gap:4,background:statusInfo.bg,color:statusInfo.color,borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginTop:3}}>
+                    {!r.totalMeta?null
+                      : ok ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
+                    {statusInfo.label}
+                  </span>
+                </div>
+                <div style={{textAlign:"right",flexShrink:0}}>
+                  <div style={{display:"flex",alignItems:"baseline",gap:2,justifyContent:"flex-end"}}>
+                    <span style={{color:accent,fontSize:20,fontWeight:900,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{cpct}</span>
+                    <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,lineHeight:1}}>%</span>
+                  </div>
+                  <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:2,fontFeatureSettings:"'tnum'"}}>{r.totalDone}/{r.totalMeta||"-"}</div>
+                </div>
+              </div>
+
+              {/* Pills por tipo — ícone + nome + fração colorida */}
+              {tiposAtivos.length===0
+                ? <div style={{color:"#cbd5e1",fontSize:10.5,fontWeight:600,fontStyle:"italic",textAlign:"center",padding:"6px 0"}}>Sem meta definida</div>
+                : <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                    {tiposAtivos.map(tt=>{
                       const tOk=tt.meta&&tt.done>=tt.meta;
                       const tPct=tt.meta?Math.round(tt.done/tt.meta*100):0;
-                      const tCor=tOk?"#22c55e":(tPct>=80?"#22c55e":(tPct>=50?"#eab308":(tt.done>0?"#f59e0b":"#cbd5e1")));
-                      return <div key={tt.l} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,fontSize:10.5,lineHeight:1.2}}>
-                        <span style={{display:"flex",alignItems:"center",gap:5,color:"#64748b",fontWeight:600,minWidth:0}}>
-                          <span style={{width:6,height:6,borderRadius:"50%",background:tCor,flexShrink:0}}/>
-                          <span style={{textOverflow:"ellipsis",overflow:"hidden",whiteSpace:"nowrap"}}>{tt.l}</span>
-                        </span>
-                        <span style={{color:tCor,fontSize:11.5,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{tt.done}<span style={{color:"#cbd5e1",fontWeight:600,fontSize:10}}>/{tt.meta||"-"}</span></span>
+                      const tCor=tOk?"#16a34a":(tPct>=70?"#0369a1":(tPct>=40?"#a16207":(tt.done>0?"#c2410c":"#64748b")));
+                      const tBg=tOk?"#dcfce7":(tPct>=70?"#e0f2fe":(tPct>=40?"#fef3c7":(tt.done>0?"#ffedd5":"#f1f5f9")));
+                      const tIco=_tipoIcon(tt.l);
+                      return <div key={tt.l} title={tt.l+": "+tt.done+" de "+(tt.meta||0)} style={{display:"inline-flex",alignItems:"center",gap:5,background:tBg,color:tCor,borderRadius:8,padding:"4px 9px 4px 7px",fontSize:11,fontWeight:700,letterSpacing:-.1}}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                          {tIco==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
+                          {tIco==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
+                          {tIco==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
+                          {tIco==="dot"&&<circle cx="12" cy="12" r="5"/>}
+                        </svg>
+                        <span style={{textTransform:"capitalize"}}>{tt.l}</span>
+                        <span style={{fontWeight:900,fontFeatureSettings:"'tnum'",marginLeft:1}}>{tt.done}<span style={{opacity:.5,fontWeight:700}}>/{tt.meta||"-"}</span></span>
                       </div>;
-                    })
-                  }
-                </div>
-              </div>
+                    })}
+                  </div>
+              }
+
+              {/* Mini progress bar geral */}
+              {r.totalMeta>0&&<div style={{height:4,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                <div style={{width:cpct+"%",height:"100%",background:`linear-gradient(90deg, ${accent}, ${accent})`,borderRadius:99,transition:"width .5s ease, background .3s"}}/>
+              </div>}
             </div>;
           };
           return <div style={{padding:"14px 16px 16px",background:"#f8f9fc"}}>
