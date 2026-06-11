@@ -12518,8 +12518,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
   const [cols,setCols]=useState(()=>{
     // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
-    // Versão atual: v6 (mescla Agendado+Publicado em "Publicações" + swap cores Copys/Publicações)
-    const COLS_VERSION="v7-publicadas-fix";
+    // v8: paleta arco-íris (vermelho→laranja→âmbar→amarelo→lima→verde→roxo)
+    // Bump da versão força rebuild — sem isso, cache antigo do localStorage mantém cores velhas
+    // mesmo após KANBAN_COLS ser atualizado.
+    const COLS_VERSION="v8-rainbow-palette";
     // IDs descontinuados — colunas que existiam em versões antigas e devem ser DESCARTADAS no rebuild.
     // (sem isso, a self-heal defensiva trata como "custom" e mantém visível indevidamente)
     const DEPRECATED_COL_IDS=new Set(["publicado"]);
