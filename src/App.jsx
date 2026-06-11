@@ -45854,20 +45854,56 @@ const PB_SEED = {
     midia: { orientacoes: "(em construção)", checklist: [] }
   },
   vetservice: {
-    sobre: "VetService Consultoria — empresa de consultoria técnica voltada à produção leiteira. Atua junto a produtores rurais, fornecendo orientação técnica em manejo, nutrição, reprodução, sanidade e gestão de fazendas leiteiras. O objetivo é elevar a produtividade e a saúde do rebanho com base em dados, acompanhamento próximo e tecnologia aplicada ao campo.",
-    comunicacao: "Tom técnico, profissional, educativo e confiável. Linguagem direta, voltada ao produtor rural, evitando jargões excessivos. Posicionamento: parceira técnica do produtor — quem entende do campo, do rebanho e dos números da fazenda. Evitar tom institucional frio: a marca conversa com produtor, é gente do campo falando com gente do campo.",
+    sobre: "VetService Consultoria é uma empresa voltada à produção leiteira, especializada em gestão de dados, nutrição de precisão e acompanhamento técnico de fazendas, especialmente em sistemas com ordenha robotizada.\n\nA empresa ajuda produtores de leite a interpretar indicadores, identificar gargalos produtivos, melhorar eficiência alimentar, ajustar estratégias nutricionais e tomar decisões com base em dados reais da propriedade.\n\nCidade base: Ibirapuitã/RS. Atuação: RS e SC.\nContato comercial: Cristiano Adam — (54) 99976-9097.",
+    descricaoCurta: "VetService — consultoria técnica para produção leiteira, especializada em dados, nutrição de precisão e ordenha robotizada.",
+    comunicacao: "A comunicação da VetService deve ser técnica, profissional, educativa e próxima do produtor rural.\n\nO foco não deve ser venda direta de ração ou minerais. A venda deve aparecer como consequência do trabalho técnico. Priorizar conteúdos sobre dados, nutrição de precisão, eficiência produtiva, rentabilidade, ordenha robotizada e tomada de decisão baseada em indicadores.\n\nTom de voz: técnico, claro, confiável, objetivo e próximo da realidade da fazenda.",
+    pilares: [
+      "Ordenha robotizada",
+      "Dados da fazenda",
+      "Nutrição de precisão",
+      "Eficiência alimentar",
+      "Custo alimentar",
+      "Produção por vaca",
+      "Taxa de prenhez",
+      "Curva de lactação",
+      "Rentabilidade",
+      "Tomada de decisão baseada em indicadores"
+    ],
     design: {
-      orientacoes: "IDENTIDADE VISUAL\n• Cor principal da marca: verde #009700 (campo, vitalidade, agropecuária)\n• Apoios: branco, off-white, tons terrosos suaves\n• Evitar: azul institucional frio, roxo, rosa, gradientes chamativos\n\nTIPOGRAFIA\n• Títulos: fonte sem serifa moderna, peso bold, hierarquia clara\n• Corpo: legível, peso regular, bom contraste com o fundo\n• Sentence case nos títulos (não TUDO EM CAIXA ALTA)\n\nELEMENTOS GRÁFICOS\n• Fotos reais de campo: vacas leiteiras, ordenha, pastagem, técnico em visita\n• Ícones técnicos clean (sem desenhos animados infantis)\n• Gráficos e dados quando o tema for produtividade/sanidade\n• Espaço em branco generoso — peça que respira\n\nO QUE EVITAR\n• Cores neon, gradientes berrantes\n• Stock photos genéricas de gravatas\n• Mascote/desenho animado de vaca\n• Layout sobrecarregado com 5 elementos competindo",
+      orientacoes: "IDENTIDADE VISUAL\n• Verde #009700 como cor principal da marca\n• Apoios: branco, preto, cinza e tons neutros\n• O visual deve transmitir tecnologia, campo, dados, confiança e consultoria técnica\n\nO QUE EVITAR\n• Não criar artes com aparência de clínica pet\n• Não usar imagens de cães, gatos ou pequenos animais\n• Não usar fotos genéricas de banco de imagens quando a peça mostrar animais, propriedades rurais, produtores, fazendas, salas de ordenha ou robôs\n• Evitar artes infantis, muito coloridas, urbanas demais ou genéricas de agro\n\nIMAGENS\n• Quando houver animais, propriedade rural, sala de ordenha, robôs, equipe em campo ou produtores, usar somente imagens próprias da VetService ou banco de imagens autorizado pela empresa\n• Priorizar fotos reais de vacas leiteiras, fazendas, ordenha robotizada, cocho, dieta, silagem, equipe técnica, produtores, dashboards e indicadores produtivos\n\nELEMENTOS GRÁFICOS\n• Pode usar dashboards, gráficos, tabelas simples, ícones de dados, linhas de tendência, números produtivos e comparativos técnicos\n• O design deve ser limpo, profissional, técnico e de leitura rápida",
       checklist: [
-        "A peça parece técnica, profissional e confiável?",
-        "O verde #009700 está presente como cor principal?",
-        "Foto usada é de campo real (não banco de imagens genérico)?",
-        "Título está em sentence case e tem hierarquia clara?",
-        "A peça conversa com produtor rural (não com executivo urbano)?",
-        "Tem respiro / espaço em branco suficiente?",
-        "Logo da VetService está aplicada com clareza e contraste?"
+        "A peça parece técnica e profissional?",
+        "A cor verde #009700 foi usada corretamente?",
+        "A imagem usada é própria ou autorizada pela VetService?",
+        "A peça evita aparência de clínica pet?",
+        "A peça não usa imagens de cães, gatos ou pequenos animais?",
+        "A arte fala com produtor de leite?",
+        "A comunicação valoriza conhecimento técnico antes da venda?",
+        "A peça evita promessa exagerada de resultado?",
+        "Os dados ou indicadores foram apresentados com clareza?",
+        "O contato comercial está correto quando aparecer?",
+        "A arte transmite campo, dados, tecnologia e confiança?",
+        "A peça está alinhada com consultoria leiteira, nutrição de precisão e ordenha robotizada?"
       ]
     },
+    chamadasAprovadas: [
+      "Dados bem interpretados mudam a tomada de decisão na fazenda.",
+      "Ordenha robotizada gera dados. A diferença está em saber o que fazer com eles.",
+      "Nutrição de precisão começa com leitura correta dos indicadores.",
+      "Você sabe quanto custa a dieta por vaca/dia?",
+      "Eficiência alimentar não é achismo. É gestão.",
+      "Produção, reprodução e nutrição precisam conversar dentro da fazenda.",
+      "A fazenda gera dados todos os dias. O desafio é transformar esses dados em decisão.",
+      "Mais do que produzir leite, é preciso medir eficiência."
+    ],
+    chamadasProibidas: [
+      "Compre agora",
+      "Promoção imperdível",
+      "Produto milagroso",
+      "Aumente sua produção sem esforço",
+      "A melhor ração do mercado",
+      "Qualquer promessa exagerada de resultado"
+    ],
     video: { orientacoes: "(em construção)", checklist: [] },
     midia: { orientacoes: "(em construção)", checklist: [] }
   }
@@ -46174,8 +46210,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 <span style={{color:"rgba(255,255,255,.55)",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>Playbook</span>
               </div>
               <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:30,letterSpacing:-.7,lineHeight:1.1}}>{cl.name}</div>
-              {data.sobre && <div style={{color:"rgba(255,255,255,.72)",fontSize:13,marginTop:8,lineHeight:1.55,maxWidth:640,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
-                {data.sobre}
+              {(data.descricaoCurta||data.sobre) && <div style={{color:"rgba(255,255,255,.72)",fontSize:13,marginTop:8,lineHeight:1.55,maxWidth:640,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                {data.descricaoCurta||data.sobre}
               </div>}
             </div>
           </div>
@@ -46235,6 +46271,14 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   ? <PbProse text={data.comunicacao}/>
                   : <_PbEmpty icon="sparkles" text="Sem orientação de comunicação cadastrada." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>)
             }
+            {!editMode && Array.isArray(data.pilares) && data.pilares.length>0 && <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+PB_BORDER2}}>
+              <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:9}}>Pilares de comunicação</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+                {data.pilares.map((p,i)=>(
+                  <span key={i} style={{background:"#e0f2fe",color:"#075985",border:"1px solid #bae6fd",borderRadius:99,padding:"4px 11px",fontSize:12,fontWeight:600,letterSpacing:-.1}}>{p}</span>
+                ))}
+              </div>
+            </div>}
           </PlaybookBlock>
 
           {/* Orientações da área */}
@@ -46248,6 +46292,31 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   : <_PbEmpty icon={areaCfg.icon} text={"Orientações de "+areaCfg.label+" em construção."}/>)
             }
           </PlaybookBlock>
+
+          {/* Exemplos de chamadas (aprovadas + proibidas) */}
+          {!editMode && (Array.isArray(data.chamadasAprovadas)&&data.chamadasAprovadas.length>0 || Array.isArray(data.chamadasProibidas)&&data.chamadasProibidas.length>0) &&
+            <PlaybookBlock id="pb-chamadas" title="Exemplos de chamadas" subtitle="Aprovadas e proibidas para os cards" icon="messageCircle" color="#10b981">
+              {Array.isArray(data.chamadasAprovadas)&&data.chamadasAprovadas.length>0 && <div style={{marginBottom:14}}>
+                <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#dcfce7",color:"#166534",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:10}}>
+                  <Ico n="check" size={12} color="#166534"/> Aprovadas
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {data.chamadasAprovadas.map((s,i)=>(
+                    <div key={i} style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9,padding:"9px 12px",color:"#14532d",fontSize:13,lineHeight:1.5,fontWeight:500}}>{s}</div>
+                  ))}
+                </div>
+              </div>}
+              {Array.isArray(data.chamadasProibidas)&&data.chamadasProibidas.length>0 && <div>
+                <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#fee2e2",color:"#991b1b",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:10}}>
+                  <Ico n="x" size={12} color="#991b1b"/> Evitar
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {data.chamadasProibidas.map((s,i)=>(
+                    <div key={i} style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,padding:"9px 12px",color:"#7f1d1d",fontSize:13,lineHeight:1.5,fontWeight:500,textDecoration:"line-through",textDecorationColor:"#fca5a5"}}>{s}</div>
+                  ))}
+                </div>
+              </div>}
+            </PlaybookBlock>}
 
           {/* Templates específicos (só design) */}
           {hasTemplate && <div id="pb-templates" style={{display:"flex",flexDirection:"column",gap:14}}>
