@@ -9367,6 +9367,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     return Math.floor((new Date()-new Date(p[2]+"-"+p[1]+"-"+p[0]))/(1000*60*60*24));
   })();
 
+  // Tabs reorganizadas: Marcos+Concorrência foram movidos pro Portal do Cliente.
+  // Ferramentas e botão IA Resumir foram removidos da aba de Estratégia.
   let TABS=[
     {id:"analises",      label:"Visão geral"},
     {id:"onboarding",    label:"Onboarding"},
@@ -9374,10 +9376,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"evolucao",      label:"Evolução"},
     {id:"briefing",      label:"Briefing"},
     {id:"planejamento",  label:"Planejamento mensal"},
-    {id:"timeline",      label:"Marcos"},
-    {id:"ferramentas",   label:"Ferramentas"},
     {id:"info",          label:"Informações"},
-    ...(canSeeConcorrencia?[{id:"concorrencia",label:"Concorrência"}]:[]),
   ];
 
   if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("analises");},0);
@@ -9452,11 +9451,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
       <div style={{flex:1,minWidth:100}}>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.3}}>{cl.name}</div>
-          {canVerResumoIA&&<button onClick={abrirIA}
-            style={{background:"linear-gradient(135deg,#a140ff,#7c3aed)",color:"#fff",border:"none",borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,boxShadow:"0 1px 4px rgba(124,58,237,0.25)"}}
-            title="Gera um resumo executivo do cliente usando IA">
-            ✨ IA Resumir
-          </button>}
+
         </div>
         <div style={{color:C.td,fontSize:11}}>{cl.sector}</div>
       </div>
@@ -9540,15 +9535,11 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
-    {tab==="timeline"&&<CMarcos cl={cl} canEdit={isSocio||myPerms.editarEvolucao}/>}
     {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
-    {tab==="ferramentas"&&<CFerramentas cl={cl} onMindmap={onMindmap}/>}
     {tab==="info"&&<CInfo cl={cl}/>}
-    {tab==="concorrencia"&&canSeeConcorrencia&&(
-      <ClienteConcorrencia cl={cl} tab={concorrenciaTab} setTab={setConcorrenciaTab}/>
-    )}
+
   </div>);
 }
 
@@ -33253,6 +33244,7 @@ const PORTAL_ALL_TABS=[
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
   {id:"performance", ico:"chart",       label:"Performance"},
+  {id:"concorrencia",ico:"target",      label:"Concorrência"},
   {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"nps",         ico:"sparkles",    label:"NPS"},
   {id:"chat",        ico:"message",     label:"Chat"},
@@ -36323,7 +36315,18 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
-    {tab==="marcos"&&typeof CMarcos==="function"&&<CMarcos cl={cl} canEdit={false}/>}
+    {tab==="marcos"&&typeof CMarcos==="function"&&(function(){
+      // Edição de Marcos no portal: liberada pra gestores Pixels (level<=2: sócios+coordinator+gestor mídia).
+      // Cliente que acessa o portal vê tudo em read-only.
+      const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
+      return <CMarcos cl={cl} canEdit={!!_gestor}/>;
+    })()}
+    {tab==="concorrencia"&&typeof ClienteConcorrencia==="function"&&(function(){
+      // Concorrência no portal: gestores Pixels alimentam, cliente só visualiza.
+      // QG analítico — visão de mercado pro cliente acompanhar movimentos da concorrência.
+      const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
+      return <ClienteConcorrencia cl={cl} tab="social_insta" setTab={function(){}} readOnly={!_gestor}/>;
+    })()}
     {tab==="nps"&&typeof PortalNPS==="function"&&<PortalNPS cl={cl} isMob={isMob}/>}
 
     {/* ── PLANEJAMENTO MENSAL ── plano do mês compartilhado entre Pixels e cliente */}
