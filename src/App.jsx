@@ -5995,7 +5995,7 @@ function ClienteConcorrencia({cl,tab,setTab}){
     {id:"social_face",  icon:"facebook", label:"Facebook",   color:"#1877f2"},
     {id:"meta_ads",     icon:"meta",     label:"Meta Ads",   color:"#1877f2"},
     {id:"google_ads",   icon:"google",   label:"Google Ads", color:"#34a853"},
-    {id:"links",        label:"🔗",      labelFull:"Links",  color:C.a},
+    {id:"links",        label:"Links",   labelFull:"Links",  color:C.a},
   ];
 
   const SOCIAL_PLATFORMS=[
@@ -6115,7 +6115,7 @@ function ClienteConcorrencia({cl,tab,setTab}){
     if(id==="tiktok")return <svg width={size} height={size} viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#010101"/><path d="M28 8h-4.5v17a4.5 4.5 0 11-4.5-4.5V16a9 9 0 109 9V16.3A13.7 13.7 0 0028 17V8z" fill="white"/></svg>;
     if(id==="youtube")return <svg width={size} height={size} viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#FF0000"/><path d="M32 20s0-4-.5-6a3.2 3.2 0 00-2.2-2.2C27.3 11.3 20 11.3 20 11.3s-7.3 0-9.3.5A3.2 3.2 0 008.5 14C8 16 8 20 8 20s0 4 .5 6a3.2 3.2 0 002.2 2.2c2 .5 9.3.5 9.3.5s7.3 0 9.3-.5A3.2 3.2 0 0031.5 26c.5-2 .5-6 .5-6zm-14 4v-8l7 4-7 4z" fill="white"/></svg>;
     if(id==="whatsapp")return <svg width={size} height={size} viewBox="0 0 40 40"><rect width="40" height="40" rx="8" fill="#25D366"/><path d="M20 7C13 7 7 13 7 20c0 2.3.6 4.4 1.7 6.2L7 33l7-1.7C15.7 32.4 17.8 33 20 33c7 0 13-6 13-13S27 7 20 7zm6.8 18.4c-.3.8-1.5 1.5-2.1 1.6-.6.1-1.3.1-4.1-1.2-3.4-1.5-5.6-5-5.8-5.3-.2-.2-1.5-2-1.5-3.8 0-1.8.9-2.7 1.3-3.1.3-.4.7-.5.9-.5h.7c.2 0 .5 0 .7.5l1 2.5c.1.3.1.6-.1.9l-.5.7c-.2.2-.3.4-.1.8.7 1.3 1.7 2.3 3 3 .4.2.6.1.8-.1l.6-.7c.3-.4.6-.5 1-.3l2.5 1.1c.5.3.5.5.5.8v.1z" fill="white"/></svg>;
-    return <span style={{fontSize:size*0.7}}>🌐</span>;
+    return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>;
   };
 
   const [socialMetric,setSocialMetric]=useState("engagement");
@@ -6242,33 +6242,38 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
         ))}
       </div>
 
-      {/* Client benchmark */}
-      <div style={{background:C.a+"10",borderRadius:12,padding:"12px 16px",border:`1px solid ${C.a}22`,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          {CLIENT_LOGOS[cl.id]?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{height:22,maxWidth:60,objectFit:"contain",background:"#fff",padding:"2px 4px",borderRadius:5}}/>:<span style={{color:cl.color,fontWeight:700,fontSize:12}}>{cl.abbr}</span>}
-          <span style={{color:C.tx,fontSize:12,fontWeight:700}}>Benchmark: {cl.name}</span>
+      {/* Client benchmark — visual moderno: header limpo + 3 cards com números grandes */}
+      <div style={{background:"#fff",borderRadius:16,padding:"20px 22px",border:"1px solid #eef0f3",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          {CLIENT_LOGOS[cl.id]
+            ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{height:24,maxWidth:80,objectFit:"contain"}}/>
+            : <span style={{color:cl.color,fontWeight:800,fontSize:14}}>{cl.abbr}</span>}
+          <div>
+            <div style={{color:"#64748b",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Benchmark</div>
+            <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>{cl.name}</div>
+          </div>
         </div>
-        <div style={{display:"flex",gap:12,flex:1,flexWrap:"wrap"}}>
-          <div style={{background:C.card,borderRadius:8,padding:"6px 12px"}}>
-            <div style={{color:C.td,fontSize:9}}>SEU ENGAJAMENTO MÉDIO</div>
-            <div style={{color:C.a,fontWeight:800,fontSize:14}}>{Math.round(clientMetric[platform].engagement/10).toLocaleString("pt-BR")}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))",gap:12}}>
+          <div style={{background:"#fafbfc",borderRadius:12,padding:"14px 16px",border:"1px solid #f1f5f9"}}>
+            <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.2,marginBottom:4}}>Seu engajamento médio</div>
+            <div style={{color:"#0f172a",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{Math.round(clientMetric[platform].engagement/10).toLocaleString("pt-BR")}</div>
           </div>
-          <div style={{background:C.card,borderRadius:8,padding:"6px 12px"}}>
-            <div style={{color:C.td,fontSize:9}}>SUAS VISUALIZAÇÕES MÉDIAS</div>
-            <div style={{color:C.a,fontWeight:800,fontSize:14}}>{Math.round(clientMetric[platform].views/10).toLocaleString("pt-BR")}</div>
+          <div style={{background:"#fafbfc",borderRadius:12,padding:"14px 16px",border:"1px solid #f1f5f9"}}>
+            <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.2,marginBottom:4}}>Suas visualizações médias</div>
+            <div style={{color:"#0f172a",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{Math.round(clientMetric[platform].views/10).toLocaleString("pt-BR")}</div>
           </div>
-          <div style={{background:C.card,borderRadius:8,padding:"6px 12px"}}>
-            <div style={{color:C.td,fontSize:9}}>MAIOR CONCORRENTE</div>
-            <div style={{color:C.rd,fontWeight:800,fontSize:14}}>{filteredPosts[0]?.[socialMetric]?.toLocaleString("pt-BR")||"—"}</div>
+          <div style={{background:"#fef2f2",borderRadius:12,padding:"14px 16px",border:"1px solid #fecaca"}}>
+            <div style={{color:"#dc2626",fontSize:11,fontWeight:700,letterSpacing:.2,marginBottom:4}}>Maior concorrente</div>
+            <div style={{color:"#991b1b",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{filteredPosts[0]?.[socialMetric]?.toLocaleString("pt-BR")||"—"}</div>
           </div>
         </div>
       </div>
 
-      {/* API notice */}
-      <div style={{background:"#fff8dc",borderRadius:10,padding:"8px 14px",border:"1px solid #f5c518",display:"flex",gap:8,alignItems:"center"}}>
-        <span style={{fontSize:14}}>⚡</span>
-        <div style={{fontSize:11,color:"#7a5c00"}}>
-          <strong>Dados de exemplo.</strong> Para dados reais em tempo real, conecte a <strong>Meta Graph API</strong> com token de acesso nas configurações da agência. Os dados abaixo representam o formato exato que receberá.
+      {/* API notice — modernizado: chip discreto azul, sem emoji ⚡ */}
+      <div style={{background:"#f0f9ff",borderRadius:11,padding:"10px 14px",border:"1px solid #bae6fd",display:"flex",gap:10,alignItems:"flex-start"}}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0369a1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:1}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <div style={{fontSize:12,color:"#075985",lineHeight:1.5}}>
+          <strong>Dados de exemplo.</strong> Pra dados reais em tempo real, conecte a <strong>Meta Graph API</strong> nas configurações da agência. O formato exibido abaixo é o mesmo que será populado.
         </div>
       </div>
 
@@ -6348,7 +6353,7 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
       </div>
 
       <div style={{background:"#fff8dc",borderRadius:10,padding:"8px 14px",border:"1px solid #f5c518",fontSize:11,color:"#7a5c00"}}>
-        ⚡ Dados de exemplo demonstrando o formato. Para dados reais, a <strong>Meta Ad Library API</strong> retorna exatamente estes campos. Clique em "Abrir Biblioteca Real" para ver ao vivo.
+        Dados de exemplo demonstrando o formato. Para dados reais, a <strong>Meta Ad Library API</strong> retorna exatamente estes campos. Clique em "Abrir Biblioteca Real" pra ver ao vivo.
       </div>
 
       {/* Search */}
@@ -6426,7 +6431,7 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
       </div>
 
       <div style={{background:"#fff8dc",borderRadius:10,padding:"8px 14px",border:"1px solid #f5c518",fontSize:11,color:"#7a5c00"}}>
-        ⚡ Dados de exemplo. Para dados reais, clique em "Abrir Google Transparency" — o centro de transparência do Google mostra todos os anúncios ativos sem necessidade de API.
+        Dados de exemplo. Pra dados reais, clique em "Abrir Google Transparency" — o centro de transparência do Google mostra todos os anúncios ativos sem necessidade de API.
       </div>
 
       <div style={{position:"relative"}}>
@@ -33261,9 +33266,9 @@ const PORTAL_ALL_TABS=[
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
   {id:"performance", ico:"chart",       label:"Performance"},
-  {id:"concorrencia",ico:"target",      label:"Concorrência"},
   {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"nps",         ico:"sparkles",    label:"NPS"},
+  {id:"concorrencia",ico:"eye",         label:"Concorrência"},
   {id:"chat",        ico:"message",     label:"Chat"},
 ];
 const INTERNAS_COLS_RADAR_P=[
