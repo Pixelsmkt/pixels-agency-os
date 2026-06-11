@@ -839,18 +839,21 @@ try{
 
 // PADRÃO ÚNICO de cores — hardcoded LIGHT pra todos os usuários (Vinicius, Hellen, Maria, etc).
 // NÃO referencia o objeto C porque queremos a mesma paleta sempre, sem depender do tema do user.
+// Paleta coerente do kanban: arco-íris que avança com o fluxo.
+// Entrada quente (vermelho/laranja) → processamento âmbar/amarelo → saída fria (verde/roxo).
+// Backup do estado anterior: backups/kanban-colors/00_clientes_data.jsx.before_recolor.bak
 const KANBAN_COLS = [
-  { id:"rascunhos",      label:"Rascunhos",              color:"#64748b", dark:false },
-  { id:"demanda",        label:"Copys",                  color:"#2563eb", dark:false },
-  { id:"alteracao_copy", label:"Alteração de copy",      color:"#ea580c", dark:true  },
-  { id:"recebida",       label:"Demanda",                color:"#db2777", dark:false },
-  { id:"execucao",       label:"Em Execução",            color:"#d97706", dark:true  },
-  { id:"ajustes",        label:"Ajustes",                color:"#7c1d1d", dark:true  },
-  { id:"avaliacao",      label:"Concluído p/ Avaliação", color:"#ea580c", dark:false },
-  { id:"aprovado",       label:"Aprovação interna",      color:"#059669", dark:true  },
-  { id:"aprovacao_final",label:"Aprovação final",        color:"#0d9488", dark:true  },
-  { id:"agendado",       label:"Publicadas",             color:"#7c3aed", dark:true  },
-  { id:"pausado",        label:"Pausado",                color:"#94a3b8", dark:false },
+  { id:"rascunhos",      label:"Rascunhos",              color:"#94a3b8", dark:true  }, // slate-400 (neutro)
+  { id:"demanda",        label:"Copys",                  color:"#dc2626", dark:true  }, // red-600
+  { id:"alteracao_copy", label:"Alteração de copy",      color:"#ea580c", dark:true  }, // orange-600
+  { id:"recebida",       label:"Demanda",                color:"#f97316", dark:true  }, // orange-500
+  { id:"execucao",       label:"Em Execução",            color:"#f59e0b", dark:true  }, // amber-500
+  { id:"ajustes",        label:"Ajustes",                color:"#ca8a04", dark:true  }, // yellow-600
+  { id:"avaliacao",      label:"Concluído p/ Avaliação", color:"#84cc16", dark:true  }, // lime-500
+  { id:"aprovado",       label:"Aprovação interna",      color:"#16a34a", dark:true  }, // green-600
+  { id:"aprovacao_final",label:"Aprovação final",        color:"#059669", dark:true  }, // emerald-600
+  { id:"agendado",       label:"Publicadas",             color:"#9333ea", dark:true  }, // purple-600
+  { id:"pausado",        label:"Pausado",                color:"#64748b", dark:true  }, // slate-500
 ];
 
 /* ─── Migração defensiva de URLs antigas ──────────────────────────
@@ -2198,7 +2201,8 @@ const Chip=({color,children,sm})=>(
    Labels e cores usados em vários módulos (chat, portal, card preview).
    Movido para cá para remover dependência oculta entre 05_chat e 14_portal. */
 const CARD_STATUS_LABEL={demanda:"Copys",alteracao_copy:"Alteração de copy",recebida:"Demanda",execucao:"Em Execução",avaliacao:"Avaliação",aprovado:"Aprovado",agendado:"Agendado",publicado:"Publicado",alteracao:"Alteração",pausado:"Pausado"};
-const CARD_STATUS_COLOR={demanda:"#a140ff",alteracao_copy:"#ea580c",recebida:"#ec4899",execucao:"#eab308",avaliacao:"#f97316",aprovado:"#16a34a",agendado:"#4db8ff",publicado:"#8b5cf6",alteracao:"#ea580c",pausado:"#94a3b8"};
+// Cores sincronizadas com KANBAN_COLS — paleta arco-íris coerente
+const CARD_STATUS_COLOR={demanda:"#dc2626",alteracao_copy:"#ea580c",recebida:"#f97316",execucao:"#f59e0b",avaliacao:"#84cc16",aprovado:"#16a34a",aprovacao_final:"#059669",agendado:"#9333ea",publicado:"#9333ea",alteracao:"#ca8a04",pausado:"#94a3b8"};
 
 /* ─── ASK CLAUDE HELPER ─────────────────────────────
    Chama a Edge Function `ask-claude` do Supabase, que faz proxy seguro para
@@ -44861,6 +44865,14 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     // Limpa quando desmarcada (volta a aparecer normalmente).
     const completed_at = newStatus==="concluida" ? new Date().toISOString() : null;
     planUpsert(_dgPersistMeta(Object.assign({},m,{status:newStatus,completed_at})));
+    // Feedback + opção rápida de Desfazer caso tenha sido clique acidental.
+    if(typeof pixelsToast!=="undefined"){
+      if(newStatus==="concluida"){
+        pixelsToast.success("Meta concluída · clique no check de novo pra desfazer", 4000);
+      } else {
+        pixelsToast.info("Concluída desmarcada", 2000);
+      }
+    }
   };
   const _deleteMeta = (m) => {
     if(typeof planRemove==="function") planRemove(m.id);
@@ -44967,8 +44979,14 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             <div style={{color:"#475569",fontSize:11,fontWeight:700,letterSpacing:.2,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{stat.l}</div>
           </div>)}
         </div>
-        {/* Próximas 3 a vencer */}
-        {metasWeek.filter(m=>m.status!=="concluida"&&m.deadline).sort((a,b)=>(a.deadline||"").localeCompare(b.deadline||"")).slice(0,3).map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta} compact/>)}
+        {/* Lista enxuta: 3 pendentes a vencer + as concluídas hoje (discretas no fim) */}
+        {(()=>{
+          const pendentes = metasWeek.filter(m=>m.status!=="concluida"&&m.deadline)
+            .sort((a,b)=>(a.deadline||"").localeCompare(b.deadline||""))
+            .slice(0,3);
+          const concluidasHoje = metasWeek.filter(m=>m.status==="concluida" && m.completed_at && String(m.completed_at).slice(0,10)===hoje);
+          return [...pendentes, ...concluidasHoje].map(m=><_DGMetaItem key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta} compact/>);
+        })()}
         {metasWeek.length===0&&<div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"30px 18px",textAlign:"center",flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:140}}>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,marginBottom:4,letterSpacing:-.2}}>Sem metas cadastradas</div>
           <div style={{color:"#94a3b8",fontSize:12}}>Use o botão "Nova meta" pra começar.</div>
@@ -45284,14 +45302,14 @@ function _DGMetaItem({meta, onToggle, onDelete, compact}){
   const diasAtraso = isLate ? Math.abs(diasRestantes) : 0;
   const cat = _dgCatOf(meta);
   const assigneeIds = Array.isArray(meta.assignees)&&meta.assignees.length>0 ? meta.assignees : (meta.responsible_id?[meta.responsible_id]:[]);
-  return <div style={{background:isLate?"#fef2f2":"#fff",border:"1px solid "+(isOk?"#bbf7d0":isLate?"#fecaca":"#eef0f3"),borderRadius:11,padding:compact?"8px 12px":"11px 13px",display:"flex",alignItems:"center",gap:10,fontFamily:DG_INTER,transition:"all .15s",marginBottom:compact?6:0,boxShadow:isOk?"none":"0 1px 2px rgba(15,23,42,0.02)"}}>
+  return <div style={{background:isOk?"#fafbfc":(isLate?"#fef2f2":"#fff"),border:"1px solid "+(isOk?"#e2e8f0":isLate?"#fecaca":"#eef0f3"),borderRadius:11,padding:compact?"8px 12px":"11px 13px",display:"flex",alignItems:"center",gap:10,fontFamily:DG_INTER,transition:"all .15s",marginBottom:compact?6:0,boxShadow:isOk?"none":"0 1px 2px rgba(15,23,42,0.02)",opacity:isOk?.55:1}}>
     <button onClick={()=>onToggle(meta)} title={isOk?"Desmarcar":"Concluir"}
       style={{width:18,height:18,borderRadius:6,border:"1.5px solid "+(isOk?"#16a34a":isLate?"#dc2626":"#cbd5e1"),background:isOk?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,padding:0,transition:"all .15s"}}>
       {isOk&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </button>
     <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
       {meta.client_id && typeof ClientLogo==="function" && <ClientLogo clientId={meta.client_id} size="xs"/>}
-      <span style={{color:isOk?"#166534":(isLate?"#dc2626":"#0f172a"),fontSize:13,fontWeight:700,textDecoration:isOk?"line-through":"none",letterSpacing:-.1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
+      <span style={{color:isOk?"#94a3b8":(isLate?"#dc2626":"#0f172a"),fontSize:13,fontWeight:isOk?500:700,textDecoration:isOk?"line-through":"none",letterSpacing:-.1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>{meta.title||"(sem título)"}</span>
       {cat&&<span style={{background:cat.color+"14",color:cat.color,borderRadius:5,padding:"2px 7px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{cat.label}</span>}
     </div>
     {assigneeIds.length>0&&<_DGAssignees ids={assigneeIds} size={22}/>}
