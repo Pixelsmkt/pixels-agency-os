@@ -13366,7 +13366,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                   onClick={()=>setOpenCard(t)}
                   onContextMenu={e=>{e.preventDefault();e.stopPropagation();setCtxMenuKanban({x:e.clientX,y:e.clientY,task:t});}}
                   title={isStale?`Parado há ${stoppedDays} dias`:undefined}
-                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,display:"flex",flexDirection:"column",minHeight:thumbUrl?290:170}}
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderTop:isOver&&dragOverId.before?"2px solid #a140ff":undefined,borderBottom:isOver&&!dragOverId.before?"2px solid #a140ff":undefined,borderRadius:8,overflow:"hidden",cursor:canDrag?"grab":"pointer",opacity:drag===t.id?.4:1,userSelect:"none",boxShadow:"0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)",transition:"box-shadow .18s ease, border-color .18s ease, transform .18s ease, opacity .2s",flexShrink:0,...(thumbUrl?{display:"flex",flexDirection:"column",minHeight:290}:{})}}
                   onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 0 0 1px #7c3aed, 0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#7c3aed";e.currentTarget.style.transform="translateY(-1px)";}}
                   onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 5px -2px rgba(15,23,42,0.14), 0 1px 1px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}>
                   {/* Tipo de Conteúdo + Mês de pagamento — badges roxos no TOPO do card */}
@@ -13488,7 +13488,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         <img src={thumbUrl} alt="" loading="lazy" style={{display:"block",maxWidth:"100%",maxHeight:"100%",objectFit:"contain",pointerEvents:"none"}}/>
                       </div>;
                   })()}
-                  <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"12px 14px 11px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+                  <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"12px 14px 11px"}}>
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
                     <div style={{color:"#0f172a",fontSize:14,fontWeight:600,lineHeight:1.42,letterSpacing:-.1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:10})}}>
