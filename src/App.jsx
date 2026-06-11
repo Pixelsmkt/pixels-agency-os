@@ -9775,15 +9775,15 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   })();
 
   // Tabs reorganizadas: Marcos+Concorrência foram movidos pro Portal do Cliente.
-  // Ferramentas e botão IA Resumir foram removidos da aba de Estratégia.
+  // Ícones SVG (componente Ico) — mesmo padrão visual do Portal do cliente.
   let TABS=[
-    {id:"analises",      label:"Visão geral"},
-    {id:"onboarding",    label:"Onboarding"},
-    {id:"nps",           label:"NPS"},
-    {id:"evolucao",      label:"Evolução"},
-    {id:"briefing",      label:"Briefing"},
-    {id:"planejamento",  label:"Planejamento mensal"},
-    {id:"info",          label:"Informações"},
+    {id:"analises",      label:"Visão geral",         ico:"chart"},
+    {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
+    {id:"nps",           label:"NPS",                 ico:"sparkles"},
+    {id:"evolucao",      label:"Evolução",            ico:"trending-up"},
+    {id:"briefing",      label:"Briefing",            ico:"fileText"},
+    {id:"planejamento",  label:"Planejamento mensal", ico:"layers"},
+    {id:"info",          label:"Informações",         ico:"info"},
   ];
 
   if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("analises");},0);
@@ -9924,17 +9924,22 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
       </div>
     )}
 
-    {/* TABS PRINCIPAIS */}
-    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,marginBottom:20,overflowX:"auto"}}>
+    {/* TABS PRINCIPAIS — mesmo padrão visual do Portal do Cliente: Ico + cor do cliente */}
+    <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,marginBottom:20,overflowX:"auto",flexWrap:"wrap"}}>
       {TABS.map(function(t){
-        return(<button key={t.id} onClick={function(){setTab(t.id);}}
+        const active = tab===t.id;
+        return <button key={t.id} onClick={function(){setTab(t.id);}}
           style={{background:"none",border:"none",
-            borderBottom:tab===t.id?"2px solid "+cl.color:"2px solid transparent",
-            padding:"10px 20px",color:tab===t.id?cl.color:C.ts,
-            fontWeight:tab===t.id?700:400,fontSize:13,cursor:"pointer",
-            transition:"all .12s",whiteSpace:"nowrap",marginBottom:-1}}>
+            borderBottom:active?"2px solid "+cl.color:"2px solid transparent",
+            padding:"10px 16px",color:active?cl.color:C.ts,
+            fontWeight:active?700:500,fontSize:12,cursor:"pointer",marginBottom:-1,
+            display:"flex",alignItems:"center",gap:6,fontFamily:"inherit",letterSpacing:-.1,
+            transition:"color .12s",whiteSpace:"nowrap"}}
+          onMouseEnter={function(e){if(!active)e.currentTarget.style.color=cl.color;}}
+          onMouseLeave={function(e){if(!active)e.currentTarget.style.color=C.ts;}}>
+          <Ico n={t.ico||"dot"} size={14}/>
           {t.label}
-        </button>);
+        </button>;
       })}
     </div>
 
