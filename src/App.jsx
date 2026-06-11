@@ -2386,6 +2386,390 @@ function textoSprintCliente(sprint,config){
     .replace(/\{fim\}/g,_ddmm(fim));
 }
 
+/* ─── BRIEFING CANÔNICO ──────────────────────────────────────
+   Schema do briefing usado em Estratégia > Cliente > Briefing
+   E no Portal do Cliente > Briefing (sincronizado via Supabase).
+   Storage: tabela clients, coluna briefing_data (JSONB).
+─────────────────────────────────────────────────────────────── */
+const BRIEFING_SECTIONS = [
+  { id:"identidade",      label:"Identidade",            icon:"building",     color:"#7c3aed",
+    fields:[
+      { id:"cadastro", label:"Informações cadastrais", help:"Nome empresarial, CNPJ, endereço, responsável legal", type:"textarea" },
+    ]
+  },
+  { id:"objetivos",       label:"Objetivos & números",   icon:"target",       color:"#dc2626",
+    fields:[
+      { id:"objetivo_primario", label:"Objetivo primário com marketing", type:"radio",
+        options:["Aumento de Vendas/Receita","Reconhecimento de Marca (Branding)","Outro"] },
+      { id:"objetivo_primario_outro", label:"Especifique outro", type:"text", showIf:{field:"objetivo_primario", value:"Outro"} },
+      { id:"objetivos_secundarios", label:"Objetivos secundários (até 3)", type:"multi",
+        options:["Lançamento de Novo Produto/Serviço","Aumentar o Ticket Médio","Melhorar a Taxa de Retenção","Educação de Mercado","Expandir para Nova Localização","Otimização do CPA","Geração de leads qualificados","Aumento de Vendas/Receita","Reconhecimento de Marca"] },
+      { id:"cidades", label:"Cidades de atuação", type:"text" },
+      { id:"ticket_medio", label:"Ticket médio", help:"em Reais", type:"text" },
+      { id:"faturamento_mensal", label:"Faturamento médio mensal", help:"em Reais", type:"text" },
+      { id:"margem_liquida", label:"Margem líquida média", help:"%", type:"text" },
+      { id:"ltv", label:"Tempo médio do cliente na empresa (LTV)", help:"meses ou anos", type:"text" },
+      { id:"ciclo_vendas", label:"Tempo médio do ciclo de vendas", help:"dias ou meses", type:"text" },
+      { id:"funil_vendas", label:"Etapas do funil de vendas", help:"do anúncio ao fechamento", type:"textarea" },
+    ]
+  },
+  { id:"mercado",         label:"Mercado & concorrência", icon:"trending-up", color:"#ea580c",
+    fields:[
+      { id:"problemas", label:"Problemas que, se resolvidos, fariam a empresa vender mais", type:"textarea" },
+      { id:"oportunidades", label:"Oportunidades de crescimento que podemos aproveitar", type:"textarea" },
+      { id:"concorrentes", label:"Concorrentes diretos e indiretos", help:"cite pelo menos 4", type:"textarea" },
+      { id:"referencia", label:"Empresa que você admira ou usa como referência", type:"textarea" },
+    ]
+  },
+  { id:"produtos",        label:"Produtos & serviços",   icon:"image",        color:"#f97316",
+    fields:[
+      { id:"principais", label:"Produtos/serviços principais e mais vendidos", type:"textarea" },
+      { id:"detalhes", label:"Detalhes (preço, benefícios, dores resolvidas, diferenciais)", type:"textarea" },
+      { id:"foco_campanha", label:"Produtos/serviços para anunciar (foco das campanhas)", type:"textarea" },
+      { id:"sazonalidade", label:"Sazonalidade", help:"épocas do ano em alta", type:"textarea" },
+      { id:"campanha_atual", label:"Foco de campanha agora", type:"textarea" },
+    ]
+  },
+  { id:"publico",         label:"Público-alvo",          icon:"users",        color:"#f59e0b",
+    fields:[
+      { id:"cliente_ideal", label:"Cliente dos sonhos", help:"descreva o perfil ideal", type:"textarea" },
+      { id:"faixa_etaria", label:"Faixa etária predominante", type:"text" },
+      { id:"sexo", label:"Sexo predominante", type:"radio", options:["Masculino","Feminino","Ambos"] },
+      { id:"localizacao", label:"Localização geográfica principal", type:"textarea" },
+      { id:"comportamento", label:"Comportamento digital", help:"o que consome, como busca soluções, quais redes usa", type:"textarea" },
+      { id:"dores", label:"3 dores do cliente ideal", type:"textarea" },
+      { id:"duvidas", label:"3 dúvidas do cliente ideal", type:"textarea" },
+      { id:"desejos", label:"3 desejos do cliente ideal", type:"textarea" },
+      { id:"objecoes", label:"3 objeções do cliente ideal", type:"textarea" },
+      { id:"segmentacao", label:"Segmentação específica", help:"renda, interesses, cargo, tipo de cultura", type:"textarea" },
+    ]
+  },
+  { id:"marketing_atual", label:"Marketing atual",       icon:"chart",        color:"#ca8a04",
+    fields:[
+      { id:"como_divulga", label:"Como a empresa divulga seus produtos/serviços hoje", type:"textarea" },
+      { id:"canais", label:"Canais de mídia/marketing usados atualmente", type:"multi",
+        options:["Instagram","Facebook","Facebook Ads","Google Perfil de Empresa","SEO","YouTube","Google Ads","LinkedIn","LinkedIn Ads","TikTok","TikTok Ads","E-mail Marketing","Blogs","Rádio","Feiras/Eventos"] },
+      { id:"melhor_acao", label:"Melhor ação de marketing já realizada", help:"e por quê", type:"textarea" },
+      { id:"pior_acao", label:"Campanha anterior que teve desempenho ruim", help:"motivo, se souber", type:"textarea" },
+    ]
+  },
+  { id:"processo",        label:"Processo comercial",    icon:"funnel",       color:"#84cc16",
+    fields:[
+      { id:"processo_comercial", label:"Processo comercial completo", help:"da chegada do lead até o pagamento", type:"textarea" },
+      { id:"qualificacao_leads", label:"Como os leads são qualificados", type:"textarea" },
+      { id:"crm", label:"CRM ou plataforma de automação", help:"qual?", type:"text" },
+      { id:"site", label:"Site / landing page", help:"link, se houver", type:"text" },
+    ]
+  },
+  { id:"orcamento",       label:"Orçamento & material",  icon:"wallet",       color:"#16a34a",
+    fields:[
+      { id:"trafego_pago", label:"Orçamento mensal para tráfego pago", help:"em Reais", type:"text" },
+      { id:"promocoes", label:"Promoções ou ofertas especiais para campanhas", type:"textarea" },
+      { id:"materiais_proprios", label:"Possui materiais de divulgação", help:"fotos, vídeos, depoimentos, artes prontas", type:"radio", options:["Sim","Não"] },
+      { id:"tom_voz", label:"Tom de voz para conteúdos/anúncios", type:"radio",
+        options:["Profissional e Técnico","Informal e Próximo","Divertido e Descontraído","Inspirador e Motivacional","Educativo","Outro"] },
+      { id:"tom_voz_outro", label:"Especifique outro tom de voz", type:"text", showIf:{field:"tom_voz", value:"Outro"} },
+    ]
+  },
+  { id:"metas",           label:"Metas & sucesso",       icon:"flag",         color:"#059669",
+    fields:[
+      { id:"sucesso_90d", label:"O que precisa conquistar em 90 dias para o projeto ser sucesso", type:"textarea" },
+      { id:"meta_numeros", label:"Meta de leads/vendas/margem", type:"textarea" },
+      { id:"desafios_internos", label:"Desafios internos que podem impactar resultados", type:"textarea" },
+    ]
+  },
+  { id:"aprovacao",       label:"Aprovação & contatos",  icon:"checkCircle",  color:"#9333ea",
+    fields:[
+      { id:"fluxo", label:"Fluxo de aprovação", type:"radio",
+        options:["Aprovação individual de cada conteúdo/anúncio","Aprovação apenas de materiais estratégicos","Pixels tem autonomia"] },
+      { id:"restricoes", label:"Restrição ou cuidado especial para conteúdos/campanhas", type:"textarea" },
+      { id:"outros", label:"Detalhe importante que não foi mencionado", type:"textarea" },
+      { id:"contato_aprovacao", label:"Responsável pela aprovação de conteúdos", help:"nome, WhatsApp, e-mail", type:"textarea" },
+      { id:"contato_financeiro", label:"Responsável financeiro", help:"nome, WhatsApp, e-mail", type:"textarea" },
+      { id:"contato_comercial", label:"Time comercial", help:"nomes, região, WhatsApp, e-mail", type:"textarea" },
+    ]
+  },
+];
+
+// Seed inicial — preenche dados antes do primeiro save remoto
+const BRIEFING_SEED = {
+  vetservice: {
+    identidade:{ cadastro:"A.R. Dos Santos Agro — CNPJ 35.348.331/0001-00\nRua Duque de Caxias — Bairro Gramado — Ibirapuitã/RS\nResponsável legal: Anderson Rigo dos Santos" },
+    objetivos:{
+      objetivo_primario:"Aumento de Vendas/Receita",
+      objetivos_secundarios:["Lançamento de Novo Produto/Serviço","Educação de Mercado","Reconhecimento de Marca"],
+      cidades:"RS e SC",
+      ticket_medio:"Vinculado à venda dos nossos produtos.",
+      faturamento_mensal:"R$ 2,5 milhões",
+      margem_liquida:"4,75%",
+      ltv:"2 anos",
+      ciclo_vendas:"30 dias",
+      funil_vendas:"Contato → Agendamento de visita → Demonstração do trabalho → Personalização do trabalho → Apresentação personalizada / identificação de gargalos → Fechamento",
+    },
+    mercado:{
+      problemas:"Baixa divulgação dos nossos serviços. Falta de divulgação dos nossos dados.",
+      oportunidades:"Ausência de empresas de consultoria na área de produção de leite focada em gestão de dados. Ausência de empresas especializadas em sistemas robotizados. O foco é a metodologia de trabalho técnico focada em gestão/criação de dados e estratégias nutricionais. Fomos a empresa responsável por criar e implementar a Nutrição de Precisão em 2018.",
+      concorrentes:"NutriMatttes, Nutrepampa, Nutron, DSM Tortuga, MikulisPaulo",
+      referencia:"DairyInside Consultoria — porém não tem redes sociais. Proprietário: Jorge Henrique Carneiro.",
+    },
+    produtos:{
+      principais:"Ração e Minerais vinculados ao trabalho técnico.",
+      detalhes:"Balanceamento de dietas personalizadas e personalização de dados para cada fazenda. Identificação de gargalos, sugestões de correção, monitoramento através dos dados.",
+      foco_campanha:"Trabalho especializado em sistemas robotizados. Divulgar dados coletados. Divulgar modelo de trabalho.",
+      sazonalidade:"Não há sazonalidade marcante.",
+      campanha_atual:"Não há foco em produto/serviço específico — o modelo de trabalho e os dados técnicos se complementam. O foco principal da empresa é ordenha robotizada.",
+    },
+    publico:{
+      cliente_ideal:"Produtor de leite que deseja crescer de maneira constante, focado em dados e índices zootécnicos.",
+      faixa_etaria:"25 a 45 anos",
+      sexo:"Ambos",
+      localizacao:"Vale gaúcho (Estrela / Carlos Barbosa), Noroeste gaúcho (Santo Cristo) e Oeste Catarinense (Chapecó / São Carlos)",
+      comportamento:"Geralmente usa o Instagram. Gosta de conteúdos que possam ajudar sua fazenda no dia-a-dia.",
+      dores:"Falta de dados para tomada de decisões. Volatilidade no preço do leite. Falta de acompanhamento especializado.",
+      duvidas:"Se vamos manter constância no serviço. Se vamos trazer inovações.",
+      desejos:"Ter uma visão holística de cada fase do negócio. Ter os dados em mão para monitoramento e tomada de decisões. Que sua rentabilidade não fique tão dependente do preço do leite.",
+      objecoes:"Falta de conhecimento sobre a empresa. Falta de referências em regiões novas. Falta de informações sobre a metodologia de trabalho.",
+      segmentacao:"Sem segmentação específica adicional.",
+    },
+    marketing_atual:{
+      como_divulga:"Pelo Instagram e cliente entre clientes.",
+      canais:["Facebook Ads"],
+      melhor_acao:"Postagens no Instagram — trouxeram alguns clientes.",
+      pior_acao:"Nunca teve campanha paga anterior.",
+    },
+    processo:{
+      processo_comercial:"Interesse do cliente → Apresentação do trabalho → Fechamento do negócio → Compra dos produtos → Pagamento.",
+      qualificacao_leads:"Não há processo estruturado de qualificação.",
+      crm:"Não",
+      site:"Não",
+    },
+    orcamento:{
+      trafego_pago:"R$ 750,00",
+      promocoes:"Não há.",
+      materiais_proprios:"Sim",
+      tom_voz:"Profissional e Técnico",
+    },
+    metas:{
+      sucesso_90d:"2 novos clientes por mês.",
+      meta_numeros:"2 novos clientes por mês.",
+      desafios_internos:"Sem impactos. Estamos bem estruturados.",
+    },
+    aprovacao:{
+      fluxo:"Aprovação individual de cada conteúdo/anúncio",
+      restricoes:"Não ser tanto comercial. Vincular sempre o conhecimento técnico.",
+      outros:"A alma da empresa é trabalho técnico, vinculado à venda de produtos. Mas a parte técnica sempre vem na frente.",
+      contato_aprovacao:"Anderson Rigo — (54) 99184-3157 — andersonrigo.mv@hotmail.com",
+      contato_financeiro:"Francieli Pedroso — (54) 99906-1302",
+      contato_comercial:"Cristiano Adam — RS, SC — (54) 99976-9097 — cristiano.adam@agroceres.com",
+    },
+  },
+};
+
+// Hook compartilhado: carrega briefing do Supabase, merge com seed
+function _useBriefing(clientId){
+  const [data,setData] = useState(()=>JSON.parse(JSON.stringify(BRIEFING_SEED[clientId]||{})));
+  const [loading,setLoading] = useState(true);
+  const [saving,setSaving] = useState(false);
+  useEffect(function(){
+    if(!clientId){setLoading(false);return;}
+    if(!window._sb){setLoading(false);return;}
+    let active=true;
+    window._sb.from("clients").select("briefing_data").eq("client_id",clientId).maybeSingle()
+      .then(function(r){
+        if(!active)return;
+        const remote = r && r.data && r.data.briefing_data;
+        if(remote && typeof remote==="object"){
+          // Merge: seed (vetservice) é só pra primeira vez. Remote sempre prevalece.
+          setData(remote);
+        }
+        setLoading(false);
+      })
+      .catch(function(e){
+        console.warn("[briefing load]", e && e.message ? e.message : e);
+        setLoading(false);
+      });
+    return function(){active=false;};
+  },[clientId]);
+  const save = function(next){
+    setData(next);
+    if(!clientId || !window._sb) return Promise.resolve();
+    setSaving(true);
+    return window._sb.from("clients").upsert({client_id:clientId, briefing_data:next},{onConflict:"client_id"})
+      .then(function(r){
+        setSaving(false);
+        if(r && r.error){
+          console.warn("[briefing save]", r.error);
+          if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha ao salvar briefing: "+(r.error.message||r.error.code||"erro"),5000);
+        }
+      })
+      .catch(function(e){
+        setSaving(false);
+        console.warn("[briefing save exception]", e);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Sem conexão pra salvar briefing", 4000);
+      });
+  };
+  return {data,setData,save,loading,saving};
+}
+
+// Componente canônico — usado em Estratégia > Briefing E no Portal > Briefing
+function BriefingFormCanonico(props){
+  const cl = props.cl;
+  const canEdit = !!props.canEdit;
+  const accentColor = props.accentColor || "#7c3aed";
+  const briefing = _useBriefing(cl.id);
+  const data = briefing.data || {};
+  const [activeSection,setActiveSection] = useState("identidade");
+
+  function getField(sec, fid){
+    const s = data[sec] || {};
+    return s[fid];
+  }
+  function setField(sec, fid, val){
+    if(!canEdit) return;
+    const next = Object.assign({}, data);
+    next[sec] = Object.assign({}, next[sec]||{}, {[fid]:val});
+    briefing.save(next);
+  }
+  function toggleMulti(sec, fid, opt){
+    if(!canEdit) return;
+    const cur = getField(sec, fid);
+    const arr = Array.isArray(cur)?cur.slice():[];
+    const idx = arr.indexOf(opt);
+    if(idx>=0) arr.splice(idx,1); else arr.push(opt);
+    setField(sec, fid, arr);
+  }
+
+  if(briefing.loading){
+    return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontFamily:"'Inter',system-ui,sans-serif"}}>Carregando briefing...</div>;
+  }
+
+  const sections = BRIEFING_SECTIONS;
+  const current = sections.find(s=>s.id===activeSection) || sections[0];
+
+  return <div style={{display:"flex",gap:14,fontFamily:"'Inter',system-ui,sans-serif",alignItems:"flex-start"}}>
+    {/* Sidebar de seções */}
+    <div style={{width:230,flexShrink:0,position:"sticky",top:0}}>
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:8,display:"flex",flexDirection:"column",gap:2}}>
+        {sections.map(function(s){
+          const active = s.id===activeSection;
+          const filled = data[s.id] && Object.keys(data[s.id]).some(function(k){const v=data[s.id][k]; return v && (Array.isArray(v)?v.length>0:String(v).trim().length>0);});
+          return <button key={s.id} onClick={function(){setActiveSection(s.id);}}
+            style={{background:active?s.color+"14":"transparent",color:active?s.color:"#475569",border:"none",borderRadius:9,padding:"9px 11px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:9,textAlign:"left",letterSpacing:-.1,transition:"all .12s"}}
+            onMouseEnter={function(e){if(!active)e.currentTarget.style.background="#f8fafc";}}
+            onMouseLeave={function(e){if(!active)e.currentTarget.style.background="transparent";}}>
+            <div style={{width:22,height:22,borderRadius:7,background:active?s.color:"#f1f5f9",color:active?"#fff":"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <Ico n={s.icon} size={11} color={active?"#fff":"#94a3b8"}/>
+            </div>
+            <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.label}</span>
+            {filled && <span style={{width:6,height:6,borderRadius:"50%",background:s.color,flexShrink:0}}/>}
+          </button>;
+        })}
+      </div>
+      {briefing.saving && <div style={{marginTop:8,padding:"6px 11px",background:"#f5f3ff",color:accentColor,borderRadius:9,fontSize:11.5,fontWeight:700,textAlign:"center"}}>Salvando...</div>}
+    </div>
+
+    {/* Conteúdo da seção */}
+    <div style={{flex:1,minWidth:0}}>
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:18,paddingBottom:14,borderBottom:"1px solid #f1f5f9"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:current.color+"14",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n={current.icon} size={16} color={current.color}/>
+          </div>
+          <div>
+            <div style={{color:current.color,fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Seção</div>
+            <div style={{color:"#0f172a",fontSize:16,fontWeight:800,letterSpacing:-.3}}>{current.label}</div>
+          </div>
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:18}}>
+          {current.fields.map(function(f){
+            // Conditional display
+            if(f.showIf){
+              const cond = getField(current.id, f.showIf.field);
+              if(cond !== f.showIf.value) return null;
+            }
+            const val = getField(current.id, f.id);
+            const labelDom = <div style={{marginBottom:6}}>
+              <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.1}}>{f.label}</div>
+              {f.help && <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2}}>{f.help}</div>}
+            </div>;
+            if(f.type==="textarea"){
+              return <div key={f.id}>
+                {labelDom}
+                <textarea value={val||""} onChange={function(e){setField(current.id, f.id, e.target.value);}}
+                  disabled={!canEdit} rows={3}
+                  placeholder={canEdit?"Escreva aqui...":"Não preenchido"}
+                  style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,lineHeight:1.55,resize:"vertical",fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:val?"#0f172a":"#cbd5e1"}}/>
+              </div>;
+            }
+            if(f.type==="text"){
+              return <div key={f.id}>
+                {labelDom}
+                <input value={val||""} onChange={function(e){setField(current.id, f.id, e.target.value);}}
+                  disabled={!canEdit}
+                  placeholder={canEdit?"Escreva aqui...":"Não preenchido"}
+                  style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:canEdit?"#fff":"#fafbfc",color:val?"#0f172a":"#cbd5e1"}}/>
+              </div>;
+            }
+            if(f.type==="radio"){
+              return <div key={f.id}>
+                {labelDom}
+                <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+                  {f.options.map(function(opt){
+                    const sel = val===opt;
+                    return <button key={opt} type="button" onClick={function(){if(canEdit)setField(current.id, f.id, opt);}}
+                      disabled={!canEdit}
+                      style={{background:sel?current.color:"#fff",color:sel?"#fff":"#475569",border:"1px solid "+(sel?current.color:"#e2e8f0"),borderRadius:99,padding:"7px 14px",fontSize:12.5,fontWeight:sel?700:600,cursor:canEdit?"pointer":"not-allowed",fontFamily:"inherit",transition:"all .12s"}}>
+                      {opt}
+                    </button>;
+                  })}
+                </div>
+              </div>;
+            }
+            if(f.type==="multi"){
+              const arr = Array.isArray(val)?val:[];
+              return <div key={f.id}>
+                {labelDom}
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {f.options.map(function(opt){
+                    const sel = arr.indexOf(opt)>=0;
+                    return <button key={opt} type="button" onClick={function(){if(canEdit)toggleMulti(current.id, f.id, opt);}}
+                      disabled={!canEdit}
+                      style={{background:sel?current.color+"14":"#fff",color:sel?current.color:"#475569",border:"1px solid "+(sel?current.color+"55":"#e2e8f0"),borderRadius:8,padding:"6px 11px",fontSize:12,fontWeight:sel?700:600,cursor:canEdit?"pointer":"not-allowed",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+                      {sel && <Ico n="check" size={11} color={current.color}/>}
+                      {opt}
+                    </button>;
+                  })}
+                </div>
+              </div>;
+            }
+            return null;
+          })}
+        </div>
+
+        {/* Navegação inferior */}
+        <div style={{display:"flex",justifyContent:"space-between",marginTop:22,paddingTop:16,borderTop:"1px solid #f1f5f9",gap:8}}>
+          {(function(){
+            const idx = sections.findIndex(s=>s.id===activeSection);
+            const prev = sections[idx-1];
+            const next = sections[idx+1];
+            return [
+              prev ? <button key="prev" onClick={function(){setActiveSection(prev.id);}}
+                style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+                <Ico n="chevron-left" size={13} color="#64748b"/> {prev.label}
+              </button> : <span key="prev"/>,
+              next ? <button key="next" onClick={function(){setActiveSection(next.id);}}
+                style={{background:current.color,color:"#fff",border:"none",borderRadius:9,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+                {next.label} <Ico n="chevron-right" size={13} color="#fff"/>
+              </button> : <span key="next"/>
+            ];
+          })()}
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
 function Ico({n,size=14,color,strokeWidth=2}){
   const cl=color||"currentColor";
   const p={width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:cl,strokeWidth,strokeLinecap:"round",strokeLinejoin:"round"};
@@ -9824,67 +10208,10 @@ function MetricsForm({cl,existing,onClose,onSaved}){
   </div>);
 }
 
-/* ─── CBriefingTab — Aba consolidada com visão estratégica do cliente ─── */
+/* ─── CBriefingTab — agora usa o BriefingFormCanonico (mesmo do Portal) ─── */
 function CBriefingTab({cl,isSocio}){
-  const sb=window._sb;
-  const [briefing,setBriefing]=useState({visao:"",publico:"",estrategia:"",naoFazer:""});
-  const [edit,setEdit]=useState(null);
-  const [tmpValue,setTmpValue]=useState("");
-
-  useEffect(function(){
-    if(!sb)return;
-    sb.from("clients").select("briefing_visao,briefing_publico,briefing_estrategia,briefing_nao_fazer").eq("client_id",cl.id).single()
-      .then(function(r){
-        const d=r.data||{};
-        setBriefing({visao:d.briefing_visao||"",publico:d.briefing_publico||"",estrategia:d.briefing_estrategia||"",naoFazer:d.briefing_nao_fazer||""});
-      }).catch(function(e){console.warn("[briefing] load:",e?.message||e);});
-  },[cl.id]);
-
-  const saveField=async function(field,value){
-    const dbField={visao:"briefing_visao",publico:"briefing_publico",estrategia:"briefing_estrategia",naoFazer:"briefing_nao_fazer"}[field];
-    try{
-      await sb.from("clients").upsert({client_id:cl.id,[dbField]:value},{onConflict:"client_id"});
-      setBriefing(function(p){return{...p,[field]:value};});
-      pixelsToast.success("Salvo!");
-    }catch(e){pixelsToast.error("Erro: "+(e?.message||e));}
-    setEdit(null);
-  };
-  const startEdit=function(field){setEdit(field);setTmpValue(briefing[field]||"");};
-
-  const Section=function({id,icon,label,color,value,placeholder,bg}){
-    const isEditing=edit===id;
-    return(<div>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-        <div style={{fontSize:9,color:color||"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{icon} {label}</div>
-        {isSocio&&!isEditing&&<button onClick={function(){startEdit(id);}} style={{background:"none",border:"none",color:"#94a3b8",fontSize:10,cursor:"pointer"}}>✎ editar</button>}
-      </div>
-      {isEditing?(<div>
-        <textarea autoFocus value={tmpValue} onChange={function(e){setTmpValue(e.target.value);}} placeholder={placeholder} rows={4}
-          style={{width:"100%",padding:"8px 10px",border:"0.5px solid #c4b5fd",borderRadius:6,fontSize:12,lineHeight:1.5,resize:"vertical",fontFamily:"inherit",boxSizing:"border-box",outline:"none"}}/>
-        <div style={{display:"flex",justifyContent:"flex-end",gap:6,marginTop:6}}>
-          <button onClick={function(){setEdit(null);}} style={{background:"#f8fafc",color:"#64748b",border:"0.5px solid #e5e7eb",padding:"4px 12px",borderRadius:5,fontSize:11,cursor:"pointer"}}>Cancelar</button>
-          <button onClick={function(){saveField(id,tmpValue);}} style={{background:"#a140ff",color:"#fff",border:"none",padding:"4px 14px",borderRadius:5,fontSize:11,fontWeight:500,cursor:"pointer"}}>Salvar</button>
-        </div>
-      </div>):(
-        <div style={{background:bg||"#f8fafc",border:"0.5px solid "+(bg==="#fef2f2"?"#fecaca":"#e5e7eb"),borderRadius:8,padding:"10px 12px",fontSize:11,lineHeight:1.5,color:value?(bg==="#fef2f2"?"#991b1b":"#475569"):"#cbd5e1",fontStyle:value?"normal":"italic",whiteSpace:"pre-wrap",minHeight:30}}>{value||(isSocio?"Clica em ✎ editar pra preencher":"Não preenchido ainda")}</div>
-      )}
-    </div>);
-  };
-
-  return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <Section id="visao" icon="📌" label="Visão geral" value={briefing.visao} placeholder="O que a empresa é, o que vende, onde atua..."/>
-      <Section id="publico" icon="🎯" label="Público-alvo" value={briefing.publico} placeholder="Quem compra, quem decide, perfil sociodemográfico..."/>
-      <Section id="estrategia" icon="📈" label="Estratégia atual" value={briefing.estrategia} placeholder="Direcionamento Q2/2026, OKRs, campanhas em andamento..."/>
-    </div>
-    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-      <Section id="naoFazer" icon="⛔" label="Não fazer" value={briefing.naoFazer} placeholder="Limites, restrições, coisas a evitar..." color="#991b1b" bg="#fef2f2"/>
-      <div style={{background:"#f8fafc",border:"0.5px solid #e5e7eb",borderRadius:8,padding:"10px 12px"}}>
-        <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>🎨 Identidade visual + Tom de voz + Contatos</div>
-        <div style={{fontSize:11,color:"#64748b",lineHeight:1.5}}>Acesse na aba <strong>Ferramentas → Orientações para a equipe</strong> pra editar logos, paleta, fontes, tom de voz, hashtags e contatos do cliente.</div>
-      </div>
-    </div>
-  </div>);
+  // No painel interno, sócios podem editar todos os campos. Outros usuários só visualizam.
+  return <BriefingFormCanonico cl={cl} canEdit={!!isSocio} accentColor="#7c3aed"/>;
 }
 
 /* ─── CMarcos — Timeline simples de marcos do projeto (Portal + interno) ─── */
@@ -33312,6 +33639,7 @@ const PORTAL_ALL_TABS=[
   {id:"dashboard",   ico:"home",        label:"Dashboard"},
   {id:"aprovacoes",  ico:"checkCircle", label:"Aprovações"},
   {id:"demandas",    ico:"zap",         label:"Demandas"},
+  {id:"briefing",    ico:"fileText",    label:"Briefing"},
   {id:"marcos",      ico:"flame",       label:"Marcos"},
   {id:"planejamento",ico:"layers",      label:"Planejamento mensal"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
@@ -36388,6 +36716,11 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
 
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
+    {tab==="briefing"&&typeof BriefingFormCanonico==="function"&&(function(){
+      // Briefing no portal: cliente pode editar livremente — é a fonte de informação dele.
+      // Gestores Pixels também editam quando acessam o portal (mesma view).
+      return <BriefingFormCanonico cl={cl} canEdit={true} accentColor="#9F43F6"/>;
+    })()}
     {tab==="marcos"&&typeof CMarcos==="function"&&(function(){
       // Edição de Marcos no portal: liberada pra gestores Pixels (level<=2: sócios+coordinator+gestor mídia).
       // Cliente que acessa o portal vê tudo em read-only.
