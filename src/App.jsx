@@ -11623,43 +11623,95 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
   const isComplete=pctProduzir>=100&&totalProduzirMeta>0;
   const _pctRef=mode==="publicar"?pctPublicar:pctProduzir;
   const accentMain=_pctRef>=80?"#22c55e":(_pctRef>=50?"#fbbf24":"#ef4444");
+  // Breakdown por tipo (todos clientes somados) — usado nos mini stats do header
+  const _doneArte = visible.filter(t=>STS.indexOf(t.status)>=0&&inMonth(t)&&tipo(t)==="arte").length;
+  const _doneVideo = visible.filter(t=>STS.indexOf(t.status)>=0&&inMonth(t)&&(tipo(t)==="video"||tipo(t)==="short")).length;
+  const _doneFoto = visible.filter(t=>STS.indexOf(t.status)>=0&&inMonth(t)&&tipo(t)==="foto").length;
+  let _metaArte=0,_metaVideo=0,_metaFoto=0;
+  CLIENTS.filter(c=>c.id!=="bioter"&&c.id!=="pixels"&&c.status!=="interno").forEach(c=>{
+    const m=_getMeta(c.id); _metaArte+=m.arte||0; _metaVideo+=m.video||0;
+  });
+  if(typeof BIOTER_UNITS!=="undefined"){
+    BIOTER_UNITS.forEach(u=>{ const m=_getMeta("bioter_"+u.id); _metaArte+=m.arte||0; _metaVideo+=m.video||0; _metaFoto+=m.produzir||0; });
+  }
   return <div style={{borderRadius:18,marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.06),0 8px 24px rgba(15,23,42,0.04)"}}>
-    {/* HERO HEADER — gradiente escuro */}
-    <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",padding:"22px 24px",position:"relative",overflow:"hidden"}}>
+    {/* HERO HEADER — gradiente escuro, 3 zonas simétricas (esquerda/centro/direita) */}
+    <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",padding:"22px 28px",position:"relative",overflow:"hidden"}}>
       {/* Decoração — anel sutil no canto */}
       <div style={{position:"absolute",right:-40,top:-40,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,0.18) 0%,transparent 70%)",pointerEvents:"none"}}/>
-      <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between",gap:20,flexWrap:"wrap"}}>
-        {/* Esquerda — navegação de mês */}
+      <div style={{position:"absolute",left:-50,bottom:-50,width:180,height:180,borderRadius:"50%",background:"radial-gradient(circle,rgba(34,197,94,0.10) 0%,transparent 70%)",pointerEvents:"none"}}/>
+
+      <div style={{position:"relative",display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:24,flexWrap:"wrap"}}>
+
+        {/* ESQUERDA — header + seletor de mês */}
         <div>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.2,marginBottom:6}}>Progresso do mês</div>
-          <div style={{display:"flex",alignItems:"center",gap:10}}>
-            <button onClick={_goPrev} title="Mês anterior" style={{width:34,height:34,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(99,102,241,0.14)",border:"1px solid rgba(99,102,241,0.28)",borderRadius:99,padding:"4px 11px",marginBottom:10}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span style={{color:"#a5b4fc",fontSize:10,fontWeight:800,letterSpacing:.9,textTransform:"uppercase"}}>Progresso do mês</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={_goPrev} title="Mês anterior" style={{width:32,height:32,borderRadius:9,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             </button>
-            <div style={{minWidth:170,textAlign:"center"}}>
+            <div style={{minWidth:140,textAlign:"center"}}>
               <div style={{color:"#fff",fontSize:22,fontWeight:800,letterSpacing:-.5,textTransform:"capitalize",lineHeight:1.1}}>{monthLabel}</div>
-              <div style={{color:"#64748b",fontSize:12,fontWeight:600,marginTop:2}}>{yearLabel}</div>
+              <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>{yearLabel}</div>
             </div>
-            <button onClick={_goNext} title="Próximo mês" style={{width:34,height:34,borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <button onClick={_goNext} title="Próximo mês" style={{width:32,height:32,borderRadius:9,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}} onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
-            {!_isToday&&<button onClick={_goToday} style={{height:34,padding:"0 14px",borderRadius:10,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:.3,fontFamily:"inherit",marginLeft:4}}>Hoje</button>}
+            {!_isToday&&<button onClick={_goToday} style={{height:32,padding:"0 12px",borderRadius:9,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:11.5,fontWeight:800,letterSpacing:.3,fontFamily:"inherit",marginLeft:2}}>Hoje</button>}
           </div>
         </div>
-        {/* Direita — indicador único (depende do mode) + anel de % */}
+
+        {/* CENTRO — breakdown por tipo (3 mini-stats) */}
+        <div style={{display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+          {[
+            {label:"Arte",done:_doneArte,meta:_metaArte,color:"#a78bfa",icon:"image"},
+            {label:"Vídeo",done:_doneVideo,meta:_metaVideo,color:"#60a5fa",icon:"play"},
+            {label:"Foto",done:_doneFoto,meta:_metaFoto,color:"#fbbf24",icon:"camera"},
+          ].filter(s=>s.meta>0).map(s=>{
+            const ratio = s.meta>0 ? Math.min(1, s.done/s.meta) : 0;
+            const ok = s.done >= s.meta && s.meta>0;
+            return <div key={s.label} title={s.label+": "+s.done+" de "+s.meta} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:11,padding:"9px 13px",minWidth:88}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <div style={{width:20,height:20,borderRadius:6,background:s.color+"24",color:s.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    {s.icon==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
+                    {s.icon==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
+                    {s.icon==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
+                  </svg>
+                </div>
+                <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{s.label}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"baseline",gap:2,marginBottom:5}}>
+                <span style={{color:ok?"#22c55e":"#fff",fontSize:18,fontWeight:800,letterSpacing:-.3,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.done}</span>
+                <span style={{color:"#64748b",fontSize:12,fontWeight:700,lineHeight:1}}>/{s.meta}</span>
+              </div>
+              <div style={{height:3,background:"rgba(255,255,255,0.08)",borderRadius:99,overflow:"hidden"}}>
+                <div style={{width:(ratio*100)+"%",height:"100%",background:ok?"#22c55e":s.color,borderRadius:99,transition:"width .4s ease"}}/>
+              </div>
+            </div>;
+          })}
+        </div>
+
+        {/* DIREITA — número grande + anel */}
         {(()=>{
           const isProd=mode!=="publicar";
           const done=isProd?totalProduzirDone:totalPublicarDone;
           const meta=isProd?totalProduzirMeta:totalPublicarMeta;
           const pctMode=isProd?pctProduzir:pctPublicar;
           const label=isProd?"A produzir":"Publicações";
-          return <div style={{display:"flex",alignItems:"center",gap:20}}>
+          return <div style={{display:"flex",alignItems:"center",gap:18,justifyContent:"flex-end"}}>
             <div style={{textAlign:"right"}}>
               <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
-                <span style={{color:accentMain,fontSize:46,fontWeight:900,letterSpacing:-2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{done}</span>
-                <span style={{color:"#64748b",fontSize:22,fontWeight:700,lineHeight:1}}>/{meta}</span>
+                <span style={{color:accentMain,fontSize:44,fontWeight:900,letterSpacing:-2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{done}</span>
+                <span style={{color:"#64748b",fontSize:20,fontWeight:700,lineHeight:1}}>/{meta}</span>
               </div>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:4}}>{label}</div>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:5,display:"inline-flex",alignItems:"center",gap:5}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                {label}
+              </div>
             </div>
             <div style={{position:"relative",width:72,height:72,flexShrink:0}}>
               <svg width="72" height="72" viewBox="0 0 72 72" style={{transform:"rotate(-90deg)"}}>
