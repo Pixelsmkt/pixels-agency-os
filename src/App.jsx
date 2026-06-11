@@ -11761,17 +11761,17 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
   const isComplete=pctProduzir>=100&&totalProduzirMeta>0;
   const _pctRef=mode==="publicar"?pctPublicar:pctProduzir;
   const accentMain=_pctRef>=80?"#22c55e":(_pctRef>=50?"#fbbf24":"#ef4444");
-  // Breakdown por tipo (todos clientes somados) — usado nos mini stats do header
-  const _doneArte = visible.filter(t=>STS.indexOf(t.status)>=0&&inMonth(t)&&tipo(t)==="arte").length;
-  const _doneVideo = visible.filter(t=>STS.indexOf(t.status)>=0&&inMonth(t)&&(tipo(t)==="video"||tipo(t)==="short")).length;
-  const _doneFoto = visible.filter(t=>STS.indexOf(t.status)>=0&&inMonth(t)&&tipo(t)==="foto").length;
-  let _metaArte=0,_metaVideo=0,_metaFoto=0;
-  CLIENTS.filter(c=>c.id!=="bioter"&&c.id!=="pixels"&&c.status!=="interno").forEach(c=>{
-    const m=_getMeta(c.id); _metaArte+=m.arte||0; _metaVideo+=m.video||0;
+  // Breakdown por tipo — somando direto dos rows (mesma fonte dos cards de baixo).
+  // Garante consistência: o total do header bate exatamente com a soma dos cards.
+  let _doneArte=0,_doneVideo=0,_doneFoto=0,_metaArte=0,_metaVideo=0,_metaFoto=0;
+  rows.forEach(function(r){
+    (r.tipos||[]).forEach(function(t){
+      const l=String(t.l||"").toLowerCase();
+      if(l.indexOf("arte")>=0){ _doneArte+=t.done||0; _metaArte+=t.meta||0; }
+      else if(l.indexOf("vídeo")>=0||l.indexOf("video")>=0){ _doneVideo+=t.done||0; _metaVideo+=t.meta||0; }
+      else if(l.indexOf("foto")>=0){ _doneFoto+=t.done||0; _metaFoto+=t.meta||0; }
+    });
   });
-  if(typeof BIOTER_UNITS!=="undefined"){
-    BIOTER_UNITS.forEach(u=>{ const m=_getMeta("bioter_"+u.id); _metaArte+=m.arte||0; _metaVideo+=m.video||0; _metaFoto+=m.produzir||0; });
-  }
   return <div style={{borderRadius:18,marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.06),0 8px 24px rgba(15,23,42,0.04)"}}>
     {/* HERO HEADER — gradiente escuro, 3 zonas simétricas (esquerda/centro/direita) */}
     <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",padding:"22px 28px",position:"relative",overflow:"hidden"}}>
@@ -11842,11 +11842,12 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
           const label=isProd?"A produzir":"Publicações";
           return <div style={{display:"flex",alignItems:"center",gap:18,justifyContent:"flex-end"}}>
             <div style={{textAlign:"right"}}>
-              <div style={{display:"flex",alignItems:"baseline",gap:3,justifyContent:"flex-end"}}>
-                <span style={{color:accentMain,fontSize:44,fontWeight:900,letterSpacing:-2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{done}</span>
-                <span style={{color:"#64748b",fontSize:20,fontWeight:700,lineHeight:1}}>/{meta}</span>
+              <div style={{display:"flex",alignItems:"baseline",gap:4,justifyContent:"flex-end",lineHeight:1}}>
+                <span style={{color:"#fff",fontSize:38,fontWeight:800,letterSpacing:-1.5,fontFeatureSettings:"'tnum'"}}>{done}</span>
+                <span style={{color:"rgba(255,255,255,0.35)",fontSize:18,fontWeight:600,fontFeatureSettings:"'tnum'"}}>/</span>
+                <span style={{color:"rgba(255,255,255,0.55)",fontSize:18,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{meta}</span>
               </div>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:1,textTransform:"uppercase",marginTop:5,display:"inline-flex",alignItems:"center",gap:5}}>
+              <div style={{color:accentMain,fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginTop:6,display:"inline-flex",alignItems:"center",gap:5}}>
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                 {label}
               </div>
