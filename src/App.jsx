@@ -13187,7 +13187,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         {/* ── Progresso do mês — só CEOs (nivel 1) e Estrategista (Hellen) ── */}
         {(activeUser?.level===1||activeUser?.id==="ellen")&&<ProgressoDoMes visible={visible} mode="produzir"/>}
 
-        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(260px,300px))`,gap:13,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
+        <div style={{display:"grid",gridTemplateColumns:`repeat(${visibleCols.length},minmax(280px,320px))`,gap:14,overflowX:"auto",justifyContent:"safe center",background:"#1e293b",padding:"16px",borderRadius:14,alignItems:"flex-start"}}>
           {visibleCols.map(col=>{
           // ═══ ORDENAÇÃO INTELIGENTE — 4 modos selecionáveis (Inteligente, Prazo, Recentes, Manual) ═══
           // Coluna "agendado" (renomeada para "Publicações") agora agrega status="agendado" + status="publicado"
@@ -13488,10 +13488,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         <img src={thumbUrl} alt="" loading="lazy" style={{display:"block",maxWidth:"100%",maxHeight:"100%",objectFit:"contain",pointerEvents:"none"}}/>
                       </div>;
                   })()}
-                  <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"9px 11px 8px"}}>
+                  <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"12px 14px 11px"}}>
                     {/* Título — herói visual do card. Sempre presente, weight 600,
                         max 3 linhas pra acomodar títulos longos sem virar elipse cedo demais. */}
-                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:9})}}>
+                    <div style={{color:"#0f172a",fontSize:14,fontWeight:600,lineHeight:1.42,letterSpacing:-.1,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",wordBreak:"break-word",...(thumbUrl?{}:{marginBottom:10})}}>
                       {t.title}
                     </div>
 
