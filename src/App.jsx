@@ -45909,13 +45909,65 @@ const PB_SEED = {
   }
 };
 
+// Markers de conteúdo OBSOLETO: se o cache/Supabase tem essas strings, descarta
+// e prefere o PB_SEED (que é a fonte autoritativa atualizada).
+// Cada item evita que conteúdo legado fantasma sobrescreva o seed novo.
+const _PB_STALE_MARKERS = [
+  "clínica veterinária", "clinica veterinaria",
+  "tutor-animal", "tutor animal",
+  "pequenos e médios animais", "pequenos e medios animais",
+  "(em construção", "(em construcao",
+];
+function _pbIsStaleText(text){
+  if(!text || typeof text !== "string") return false;
+  const lo = text.toLowerCase();
+  return _PB_STALE_MARKERS.some(m => lo.indexOf(m) >= 0);
+}
+// Merge inteligente entre PB_SEED (seed) e cache/remote (override).
+// Pra cada campo crítico: se o override está vazio OU contém marker obsoleto,
+// mantém o seed. Senão, deixa o override (edição legítima do user) prevalecer.
+function _pbMergePreferSeed(seed, override){
+  if(!seed && !override) return null;
+  if(!seed) return override;
+  if(!override) return JSON.parse(JSON.stringify(seed));
+  const out = Object.assign({}, seed, override);
+  // Campos string de topo
+  ["sobre","comunicacao","descricaoCurta"].forEach(function(k){
+    if(_pbIsStaleText(override[k]) || !override[k]) out[k] = seed[k] || override[k] || "";
+  });
+  // Arrays de topo: prefere seed quando override tá vazio
+  ["pilares","chamadasAprovadas","chamadasProibidas"].forEach(function(k){
+    const ov = override[k];
+    if(!Array.isArray(ov) || ov.length===0){
+      if(Array.isArray(seed[k])) out[k] = seed[k].slice();
+    }
+  });
+  // Áreas (design/video/midia)
+  ["design","video","midia"].forEach(function(area){
+    const sA = seed[area] || {};
+    const oA = override[area] || {};
+    if(!seed[area] && !override[area]) return;
+    const merged = Object.assign({}, sA, oA);
+    if(_pbIsStaleText(oA.orientacoes) || !oA.orientacoes) merged.orientacoes = sA.orientacoes || oA.orientacoes || "";
+    if(!Array.isArray(oA.checklist) || oA.checklist.length===0){
+      if(Array.isArray(sA.checklist)) merged.checklist = sA.checklist.slice();
+    }
+    out[area] = merged;
+  });
+  return out;
+}
+
 function _pbInitFromCache(){
   try{
     const cache = _pbLoadCache();
     const base = JSON.parse(JSON.stringify(PB_SEED));
     if(cache && typeof cache === "object" && !Array.isArray(cache)){
       Object.keys(cache).forEach(k => {
-        if(cache[k] && typeof cache[k]==="object") base[k] = cache[k];
+        if(cache[k] && typeof cache[k]==="object"){
+          // Antes era: base[k] = cache[k] (sobrescrevia PB_SEED sem dó)
+          // Agora: merge inteligente que preserva PB_SEED quando cache é obsoleto
+          base[k] = _pbMergePreferSeed(base[k], cache[k]);
+        }
       });
     }
     _pbSaveCache(base);
@@ -45937,7 +45989,11 @@ function _usePlaybooksStore(){
       if(!active || !remote) return;
       setStore(prev => {
         const next = Object.assign({}, prev);
-        Object.keys(remote).forEach(k => { next[k] = remote[k]; });
+        // Merge inteligente: PB_SEED prevalece quando remote contém conteúdo obsoleto
+        Object.keys(remote).forEach(k => {
+          const seedK = PB_SEED[k];
+          next[k] = seedK ? _pbMergePreferSeed(seedK, remote[k]) : remote[k];
+        });
         _pbSaveCache(next);
         return next;
       });
@@ -45964,7 +46020,9 @@ function _usePlaybooksStore(){
         const row = payload.new;
         if(!row?.client_id) return;
         setStore(prev => {
-          const next = Object.assign({}, prev, {[row.client_id]: row.data||{}});
+          const seedK = PB_SEED[row.client_id];
+          const merged = seedK ? _pbMergePreferSeed(seedK, row.data||{}) : (row.data||{});
+          const next = Object.assign({}, prev, {[row.client_id]: merged});
           _pbSaveCache(next);
           return next;
         });
