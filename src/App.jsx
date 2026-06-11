@@ -9968,116 +9968,209 @@ const MILESTONE_TYPES={
 
 function CEvolucao({cl,isSocio}){
   const sb=window._sb;
-  const [milestones,setMilestones]=useState([]);
   const [metrics,setMetrics]=useState([]);
   const [loading,setLoading]=useState(true);
-  const [showMilestoneForm,setShowMilestoneForm]=useState(false);
   const [showMetricsForm,setShowMetricsForm]=useState(false);
+  // Mês selecionado pra navegação (default: mês atual)
+  const _now=new Date();
+  const [selPeriod,setSelPeriod]=useState(_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0"));
 
   const reload=async function(){
     if(!sb){setLoading(false);return;}
     try{
-      const r1=await sb.from("client_milestones").select("*").eq("client_id",cl.id).order("date",{ascending:false});
-      const r2=await sb.from("client_metrics_monthly").select("*").eq("client_id",cl.id).order("period",{ascending:false});
-      setMilestones(r1.data||[]);
-      setMetrics(r2.data||[]);
+      const r=await sb.from("client_metrics_monthly").select("*").eq("client_id",cl.id).order("period",{ascending:true});
+      setMetrics(r.data||[]);
     }catch(e){console.warn("[evolucao] load:",e?.message||e);}
     setLoading(false);
   };
   useEffect(function(){reload();},[cl.id]);
 
-  // Métrica do mês atual (e anterior pra delta)
-  const atual=metrics[0]||{};
-  const anterior=metrics[1]||{};
-  const delta=function(a,b){if(a==null||b==null||b===0)return null;return Math.round(((a-b)/b)*100);};
-  const periodFmt=function(p){if(!p)return"—";const[y,m]=p.split("-");return["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][parseInt(m,10)-1]+" "+y;};
+  // Mês selecionado e mês anterior (pra delta)
+  const atual = metrics.find(m=>m.period===selPeriod) || {};
+  const idxSel = metrics.findIndex(m=>m.period===selPeriod);
+  const anterior = idxSel>0 ? metrics[idxSel-1] : (metrics[metrics.length-2]||{});
 
-  return(<div style={{display:"flex",flexDirection:"column",gap:14}}>
+  const delta=function(a,b){if(a==null||b==null||b===0||isNaN(a)||isNaN(b))return null;return Math.round(((a-b)/b)*100);};
+  const periodFmt=function(p){if(!p)return"—";const[y,m]=p.split("-");return["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][parseInt(m,10)-1]+" "+y;};
+  // Calcula taxa de engajamento: interacoes / visualizacoes (em %)
+  const engajamentoCalc=function(row){
+    const inter = parseFloat(row.interactions);
+    const viz   = parseFloat(row.views);
+    if(!isFinite(inter)||!isFinite(viz)||viz<=0) return null;
+    return (inter/viz)*100;
+  };
 
-    {/* Métricas do mês */}
-    <div style={{background:"#faf5ff",border:"0.5px solid #e9d5ff",borderRadius:10,padding:"14px 16px"}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-        <div style={{fontSize:10,color:"#7c3aed",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>
-          Métricas — {atual.period?periodFmt(atual.period):"sem dados"}
-        </div>
-        {isSocio&&<button onClick={function(){setShowMetricsForm(true);}}
-          style={{background:"#fff",border:"0.5px solid #e9d5ff",color:"#7c3aed",padding:"5px 12px",borderRadius:5,fontSize:11,fontWeight:500,cursor:"pointer"}}>+ Registrar mês</button>}
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
-        {[
-          {label:"Instagram",value:atual.instagram_followers,delta:delta(atual.instagram_followers,anterior.instagram_followers),suffix:""},
-          {label:"Leads digital",value:atual.leads_digital,delta:delta(atual.leads_digital,anterior.leads_digital),suffix:""},
-          {label:"Vendas",value:atual.sales_digital,delta:delta(atual.sales_digital,anterior.sales_digital),suffix:""},
-          {label:"ROI",value:atual.roi,delta:delta(atual.roi,anterior.roi),suffix:"x"},
-        ].map(function(m){return(<div key={m.label} style={{background:"#fff",borderRadius:6,padding:"8px 10px"}}>
-          <div style={{fontSize:9,color:"#94a3b8",textTransform:"uppercase",marginBottom:3,fontWeight:500}}>{m.label}</div>
-          <div style={{fontSize:16,fontWeight:600,color:"#0f172a"}}>{m.value!=null?m.value+(m.suffix||""):"—"}</div>
-          {m.delta!=null&&<div style={{fontSize:9,color:m.delta>=0?"#15803d":"#dc2626"}}>{m.delta>=0?"↑":"↓"} {Math.abs(m.delta)}%</div>}
-        </div>);})}
-      </div>
-      {metrics.length>1&&<div style={{marginTop:10,paddingTop:10,borderTop:"0.5px solid #e9d5ff",height:36,display:"flex",alignItems:"end",gap:3}}>
-        {metrics.slice(0,6).reverse().map(function(m,i){
-          const maxV=Math.max(...metrics.slice(0,6).map(function(x){return x.instagram_followers||0;}));
-          const h=maxV>0?Math.max(8,((m.instagram_followers||0)/maxV)*100):8;
-          return <div key={m.period} title={periodFmt(m.period)+": "+(m.instagram_followers||0)+" followers"}
-            style={{width:6,background:i===metrics.length-1?"#7c3aed":"#c4b5fd",height:h+"%",borderRadius:1}}/>;
-        })}
-        <span style={{fontSize:9,color:"#94a3b8",marginLeft:8,alignSelf:"end"}}>Crescimento Instagram últimos {Math.min(6,metrics.length)} meses</span>
-      </div>}
-    </div>
+  function _goPrev(){
+    const [y,m]=selPeriod.split("-").map(Number);
+    const d=new Date(y, m-2, 1);
+    setSelPeriod(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));
+  }
+  function _goNext(){
+    const [y,m]=selPeriod.split("-").map(Number);
+    const d=new Date(y, m, 1);
+    setSelPeriod(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));
+  }
+  function _goToday(){
+    const n=new Date();
+    setSelPeriod(n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0"));
+  }
+  const _isCurrentMonth = selPeriod === (_now.getFullYear()+"-"+String(_now.getMonth()+1).padStart(2,"0"));
 
-    {/* Timeline de marcos */}
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-      <div style={{fontSize:10,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Linha do tempo do projeto</div>
-      {isSocio&&<button onClick={function(){setShowMilestoneForm(true);}}
-        style={{background:"#a140ff",color:"#fff",border:"none",padding:"6px 14px",borderRadius:6,fontSize:11,fontWeight:500,cursor:"pointer"}}>+ Adicionar marco</button>}
-    </div>
+  // Cards de métricas — config visual
+  const cardsConfig = [
+    { id:"instagram_followers", label:"Seguidores Instagram", icon:"image",       color:"#ec4899", fmt:v=>v!=null?Number(v).toLocaleString("pt-BR"):"—" },
+    { id:"engagement_rate",     label:"Taxa de engajamento",  icon:"sparkles",    color:"#a855f7", fmt:v=>v!=null?Number(v).toFixed(2)+"%":"—",
+      // Esta métrica é calculada a partir de interactions/views
+      computed:row=>engajamentoCalc(row) },
+    { id:"leads_digital",       label:"Leads digital",        icon:"trending-up", color:"#0ea5e9", fmt:v=>v!=null?Number(v).toLocaleString("pt-BR"):"—" },
+    { id:"sales_digital",       label:"Vendas digital",       icon:"wallet",      color:"#16a34a", fmt:v=>v!=null?Number(v).toLocaleString("pt-BR"):"—" },
+    { id:"roi",                 label:"ROI",                  icon:"chart",       color:"#f59e0b", fmt:v=>v!=null?Number(v).toFixed(1)+"x":"—" },
+  ];
 
-    {loading?(
-      <div style={{textAlign:"center",padding:30,color:"#94a3b8",fontSize:12}}>Carregando histórico...</div>
-    ):milestones.length===0?(
-      <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderRadius:10,padding:"30px 20px",textAlign:"center"}}>
-        <div style={{fontSize:28,marginBottom:8,opacity:.5}}>📅</div>
-        <div style={{color:"#0f172a",fontWeight:500,fontSize:13,marginBottom:4}}>Nenhum marco registrado</div>
-        <div style={{color:"#94a3b8",fontSize:11}}>{isSocio?"Clica em \"+ Adicionar marco\" pra começar o histórico":"O sócio ainda não registrou marcos."}</div>
-      </div>
-    ):(
-      <div style={{position:"relative"}}>
-        <div style={{position:"absolute",left:14,top:8,bottom:0,width:1.5,background:"linear-gradient(to bottom, #c4b5fd, #e9d5ff)"}}/>
-        {milestones.map(function(m){
-          const t=MILESTONE_TYPES[m.type]||MILESTONE_TYPES.reuniao;
-          const dateFmt=m.date?new Date(m.date+"T12:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"}):"—";
-          const metricsArr=m.metrics?Object.entries(m.metrics):[];
-          return(<div key={m.id} style={{position:"relative",paddingLeft:36,marginBottom:14}}>
-            <div style={{position:"absolute",left:8,top:6,width:14,height:14,borderRadius:"50%",background:"#fff",border:"2px solid "+t.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:7}}>{t.icon}</div>
-            <div style={{background:"#fff",border:"0.5px solid #e5e7eb",borderLeft:"3px solid "+t.color,borderRadius:8,padding:"10px 12px",position:"relative"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,gap:8,flexWrap:"wrap"}}>
-                <span style={{fontSize:9,color:t.color,fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{t.label}</span>
-                <span style={{fontSize:9,color:"#94a3b8"}}>{dateFmt}{m.created_by?" · por "+m.created_by:""}</span>
-              </div>
-              <div style={{fontSize:13,fontWeight:500,color:"#0f172a",marginBottom:4}}>{m.title}</div>
-              {m.description&&<div style={{fontSize:11,color:"#64748b",lineHeight:1.5,whiteSpace:"pre-wrap"}}>{m.description}</div>}
-              {metricsArr.length>0&&<div style={{display:"flex",gap:5,marginTop:6,flexWrap:"wrap"}}>
-                {metricsArr.map(function(p){return <span key={p[0]} style={{background:t.color+"15",color:t.color,fontSize:9,padding:"2px 7px",borderRadius:3,fontWeight:600}}>{p[0]}: {p[1]}</span>;})}
-              </div>}
-              {isSocio&&<button onClick={async function(){
-                if(!confirm("Excluir este marco?"))return;
-                await sb.from("client_milestones").delete().eq("id",m.id);
-                reload();
-              }} title="Excluir" style={{position:"absolute",top:8,right:8,background:"none",border:"none",color:"#cbd5e1",fontSize:14,cursor:"pointer",padding:0,width:18,height:18}}>×</button>}
+  // Dados pro gráfico — últimos 12 meses
+  const chartData = metrics.slice(-12);
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+    {/* HERO HEADER — navegação por mês */}
+    <div style={{background:"linear-gradient(135deg,#0f172a 0%,#1e293b 100%)",borderRadius:16,padding:"20px 24px",position:"relative",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.06)"}}>
+      <div style={{position:"absolute",right:-40,top:-40,width:160,height:160,borderRadius:"50%",background:"radial-gradient(circle,rgba(168,85,247,0.18) 0%,transparent 70%)",pointerEvents:"none"}}/>
+      <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"space-between",gap:20,flexWrap:"wrap"}}>
+        <div>
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(168,85,247,0.14)",border:"1px solid rgba(168,85,247,0.28)",borderRadius:99,padding:"4px 11px",marginBottom:10}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d8b4fe" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+            <span style={{color:"#d8b4fe",fontSize:10,fontWeight:800,letterSpacing:.9,textTransform:"uppercase"}}>Evolução do cliente</span>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button onClick={_goPrev} title="Mês anterior" style={{width:32,height:32,borderRadius:9,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <div style={{minWidth:170,textAlign:"center"}}>
+              <div style={{color:"#fff",fontSize:22,fontWeight:800,letterSpacing:-.5,textTransform:"capitalize",lineHeight:1.1}}>{periodFmt(selPeriod)}</div>
+              <div style={{color:"#64748b",fontSize:11.5,fontWeight:600,marginTop:2}}>{atual.period?"Registrado":"Sem dados pra este mês"}</div>
             </div>
-          </div>);
-        })}
+            <button onClick={_goNext} title="Próximo mês" style={{width:32,height:32,borderRadius:9,border:"1px solid rgba(255,255,255,0.12)",background:"rgba(255,255,255,0.06)",color:"#cbd5e1",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.12)";e.currentTarget.style.color="#fff";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="#cbd5e1";}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            {!_isCurrentMonth&&<button onClick={_goToday} style={{height:32,padding:"0 12px",borderRadius:9,border:"none",background:"#fff",color:"#0f172a",cursor:"pointer",fontSize:11.5,fontWeight:800,letterSpacing:.3,fontFamily:"inherit"}}>Hoje</button>}
+          </div>
+        </div>
+        {isSocio&&<button onClick={()=>setShowMetricsForm(true)}
+          style={{background:"linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)",color:"#fff",border:"none",borderRadius:11,padding:"11px 18px",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 18px rgba(168,85,247,0.40)",display:"inline-flex",alignItems:"center",gap:7}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          Registrar mês
+        </button>}
       </div>
-    )}
+    </div>
 
-    {/* Form de marco */}
-    {showMilestoneForm&&<MilestoneForm cl={cl} onClose={function(){setShowMilestoneForm(false);}} onSaved={function(){setShowMilestoneForm(false);reload();}}/>}
-    {/* Form de métricas mensais */}
-    {showMetricsForm&&<MetricsForm cl={cl} existing={atual} onClose={function(){setShowMetricsForm(false);}} onSaved={function(){setShowMetricsForm(false);reload();}}/>}
-  </div>);
+    {/* CARDS DE MÉTRICAS — 5 indicadores do mês selecionado */}
+    {loading
+      ? <div style={{padding:30,color:"#94a3b8",textAlign:"center",fontSize:12.5}}>Carregando...</div>
+      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
+          {cardsConfig.map(function(card){
+            const valor = card.computed ? card.computed(atual) : atual[card.id];
+            const valorAnt = card.computed ? card.computed(anterior) : anterior[card.id];
+            const d = delta(valor, valorAnt);
+            const noData = (valor==null || valor==="" || (typeof valor==="number"&&isNaN(valor)));
+            return <div key={card.id} style={{background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid #eef0f3",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",position:"relative",overflow:"hidden",transition:"transform .15s, box-shadow .15s, border-color .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=card.color+"33";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.025)";e.currentTarget.style.borderColor="#eef0f3";}}>
+              <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:card.color}}/>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                <div style={{width:30,height:30,borderRadius:9,background:card.color+"14",color:card.color,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Ico n={card.icon} size={14} color={card.color}/>
+                </div>
+                <span style={{color:"#475569",fontSize:11,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{card.label}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+                <span style={{color:noData?"#cbd5e1":"#0f172a",fontSize:24,fontWeight:900,letterSpacing:-.7,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{card.fmt(valor)}</span>
+                {d!=null && <span style={{display:"inline-flex",alignItems:"center",gap:3,background:d>=0?"#dcfce7":"#fee2e2",color:d>=0?"#15803d":"#b91c1c",borderRadius:99,padding:"2px 8px",fontSize:10.5,fontWeight:800,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">{d>=0?<polyline points="6 15 12 9 18 15"/>:<polyline points="6 9 12 15 18 9"/>}</svg>
+                  {Math.abs(d)}%
+                </span>}
+              </div>
+              {anterior && anterior.period && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:5}}>vs {periodFmt(anterior.period).split(" ")[0]}</div>}
+            </div>;
+          })}
+        </div>
+    }
+
+    {/* GRÁFICO DE EVOLUÇÃO TEMPORAL */}
+    {chartData.length >= 2 && <div style={{background:"#fff",borderRadius:16,padding:"20px 22px",border:"1px solid #eef0f3",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:14,paddingBottom:12,borderBottom:"1px solid #f1f5f9"}}>
+        <div style={{width:34,height:34,borderRadius:10,background:"#ec489914",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n="chart" size={15} color="#ec4899"/>
+        </div>
+        <div>
+          <div style={{color:"#ec4899",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase"}}>Evolução temporal</div>
+          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2}}>Seguidores Instagram</div>
+        </div>
+      </div>
+      {(function(){
+        const followers = chartData.map(m=>m.instagram_followers||0);
+        const maxV = Math.max(...followers, 1);
+        const minV = Math.min(...followers.filter(v=>v>0), maxV);
+        const W = 700, H = 180, PAD = 36;
+        const innerW = W - PAD*2, innerH = H - PAD - 12;
+        const stepX = chartData.length>1 ? innerW/(chartData.length-1) : 0;
+        const yOf = v => PAD + innerH - ((v-minV)/(Math.max(1,maxV-minV)))*innerH;
+        const pts = chartData.map((m,i)=>({x:PAD+i*stepX, y:yOf(m.instagram_followers||0), m}));
+        const linePath = pts.map((p,i)=>(i===0?"M":"L")+p.x+","+p.y).join(" ");
+        const areaPath = linePath + " L"+(pts[pts.length-1].x)+","+(PAD+innerH)+" L"+pts[0].x+","+(PAD+innerH)+" Z";
+        return <svg width="100%" height={H} viewBox={"0 0 "+W+" "+H} preserveAspectRatio="xMidYMid meet" style={{display:"block"}}>
+          <defs>
+            <linearGradient id={"gradev-"+cl.id} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#ec4899" stopOpacity="0.28"/>
+              <stop offset="100%" stopColor="#ec4899" stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+          {/* grid lines */}
+          {[0,0.25,0.5,0.75,1].map((r,i)=>(
+            <line key={i} x1={PAD} x2={W-PAD} y1={PAD+r*innerH} y2={PAD+r*innerH} stroke="#f1f5f9" strokeWidth="1"/>
+          ))}
+          {/* area + line */}
+          <path d={areaPath} fill={"url(#gradev-"+cl.id+")"}/>
+          <path d={linePath} fill="none" stroke="#ec4899" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+          {/* points */}
+          {pts.map((p,i)=>{
+            const isSel = p.m.period===selPeriod;
+            return <g key={i}>
+              <circle cx={p.x} cy={p.y} r={isSel?6:4} fill={isSel?"#ec4899":"#fff"} stroke="#ec4899" strokeWidth="2"/>
+              {isSel && <text x={p.x} y={p.y-12} textAnchor="middle" fontSize="11" fontWeight="800" fill="#0f172a" fontFamily="'Inter',system-ui,sans-serif">{(p.m.instagram_followers||0).toLocaleString("pt-BR")}</text>}
+            </g>;
+          })}
+          {/* x labels */}
+          {pts.map((p,i)=>(
+            <text key={i} x={p.x} y={H-2} textAnchor="middle" fontSize="9.5" fill="#94a3b8" fontFamily="'Inter',system-ui,sans-serif" fontWeight="600">
+              {(function(){const[y,m]=p.m.period.split("-");return ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][parseInt(m,10)-1]+"/"+String(y).slice(-2);})()}
+            </text>
+          ))}
+        </svg>;
+      })()}
+    </div>}
+
+    {/* EMPTY STATE (sem métricas registradas em nenhum mês) */}
+    {!loading && metrics.length===0 && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"40px 24px",textAlign:"center"}}>
+      <div style={{display:"inline-flex",width:54,height:54,borderRadius:14,background:"#f5f3ff",color:"#a855f7",alignItems:"center",justifyContent:"center",marginBottom:14}}>
+        <Ico n="trending-up" size={22} color="#a855f7"/>
+      </div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,marginBottom:6}}>Sem métricas registradas ainda</div>
+      <div style={{color:"#64748b",fontSize:12.5,maxWidth:380,margin:"0 auto",lineHeight:1.55}}>Registre as métricas do mês pra acompanhar a evolução do cliente ao longo do tempo. Recomendamos atualizar todo dia 1º.</div>
+    </div>}
+
+    {/* OBSERVAÇÕES DO MÊS (se houver) */}
+    {atual.notes && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 18px"}}>
+      <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Observações do mês</div>
+      <div style={{color:"#475569",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{atual.notes}</div>
+    </div>}
+
+    {showMetricsForm&&<MetricsForm cl={cl} existing={atual.period?atual:{period:selPeriod}} onClose={()=>setShowMetricsForm(false)} onSaved={()=>{setShowMetricsForm(false);reload();}}/>}
+  </div>;
 }
-
 function MilestoneForm({cl,onClose,onSaved}){
   const sb=window._sb;
   const [type,setType]=useState("kickoff");
@@ -10107,7 +10200,7 @@ function MilestoneForm({cl,onClose,onSaved}){
   };
 
   return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
-    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(500px,92%)",padding:"18px 20px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(620px,94%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
       <div style={{fontSize:14,fontWeight:600,color:"#0f172a",marginBottom:14}}>Novo marco — {cl.name}</div>
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
         <div>
@@ -10159,8 +10252,18 @@ function MetricsForm({cl,existing,onClose,onSaved}){
   const [leads,setLeads]=useState(existing.leads_digital||"");
   const [sales,setSales]=useState(existing.sales_digital||"");
   const [roi,setRoi]=useState(existing.roi||"");
+  const [interactions,setInteractions]=useState(existing.interactions||"");
+  const [views,setViews]=useState(existing.views||"");
   const [notes,setNotes]=useState(existing.notes||"");
   const [saving,setSaving]=useState(false);
+
+  // Calculadora de engajamento: interactions / views * 100
+  const engRate = (function(){
+    const i=parseFloat(String(interactions).replace(",","."));
+    const v=parseFloat(String(views).replace(",","."));
+    if(!isFinite(i)||!isFinite(v)||v<=0) return null;
+    return (i/v)*100;
+  })();
 
   const save=async function(){
     setSaving(true);
@@ -10173,7 +10276,10 @@ function MetricsForm({cl,existing,onClose,onSaved}){
         tiktok_followers:num(tt)?parseInt(num(tt)):null,
         leads_digital:num(leads)?parseInt(num(leads)):null,
         sales_digital:num(sales)?parseInt(num(sales)):null,
-        roi:num(roi),notes:notes||null,created_by:CURRENT_USER.name
+        roi:num(roi),
+        interactions:num(interactions)?parseInt(num(interactions)):null,
+        views:num(views)?parseInt(num(views)):null,
+        notes:notes||null,created_by:CURRENT_USER.name
       },{onConflict:"client_id,period"});
       pixelsToast.success("Métricas salvas!");
       onSaved();
@@ -10182,24 +10288,56 @@ function MetricsForm({cl,existing,onClose,onSaved}){
   };
 
   return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(0,0,0,0.5)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80}}>
-    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(500px,92%)",padding:"18px 20px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
-      <div style={{fontSize:14,fontWeight:600,color:"#0f172a",marginBottom:14}}>Registrar métricas — {cl.name}</div>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:12,width:"min(620px,94%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.25)"}}>
+      <div style={{fontSize:18,fontWeight:800,color:"#0f172a",letterSpacing:-.3,marginBottom:4}}>Registrar métricas</div><div style={{fontSize:12.5,color:"#94a3b8",marginBottom:18}}>{cl.name}</div>
       <div style={{marginBottom:12}}>
         <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:5}}>Período</div>
         <input type="month" value={period} onChange={function(e){setPeriod(e.target.value);}} style={{padding:"6px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12}}/>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
         {[
-          {label:"Instagram",v:ig,set:setIg,ph:"5000"},
-          {label:"Facebook",v:fb,set:setFb,ph:"3200"},
-          {label:"TikTok",v:tt,set:setTt,ph:"800"},
-          {label:"Leads digital",v:leads,set:setLeads,ph:"42"},
-          {label:"Vendas digital",v:sales,set:setSales,ph:"8"},
-          {label:"ROI",v:roi,set:setRoi,ph:"3.5"},
+          {label:"Instagram",v:ig,set:setIg,ph:"5000",hint:"seguidores"},
+          {label:"Facebook",v:fb,set:setFb,ph:"3200",hint:"seguidores"},
+          {label:"TikTok",v:tt,set:setTt,ph:"800",hint:"seguidores"},
+          {label:"Leads digital",v:leads,set:setLeads,ph:"42",hint:"no mês"},
+          {label:"Vendas digital",v:sales,set:setSales,ph:"8",hint:"no mês"},
+          {label:"ROI",v:roi,set:setRoi,ph:"3.5",hint:"retorno (x)"},
         ].map(function(f){return(<div key={f.label}>
-          <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
-          <input value={f.v} onChange={function(e){f.set(e.target.value);}} placeholder={f.ph} style={{width:"100%",padding:"6px 10px",border:"0.5px solid #e5e7eb",borderRadius:5,fontSize:12,boxSizing:"border-box"}}/>
+          <div style={{fontSize:10.5,color:"#475569",fontWeight:700,letterSpacing:.2,marginBottom:5}}>{f.label}</div>
+          <input value={f.v} onChange={function(e){f.set(e.target.value);}} placeholder={f.ph} style={{width:"100%",padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",fontFamily:"inherit",outline:"none"}}/>
+          {f.hint&&<div style={{color:"#94a3b8",fontSize:10,marginTop:3}}>{f.hint}</div>}
         </div>);})}
+      </div>
+
+      {/* CALCULADORA DE TAXA DE ENGAJAMENTO */}
+      <div style={{background:"linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%)",border:"1px solid #f3e8ff",borderRadius:12,padding:"14px 16px",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:9}}>
+            <div style={{width:30,height:30,borderRadius:9,background:"#a855f714",color:"#a855f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>
+            </div>
+            <div>
+              <div style={{color:"#a855f7",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Taxa de engajamento</div>
+              <div style={{color:"#475569",fontSize:11.5,marginTop:1}}>Interações ÷ Visualizações × 100</div>
+            </div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{color:engRate==null?"#cbd5e1":"#a855f7",fontSize:24,fontWeight:900,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{engRate==null?"—":engRate.toFixed(2)+"%"}</div>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:2}}>resultado</div>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <div style={{fontSize:10.5,color:"#475569",fontWeight:700,letterSpacing:.2,marginBottom:5}}>Interações</div>
+            <input value={interactions} onChange={e=>setInteractions(e.target.value)} placeholder="curtidas + comentários + saves" style={{width:"100%",padding:"9px 12px",border:"1px solid #e9d5ff",borderRadius:9,fontSize:13.5,boxSizing:"border-box",fontFamily:"inherit",outline:"none",background:"#fff"}}/>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:3}}>soma total no mês</div>
+          </div>
+          <div>
+            <div style={{fontSize:10.5,color:"#475569",fontWeight:700,letterSpacing:.2,marginBottom:5}}>Visualizações únicas</div>
+            <input value={views} onChange={e=>setViews(e.target.value)} placeholder="alcance único" style={{width:"100%",padding:"9px 12px",border:"1px solid #e9d5ff",borderRadius:9,fontSize:13.5,boxSizing:"border-box",fontFamily:"inherit",outline:"none",background:"#fff"}}/>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:3}}>pessoas alcançadas</div>
+          </div>
+        </div>
       </div>
       <div>
         <div style={{fontSize:9,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",marginBottom:4}}>Observações</div>
@@ -11751,69 +11889,64 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
               if(l.includes("foto"))return "camera";
               return "dot";
             };
-            return <div key={r.id} style={{position:"relative",background:"#fff",borderRadius:14,padding:"14px 16px",border:"1px solid #eef0f3",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",transition:"transform .18s, box-shadow .18s, border-color .18s",display:"flex",flexDirection:"column",gap:12}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,23,42,0.08), 0 2px 5px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#cbd5e1";}}
+            return <div key={r.id} style={{position:"relative",background:"#fff",borderRadius:11,padding:"10px 12px",border:"1px solid #eef0f3",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",transition:"transform .15s, box-shadow .15s, border-color .15s",display:"flex",alignItems:"center",gap:11}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 14px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#cbd5e1";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.025)";e.currentTarget.style.borderColor="#eef0f3";}}>
-              {/* Header: logo + nome + fração total muted */}
-              <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
-                {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]
-                  ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:20,maxWidth:60,objectFit:"contain",flexShrink:0}}/>
-                  : <div style={{width:22,height:22,borderRadius:6,background:r.color+"18",color:r.color,fontSize:11,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,letterSpacing:-.3}}>{(r.name||"").slice(0,2).toUpperCase()}</div>}
-                <span style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1,lineHeight:1.15}}>{r.name}</span>
-                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'",letterSpacing:.3}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
+              {/* Donut compacto à esquerda */}
+              <div style={{position:"relative",width:48,height:48,flexShrink:0,filter:ok?"drop-shadow(0 0 6px rgba(34,197,94,0.30))":"none"}}>
+                <svg width="48" height="48" viewBox="0 0 48 48" style={{transform:"rotate(-90deg)"}}>
+                  <defs>
+                    <linearGradient id={"grad-"+r.id} x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor={accent}/>
+                      <stop offset="100%" stopColor={ok?"#16a34a":accent}/>
+                    </linearGradient>
+                  </defs>
+                  <circle cx="24" cy="24" r="19" fill="none" stroke="#f1f5f9" strokeWidth="5"/>
+                  {r.totalMeta>0&&<circle cx="24" cy="24" r="19" fill="none" stroke={"url(#grad-"+r.id+")"} strokeWidth="5" strokeLinecap="round" strokeDasharray={2*Math.PI*19} strokeDashoffset={2*Math.PI*19*(1-cpct/100)} style={{transition:"stroke-dashoffset .5s ease-out, stroke .3s"}}/>}
+                </svg>
+                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{color:accent,fontSize:11.5,fontWeight:900,letterSpacing:-.4,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{cpct}<span style={{fontSize:7.5,fontWeight:800}}>%</span></span>
+                </div>
               </div>
 
-              {/* Body: donut maior à esquerda + lista limpa com ícones à direita */}
-              <div style={{display:"flex",alignItems:"center",gap:14}}>
-                <div style={{position:"relative",width:68,height:68,flexShrink:0,filter:ok?"drop-shadow(0 0 8px rgba(34,197,94,0.30))":"none"}}>
-                  <svg width="68" height="68" viewBox="0 0 68 68" style={{transform:"rotate(-90deg)"}}>
-                    <defs>
-                      <linearGradient id={"grad-"+r.id} x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor={accent}/>
-                        <stop offset="100%" stopColor={ok?"#16a34a":accent}/>
-                      </linearGradient>
-                    </defs>
-                    <circle cx="34" cy="34" r={R} fill="none" stroke="#f1f5f9" strokeWidth="6"/>
-                    {r.totalMeta>0&&<circle cx="34" cy="34" r={R} fill="none" stroke={"url(#grad-"+r.id+")"} strokeWidth="6" strokeLinecap="round" strokeDasharray={CIRC} strokeDashoffset={CIRC*(1-cpct/100)} style={{transition:"stroke-dashoffset .6s ease-out, stroke .3s"}}/>}
-                  </svg>
-                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column"}}>
-                    <span style={{color:accent,fontSize:15,fontWeight:900,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{cpct}<span style={{fontSize:9,fontWeight:800,marginLeft:1}}>%</span></span>
-                  </div>
+              {/* Conteúdo: header (logo+nome+fração) + tipos compactos */}
+              <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:5}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+                  {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]
+                    ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:16,maxWidth:48,objectFit:"contain",flexShrink:0}}/>
+                    : null}
+                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1,lineHeight:1.1}}>{r.name}</span>
+                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
                 </div>
-
-                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:6}}>
-                  {tiposAtivos.length===0
-                    ? <div style={{color:"#cbd5e1",fontSize:10.5,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
-                    : tiposAtivos.map(tt=>{
+                {tiposAtivos.length===0
+                  ? <div style={{color:"#cbd5e1",fontSize:10,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
+                  : <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                      {tiposAtivos.map(tt=>{
                         const tOk=tt.meta&&tt.done>=tt.meta;
                         const tPct=tt.meta?Math.round(tt.done/tt.meta*100):0;
-                        const tCor=tOk?"#16a34a":(tPct>=70?"#0369a1":(tPct>=40?"#a16207":(tt.done>0?"#dc2626":"#cbd5e1")));
+                        const tCor=tOk?"#16a34a":(tPct>=70?"#0369a1":(tPct>=40?"#a16207":(tt.done>0?"#dc2626":"#94a3b8")));
                         const tIco=_tipoIcon(tt.l);
-                        return <div key={tt.l} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,fontSize:11.5,lineHeight:1.2}}>
-                          <span style={{display:"flex",alignItems:"center",gap:6,color:"#475569",fontWeight:600,minWidth:0,letterSpacing:-.1}}>
-                            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:tCor+"15",color:tCor,flexShrink:0}}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
-                                {tIco==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
-                                {tIco==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
-                                {tIco==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
-                                {tIco==="dot"&&<circle cx="12" cy="12" r="5" fill="currentColor"/>}
-                              </svg>
-                            </span>
-                            <span style={{textOverflow:"ellipsis",overflow:"hidden",whiteSpace:"nowrap",textTransform:"capitalize"}}>{tt.l}</span>
-                          </span>
-                          <span style={{color:tCor,fontSize:12,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{tt.done}<span style={{color:"#cbd5e1",fontWeight:600,fontSize:10.5}}>/{tt.meta||"-"}</span></span>
-                        </div>;
-                      })
-                  }
-                </div>
+                        return <span key={tt.l} title={tt.l+": "+tt.done+"/"+(tt.meta||0)} style={{display:"inline-flex",alignItems:"center",gap:4,background:tCor+"12",color:tCor,borderRadius:6,padding:"2px 7px 2px 6px",fontSize:10.5,fontWeight:700,letterSpacing:-.1,lineHeight:1.3}}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+                            {tIco==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
+                            {tIco==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
+                            {tIco==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
+                            {tIco==="dot"&&<circle cx="12" cy="12" r="5" fill="currentColor"/>}
+                          </svg>
+                          <span style={{textTransform:"capitalize"}}>{tt.l}</span>
+                          <span style={{fontWeight:900,fontFeatureSettings:"'tnum'"}}>{tt.done}<span style={{opacity:.55,fontWeight:700}}>/{tt.meta||"-"}</span></span>
+                        </span>;
+                      })}
+                    </div>
+                }
               </div>
             </div>;
           };
           return <div style={{padding:"14px 16px 16px",background:"#f8f9fc"}}>
-            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginBottom:bioter.length>0?10:0}}>
+            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:8,marginBottom:bioter.length>0?8:0}}>
               {padrao.map(renderCard)}
             </div>}
-            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
+            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:8}}>
               {bioter.map(renderCard)}
             </div>}
           </div>;
