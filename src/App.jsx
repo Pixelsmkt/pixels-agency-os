@@ -42580,8 +42580,8 @@ function CClienteNPS(props){
     </section>
     </>}
 
-    {/* ═══ DRAWER HISTÓRICO POR PESSOA — sócios clicam em card da equipe ═══ */}
-    {drawerUser && <_ENPSDrawer user={drawerUser} rows={rows} onClose={function(){setDrawerUser(null);}}/>}
+    {/* Drawer ENPS removido — pertence ao componente ENPS, não ao NPS de cliente.
+        Causava tela preta porque drawerUser/setDrawerUser não são declarados aqui. */}
 
   </div>;
 }
