@@ -45484,9 +45484,20 @@ const PB_SEED = {
     midia: { orientacoes: "(em construção)", checklist: [] }
   },
   vetservice: {
-    sobre: "VetService — clínica veterinária com atendimento especializado em pequenos e médios animais.",
-    comunicacao: "Tom acolhedor e humanizado, valorizando o vínculo tutor-animal. Linguagem clara, sem termos médicos pesados.",
-    design: { orientacoes: "(em construção — sócios preencher)", checklist: [] },
+    sobre: "VetService Consultoria — empresa de consultoria técnica voltada à produção leiteira. Atua junto a produtores rurais, fornecendo orientação técnica em manejo, nutrição, reprodução, sanidade e gestão de fazendas leiteiras. O objetivo é elevar a produtividade e a saúde do rebanho com base em dados, acompanhamento próximo e tecnologia aplicada ao campo.",
+    comunicacao: "Tom técnico, profissional, educativo e confiável. Linguagem direta, voltada ao produtor rural, evitando jargões excessivos. Posicionamento: parceira técnica do produtor — quem entende do campo, do rebanho e dos números da fazenda. Evitar tom institucional frio: a marca conversa com produtor, é gente do campo falando com gente do campo.",
+    design: {
+      orientacoes: "IDENTIDADE VISUAL\n• Cor principal da marca: verde #009700 (campo, vitalidade, agropecuária)\n• Apoios: branco, off-white, tons terrosos suaves\n• Evitar: azul institucional frio, roxo, rosa, gradientes chamativos\n\nTIPOGRAFIA\n• Títulos: fonte sem serifa moderna, peso bold, hierarquia clara\n• Corpo: legível, peso regular, bom contraste com o fundo\n• Sentence case nos títulos (não TUDO EM CAIXA ALTA)\n\nELEMENTOS GRÁFICOS\n• Fotos reais de campo: vacas leiteiras, ordenha, pastagem, técnico em visita\n• Ícones técnicos clean (sem desenhos animados infantis)\n• Gráficos e dados quando o tema for produtividade/sanidade\n• Espaço em branco generoso — peça que respira\n\nO QUE EVITAR\n• Cores neon, gradientes berrantes\n• Stock photos genéricas de gravatas\n• Mascote/desenho animado de vaca\n• Layout sobrecarregado com 5 elementos competindo",
+      checklist: [
+        "A peça parece técnica, profissional e confiável?",
+        "O verde #009700 está presente como cor principal?",
+        "Foto usada é de campo real (não banco de imagens genérico)?",
+        "Título está em sentence case e tem hierarquia clara?",
+        "A peça conversa com produtor rural (não com executivo urbano)?",
+        "Tem respiro / espaço em branco suficiente?",
+        "Logo da VetService está aplicada com clareza e contraste?"
+      ]
+    },
     video: { orientacoes: "(em construção)", checklist: [] },
     midia: { orientacoes: "(em construção)", checklist: [] }
   }
