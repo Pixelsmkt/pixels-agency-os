@@ -13085,7 +13085,54 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                       let paidLocal=false;
                       try{paidLocal=!!(JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}")[t.id]);}catch(e){}
                       const isPaid=!!t.paidAt||paidLocal;
-                      return <span onClick={function(e){e.stopPropagation();if(!canEditPaid)return;const wasPaid=isPaid;const nowIso=new Date().toISOString();const nextPaidAt=wasPaid?null:nowIso;try{const lp=JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}");if(wasPaid){delete lp[t.id];}else{lp[t.id]=nowIso;}localStorage.setItem("pixels-paid-tasks",JSON.stringify(lp));}catch(e){}if(typeof setTasks==="function"){setTasks(function(prev){return (prev||[]).map(function(x){if(x.id!==t.id)return x;return Object.assign({},x,{paidAt:nextPaidAt});});});}if(window._sb){window._sb.from("tasks").update({paid_at:nextPaidAt}).eq("id",t.id).then(function(){}).catch(function(err){console.error("paid sync supabase:",err);});}}} title={canEditPaid?(isPaid?"Clique pra desmarcar pago":"Clique pra marcar como pago"):"Só Gustavo pode marcar pago"} style={{display:"inline-flex",alignItems:"center",gap:3,background:isPaid?"#dcfce7":"#f1f5f9",color:isPaid?"#15803d":"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",cursor:canEditPaid?"pointer":"not-allowed",border:isPaid?"1px solid #bbf7d0":"1px dashed #cbd5e1",transition:"all .12s",opacity:canEditPaid?1:0.7}}>
+                      return <span onClick={function(e){e.stopPropagation();if(!canEditPaid)return;const wasPaid=isPaid;const nowIso=new Date().toISOString();const nextPaidAt=wasPaid?null:nowIso;try{const lp=JSON.parse(localStorage.getItem("pixels-paid-tasks")||"{}");if(wasPaid){delete lp[t.id];}else{lp[t.id]=nowIso;}localStorage.setItem("pixels-paid-tasks",JSON.stringify(lp));}catch(e){}if(typeof setTasks==="function"){setTasks(function(prev){return (prev||[]).map(function(x){if(x.id!==t.id)return x;return Object.assign({},x,{paidAt:nextPaidAt});});});}if(window._sb){
+  // Upsert defensivo: manda só {id, paid_at} via PATCH direto via fetch REST API,
+  // bypassando qualquer interceptor do supabase-js que pode estar comendo o update.
+  // Authorization é obtida do localStorage que o supabase-js mantém.
+  (function(){
+    try{
+      const SB_URL="https://jffvoojcskwumnphsedq.supabase.co";
+      const SB_ANON=(window._sb&&window._sb.supabaseKey)||"";
+      const sess=window._sb&&window._sb.auth&&window._sb.auth.getSession?null:null; // placeholder
+      // Pega token do localStorage (padrão supabase-js)
+      let tok="";
+      try{
+        const keys=Object.keys(localStorage);
+        const k=keys.find(k=>k.startsWith("sb-")&&k.endsWith("-auth-token"));
+        if(k){const v=JSON.parse(localStorage.getItem(k));tok=v&&v.access_token||"";}
+      }catch(e){}
+      if(!tok){console.warn("paid sync: sem token");if(typeof pixelsToast!=="undefined")pixelsToast.warning("Sem sessão Supabase pra salvar",4000);return;}
+      fetch(SB_URL+"/rest/v1/tasks?id=eq."+encodeURIComponent(t.id),{
+        method:"PATCH",
+        headers:{
+          "apikey":SB_ANON,
+          "Authorization":"Bearer "+tok,
+          "Content-Type":"application/json",
+          "Prefer":"return=representation"
+        },
+        body:JSON.stringify({paid_at:nextPaidAt})
+      }).then(async function(r){
+        if(!r.ok){
+          const txt=await r.text().catch(()=>r.statusText);
+          console.error("paid sync HTTP "+r.status+":",txt);
+          if(typeof pixelsToast!=="undefined")pixelsToast.error("Falha ao salvar Pago ("+r.status+"): "+txt.slice(0,80),7000);
+        } else {
+          const arr=await r.json().catch(()=>null);
+          if(Array.isArray(arr)&&arr.length===0){
+            // PATCH retornou 200 mas 0 rows alteradas — provavelmente RLS bloqueou
+            console.warn("paid sync: 0 rows alteradas pro id "+t.id);
+            if(typeof pixelsToast!=="undefined")pixelsToast.warning("Pago não persistiu (0 rows). Verifique RLS da tabela tasks pra UPDATE.",7000);
+          }
+        }
+      }).catch(function(err){
+        console.error("paid sync fetch error:",err);
+        if(typeof pixelsToast!=="undefined")pixelsToast.error("Falha de rede: "+(err.message||err),6000);
+      });
+    }catch(outerErr){
+      console.error("paid sync outer error:",outerErr);
+    }
+  })();
+}}} title={canEditPaid?(isPaid?"Clique pra desmarcar pago":"Clique pra marcar como pago"):"Só Gustavo pode marcar pago"} style={{display:"inline-flex",alignItems:"center",gap:3,background:isPaid?"#dcfce7":"#f1f5f9",color:isPaid?"#15803d":"#94a3b8",borderRadius:99,padding:"2px 9px",fontSize:9,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap",cursor:canEditPaid?"pointer":"not-allowed",border:isPaid?"1px solid #bbf7d0":"1px dashed #cbd5e1",transition:"all .12s",opacity:canEditPaid?1:0.7}}>
                         {isPaid
                           ?<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                           :<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>}
