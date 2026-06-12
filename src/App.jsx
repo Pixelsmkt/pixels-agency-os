@@ -2837,6 +2837,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="gamepad")   return <svg {...p}><line x1="6" y1="11" x2="10" y2="11"/><line x1="8" y1="9" x2="8" y2="13"/><line x1="15" y1="12" x2="15.01" y2="12"/><line x1="18" y1="10" x2="18.01" y2="10"/><path d="M17.32 5H6.68a4 4 0 00-3.978 3.59c-.006.052-.01.101-.017.152C2.604 9.416 2 14.456 2 16a3 3 0 003 3c1 0 1.5-.5 2-1l1.414-1.414A2 2 0 019.828 16h4.344a2 2 0 011.414.586L17 18c.5.5 1 1 2 1a3 3 0 003-3c0-1.545-.604-6.584-.685-7.258-.007-.05-.011-.1-.017-.151A4 4 0 0017.32 5z"/></svg>;
   if(n==="heart")     return <svg {...p}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>;
   if(n==="info")      return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
+  if(n==="target")    return <svg {...p}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
   return null;
 }
 
@@ -8997,86 +8998,209 @@ function COrientacoes({cl}){
   </div>);
 }
 
-function CMetas({cl}){
-  let[goals,setGoals]=useState(function(){
-    try{let s=localStorage.getItem("pixels-goals-"+cl.id);if(s)return JSON.parse(s);}catch(e){}
-    return cl.goals||[];
-  });
-  let[adding,setAdding]=useState(false);
-  let[form,setForm]=useState({title:"",target:"",current:"",unit:""});
+// ── METAS ─────────────────────────────────────────────────
+// Estrutura fixa de agência: 4 pilares (Seguidores, Engajamento, Leads, Vendas).
+// Cada pilar tem `target` (combinado com cliente no início do ciclo) e
+// `current` (atualizado pela equipe ou puxado de relatório).
+// Salvo em Supabase `clients.metas` (JSONB) — mesma fonte que o Portal lê,
+// então tudo aqui aparece automático no Portal do cliente.
+function CMetas({cl, accentColor, readOnly}){
+  const accent = accentColor || cl.color || "#9F43F6";
+  const sb = window._sb;
 
-  let save=function(list){
-    setGoals(list);
-    try{localStorage.setItem("pixels-goals-"+cl.id,JSON.stringify(list));}catch(e){}
-    if(window._sb)window._sb.from("clients").update({metas:list,updated_by:CURRENT_USER.name}).eq("client_id",cl.id).then(()=>{}).catch(e=>console.warn("[cliente_ferramentas] db update falhou:",e?.message||e));
-  };
+  const PILARES = [
+    {key:"seguidores",  label:"Seguidores",  ico:"users",       color:"#0ea5e9",
+     desc:"Crescimento da audiência (Instagram, TikTok, etc)", unit:"", scope:"acumulado"},
+    {key:"engajamento", label:"Engajamento", ico:"heart",       color:"#ec4899",
+     desc:"Taxa media de engajamento por publicacao",          unit:"%", scope:"mensal"},
+    {key:"leads",       label:"Leads",       ico:"flame",       color:"#f59e0b",
+     desc:"Leads gerados via trafego pago e organico",         unit:"", scope:"mensal"},
+    {key:"vendas",      label:"Vendas",      ico:"trending-up", color:"#16a34a",
+     desc:"Vendas/conversoes atribuidas ao marketing",         unit:"", scope:"mensal"},
+  ];
 
-  let add=function(){
-    if(!form.title.trim())return;
-    save([...goals,{...form,id:Date.now(),target:parseFloat(form.target)||0,current:parseFloat(form.current)||0}]);
-    setForm({title:"",target:"",current:"",unit:""});setAdding(false);
-  };
+  function _legacyToPilares(arr){
+    const out={};
+    (arr||[]).forEach(function(g){
+      const t=(g.title||"").toLowerCase();
+      let k=null;
+      if(t.indexOf("seguidor")>=0) k="seguidores";
+      else if(t.indexOf("engaj")>=0||t.indexOf("eng.")>=0) k="engajamento";
+      else if(t.indexOf("lead")>=0) k="leads";
+      else if(t.indexOf("venda")>=0||t.indexOf("conver")>=0) k="vendas";
+      if(k && !out[k]) out[k]={target:Number(g.target)||0,current:Number(g.current)||0};
+    });
+    return out;
+  }
 
-  let update=function(id,field,val){
-    save(goals.map(function(g){return g.id===id?{...g,[field]:parseFloat(val)||0}:g;}));
-  };
+  const _initialMetas = (function(){
+    try{
+      const s=localStorage.getItem("pixels-goals-"+cl.id);
+      if(s){
+        const parsed=JSON.parse(s);
+        if(parsed && !Array.isArray(parsed) && typeof parsed==="object") return parsed;
+        if(Array.isArray(parsed)) return _legacyToPilares(parsed);
+      }
+    }catch(e){}
+    if(Array.isArray(cl.goals)) return _legacyToPilares(cl.goals);
+    if(Array.isArray(cl.metas)) return _legacyToPilares(cl.metas);
+    if(cl.metas && typeof cl.metas==="object") return cl.metas;
+    return {};
+  })();
 
-  let inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  const [metas,setMetas] = useState(_initialMetas);
+  const [savedAt,setSavedAt] = useState(0);
 
-  return(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-      <div>
-        <div style={{color:C.tx,fontWeight:700,fontSize:14}}>Metas e Objetivos</div>
-        <div style={{color:C.td,fontSize:11,marginTop:2}}>Objetivos combinados com o cliente</div>
+  useEffect(function(){
+    if(!sb) return;
+    let alive = true;
+    function reload(){
+      sb.from("clients").select("metas").eq("client_id",cl.id).single()
+        .then(function(r){
+          if(!alive) return;
+          if(r.error) return;
+          const remote = r.data && r.data.metas;
+          if(remote && typeof remote==="object" && !Array.isArray(remote)) setMetas(remote);
+          else if(Array.isArray(remote)) setMetas(_legacyToPilares(remote));
+        })
+        .catch(function(){});
+    }
+    reload();
+    const ch = sb.channel("clients-metas-"+cl.id)
+      .on("postgres_changes",{event:"UPDATE",schema:"public",table:"clients",filter:"client_id=eq."+cl.id},
+        function(){ reload(); })
+      .subscribe();
+    function onFocus(){ reload(); }
+    window.addEventListener("focus",onFocus);
+    return function(){
+      alive=false;
+      try{ sb.removeChannel(ch); }catch(e){}
+      window.removeEventListener("focus",onFocus);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[cl.id]);
+
+  function persist(next){
+    setMetas(next);
+    try{ localStorage.setItem("pixels-goals-"+cl.id, JSON.stringify(next)); }catch(e){}
+    if(!sb) return;
+    sb.from("clients").update({metas:next,updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"system")}).eq("client_id",cl.id)
+      .then(function(r){
+        if(r.error){ console.warn("[metas] save:",r.error.message); return; }
+        setSavedAt(Date.now());
+      })
+      .catch(function(e){ console.warn("[metas] save:",e?.message||e); });
+  }
+
+  function setField(key,field,val){
+    if(readOnly) return;
+    const cur = metas[key] || {target:0,current:0};
+    const num = val===""?0:Number(val);
+    const next = Object.assign({}, metas, {[key]: Object.assign({}, cur, {[field]: isFinite(num)?num:0})});
+    persist(next);
+  }
+
+  const FF="'Inter',system-ui,-apple-system,sans-serif";
+
+  const atingidos = PILARES.filter(function(p){
+    const m=metas[p.key]; if(!m||!m.target) return false;
+    return Number(m.current||0) >= Number(m.target||0);
+  }).length;
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:FF}}>
+
+    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:accent+"15",border:"1px solid "+accent+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          {typeof Ico==="function"
+            ? <Ico n="target" size={20} color={accent}/>
+            : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>}
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Metas — {cl.name}</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>4 pilares fixos: o que combinamos no inicio do ciclo e onde estamos agora</div>
+        </div>
       </div>
-      <button onClick={()=>setAdding(true)} style={{background:C.a+"18",color:C.a,border:"1px solid "+C.a+"33",borderRadius:9,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}}>+ Meta</button>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        {savedAt>0 && Date.now()-savedAt<3000 && <span style={{color:"#16a34a",fontSize:11,fontWeight:600}}>Salvo</span>}
+        <div style={{background:atingidos===PILARES.length?"#dcfce7":"#f1f5f9",color:atingidos===PILARES.length?"#15803d":"#0f172a",border:"1px solid "+(atingidos===PILARES.length?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1}}>
+          {atingidos}/{PILARES.length} atingidas
+        </div>
+      </div>
     </div>
 
-    {adding&&(<div style={{background:C.card,borderRadius:14,padding:"16px",border:"1px solid "+C.b1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-      <div style={{gridColumn:"1/-1"}}>
-        <div style={{color:C.td,fontSize:10,marginBottom:3}}>Título *</div>
-        <input value={form.title} onChange={e=>setForm(function(p){return{...p,title:e.target.value};})} placeholder="Ex: Leads Meta, ROAS, Seguidores..." style={inp}/>
-      </div>
-      {[{k:"target",p:"Meta (target)"},{k:"current",p:"Valor atual"},{k:"unit",p:"Unidade (leads, x, %)"}].map(function(f){
-        return(<div key={f.k}>
-          <div style={{color:C.td,fontSize:10,marginBottom:3}}>{f.p}</div>
-          <input value={form[f.k]} onChange={e=>{let n={...form};n[f.k]=e.target.value;setForm(n);}} style={inp}/>
-        </div>);
-      })}
-      <div style={{gridColumn:"1/-1",display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button onClick={()=>setAdding(false)} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 14px",color:C.ts,fontSize:12,cursor:"pointer"}}>Cancelar</button>
-        <button onClick={add} style={{background:C.a,color:"#fff",border:"none",borderRadius:9,padding:"7px 16px",fontWeight:700,fontSize:12,cursor:"pointer"}}>Salvar</button>
-      </div>
-    </div>)}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12}}>
+      {PILARES.map(function(p){
+        const m = metas[p.key] || {target:0,current:0};
+        const tgt = Number(m.target||0);
+        const cur = Number(m.current||0);
+        const pct = tgt>0 ? Math.min(100, Math.round(cur/tgt*100)) : 0;
+        const ok = tgt>0 && cur>=tgt;
+        const status = ok ? {label:"Meta atingida", color:"#16a34a", bg:"#dcfce7", border:"#bbf7d0"}
+                          : pct>=70 ? {label:"No caminho",      color:"#a16207", bg:"#fef3c7", border:"#fde68a"}
+                          : pct>=40 ? {label:"Em progresso",    color:"#9a3412", bg:"#ffedd5", border:"#fed7aa"}
+                          : tgt===0 ? {label:"Nao definida",    color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"}
+                                    : {label:"Atrasada",        color:"#991b1b", bg:"#fee2e2", border:"#fecaca"};
 
-    {goals.length===0&&!adding&&(<div style={{background:C.card,borderRadius:14,padding:"32px",textAlign:"center",border:"1px solid "+C.b1}}>
-      <div style={{fontSize:32,marginBottom:8}}>🎯</div><div style={{color:C.ts,fontSize:13}}>Nenhuma meta cadastrada</div>
-    </div>)}
+        return <div key={p.key} style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"18px 18px 16px",display:"flex",flexDirection:"column",gap:12,fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:11}}>
+            <div style={{width:38,height:38,borderRadius:11,background:p.color+"15",border:"1px solid "+p.color+"30",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {typeof Ico==="function" && <Ico n={p.ico} size={18} color={p.color}/>}
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>{p.label}</div>
+              <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,textTransform:"uppercase",letterSpacing:.4,fontWeight:600}}>
+                {p.scope==="acumulado"?"Total acumulado":"Por mes"}
+              </div>
+            </div>
+            <span style={{background:status.bg,color:status.color,border:"1px solid "+status.border,borderRadius:99,padding:"3px 9px",fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>
+              {status.label}
+            </span>
+          </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:12}}>
-      {goals.map(function(g,i){
-        let pct=g.target>0?Math.min(100,Math.round((g.current/g.target)*100)):0;
-        let col=pct>=100?C.gr:pct>=70?C.yw:pct>=40?C.or:C.rd;
-        return(<div key={g.id||i} style={{background:C.card,borderRadius:14,padding:"16px",border:"1px solid "+C.b1,position:"relative"}}>
-          <button onClick={()=>save(goals.filter(function(_,j){return j!==i;}))}
-            style={{position:"absolute",top:10,right:10,background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13}}>×</button>
-          <div style={{color:C.tx,fontWeight:700,fontSize:13,paddingRight:20,marginBottom:8}}>{g.title}</div>
-          <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:10}}>
-            <input type="number" value={g.current} onChange={e=>update(g.id,"current",e.target.value)}
-              style={{...inp,width:70,textAlign:"center",fontWeight:900,fontSize:20,color:col,padding:"4px 6px"}}/>
-            <span style={{color:C.td,fontSize:13}}>/ {g.target} {g.unit}</span>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div>
+              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Atual</div>
+              <div style={{position:"relative"}}>
+                <input type="number" inputMode="decimal" value={cur||""} placeholder="0"
+                  onChange={function(e){ setField(p.key,"current",e.target.value); }}
+                  disabled={readOnly}
+                  style={{width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 11px",fontSize:18,fontWeight:800,color:p.color,outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"}}/>
+                {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
+              </div>
+            </div>
+            <div>
+              <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Meta</div>
+              <div style={{position:"relative"}}>
+                <input type="number" inputMode="decimal" value={tgt||""} placeholder="0"
+                  onChange={function(e){ setField(p.key,"target",e.target.value); }}
+                  disabled={readOnly}
+                  style={{width:"100%",boxSizing:"border-box",background:readOnly?"#f8fafc":"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 11px",fontSize:18,fontWeight:800,color:"#0f172a",outline:"none",fontFamily:FF,fontFeatureSettings:"'tnum'"}}/>
+                {p.unit && <span style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:11,fontWeight:600,pointerEvents:"none"}}>{p.unit}</span>}
+              </div>
+            </div>
           </div>
-          <div style={{background:C.b1,borderRadius:99,height:6,overflow:"hidden"}}>
-            <div style={{width:pct+"%",height:"100%",background:col,borderRadius:99,transition:"width .5s"}}/>
+
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+              <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Progresso</span>
+              <span style={{color:ok?"#15803d":p.color,fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
+            </div>
+            <div style={{background:"#f1f5f9",borderRadius:99,height:7,overflow:"hidden"}}>
+              <div style={{width:pct+"%",height:"100%",background:ok?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+p.color+","+p.color+"cc)",borderRadius:99,transition:"width .35s"}}/>
+            </div>
           </div>
-          <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
-            <span style={{color:col,fontSize:11,fontWeight:700}}>{pct}%</span>
-            <span style={{color:C.td,fontSize:10}}>{pct>=100?"Meta atingida!":pct>=70?"No caminho":"Atenção"}</span>
-          </div>
-        </div>);
+
+          <div style={{color:"#94a3b8",fontSize:11,lineHeight:1.45}}>{p.desc}</div>
+        </div>;
       })}
     </div>
-  </div>);
+
+    <div style={{background:"#f8fafc",border:"0.5px dashed #cbd5e1",borderRadius:12,padding:"11px 14px",color:"#64748b",fontSize:11.5,lineHeight:1.5,fontFamily:FF}}>
+      Atualizado em tempo real entre Estrategia &gt; Clientes e o Portal do cliente. Socios e gestores editam, cliente acompanha em modo leitura no portal.
+    </div>
+
+  </div>;
 }
 
 /* ── DRIVE (Info) ────────────────────────── */
@@ -9952,7 +10076,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"evolucao",      label:"Evolução",            ico:"trending-up"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
     {id:"planejamento",  label:"Planejamento mensal", ico:"layers"},
-    {id:"metas",         label:"Metas",               ico:"sparkles"},
+    {id:"metas",         label:"Metas",               ico:"target"},
   ];
 
   if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("analises");},0);
@@ -33900,6 +34024,7 @@ const PORTAL_ALL_TABS=[
   {id:"demandas",    ico:"zap",         label:"Demandas"},
   {id:"briefing",    ico:"fileText",    label:"Briefing"},
   {id:"marcos",      ico:"flame",       label:"Marcos"},
+  {id:"metas",       ico:"target",      label:"Metas"},
   {id:"planejamento",ico:"layers",      label:"Planejamento mensal"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicadas"},
@@ -36985,6 +37110,12 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       // Cliente que acessa o portal vê tudo em read-only.
       const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
       return <CMarcos cl={cl} canEdit={!!_gestor}/>;
+    })()}
+    {tab==="metas"&&typeof CMetas==="function"&&(function(){
+      // Metas no portal: gestores Pixels editam, cliente que acessa o portal vê em read-only.
+      // Mesmo componente CMetas que Estratégia > Clientes usa — sincronizado via Supabase.
+      const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
+      return <CMetas cl={cl} accentColor={cl.color} readOnly={!_gestor}/>;
     })()}
     {tab==="concorrencia"&&typeof ClienteConcorrencia==="function"&&(function(){
       // Concorrência no portal: gestores Pixels alimentam, cliente só visualiza.
