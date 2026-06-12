@@ -2397,13 +2397,13 @@ const BRIEFING_SECTIONS = [
       { id:"cadastro", label:"Informações cadastrais", help:"Nome empresarial, CNPJ, endereço, responsável legal", type:"textarea" },
     ]
   },
-  { id:"objetivos",       label:"Objetivos & números",   icon:"target",       color:"#dc2626",
+  { id:"objetivos",       label:"Objetivos e números",   icon:"target",       color:"#dc2626",
     fields:[
       { id:"objetivo_primario", label:"Objetivo primário com marketing", type:"radio",
-        options:["Aumento de Vendas/Receita","Reconhecimento de Marca (Branding)","Outro"] },
+        options:["Aumento de vendas/receita","Reconhecimento de marca (Branding)","Outro"] },
       { id:"objetivo_primario_outro", label:"Especifique outro", type:"text", showIf:{field:"objetivo_primario", value:"Outro"} },
       { id:"objetivos_secundarios", label:"Objetivos secundários (até 3)", type:"multi",
-        options:["Lançamento de Novo Produto/Serviço","Aumentar o Ticket Médio","Melhorar a Taxa de Retenção","Educação de Mercado","Expandir para Nova Localização","Otimização do CPA","Geração de leads qualificados","Aumento de Vendas/Receita","Reconhecimento de Marca"] },
+        options:["Lançamento de novo produto/serviço","Aumentar o ticket médio","Melhorar a taxa de retenção","Educação de mercado","Expandir para nova localização","Otimização do CPA","Geração de leads qualificados","Aumento de vendas/receita","Reconhecimento de marca"] },
       { id:"cidades", label:"Cidades de atuação", type:"text" },
       { id:"ticket_medio", label:"Ticket médio", help:"em Reais", type:"text" },
       { id:"faturamento_mensal", label:"Faturamento médio mensal", help:"em Reais", type:"text" },
@@ -2413,7 +2413,7 @@ const BRIEFING_SECTIONS = [
       { id:"funil_vendas", label:"Etapas do funil de vendas", help:"do anúncio ao fechamento", type:"textarea" },
     ]
   },
-  { id:"mercado",         label:"Mercado & concorrência", icon:"trending-up", color:"#ea580c",
+  { id:"mercado",         label:"Mercado e concorrência", icon:"trending-up", color:"#ea580c",
     fields:[
       { id:"problemas", label:"Problemas que, se resolvidos, fariam a empresa vender mais", type:"textarea" },
       { id:"oportunidades", label:"Oportunidades de crescimento que podemos aproveitar", type:"textarea" },
@@ -2421,7 +2421,7 @@ const BRIEFING_SECTIONS = [
       { id:"referencia", label:"Empresa que você admira ou usa como referência", type:"textarea" },
     ]
   },
-  { id:"produtos",        label:"Produtos & serviços",   icon:"image",        color:"#f97316",
+  { id:"produtos",        label:"Produtos e serviços",   icon:"image",        color:"#f97316",
     fields:[
       { id:"principais", label:"Produtos/serviços principais e mais vendidos", type:"textarea" },
       { id:"detalhes", label:"Detalhes (preço, benefícios, dores resolvidas, diferenciais)", type:"textarea" },
@@ -2461,24 +2461,24 @@ const BRIEFING_SECTIONS = [
       { id:"site", label:"Site / landing page", help:"link, se houver", type:"text" },
     ]
   },
-  { id:"orcamento",       label:"Orçamento & material",  icon:"wallet",       color:"#16a34a",
+  { id:"orcamento",       label:"Orçamento e material",  icon:"wallet",       color:"#16a34a",
     fields:[
       { id:"trafego_pago", label:"Orçamento mensal para tráfego pago", help:"em Reais", type:"text" },
       { id:"promocoes", label:"Promoções ou ofertas especiais para campanhas", type:"textarea" },
       { id:"materiais_proprios", label:"Possui materiais de divulgação", help:"fotos, vídeos, depoimentos, artes prontas", type:"radio", options:["Sim","Não"] },
       { id:"tom_voz", label:"Tom de voz para conteúdos/anúncios", type:"radio",
-        options:["Profissional e Técnico","Informal e Próximo","Divertido e Descontraído","Inspirador e Motivacional","Educativo","Outro"] },
+        options:["Profissional e técnico","Informal e próximo","Divertido e descontraído","Inspirador e motivacional","Educativo","Outro"] },
       { id:"tom_voz_outro", label:"Especifique outro tom de voz", type:"text", showIf:{field:"tom_voz", value:"Outro"} },
     ]
   },
-  { id:"metas",           label:"Metas & sucesso",       icon:"flag",         color:"#059669",
+  { id:"metas",           label:"Metas e sucesso",       icon:"flag",         color:"#059669",
     fields:[
       { id:"sucesso_90d", label:"O que precisa conquistar em 90 dias para o projeto ser sucesso", type:"textarea" },
       { id:"meta_numeros", label:"Meta de leads/vendas/margem", type:"textarea" },
       { id:"desafios_internos", label:"Desafios internos que podem impactar resultados", type:"textarea" },
     ]
   },
-  { id:"aprovacao",       label:"Aprovação & contatos",  icon:"checkCircle",  color:"#9333ea",
+  { id:"aprovacao",       label:"Aprovação e contatos",  icon:"checkCircle",  color:"#9333ea",
     fields:[
       { id:"fluxo", label:"Fluxo de aprovação", type:"radio",
         options:["Aprovação individual de cada conteúdo/anúncio","Aprovação apenas de materiais estratégicos","Pixels tem autonomia"] },
@@ -2496,8 +2496,8 @@ const BRIEFING_SEED = {
   vetservice: {
     identidade:{ cadastro:"A.R. Dos Santos Agro — CNPJ 35.348.331/0001-00\nRua Duque de Caxias — Bairro Gramado — Ibirapuitã/RS\nResponsável legal: Anderson Rigo dos Santos" },
     objetivos:{
-      objetivo_primario:"Aumento de Vendas/Receita",
-      objetivos_secundarios:["Lançamento de Novo Produto/Serviço","Educação de Mercado","Reconhecimento de Marca"],
+      objetivo_primario:"Aumento de vendas/receita",
+      objetivos_secundarios:["Lançamento de novo produto/serviço","Educação de mercado","Reconhecimento de marca"],
       cidades:"RS e SC",
       ticket_medio:"Vinculado à venda dos nossos produtos.",
       faturamento_mensal:"R$ 2,5 milhões",
@@ -2547,7 +2547,7 @@ const BRIEFING_SEED = {
       trafego_pago:"R$ 750,00",
       promocoes:"Não há.",
       materiais_proprios:"Sim",
-      tom_voz:"Profissional e Técnico",
+      tom_voz:"Profissional e técnico",
     },
     metas:{
       sucesso_90d:"2 novos clientes por mês.",
@@ -2620,6 +2620,15 @@ function BriefingFormCanonico(props){
   const data = briefing.data || {};
   const [activeSection,setActiveSection] = useState("identidade");
 
+  // Normalização pra comparar valores salvos antigamente (casing diferente, acentos)
+  // com as options atuais. Casos: "Educação de Mercado" salvo no DB precisa bater com
+  // "Educação de mercado" do array de options atual (sentence case ABNT).
+  function _brNorm(s){
+    if(s==null) return "";
+    return String(s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").trim();
+  }
+  function _brEq(a,b){ return _brNorm(a) === _brNorm(b); }
+
   function getField(sec, fid){
     const s = data[sec] || {};
     return s[fid];
@@ -2634,7 +2643,8 @@ function BriefingFormCanonico(props){
     if(!canEdit) return;
     const cur = getField(sec, fid);
     const arr = Array.isArray(cur)?cur.slice():[];
-    const idx = arr.indexOf(opt);
+    // Comparação case/acento-insensitive pra encontrar valores legados
+    const idx = arr.findIndex(function(v){ return _brEq(v, opt); });
     if(idx>=0) arr.splice(idx,1); else arr.push(opt);
     setField(sec, fid, arr);
   }
@@ -2716,7 +2726,7 @@ function BriefingFormCanonico(props){
                 {labelDom}
                 <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
                   {f.options.map(function(opt){
-                    const sel = val===opt;
+                    const sel = _brEq(val, opt);
                     return <button key={opt} type="button" onClick={function(){if(canEdit)setField(current.id, f.id, opt);}}
                       disabled={!canEdit}
                       style={{background:sel?current.color:"#fff",color:sel?"#fff":"#475569",border:"1px solid "+(sel?current.color:"#e2e8f0"),borderRadius:99,padding:"7px 14px",fontSize:12.5,fontWeight:sel?700:600,cursor:canEdit?"pointer":"not-allowed",fontFamily:"inherit",transition:"all .12s"}}>
@@ -2732,7 +2742,7 @@ function BriefingFormCanonico(props){
                 {labelDom}
                 <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
                   {f.options.map(function(opt){
-                    const sel = arr.indexOf(opt)>=0;
+                    const sel = arr.some(function(v){ return _brEq(v, opt); });
                     return <button key={opt} type="button" onClick={function(){if(canEdit)toggleMulti(current.id, f.id, opt);}}
                       disabled={!canEdit}
                       style={{background:sel?current.color+"14":"#fff",color:sel?current.color:"#475569",border:"1px solid "+(sel?current.color+"55":"#e2e8f0"),borderRadius:8,padding:"6px 11px",fontSize:12,fontWeight:sel?700:600,cursor:canEdit?"pointer":"not-allowed",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
