@@ -9952,7 +9952,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"evolucao",      label:"Evolução",            ico:"trending-up"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
     {id:"planejamento",  label:"Planejamento mensal", ico:"layers"},
-    {id:"info",          label:"Informações",         ico:"info"},
+    {id:"metas",         label:"Metas",               ico:"sparkles"},
   ];
 
   if(!TABS.find(function(t){return t.id===tab;})) setTimeout(function(){setTab("analises");},0);
@@ -10086,7 +10086,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
-    {tab==="info"&&<CInfo cl={cl}/>}
+    {tab==="metas"&&<CMetas cl={cl}/>}
 
   </div>);
 }
@@ -46920,6 +46920,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     {id:"pb-orientacoes",  label:"Orientações",  icon:areaCfg.icon},
   ];
   if(hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
+  if(area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações para a equipe", icon:"sparkles"});
   SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
 
   // ─────────── Layout ───────────
@@ -47065,6 +47066,16 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 onSaveImg={(url)=>onUpdateArea({templates:(areaData.templates||[]).map(t=>t.id===tpl.id?Object.assign({},t,{imgUrl:url}):t)})}/>
             ))}
           </div>}
+
+          {/* Orientações para a equipe — só na área Design.
+              Logos, paleta de cores copiável, fontes, tom de voz, hashtags, CTA,
+              não-fazer e redes sociais. Mesma fonte (Supabase clients.orientacoes)
+              que o card de cada cliente lê — alterações refletem em todo lugar. */}
+          {area==="design" && typeof COrientacoes==="function" &&
+            <PlaybookBlock id="pb-equipe" title="Orientações para a equipe" subtitle="Logos, paleta, fontes, tom de voz — copiável pela equipe nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
+              <COrientacoes cl={cl}/>
+            </PlaybookBlock>
+          }
 
         </div>
 
