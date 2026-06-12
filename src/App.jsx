@@ -1436,44 +1436,38 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
           :[{l:"Foto",n:c.fotoObra,p:DESIGNER_PRICES.fotoObra},{l:"Arte",n:c.arte,p:DESIGNER_PRICES.arte},{l:"Carrossel",n:c.carrossel,p:DESIGNER_PRICES.carrossel},{l:"Folder",n:c.folder,p:DESIGNER_PRICES.folder}];
         // Mostra TODOS os tipos (inclusive 0) com preço unitário visível
         const hasAny=items.some(function(it){return it.n>0;});
-        return <div key={fr.id} style={{background:"linear-gradient(180deg,"+accent+"08 0%,#fff 75%)",border:"1px solid "+accent+"33",borderRadius:16,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 6px 22px "+accent+"15, 0 1px 2px rgba(15,23,42,0.04)",transition:"all .22s cubic-bezier(.4,0,.2,1)"}}
-          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 18px 38px "+accent+"30, 0 2px 6px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor=accent+"66";}}
-          onMouseLeave={function(e){e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 6px 22px "+accent+"15, 0 1px 2px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor=accent+"33";}}>
+        return <div key={fr.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"55";e.currentTarget.style.boxShadow="0 8px 20px rgba(15,23,42,0.06)";e.currentTarget.style.transform="translateY(-2px)";}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,0.04)";e.currentTarget.style.transform="translateY(0)";}}>
 
-          {/* ── HEADER COLORIDO ── */}
-          <div style={{position:"relative",background:"linear-gradient(135deg,"+accent+" 0%,"+accent+"dd 55%,"+accent+"aa 100%)",padding:"22px 18px 18px",display:"flex",flexDirection:"column",alignItems:"center",gap:11,overflow:"hidden"}}>
-            {/* Glow decorativo no header */}
-            <div style={{position:"absolute",top:-40,right:-30,width:140,height:140,borderRadius:"50%",background:"radial-gradient(circle,rgba(255,255,255,0.25) 0%,transparent 70%)",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",bottom:-50,left:-20,width:120,height:120,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,0,0,0.15) 0%,transparent 70%)",pointerEvents:"none"}}/>
-            <div style={{position:"relative",width:84,height:84,borderRadius:"50%",border:"4px solid rgba(255,255,255,0.85)",overflow:"hidden",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 24px rgba(0,0,0,0.18)",flexShrink:0}}>
+          {/* HEADER — sóbrio, fundo branco, accent só no anel do avatar e no chip da função */}
+          <div style={{padding:"22px 18px 16px",display:"flex",flexDirection:"column",alignItems:"center",gap:10,borderBottom:"1px solid #f1f5f9"}}>
+            <div style={{position:"relative",width:80,height:80,borderRadius:"50%",overflow:"hidden",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 0 0 3px "+accent+", 0 4px 12px "+accent+"30"}}>
               {photo
                 ?<img src={photo} alt={fr.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                :<span style={{color:accent,fontWeight:900,fontSize:36,letterSpacing:-.6}}>{fr.av||(fr.name||"?")[0]}</span>}
+                :<span style={{color:accent,fontWeight:900,fontSize:32,letterSpacing:-.6}}>{fr.av||(fr.name||"?")[0]}</span>}
             </div>
-            <div style={{position:"relative",textAlign:"center"}}>
-              <div style={{color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3,lineHeight:1.2,textShadow:"0 1px 3px rgba(0,0,0,0.18)"}}>{fr.name}</div>
-              <div style={{display:"inline-block",marginTop:5,padding:"3px 11px",background:"rgba(255,255,255,0.22)",backdropFilter:"blur(4px)",borderRadius:99,color:"#fff",fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
+            <div style={{textAlign:"center"}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>{fr.name}</div>
+              <div style={{display:"inline-block",marginTop:5,padding:"2px 10px",background:accent+"12",border:"1px solid "+accent+"22",borderRadius:99,color:accent,fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{r.isEditor?"Edição de vídeo":"Design"}</div>
             </div>
           </div>
 
-          {/* ── BREAKDOWN ── */}
-          <div style={{padding:"16px 14px 14px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
+          {/* BREAKDOWN — sem gradiente colorido, fundo neutro */}
+          <div style={{padding:"14px 14px 12px",display:"flex",flexDirection:"column",gap:5,flex:1}}>
             {items.map(function(it,i){
               const has=it.n>0;
-              return <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"9px 11px",background:has?"linear-gradient(90deg,"+accent+"12 0%,"+accent+"06 100%)":"transparent",border:"1px solid "+(has?accent+"22":"#eef0f3"),borderRadius:10,opacity:has?1:0.55,transition:"all .15s"}}>
+              return <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"8px 11px",background:has?"#fafbfc":"transparent",border:"1px solid "+(has?"#f1f5f9":"transparent"),borderRadius:9,opacity:has?1:0.5}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
-                  <span style={{background:has?accent:"#f1f5f9",color:has?"#fff":"#94a3b8",fontWeight:800,fontSize:11.5,padding:"3px 8px",borderRadius:6,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0,minWidth:26,textAlign:"center",boxShadow:has?"0 2px 6px "+accent+"40":"none"}}>{it.n}×</span>
-                  <span style={{color:has?"#0f172a":"#94a3b8",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span>
-                  <span style={{color:has?accent:"#cbd5e1",fontSize:10,fontWeight:600,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",opacity:.75}}>· {fmtBRL(it.p).replace(",00","")}/un</span>
+                  <span style={{background:has?accent:"#f1f5f9",color:has?"#fff":"#94a3b8",fontWeight:800,fontSize:11.5,padding:"2px 8px",borderRadius:6,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0,minWidth:24,textAlign:"center"}}>{it.n}×</span>
+                  <span style={{color:has?"#0f172a":"#94a3b8",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span>
+                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>· {fmtBRL(it.p).replace(",00","")}/un</span>
                 </div>
-                <span style={{color:has?"#16a34a":"#cbd5e1",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.3,flexShrink:0}}>{fmtBRL(it.n*it.p).replace(",00","")}</span>
+                <span style={{color:has?"#16a34a":"#cbd5e1",fontSize:12.5,fontWeight:700,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0}}>{fmtBRL(it.n*it.p).replace(",00","")}</span>
               </div>;
             })}
-            {c.naoClassificado>0&&<div style={{color:"#a16207",fontSize:10.5,textAlign:"center",fontStyle:"italic",padding:"7px 8px",fontWeight:700,background:"#fef3c7",borderRadius:8,border:"1px solid #fde68a",marginTop:3}}>{c.naoClassificado} card(s) atribuído(s) sem tipo definido</div>}
 
-            {/* ── Miniaturas dos cards a pagar (mês anterior, atual, próximo) ── */}
-            {/* Pega capas das tasks já contadas em calcDesignerPayments — só status pago (aprovado/agendado/publicado).
-                3 colunas pra dar contexto: o que foi pago mês passado, o que paga agora, o que vem aí. */}
+            {/* Miniaturas dos cards a pagar — visual neutro, thumbs grandes (84px) */}
             {(function(){
               function _shiftRef(rm, delta){
                 if(!rm) return null;
@@ -1507,36 +1501,31 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               ];
               const totalCards=buckets.reduce(function(s,b){return s+b.items.length;},0);
               if(totalCards===0) return null;
-              return <div style={{marginTop:12,paddingTop:14,borderTop:"1px dashed "+accent+"44",display:"flex",flexDirection:"column",gap:11}}>
-                <div style={{display:"flex",alignItems:"center",gap:7}}>
-                  <div style={{width:4,height:13,borderRadius:2,background:accent}}/>
-                  <div style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Cards a pagar</div>
-                </div>
+              return <div style={{marginTop:12,paddingTop:14,borderTop:"1px solid #f1f5f9",display:"flex",flexDirection:"column",gap:12}}>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Cards a pagar</div>
                 {buckets.map(function(b){
-                  return <div key={b.key} style={{display:"flex",flexDirection:"column",gap:6,opacity:b.muted?0.72:1}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
-                      <div style={{display:"flex",alignItems:"center",gap:7}}>
-                        <span style={{background:b.muted?"#f1f5f9":accent+"15",color:b.muted?"#64748b":accent,fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",padding:"3px 9px",borderRadius:99,border:"1px solid "+(b.muted?"#e2e8f0":accent+"33")}}>{b.label||"—"}</span>
-                        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{b.items.length}{b.items.length===1?" card":" cards"}</span>
-                      </div>
+                  return <div key={b.key} style={{display:"flex",flexDirection:"column",gap:6,opacity:b.muted?0.6:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:7}}>
+                      <span style={{background:"#f1f5f9",color:"#64748b",fontSize:10,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",padding:"2px 8px",borderRadius:99}}>{b.label||"—"}</span>
+                      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>{b.items.length}{b.items.length===1?" card":" cards"}</span>
                     </div>
                     {b.items.length===0
-                      ? <div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",padding:"6px 2px"}}>nenhum</div>
-                      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(58px,1fr))",gap:6}}>
-                          {b.items.slice(0,8).map(function(t){
+                      ? <div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",paddingLeft:2}}>nenhum</div>
+                      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(84px,1fr))",gap:7}}>
+                          {b.items.slice(0,6).map(function(t){
                             const url=_thumb(t);
                             const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===t.client;});
                             const tip=(t.title||"Sem título")+(cl?" · "+cl.name:"");
-                            return <div key={t.id} title={tip} style={{aspectRatio:"1/1",borderRadius:9,overflow:"hidden",background:url?"#f1f5f9":(cl&&cl.color?cl.color+"18":"#f1f5f9"),border:"1.5px solid "+(b.muted?"#e5e7eb":accent+"44"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:cl&&cl.color?cl.color:"#94a3b8",cursor:"default",boxShadow:b.muted?"none":"0 2px 6px "+accent+"15",transition:"transform .15s"}}
-                              onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.06)";}}
-                              onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";}}>
+                            return <div key={t.id} title={tip} style={{aspectRatio:"1/1",borderRadius:10,overflow:"hidden",background:url?"#f1f5f9":"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#94a3b8",cursor:"default",transition:"all .15s"}}
+                              onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.04)";e.currentTarget.style.borderColor="#cbd5e1";}}
+                              onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";e.currentTarget.style.borderColor="#e2e8f0";}}>
                               {url
                                 ? <img src={url} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
                                 : (cl?cl.name.slice(0,2).toUpperCase():"?")
                               }
                             </div>;
                           })}
-                          {b.items.length>8 && <div title={(b.items.length-8)+" cards a mais"} style={{aspectRatio:"1/1",borderRadius:9,background:b.muted?"#f1f5f9":accent+"10",border:"1.5px dashed "+(b.muted?"#cbd5e1":accent+"55"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:b.muted?"#64748b":accent}}>+{b.items.length-8}</div>}
+                          {b.items.length>6 && <div title={(b.items.length-6)+" cards a mais"} style={{aspectRatio:"1/1",borderRadius:10,background:"#f8fafc",border:"1px dashed #cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#64748b"}}>+{b.items.length-6}</div>}
                         </div>
                     }
                   </div>;
@@ -1544,13 +1533,17 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               </div>;
             })()}
           </div>
-          <div style={{padding:"14px 18px",background:"linear-gradient(135deg,"+accent+"12 0%,"+accent+"05 100%)",borderTop:"1px solid "+accent+"22",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-            <span style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Total</span>
-            <div style={{textAlign:"right"}}>
-              <div style={{color:c.total>0?"#16a34a":"#94a3b8",fontWeight:900,fontSize:20,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(c.total)}</div>
-            </div>
+
+          {/* TOTAL — separador limpo */}
+          <div style={{padding:"14px 18px",background:"#fafbfc",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Total</span>
+            <div style={{color:c.total>0?"#16a34a":"#94a3b8",fontWeight:800,fontSize:18,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(c.total)}</div>
           </div>
-          <button type="button" onClick={function(){_abrirRollover(fr.id);}} title={"Rolar pendentes do "+fr.name+" pro próximo mês"} style={{background:"linear-gradient(90deg,"+accent+"22 0%,"+accent+"12 100%)",color:accent,border:"none",borderTop:"1px solid "+accent+"33",padding:"11px 12px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,letterSpacing:-.1,transition:"all .15s"}} onMouseEnter={function(e){e.currentTarget.style.background=accent;e.currentTarget.style.color="#fff";}} onMouseLeave={function(e){e.currentTarget.style.background="linear-gradient(90deg,"+accent+"22 0%,"+accent+"12 100%)";e.currentTarget.style.color=accent;}}>⟳ Rolar pendentes do {fr.name.split(" ")[0]}</button>
+
+          {/* ROLAR — ghost discreto */}
+          <button type="button" onClick={function(){_abrirRollover(fr.id);}} title={"Rolar pendentes do "+fr.name+" pro próximo mês"} style={{background:"#fff",color:"#64748b",border:"none",borderTop:"1px solid #f1f5f9",padding:"11px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color=accent;}}
+            onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>⟳ Rolar pendentes do {fr.name.split(" ")[0]}</button>
         </div>;
       })}
     </div>
