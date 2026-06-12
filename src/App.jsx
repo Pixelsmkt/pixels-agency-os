@@ -854,6 +854,7 @@ const KANBAN_COLS = [
   { id:"aprovacao_final",label:"Aprovação final",        color:"#059669", dark:true  }, // emerald-600
   { id:"agendado",       label:"Publicadas",             color:"#9333ea", dark:true  }, // purple-600
   { id:"pausado",        label:"Pausado",                color:"#64748b", dark:true  }, // slate-500
+  { id:"reprovado",      label:"Reprovadas",             color:"#7f1d1d", dark:true  }, // red-900 — última coluna
 ];
 
 /* ─── Migração defensiva de URLs antigas ──────────────────────────
@@ -1236,7 +1237,9 @@ function smartFormatTitle(input){
 
 /* ─── DESIGNER PAYMENTS ─── */
 const DESIGNER_PRICES = { fotoObra: 20, arte: 30, carrossel: 45, folder: 30, video: 100, corte: 20, videoComplexo: 150, videoFeira: 50 };
-const PAID_STATUSES = ["aprovado","agendado","publicado"];
+// "reprovado" entra porque o material foi produzido — paga igual.
+// Sócio pode reprovar quem reprova é o cliente; produção já gastou hora/recurso.
+const PAID_STATUSES = ["aprovado","agendado","publicado","reprovado"];
 function calcDesignerPayments(tasks, designerId, refMonth){
   const out = { fotoObra:0, arte:0, carrossel:0, folder:0, video:0, corte:0, videoComplexo:0, videoFeira:0, naoClassificado:0,
                 tasksFotoObra:[], tasksArte:[], tasksCarrossel:[], tasksFolder:[], tasksVideo:[], tasksCorte:[], tasksVideoComplexo:[], tasksVideoFeira:[], tasksOutros:[] };
@@ -1298,7 +1301,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
   function _abrirRollover(filterFreelancerId){
     if(!refMonth){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Selecione um mês primeiro."); return; }
     if(!setTasks){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Função de atualização indisponível."); return; }
-    const PAID=["aprovado","agendado","publicado"];
+    const PAID=["aprovado","agendado","publicado","reprovado"];
     const targetIds = filterFreelancerId?[filterFreelancerId]:freelancers.map(function(f){return f.id;});
     const pendentes=(tasks||[]).filter(function(t){
       if(!t||t.deletedAt) return false;
@@ -1320,7 +1323,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
     const nextMonth=_rolModal.nextMonth;
     const ids={};
     _rolModal.cards.forEach(function(t){ ids[t.id]=true; });
-    const PAID2=["aprovado","agendado","publicado"];
+    const PAID2=["aprovado","agendado","publicado","reprovado"];
     // Se o rollover foi filtrado por colaborador, marca pago só dele. Senão, todos.
     const fids=_rolModal.filterId?[_rolModal.filterId]:freelancers.map(function(f){return f.id;});
     const nowIso=new Date().toISOString();
@@ -2171,7 +2174,7 @@ function useOpenCardSync(openCard, setOpenCard, tasks){
 /* ─── URGÊNCIA DE TAREFAS ────────────────────── */
 // Retorna nível de urgência: 0=atrasado | 1=urgente | 2=atenção | 3=no prazo
 function taskUrgencyLevel(t){
-  if(!t||["aprovado","agendado","publicado","pausado"].includes(t.status))return 3;
+  if(!t||["aprovado","agendado","publicado","pausado","reprovado"].includes(t.status))return 3;
   const d=t.deadline?daysLeft(t.deadline):null;
   if(d===null)return 3;
   if(d<0)return 0;   // atrasado
@@ -3078,7 +3081,7 @@ function DashPartner({user,isViewing,tasks:propTasks,setTasks:propSetTasks,notif
   const daqui7d=new Date(hoje);daqui7d.setDate(hoje.getDate()+7);
 
   // ═══ Demandas CLIENTES (kanban normal) ═══
-  const clientStatuses=["demanda","recebida","execucao","avaliacao","aprovado","agendado","publicado","pausado"];
+  const clientStatuses=["demanda","recebida","execucao","avaliacao","aprovado","agendado","publicado","pausado","reprovado"];
   const clientTasks=active.filter(t=>clientStatuses.includes(t.status));
   const clientAtivas=clientTasks.filter(t=>t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado");
 
@@ -15268,9 +15271,9 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
 
 function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask,reorderTask,canDrag}){
   // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
-  const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado"];
+  const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado","reprovado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
-  const STAT_COLORS={rascunhos:C.td,demanda:C.kDemanda,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.kAgendado,publicado:C.kAgendado,pausado:C.td};
+  const STAT_COLORS={rascunhos:C.td,demanda:C.kDemanda,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.kAgendado,publicado:C.kAgendado,pausado:C.td,reprovado:"#7f1d1d"};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
   // isAdminViewer = pode ver coluna Tag na lista + faixas de tag. Permissão: gerenciarEtiquetas.
   const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
@@ -17966,6 +17969,59 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     setCardIdx(0);setImgIdx(0);
   };
 
+  // Reprovação direta — usado quando o cliente reprova o material sem chance de ajuste.
+  // Vai pra coluna "Reprovadas" (status: reprovado). Importante: A produção foi feita,
+  // então CONTA NO PAGAMENTO normalmente (vide PAID_STATUSES + demand_history).
+  const rejectPub=(task)=>{
+    if(!isApprover)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const toStatus="reprovado";
+    const fromLabel=task.status==="aprovacao_final"?"Aprovação final":"Avaliação";
+    const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel:"Reprovadas",from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl}:t));
+
+    const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
+
+    // Conta como demanda paga no histórico imutável — mesma logica do approve mas com
+    // approval_type:"reprovado" pra distinguir nas estatísticas futuras.
+    try{
+      const sb=window._sb;
+      if(sb&&assignees.length>0){
+        const cl=CLIENTS.find(c=>c.id===task.client);
+        const stripHtml=(s)=>!s?"":String(s).replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").trim();
+        const rows=assignees
+          .map(aid=>TEAM.find(u=>u.id===aid))
+          .filter(u=>u&&u.pagamentoPorDemanda)
+          .map(u=>({
+            task_id:String(task.id),
+            assignee_id:u.id,
+            assignee_name:u.name,
+            task_title:task.title||"",
+            task_description:stripHtml(task.desc||""),
+            task_caption:stripHtml(task.caption||""),
+            client_id:task.client||null,
+            client_name:cl?.name||null,
+            approval_type:"reprovado",
+            approved_at:new Date().toISOString(),
+            approved_by:actor,
+          }));
+        if(rows.length>0){
+          sb.from("demand_history").upsert(rows,{onConflict:"task_id,assignee_id"})
+            .then(({error})=>{if(error)console.warn("[demand_history reprov] upsert:",error.message);})
+            .catch(e=>console.warn("[demand_history reprov] exception:",e?.message||e));
+        }
+      }
+    }catch(e){console.warn("[demand_history reprov] try block:",e?.message||e);}
+
+    pushNotif({
+      type:"reprovacao",icon:"⚠",
+      title:"Material reprovado",
+      body:'"'+task.title+'" foi reprovado. Verifique no kanban (coluna Reprovadas) e discuta o aprendizado com a equipe.',
+      user:actor,at:"Agora",taskId:task.id,category:"agendamento",targetUsers:_notifTargets(task)
+    });
+    setCardIdx(0);setImgIdx(0);
+  };
+
   const requestAdjust=(task,feedback,drawingFiles,audioFiles,comments)=>{
     if(!isApprover)return;
     const isInterna=task.status==="interno_avaliacao";
@@ -18550,6 +18606,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
                 onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
                 Aprovar publicação
+              </button>
+              <button onClick={async()=>{ if(await pixelsConfirm("Reprovar este material? Ele vai pra coluna Reprovadas. A produção foi feita, então ainda conta no pagamento do mês.",{okText:"Reprovar",danger:true})) rejectPub(current); }}
+                title="Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."
+                style={{width:"100%",background:"#7f1d1d",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #7f1d1d33"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px #7f1d1d55";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #7f1d1d33";}}>
+                Reprovar publicação
               </button>
               <button onClick={()=>setEditAnnot(current)}
                 style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
@@ -40912,7 +40975,7 @@ function _opKpisColab(colab, monthTasks, today0, visible){
     const artes = my.filter(function(t){const x=_opTipoV2(t);return x==="arte"||x==="foto";});
     return [
       {l:"Artes previstas", v: artes.length, m:26},
-      {l:"Concluídas", v: artes.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Concluídas", v: artes.filter(function(t){return ["aprovado","agendado","publicado","reprovado"].indexOf(t.status)>=0;}).length, m:null},
       {l:"Em ajustes", v: artes.filter(function(t){return t.status==="ajustes";}).length, m:null},
       {l:"Atrasadas", v: atras(artes), m:0, invert:true},
       {l:"Aguardando aprovação", v: artes.filter(function(t){return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0;}).length, m:null},
@@ -40922,7 +40985,7 @@ function _opKpisColab(colab, monthTasks, today0, visible){
     const videos = my.filter(function(t){return _opTipoV2(t)==="video";});
     return [
       {l:"Vídeos previstos", v: videos.length, m:8},
-      {l:"Concluídos", v: videos.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length, m:null},
+      {l:"Concluídos", v: videos.filter(function(t){return ["aprovado","agendado","publicado","reprovado"].indexOf(t.status)>=0;}).length, m:null},
       {l:"Em ajustes", v: videos.filter(function(t){return t.status==="ajustes";}).length, m:null},
       {l:"Atrasados", v: atras(videos), m:0, invert:true},
       {l:"Drive pendentes", v: monthTasks.filter(function(t){return _opIsDriveV2(t) && t.status!=="publicado" && (!t.files||t.files.length===0);}).length, m:null},
@@ -41066,7 +41129,7 @@ function PageOperacional(props){
 
   /* ───── Status mês ───── */
   const publicadasMes = monthTasks.filter(function(t){return t.status==="publicado";}).length;
-  const concluidosMes = monthTasks.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;}).length;
+  const concluidosMes = monthTasks.filter(function(t){return ["aprovado","agendado","publicado","reprovado"].indexOf(t.status)>=0;}).length;
   const atrasadosMes = monthTasks.filter(function(t){
     if(t.status==="publicado")return false;
     const r=t.publishDate||t.deadline;if(!r)return false;
@@ -43760,7 +43823,8 @@ function DashColabV2(props){
     if(!ref) return false;
     return new Date(ref+"T00:00:00") < today0;
   });
-  const entreguesMes = myMonth.filter(function(t){return ["aprovado","agendado","publicado"].indexOf(t.status)>=0;});
+  // Reprovado conta como entregue — produção foi feita
+  const entreguesMes = myMonth.filter(function(t){return ["aprovado","agendado","publicado","reprovado"].indexOf(t.status)>=0;});
   const totalAtivas = my.filter(function(t){return STS_ACT.indexOf(t.status)>=0 && t.status!=="publicado";}).length;
 
   // Pagamentos do mês (usa calcDesignerPayments global)
