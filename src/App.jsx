@@ -44323,9 +44323,19 @@ function _dcAvatar(user, size){
   return <div style={{width:sz,height:sz,borderRadius:"50%",background:user.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.36),fontFamily:_DC_FF,flexShrink:0,boxShadow:"0 0 0 3px "+(user.color||"#9F43F6")}}>{ini}</div>;
 }
 function _dcThumb(t){
+  // Pega a ÚLTIMA imagem subida (arte final, depois dos ajustes) — não a primeira nem a cover legada.
+  // Ignora anotações (revisões com riscos vermelhos não devem aparecer como capa).
+  const imgs = (t.files||[]).filter(function(f){
+    if(!f || !f.type || f.type.indexOf("image/")!==0) return false;
+    if(f.isAnnotation===true) return false;
+    const name = String(f.name||"").toLowerCase();
+    if(name.indexOf("annotation-")===0) return false;
+    return true;
+  });
+  if(imgs.length>0) return imgs[imgs.length-1].url;
+  // Fallback: cover legada (cards antigos) ou null
   if(t.cover) return t.cover;
-  const img = (t.files||[]).find(function(f){return f && f.type && f.type.indexOf("image/")===0;});
-  return img ? img.url : null;
+  return null;
 }
 
 // Status considerados "concluídos/avançados" pra contagem do mês e pagamento
@@ -44702,7 +44712,7 @@ function DashColabV2(props){
             </div>
             <div style={{color:isCur?accent:"#64748b",fontSize:10.5,fontWeight:isCur?800:600,textTransform:"uppercase",letterSpacing:.3}}>{_dcMonthShort(e.mes)}</div>
             <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{e.aprovados}/{e.produzidos}</div>
-          </div>;
+     </div>;
         })}
       </div>
       <div style={{color:"#94a3b8",fontSize:10.5,marginTop:12,textAlign:"center",fontStyle:"italic"}}>
