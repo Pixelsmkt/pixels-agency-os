@@ -9292,6 +9292,421 @@ function CMetas({cl, accentColor, readOnly}){
   </div>;
 }
 
+// ── ONGOING ─────────────────────────────────────────────────────────
+// Rotina contínua do cliente depois do onboarding. 4 seções:
+//   1) Resumo (5 mini-cards: última/próxima reunião, plan. mensal/trim, indicação)
+//   2) Reuniões — registra datas, tipo, observações
+//   3) Rotina mensal — checklist de 7 itens padrão por mês
+//   4) Rotina trimestral — checklist de 7 itens padrão por trimestre
+//   5) Pendências — lista simples de coisas que dependem do cliente
+// Persistido em Supabase clients.ongoing (JSONB) — pattern igual metas/orientacoes.
+function COngoing({cl, isMob}){
+  const FF = "'Inter',system-ui,-apple-system,sans-serif";
+  const accent = cl.color || "#9F43F6";
+  const sb = window._sb;
+
+  // Schema padrão dos itens recorrentes
+  const MONTHLY_ITEMS = [
+    {id:"resultados",  label:"Analisar resultados do mês"},
+    {id:"relatorio",   label:"Preparar relatório mensal"},
+    {id:"reuniao",     label:"Realizar reunião mensal com o cliente"},
+    {id:"metas",       label:"Atualizar metas do cliente"},
+    {id:"conteudos",   label:"Planejar conteúdos do próximo mês"},
+    {id:"campanhas",   label:"Verificar campanhas e oportunidades"},
+    {id:"materiais",   label:"Solicitar materiais importantes para o cliente"},
+  ];
+  const QUARTERLY_ITEMS = [
+    {id:"posicionamento", label:"Revisar posicionamento do cliente"},
+    {id:"ofertas",        label:"Revisar principais ofertas/produtos/serviços"},
+    {id:"plano3m",        label:"Planejar próximos 3 meses"},
+    {id:"evolucao",       label:"Analisar evolução dos resultados"},
+    {id:"oportunidades",  label:"Levantar novas oportunidades comerciais"},
+    {id:"indicacao",      label:"Pedir indicação para o cliente"},
+    {id:"depoimento",     label:"Solicitar depoimento/case (se fizer sentido)"},
+  ];
+
+  // Period helpers
+  function _currentMonth(){
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+  }
+  function _currentQuarter(){
+    const d = new Date();
+    const q = Math.floor(d.getMonth()/3) + 1;
+    return d.getFullYear() + "-Q" + q;
+  }
+
+  // ── State + persistência ──────────────────────
+  const [data, setData] = useState({
+    reunioes: {ultima:"", proxima:"", tipo:"alinhamento", obs:""},
+    proximos: {planMensal:"", planTrimestral:"", indicacao:""},
+    mensal: {},        // {"2026-06": {resultados:{done:true,resp:"vinicius",due:"2026-06-30",at:"..."}}}
+    trimestral: {},    // {"2026-Q2": {...}}
+    pendencias: []     // [{id, title, date, status}]
+  });
+  const [savedAt, setSavedAt] = useState(0);
+  const [periodMonth, setPeriodMonth] = useState(_currentMonth());
+  const [periodQuarter, setPeriodQuarter] = useState(_currentQuarter());
+
+  useEffect(function(){
+    if(!sb) return;
+    let alive = true;
+    sb.from("clients").select("ongoing").eq("client_id",cl.id).single()
+      .then(function(r){
+        if(!alive) return;
+        if(r.error) return;
+        const remote = r.data && r.data.ongoing;
+        if(remote && typeof remote==="object"){
+          setData(function(prev){
+            return Object.assign({}, prev, remote, {
+              reunioes: Object.assign({}, prev.reunioes, remote.reunioes||{}),
+              proximos: Object.assign({}, prev.proximos, remote.proximos||{}),
+              mensal: remote.mensal||{},
+              trimestral: remote.trimestral||{},
+              pendencias: Array.isArray(remote.pendencias)?remote.pendencias:[]
+            });
+          });
+        }
+      })
+      .catch(function(){});
+    return function(){ alive = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[cl.id]);
+
+  function persist(next){
+    setData(next);
+    if(!sb) return;
+    sb.from("clients").update({ongoing:next,updated_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"system")}).eq("client_id",cl.id)
+      .then(function(r){
+        if(r.error){ console.warn("[ongoing] save:", r.error.message); return; }
+        setSavedAt(Date.now());
+      })
+      .catch(function(e){ console.warn("[ongoing] save exception:", e?.message||e); });
+  }
+
+  // ── Helpers de status visual ──────────────────
+  function _dateBR(iso){
+    if(!iso || iso.length<10) return "—";
+    return iso.slice(8,10)+"/"+iso.slice(5,7)+"/"+iso.slice(0,4);
+  }
+  function _daysUntil(iso){
+    if(!iso || iso.length<10) return null;
+    const d = new Date(iso+"T00:00:00");
+    const today = new Date(); today.setHours(0,0,0,0);
+    return Math.round((d-today)/(1000*60*60*24));
+  }
+  function _statusForFuture(iso){
+    const days = _daysUntil(iso);
+    if(days === null) return {label:"Sem data", color:"#94a3b8", bg:"#f1f5f9", border:"#e2e8f0"};
+    if(days < 0) return {label:"Atrasado", color:"#991b1b", bg:"#fee2e2", border:"#fecaca"};
+    if(days <= 7) return {label:"Próximo", color:"#a16207", bg:"#fef3c7", border:"#fde68a"};
+    return {label:"Em dia", color:"#15803d", bg:"#dcfce7", border:"#bbf7d0"};
+  }
+
+  // ── Reuniões: marcar realizada ────────────────
+  function markMeetingDone(){
+    const today = new Date().toISOString().slice(0,10);
+    const next = Object.assign({}, data, {
+      reunioes: Object.assign({}, data.reunioes, {ultima: data.reunioes.proxima || today, proxima:""})
+    });
+    persist(next);
+  }
+  function setReuniaoField(field, val){
+    const next = Object.assign({}, data, {reunioes: Object.assign({}, data.reunioes, {[field]:val})});
+    persist(next);
+  }
+  function setProximoField(field, val){
+    const next = Object.assign({}, data, {proximos: Object.assign({}, data.proximos, {[field]:val})});
+    persist(next);
+  }
+
+  // ── Checklist (mensal/trimestral) ─────────────
+  function getChecklistItem(scope, period, itemId){
+    const bucket = (data[scope]||{})[period] || {};
+    return bucket[itemId] || {done:false, resp:"", due:"", at:""};
+  }
+  function setChecklistField(scope, period, itemId, field, val){
+    const allBucket = data[scope] || {};
+    const periodBucket = allBucket[period] || {};
+    const item = periodBucket[itemId] || {done:false, resp:"", due:"", at:""};    const newItem = Object.assign({}, item, {[field]:val});
+    if(field==="done"){
+      newItem.at = val ? new Date().toISOString() : "";
+    }
+    const newPeriod = Object.assign({}, periodBucket, {[itemId]:newItem});
+    const newAll = Object.assign({}, allBucket, {[period]:newPeriod});
+    persist(Object.assign({}, data, {[scope]:newAll}));
+  }
+  function _itemStatus(item){
+    if(item.done) return {label:"Concluído", color:"#15803d", bg:"#dcfce7", border:"#bbf7d0"};
+    const days = _daysUntil(item.due);
+    if(days===null) return {label:"Pendente", color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"};
+    if(days<0) return {label:"Atrasado", color:"#991b1b", bg:"#fee2e2", border:"#fecaca"};
+    return {label:"Pendente", color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"};
+  }
+
+  // Pendências
+  function addPendencia(){
+    const id = "p"+Date.now();
+    const item = {id, title:"", date:new Date().toISOString().slice(0,10), status:"pendente"};
+    persist(Object.assign({}, data, {pendencias: data.pendencias.concat([item])}));
+  }
+  function updatePendencia(id, field, val){
+    const next = data.pendencias.map(function(p){ return p.id===id ? Object.assign({},p,{[field]:val}) : p; });
+    persist(Object.assign({}, data, {pendencias: next}));
+  }
+  function removePendencia(id){
+    persist(Object.assign({}, data, {pendencias: data.pendencias.filter(function(p){return p.id!==id;})}));
+  }
+
+  function shiftMonth(delta){
+    const parts = periodMonth.split("-");
+    let y = parseInt(parts[0],10); let m = parseInt(parts[1],10)+delta;
+    while(m<1){m+=12;y--;} while(m>12){m-=12;y++;}
+    setPeriodMonth(y+"-"+String(m).padStart(2,"0"));
+  }
+  function shiftQuarter(delta){
+    const parts = periodQuarter.split("-Q");
+    let y = parseInt(parts[0],10); let q = parseInt(parts[1],10)+delta;
+    while(q<1){q+=4;y--;} while(q>4){q-=4;y++;}
+    setPeriodQuarter(y+"-Q"+q);
+  }
+  function monthLabel(p){
+    if(!p) return "";
+    const mn = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const parts = p.split("-");
+    return (mn[parseInt(parts[1],10)-1]||"?")+" de "+parts[0];
+  }
+  function quarterLabel(p){
+    if(!p) return "";
+    const parts = p.split("-Q");
+    return parts[1]+"º trimestre de "+parts[0];
+  }
+
+  const TEAM_OPTS = (typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.level && u.level<=2;});
+
+  function _sectionCard(){
+    return {background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"};
+  }
+
+  function MiniResume(props){
+    const st = _statusForFuture(props.date);
+    return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{props.label}</div>
+        <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,whiteSpace:"nowrap",textTransform:"uppercase"}}>{st.label}</span>
+      </div>
+      <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{_dateBR(props.date)}</div>
+      {props.date && (function(){
+        const d = _daysUntil(props.date);
+        if(d===null) return null;
+        const txt = d<0 ? "Há "+Math.abs(d)+" "+(Math.abs(d)===1?"dia":"dias") : d===0 ? "Hoje" : "Em "+d+" "+(d===1?"dia":"dias");
+        return <div style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>{txt}</div>;
+      })()}
+    </div>;
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:FF}}>
+
+    <div style={_sectionCard()}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+          <div style={{width:42,height:42,borderRadius:12,background:accent+"15",border:"1px solid "+accent+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            {typeof Ico==="function" && <Ico n="refresh" size={20} color={accent}/>}
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Ongoing</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Rotina de acompanhamento contínuo do cliente</div>
+          </div>
+        </div>
+        {savedAt>0 && Date.now()-savedAt<3000 && <span style={{color:"#16a34a",fontSize:11,fontWeight:700}}>Salvo</span>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:10}}>
+        <MiniResume label="Última reunião" date={data.reunioes.ultima}/>
+        <MiniResume label="Próxima reunião" date={data.reunioes.proxima}/>
+        <MiniResume label="Plan. mensal" date={data.proximos.planMensal}/>
+        <MiniResume label="Plan. trimestral" date={data.proximos.planTrimestral}/>
+        <MiniResume label="Pedido de indicação" date={data.proximos.indicacao}/>
+      </div>
+    </div>
+
+    <div style={_sectionCard()}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        {typeof Ico==="function" && <Ico n="calendar" size={16} color={accent}/>}
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Reuniões</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+        <div>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Última reunião</div>
+          <input type="date" value={data.reunioes.ultima||""} onChange={function(e){setReuniaoField("ultima",e.target.value);}}
+            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+        </div>
+        <div>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Próxima reunião</div>
+          <input type="date" value={data.reunioes.proxima||""} onChange={function(e){setReuniaoField("proxima",e.target.value);}}
+            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+        </div>
+        <div>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Tipo da reunião</div>
+          <select value={data.reunioes.tipo||"alinhamento"} onChange={function(e){setReuniaoField("tipo",e.target.value);}}
+            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF,cursor:"pointer"}}>
+            <option value="alinhamento">Alinhamento</option>
+            <option value="resultado">Resultado</option>
+            <option value="planejamento">Planejamento</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div style={{display:"flex",alignItems:"flex-end"}}>
+          <button onClick={markMeetingDone} disabled={!data.reunioes.proxima}
+            style={{width:"100%",background:data.reunioes.proxima?accent:"#f1f5f9",color:data.reunioes.proxima?"#fff":"#94a3b8",border:"none",borderRadius:9,padding:"10px 14px",fontSize:12.5,fontWeight:700,cursor:data.reunioes.proxima?"pointer":"not-allowed",fontFamily:FF,transition:"all .15s"}}>
+            ✓ Marcar próxima como realizada
+          </button>
+        </div>
+        <div style={{gridColumn:isMob?"1":"1/-1"}}>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Observações rápidas</div>
+          <textarea value={data.reunioes.obs||""} onChange={function(e){setReuniaoField("obs",e.target.value);}}
+            rows={3}
+            placeholder="O que precisa lembrar pra próxima conversa..."
+            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF,resize:"vertical",lineHeight:1.5}}/>
+        </div>
+      </div>
+    </div>
+
+    <div style={_sectionCard()}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {typeof Ico==="function" && <Ico n="checkCircle" size={16} color={accent}/>}
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Rotina mensal</div>
+        </div>
+        <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:3}}>
+          <button onClick={function(){shiftMonth(-1);}} style={{background:"transparent",border:"none",borderRadius:6,width:28,height:28,cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span style={{padding:"0 12px",fontSize:12.5,fontWeight:700,color:accent,minWidth:130,textAlign:"center"}}>{monthLabel(periodMonth)}</span>
+          <button onClick={function(){shiftMonth(1);}} style={{background:"transparent",border:"none",borderRadius:6,width:28,height:28,cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {MONTHLY_ITEMS.map(function(item){
+          const it = getChecklistItem("mensal", periodMonth, item.id);
+          const st = _itemStatus(it);
+          return <ChecklistRow key={item.id} item={item} it={it} st={st} accent={accent} teamOpts={TEAM_OPTS}
+            onToggle={function(){setChecklistField("mensal", periodMonth, item.id, "done", !it.done);}}
+            onResp={function(v){setChecklistField("mensal", periodMonth, item.id, "resp", v);}}
+            onDue={function(v){setChecklistField("mensal", periodMonth, item.id, "due", v);}}/>;
+        })}
+      </div>
+    </div>
+
+    <div style={_sectionCard()}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {typeof Ico==="function" && <Ico n="layers" size={16} color={accent}/>}
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Rotina trimestral</div>
+        </div>
+        <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:3}}>
+          <button onClick={function(){shiftQuarter(-1);}} style={{background:"transparent",border:"none",borderRadius:6,width:28,height:28,cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span style={{padding:"0 12px",fontSize:12.5,fontWeight:700,color:accent,minWidth:130,textAlign:"center"}}>{quarterLabel(periodQuarter)}</span>
+          <button onClick={function(){shiftQuarter(1);}} style={{background:"transparent",border:"none",borderRadius:6,width:28,height:28,cursor:"pointer",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {QUARTERLY_ITEMS.map(function(item){
+          const it = getChecklistItem("trimestral", periodQuarter, item.id);
+          const st = _itemStatus(it);
+          return <ChecklistRow key={item.id} item={item} it={it} st={st} accent={accent} teamOpts={TEAM_OPTS}
+            onToggle={function(){setChecklistField("trimestral", periodQuarter, item.id, "done", !it.done);}}
+            onResp={function(v){setChecklistField("trimestral", periodQuarter, item.id, "resp", v);}}
+            onDue={function(v){setChecklistField("trimestral", periodQuarter, item.id, "due", v);}}/>;
+        })}
+      </div>
+    </div>
+
+    <div style={_sectionCard()}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {typeof Ico==="function" && <Ico n="alert" size={16} color={accent}/>}
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Pendências do cliente</div>
+          <span style={{background:"#f1f5f9",color:"#64748b",fontSize:10.5,fontWeight:700,padding:"2px 8px",borderRadius:99}}>{(data.pendencias||[]).filter(function(p){return p.status!=="resolvido";}).length} abertas</span>
+        </div>
+        <button onClick={addPendencia}
+          style={{background:accent+"15",border:"1px solid "+accent+"33",borderRadius:9,padding:"7px 13px",color:accent,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}
+          onMouseEnter={function(e){e.currentTarget.style.background=accent;e.currentTarget.style.color="#fff";}}
+          onMouseLeave={function(e){e.currentTarget.style.background=accent+"15";e.currentTarget.style.color=accent;}}>
+          + Nova pendência
+        </button>
+      </div>
+      {(data.pendencias||[]).length===0
+        ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:10,padding:"22px 14px",textAlign:"center",color:"#94a3b8",fontSize:12.5}}>Nenhuma pendência. Tudo no jeito.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {data.pendencias.map(function(p){
+              const stColor = p.status==="resolvido" ? {bg:"#dcfce7",color:"#15803d",border:"#bbf7d0"} : {bg:"#fef3c7",color:"#a16207",border:"#fde68a"};
+              return <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,background:p.status==="resolvido"?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"9px 12px",opacity:p.status==="resolvido"?0.7:1}}>
+                <input type="checkbox" checked={p.status==="resolvido"} onChange={function(){updatePendencia(p.id, "status", p.status==="resolvido"?"pendente":"resolvido");}}
+                  style={{width:16,height:16,cursor:"pointer",accentColor:accent}}/>
+                <input value={p.title||""} onChange={function(e){updatePendencia(p.id, "title", e.target.value);}} placeholder="O que está faltando do cliente..."
+                  style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:"#0f172a",fontSize:13,fontWeight:600,fontFamily:FF,textDecoration:p.status==="resolvido"?"line-through":"none"}}/>
+                <input type="date" value={p.date||""} onChange={function(e){updatePendencia(p.id, "date", e.target.value);}}
+                  style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11.5,color:"#475569",outline:"none",fontFamily:FF}}/>
+                <span style={{background:stColor.bg,color:stColor.color,border:"1px solid "+stColor.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{p.status==="resolvido"?"Resolvido":"Pendente"}</span>
+                <button onClick={function(){removePendencia(p.id);}} title="Remover pendência" style={{background:"transparent",border:"none",cursor:"pointer",color:"#94a3b8",padding:4,display:"inline-flex",alignItems:"center"}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>;
+            })}
+          </div>
+      }
+    </div>
+
+    <div style={_sectionCard()}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        {typeof Ico==="function" && <Ico n="target" size={16} color={accent}/>}
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Próximos eventos do cliente</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
+        <div>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Próximo planejamento mensal</div>
+          <input type="date" value={data.proximos.planMensal||""} onChange={function(e){setProximoField("planMensal",e.target.value);}}
+            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+        </div>
+        <div>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Próximo planejamento trimestral</div>
+          <input type="date" value={data.proximos.planTrimestral||""} onChange={function(e){setProximoField("planTrimestral",e.target.value);}}
+            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+        </div>
+        <div>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Próximo pedido de indicação</div>
+          <input type="date" value={data.proximos.indicacao||""} onChange={function(e){setProximoField("indicacao",e.target.value);}}
+            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+        </div>
+      </div>
+    </div>
+
+  </div>;
+}
+
+function ChecklistRow({item, it, st, accent, teamOpts, onToggle, onResp, onDue}){
+  const FF = "'Inter',system-ui,-apple-system,sans-serif";
+  return <div style={{display:"flex",alignItems:"center",gap:10,background:it.done?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"9px 12px",opacity:it.done?0.75:1,transition:"all .15s"}}>
+    <input type="checkbox" checked={!!it.done} onChange={onToggle}
+      style={{width:17,height:17,cursor:"pointer",accentColor:accent,flexShrink:0}}/>
+    <span style={{flex:1,minWidth:0,color:"#0f172a",fontSize:13,fontWeight:600,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:FF}}>{item.label}</span>
+    <select value={it.resp||""} onChange={function(e){onResp(e.target.value);}}
+      style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11.5,color:it.resp?"#0f172a":"#94a3b8",outline:"none",fontFamily:FF,cursor:"pointer",minWidth:110}}>
+      <option value="">Responsável</option>
+      {teamOpts.map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}
+    </select>
+    <input type="date" value={it.due||""} onChange={function(e){onDue(e.target.value);}}
+      style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11.5,color:"#475569",outline:"none",fontFamily:FF}}/>
+    <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{st.label}</span>
+  </div>;
+}
+
 /* ── DRIVE (Info) ────────────────────────── */
 function CDrive({cl}){
   let[driveUrl,setDriveUrl]=useState(function(){
@@ -10185,6 +10600,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   let TABS=[
     {id:"analises",      label:"Visão geral",         ico:"chart"},
     {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
+    {id:"ongoing",       label:"Ongoing",             ico:"refresh"},
     {id:"nps",           label:"NPS",                 ico:"sparkles"},
     {id:"evolucao",      label:"Evolução",            ico:"trending-up"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
@@ -10245,29 +10661,30 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
       </div>
     </div>}
 
-    {/* HEADER */}
-    <div style={{display:"flex",alignItems:"center",gap:14,paddingBottom:16,flexWrap:"wrap"}}>
+    {/* HEADER — botão voltar ACIMA da logo + nome do cliente como primeira coisa visual */}
+    <div style={{display:"flex",flexDirection:"column",gap:10,paddingBottom:16}}>
+      {/* Linha 1: botão voltar modernizado, alinhado à esquerda */}
       <button onClick={onBack}
-        style={{background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:13,
-          fontWeight:600,display:"flex",alignItems:"center",gap:4,padding:0,flexShrink:0}}
-        onMouseEnter={function(e){e.currentTarget.style.color=C.ts;}}
-        onMouseLeave={function(e){e.currentTarget.style.color=C.td;}}>
-        ← Clientes
+        style={{alignSelf:"flex-start",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 12px 6px 8px",color:"#64748b",cursor:"pointer",fontSize:12,fontWeight:600,display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .15s"}}
+        onMouseEnter={function(e){e.currentTarget.style.background="#0f172a";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#0f172a";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="#e2e8f0";}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Voltar pra Clientes
       </button>
-      <div style={{width:1,height:20,background:C.b1,flexShrink:0}}/>
-      <div style={{background:"#fff",borderRadius:8,padding:"4px 10px",display:"flex",
-          alignItems:"center",justifyContent:"center",height:30,border:"1px solid #f1f5f9",flexShrink:0}}>
-        {CLIENT_LOGOS[cl.id]
-          ?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:20,maxWidth:68,objectFit:"contain"}}/>
-          :<span style={{color:cl.color,fontWeight:900,fontSize:11}}>{cl.abbr}</span>}
-      </div>
-      <div style={{flex:1,minWidth:100}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          <div style={{color:C.tx,fontWeight:800,fontSize:16,letterSpacing:-.3}}>{cl.name}</div>
-
+      {/* Linha 2: logo + nome (primeira coisa visual) + KPIs à direita */}
+      <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+        <div style={{background:"#fff",borderRadius:10,padding:"5px 12px",display:"flex",
+            alignItems:"center",justifyContent:"center",height:42,border:"1px solid "+cl.color+"33",flexShrink:0,boxShadow:"0 2px 8px "+cl.color+"15"}}>
+          {CLIENT_LOGOS[cl.id]
+            ?<img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:28,maxWidth:78,objectFit:"contain"}}/>
+            :<span style={{color:cl.color,fontWeight:900,fontSize:14}}>{cl.abbr}</span>}
         </div>
-        <div style={{color:C.td,fontSize:11}}>{cl.sector}</div>
-      </div>
+        <div style={{flex:1,minWidth:100}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4}}>{cl.name}</div>
+          </div>
+          <div style={{color:C.td,fontSize:12,marginTop:2}}>{cl.sector}</div>
+        </div>
       <div style={{display:"flex",gap:14,alignItems:"center",flexShrink:0}}>
         {[
           {label:"Score",value:score,color:scoreColor,circle:true},
@@ -10294,6 +10711,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
             <div style={{color:C.td,fontSize:9,marginTop:2}}>{item.label}</div>
           </div>);
         })}
+        </div>
       </div>
     </div>
 
@@ -10324,6 +10742,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
     {tab==="metas"&&<CMetas cl={cl}/>}
+    {tab==="ongoing"&&typeof COngoing==="function"&&<COngoing cl={cl} isMob={isMob}/>}
 
   </div>);
 }
