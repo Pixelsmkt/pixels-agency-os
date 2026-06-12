@@ -2927,6 +2927,7 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="heart")     return <svg {...p}><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg>;
   if(n==="info")      return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>;
   if(n==="target")    return <svg {...p}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>;
+  if(n==="infinity")  return <svg {...p}><path d="M12 12c-2-2.67-4-4-6-4a4 4 0 100 8c2 0 4-1.33 6-4zm0 0c2 2.67 4 4 6 4a4 4 0 000-8c-2 0-4 1.33-6 4z"/></svg>;
   return null;
 }
 
@@ -9511,7 +9512,7 @@ function COngoing({cl, isMob}){
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
           <div style={{width:42,height:42,borderRadius:12,background:accent+"15",border:"1px solid "+accent+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            {typeof Ico==="function" && <Ico n="refresh" size={20} color={accent}/>}
+            {typeof Ico==="function" && <Ico n="infinity" size={20} color={accent}/>}
           </div>
           <div>
             <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Ongoing</div>
@@ -10600,7 +10601,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   let TABS=[
     {id:"analises",      label:"Visão geral",         ico:"chart"},
     {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
-    {id:"ongoing",       label:"Ongoing",             ico:"refresh"},
+    {id:"ongoing",       label:"Ongoing",             ico:"infinity"},
     {id:"nps",           label:"NPS",                 ico:"sparkles"},
     {id:"evolucao",      label:"Evolução",            ico:"trending-up"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
@@ -44239,8 +44240,9 @@ function ENPSPendenteAviso(props){
 }
 
 // ======= 24_dash_colab.jsx =======
-// Dashboard individual do colaborador (V2) — moderno, focado em execução
-// Usado por André, Guilherme e outros com pagamentoPorDemanda.
+// Dashboard individual do colaborador (V3) — refeito 2026-06-12
+// Foco: bate-olho rápido — o que fazer agora, o que tá atrasado, quanto vai receber.
+// Usado por André, Maria, Guilherme e qualquer outro com pagamentoPorDemanda.
 
 const _DC_FF = "'Inter',system-ui,-apple-system,sans-serif";
 
@@ -44250,12 +44252,6 @@ function _dcFmtBRL(n){
 }
 function _dcFmtBRL2(n){
   return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
-}
-function _dcGreeting(){
-  const h = new Date().getHours();
-  if(h<12) return "Bom dia";
-  if(h<18) return "Boa tarde";
-  return "Boa noite";
 }
 function _dcFmtToday(){
   const d = new Date();
@@ -44267,20 +44263,45 @@ function _dcCurrentMonth(){
   const d = new Date();
   return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
 }
+function _dcMonthLabel(refMonth){
+  if(!refMonth) return "—";
+  const parts = refMonth.split("-");
+  const mn = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  return (mn[parseInt(parts[1],10)-1]||"?")+" de "+parts[0];
+}
+function _dcMonthShort(refMonth){
+  if(!refMonth) return "—";
+  const parts = refMonth.split("-");
+  const mn = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  return (mn[parseInt(parts[1],10)-1]||"?")+"/"+parts[0].slice(-2);
+}
+function _dcShiftMonth(refMonth, delta){
+  if(!refMonth) return refMonth;
+  const parts = refMonth.split("-");
+  let y = parseInt(parts[0],10);
+  let m = parseInt(parts[1],10)+delta;
+  while(m<1){m+=12;y--;}
+  while(m>12){m-=12;y++;}
+  return y+"-"+String(m).padStart(2,"0");
+}
 function _dcInMonth(t, refMonth){
-  // refMonth: "YYYY-MM"
-  if(t.publishDate) return t.publishDate.slice(0,7)===refMonth;
+  if(!refMonth) return false;
   if(t.referenceMonth) return t.referenceMonth===refMonth;
+  if(t.publishDate) return t.publishDate.slice(0,7)===refMonth;
+  if(t.completedAt) return String(t.completedAt).slice(0,7)===refMonth;
+  if(t.deadline) return String(t.deadline).slice(0,7)===refMonth;
   return false;
 }
 function _dcTipoLabel(t){
   const ct = String(t.contentType||t.tipo||"").toLowerCase();
   if(ct==="arte") return "Arte única";
   if(ct==="carrossel") return "Carrossel";
+  if(ct==="folder") return "Folder";
   if(ct==="foto") return "Foto de obra";
   if(ct==="video"||ct==="vídeo") return "Vídeo";
   if(ct==="corte") return "Corte de vídeo";
-  if(ct==="video_short") return "Short (Drive)";
+  if(ct==="video_complexo") return "Vídeo dinâmico";
+  if(ct==="video_feira") return "Vídeo feira";
   return "—";
 }
 function _dcDiasAteSomething(dateStr){
@@ -44290,269 +44311,406 @@ function _dcDiasAteSomething(dateStr){
   return Math.floor((d.getTime()-today.getTime())/86400000);
 }
 function _dcAvatar(user, size){
-  const sz = size||52;
+  const sz = size||44;
   const photo = (user && user.profile_data && user.profile_data.photo) ||
                 (typeof localStorage!=="undefined" && localStorage.getItem("pixels-selfprofile-"+user.id) ?
                   (function(){try{return JSON.parse(localStorage.getItem("pixels-selfprofile-"+user.id)).photo;}catch(e){return null;}})()
                   : null);
   if(photo){
-    return <img src={photo} alt={user.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",flexShrink:0,boxShadow:"0 0 0 2px #fff, 0 0 0 3px "+(user.color||"#9F43F6")}}/>;
+    return <img src={photo} alt={user.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",flexShrink:0,boxShadow:"0 0 0 3px "+(user.color||"#9F43F6")}}/>;
   }
   const ini = (user.name||"?").split(" ").map(function(p){return p[0];}).slice(0,2).join("").toUpperCase();
-  return <div style={{width:sz,height:sz,borderRadius:"50%",background:user.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.36),fontFamily:_DC_FF,flexShrink:0,boxShadow:"0 0 0 2px #fff, 0 0 0 3px "+(user.color||"#9F43F6")}}>{ini}</div>;
+  return <div style={{width:sz,height:sz,borderRadius:"50%",background:user.color||"#9F43F6",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.36),fontFamily:_DC_FF,flexShrink:0,boxShadow:"0 0 0 3px "+(user.color||"#9F43F6")}}>{ini}</div>;
 }
+function _dcThumb(t){
+  if(t.cover) return t.cover;
+  const img = (t.files||[]).find(function(f){return f && f.type && f.type.indexOf("image/")===0;});
+  return img ? img.url : null;
+}
+
+// Status considerados "concluídos/avançados" pra contagem do mês e pagamento
+// Inclui aprovacao_final (cliente avaliando), aprovado, agendado, publicado, reprovado
+// reprovado entra porque a produção foi feita — quem paga é o cliente, mas a equipe já gastou hora
+const _DC_DONE_STATUSES = ["aprovacao_final","aprovado","agendado","publicado","reprovado"];
+const _DC_ACT_STATUSES = ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"];
 
 /* ─── COMPONENTE PRINCIPAL ────────────────────────────────── */
 function DashColabV2(props){
   const { user, tasks, allTasks, setTasks, isViewing, currentUser, isMob } = props;
-  const refMonth = _dcCurrentMonth();
+  const [refMonth, setRefMonth] = useState(_dcCurrentMonth());
 
   // Tasks do colaborador (já filtradas no pai por assignee)
   const my = (tasks||[]).filter(function(t){return !t.deletedAt;});
   const today0 = new Date(); today0.setHours(0,0,0,0);
 
-  // Categorias do mês corrente
+  // ── Categorias do mês selecionado ──
   const myMonth = my.filter(function(t){return _dcInMonth(t, refMonth);});
 
-  // Estados das demandas
-  const STS_ACT = ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"];
-  const emProducao = my.filter(function(t){return ["execucao","ajustes"].indexOf(t.status)>=0;});
+  // ── Estados das demandas (visão geral, não restrita ao mês) ──
+  const emProducao = my.filter(function(t){return ["execucao"].indexOf(t.status)>=0;});
+  const ajustesList = my.filter(function(t){return t.status==="ajustes";});
   const aguardandoAprov = my.filter(function(t){return ["avaliacao","aprovacao_final"].indexOf(t.status)>=0;});
   const atrasadas = my.filter(function(t){
-    if(["aprovado","agendado","publicado"].indexOf(t.status)>=0) return false;
-    if(STS_ACT.indexOf(t.status)<0) return false;
+    if(_DC_DONE_STATUSES.indexOf(t.status)>=0) return false;
+    if(_DC_ACT_STATUSES.indexOf(t.status)<0) return false;
     const ref = t.publishDate||t.deadline;
     if(!ref) return false;
     return new Date(ref+"T00:00:00") < today0;
   });
-  // Reprovado conta como entregue — produção foi feita
-  const entreguesMes = myMonth.filter(function(t){return ["aprovado","agendado","publicado","reprovado"].indexOf(t.status)>=0;});
-  const totalAtivas = my.filter(function(t){return STS_ACT.indexOf(t.status)>=0 && t.status!=="publicado";}).length;
 
-  // Pagamentos do mês (usa calcDesignerPayments global)
+  // ── Entregues no mês (Aprovação interna + Aprovadas + Publicadas + Reprovadas) ──
+  const entreguesMes = myMonth.filter(function(t){return _DC_DONE_STATUSES.indexOf(t.status)>=0;});
+  const atribuidasMes = myMonth.length;
+  const totalAtivas = my.filter(function(t){return _DC_ACT_STATUSES.indexOf(t.status)>=0 && t.status!=="publicado";}).length;
+
+  // ── Pagamentos do mês ──
   const isEditor = user.dash==="editor";
   const calc = (typeof calcDesignerPayments==="function") ? calcDesignerPayments(my, user.id, refMonth) : {total:0};
   const valorReceber = calc.total||0;
+  // Tasks que entram no cálculo
+  const tasksPagas = [].concat(calc.tasksFotoObra||[], calc.tasksArte||[], calc.tasksCarrossel||[], calc.tasksFolder||[], calc.tasksVideo||[], calc.tasksCorte||[], calc.tasksVideoComplexo||[], calc.tasksVideoFeira||[]);
+  const valorMedio = tasksPagas.length>0 ? valorReceber/tasksPagas.length : 0;
 
-  // Detalhamento por tipo
+  // ── Detalhamento por tipo (pra cards do pagamento) ──
   const breakdown = isEditor
     ? [
-        {label:"Vídeo",           count:calc.video||0,    price:DESIGNER_PRICES.video},
-        {label:"Corte de vídeo",  count:calc.corte||0,    price:DESIGNER_PRICES.corte},
+        {label:"Vídeo",           count:calc.video||0,         price:DESIGNER_PRICES.video,         tasks:calc.tasksVideo||[]},
+        {label:"Corte de vídeo",  count:calc.corte||0,         price:DESIGNER_PRICES.corte,         tasks:calc.tasksCorte||[]},
+        {label:"Vídeo dinâmico",  count:calc.videoComplexo||0, price:DESIGNER_PRICES.videoComplexo, tasks:calc.tasksVideoComplexo||[]},
+        {label:"Vídeo feira",     count:calc.videoFeira||0,    price:DESIGNER_PRICES.videoFeira,    tasks:calc.tasksVideoFeira||[]},
       ]
     : [
-        {label:"Foto de obra",    count:calc.fotoObra||0, price:DESIGNER_PRICES.fotoObra},
-        {label:"Arte única",      count:calc.arte||0,     price:DESIGNER_PRICES.arte},
-        {label:"Carrossel",       count:calc.carrossel||0,price:DESIGNER_PRICES.carrossel},
+        {label:"Foto de obra",    count:calc.fotoObra||0,      price:DESIGNER_PRICES.fotoObra,      tasks:calc.tasksFotoObra||[]},
+        {label:"Arte única",      count:calc.arte||0,          price:DESIGNER_PRICES.arte,          tasks:calc.tasksArte||[]},
+        {label:"Carrossel",       count:calc.carrossel||0,     price:DESIGNER_PRICES.carrossel,     tasks:calc.tasksCarrossel||[]},
+        {label:"Folder",          count:calc.folder||0,        price:DESIGNER_PRICES.folder,        tasks:calc.tasksFolder||[]},
       ];
 
-  // Prioridades de hoje — atrasadas > prazo próximo > ajustes
+  // ── Status geral do mês ──
+  const statusMes = (function(){
+    if(atrasadas.length>0) return {label:"Atrasado", color:"#dc2626", bg:"#fee2e2", border:"#fecaca"};
+    if(ajustesList.length>0 || aguardandoAprov.length>3) return {label:"Atenção", color:"#a16207", bg:"#fef3c7", border:"#fde68a"};
+    return {label:"Em dia", color:"#15803d", bg:"#dcfce7", border:"#bbf7d0"};
+  })();
+
+  // ── Prioridades de hoje ──
   const prioridades = (function(){
     const list = [];
-    // 1) atrasadas
     atrasadas.forEach(function(t){
       const dias = _dcDiasAteSomething(t.publishDate||t.deadline);
       list.push({task:t, reason:"Atrasada", dias:dias, color:"#dc2626"});
     });
-    // 2) vencendo hoje
     my.forEach(function(t){
-      if(["aprovado","agendado","publicado"].indexOf(t.status)>=0) return;
-      if(STS_ACT.indexOf(t.status)<0) return;
+      if(_DC_DONE_STATUSES.indexOf(t.status)>=0) return;
+      if(_DC_ACT_STATUSES.indexOf(t.status)<0) return;
       const ref = t.publishDate||t.deadline;
       if(!ref) return;
       const dias = _dcDiasAteSomething(ref);
-      if(dias===0 && atrasadas.indexOf(t)<0) list.push({task:t, reason:"Vence hoje", dias:0, color:"#a16207"});
-      else if(dias>0 && dias<=2 && atrasadas.indexOf(t)<0) list.push({task:t, reason:"Vence em "+dias+"d", dias:dias, color:"#a16207"});
+      if(dias===0 && !list.find(function(x){return x.task.id===t.id;})) list.push({task:t, reason:"Vence hoje", dias:0, color:"#a16207"});
+      else if(dias>0 && dias<=2 && !list.find(function(x){return x.task.id===t.id;})) list.push({task:t, reason:"Vence em "+dias+"d", dias:dias, color:"#a16207"});
     });
-    // 3) em ajuste
-    my.filter(function(t){return t.status==="ajustes";}).forEach(function(t){
+    ajustesList.forEach(function(t){
       if(list.find(function(x){return x.task.id===t.id;})) return;
       list.push({task:t, reason:"Em ajuste", dias:null, color:"#7c3aed"});
     });
     return list.slice(0, 8);
   })();
 
+  // ── Evolução 6 meses ──
+  const evolucao = (function(){
+    const out = [];
+    for(let i=5;i>=0;i--){
+      const mref = _dcShiftMonth(refMonth, -i);
+      const monthTasks = my.filter(function(t){return _dcInMonth(t, mref);});
+      const produzidos = monthTasks.length;
+      const aprovados = monthTasks.filter(function(t){return _DC_DONE_STATUSES.indexOf(t.status)>=0;}).length;
+      const c = (typeof calcDesignerPayments==="function") ? calcDesignerPayments(my, user.id, mref) : {total:0};
+      out.push({mes:mref, produzidos:produzidos, aprovados:aprovados, valor:c.total||0});
+    }
+    return out;
+  })();
+  const maxValor = Math.max.apply(null, evolucao.map(function(e){return e.valor;}).concat([1]));
+
+  // ── Helpers ──
   function clientName(id){
     if(typeof CLIENTS==="undefined") return id;
     const c = CLIENTS.find(function(x){return x.id===id;});
     return c?c.name:id;
   }
+  function clientObj(id){
+    if(typeof CLIENTS==="undefined") return null;
+    return CLIENTS.find(function(x){return x.id===id;});
+  }
+  function _statusLabelShort(t){
+    const s = t.status;
+    if(s==="aprovacao_final") return "Aprovação cliente";
+    if(s==="aprovado") return "Aprovado";
+    if(s==="agendado") return "Agendado";
+    if(s==="publicado") return "Publicado";
+    if(s==="reprovado") return "Reprovado";
+    if(s==="ajustes") return "Em ajuste";
+    if(s==="execucao") return "Em execução";
+    if(s==="avaliacao") return "Aguardando avaliação";
+    return s;
+  }
+  function _statusColor(s){
+    if(s==="aprovado"||s==="agendado"||s==="publicado") return "#16a34a";
+    if(s==="aprovacao_final") return "#059669";
+    if(s==="reprovado") return "#7f1d1d";
+    if(s==="ajustes") return "#a16207";
+    if(s==="execucao") return "#0891b2";
+    if(s==="avaliacao") return "#9F43F6";
+    return "#64748b";
+  }
 
-  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:_DC_FF,width:"100%"}}>
+  const accent = user.color || "#9F43F6";
+  const isCurrentMonth = refMonth === _dcCurrentMonth();
 
-    {/* ═══ 1. HEADER DO COLABORADOR ═══ */}
-    <section style={{background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 60%,#3b1764 100%)",borderRadius:18,padding:isMob?"22px 22px":"26px 30px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 14px 40px rgba(15,23,42,0.30)",fontFamily:_DC_FF}}>
-      <div style={{position:"absolute",top:-60,right:-60,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.35),transparent 70%)",pointerEvents:"none"}}/>
-      <div style={{position:"relative",display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
-        {_dcAvatar(user, 64)}
-        <div style={{flex:1,minWidth:200}}>
-          <div style={{color:"#c4b5fd",fontSize:11,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",fontFamily:_DC_FF}}>{_dcGreeting()}</div>
-          <div style={{color:"#fff",fontSize:isMob?22:26,fontWeight:800,letterSpacing:-.6,lineHeight:1.15,marginTop:3,fontFamily:_DC_FF}}>{user.name}</div>
-          <div style={{color:"#cbd5e1",fontSize:12.5,marginTop:4,fontFamily:_DC_FF}}>{user.role} · {_dcFmtToday()}</div>
-        </div>
-        {/* Resumo lateral */}
-        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          {[
-            {l:"Demandas ativas", v:totalAtivas, c:"#fff"},
-            {l:"Em produção",     v:emProducao.length, c:"#c4b5fd"},
-            {l:"Entregues no mês",v:entreguesMes.length, c:"#86efac"},
-          ].map(function(k,i){
-            return <div key={i} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.10)",borderRadius:11,padding:"10px 14px",minWidth:90,fontFamily:_DC_FF}}>
-              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",fontFamily:_DC_FF}}>{k.l}</div>
-              <div style={{color:k.c,fontSize:22,fontWeight:800,letterSpacing:-.5,marginTop:3,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{k.v}</div>
-            </div>;
-          })}
-          <div style={{background:"linear-gradient(135deg,#9F43F6,#7c3aed)",borderRadius:11,padding:"10px 14px",minWidth:120,fontFamily:_DC_FF,boxShadow:"0 4px 14px rgba(159,67,246,0.45)"}}>
-            <div style={{color:"#fff",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",opacity:.9,fontFamily:_DC_FF}}>A receber no mês</div>
-            <div style={{color:"#fff",fontSize:20,fontWeight:900,letterSpacing:-.5,marginTop:3,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{_dcFmtBRL(valorReceber)}</div>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_DC_FF,width:"100%"}}>
+
+    {/* ═══ 1. HEADER COMPACTO ═══ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:isMob?"16px 18px":"18px 22px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+        {_dcAvatar(user, 52)}
+        <div style={{flex:1,minWidth:180}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:2}}>
+            <span style={{color:"#0f172a",fontWeight:800,fontSize:isMob?17:19,letterSpacing:-.4,lineHeight:1.1}}>{user.name}</span>
+            <span style={{background:statusMes.bg,color:statusMes.color,border:"1px solid "+statusMes.border,fontSize:10,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{statusMes.label}</span>
           </div>
+          <div style={{color:"#64748b",fontSize:12.5,fontWeight:500}}>{user.role} · {_dcFmtToday()}</div>
+        </div>
+        {/* Navegação de mês */}
+        <div style={{display:"inline-flex",alignItems:"center",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:3,flexShrink:0}}>
+          <button onClick={function(){setRefMonth(_dcShiftMonth(refMonth,-1));}} title="Mês anterior"
+            style={{background:"transparent",border:"none",borderRadius:7,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <span style={{padding:"0 12px",fontSize:12.5,fontWeight:700,color:accent,minWidth:120,textAlign:"center",fontFeatureSettings:"'tnum'"}}>{_dcMonthLabel(refMonth)}</span>
+          <button onClick={function(){setRefMonth(_dcShiftMonth(refMonth,1));}} title="Próximo mês"
+            style={{background:"transparent",border:"none",borderRadius:7,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+          {!isCurrentMonth && <button onClick={function(){setRefMonth(_dcCurrentMonth());}} title="Voltar pro mês atual"
+            style={{background:accent,color:"#fff",border:"none",borderRadius:7,padding:"4px 10px",marginLeft:4,fontSize:10.5,fontWeight:700,cursor:"pointer"}}>Hoje</button>}
         </div>
       </div>
     </section>
 
-    {/* ═══ 2. CARDS PRINCIPAIS ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(5,1fr)",gap:10,fontFamily:_DC_FF}}>
+    {/* ═══ 2. CARDS RESUMO DO MÊS ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(6,1fr)",gap:10}}>
       {[
-        {l:"Atribuídas",      v:totalAtivas,            c:"#0f172a"},
-        {l:"Em produção",     v:emProducao.length,      c:"#0891b2"},
-        {l:"Atrasadas",       v:atrasadas.length,       c:atrasadas.length>0?"#dc2626":"#0f172a"},
-        {l:"Aguard. aprovação",v:aguardandoAprov.length,c:"#a16207"},
-        {l:"Entregues no mês",v:entreguesMes.length,    c:"#16a34a"},
+        {l:"Atribuídas",       v:atribuidasMes,            c:"#0f172a", sub:"no mês"},
+        {l:"Em produção",      v:emProducao.length,        c:"#0891b2", sub:emProducao.length===1?"ativa":"ativas"},
+        {l:"Atrasadas",        v:atrasadas.length,         c:atrasadas.length>0?"#dc2626":"#94a3b8", sub:atrasadas.length===1?"item":"itens"},
+        {l:"Aguard. aprovação",v:aguardandoAprov.length,   c:"#9F43F6", sub:aguardandoAprov.length===1?"item":"itens"},
+        {l:"Entregues",        v:entreguesMes.length,      c:"#16a34a", sub:"aprovadas+"},
+        {l:"A receber",        v:_dcFmtBRL(valorReceber),  c:accent,    sub:"total do mês",isMoney:true},
       ].map(function(k,i){
-        return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-          <div style={{color:"#64748b",fontSize:10.5,fontWeight:600,letterSpacing:.2,fontFamily:_DC_FF}}>{k.l}</div>
-          <div style={{color:k.c,fontWeight:800,fontSize:26,marginTop:4,letterSpacing:-.7,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{k.v}</div>
+        return <div key={i} style={{background:"#fff",border:"1px solid "+(k.isMoney?accent+"55":"#e2e8f0"),borderRadius:12,padding:"14px 16px",boxShadow:k.isMoney?"0 4px 14px "+accent+"22":"0 1px 3px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden"}}>
+          {k.isMoney && <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:accent}}/>}
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{k.l}</div>
+          <div style={{color:k.c,fontWeight:800,fontSize:k.isMoney?22:26,marginTop:5,letterSpacing:-.7,fontFeatureSettings:"'tnum'",lineHeight:1.1}}>{k.v}</div>
+          <div style={{color:"#94a3b8",fontSize:10.5,marginTop:3,fontWeight:500}}>{k.sub}</div>
         </div>;
       })}
     </div>
 
     {/* ═══ 3. PRIORIDADES DE HOJE ═══ */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:12,fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_DC_FF}}>Prioridades de hoje</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_DC_FF}}>O que precisa de atenção primeiro — atrasos, prazos curtos e ajustes.</div>
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Prioridades de hoje</div>
+        <div style={{color:"#94a3b8",fontSize:12,marginLeft:"auto"}}>{prioridades.length} {prioridades.length===1?"item":"itens"}</div>
       </div>
       {prioridades.length===0
-        ? <div style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:11,padding:"18px 20px",display:"flex",alignItems:"center",gap:12,fontFamily:_DC_FF}}>
-            <div style={{width:36,height:36,borderRadius:9,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        ? <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:11,padding:"20px 22px",display:"flex",alignItems:"center",gap:13}}>
+            <div style={{width:40,height:40,borderRadius:10,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
             </div>
             <div>
-              <div style={{color:"#15803d",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_DC_FF}}>Tudo em dia</div>
-              <div style={{color:"#16a34a",fontSize:12,marginTop:2,fontFamily:_DC_FF}}>Nenhuma urgência no momento. Bom trabalho!</div>
+              <div style={{color:"#15803d",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>Tudo em dia por aqui</div>
+              <div style={{color:"#16a34a",fontSize:12,marginTop:2}}>Nenhuma urgência. Bom trabalho!</div>
             </div>
           </div>
         : <div style={{display:"flex",flexDirection:"column",gap:6}}>
             {prioridades.map(function(p,i){
-              return <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,fontFamily:_DC_FF}}>
-                <div style={{width:6,height:36,borderRadius:3,background:p.color,flexShrink:0}}/>
+              const cl = clientObj(p.task.client);
+              return <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 13px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10}}>
+                <div style={{width:5,alignSelf:"stretch",borderRadius:3,background:p.color,flexShrink:0}}/>
+                {cl && <div style={{width:30,height:30,borderRadius:8,background:cl.color+"15",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+                  {typeof ClientLogo==="function" ? <ClientLogo clientId={cl.id} size="xs"/> : <span style={{color:cl.color,fontWeight:800,fontSize:11}}>{cl.abbr||cl.name.slice(0,2)}</span>}
+                </div>}
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_DC_FF}}>{p.task.title||"(Sem título)"}</div>
-                  <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontFamily:_DC_FF}}>{clientName(p.task.client)} · {_dcTipoLabel(p.task)}</div>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.task.title||"(Sem título)"}</div>
+                  <div style={{color:"#64748b",fontSize:11,marginTop:2,fontWeight:500}}>{cl?cl.name:p.task.client} · {_dcTipoLabel(p.task)}</div>
                 </div>
-                <span style={{background:p.color+"15",color:p.color,fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,letterSpacing:.3,fontFamily:_DC_FF,flexShrink:0,whiteSpace:"nowrap"}}>{p.reason}</span>
+                <span style={{background:p.color+"15",color:p.color,fontSize:10.5,fontWeight:800,padding:"4px 10px",borderRadius:99,letterSpacing:.3,flexShrink:0,whiteSpace:"nowrap"}}>{p.reason}</span>
               </div>;
             })}
           </div>
       }
     </section>
 
-    {/* ═══ 4. EM PRODUÇÃO + AGUARDANDO APROVAÇÃO ═══ */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12,fontFamily:_DC_FF}}>
-      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:10}}>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_DC_FF}}>Em produção</div>
-          <span style={{color:"#94a3b8",fontSize:11,fontFamily:_DC_FF}}>{emProducao.length} {emProducao.length===1?"item":"itens"}</span>
-        </div>
-        {emProducao.length===0
-          ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_DC_FF}}>Nada em produção no momento.</div>
-          : <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {emProducao.slice(0,6).map(function(t){
-                return <div key={t.id} style={{padding:"9px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,fontFamily:_DC_FF}}>
-                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_DC_FF}}>{t.title||"(Sem título)"}</div>
-                  <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontFamily:_DC_FF}}>{clientName(t.client)} · {_dcTipoLabel(t)} · <span style={{color:t.status==="ajustes"?"#a16207":"#0891b2",fontWeight:600}}>{t.status==="ajustes"?"Em ajuste":"Em execução"}</span></div>
-                </div>;
-              })}
-              {emProducao.length>6 && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",paddingTop:4,fontFamily:_DC_FF}}>e mais {emProducao.length-6}…</div>}
+    {/* ═══ 4. PRODUÇÃO ATUAL (3 colunas) ═══ */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:12}}>
+      {[
+        {label:"Em produção", items:emProducao, color:"#0891b2", icon:"clock"},
+        {label:"Aguardando aprovação", items:aguardandoAprov, color:"#9F43F6", icon:"eye"},
+        {label:"Em ajuste", items:ajustesList, color:"#a16207", icon:"edit"},
+      ].map(function(col){
+        return <section key={col.label} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",minHeight:140}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:col.color}}/>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>{col.label}</div>
             </div>
-        }
-      </section>
-      <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:10}}>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_DC_FF}}>Aguardando aprovação</div>
-          <span style={{color:"#94a3b8",fontSize:11,fontFamily:_DC_FF}}>{aguardandoAprov.length} {aguardandoAprov.length===1?"item":"itens"}</span>
-        </div>
-        {aguardandoAprov.length===0
-          ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_DC_FF}}>Nada aguardando aprovação.</div>
-          : <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {aguardandoAprov.slice(0,6).map(function(t){
-                return <div key={t.id} style={{padding:"9px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,fontFamily:_DC_FF}}>
-                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_DC_FF}}>{t.title||"(Sem título)"}</div>
-                  <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontFamily:_DC_FF}}>{clientName(t.client)} · {_dcTipoLabel(t)}</div>
-                </div>;
-              })}
-              {aguardandoAprov.length>6 && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",paddingTop:4,fontFamily:_DC_FF}}>e mais {aguardandoAprov.length-6}…</div>}
-            </div>
-        }
-      </section>
+            <span style={{background:col.color+"15",color:col.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99}}>{col.items.length}</span>
+          </div>
+          {col.items.length===0
+            ? <div style={{color:"#cbd5e1",fontSize:12,fontStyle:"italic",padding:"10px 0"}}>Vazio</div>
+            : <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {col.items.slice(0,5).map(function(t){
+                  const cl = clientObj(t.client);
+                  return <div key={t.id} style={{padding:"8px 10px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:8}}>
+                    <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(Sem título)"}</div>
+                    <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontWeight:500}}>{cl?cl.name:t.client} · {_dcTipoLabel(t)}</div>
+                  </div>;
+                })}
+                {col.items.length>5 && <div style={{color:"#94a3b8",fontSize:10.5,textAlign:"center",paddingTop:3,fontWeight:600}}>+ {col.items.length-5} {col.items.length-5===1?"a mais":"a mais"}</div>}
+              </div>
+          }
+        </section>;
+      })}
     </div>
 
-    {/* ═══ 5. PAGAMENTOS DO MÊS — detalhamento automático ═══ */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,fontFamily:_DC_FF}}>Pagamentos do mês</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontFamily:_DC_FF}}>Cálculo automático — só entregas em Aprovadas, Agendadas ou Publicadas entram.</div>
+    {/* ═══ 5. PAGAMENTO DO MÊS — destacado ═══ */}
+    <section style={{background:"linear-gradient(180deg,"+accent+"06 0%,#fff 80%)",border:"1px solid "+accent+"33",borderRadius:16,padding:isMob?"20px":"22px 26px",boxShadow:"0 6px 22px "+accent+"15"}}>
+      <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14,flexWrap:"wrap",marginBottom:18,paddingBottom:14,borderBottom:"1px solid "+accent+"22"}}>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{width:44,height:44,borderRadius:12,background:accent,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px "+accent+"55"}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Pagamento de {_dcMonthShort(refMonth)}</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:3}}>Só entregas em Aprovação interna, Aprovadas, Publicadas ou Reprovadas.</div>
+          </div>
         </div>
-        <div style={{textAlign:"right",background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #e9d5ff",borderRadius:11,padding:"10px 16px",fontFamily:_DC_FF}}>
-          <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",fontFamily:_DC_FF}}>Total do mês</div>
-          <div style={{color:"#7c3aed",fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{_dcFmtBRL2(valorReceber)}</div>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:accent,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Total a receber</div>
+          <div style={{color:accent,fontWeight:900,fontSize:isMob?28:34,letterSpacing:-1,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_dcFmtBRL2(valorReceber)}</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:4,fontWeight:600}}>
+            {tasksPagas.length} {tasksPagas.length===1?"entrega":"entregas"}
+            {tasksPagas.length>0 && " · média "+_dcFmtBRL2(valorMedio)}
+          </div>
         </div>
       </div>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat("+breakdown.length+",1fr)",gap:10}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat("+breakdown.length+",1fr)",gap:10,marginBottom:14}}>
         {breakdown.map(function(b,i){
           const subtotal = b.count * b.price;
-          return <div key={i} style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"12px 14px",fontFamily:_DC_FF}}>
-            <div style={{color:"#64748b",fontSize:11,fontWeight:600,fontFamily:_DC_FF}}>{b.label}</div>
+          const has = b.count>0;
+          return <div key={i} style={{background:"#fff",border:"1px solid "+(has?"#e2e8f0":"#f1f5f9"),borderRadius:11,padding:"12px 14px",opacity:has?1:0.55}}>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{b.label}</div>
             <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:5}}>
-              <span style={{color:"#0f172a",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{b.count}</span>
-              <span style={{color:"#94a3b8",fontSize:11,fontFamily:_DC_FF}}>× {_dcFmtBRL(b.price)}</span>
+              <span style={{color:has?accent:"#cbd5e1",fontWeight:800,fontSize:22,fontFeatureSettings:"'tnum'"}}>{b.count}</span>
+              <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>× {_dcFmtBRL(b.price)}</span>
             </div>
-            <div style={{color:"#16a34a",fontWeight:700,fontSize:14,marginTop:4,fontFeatureSettings:"'tnum'",fontFamily:_DC_FF}}>{_dcFmtBRL2(subtotal)}</div>
+            <div style={{color:has?"#16a34a":"#cbd5e1",fontWeight:800,fontSize:14,marginTop:5,fontFeatureSettings:"'tnum'"}}>{_dcFmtBRL2(subtotal)}</div>
           </div>;
         })}
       </div>
-      {calc.naoClassificado>0 && <div style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:11.5,borderRadius:10,padding:"10px 14px",lineHeight:1.5,fontFamily:_DC_FF}}>
-        <strong>{calc.naoClassificado} demanda(s) sem tipo definido</strong> ainda não entram no cálculo. Os sócios precisam classificar.
+      {tasksPagas.length>0 && <div>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Demandas no cálculo</div>
+        <div style={{display:"flex",flexDirection:"column",gap:5,maxHeight:280,overflowY:"auto"}}>
+          {tasksPagas.map(function(t){
+            const cl = clientObj(t.client);
+            const ct = String(t.contentType||"").toLowerCase();
+            const price = ct==="foto"?DESIGNER_PRICES.fotoObra : ct==="arte"?DESIGNER_PRICES.arte : ct==="carrossel"?DESIGNER_PRICES.carrossel : ct==="folder"?DESIGNER_PRICES.folder : ct==="video"?DESIGNER_PRICES.video : ct==="corte"?DESIGNER_PRICES.corte : ct==="video_complexo"?DESIGNER_PRICES.videoComplexo : ct==="video_feira"?DESIGNER_PRICES.videoFeira : 0;
+            const dateRef = t.completedAt || t.publishDate || "";
+            const dateStr = dateRef && dateRef.length>=10 ? dateRef.slice(8,10)+"/"+dateRef.slice(5,7) : "—";
+            return <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:"#fff",border:"1px solid #f1f5f9",borderRadius:9}}>
+              {cl && <div style={{width:26,height:26,borderRadius:7,background:cl.color+"15",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+                {typeof ClientLogo==="function" ? <ClientLogo clientId={cl.id} size="xs"/> : <span style={{color:cl.color,fontWeight:800,fontSize:9}}>{cl.abbr||cl.name.slice(0,2)}</span>}
+              </div>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(Sem título)"}</div>
+                <div style={{color:"#64748b",fontSize:10.5,marginTop:2}}>{cl?cl.name:t.client} · {_dcTipoLabel(t)}</div>
+              </div>
+              <span style={{color:_statusColor(t.status),fontSize:10,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{_statusLabelShort(t)}</span>
+              <span style={{color:"#94a3b8",fontSize:10.5,fontFeatureSettings:"'tnum'",fontWeight:600,minWidth:32,textAlign:"right"}}>{dateStr}</span>
+              <span style={{color:price>0?"#16a34a":"#cbd5e1",fontSize:12.5,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.2,minWidth:60,textAlign:"right"}}>{price>0?_dcFmtBRL2(price):"sem valor"}</span>
+            </div>;
+          })}
+        </div>
       </div>}
+      {calc.naoClassificado>0 && <div style={{background:"#fff7ed",border:"1px solid #fed7aa",color:"#9a3412",fontSize:11.5,borderRadius:10,padding:"10px 14px",marginTop:12,lineHeight:1.5}}>
+        <strong>{calc.naoClassificado} demanda(s) sem tipo definido</strong> não entraram no cálculo. Avisa os sócios pra classificar.
+      </div>}
+      <div style={{color:"#94a3b8",fontSize:10.5,marginTop:14,fontStyle:"italic",lineHeight:1.5,textAlign:"center"}}>
+        O cálculo considera apenas demandas em Aprovação interna, Aprovadas, Publicadas ou Reprovadas no mês selecionado.
+      </div>
     </section>
 
-    {/* ═══ 6. ENTREGUES NO MÊS ═══ */}
-    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:_DC_FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:10}}>
+    {/* ═══ 6. ENTREGUES NO MÊS — FEED INSTAGRAM (grid 4 cols) ═══ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,marginBottom:14}}>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,fontFamily:_DC_FF}}>Entregues no mês</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontFamily:_DC_FF}}>{entreguesMes.length} entrega{entreguesMes.length===1?"":"s"} no ciclo atual.</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Entregues em {_dcMonthShort(refMonth)}</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>{entreguesMes.length} {entreguesMes.length===1?"entrega":"entregas"} já concluídas ou em aprovação cliente</div>
         </div>
       </div>
       {entreguesMes.length===0
-        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"10px 0",fontFamily:_DC_FF}}>Nenhuma entrega registrada no mês ainda.</div>
-        : <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            {entreguesMes.slice(0,10).map(function(t){
-              return <div key={t.id} style={{padding:"9px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9,display:"flex",alignItems:"center",gap:10,fontFamily:_DC_FF}}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_DC_FF}}>{t.title||"(Sem título)"}</div>
-                  <div style={{color:"#64748b",fontSize:10.5,marginTop:2,fontFamily:_DC_FF}}>{clientName(t.client)} · {_dcTipoLabel(t)}</div>
+        ? <div style={{color:"#cbd5e1",fontSize:12.5,fontStyle:"italic",padding:"22px 0",textAlign:"center"}}>Nenhuma entrega registrada em {_dcMonthShort(refMonth)} ainda.</div>
+        : <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:8}}>
+            {entreguesMes.map(function(t){
+              const url = _dcThumb(t);
+              const cl = clientObj(t.client);
+              const tip = (t.title||"Sem título")+(cl?" · "+cl.name:"");
+              const stColor = _statusColor(t.status);
+              return <div key={t.id} title={tip} style={{position:"relative",aspectRatio:"4/5",borderRadius:10,overflow:"hidden",background:url?"#f1f5f9":(cl&&cl.color?cl.color+"15":"#f8fafc"),border:"1px solid #e2e8f0",cursor:"default",transition:"transform .15s, box-shadow .15s"}}
+                onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.02)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.12)";}}
+                onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow="none";}}>
+                {url
+                  ? <img src={url} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
+                  : <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:cl&&cl.color?cl.color:"#94a3b8",fontSize:24,fontWeight:800}}>{cl?cl.name.slice(0,2).toUpperCase():"?"}</div>
+                }
+                <span style={{position:"absolute",top:6,right:6,background:stColor,color:"#fff",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",boxShadow:"0 2px 4px rgba(0,0,0,0.2)"}}>{t.status==="aprovacao_final"?"Cliente":t.status==="aprovado"?"Aprovado":t.status==="agendado"?"Agendado":t.status==="publicado"?"Publicado":t.status==="reprovado"?"Reprovado":t.status}</span>
+                <div style={{position:"absolute",bottom:0,left:0,right:0,padding:"18px 8px 7px",background:"linear-gradient(180deg,transparent 0%,rgba(0,0,0,0.75) 100%)",color:"#fff"}}>
+                  <div style={{fontSize:9.5,fontWeight:700,opacity:.85,textTransform:"uppercase",letterSpacing:.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.name:t.client}</div>
+                  <div style={{fontSize:10.5,fontWeight:700,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"Sem título"}</div>
                 </div>
               </div>;
             })}
-            {entreguesMes.length>10 && <div style={{color:"#94a3b8",fontSize:11,textAlign:"center",paddingTop:6,fontFamily:_DC_FF}}>e mais {entreguesMes.length-10}…</div>}
           </div>
       }
     </section>
 
-    {/* ═══ 7. ROTINA DA SEMANA — checklist personalizado do colaborador ═══ */}
+    {/* ═══ 7. EVOLUÇÃO 6 MESES ═══ */}
+    <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:18}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Evolução nos últimos 6 meses</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:8,alignItems:"end"}}>
+        {evolucao.map(function(e,i){
+          const isCur = e.mes === refMonth;
+          const heightPct = Math.max(4, Math.round((e.valor/maxValor)*100));
+          return <div key={e.mes} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5}}>
+            <div style={{color:isCur?accent:"#0f172a",fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'",height:14}}>{e.valor>0?_dcFmtBRL(e.valor).replace("R$ ",""):"—"}</div>
+            <div style={{width:"100%",height:80,background:"#f8fafc",border:"1px solid #f1f5f9",borderRadius:8,display:"flex",alignItems:"flex-end",overflow:"hidden",position:"relative"}}>
+              <div style={{width:"100%",height:heightPct+"%",background:isCur?"linear-gradient(180deg,"+accent+","+accent+"cc)":"linear-gradient(180deg,#cbd5e1,#94a3b8)",borderRadius:"6px 6px 0 0",transition:"height .25s",cursor:"pointer"}}
+                onClick={function(){setRefMonth(e.mes);}}/>
+            </div>
+            <div style={{color:isCur?accent:"#64748b",fontSize:10.5,fontWeight:isCur?800:600,textTransform:"uppercase",letterSpacing:.3}}>{_dcMonthShort(e.mes)}</div>
+            <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{e.aprovados}/{e.produzidos}</div>
+          </div>;
+        })}
+      </div>
+      <div style={{color:"#94a3b8",fontSize:10.5,marginTop:12,textAlign:"center",fontStyle:"italic"}}>
+        Barras = valor recebido · números = aprovadas/total produzidas · clica numa barra pra ver o mês
+      </div>
+    </section>
+
+    {/* ═══ 8. ROTINA DA SEMANA ═══ */}
     {typeof OpRotinaWidget==="function" && <OpRotinaWidget userId={user.id} accentColor={user.color||"#9F43F6"} isMob={isMob}/>}
 
   </div>;
