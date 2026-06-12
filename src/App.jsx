@@ -9683,29 +9683,34 @@ function PageClientes({isMob, tasks}){
   return(<div style={{display:"flex",flexDirection:"column",gap:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {showNovo&&<NovoClienteModal onClose={()=>setShowNovo(false)} onSave={cl=>setExtraClients(p=>[...p,cl])}/>}
 
-    {/* ── HEADER ── */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+    {/* ── HEADER ── modernizado, simétrico, altura 40 ── */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
       <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:24,letterSpacing:-.5}}>Clientes</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>
-          {allClients.length} clientes ativos · Pressione / para buscar
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:26,letterSpacing:-.6}}>Clientes</div>
+        <div style={{color:"#64748b",fontSize:12.5,marginTop:4,fontWeight:500}}>
+          {allClients.length} {allClients.length===1?"cliente ativo":"clientes ativos"} · pressione <kbd style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:600,color:"#475569",fontFamily:"'Inter',system-ui,sans-serif"}}>/</kbd> pra buscar
         </div>
       </div>
-      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-        <div style={{position:"relative"}}>
-          <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",fontSize:13,pointerEvents:"none"}}>🔍</span>
-          <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar... (/)"
-            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 14px 9px 34px",color:"#0f172a",fontSize:12.5,outline:"none",width:220,fontFamily:"inherit",transition:"border-color .15s"}}
-            onFocus={e=>e.currentTarget.style.borderColor="#7c3aed"}
-            onBlur={e=>e.currentTarget.style.borderColor="#e2e8f0"}/>
+      <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+          <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:search?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </span>
+          <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente..."
+            style={{background:"#fff",border:`1px solid ${search?"#0f172a":"#e2e8f0"}`,borderRadius:11,padding:"0 36px 0 36px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",width:280,height:40,boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"}}/>
+          {search&&<button onClick={()=>setSearch("")} title="Limpar busca"
+            style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
+            onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
+            onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>}
         </div>
-        <button onClick={exportCSV}
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 14px",color:"#64748b",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-          ↓ CSV
-        </button>
         <button onClick={()=>setShowNovo(true)}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-          + Novo cliente
+          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:11,padding:"0 18px",height:40,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 4px 12px rgba(15,23,42,0.18)",transition:"all .15s",boxSizing:"border-box"}}
+          onMouseEnter={e=>{e.currentTarget.style.background="#1e293b";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.25)";}}
+          onMouseLeave={e=>{e.currentTarget.style.background="#0f172a";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.18)";}}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo cliente
         </button>
       </div>
     </div>
@@ -9737,62 +9742,81 @@ function PageClientes({isMob, tasks}){
         const stCfg=getStatusConfig((profile&&profile.status)||cl.status||"ativo");
         const responsavelId=(profile&&profile.responsavel_interno)||cl.manager;
         const respUser=responsavelId&&typeof TEAM!=="undefined"?TEAM.find(function(u){return u.id===responsavelId;}):null;
+        const _accentCl = cl.color || "#94a3b8";
         return <div key={cl.id}
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:18,boxShadow:"0 1px 2px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:12,transition:"all .15s",cursor:"pointer"}}
-          onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 4px 16px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor="#cbd5e1";}}
-          onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e2e8f0";}}
-          onClick={function(e){if(e.target.tagName!=="BUTTON")setActiveClient(cl);}}>
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:0,boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",transition:"all .2s cubic-bezier(.4,0,.2,1)",cursor:"pointer",overflow:"hidden",position:"relative"}}
+          onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 10px 28px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=_accentCl+"55";e.currentTarget.style.transform="translateY(-2px)";}}
+          onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}
+          onClick={function(e){if(e.target.tagName!=="BUTTON"&&!e.target.closest("button"))setActiveClient(cl);}}>
 
-          {/* Header do card */}
-          <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-            <div style={{width:44,height:44,borderRadius:11,background:cl.color||"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+          {/* Faixa fina de accent no topo */}
+          <div style={{height:3,background:_accentCl}}/>
+
+          {/* HEADER do card — logo grande + nome + status pill */}
+          <div style={{padding:"18px 18px 14px",display:"flex",alignItems:"flex-start",gap:13}}>
+            <div style={{width:52,height:52,borderRadius:13,background:_accentCl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 4px 12px "+_accentCl+"30"}}>
               {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
-                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:32,maxWidth:36,objectFit:"contain"}}/>
-                : <span style={{color:"#fff",fontWeight:800,fontSize:16}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</span>
+                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:38,maxWidth:44,objectFit:"contain"}}/>
+                : <span style={{color:"#fff",fontWeight:800,fontSize:18,letterSpacing:-.5}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</span>
               }
             </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                {(profile&&profile.name)||cl.name}
-                {isBioterGroup&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:99,letterSpacing:.4}}>GRUPO · {BIOTER_GROUP_UNITS.length} UNIDADES</span>}
+            <div style={{flex:1,minWidth:0,paddingTop:2}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:3}}>
+                <span style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.2}}>{(profile&&profile.name)||cl.name}</span>
+                {isBioterGroup&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,border:"1px solid #ddd6fe"}}>GRUPO · {BIOTER_GROUP_UNITS.length} UNID</span>}
               </div>
-              <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontWeight:500}}>
+              <div style={{color:"#64748b",fontSize:11.5,fontWeight:500,lineHeight:1.45,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
                 {(profile&&profile.segmento)||cl.sector}
               </div>
             </div>
-            <span style={{background:stCfg.bg,color:stCfg.color,fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0}}>{stCfg.label}</span>
+            <span style={{background:stCfg.bg,color:stCfg.color,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+stCfg.color+"33"}}>{stCfg.label}</span>
           </div>
 
-          {/* Dados cadastrais — sem informação financeira (financeiro fica em aba própria) */}
-          {!isBioterGroup&&profile&&<div style={{display:"flex",flexDirection:"column",gap:7,paddingTop:2,borderTop:"1px solid #f1f5f9",paddingBottom:0}}>
-            {profile.cnpj&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8,paddingTop:9}}>
-              <span style={{color:"#94a3b8",fontWeight:500}}>CNPJ</span><span style={{color:"#0f172a",fontWeight:500,fontFamily:"monospace"}}>{profile.cnpj}</span>
+          {/* DADOS CADASTRAIS — ícones SVG, visual clean */}
+          {!isBioterGroup&&profile&&(profile.cnpj||profile.ruc||profile.cidade||profile.estado||profile.telefone)&&<div style={{padding:"12px 18px 16px",borderTop:"1px solid #f1f5f9",display:"flex",flexDirection:"column",gap:8}}>
+            {profile.cnpj&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
+              <span style={{width:18,height:18,borderRadius:5,background:"#f1f5f9",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>
+              </span>
+              <span style={{color:"#0f172a",fontWeight:600,fontFamily:"monospace",fontSize:11.5,fontFeatureSettings:"'tnum'"}}>{profile.cnpj}</span>
             </div>}
-            {profile.ruc&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
-              <span style={{color:"#94a3b8",fontWeight:500}}>RUC</span><span style={{color:"#0f172a",fontWeight:500,fontFamily:"monospace"}}>{profile.ruc}</span>
+            {profile.ruc&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
+              <span style={{width:18,height:18,borderRadius:5,background:"#f1f5f9",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0,fontSize:8.5,fontWeight:800}}>R</span>
+              <span style={{color:"#0f172a",fontWeight:600,fontFamily:"monospace",fontSize:11.5,fontFeatureSettings:"'tnum'"}}>{profile.ruc}</span>
             </div>}
-            {(profile.cidade||profile.estado)&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
-              <span style={{color:"#94a3b8"}}>Localização</span><span style={{color:"#0f172a",fontWeight:500}}>{[profile.cidade,profile.estado].filter(Boolean).join("/")}</span>
+            {(profile.cidade||profile.estado)&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
+              <span style={{width:18,height:18,borderRadius:5,background:"#f1f5f9",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              </span>
+              <span style={{color:"#0f172a",fontWeight:600}}>{[profile.cidade,profile.estado].filter(Boolean).join("/")}</span>
             </div>}
-            {profile.telefone&&<div style={{color:"#64748b",fontSize:11,display:"flex",justifyContent:"space-between",gap:8}}>
-              <span style={{color:"#94a3b8"}}>Telefone</span><span style={{color:"#0f172a",fontWeight:500}}>{profile.telefone}</span>
+            {profile.telefone&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
+              <span style={{width:18,height:18,borderRadius:5,background:"#f1f5f9",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+              </span>
+              <span style={{color:"#0f172a",fontWeight:600,fontFamily:"monospace",fontSize:11.5,fontFeatureSettings:"'tnum'"}}>{profile.telefone}</span>
             </div>}
           </div>}
 
-          {/* Botão expandir unidades — só Bioter */}
-          {isBioterGroup&&<button onClick={function(e){e.stopPropagation();setBioterExpanded(!bioterExpanded);}}
-            style={{background:bioterExpanded?"#f5f3ff":"#f8fafc",color:bioterExpanded?"#7c3aed":"#64748b",border:"1px solid "+(bioterExpanded?"#ddd6fe":"#e2e8f0"),borderRadius:9,padding:"8px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s"}}>
-            <span>{bioterExpanded?"▾ Ocultar":"▸ Ver"} unidades</span>
-            <span style={{background:bioterExpanded?"#7c3aed":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 7px",fontSize:9.5,fontWeight:700}}>{BIOTER_GROUP_UNITS.length}</span>
-          </button>}
+          {/* BOTÃO EXPANDIR — só Bioter (visual igual aos outros campos pra ficar coerente) */}
+          {isBioterGroup&&<div style={{padding:"12px 18px 16px",borderTop:"1px solid #f1f5f9"}}>
+            <button onClick={function(e){e.stopPropagation();setBioterExpanded(!bioterExpanded);}}
+              style={{width:"100%",background:bioterExpanded?"#f5f3ff":"#fafbfc",color:bioterExpanded?"#7c3aed":"#475569",border:`1px solid ${bioterExpanded?"#ddd6fe":"#e2e8f0"}`,borderRadius:10,padding:"10px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s"}}
+              onMouseEnter={e=>{if(!bioterExpanded){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.borderColor="#cbd5e1";}}}
+              onMouseLeave={e=>{if(!bioterExpanded){e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderColor="#e2e8f0";}}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:bioterExpanded?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+              {bioterExpanded?"Ocultar":"Ver"} unidades
+              <span style={{background:bioterExpanded?"#7c3aed":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,marginLeft:2}}>{BIOTER_GROUP_UNITS.length}</span>
+            </button>
+          </div>}
 
-          {/* Lista de unidades — quando expandida (só dados cadastrais) */}
-          {isExpanded&&<div style={{display:"flex",flexDirection:"column",gap:6,paddingTop:4,borderTop:"1px solid #f1f5f9"}}>
+          {/* LISTA DE UNIDADES — quando expandida */}
+          {isExpanded&&<div style={{padding:"0 18px 16px",display:"flex",flexDirection:"column",gap:6}}>
             {BIOTER_GROUP_UNITS.map(function(u){
               return <div key={u.id}
-                style={{padding:"9px 11px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:9}}>
-                <div style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{u.name}</div>
-                <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{u.cidade}/{u.estado}{u.cnpj?" · "+u.cnpj:""}{u.ruc?" · RUC "+u.ruc:""}</div>
+                style={{padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10}}>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{u.name}</div>
+                <div style={{color:"#94a3b8",fontSize:10.5,marginTop:3,fontWeight:500}}>{u.cidade}/{u.estado}{u.cnpj?" · "+u.cnpj:""}{u.ruc?" · RUC "+u.ruc:""}</div>
               </div>;
             })}
           </div>}
