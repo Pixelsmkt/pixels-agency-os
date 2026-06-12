@@ -1284,7 +1284,10 @@ function formatRefMonth(refMonth){
        Reutilizado em DashPartner e em PageGestaoFinanceiro.                        ─── */
 function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMob, compact}){
   const fmtBRL=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
-  const freelancers=(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.pagamentoPorDemanda;});
+  // Whitelist explícita pra Ocsana (estagiária com salário fixo) e qualquer outro perfil
+  // que tenha pagamentoPorDemanda:true por engano em algum override não cair aqui.
+  const _PAY_BY_DEMAND_IDS = ["andre","maria","guilherme"];
+  const freelancers=(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.pagamentoPorDemanda && _PAY_BY_DEMAND_IDS.indexOf(u.id)>=0;});
   const rows=freelancers.map(function(fr){
     const calc=calcDesignerPayments(tasks||[],fr.id,refMonth);
     return {fr:fr,calc:calc,isEditor:fr.dash==="editor"};
@@ -1457,6 +1460,72 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               </div>;
             })}
             {c.naoClassificado>0&&<div style={{color:"#a16207",fontSize:10.5,textAlign:"center",fontStyle:"italic",padding:"6px 4px",fontWeight:600,background:"#fef3c7",borderRadius:6,border:"1px solid #fde68a",marginTop:2}}>{c.naoClassificado} card(s) atribuído(s) sem tipo definido</div>}
+
+            {/* ── Miniaturas dos cards a pagar (mês anterior, atual, próximo) ── */}
+            {/* Pega capas das tasks já contadas em calcDesignerPayments — só status pago (aprovado/agendado/publicado).
+                3 colunas pra dar contexto: o que foi pago mês passado, o que paga agora, o que vem aí. */}
+            {(function(){
+              function _shiftRef(rm, delta){
+                if(!rm) return null;
+                const parts=rm.split("-");
+                let y=parseInt(parts[0],10); let m=parseInt(parts[1],10)+delta;
+                while(m<1){m+=12;y--;} while(m>12){m-=12;y++;}
+                return y+"-"+String(m).padStart(2,"0");
+              }
+              function _monthShortLabel(rm){
+                if(!rm) return "";
+                const mn=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+                const parts=rm.split("-");
+                return (mn[parseInt(parts[1],10)-1]||"?")+"/"+parts[0].slice(-2);
+              }
+              function _cardsFor(month){
+                if(!month) return [];
+                const cc=calcDesignerPayments(tasks||[], fr.id, month);
+                return [].concat(cc.tasksFotoObra,cc.tasksArte,cc.tasksCarrossel,cc.tasksFolder,cc.tasksVideo,cc.tasksCorte,cc.tasksVideoComplexo,cc.tasksVideoFeira);
+              }
+              function _thumb(t){
+                if(t.cover) return t.cover;
+                const img=(t.files||[]).find(function(f){return f && f.type && f.type.indexOf("image/")===0;});
+                return img?img.url:null;
+              }
+              const prev=_shiftRef(refMonth,-1);
+              const next=_shiftRef(refMonth,1);
+              const buckets=[
+                {key:"prev",  label:_monthShortLabel(prev),     month:prev, items:_cardsFor(prev),     muted:true},
+                {key:"cur",   label:_monthShortLabel(refMonth), month:refMonth, items:_cardsFor(refMonth), muted:false},
+                {key:"next",  label:_monthShortLabel(next),     month:next, items:_cardsFor(next),     muted:true},
+              ];
+              const totalCards=buckets.reduce(function(s,b){return s+b.items.length;},0);
+              if(totalCards===0) return null;
+              return <div style={{marginTop:8,paddingTop:10,borderTop:"1px dashed #e5e7eb",display:"flex",flexDirection:"column",gap:7}}>
+                <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Cards a pagar</div>
+                {buckets.map(function(b){
+                  return <div key={b.key} style={{display:"flex",flexDirection:"column",gap:4,opacity:b.muted?0.78:1}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,fontSize:10,fontWeight:700,color:b.muted?"#94a3b8":accent,letterSpacing:-.1}}>
+                      <span style={{textTransform:"uppercase",letterSpacing:.4}}>{b.label||"—"}</span>
+                      <span style={{color:"#cbd5e1",fontSize:9.5,fontWeight:600}}>· {b.items.length}{b.items.length===1?" card":" cards"}</span>
+                    </div>
+                    {b.items.length===0
+                      ? <div style={{color:"#cbd5e1",fontSize:10,fontStyle:"italic",padding:"4px 0"}}>—</div>
+                      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(38px,1fr))",gap:4}}>
+                          {b.items.slice(0,12).map(function(t){
+                            const url=_thumb(t);
+                            const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===t.client;});
+                            const tip=(t.title||"Sem título")+(cl?" · "+cl.name:"");
+                            return <div key={t.id} title={tip} style={{aspectRatio:"1/1",borderRadius:6,overflow:"hidden",background:url?"#f1f5f9":(cl&&cl.color?cl.color+"22":"#f1f5f9"),border:"1px solid "+(b.muted?"#e5e7eb":accent+"33"),display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:cl&&cl.color?cl.color:"#94a3b8",cursor:"default"}}>
+                              {url
+                                ? <img src={url} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
+                                : (cl?cl.name.slice(0,2).toUpperCase():"?")
+                              }
+                            </div>;
+                          })}
+                          {b.items.length>12 && <div title={(b.items.length-12)+" cards a mais"} style={{aspectRatio:"1/1",borderRadius:6,background:"#f1f5f9",border:"1px dashed #cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:"#64748b"}}>+{b.items.length-12}</div>}
+                        </div>
+                    }
+                  </div>;
+                })}
+              </div>;
+            })()}
           </div>
           <div style={{padding:"12px 16px",background:"#fafbfc",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
             <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Total</span>
