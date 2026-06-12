@@ -854,7 +854,7 @@ const KANBAN_COLS = [
   { id:"aprovacao_final",label:"Aprovação final",        color:"#059669", dark:true  }, // emerald-600
   { id:"agendado",       label:"Publicadas",             color:"#9333ea", dark:true  }, // purple-600
   { id:"pausado",        label:"Pausado",                color:"#64748b", dark:true  }, // slate-500
-  { id:"reprovado",      label:"Reprovadas",             color:"#7f1d1d", dark:true  }, // red-900 — última coluna
+  { id:"reprovado",      label:"Reprovadas",             color:"#475569", dark:true  }, // slate-600 — parecido com pausado, um pouco mais escuro
 ];
 
 /* ─── Migração defensiva de URLs antigas ──────────────────────────
@@ -12279,12 +12279,12 @@ function KanbanDropdown({label,icon,active,children}){
   const [open,setOpen]=useState(false);
   return <div style={{position:"relative",fontFamily:"'Inter',system-ui,sans-serif"}}>
     <button onMouseDown={e=>{e.stopPropagation();setOpen(v=>!v);}}
-      style={{display:"inline-flex",alignItems:"center",gap:7,background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:`1px solid ${active?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",fontFamily:"inherit"}}
+      style={{display:"inline-flex",alignItems:"center",gap:9,background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:`1px solid ${active?"#0f172a":"#e2e8f0"}`,borderRadius:11,padding:"10px 16px",fontSize:13,fontWeight:active?700:600,cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",fontFamily:"inherit",height:40,boxSizing:"border-box"}}
       onMouseEnter={e=>{if(!active){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#f8fafc";}}}
       onMouseLeave={e=>{if(!active){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
       {icon&&<span style={{display:"flex",alignItems:"center",color:active?"#fff":"#64748b"}}>{icon}</span>}
       <span>{label}</span>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.6,transform:open?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.6,transform:open?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
     </button>
     {open&&<>
       <div style={{position:"fixed",inset:0,zIndex:98}} onMouseDown={()=>setOpen(false)}/>
@@ -12946,6 +12946,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [filterUser,setFilterUser]=useState("todos");
   const [filterSector,setFilterSector]=useState("todos_setores");
   const [searchTerm,setSearchTerm]=useState("");
+  // Busca local dentro da Lixeira (título + cliente + responsável)
+  const [trashSearch,setTrashSearch]=useState("");
   const [filterClient,setFilterClient]=useState("todos");
   const [filterBioterUnit,setFilterBioterUnit]=useState("todos");
   // Filtro de etiqueta interna (só sócios). Array de strings — multi-select.
@@ -13578,37 +13580,32 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             {trash.length} na lixeira
           </div>
         </div>
-        <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-          {/* SEARCH input — pesquisar cards por título */}
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+          {/* SEARCH input — pesquisar cards por título (altura 40 pra simetria com outros) */}
           <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:searchTerm?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             </span>
             <input type="text" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} placeholder="Buscar demanda..."
-              style={{background:"#fff",border:`1px solid ${searchTerm?"#0f172a":"#e2e8f0"}`,borderRadius:10,padding:"7px 30px 7px 30px",fontSize:12,fontWeight:500,color:"#0f172a",outline:"none",width:200,transition:"border-color .15s",fontFamily:"inherit"}}/>
+              style={{background:"#fff",border:`1px solid ${searchTerm?"#0f172a":"#e2e8f0"}`,borderRadius:11,padding:"0 36px 0 36px",fontSize:13,fontWeight:500,color:"#0f172a",outline:"none",width:260,height:40,boxSizing:"border-box",transition:"border-color .15s",fontFamily:"inherit"}}/>
             {searchTerm&&<button onClick={()=>setSearchTerm("")} title="Limpar busca"
-              style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
+              style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
               onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
               onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>}
           </div>
           {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")}
-            style={{background:viewMode==="trash"?"#fee2e2":"#f1f5f9",color:viewMode==="trash"?"#dc2626":"#64748b",border:"none",borderRadius:10,padding:"6px 13px",fontSize:11,fontWeight:viewMode==="trash"?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}>
-            <Ico n="trash" size={13}/> Lixeira
+            style={{background:viewMode==="trash"?"#fee2e2":"#fff",color:viewMode==="trash"?"#dc2626":"#0f172a",border:`1px solid ${viewMode==="trash"?"#fecaca":"#e2e8f0"}`,borderRadius:11,padding:"0 16px",height:40,fontSize:13,fontWeight:viewMode==="trash"?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s",boxSizing:"border-box"}}
+            onMouseEnter={e=>{if(viewMode!=="trash"){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}}
+            onMouseLeave={e=>{if(viewMode!=="trash"){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}}>
+            <Ico n="trash" size={15}/> Lixeira
           </button>}
-          {/* Botão de refresh manual */}
-          <button onClick={()=>window.location.reload()} title="Recarregar dados"
-            style={{background:"#f1f5f9",border:"none",borderRadius:10,width:32,height:32,fontSize:14,cursor:"pointer",color:"#64748b",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
-            onMouseEnter={e=>{e.currentTarget.style.background="#e2e8f0";e.currentTarget.style.color="#0f172a";}}
-            onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
-            <Ico n="refresh" size={14}/>
-          </button>
           {myPerms.criarDemanda&&<button onClick={()=>addNewTask("demanda")}
-            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 2px 8px rgba(15,23,42,0.15)",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s"}}
-            onMouseEnter={e=>e.currentTarget.style.background="#1e293b"}
-            onMouseLeave={e=>e.currentTarget.style.background="#0f172a"}>
-            <Ico n="plus" size={13}/> Nova
+            style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:11,padding:"0 18px",height:40,fontSize:13,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 4px 12px rgba(15,23,42,0.18)",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s",boxSizing:"border-box"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="#1e293b";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.25)";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#0f172a";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.18)";}}>
+            <Ico n="plus" size={15}/> Nova
           </button>}
         </div>
       </div>
@@ -14045,35 +14042,104 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       {/* ── CLIENTES BOARD ── */}
       {viewMode==="clientes"&&<ClientesBoard tasks={tasks} setTasks={setTasks} setOpenCard={setOpenCard} canDelete={canDelete} handleDelete={handleDelete} canDrag={canDrag} canCreate={canCreate}/>}
 
-      {/* ── TRASH ── */}
-      {viewMode==="trash"&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
-        <div style={{background:C.rd+"12",border:`1px solid ${C.rd}33`,borderRadius:12,padding:"12px 16px",display:"flex",gap:10,alignItems:"center"}}>
-          <span style={{fontSize:20}}>🗑</span>
-          <div style={{color:C.ts,fontSize:12}}>Cartões excluídos são mantidos por <strong style={{color:C.rd}}>30 dias</strong> antes de serem removidos permanentemente.</div>
-        </div>
-        {(()=>{
-          const trashVisible=myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)));
-          return <>
-            {trashVisible.length===0&&<div style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:28,textAlign:"center"}}>
-              <div style={{fontSize:40,marginBottom:8}}>✅</div>
-              <div style={{color:C.ts,fontSize:14}}>Lixeira vazia</div>
-            </div>}
-            {trashVisible.map(t=>{
-              const days=trashDaysLeft(t);
-              const cl=CLIENTS.find(c=>c.id===t.client);
-              return <div key={t.id} style={{background:C.card,border:`1px solid ${C.b1}`,borderRadius:12,padding:"14px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,opacity:.7}}>
-                <div>
-                  <div style={{color:C.tx,fontWeight:600,fontSize:13,textDecoration:"line-through"}}>{t.title}</div>
-                  <div style={{color:C.ts,fontSize:11,marginTop:3}}>{cl?.name||t.client} · {TEAM.find(u=>u.id===t.assignee)?.name}</div>
+      {/* ── TRASH ── modernizada com busca e visual mais clean ── */}
+      {viewMode==="trash"&&(()=>{
+        const trashVisibleAll=myPerms.verTodosKanban?trash:trash.filter(t=>t.assignee===activeUserId||(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId)));
+        const _q=(trashSearch||"").trim().toLowerCase();
+        const trashVisible=_q
+          ?trashVisibleAll.filter(t=>{
+            const cl=CLIENTS.find(c=>c.id===t.client);
+            const u=TEAM.find(x=>x.id===t.assignee);
+            const hay=((t.title||"")+" "+(cl?.name||"")+" "+(u?.name||"")).toLowerCase();
+            return hay.indexOf(_q)>=0;
+          })
+          :trashVisibleAll;
+        return <div style={{display:"flex",flexDirection:"column",gap:12,fontFamily:"'Inter',system-ui,sans-serif"}}>
+
+          {/* Banner + busca */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap",background:"linear-gradient(135deg,#fef2f2 0%,#fff 80%)",border:"1px solid #fecaca",borderRadius:14,padding:"14px 18px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0,flex:1}}>
+              <div style={{width:40,height:40,borderRadius:11,background:"#fee2e2",border:"1px solid #fecaca",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Ico n="trash" size={18} color="#dc2626"/>
+              </div>
+              <div style={{minWidth:0}}>
+                <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.2}}>Lixeira</div>
+                <div style={{color:"#64748b",fontSize:11.5,marginTop:2,lineHeight:1.5}}>Cartões excluídos ficam aqui por <strong style={{color:"#991b1b"}}>30 dias</strong> antes de sumirem. Use o botão pra restaurar.</div>
+              </div>
+            </div>
+            <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+              <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:trashSearch?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              </span>
+              <input type="text" value={trashSearch} onChange={e=>setTrashSearch(e.target.value)} placeholder="Buscar na lixeira..."
+                style={{background:"#fff",border:`1px solid ${trashSearch?"#0f172a":"#fecaca"}`,borderRadius:11,padding:"0 36px 0 36px",fontSize:13,fontWeight:500,color:"#0f172a",outline:"none",width:260,height:38,boxSizing:"border-box",transition:"border-color .15s",fontFamily:"inherit"}}/>
+              {trashSearch&&<button onClick={()=>setTrashSearch("")} title="Limpar busca"
+                style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>}
+            </div>
+          </div>
+
+          {trashVisibleAll.length>0&&<div style={{color:"#64748b",fontSize:11.5,fontWeight:600,paddingLeft:4}}>
+            {_q
+              ?`${trashVisible.length} resultado${trashVisible.length===1?"":"s"} pra "${trashSearch}" · ${trashVisibleAll.length} total na lixeira`
+              :`${trashVisibleAll.length} cartão${trashVisibleAll.length===1?"":"s"} na lixeira`}
+          </div>}
+
+          {trashVisibleAll.length===0
+            ? <div style={{background:"#fff",border:"1px dashed #e2e8f0",borderRadius:14,padding:48,textAlign:"center"}}>
+                <div style={{width:56,height:56,borderRadius:14,background:"#f0fdf4",border:"1px solid #bbf7d0",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+                  <Ico n="check" size={26} color="#16a34a"/>
                 </div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  {canDelete&&<button onClick={()=>restoreTask(t.id)} style={{background:C.gr+"22",border:`1px solid ${C.gr}44`,borderRadius:8,padding:"5px 12px",color:C.gr,fontSize:11,fontWeight:700,cursor:"pointer"}}>↩ Restaurar</button>}
+                <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:3}}>Lixeira vazia</div>
+                <div style={{color:"#94a3b8",fontSize:12}}>Nada por aqui — tudo limpo</div>
+              </div>
+            : trashVisible.length===0
+              ? <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:32,textAlign:"center"}}>
+                  <div style={{color:"#64748b",fontSize:13,fontWeight:600}}>Nenhum resultado pra "{trashSearch}"</div>
+                  <div style={{color:"#94a3b8",fontSize:11.5,marginTop:4}}>Tenta outro termo ou limpa a busca</div>
                 </div>
-              </div>;
-            })}
-          </>;
-        })()}
-      </div>}
+              : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {trashVisible.map(t=>{
+                    const days=trashDaysLeft(t);
+                    const cl=CLIENTS.find(c=>c.id===t.client);
+                    const u=TEAM.find(x=>x.id===t.assignee);
+                    const danger=days!==null&&days<=3;
+                    return <div key={t.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"13px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12,transition:"all .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 2px 6px rgba(15,23,42,0.06)";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+                      <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0,flex:1}}>
+                        {cl&&<div style={{width:34,height:34,borderRadius:9,background:(cl.color||"#94a3b8")+"15",border:`1px solid ${(cl.color||"#94a3b8")}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          <ClientLogo clientId={cl.id} size="sm"/>
+                        </div>}
+                        <div style={{minWidth:0,flex:1}}>
+                          <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title||"(sem título)"}</div>
+                          <div style={{color:"#64748b",fontSize:11.5,marginTop:3,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                            {cl&&<span style={{fontWeight:600}}>{cl.name}</span>}
+                            {u&&<><span style={{color:"#cbd5e1"}}>·</span><span>{u.name}</span></>}
+                            {days!==null&&<><span style={{color:"#cbd5e1"}}>·</span>
+                              <span style={{color:danger?"#dc2626":"#94a3b8",fontWeight:danger?700:500}}>
+                                some em {days}{days===1?" dia":" dias"}
+                              </span>
+                            </>}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+                        {canDelete&&<button onClick={()=>restoreTask(t.id)} title="Restaurar cartão pra demanda"
+                          style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9,padding:"7px 14px",color:"#15803d",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",fontFamily:"inherit"}}
+                          onMouseEnter={e=>{e.currentTarget.style.background="#16a34a";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#16a34a";}}
+                          onMouseLeave={e=>{e.currentTarget.style.background="#f0fdf4";e.currentTarget.style.color="#15803d";e.currentTarget.style.borderColor="#bbf7d0";}}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 7 3 13 9 13"/><path d="M3.51 13a9 9 0 1014.85-9.36L3 13"/></svg>
+                          Restaurar
+                        </button>}
+                      </div>
+                    </div>;
+                  })}
+                </div>
+          }
+        </div>;
+      })()}
     </div>
   </>;
 }
@@ -15273,7 +15339,7 @@ function ListaView({visible,setOpenCard,canDelete,handleDelete,setTasks,moveTask
   // Ordem do fluxo natural: Rascunhos → Copys → Demanda → Execução → ... → Pausado
   const LISTA_ORDER_LOCAL=["rascunhos","demanda","recebida","execucao","ajustes","avaliacao","aprovado","agendado","publicado","pausado","reprovado"];
   const orderedCols=[...KANBAN_COLS].sort((a,b)=>LISTA_ORDER_LOCAL.indexOf(a.id)-LISTA_ORDER_LOCAL.indexOf(b.id));
-  const STAT_COLORS={rascunhos:C.td,demanda:C.kDemanda,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.kAgendado,publicado:C.kAgendado,pausado:C.td,reprovado:"#7f1d1d"};
+  const STAT_COLORS={rascunhos:C.td,demanda:C.kDemanda,recebida:C.pk,execucao:C.yw,ajustes:C.kAlteracao||"#fb7185",avaliacao:C.or,aprovado:C.gr,agendado:C.kAgendado,publicado:C.kAgendado,pausado:C.td,reprovado:"#475569"};
   const PRIO_COLORS={alta:C.rd,media:C.yw,baixa:C.gr};
   // isAdminViewer = pode ver coluna Tag na lista + faixas de tag. Permissão: gerenciarEtiquetas.
   const isAdminViewer=(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&(CURRENT_USER.level===1||(ACCESS_STORE[CURRENT_USER.id]||{}).gerenciarEtiquetas===true));
@@ -18609,9 +18675,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               </button>
               <button onClick={async()=>{ if(await pixelsConfirm("Reprovar este material? Ele vai pra coluna Reprovadas. A produção foi feita, então ainda conta no pagamento do mês.",{okText:"Reprovar",danger:true})) rejectPub(current); }}
                 title="Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."
-                style={{width:"100%",background:"#7f1d1d",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #7f1d1d33"}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px #7f1d1d55";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #7f1d1d33";}}>
+                style={{width:"100%",background:"#475569",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #47556933"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px #47556955";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #47556933";}}>
                 Reprovar publicação
               </button>
               <button onClick={()=>setEditAnnot(current)}
