@@ -34686,7 +34686,7 @@ const PORTAL_ALL_TABS=[
   {id:"metas",       ico:"target",      label:"Metas"},
   {id:"planejamento",ico:"layers",      label:"Planejamento mensal"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
-  {id:"publicacoes", ico:"check",       label:"Publicadas"},
+  {id:"publicacoes", ico:"check",       label:"Publicações"},
   {id:"performance", ico:"chart",       label:"Performance"},
   {id:"analises",    ico:"chart",       label:"Análises"},
   {id:"nps",         ico:"sparkles",    label:"NPS"},
