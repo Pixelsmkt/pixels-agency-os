@@ -9090,8 +9090,10 @@ function CMetas({cl, accentColor, readOnly}){
      desc:"Taxa media de engajamento por publicacao",          unit:"%", scope:"mensal"},
     {key:"leads",       label:"Leads",       ico:"flame",       color:"#f59e0b",
      desc:"Leads gerados via trafego pago e organico",         unit:"", scope:"mensal"},
-    {key:"vendas",      label:"Vendas",      ico:"trending-up", color:"#16a34a",
+    {key:"vendas",      label:"Vendas digital", ico:"trending-up", color:"#16a34a",
      desc:"Vendas/conversoes atribuidas ao marketing",         unit:"", scope:"mensal"},
+    {key:"roi",         label:"ROI",         ico:"dollar",      color:"#7c3aed",
+     desc:"Retorno sobre investimento em midia paga",          unit:"x", scope:"mensal"},
   ];
 
   function _legacyToPilares(arr){
@@ -9103,6 +9105,7 @@ function CMetas({cl, accentColor, readOnly}){
       else if(t.indexOf("engaj")>=0||t.indexOf("eng.")>=0) k="engajamento";
       else if(t.indexOf("lead")>=0) k="leads";
       else if(t.indexOf("venda")>=0||t.indexOf("conver")>=0) k="vendas";
+      else if(t.indexOf("roi")>=0||t.indexOf("retorno")>=0) k="roi";
       if(k && !out[k]) out[k]={target:Number(g.target)||0,current:Number(g.current)||0};
     });
     return out;
@@ -9193,7 +9196,7 @@ function CMetas({cl, accentColor, readOnly}){
         </div>
         <div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Metas — {cl.name}</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>4 pilares fixos: o que combinamos no inicio do ciclo e onde estamos agora</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>5 pilares fixos: o que combinamos no inicio do ciclo e onde estamos agora</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -10354,61 +10357,88 @@ function CAnalises({cl,isMob,tasks}){
   const _hasMeta   = !!(cl.meta && ((cl.meta.spend||0)>0 || (cl.meta.budget||0)>0));
   const _hasGoogle = !!(cl.google && ((cl.google.spend||0)>0 || (cl.google.budget||0)>0));
   const _pacotes = [];
-  if(_hasSocial) _pacotes.push({l:"Social Media", color:"#a855f7", ico:"sparkles"});
-  if(_hasMeta)   _pacotes.push({l:"Gestão de mídia · Meta Ads", color:"#1877F2", ico:"target"});
-  if(_hasGoogle) _pacotes.push({l:"Gestão de mídia · Google Ads", color:"#0d9488", ico:"target"});
+  if(_hasSocial) _pacotes.push({l:"Social Media",                 color:"#a855f7", ico:"sparkles", desc:"Conteúdo, gestão de Instagram e redes"});
+  if(_hasMeta)   _pacotes.push({l:"Gestão de mídia · Meta Ads",   color:"#1877F2", ico:"target",   desc:"Campanhas Facebook e Instagram"});
+  if(_hasGoogle) _pacotes.push({l:"Gestão de mídia · Google Ads", color:"#0d9488", ico:"target",   desc:"Search, Display, YouTube e Perf. Max"});
   const _sinceDate = _parseSince(cl.since);
   const _sinceLabel = _sinceDate
     ? _sinceDate.toLocaleDateString("pt-BR",{month:"long",year:"numeric"})
     : (cl.since || "—");
   const _projDur = _projectDuration(cl.since);
-  const _contractTypeLabel = ({mensal:"Contrato mensal",trimestral:"Contrato trimestral",anual:"Contrato anual",interno:"Cliente interno"})[cl.contractType] || (cl.contractType || "—");
-  const _fmtBRL = function(n){try{return Number(n||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});}catch(e){return "R$ "+(n||0);}};
+  const _contractTypeLabel = ({mensal:"Mensal",trimestral:"Trimestral",anual:"Anual",interno:"Interno"})[cl.contractType] || (cl.contractType || "—");
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
 
-    {/* ── INFORMAÇÕES DO PROJETO ──────────────────────────────────────── */}
-    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-        <div style={{width:30,height:30,borderRadius:9,background:(cl.color||"#7c3aed")+"14",color:cl.color||"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Ico n="folder" size={14} color={cl.color||"#7c3aed"}/>
+    {/* ── INFORMAÇÕES DO PROJETO ─ card grande, moderno, sem dado financeiro ─── */}
+    <div style={{background:"linear-gradient(180deg,"+((cl.color||"#7c3aed"))+"08 0%, #fff 65%)",border:"1px solid "+(cl.color||"#7c3aed")+"22",borderRadius:18,padding:isMob?"22px 22px":"28px 30px",boxShadow:"0 4px 18px rgba(15,23,42,0.04), 0 1px 2px rgba(15,23,42,0.03)",position:"relative",overflow:"hidden"}}>
+      {/* Faixa de accent superior */}
+      <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,"+(cl.color||"#7c3aed")+", "+(cl.color||"#7c3aed")+"99)"}}></div>
+
+      {/* Header — ícone grande + título grande */}
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:22}}>
+        <div style={{width:52,height:52,borderRadius:14,background:(cl.color||"#7c3aed")+"15",border:"1px solid "+(cl.color||"#7c3aed")+"33",color:cl.color||"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px "+(cl.color||"#7c3aed")+"22"}}>
+          <Ico n="folder" size={24} color={cl.color||"#7c3aed"}/>
         </div>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Informações do projeto</div>
-          <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>Pacotes contratados e dados gerais do contrato</div>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5,lineHeight:1.1}}>Informações do projeto</div>
+          <div style={{color:"#64748b",fontSize:13,marginTop:4,fontWeight:500}}>Pacotes contratados e dados gerais</div>
         </div>
       </div>
 
-      {/* Pacotes contratados (chips) */}
-      <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
+      {/* PACOTES — cards grandes, um ao lado do outro */}
+      <div style={{marginBottom:24}}>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:11}}>Pacotes contratados</div>
         {_pacotes.length===0
-          ? <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic"}}>Nenhum pacote identificado.</div>
-          : _pacotes.map(function(p,i){
-              return <span key={i} style={{display:"inline-flex",alignItems:"center",gap:6,background:p.color+"12",color:p.color,border:"1px solid "+p.color+"33",borderRadius:99,padding:"5px 11px",fontSize:11.5,fontWeight:700,letterSpacing:.1}}>
-                <span style={{width:6,height:6,borderRadius:99,background:p.color}}></span>
-                {p.l}
-              </span>;
-            })
+          ? <div style={{color:"#94a3b8",fontSize:13,fontStyle:"italic",padding:"18px 0"}}>Nenhum pacote identificado.</div>
+          : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:11}}>
+              {_pacotes.map(function(p,i){
+                return <div key={i} style={{background:"#fff",border:"1px solid "+p.color+"33",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,transition:"all .15s",boxShadow:"0 2px 8px "+p.color+"10"}}
+                  onMouseEnter={function(e){e.currentTarget.style.borderColor=p.color+"66";e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px "+p.color+"22";}}
+                  onMouseLeave={function(e){e.currentTarget.style.borderColor=p.color+"33";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+p.color+"10";}}>
+                  <div style={{width:38,height:38,borderRadius:10,background:p.color+"15",border:"1px solid "+p.color+"33",color:p.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <Ico n={p.ico} size={17} color={p.color}/>
+                  </div>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{color:p.color,fontSize:13.5,fontWeight:800,letterSpacing:-.1,lineHeight:1.2}}>{p.l}</div>
+                    <div style={{color:"#64748b",fontSize:11,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.desc}</div>
+                  </div>
+                </div>;
+              })}
+            </div>
         }
       </div>
 
-      {/* Grid 4 dados gerais */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
-        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"11px 13px"}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Início do projeto</div>
-          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,marginTop:4,letterSpacing:-.2,textTransform:"capitalize"}}>{_sinceLabel}</div>
+      {/* DIVISOR sutil */}
+      <div style={{height:1,background:"linear-gradient(90deg,transparent,#e2e8f0 20%,#e2e8f0 80%,transparent)",margin:"0 0 22px"}}></div>
+
+      {/* Grid 3 dados gerais (sem mensalidade) — cards grandes */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14}}>
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"16px 18px",boxShadow:"0 2px 8px rgba(15,23,42,0.03)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <div style={{width:26,height:26,borderRadius:8,background:"#a855f714",color:"#a855f7",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ico n="calendar" size={13} color="#a855f7"/>
+            </div>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Início do projeto</span>
+          </div>
+          <div style={{color:"#0f172a",fontSize:19,fontWeight:800,letterSpacing:-.4,lineHeight:1.1,textTransform:"capitalize"}}>{_sinceLabel}</div>
         </div>
-        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"11px 13px"}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Tempo de projeto</div>
-          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,marginTop:4,letterSpacing:-.2}}>{_projDur||"—"}</div>
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"16px 18px",boxShadow:"0 2px 8px rgba(15,23,42,0.03)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <div style={{width:26,height:26,borderRadius:8,background:"#0ea5e914",color:"#0ea5e9",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ico n="trending-up" size={13} color="#0ea5e9"/>
+            </div>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Tempo de projeto</span>
+          </div>
+          <div style={{color:"#0f172a",fontSize:19,fontWeight:800,letterSpacing:-.4,lineHeight:1.1}}>{_projDur||"—"}</div>
         </div>
-        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"11px 13px"}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Contrato</div>
-          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,marginTop:4,letterSpacing:-.2}}>{_contractTypeLabel}</div>
-        </div>
-        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"11px 13px"}}>
-          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Mensalidade</div>
-          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,marginTop:4,letterSpacing:-.2,fontFeatureSettings:"'tnum'"}}>{cl.contract>0?_fmtBRL(cl.contract):"—"}</div>
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"16px 18px",boxShadow:"0 2px 8px rgba(15,23,42,0.03)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <div style={{width:26,height:26,borderRadius:8,background:"#16a34a14",color:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ico n="check" size={13} color="#16a34a"/>
+            </div>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Renovação</span>
+          </div>
+          <div style={{color:"#0f172a",fontSize:19,fontWeight:800,letterSpacing:-.4,lineHeight:1.1}}>{_contractTypeLabel}</div>
         </div>
       </div>
     </div>
