@@ -10716,6 +10716,36 @@ function CAnalises({cl,isMob,tasks}){
   const [monthlyPlan, setMonthlyPlan] = useState(null);
   const [loadingDash, setLoadingDash] = useState(true);
 
+  // ── "Sobre a empresa" — espelha o bloco do Playbook (mesma fonte) ──
+  // Lê de localStorage["pixels-playbooks-v1"] (cache do _usePlaybooksStore em 27_playbooks.jsx).
+  // Quando o sócio edita lá, o cache é atualizado e o evento "storage" notifica esta tela.
+  const [pbSobre, setPbSobre] = useState("");
+  useEffect(function(){
+    function _read(){
+      try{
+        const raw = localStorage.getItem("pixels-playbooks-v1");
+        if(!raw) return "";
+        const obj = JSON.parse(raw);
+        return (obj && obj[cl.id] && obj[cl.id].sobre) || "";
+      }catch(e){ return ""; }
+    }
+    setPbSobre(_read());
+    function _onStorage(e){
+      if(!e || e.key==="pixels-playbooks-v1") setPbSobre(_read());
+    }
+    function _onCustom(){ setPbSobre(_read()); }
+    window.addEventListener("storage", _onStorage);
+    window.addEventListener("pixels:playbook-updated", _onCustom);
+    // Polling leve a cada 4s pra capturar updates do mesmo navegador (storage event só dispara em outras abas)
+    const _tid = setInterval(_onCustom, 4000);
+    return function(){
+      window.removeEventListener("storage", _onStorage);
+      window.removeEventListener("pixels:playbook-updated", _onCustom);
+      clearInterval(_tid);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[cl.id]);
+
   useEffect(function(){
     if(!window._sb){ setLoadingDash(false); return; }
     let active = true;
@@ -10916,6 +10946,29 @@ function CAnalises({cl,isMob,tasks}){
         </div>
       </div>
     </div>
+
+    {/* ── SOBRE A EMPRESA — espelhado do Playbook (mesma fonte) ──────── */}
+    {(function(){
+      const _ac = cl.color || "#7c3aed";
+      const hasText = !!(pbSobre && pbSobre.trim());
+      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:11}}>
+          <div style={{width:36,height:36,borderRadius:10,background:_ac+"15",border:"1px solid "+_ac+"33",color:_ac,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/><line x1="9" y1="13" x2="9.01" y2="13"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="9" y1="17" x2="9.01" y2="17"/><line x1="15" y1="17" x2="15.01" y2="17"/></svg>
+          </div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Sobre a empresa</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:600}}>Quem é o cliente, onde atua e posicionamento · sincronizado com o Playbook</div>
+          </div>
+        </div>
+        {hasText
+          ? <div style={{color:"#334155",fontSize:13.5,lineHeight:1.65,whiteSpace:"pre-wrap",fontWeight:500}}>{pbSobre}</div>
+          : <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:10,padding:"14px 16px",color:"#94a3b8",fontSize:12.5,lineHeight:1.5,fontStyle:"italic"}}>
+              Nenhuma descrição cadastrada ainda. Edite em <span style={{color:"#475569",fontWeight:700,fontStyle:"normal"}}>Estratégia &gt; Playbooks &gt; {cl.name}</span> — o texto aparece aqui automaticamente.
+            </div>
+        }
+      </div>;
+    })()}
 
     {/* ── 3 CARDS ESTRATÉGICOS — NPS · Última reunião · Próxima reunião ── */}
     {(function(){
@@ -48697,6 +48750,8 @@ function _pbLoadCache(){
 }
 function _pbSaveCache(s){
   try{ localStorage.setItem(PB_LS_KEY,JSON.stringify(s)); }catch(_){}
+  // Notifica outras telas (ex: Visão geral em Clientes) que escutam alterações no playbook
+  try{ window.dispatchEvent(new CustomEvent("pixels:playbook-updated")); }catch(_){}
 }
 
 // Carrega todos os playbooks do Supabase (1 row = 1 client_id, data jsonb)
