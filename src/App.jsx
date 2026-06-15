@@ -11312,33 +11312,6 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
           </div>
           <div style={{color:C.td,fontSize:12,marginTop:2}}>{cl.sector}</div>
         </div>
-      <div style={{display:"flex",gap:14,alignItems:"center",flexShrink:0}}>
-        {[
-          {label:"Score",value:score,color:scoreColor,circle:true},
-          {label:"Saúde",value:cl.health+"%",color:healthColor,circle:false},
-          {label:"NPS",value:cl.nps||0,color:cl.nps>=80?C.gr:cl.nps>=60?C.yw:C.rd,circle:false},
-          {label:"MRR",value:cl.contract>0?"R$"+(cl.contract/1000).toFixed(1)+"k":"—",color:C.tx,circle:false},
-        ].map(function(item){
-          return(<div key={item.label} style={{textAlign:"center"}}>
-            {item.circle?(
-              <div style={{position:"relative",width:36,height:36,margin:"0 auto"}}>
-                <svg width="36" height="36" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="14" fill="none" stroke={C.b1} strokeWidth="3"/>
-                  <circle cx="18" cy="18" r="14" fill="none" stroke={item.color} strokeWidth="3"
-                    strokeDasharray={2*Math.PI*14}
-                    strokeDashoffset={2*Math.PI*14*(1-item.value/100)}
-                    strokeLinecap="round" transform="rotate(-90 18 18)"/>
-                </svg>
-                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",
-                  justifyContent:"center",color:item.color,fontWeight:900,fontSize:10}}>
-                  {item.value}
-                </div>
-              </div>
-            ):<div style={{color:item.color,fontWeight:800,fontSize:15}}>{item.value}</div>}
-            <div style={{color:C.td,fontSize:9,marginTop:2}}>{item.label}</div>
-          </div>);
-        })}
-        </div>
       </div>
     </div>
 
