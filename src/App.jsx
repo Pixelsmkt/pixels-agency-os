@@ -12575,16 +12575,19 @@ function PageCalendarioInterno({isMob}){
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {[
-            {id:"todos",   label:"Todos"},
-            {id:"equipe",  label:"🎂 Aniversários equipe",  count:teamCount},
-            {id:"clientes",label:"🎁 Aniversários clientes",count:clientCount},
-            {id:"marcos",  label:"⭐ Marcos do cliente",   count:marcoCount},
+            {id:"todos",   label:"Todos",                          icoColor:"#64748b"},
+            {id:"equipe",  label:"Aniversários equipe",  count:teamCount,   icoColor:"#ec4899", icoType:"cake"},
+            {id:"clientes",label:"Aniversários clientes",count:clientCount, icoColor:"#f97316", icoType:"gift"},
+            {id:"marcos",  label:"Marcos",               count:marcoCount,  icoColor:"#0ea5e9", icoType:"flag"},
           ].map(function(o){
             const active=filterType===o.id;
             return <button key={o.id} onClick={function(){setFilterType(o.id);}}
-              style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}>
+              style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:10,padding:"7px 13px",fontSize:12,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:7,letterSpacing:-.1}}>
+              {o.icoType==="cake" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/><line x1="8" y1="9" x2="8" y2="6"/><line x1="16" y1="9" x2="16" y2="6"/><line x1="12" y1="9" x2="12" y2="6"/></svg>}
+              {o.icoType==="gift" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>}
+              {o.icoType==="flag" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>}
               {o.label}
-              {typeof o.count==="number"&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{o.count}</span>}
+              {typeof o.count==="number"&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 8px",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{o.count}</span>}
             </button>;
           })}
         </div>
@@ -12604,13 +12607,19 @@ function PageCalendarioInterno({isMob}){
               {evs.slice(0,3).map(function(ev){
                 const isMarco = ev.kind==="marco";
                 const onClick = isMarco ? function(){setOpenMarco({marco:ev._marco, cl:ev._cl});} : null;
+                // Ícone SVG por tipo de evento
+                const _evIcon = ev.kind==="equipe"
+                  ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>
+                  : ev.kind==="cliente"
+                    ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/></svg>
+                    : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
                 return <div key={ev.id} title={ev.title+" — "+ev.subtitle}
                   onClick={onClick}
-                  style={{background:ev.color+"18",border:"1px solid "+ev.color+"55",borderRadius:6,padding:"3px 6px",fontSize:9.5,color:"#0f172a",lineHeight:1.25,display:"flex",alignItems:"center",gap:4,overflow:"hidden",cursor:isMarco?"pointer":"default",transition:"all .12s"}}
-                  onMouseEnter={isMarco?function(e){e.currentTarget.style.background=ev.color+"30";e.currentTarget.style.borderColor=ev.color;}:null}
-                  onMouseLeave={isMarco?function(e){e.currentTarget.style.background=ev.color+"18";e.currentTarget.style.borderColor=ev.color+"55";}:null}>
-                  <span style={{fontSize:11,flexShrink:0}}>{ev.icon}</span>
-                  <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
+                  style={{background:ev.color,color:"#fff",borderRadius:7,padding:"4px 8px",fontSize:10.5,lineHeight:1.25,display:"flex",alignItems:"center",gap:6,overflow:"hidden",cursor:isMarco?"pointer":"default",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"inherit"}}
+                  onMouseEnter={isMarco?function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 10px "+ev.color+"55";}:null}
+                  onMouseLeave={isMarco?function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}:null}>
+                  <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:.92}}>{_evIcon}</span>
+                  <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:700,letterSpacing:-.1}}>{ev.title}</span>
                 </div>;
               })}
               {evs.length>3&&<div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textAlign:"center"}}>+{evs.length-3} mais</div>}
