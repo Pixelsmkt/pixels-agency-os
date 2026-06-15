@@ -43228,15 +43228,14 @@ function ClientAlertsPanel(props){
   </div>;
 }
 
-/* ─── COMPONENTE: OnboardingItem (linha do checklist) ────────── */
+/* ─── COMPONENTE: OnboardingItem (linha do checklist) — padrão Ongoing ─── */
 function OnboardingItem(props){
-  const { item, items, toggle, level, currentUserId } = props;
+  const { item, items, toggle, level, currentUserId, accent } = props;
   const st = items[item.id];
   const done = st&&st.done;
   const hasSub = item.sub&&item.sub.length>0;
   const [expanded, setExpanded] = useState(hasSub);
 
-  // Se tem subitens, marca o pai automaticamente se todos os filhos estiverem concluídos
   const allSubDone = hasSub && item.sub.every(function(s){return items[s.id]&&items[s.id].done;});
   const someSubDone = hasSub && item.sub.some(function(s){return items[s.id]&&items[s.id].done;});
   const isChecked = done || (hasSub && allSubDone);
@@ -43248,45 +43247,69 @@ function OnboardingItem(props){
     return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
   }
 
-  return <div style={{paddingLeft:level>0?20:0,position:"relative"}}>
-    {level>0&&<div style={{position:"absolute",left:8,top:0,bottom:0,width:1,background:"#e9d5ff"}}/>}
-    <div style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 4px",borderRadius:8,transition:"background .15s",cursor:hasSub?"default":"pointer"}}
-      onMouseEnter={function(e){if(!hasSub)e.currentTarget.style.background="#faf5ff";}}
-      onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}
-      onClick={hasSub?null:function(){toggle(item.id, currentUserId);}}>
-      {/* Check circular */}
-      <div onClick={function(e){e.stopPropagation();if(!hasSub)toggle(item.id, currentUserId);}}
-        style={{width:20,height:20,borderRadius:"50%",border:"2px solid "+(isChecked?"#7c3aed":(isPartial?"#a855f7":"#cbd5e1")),background:isChecked?"#7c3aed":(isPartial?"#a855f733":"transparent"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,cursor:"pointer",transition:"all .15s"}}>
-        {isChecked&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-        {isPartial&&!isChecked&&<div style={{width:8,height:8,borderRadius:"50%",background:"#a855f7"}}/>}
-      </div>
-      {/* Label + sub */}
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
-          <div style={{color:isChecked?"#94a3b8":"#0f172a",fontSize:12.5,fontWeight:isChecked?500:600,textDecoration:isChecked&&!hasSub?"line-through":"none",lineHeight:1.4,flex:1,minWidth:0}}>{item.label}</div>
-          {hasSub&&<button onClick={function(e){e.stopPropagation();setExpanded(function(p){return !p;});}}
-            style={{background:"none",border:"none",color:"#94a3b8",fontSize:14,cursor:"pointer",padding:"0 4px",flexShrink:0,transform:expanded?"rotate(90deg)":"rotate(0)",transition:"transform .2s"}}>›</button>}
+  // Cor padrão (fallback) caso accent não venha
+  const _ac = accent || "#7c3aed";
+
+  if(level>0){
+    // Sub-item — visual mais discreto, indent
+    return <div style={{paddingLeft:32,position:"relative"}}>
+      <div style={{position:"absolute",left:14,top:6,bottom:6,width:1.5,background:_ac+"22"}}/>
+      <div style={{display:"flex",alignItems:"flex-start",gap:9,padding:"7px 10px",borderRadius:8,transition:"background .12s",cursor:hasSub?"default":"pointer"}}
+        onMouseEnter={function(e){if(!hasSub)e.currentTarget.style.background=_ac+"08";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}
+        onClick={hasSub?null:function(){toggle(item.id, currentUserId);}}>
+        <div onClick={function(e){e.stopPropagation();if(!hasSub)toggle(item.id, currentUserId);}}
+          style={{width:17,height:17,borderRadius:5,border:"1.5px solid "+(isChecked?_ac:"#cbd5e1"),background:isChecked?_ac:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,cursor:"pointer",transition:"all .15s"}}>
+          {isChecked&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
         </div>
-        {/* Data de conclusão */}
-        {done&&st.completed_at&&<div style={{color:"#7c3aed",fontSize:10,fontWeight:600,marginTop:3,display:"flex",alignItems:"center",gap:4}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:isChecked?"#94a3b8":"#475569",fontSize:12,fontWeight:isChecked?500:600,textDecoration:isChecked?"line-through":"none",lineHeight:1.4}}>{item.label}</div>
+          {done&&st.completed_at&&<div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>
+            {fmtDate(st.completed_at)}{st.completed_by?" · "+st.completed_by:""}
+          </div>}
+        </div>
+      </div>
+    </div>;
+  }
+
+  // Item principal — visual cleaner, parecido com ChecklistRow do Ongoing
+  return <div style={{display:"flex",flexDirection:"column",gap:0}}>
+    <div style={{display:"flex",alignItems:"flex-start",gap:11,background:isChecked?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 13px",opacity:isChecked?0.85:1,transition:"all .15s",cursor:hasSub?"default":"pointer"}}
+      onMouseEnter={function(e){if(!hasSub){e.currentTarget.style.borderColor=_ac+"44";e.currentTarget.style.background=_ac+"06";}}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor="#f1f5f9";e.currentTarget.style.background=isChecked?"#fafbfc":"#fff";}}
+      onClick={hasSub?null:function(){toggle(item.id, currentUserId);}}>
+      <div onClick={function(e){e.stopPropagation();if(!hasSub)toggle(item.id, currentUserId);}}
+        style={{width:19,height:19,borderRadius:5.5,border:"1.5px solid "+(isChecked?_ac:(isPartial?_ac:"#cbd5e1")),background:isChecked?_ac:(isPartial?_ac+"22":"transparent"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,cursor:"pointer",transition:"all .15s"}}>
+        {isChecked&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+        {isPartial&&!isChecked&&<div style={{width:7,height:7,borderRadius:2,background:_ac}}/>}
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <div style={{color:isChecked?"#94a3b8":"#0f172a",fontSize:13,fontWeight:isChecked?500:700,textDecoration:isChecked&&!hasSub?"line-through":"none",lineHeight:1.4,letterSpacing:-.1,flex:1,minWidth:0}}>{item.label}</div>
+          {hasSub&&<button onClick={function(e){e.stopPropagation();setExpanded(function(p){return !p;});}}
+            title={expanded?"Recolher":"Expandir"}
+            style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:"2px 4px",flexShrink:0,transform:expanded?"rotate(180deg)":"rotate(0)",transition:"transform .18s",display:"inline-flex",alignItems:"center"}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>}
+        </div>
+        {done&&st.completed_at&&<div style={{color:_ac,fontSize:10,fontWeight:700,marginTop:4,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          {fmtDate(st.completed_at)} {st.completed_by&&"· por "+st.completed_by}
-        </div>}
-        {/* Sub-items */}
-        {hasSub&&expanded&&<div style={{marginTop:4,display:"flex",flexDirection:"column",gap:0}}>
-          {item.sub.map(function(s){
-            return <OnboardingItem key={s.id} item={s} items={items} toggle={toggle} level={level+1} currentUserId={currentUserId}/>;
-          })}
+          {fmtDate(st.completed_at)}{st.completed_by?" · "+st.completed_by:""}
         </div>}
       </div>
     </div>
+    {hasSub&&expanded&&<div style={{marginTop:4,display:"flex",flexDirection:"column",gap:0}}>
+      {item.sub.map(function(s){
+        return <OnboardingItem key={s.id} item={s} items={items} toggle={toggle} level={level+1} currentUserId={currentUserId} accent={_ac}/>;
+      })}
+    </div>}
   </div>;
 }
 
-/* ─── COMPONENTE: OnboardingSection (bloco) ──────────────────── */
+/* ─── COMPONENTE: OnboardingSection (bloco) — padrão Ongoing _sectionCard ─── */
 function OnboardingSection(props){
-  const { block, items, toggle, currentUserId } = props;
-  // Conta items + subs feitos
+  const { block, items, toggle, currentUserId, accent, ico } = props;
+  const _ac = accent || "#7c3aed";
   let total=0, feitos=0;
   block.items.forEach(function(it){
     total++;
@@ -43301,61 +43324,91 @@ function OnboardingSection(props){
   const pct = total>0?Math.round(feitos/total*100):0;
   const allDone = total>0&&feitos===total;
 
-  return <section style={{background:"#fff",border:"1px solid "+(allDone?"#bbf7d0":"#e2e8f0"),borderRadius:12,padding:"14px 18px",display:"flex",flexDirection:"column",gap:8}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:34,height:34,borderRadius:9,background:allDone?"#dcfce7":"#faf5ff",display:"flex",alignItems:"center",justifyContent:"center",color:allDone?"#16a34a":"#7c3aed",fontWeight:800,fontSize:12,letterSpacing:-.3}}>
-          {allDone?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>:feitos+"/"+total}
+  return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:12}}>
+    {/* Header — mesmo padrão das seções do Ongoing */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0}}>
+        <div style={{width:36,height:36,borderRadius:10,background:allDone?"#dcfce7":_ac+"15",border:"1px solid "+(allDone?"#bbf7d0":_ac+"33"),color:allDone?"#16a34a":_ac,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          {allDone
+            ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            : (typeof Ico==="function" ? <Ico n={ico||"calendar"} size={16} color={_ac}/> : <span style={{fontWeight:800,fontSize:11,letterSpacing:-.3}}>{feitos}/{total}</span>)}
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{block.title}</div>
-          {block.subtitle&&<div style={{color:"#64748b",fontSize:11,marginTop:1}}>{block.subtitle}</div>}
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{block.title}</div>
+          {block.subtitle&&<div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontWeight:500}}>{block.subtitle}</div>}
         </div>
       </div>
-      <div style={{minWidth:80,textAlign:"right"}}>
-        <div style={{color:allDone?"#16a34a":"#7c3aed",fontWeight:800,fontSize:14,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
-        <div style={{background:"#f1f5f9",borderRadius:99,height:4,marginTop:3,overflow:"hidden",width:80}}>
-          <div style={{width:pct+"%",height:"100%",background:allDone?"#22c55e":"linear-gradient(90deg,#a855f7,#7c3aed)",borderRadius:99,transition:"width .3s"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{background:allDone?"#dcfce7":"#f1f5f9",color:allDone?"#15803d":"#64748b",border:"1px solid "+(allDone?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"3px 11px",fontSize:11,fontWeight:800,letterSpacing:.2,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{feitos}/{total}</span>
+        <div style={{minWidth:120,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
+          <div style={{color:allDone?"#16a34a":_ac,fontWeight:800,fontSize:14,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
+          <div style={{background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden",width:110}}>
+            <div style={{width:pct+"%",height:"100%",background:allDone?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_ac+","+_ac+"cc)",borderRadius:99,transition:"width .35s ease"}}/>
+          </div>
         </div>
       </div>
     </div>
-    <div style={{display:"flex",flexDirection:"column",gap:0,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
+    {/* Lista de items */}
+    <div style={{display:"flex",flexDirection:"column",gap:6,paddingTop:4}}>
       {block.items.map(function(it){
-        return <OnboardingItem key={it.id} item={it} items={items} toggle={toggle} level={0} currentUserId={currentUserId}/>;
+        return <OnboardingItem key={it.id} item={it} items={items} toggle={toggle} level={0} currentUserId={currentUserId} accent={_ac}/>;
       })}
     </div>
   </section>;
 }
 
-/* ─── COMPONENTE: OnboardingChecklist (raiz da aba) ──────────── */
+/* ─── COMPONENTE: OnboardingChecklist (raiz) — padrão Ongoing ─── */
 function OnboardingChecklist(props){
   const { cl, currentUserId } = props;
   const { items, toggle, doneCount, loading } = useClientOnboarding(cl.id);
   const total = ONBOARDING_TOTAL;
   const pct = total>0?Math.round(doneCount/total*100):0;
+  const accent = (cl && cl.color) || "#7c3aed";
+
+  // Ícone por bloco — alinha com a fase do projeto
+  const _ICO_BY_BLOCK = {
+    inicial: "sparkles",
+    dia1:    "flame",
+    dia2:    "fileText",
+    dia3:    "users",
+    dia3_7:  "layers",
+    dia7:    "trending-up",
+    dia14:   "chart",
+    dia31:   "target",
+  };
 
   if(loading)return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando onboarding...</div>;
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {/* Header com progresso geral */}
-    <div style={{background:"linear-gradient(135deg,#7c3aed,#a855f7)",borderRadius:14,padding:"18px 22px",color:"#fff",boxShadow:"0 8px 24px rgba(124,58,237,0.20)"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
-        <div>
-          <div style={{fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",opacity:.85}}>Onboarding</div>
-          <div style={{fontSize:20,fontWeight:800,letterSpacing:-.5,marginTop:3}}>{doneCount} de {total} etapas concluídas</div>
-          <div style={{fontSize:12,opacity:.85,marginTop:3}}>Checklist do projeto de {cl.name}</div>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,-apple-system,sans-serif"}}>
+    {/* Header principal — card branco com accent (padrão Ongoing) em vez de gradiente roxo full */}
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 22px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,"+accent+", "+accent+"99)"}}></div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0}}>
+          <div style={{width:48,height:48,borderRadius:13,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+accent+"22"}}>
+            {typeof Ico==="function" && <Ico n="checkCircle" size={22} color={accent}/>}
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4,lineHeight:1.1}}>Onboarding</div>
+            <div style={{color:"#64748b",fontSize:12.5,marginTop:4,fontWeight:500}}>Checklist do projeto de {cl.name} · {doneCount} de {total} etapas concluídas</div>
+          </div>
         </div>
-        <div style={{textAlign:"right",minWidth:90}}>
-          <div style={{fontSize:36,fontWeight:900,letterSpacing:-1.4,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{pct}<span style={{fontSize:18,opacity:.75}}>%</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:14}}>
+          <div style={{minWidth:160,display:"flex",flexDirection:"column",gap:6}}>
+            <div style={{display:"flex",alignItems:"baseline",justifyContent:"flex-end",gap:7}}>
+              <span style={{color:accent,fontSize:30,fontWeight:900,letterSpacing:-.8,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{pct}<span style={{fontSize:16,opacity:.65}}>%</span></span>
+            </div>
+            <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
+              <div style={{width:pct+"%",height:"100%",background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+accent+","+accent+"cc)",borderRadius:99,transition:"width .5s ease"}}/>
+            </div>
+          </div>
         </div>
-      </div>
-      <div style={{background:"rgba(255,255,255,0.18)",borderRadius:99,height:8,marginTop:14,overflow:"hidden"}}>
-        <div style={{width:pct+"%",height:"100%",background:"linear-gradient(90deg,#fde047,#facc15)",borderRadius:99,transition:"width .5s"}}/>
       </div>
     </div>
-    {/* Blocos */}
+
+    {/* Blocos — cada um com ícone próprio */}
     {ONBOARDING_BLOCKS.map(function(b){
-      return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} currentUserId={currentUserId}/>;
+      return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} currentUserId={currentUserId} accent={accent} ico={_ICO_BY_BLOCK[b.id]||"calendar"}/>;
     })}
   </div>;
 }
