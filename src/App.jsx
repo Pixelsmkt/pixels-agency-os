@@ -48169,6 +48169,31 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const [novoSprint, setNovoSprint]     = useState(null);   // {clientId?, item?}
   const [sprintWeekOffset, setSprintWeekOffset] = useState(1); // 0=atual, 1=próxima
 
+  // ── Calendário interno: marcos + eventos + aniversários da equipe (próximos 30 dias) ──
+  const [calMarcos, setCalMarcos] = useState([]);
+  const [calEventos, setCalEventos] = useState([]);
+  useEffect(function(){
+    if(typeof window==="undefined" || !window._sb) return;
+    let canceled=false;
+    // Marcos de TODOS os clientes
+    window._sb.from("client_milestones").select("*").order("date",{ascending:true}).then(function(r){
+      if(canceled||!r||!r.data) return;
+      setCalMarcos(r.data||[]);
+    }).catch(function(e){console.warn("[dash cal marcos]",e&&e.message?e.message:e);});
+    // Eventos cadastrados pelo cliente no Portal
+    window._sb.from("clients").select("client_id,client_events").then(function(r){
+      if(canceled||!r||!r.data) return;
+      const flat=[];
+      r.data.forEach(function(row){
+        if(Array.isArray(row.client_events)){
+          row.client_events.forEach(function(ev){flat.push(Object.assign({},ev,{clientId:row.client_id}));});
+        }
+      });
+      setCalEventos(flat);
+    }).catch(function(e){console.warn("[dash cal eventos]",e&&e.message?e.message:e);});
+    return function(){canceled=true;};
+  },[]);
+
   const _filtrar = (arr) => {
     if(filtroStatus==="pendentes") return arr.filter(m=>m.status!=="concluida");
     if(filtroStatus==="concluidas") return arr.filter(m=>m.status==="concluida");
@@ -48346,6 +48371,142 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
           })}
         </div>
       </div>;
+    })()}
+
+    {/* ══════════ CALENDÁRIO INTERNO — próximos 30 dias ══════════ */}
+    {(function(){
+      const today0 = new Date(); today0.setHours(0,0,0,0);
+      const limit = new Date(today0.getTime() + 30*86400000);
+      const out=[];
+      // Marcos dos clientes
+      calMarcos.forEach(function(m){
+        if(!m.date) return;
+        const d = new Date(m.date+"T00:00:00");
+        if(isNaN(d.getTime())) return;
+        if(d < today0 || d > limit) return;
+        const cl = (typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===m.client_id;});
+        if(!cl) return;
+        out.push({
+          kind:"marco", date:d, dateIso:m.date,
+          title:m.title||"Marco",
+          subtitle:cl.name,
+          color: cl.color||"#0ea5e9",
+          cl: cl,
+        });
+      });
+      // Eventos do cliente
+      calEventos.forEach(function(e){
+        if(!e.date) return;
+        const d = new Date(e.date+"T00:00:00");
+        if(isNaN(d.getTime())) return;
+        if(d < today0 || d > limit) return;
+        const cl = (typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(c){return c.id===e.clientId;});
+        if(!cl) return;
+        out.push({
+          kind:"evento", date:d, dateIso:e.date,
+          title:e.title||"Evento",
+          subtitle:cl.name,
+          color: cl.color||"#a855f7",
+          cl: cl,
+        });
+      });
+      // Aniversários da equipe (próximos 30 dias)
+      (typeof TEAM!=="undefined"?TEAM:[]).forEach(function(u){
+        if(!u.birthday) return;
+        const mm = String(u.birthday).match(/^(\d{1,2})[\/\-](\d{1,2})/);
+        if(!mm) return;
+        const day = parseInt(mm[1],10), month = parseInt(mm[2],10);
+        // Próximo aniversário (este ano OU próximo)
+        const thisYear = today0.getFullYear();
+        let d = new Date(thisYear, month-1, day);
+        if(d < today0) d = new Date(thisYear+1, month-1, day);
+        if(d < today0 || d > limit) return;
+        const dStr = d.getFullYear()+"-"+String(month).padStart(2,"0")+"-"+String(day).padStart(2,"0");
+        out.push({
+          kind:"aniversario_equipe", date:d, dateIso:dStr,
+          title:"Aniversário · "+u.name,
+          subtitle:u.role||"Equipe",
+          color: u.color||"#ec4899",
+          cl: null,
+          _user: u,
+        });
+      });
+      // Ordena por data
+      out.sort(function(a,b){return a.date.getTime()-b.date.getTime();});
+      const items = out.slice(0, 6); // até 6 destaques
+
+      const _fmtRel = function(d){
+        const diff = Math.round((d.getTime()-today0.getTime())/86400000);
+        if(diff===0) return "Hoje";
+        if(diff===1) return "Amanhã";
+        if(diff<7) return "Em "+diff+" dias";
+        const wk = Math.floor(diff/7);
+        if(wk===1) return "Em 1 semana";
+        if(wk<4) return "Em "+wk+" semanas";
+        return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
+      };
+      const _fmtData = function(d){
+        return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+      };
+      function _goCalendario(){
+        try{ if(typeof window!=="undefined" && typeof window.pixelsNav==="function") window.pixelsNav("demandas_cal_interno"); }catch(e){}
+      }
+
+      return <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:14}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+            <div style={{width:34,height:34,borderRadius:10,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
+              <Ico n="calendar" size={15} color={DG_PURPLE}/>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Próximos 30 dias</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Marcos, eventos dos clientes e aniversários da equipe</div>
+            </div>
+          </div>
+          <button onClick={_goCalendario}
+            style={{background:"#f5f3ff",color:DG_PURPLE,border:"1px solid #ede9fe",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6,letterSpacing:-.1,transition:"all .15s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background=DG_PURPLE;e.currentTarget.style.color="#fff";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color=DG_PURPLE;}}>
+            Ver calendário
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </div>
+
+        {/* Lista */}
+        {items.length===0
+          ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"22px 14px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontStyle:"italic"}}>Sem eventos próximos. Tudo tranquilo nas próximas 4 semanas.</div>
+          : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
+              {items.map(function(it,i){
+                const isUrgent = it.date.getTime()-today0.getTime() <= 3*86400000;
+                const _kindLabel = it.kind==="marco" ? "Marco" : it.kind==="evento" ? "Evento" : "Aniversário";
+                const _logo = it.cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[it.cl.id];
+                return <div key={i} style={{background:"#fff",border:"1px solid "+(isUrgent?it.color+"55":"#eef0f3"),borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11,position:"relative",overflow:"hidden",transition:"all .15s",boxShadow:isUrgent?"0 2px 8px "+it.color+"22":"0 1px 2px rgba(15,23,42,0.02)"}}
+                  onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.borderColor=it.color+"77";e.currentTarget.style.boxShadow="0 8px 18px "+it.color+"22";}}
+                  onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.borderColor=isUrgent?it.color+"55":"#eef0f3";e.currentTarget.style.boxShadow=isUrgent?"0 2px 8px "+it.color+"22":"0 1px 2px rgba(15,23,42,0.02)";}}>
+                  {/* Data verticalmente à esquerda */}
+                  <div style={{background:it.color,color:"#fff",borderRadius:9,padding:"6px 10px",display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0,minWidth:48,boxShadow:"0 2px 6px "+it.color+"40"}}>
+                    <div style={{fontSize:16,fontWeight:900,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{String(it.date.getDate()).padStart(2,"0")}</div>
+                    <div style={{fontSize:9,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",opacity:.9,marginTop:2}}>{["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"][it.date.getMonth()]}</div>
+                  </div>
+                  {/* Logo cliente */}
+                  {_logo && <div style={{width:30,height:30,borderRadius:8,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:2}}>
+                    <img src={_logo} alt={it.cl.name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                  </div>}
+                  {/* Texto */}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3,flexWrap:"wrap"}}>
+                      <span style={{background:it.color+"15",color:it.color,border:"1px solid "+it.color+"33",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{_kindLabel}</span>
+                      <span style={{color:isUrgent?it.color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.2}}>{_fmtRel(it.date)}</span>
+                    </div>
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.title}</div>
+                    <div style={{color:"#64748b",fontSize:11,marginTop:2,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.subtitle}</div>
+                  </div>
+                </div>;
+              })}
+            </div>
+        }
+      </section>;
     })()}
 
     {/* ══════════ METAS DO DIA + METAS DA SEMANA — visual unificado ══════════ */}
