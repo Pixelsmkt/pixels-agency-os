@@ -43132,24 +43132,64 @@ function useClientMeta(clientId){
 }
 
 /* ─── HOOK: useClientOnboarding ──────────────────────────────── */
+// Cache local com TTL — evita que fetch do Supabase sobrescreva um clique recente
+// quando o usuário troca de aba e volta antes do upsert completar
+const _ONB_CACHE_TTL_MS = 60*1000; // 60s — janela confortável pra trocar abas
+function _onbCacheKey(clientId){ return "pixels-onb-"+clientId; }
+function _onbCacheLoad(clientId){
+  try{
+    const s=localStorage.getItem(_onbCacheKey(clientId));
+    if(!s) return null;
+    const obj=JSON.parse(s);
+    if(!obj||!obj.items) return null;
+    return obj; // {items, v: timestamp}
+  }catch(e){ return null; }
+}
+function _onbCacheSave(clientId, items){
+  try{ localStorage.setItem(_onbCacheKey(clientId), JSON.stringify({items:items, v:Date.now()})); }catch(e){}
+}
+
 function useClientOnboarding(clientId){
   const [items, setItems] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(function(){
-    if(!clientId||!window._sb){setLoading(false);return;}
-    setLoading(true);
+    if(!clientId){setLoading(false);return;}
+    // 1) Cache local primeiro — resposta instantânea
+    const cached = _onbCacheLoad(clientId);
+    const cacheFresh = cached && (Date.now()-cached.v) < _ONB_CACHE_TTL_MS;
+    if(cached){
+      setItems(cached.items);
+      setLoading(false);
+    }
+    // Cache fresco vence — pula fetch pra não sobrescrever clique recente
+    if(cacheFresh) return;
+    // 2) Fetch do Supabase
+    if(!window._sb){setLoading(false);return;}
+    let canceled=false;
     window._sb.from("client_onboarding").select("*").eq("client_id",clientId).maybeSingle().then(function(r){
-      if(r.data&&r.data.items) setItems(r.data.items);
-      else setItems({});
+      if(canceled) return;
+      if(r&&r.data&&r.data.items){
+        setItems(r.data.items);
+        _onbCacheSave(clientId, r.data.items);
+      } else if(!cached){
+        setItems({});
+      }
+      setLoading(false);
+    }).catch(function(e){
+      console.warn("[onboarding load]", e&&e.message||e);
       setLoading(false);
     });
+    return function(){canceled=true;};
   }, [clientId]);
 
   function _persist(next){
     setItems(next);
+    // Cache local imediato — vence sobre fetch nas próximas 60s
+    _onbCacheSave(clientId, next);
     if(window._sb){
-      window._sb.from("client_onboarding").upsert({client_id:clientId, items:next}, {onConflict:"client_id"});
+      window._sb.from("client_onboarding").upsert({client_id:clientId, items:next}, {onConflict:"client_id"})
+        .then(function(r){ if(r&&r.error) console.warn("[onboarding persist]", r.error.message); });
     }
   }
   function toggle(itemId, currentUserId){
@@ -43176,9 +43216,11 @@ function useClientOnboarding(clientId){
     }
     _persist(next);
   }
-  function setResp(itemId, respId){
+  function setResp(itemId, respVal){
+    // Aceita string (legado: 1 responsável) OU array (novo: vários)
+    const arr = Array.isArray(respVal) ? respVal.filter(Boolean) : (respVal ? [respVal] : []);
     const next = Object.assign({}, items, {
-      [itemId]: Object.assign({}, items[itemId]||{}, { resp: respId||"" })
+      [itemId]: Object.assign({}, items[itemId]||{}, { resp: arr })
     });
     _persist(next);
   }
@@ -43406,19 +43448,27 @@ function _OnbDateField(props){
 function _OnbRespAvatars(props){
   const accent = props.accent||"#7c3aed";
   const TEAM_OPTS = (typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return _ONB_RESP_IDS.indexOf(u.id)>=0;});
-  const sel = props.value||"";
+  // Normaliza value pra array (backward compat: string vira [string])
+  const raw = props.value;
+  const sel = Array.isArray(raw) ? raw.filter(Boolean) : (raw ? [raw] : []);
+  const anySelected = sel.length>0;
   const sz = 26;
+  function _toggle(uid){
+    const idx = sel.indexOf(uid);
+    const next = idx>=0 ? sel.filter(function(x){return x!==uid;}) : sel.concat([uid]);
+    props.onChange && props.onChange(next);
+  }
   return <div style={{display:"inline-flex",alignItems:"center",gap:5,flexShrink:0}}>
     {TEAM_OPTS.map(function(u){
-      const active = sel===u.id;
+      const active = sel.indexOf(u.id)>=0;
       const photo = (u.profile_data && u.profile_data.photo) || ((typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id))||null);
       const ini = (u.av||(u.name||"?")[0]||"?").toUpperCase();
       return <button key={u.id} type="button"
-        title={u.name+(active?" (selecionado)":" — clique pra atribuir")}
-        onClick={function(e){e.stopPropagation();props.onChange&&props.onChange(active?"":u.id);}}
-        style={{background:"transparent",border:"none",padding:0,cursor:"pointer",borderRadius:"50%",lineHeight:0,position:"relative",transition:"transform .12s",transform:active?"scale(1.0)":"scale(.94)",opacity:sel&&!active?0.45:1,filter:sel&&!active?"grayscale(.6)":"none"}}
+        title={u.name+(active?" (selecionado — clique pra remover)":" — clique pra atribuir")}
+        onClick={function(e){e.stopPropagation();_toggle(u.id);}}
+        style={{background:"transparent",border:"none",padding:0,cursor:"pointer",borderRadius:"50%",lineHeight:0,position:"relative",transition:"transform .12s",transform:active?"scale(1.0)":"scale(.94)",opacity:anySelected&&!active?0.45:1,filter:anySelected&&!active?"grayscale(.6)":"none"}}
         onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.05)";e.currentTarget.style.opacity=1;e.currentTarget.style.filter="none";}}
-        onMouseLeave={function(e){e.currentTarget.style.transform=active?"scale(1.0)":"scale(.94)";e.currentTarget.style.opacity=sel&&!active?0.45:1;e.currentTarget.style.filter=sel&&!active?"grayscale(.6)":"none";}}>
+        onMouseLeave={function(e){e.currentTarget.style.transform=active?"scale(1.0)":"scale(.94)";e.currentTarget.style.opacity=anySelected&&!active?0.45:1;e.currentTarget.style.filter=anySelected&&!active?"grayscale(.6)":"none";}}>
         {photo
           ? <img src={photo} alt={u.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",display:"block",boxShadow:active?"0 0 0 2.5px "+(u.color||accent)+", 0 2px 6px rgba(15,23,42,0.15)":"0 0 0 1.5px #e2e8f0"}}/>
           : <span style={{display:"inline-flex",width:sz,height:sz,borderRadius:"50%",background:u.color||"#94a3b8",color:"#fff",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.42),fontFamily:_ONB_FF,boxShadow:active?"0 0 0 2.5px "+(u.color||accent)+", 0 2px 6px rgba(15,23,42,0.15)":"0 0 0 1.5px #e2e8f0"}}>{ini}</span>
@@ -43579,10 +43629,10 @@ function OnboardingChecklist(props){
         <div style={{background:pct>=100?"#dcfce7":"#f1f5f9",color:pct>=100?"#15803d":"#0f172a",border:"1px solid "+(pct>=100?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
         <button onClick={function(){setFinalizado(true);}}
           title="Marca o onboarding como concluído e esconde toda a checklist"
-          style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"7px 13px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,letterSpacing:.2,transition:"all .15s",boxShadow:"0 4px 12px rgba(22,163,74,0.25)"}}
-          onMouseEnter={function(e){e.currentTarget.style.background="#15803d";e.currentTarget.style.transform="translateY(-1px)";}}
-          onMouseLeave={function(e){e.currentTarget.style.background="#16a34a";e.currentTarget.style.transform="";}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",flexShrink:0}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor="#86efac";e.currentTarget.style.background="#f0fdf4";e.currentTarget.style.color="#15803d";}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
           Onboarding finalizado
         </button>
       </div>
@@ -45436,8 +45486,11 @@ function DashColabV2(props){
       r.data.forEach(function(row){
         const items=row.items||{};
         Object.keys(items).forEach(function(itemId){
+          if(itemId==="__finalizado__"||itemId==="__version") return; // chaves especiais
           const it=items[itemId];
-          if(!it||it.resp!==user.id) return;
+          if(!it) return;
+          const respList = Array.isArray(it.resp) ? it.resp : (it.resp ? [it.resp] : []);
+          if(respList.indexOf(user.id)<0) return;
           const meta=_dcOnbResolve(itemId);
           out.push({
             kind:"onboarding",
@@ -45472,7 +45525,9 @@ function DashColabV2(props){
           const items=mensal[period]||{};
           Object.keys(items).forEach(function(itemId){
             const it=items[itemId];
-            if(!it||it.resp!==user.id) return;
+            if(!it) return;
+            const respList = Array.isArray(it.resp) ? it.resp : (it.resp ? [it.resp] : []);
+            if(respList.indexOf(user.id)<0) return;
             const meta=_dcOngResolveMensal(itemId);
             out.push({
               kind:"ongoing-mensal",
@@ -45492,7 +45547,9 @@ function DashColabV2(props){
           const items=trim[period]||{};
           Object.keys(items).forEach(function(itemId){
             const it=items[itemId];
-            if(!it||it.resp!==user.id) return;
+            if(!it) return;
+            const respList = Array.isArray(it.resp) ? it.resp : (it.resp ? [it.resp] : []);
+            if(respList.indexOf(user.id)<0) return;
             const meta=_dcOngResolveTrim(itemId);
             out.push({
               kind:"ongoing-trimestral",
