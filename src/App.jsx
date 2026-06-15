@@ -1405,7 +1405,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         </div>
         <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4}}>Pagamentos por demanda</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Conta cards aprovados, agendados e publicados no mês</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>Conta artes aprovadas, agendadas e publicadas no mês</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
@@ -1430,10 +1430,10 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
       {rows.map(function(r){
         const fr=r.fr,c=r.calc;
         const accent=fr.color||"#7c3aed";
-        const photo=(typeof getProfilePhoto!=="undefined")?getProfilePhoto(fr.id):null;
+        const photo=(fr&&fr.profile_data&&fr.profile_data.photo)||((typeof getProfilePhoto!=="undefined")?getProfilePhoto(fr.id):null);
         const items=r.isEditor
           ?[{l:"Vídeo",n:c.video,p:DESIGNER_PRICES.video},{l:"Corte",n:c.corte,p:DESIGNER_PRICES.corte},{l:"V. dinâmico",n:c.videoComplexo,p:DESIGNER_PRICES.videoComplexo},{l:"V. feira",n:c.videoFeira,p:DESIGNER_PRICES.videoFeira}]
-          :[{l:"Foto",n:c.fotoObra,p:DESIGNER_PRICES.fotoObra},{l:"Arte",n:c.arte,p:DESIGNER_PRICES.arte},{l:"Carrossel",n:c.carrossel,p:DESIGNER_PRICES.carrossel},{l:"Folder",n:c.folder,p:DESIGNER_PRICES.folder}];
+          :[{l:"Foto de obra",n:c.fotoObra,p:DESIGNER_PRICES.fotoObra},{l:"Arte única",n:c.arte,p:DESIGNER_PRICES.arte},{l:"Carrossel",n:c.carrossel,p:DESIGNER_PRICES.carrossel},{l:"Folder",n:c.folder,p:DESIGNER_PRICES.folder}];
         // Mostra TODOS os tipos (inclusive 0) com preço unitário visível
         const hasAny=items.some(function(it){return it.n>0;});
         return <div key={fr.id} style={{background:"linear-gradient(180deg,"+accent+"08 0%, #fff 60%)",border:"1px solid "+accent+"22",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 4px 14px "+accent+"10, 0 1px 3px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
@@ -1495,7 +1495,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               if(items.length===0) return null;
               return <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+accent+"22",display:"flex",flexDirection:"column",gap:10}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <div style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Cards a pagar</div>
+                  <div style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Produção mensal</div>
                   <span style={{background:accent+"15",color:accent,fontSize:10,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",padding:"2px 9px",borderRadius:99,border:"1px solid "+accent+"33"}}>{_monthShortLabel(refMonth)}</span>
                   <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{items.length}{items.length===1?" card":" cards"}</span>
                 </div>
@@ -10232,20 +10232,6 @@ function PageClientes({isMob, tasks}){
 function CAnalises({cl,isMob,tasks}){
   const TASKS = Array.isArray(tasks) ? tasks : [];
   const clTasks = TASKS.filter(function(t){return t&&t.client===cl.id&&!t.deletedAt;});
-  const ativas  = clTasks.filter(function(t){return t.status!=="aprovado"&&t.status!=="publicado"&&t.status!=="pausado";});
-  const atrasadas = ativas.filter(function(t){
-    if(!t.deadline) return false;
-    return new Date(t.deadline) < new Date();
-  });
-  const pendCopy  = ativas.filter(function(t){return t.status==="demanda";});
-  const pendApr   = ativas.filter(function(t){return t.status==="avaliacao";});
-  const execucao  = ativas.filter(function(t){return t.status==="execucao";});
-  const ajustes   = ativas.filter(function(t){return t.status==="ajustes";});
-  const proxPubs  = clTasks
-    .filter(function(t){return t.publishDate && t.status!=="publicado";})
-    .sort(function(a,b){return String(a.publishDate).localeCompare(String(b.publishDate));})
-    .slice(0,5);
-  const concluidas = clTasks.filter(function(t){return t.status==="aprovado"||t.status==="publicado";});
 
   // ───── DADOS DAS OUTRAS ABAS (carregados do Supabase em paralelo) ─────
   const [npsRows, setNpsRows] = useState([]);
@@ -10327,14 +10313,6 @@ function CAnalises({cl,isMob,tasks}){
     return iso;
   };
 
-  const KPI = function(props){
-    return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-      <div style={{color:props.color||"#9F43F6",fontSize:24,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{props.value}</div>
-      <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:6}}>{props.label}</div>
-      {props.hint && <div style={{color:"#94a3b8",fontSize:10,marginTop:3}}>{props.hint}</div>}
-    </div>;
-  };
-
   // Mini gráfico linear pra evolução (últimos pontos)
   const _miniChart = function(values, color){
     if(!values || values.length<2) return null;
@@ -10353,16 +10331,86 @@ function CAnalises({cl,isMob,tasks}){
   };
   const igSeries = metricsRows.slice(-6).map(function(m){return m.instagram_followers||0;}).filter(function(v){return v>0;});
 
+  // ── INFORMAÇÕES DO PROJETO ──
+  function _parseSince(s){
+    if(!s) return null;
+    const map={jan:0,fev:1,mar:2,abr:3,mai:4,jun:5,jul:6,ago:7,set:8,out:9,nov:10,dez:11};
+    const mm=String(s).toLowerCase().match(/^([a-z]{3})\s+(\d{4})$/);
+    if(!mm) return null;
+    const mi=map[mm[1]]; if(mi==null) return null;
+    return new Date(parseInt(mm[2]),mi,1);
+  }
+  function _projectDuration(s){
+    const d=_parseSince(s); if(!d) return "";
+    const n=new Date();
+    let months=(n.getFullYear()-d.getFullYear())*12+(n.getMonth()-d.getMonth());
+    if(months<0) months=0;
+    const y=Math.floor(months/12), mo=months%12;
+    if(y===0) return mo+" "+(mo===1?"mês":"meses");
+    if(mo===0) return y+" "+(y===1?"ano":"anos");
+    return y+" "+(y===1?"ano":"anos")+" e "+mo+" "+(mo===1?"mês":"meses");
+  }
+  const _hasSocial = !!(cl.social && ((cl.social.posts||0)>0 || (cl.social.followers||0)>0));
+  const _hasMeta   = !!(cl.meta && ((cl.meta.spend||0)>0 || (cl.meta.budget||0)>0));
+  const _hasGoogle = !!(cl.google && ((cl.google.spend||0)>0 || (cl.google.budget||0)>0));
+  const _pacotes = [];
+  if(_hasSocial) _pacotes.push({l:"Social Media", color:"#a855f7", ico:"sparkles"});
+  if(_hasMeta)   _pacotes.push({l:"Gestão de mídia · Meta Ads", color:"#1877F2", ico:"target"});
+  if(_hasGoogle) _pacotes.push({l:"Gestão de mídia · Google Ads", color:"#0d9488", ico:"target"});
+  const _sinceDate = _parseSince(cl.since);
+  const _sinceLabel = _sinceDate
+    ? _sinceDate.toLocaleDateString("pt-BR",{month:"long",year:"numeric"})
+    : (cl.since || "—");
+  const _projDur = _projectDuration(cl.since);
+  const _contractTypeLabel = ({mensal:"Contrato mensal",trimestral:"Contrato trimestral",anual:"Contrato anual",interno:"Cliente interno"})[cl.contractType] || (cl.contractType || "—");
+  const _fmtBRL = function(n){try{return Number(n||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL",maximumFractionDigits:0});}catch(e){return "R$ "+(n||0);}};
+
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
 
-    {/* KPIs operacionais */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(150px,1fr))",gap:10}}>
-      <KPI value={ativas.length}     label="Demandas ativas" color="#9F43F6"/>
-      <KPI value={pendCopy.length}   label="Copy pendente"   color="#a140ff"/>
-      <KPI value={pendApr.length}    label="Aguardando aprovação" color="#eab308"/>
-      <KPI value={execucao.length}   label="Em execução"     color="#f97316"/>
-      <KPI value={ajustes.length}    label="Em ajuste"       color="#dc2626"/>
-      <KPI value={concluidas.length} label="Concluídas"      color="#16a34a"/>
+    {/* ── INFORMAÇÕES DO PROJETO ──────────────────────────────────────── */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+        <div style={{width:30,height:30,borderRadius:9,background:(cl.color||"#7c3aed")+"14",color:cl.color||"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <Ico n="folder" size={14} color={cl.color||"#7c3aed"}/>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Informações do projeto</div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:1,fontWeight:600}}>Pacotes contratados e dados gerais do contrato</div>
+        </div>
+      </div>
+
+      {/* Pacotes contratados (chips) */}
+      <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:14}}>
+        {_pacotes.length===0
+          ? <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic"}}>Nenhum pacote identificado.</div>
+          : _pacotes.map(function(p,i){
+              return <span key={i} style={{display:"inline-flex",alignItems:"center",gap:6,background:p.color+"12",color:p.color,border:"1px solid "+p.color+"33",borderRadius:99,padding:"5px 11px",fontSize:11.5,fontWeight:700,letterSpacing:.1}}>
+                <span style={{width:6,height:6,borderRadius:99,background:p.color}}></span>
+                {p.l}
+              </span>;
+            })
+        }
+      </div>
+
+      {/* Grid 4 dados gerais */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(160px,1fr))",gap:10}}>
+        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"11px 13px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Início do projeto</div>
+          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,marginTop:4,letterSpacing:-.2,textTransform:"capitalize"}}>{_sinceLabel}</div>
+        </div>
+        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"11px 13px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Tempo de projeto</div>
+          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,marginTop:4,letterSpacing:-.2}}>{_projDur||"—"}</div>
+        </div>
+        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"11px 13px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Contrato</div>
+          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,marginTop:4,letterSpacing:-.2}}>{_contractTypeLabel}</div>
+        </div>
+        <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:11,padding:"11px 13px"}}>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Mensalidade</div>
+          <div style={{color:"#0f172a",fontSize:14,fontWeight:800,marginTop:4,letterSpacing:-.2,fontFeatureSettings:"'tnum'"}}>{cl.contract>0?_fmtBRL(cl.contract):"—"}</div>
+        </div>
+      </div>
     </div>
 
     {/* DASHBOARD GRID — 4 mini-cards: NPS · Evolução · Planejamento · Última reunião */}
@@ -10460,33 +10508,51 @@ function CAnalises({cl,isMob,tasks}){
       </div>
     </div>
 
-    {/* Próximas publicações (mini-calendário) */}
-    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"16px 18px"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-        <div style={{display:"flex",alignItems:"center",gap:9}}>
-          <div style={{width:28,height:28,borderRadius:9,background:(cl.color||"#7c3aed")+"14",color:cl.color||"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="calendar" size={13} color={cl.color||"#7c3aed"}/></div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Próximas publicações</div>
-        </div>
-        <span style={{background:"#f1f5f9",color:"#475569",borderRadius:99,padding:"2px 10px",fontSize:10.5,fontWeight:700}}>{proxPubs.length}</span>
-      </div>
-      {proxPubs.length===0
-        ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"14px 0",textAlign:"center"}}>Sem publicações agendadas.</div>
-        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {proxPubs.map(function(t){
-              return <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#fafbfc",borderRadius:10,border:"1px solid #f1f5f9"}}>
-                <div style={{minWidth:50,textAlign:"center",background:"#fff",border:"1px solid #e5e7eb",borderRadius:8,padding:"4px 6px"}}>
-                  <div style={{color:cl.color||"#7c3aed",fontSize:14,fontWeight:800,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{fmt(t.publishDate).split("/")[0]||"—"}</div>
-                  <div style={{color:"#64748b",fontSize:9,fontWeight:600,letterSpacing:.4,textTransform:"uppercase",marginTop:2}}>{fmt(t.publishDate).split("/")[1]||""}</div>
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{t.title||"Sem título"}</div>
-                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600,letterSpacing:.2}}>{t.publishTime||""} · {(typeof CARD_STATUS_LABEL!=="undefined"&&CARD_STATUS_LABEL[t.status])||t.status||""}</div>
-                </div>
-              </div>;
-            })}
+    {/* ── PUBLICAÇÕES (espelho do feed do portal do cliente) ──────── */}
+    {(function(){
+      const pubs = clTasks.filter(function(t){
+        if(["agendado","publicado"].indexOf(t.status)===-1) return false;
+        if(t.caption) return true;
+        return (t.files||[]).some(function(f){
+          return f && !f.isAnnotation && f.type && (f.type.indexOf("image/")===0 || f.type.indexOf("video/")===0);
+        });
+      }).sort(function(a,b){return String(b.publishDate||"").localeCompare(String(a.publishDate||""));});
+      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"16px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:9}}>
+            <div style={{width:28,height:28,borderRadius:9,background:(cl.color||"#7c3aed")+"14",color:cl.color||"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Ico n="image" size={13} color={cl.color||"#7c3aed"}/>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Publicações</div>
+              <div style={{color:"#94a3b8",fontSize:10.5,marginTop:1,fontWeight:600}}>Mesmo feed que o cliente vê no portal · do mais recente ao mais antigo</div>
+            </div>
           </div>
-      }
-    </div>
+          <span style={{background:(cl.color||"#7c3aed")+"15",color:cl.color||"#7c3aed",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,letterSpacing:.3,border:"1px solid "+(cl.color||"#7c3aed")+"33",fontFeatureSettings:"'tnum'"}}>{pubs.length}</span>
+        </div>
+        {pubs.length===0
+          ? <div style={{color:"#94a3b8",fontSize:12.5,fontStyle:"italic",padding:"24px 0",textAlign:"center"}}>Nenhuma publicação disponível ainda.</div>
+          : <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10}}>
+              {pubs.slice(0,16).map(function(t){
+                const img=(t.files||[]).slice().reverse().find(function(f){return f&&f.url&&!f.isAnnotation&&(f.type||"").indexOf("image/")===0;});
+                const cover=t.cover||(img?img.url:null);
+                const dataPub=t.publishDate?new Date(t.publishDate+"T12:00:00"):null;
+                const dataLabel=dataPub?String(dataPub.getDate()).padStart(2,"0")+"/"+String(dataPub.getMonth()+1).padStart(2,"0"):"";
+                return <div key={t.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",display:"flex",flexDirection:"column",transition:"all .15s"}}
+                  onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 18px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=(cl.color||"#7c3aed")+"66";}}
+                  onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                  <div style={{aspectRatio:"4/5",background:"#f1f5f9",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+                    {cover
+                      ? <img src={cover} alt={t.title||""} loading="lazy" style={{width:"100%",height:"100%",objectFit:"contain",display:"block"}}/>
+                      : <Ico n="image" size={26} color="#cbd5e1"/>}
+                    {dataLabel && <div style={{position:"absolute",top:7,right:7,background:"rgba(0,0,0,0.65)",color:"#fff",fontSize:9.5,fontWeight:700,padding:"3px 8px",borderRadius:99,fontFeatureSettings:"'tnum'",letterSpacing:.2}}>{dataLabel}</div>}
+                  </div>
+                </div>;
+              })}
+            </div>
+        }
+      </div>;
+    })()}
   </div>;
 }
 function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
