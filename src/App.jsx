@@ -10689,100 +10689,172 @@ function CAnalises({cl,isMob,tasks}){
       </div>
     </div>
 
-    {/* DASHBOARD GRID — 4 mini-cards: NPS · Evolução · Planejamento · Última reunião */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
-
-      {/* NPS card */}
-      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <div style={{width:26,height:26,borderRadius:8,background:"#a855f714",color:"#a855f7",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="sparkles" size={12} color="#a855f7"/></div>
-          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>NPS do cliente</span>
-        </div>
-        {loadingDash ? <div style={{color:"#cbd5e1",fontSize:11}}>Carregando...</div>
-          : !lastNps ? <div style={{color:"#94a3b8",fontSize:11.5,padding:"6px 0"}}>Sem registros ainda</div>
-          : <>
-              <div style={{display:"flex",alignItems:"baseline",gap:7,marginBottom:5}}>
-                <span style={{color:npsCl.color,fontSize:28,fontWeight:900,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{lastNps.score}</span>
-                <span style={{background:npsCl.bg,color:npsCl.color,borderRadius:99,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{npsCl.label}</span>
-              </div>
-              <div style={{color:"#64748b",fontSize:10.5,fontWeight:600,display:"flex",justifyContent:"space-between",gap:6}}>
-                <span>Média histórica</span>
-                <span style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{npsMedia!=null?npsMedia.toFixed(1):"—"}</span>
-              </div>
-              {lastNps.respondent_name && <div style={{color:"#94a3b8",fontSize:10,marginTop:4,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>por {lastNps.respondent_name}</div>}
-            </>
+    {/* ── 3 CARDS ESTRATÉGICOS — NPS · Última reunião · Próxima reunião ── */}
+    {(function(){
+      // Próxima reunião (mesma parse de lastMeetIso)
+      const _nextIso = cl.nextMeeting || null;
+      let nextText="—", nextDays=null, nextCor="#64748b", nextBg="#f1f5f9", nextBorder="#e2e8f0";
+      if(_nextIso){
+        let d=null;
+        const m=String(_nextIso).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if(m) d=new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
+        else d=new Date(_nextIso);
+        if(d&&!isNaN(d.getTime())){
+          const today=new Date(); today.setHours(0,0,0,0);
+          nextDays=Math.round((d.getTime()-today.getTime())/86400000);
+          nextText=d.toLocaleDateString("pt-BR",{day:"2-digit",month:"long",year:"numeric"});
+          if(nextDays<=7){ nextCor="#16a34a"; nextBg="#dcfce7"; nextBorder="#bbf7d0"; }
+          else if(nextDays<=30){ nextCor="#0ea5e9"; nextBg="#eff6ff"; nextBorder="#bfdbfe"; }
+          else { nextCor="#64748b"; nextBg="#f1f5f9"; nextBorder="#e2e8f0"; }
         }
-      </div>
+      }
+      const _lastFullText = lastMeetIso ? (function(){
+        let d=null;
+        const m=String(lastMeetIso).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if(m) d=new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
+        else d=new Date(lastMeetIso);
+        if(!d||isNaN(d.getTime())) return "—";
+        return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"long",year:"numeric"});
+      })() : "—";
 
-      {/* Evolução card */}
-      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <div style={{width:26,height:26,borderRadius:8,background:"#ec489914",color:"#ec4899",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="trending-up" size={12} color="#ec4899"/></div>
-          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>Evolução</span>
-        </div>
-        {loadingDash ? <div style={{color:"#cbd5e1",fontSize:11}}>Carregando...</div>
-          : metricsRows.length===0 ? <div style={{color:"#94a3b8",fontSize:11.5,padding:"6px 0"}}>Sem métricas registradas</div>
-          : <>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",gap:8,marginBottom:5}}>
-                <div>
-                  <div style={{color:"#0f172a",fontSize:22,fontWeight:900,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{igNow!=null?Number(igNow).toLocaleString("pt-BR"):"—"}</div>
-                  <div style={{color:"#94a3b8",fontSize:10,marginTop:3,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>seguidores IG</div>
+      return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:14}}>
+        {/* NPS card — destaque com score grande */}
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 20px",boxShadow:"0 2px 8px rgba(15,23,42,0.03)",transition:"all .15s",display:"flex",flexDirection:"column",gap:12}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,23,42,0.06)";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,0.03)";}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:30,height:30,borderRadius:9,background:"#a855f714",color:"#a855f7",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="sparkles" size={14} color="#a855f7"/></div>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>NPS do cliente</span>
+          </div>
+          {loadingDash ? <div style={{color:"#cbd5e1",fontSize:12,padding:"14px 0"}}>Carregando...</div>
+            : !lastNps ? <div style={{color:"#94a3b8",fontSize:13,fontStyle:"italic",padding:"14px 0"}}>Sem registros ainda</div>
+            : <>
+                <div style={{display:"flex",alignItems:"baseline",gap:10,marginTop:2}}>
+                  <span style={{color:npsCl.color,fontSize:42,fontWeight:900,letterSpacing:-1.2,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{lastNps.score}</span>
+                  <span style={{background:npsCl.bg,color:npsCl.color,borderRadius:99,padding:"4px 11px",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",border:"1px solid "+npsCl.color+"33"}}>{npsCl.label}</span>
                 </div>
-                {igSeries.length>=2 && <div>{_miniChart(igSeries,"#ec4899")}</div>}
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6,marginTop:6}}>
-                {igDelta!=null && <span style={{display:"inline-flex",alignItems:"center",gap:3,background:igDelta>=0?"#dcfce7":"#fee2e2",color:igDelta>=0?"#15803d":"#b91c1c",borderRadius:99,padding:"2px 7px",fontSize:10,fontWeight:800,letterSpacing:.2}}>
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">{igDelta>=0?<polyline points="6 15 12 9 18 15"/>:<polyline points="6 9 12 15 18 9"/>}</svg>
-                  {Math.abs(igDelta)}%
-                </span>}
-                {engNow!=null && <span style={{color:"#a855f7",fontSize:10.5,fontWeight:800,letterSpacing:.2}}>{engNow.toFixed(1)}% eng.</span>}
-              </div>
-            </>
-        }
-      </div>
-
-      {/* Planejamento mensal card */}
-      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <div style={{width:26,height:26,borderRadius:8,background:"#0ea5e914",color:"#0ea5e9",display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="layers" size={12} color="#0ea5e9"/></div>
-          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>Planejamento mensal</span>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
+                  <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Média histórica</span>
+                  <span style={{color:"#0f172a",fontSize:14,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{npsMedia!=null?npsMedia.toFixed(1):"—"}</span>
+                </div>
+              </>
+          }
         </div>
-        {loadingDash ? <div style={{color:"#cbd5e1",fontSize:11}}>Carregando...</div>
-          : planTotal===0 ? <div style={{color:"#94a3b8",fontSize:11.5,padding:"6px 0"}}>Sem plano definido</div>
-          : <>
-              <div style={{display:"flex",alignItems:"baseline",gap:5,marginBottom:8}}>
-                <span style={{color:planPct>=80?"#16a34a":"#0f172a",fontSize:22,fontWeight:900,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{planDone}</span>
-                <span style={{color:"#94a3b8",fontSize:14,fontWeight:700,fontFeatureSettings:"'tnum'"}}>/ {planTotal}</span>
-                <span style={{marginLeft:"auto",color:planPct>=80?"#16a34a":"#a855f7",fontSize:13,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.3}}>{planPct}%</span>
-              </div>
-              <div style={{height:4,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
-                <div style={{width:planPct+"%",height:"100%",background:planPct>=80?"#16a34a":"#0ea5e9",borderRadius:99,transition:"width .4s ease"}}/>
-              </div>
-              <div style={{color:"#94a3b8",fontSize:10,marginTop:6,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>itens concluídos no mês</div>
-            </>
-        }
-      </div>
 
-      {/* Última reunião card */}
-      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"14px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-          <div style={{width:26,height:26,borderRadius:8,background:lastMeetBg,color:lastMeetCor,display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="calendar" size={12} color={lastMeetCor}/></div>
-          <span style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>Última reunião</span>
+        {/* Última reunião card */}
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 20px",boxShadow:"0 2px 8px rgba(15,23,42,0.03)",transition:"all .15s",display:"flex",flexDirection:"column",gap:12}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,23,42,0.06)";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,0.03)";}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:30,height:30,borderRadius:9,background:lastMeetBg,color:lastMeetCor,display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="calendar" size={14} color={lastMeetCor}/></div>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Última reunião</span>
+          </div>
+          {!lastMeetIso ? <div style={{color:"#94a3b8",fontSize:13,fontStyle:"italic",padding:"14px 0"}}>Sem reunião registrada</div>
+            : <>
+                <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4,lineHeight:1.15,textTransform:"capitalize",marginTop:2}}>{_lastFullText}</div>
+                <div style={{display:"flex",alignItems:"center",gap:6,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
+                  <span style={{background:lastMeetBg,color:lastMeetCor,borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+lastMeetCor+"33",display:"inline-flex",alignItems:"center",gap:5}}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    há {lastMeetDays} dia{lastMeetDays===1?"":"s"}
+                  </span>
+                </div>
+              </>
+          }
         </div>
-        {!lastMeetIso ? <div style={{color:"#94a3b8",fontSize:11.5,padding:"6px 0"}}>Sem reunião registrada</div>
-          : <>
-              <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.3,lineHeight:1.1,textTransform:"capitalize"}}>{lastMeetText}</div>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,flexWrap:"wrap"}}>
-                <span style={{background:lastMeetBg,color:lastMeetCor,borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:4}}>
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  {lastMeetDays} dia{lastMeetDays===1?"":"s"}
-                </span>
-                {cl.nextMeeting && <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>próxima: {cl.nextMeeting}</span>}
+
+        {/* Próxima reunião card */}
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 20px",boxShadow:"0 2px 8px rgba(15,23,42,0.03)",transition:"all .15s",display:"flex",flexDirection:"column",gap:12}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,23,42,0.06)";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,0.03)";}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:30,height:30,borderRadius:9,background:nextBg,color:nextCor,display:"flex",alignItems:"center",justifyContent:"center"}}><Ico n="users" size={14} color={nextCor}/></div>
+            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Próxima reunião</span>
+          </div>
+          {!_nextIso ? <div style={{color:"#94a3b8",fontSize:13,fontStyle:"italic",padding:"14px 0"}}>Sem reunião agendada</div>
+            : <>
+                <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4,lineHeight:1.15,textTransform:"capitalize",marginTop:2}}>{nextText}</div>
+                <div style={{display:"flex",alignItems:"center",gap:6,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
+                  <span style={{background:nextBg,color:nextCor,borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+nextBorder,display:"inline-flex",alignItems:"center",gap:5}}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>
+                    {nextDays===0?"hoje":nextDays===1?"amanhã":nextDays<0?"atrasada":"em "+nextDays+" dias"}
+                  </span>
+                </div>
+              </>
+          }
+        </div>
+      </div>;
+    })()}
+
+    {/* ── PLANEJAMENTO MENSAL — bloco grande de destaque ── */}
+    {(function(){
+      const items = (monthlyPlan && Array.isArray(monthlyPlan.items)) ? monthlyPlan.items : [];
+      const _period = monthlyPlan && monthlyPlan.period ? monthlyPlan.period : "";
+      const _periodLabel = (function(){
+        if(!_period) return "Mês atual";
+        const p=String(_period).split("-");
+        if(p.length<2) return _period;
+        const mn=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+        return (mn[parseInt(p[1],10)-1]||"?")+" de "+p[0];
+      })();
+      const _ac = cl.color || "#0ea5e9";
+      const showItems = items.slice(0, 8);
+      const remaining = Math.max(0, items.length - showItems.length);
+      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?"22px 22px":"26px 28px",boxShadow:"0 4px 18px rgba(15,23,42,0.04), 0 1px 2px rgba(15,23,42,0.03)",display:"flex",flexDirection:"column",gap:18}}>
+        {/* Header do bloco */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0}}>
+            <div style={{width:46,height:46,borderRadius:13,background:_ac+"15",border:"1px solid "+_ac+"33",color:_ac,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+_ac+"22"}}>
+              <Ico n="layers" size={20} color={_ac}/>
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4,lineHeight:1.15}}>Planejamento mensal</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500,textTransform:"capitalize"}}>{_periodLabel}</div>
+            </div>
+          </div>
+          {planTotal>0 && <div style={{display:"flex",alignItems:"center",gap:14}}>
+            <div style={{textAlign:"right"}}>
+              <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Progresso</div>
+              <div style={{display:"flex",alignItems:"baseline",gap:6,marginTop:3}}>
+                <span style={{color:planPct>=80?"#16a34a":_ac,fontSize:24,fontWeight:900,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{planPct}%</span>
+                <span style={{color:"#64748b",fontSize:13,fontWeight:700,fontFeatureSettings:"'tnum'"}}>· {planDone}/{planTotal}</span>
               </div>
-            </>
+            </div>
+          </div>}
+        </div>
+
+        {/* Progress bar grande */}
+        {planTotal>0 && <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
+          <div style={{width:planPct+"%",height:"100%",background:planPct>=80?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_ac+","+_ac+"cc)",borderRadius:99,transition:"width .4s ease"}}/>
+        </div>}
+
+        {/* Empty state ou lista de itens */}
+        {loadingDash ? <div style={{color:"#cbd5e1",fontSize:13,padding:"20px 0",textAlign:"center"}}>Carregando planejamento...</div>
+          : items.length===0 ? <div style={{padding:"26px 0",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+              <div style={{width:48,height:48,borderRadius:"50%",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
+                <Ico n="layers" size={20} color="#cbd5e1"/>
+              </div>
+              <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2}}>Nenhum item planejado</div>
+              <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,maxWidth:320,lineHeight:1.5}}>Use a aba <span style={{color:"#475569",fontWeight:700}}>Planejamento mensal</span> pra cadastrar os itens do mês.</div>
+            </div>
+          : <div style={{display:"flex",flexDirection:"column",gap:7}}>
+            {showItems.map(function(it,i){
+              const done = !!it.done;
+              return <div key={i} style={{display:"flex",alignItems:"center",gap:11,padding:"10px 13px",background:done?"#f8fafc":"#fff",border:"1px solid "+(done?"#f1f5f9":"#eef0f3"),borderRadius:11,transition:"all .12s"}}>
+                <div style={{width:20,height:20,borderRadius:6,background:done?"#dcfce7":"#fff",border:"1.5px solid "+(done?"#86efac":"#e2e8f0"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {done && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:done?"#94a3b8":"#0f172a",fontSize:13,fontWeight:done?500:700,letterSpacing:-.1,textDecoration:done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.title||it.label||it.name||"Sem título"}</div>
+                  {it.note && <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.note}</div>}
+                </div>
+                {it.deadline && <span style={{color:"#64748b",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0,background:"#f1f5f9",borderRadius:99,padding:"2px 8px",letterSpacing:.2}}>{it.deadline}</span>}
+              </div>;
+            })}
+            {remaining>0 && <div style={{color:"#94a3b8",fontSize:11.5,textAlign:"center",fontWeight:600,paddingTop:6}}>+ {remaining} {remaining===1?"item":"itens"} · veja todos na aba Planejamento mensal</div>}
+          </div>
         }
-      </div>
-    </div>
+      </div>;
+    })()}
 
     {/* ── PUBLICAÇÕES (espelho do feed do portal do cliente) ──────── */}
     {(function(){
