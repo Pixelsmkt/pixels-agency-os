@@ -35359,7 +35359,7 @@ const PORTAL_ALL_TABS=[
   {id:"briefing",    ico:"fileText",    label:"Briefing"},
   {id:"marcos",      ico:"flame",       label:"Marcos"},
   {id:"metas",       ico:"target",      label:"Metas"},
-  {id:"planejamento",ico:"layers",      label:"Planejamento mensal"},
+  {id:"planejamento",ico:"layers",      label:"Planejamento"},
   {id:"calendario",  ico:"calendar",    label:"Calendário"},
   {id:"publicacoes", ico:"check",       label:"Publicações"},
   {id:"performance", ico:"chart",       label:"Performance"},
@@ -41577,13 +41577,44 @@ function _PlanSection({cl, unit, year, accent, isMob, kind}){
    Read-only nos campos; cliente comenta + aprova ou solicita ajuste
 ═══════════════════════════════════════════════════════════════════ */
 function PortalMonthlyPlan({cl, selUnit, isMob}){
+  // Wrapper "Planejamento" no portal — espelha o interno:
+  // mensal + trimestral lado a lado verticalmente, com pickers accent.
   const _now=new Date();
-  const [month,setMonth]=useState(_now.getMonth()+1);
   const [year,setYear]=useState(_now.getFullYear());
   const unit=_mpUnit(cl,selUnit);
-  const {data,loading,saving,save}=useMonthlyPlan(cl.id,unit,year,month);
+  const accent = cl.color||"#7c3aed";
 
-  // Form local — mesma estrutura do interno (cliente também edita)
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header geral */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Planejamento</div>
+        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Mensal e trimestral construídos com a equipe Pixels. Você também pode editar, comentar e aprovar.</div>
+      </div>
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
+          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y}>{y}</option>;})}
+        </select>
+      </div>
+    </div>
+
+    {/* Seção mensal */}
+    <_PortalPlanSection kind="mensal" cl={cl} unit={unit} year={year} accent={accent} isMob={isMob}/>
+
+    {/* Seção trimestral */}
+    <_PortalPlanSection kind="trimestral" cl={cl} unit={unit} year={year} accent={accent} isMob={isMob}/>
+  </div>;
+}
+
+function _PortalPlanSection({cl, unit, year, accent, isMob, kind}){
+  const _now = new Date();
+  const isMensal = kind==="mensal";
+  const initialPeriod = isMensal ? (_now.getMonth()+1) : (Math.floor(_now.getMonth()/3)+1);
+  const [period,setPeriod] = useState(initialPeriod);
+  const monthEncoded = isMensal ? period : (20+period);
+  const {data,loading,saving,save}=useMonthlyPlan(cl.id, unit||"", year, monthEncoded);
+
   const [form,setForm]=useState({});
   const [dirty,setDirty]=useState(false);
   useEffect(function(){
@@ -41592,7 +41623,7 @@ function PortalMonthlyPlan({cl, selUnit, isMob}){
     init.status_cliente=(data&&data.status_cliente)||"pendente";
     setForm(init);
     setDirty(false);
-  },[data,cl.id,unit,year,month]);
+  },[data,cl.id,unit,year,monthEncoded]);
 
   function _set(k,v){setForm(function(p){return Object.assign({},p,{[k]:v});});setDirty(true);}
 
@@ -41604,7 +41635,6 @@ function PortalMonthlyPlan({cl, selUnit, isMob}){
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Planejamento salvo.",3000);
     });
   }
-
   function aprovarPlano(){
     save({status_cliente:"aprovado"}).then(function(){
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Planejamento aprovado!",3500);
@@ -41631,39 +41661,58 @@ function PortalMonthlyPlan({cl, selUnit, isMob}){
 
   const stCliente=STATUS_CLIENTE_OPTS.find(function(s){return s.id===((data&&data.status_cliente)||"pendente");})||STATUS_CLIENTE_OPTS[0];
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>Planejamento mensal</div>
-        <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Plano construído junto com a equipe Pixels. Você também pode editar e comentar.</div>
-      </div>
-      <div style={{display:"flex",gap:8,alignItems:"center"}}>
-        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
-          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {_MP_MESES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
-        </select>
-        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
-          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:9,padding:"8px 12px",color:"#0f172a",fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y}>{y}</option>;})}
-        </select>
-      </div>
-    </div>
+  function _shift(delta){
+    const limit = isMensal ? 12 : 4;
+    let v = period + delta;
+    if(v<1) v = limit;
+    if(v>limit) v = 1;
+    setPeriod(v);
+  }
+  const labelPeriod = isMensal
+    ? (_MP_MESES[period-1]+" de "+year)
+    : (period+"º trimestre de "+year);
 
-    {/* Status pill */}
-    <div>
-      <span style={{background:stCliente.bg,color:stCliente.color,borderRadius:99,padding:"5px 14px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>
-        {stCliente.label}
-      </span>
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header da seção com period picker accent */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:36,height:36,borderRadius:10,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Ico n={isMensal?"calendar":"layers"} size={17} color={accent}/>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>{isMensal?"Planejamento mensal":"Planejamento trimestral"}</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontWeight:500}}>{isMensal?"Objetivos, conteúdos e campanhas do mês":"Visão de 3 meses + revisões estratégicas"}</div>
+        </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+        <span style={{background:stCliente.bg,color:stCliente.color,borderRadius:99,padding:"4px 11px",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3}}>
+          {stCliente.label}
+        </span>
+        <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:3,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+          <button type="button" title="Anterior" onClick={function(){_shift(-1);}}
+            style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{padding:"0 14px",minWidth:isMensal?160:170,textAlign:"center",fontSize:12.5,fontWeight:700,color:accent,letterSpacing:-.1,fontFeatureSettings:"'tnum'",textTransform:"capitalize"}}>{labelPeriod}</div>
+          <button type="button" title="Próximo" onClick={function(){_shift(1);}}
+            style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
+      </div>
     </div>
 
     {loading?<div style={{padding:30,textAlign:"center",color:"#94a3b8"}}>Carregando…</div>:<>
       {/* Campos editáveis (sincronizados em tempo real com a equipe Pixels) */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
         {MP_CAMPOS.map(function(c){
           return <div key={c.k}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-              <Ico n={c.icon} size={13} color={cl.color}/>
+              <Ico n={c.icon} size={13} color={accent}/>
               <div style={{color:"#0f172a",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{c.label}</div>
             </div>
             <textarea value={form[c.k]||""} onChange={function(e){_set(c.k,e.target.value);}}
@@ -41679,11 +41728,11 @@ function PortalMonthlyPlan({cl, selUnit, isMob}){
         </div>}
       </div>
 
-      {/* Aprovação / Solicitar ajuste — sempre disponíveis pro cliente */}
+      {/* Aprovação / Solicitar ajuste */}
       {data&&data.status_cliente!=="aprovado"&&<div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
         <button onClick={aprovarPlano}
           style={{background:"#059669",color:"#fff",border:"none",borderRadius:10,padding:"11px 22px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
-          <Ico n="check" size={14}/> Aprovar planejamento
+          <Ico n="check" size={14}/> Aprovar {isMensal?"mensal":"trimestral"}
         </button>
         {data.status_cliente!=="em_ajuste"&&<button onClick={pedirAjuste}
           style={{background:"#fff",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"11px 18px",fontWeight:700,fontSize:13,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit"}}>
@@ -41691,8 +41740,8 @@ function PortalMonthlyPlan({cl, selUnit, isMob}){
         </button>}
       </div>}
 
-      {/* Comentários (ambos lados) */}
-      <MonthlyPlanComments data={data} onAdd={addComment} clColor={cl.color}/>
+      {/* Comentários (ambos lados — espelhado com o interno) */}
+      <MonthlyPlanComments data={data} onAdd={addComment} clColor={accent}/>
     </>}
   </div>;
 }
