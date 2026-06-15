@@ -341,6 +341,30 @@ function getClientProfile(id){
   return null;
 }
 
+// ── IDENTIDADE DO CLIENTE — preenchida via Briefing > Identidade ──
+// Mirror em localStorage pra ser lido pela PageClientes e ClienteDetail
+// sem precisar carregar briefing_data completo.
+function getClientIdentity(clientId){
+  if(!clientId) return null;
+  try{
+    const raw = localStorage.getItem("pixels-cl-identity-"+clientId);
+    if(raw){
+      const obj = JSON.parse(raw);
+      if(obj && typeof obj==="object") return obj;
+    }
+  }catch(e){}
+  return null;
+}
+function saveClientIdentity(clientId, partial){
+  if(!clientId || !partial) return;
+  try{
+    const cur = getClientIdentity(clientId)||{};
+    const next = Object.assign({}, cur, partial);
+    localStorage.setItem("pixels-cl-identity-"+clientId, JSON.stringify(next));
+    window.dispatchEvent(new CustomEvent("pixels:identity-updated",{detail:{clientId:clientId}}));
+  }catch(e){console.warn("[identity save]",e);}
+}
+
 // MRR total do Grupo Bioter — soma das unidades.
 function getBioterGroupMRR(){
   return BIOTER_GROUP_UNITS.reduce(function(acc,u){return acc+(u.mrr||0);},0);
@@ -2458,7 +2482,11 @@ function textoSprintCliente(sprint,config){
 const BRIEFING_SECTIONS = [
   { id:"identidade",      label:"Identidade",            icon:"building",     color:"#7c3aed",
     fields:[
-      { id:"cadastro", label:"Informações cadastrais", help:"Nome empresarial, CNPJ, endereço, responsável legal", type:"textarea" },
+      { id:"nome_empresarial", label:"Nome empresarial",   help:"Razão social registrada na Receita", type:"text" },
+      { id:"cnpj",             label:"CNPJ",               help:"00.000.000/0000-00",                  type:"text" },
+      { id:"cidade",           label:"Cidade",             help:"Cidade/UF onde o cliente atua",        type:"text" },
+      { id:"endereco",         label:"Endereço completo",  help:"Rua, número, complemento, bairro, CEP", type:"textarea" },
+      { id:"responsavel_legal",label:"Responsável legal",  help:"Nome + contato",                       type:"text" },
     ]
   },
   { id:"objetivos",       label:"Objetivos e números",   icon:"target",       color:"#dc2626",
@@ -2708,6 +2736,11 @@ function BriefingFormCanonico(props){
     const next = Object.assign({}, data);
     next[sec] = Object.assign({}, next[sec]||{}, {[fid]:val});
     briefing.save(next);
+    // Espelha campos da seção Identidade pra localStorage — usado pelos cards
+    // da PageClientes e pelo header do ClienteDetail (sem precisar carregar briefing).
+    if(sec==="identidade" && typeof saveClientIdentity==="function"){
+      try{ saveClientIdentity(cl.id, {[fid]: val}); }catch(e){}
+    }
   }
   function toggleMulti(sec, fid, opt){
     if(!canEdit) return;
