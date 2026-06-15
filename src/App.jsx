@@ -9374,193 +9374,193 @@ function CMetas({cl, accentColor, readOnly}){
       })}
     </div>
 
-    {/* ── GRÁFICO DE EVOLUÇÃO — % atingido por pilar (anchora no mês selecionado) ── */}
+    {/* ── GRÁFICO DE EVOLUÇÃO — mini-charts Atual vs Meta por pilar ─────────
+        Independente do refMonth: sempre mostra últimos 12 meses do calendário real
+        pra acompanhar a evolução geral sem se confundir com o mês selecionado acima. */}
     {(function(){
-      // Janela de 6 meses TERMINANDO no refMonth (não no mês corrente do calendário)
+      // Janela de 12 meses TERMINANDO no mês corrente do calendário (não no refMonth)
       const months = [];
-      for(let i=5;i>=0;i--) months.push(_ymShift(refMonth,-i));
-      // Calcula % + valores absolutos por pilar por mês
-      const series = PILARES.map(function(p){
-        const points = months.map(function(ym){
-          const snap = _readSnapshot(p.key, ym);
-          if(!snap.target||snap.target<=0) return null;
-          const pct = Math.round((snap.current/snap.target)*100);
-          return {pct: Math.min(150, pct), current: snap.current, target: snap.target};
-        });
-        const hasData = points.some(function(v){return v!=null;});
-        return {pilar:p, points:points, hasData:hasData};
-      });
-      const anySeries = series.some(function(s){return s.hasData;});
-      const W=820, H=240, padL=44, padR=24, padT=26, padB=46;
-      const innerW=W-padL-padR, innerH=H-padT-padB;
-      const maxYRaw=Math.max(110, ...series.flatMap(function(s){return s.points.filter(function(v){return v!=null;}).map(function(p){return p.pct;});}));
-      const maxY = Math.min(150, Math.max(110, Math.ceil(maxYRaw/25)*25));
-      // Hover state
-      const [hover, setHover] = useState(null); // {seriesIdx, pointIdx}
-      function _fmtNum(n){
-        if(n==null) return "—";
-        try{return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:2});}catch(e){return String(n);}
-      }
+      for(let i=11;i>=0;i--) months.push(_ymShift(_currentYM,-i));
       function _ymShortLabel(ym){
         const parts=ym.split("-");
         const mn=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
         return (mn[parseInt(parts[1],10)-1]||"?")+"/"+parts[0].slice(-2);
       }
-      function _ymFullLabel(ym){ return _ymLabel(ym); }
+      function _fmtNum(n,unit){
+        if(n==null||!isFinite(n)) return "—";
+        try{return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:2})+(unit||"");}catch(e){return String(n)+(unit||"");}
+      }
+      // Pra cada pilar, monta série dos 12 meses
+      const seriesAll = PILARES.map(function(p){
+        const points = months.map(function(ym){
+          const snap = _readSnapshot(p.key, ym);
+          const tgt = Number(snap.target||0), cur = Number(snap.current||0);
+          const hasMeta = tgt>0;
+          const hasAtual = cur>0;
+          return {ym:ym, current:cur, target:tgt, hasMeta:hasMeta, hasAtual:hasAtual};
+        });
+        const hasData = points.some(function(pt){return pt.hasMeta||pt.hasAtual;});
+        return {pilar:p, points:points, hasData:hasData};
+      });
+      const anyData = seriesAll.some(function(s){return s.hasData;});
 
-      return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"20px 22px",fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)",position:"relative"}}>
-        {/* Header + legenda */}
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-            <div style={{width:38,height:38,borderRadius:11,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+accent+"22"}}>
-              {typeof Ico==="function" && <Ico n="trending-up" size={18} color={accent}/>}
-            </div>
-            <div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.1}}>Evolução das metas</div>
-              <div style={{color:"#64748b",fontSize:11.5,marginTop:3,fontWeight:500}}>Últimos 6 meses · passe o mouse nos pontos pra ver atual e meta</div>
-            </div>
+      // Tooltip state (compartilhado entre mini-charts)
+      const [hover, setHover] = useState(null); // {pilarKey, pointIdx, mx, my}
+
+      return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"20px 22px",fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        {/* Header */}
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18,flexWrap:"wrap"}}>
+          <div style={{width:38,height:38,borderRadius:11,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+accent+"22"}}>
+            {typeof Ico==="function" && <Ico n="trending-up" size={18} color={accent}/>}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:11,flexWrap:"wrap"}}>
-            {PILARES.map(function(p){
-              const s = series.find(function(x){return x.pilar.key===p.key;});
-              const active = s && s.hasData;
-              return <span key={p.key} style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:700,color:active?"#0f172a":"#cbd5e1",letterSpacing:-.05,padding:"3px 9px",background:active?p.color+"0d":"#f8fafc",border:"1px solid "+(active?p.color+"22":"#eef0f3"),borderRadius:99,transition:"all .15s"}}>
-                <span style={{width:8,height:8,borderRadius:99,background:active?p.color:"#e2e8f0"}}></span>
-                {p.label}
-              </span>;
-            })}
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.1}}>Evolução mensal</div>
+            <div style={{color:"#64748b",fontSize:11.5,marginTop:3,fontWeight:500}}>Últimos 12 meses · Atual (linha sólida) vs Meta (linha tracejada)</div>
           </div>
         </div>
 
-        {!anySeries
+        {!anyData
           ? <div style={{padding:"50px 0",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:9}}>
               <div style={{width:48,height:48,borderRadius:"50%",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
                 {typeof Ico==="function" && <Ico n="trending-up" size={20} color="#cbd5e1"/>}
               </div>
               <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Sem dados de evolução ainda</div>
-              <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,maxWidth:380,lineHeight:1.5}}>Preencha o ATUAL e a META de cada pilar no seletor de mês acima — o gráfico vai sendo desenhado mês a mês.</div>
+              <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,maxWidth:380,lineHeight:1.5}}>Preencha o ATUAL e a META de cada pilar no seletor de mês acima — os mini-gráficos vão sendo desenhados mês a mês.</div>
             </div>
-          : <div style={{overflowX:"auto",position:"relative"}}>
-            <svg width={W} height={H} viewBox={"0 0 "+W+" "+H} style={{display:"block",maxWidth:"100%",userSelect:"none"}}>
-              <defs>
-                {PILARES.map(function(p){
-                  return <linearGradient key={p.key} id={"gradFill-"+cl.id+"-"+p.key} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={p.color} stopOpacity="0.18"/>
-                    <stop offset="100%" stopColor={p.color} stopOpacity="0"/>
-                  </linearGradient>;
-                })}
-              </defs>
-
-              {/* Eixo Y guias (mais leves) */}
-              {[0,25,50,75,100].concat(maxY>100?[maxY]:[]).map(function(g,i){
-                const y = padT + innerH - (g/maxY)*innerH;
-                const isMeta = g===100;
-                return <g key={i}>
-                  <line x1={padL} x2={W-padR} y1={y} y2={y}
-                    stroke={isMeta?"#16a34a":"#f1f5f9"}
-                    strokeWidth={isMeta?1.5:1}
-                    strokeDasharray={isMeta?"4 3":""}/>
-                  <text x={padL-8} y={y+3} textAnchor="end" fontSize="9.5" fill={isMeta?"#16a34a":"#94a3b8"} fontWeight={isMeta?800:600} fontFamily="inherit">{g}%</text>
-                </g>;
-              })}
-              {/* Label da linha de meta */}
-              <text x={W-padR} y={padT+innerH-(100/maxY)*innerH-5} textAnchor="end" fontSize="8.5" fill="#16a34a" fontWeight="800" fontFamily="inherit" letterSpacing=".4">META 100%</text>
-
-              {/* Highlight do mês selecionado (refMonth) */}
-              {(function(){
-                const idx = months.indexOf(refMonth);
-                if(idx<0) return null;
-                const x = padL + (idx/(months.length-1))*innerW;
-                return <g>
-                  <line x1={x} x2={x} y1={padT} y2={H-padB} stroke={accent} strokeWidth="1.2" strokeDasharray="2 4" opacity="0.35"/>
-                  <rect x={x-26} y={H-padB+2} width="52" height="18" rx="9" fill={accent}/>
-                  <text x={x} y={H-padB+15} textAnchor="middle" fontSize="9.5" fill="#fff" fontWeight="800" fontFamily="inherit" letterSpacing=".2">{_ymShortLabel(refMonth)}</text>
-                </g>;
-              })()}
-
-              {/* Eixo X — meses (label menor pros não-selecionados) */}
-              {months.map(function(ym,i){
-                if(ym===refMonth) return null; // já mostrado destacado acima
-                const x = padL + (i/(months.length-1))*innerW;
-                return <text key={ym} x={x} y={H-padB+15} textAnchor="middle" fontSize="9.5" fill="#94a3b8" fontWeight="600" fontFamily="inherit">{_ymShortLabel(ym)}</text>;
-              })}
-
-              {/* Séries: área preenchida + linha + pontos */}
-              {series.map(function(s,si){
-                if(!s.hasData) return null;
-                const pts = s.points.map(function(v,i){
-                  const x = padL + (i/(months.length-1))*innerW;
-                  const y = v==null ? null : padT + innerH - (Math.min(maxY,v.pct)/maxY)*innerH;
-                  return {x,y,v};
+          : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
+              {seriesAll.map(function(s){
+                const p = s.pilar;
+                const W=320, H=170, padL=42, padR=14, padT=24, padB=30;
+                const innerW=W-padL-padR, innerH=H-padT-padB;
+                // Y-axis: pega max entre atual e meta de todos os meses (com 10% de cabeceira)
+                let maxY = 0;
+                s.points.forEach(function(pt){
+                  if(pt.hasAtual) maxY=Math.max(maxY,pt.current);
+                  if(pt.hasMeta)  maxY=Math.max(maxY,pt.target);
                 });
-                // Path da linha (skipping null)
-                let line="";
-                let started=false;
-                pts.forEach(function(pt){
-                  if(pt.y==null){started=false;return;}
-                  if(!started){line += "M"+pt.x.toFixed(1)+" "+pt.y.toFixed(1); started=true;}
-                  else line += " L"+pt.x.toFixed(1)+" "+pt.y.toFixed(1);
+                if(maxY<=0) maxY=10;
+                maxY = Math.ceil(maxY*1.1);
+                // Pega valor atual e meta do último mês com dado pra pill resumo
+                let lastIdx = -1;
+                for(let i=s.points.length-1;i>=0;i--){if(s.points[i].hasAtual||s.points[i].hasMeta){lastIdx=i;break;}}
+                const lastPoint = lastIdx>=0 ? s.points[lastIdx] : null;
+                const lastPct = lastPoint && lastPoint.hasMeta && lastPoint.target>0 ? Math.round((lastPoint.current/lastPoint.target)*100) : null;
+                const pctColor = lastPct==null ? "#94a3b8" : (lastPct>=100?"#16a34a":(lastPct>=70?"#a16207":"#dc2626"));
+
+                // Helper coords
+                function _xFor(i){ return padL + (i/(s.points.length-1))*innerW; }
+                function _yFor(v){ return padT + innerH - (Math.min(maxY,v)/maxY)*innerH; }
+
+                // Path da linha Atual (skipping null)
+                let lineAtual="", lineMeta="";
+                let startedA=false, startedM=false;
+                s.points.forEach(function(pt,i){
+                  const x=_xFor(i);
+                  if(pt.hasAtual){
+                    const y=_yFor(pt.current);
+                    if(!startedA){lineAtual+="M"+x.toFixed(1)+" "+y.toFixed(1);startedA=true;}
+                    else lineAtual+=" L"+x.toFixed(1)+" "+y.toFixed(1);
+                  } else { startedA=false; }
+                  if(pt.hasMeta){
+                    const y=_yFor(pt.target);
+                    if(!startedM){lineMeta+="M"+x.toFixed(1)+" "+y.toFixed(1);startedM=true;}
+                    else lineMeta+=" L"+x.toFixed(1)+" "+y.toFixed(1);
+                  } else { startedM=false; }
                 });
-                // Path da área (linha + fechamento na base)
-                let area="";
-                if(line){
-                  const valid = pts.filter(function(p){return p.y!=null;});
-                  if(valid.length>0){
-                    area = line + " L"+valid[valid.length-1].x.toFixed(1)+" "+(padT+innerH).toFixed(1)+" L"+valid[0].x.toFixed(1)+" "+(padT+innerH).toFixed(1)+" Z";
+
+                return <div key={p.key} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 1px 2px rgba(15,23,42,0.03)",transition:"all .15s"}}
+                  onMouseEnter={function(e){e.currentTarget.style.borderColor=p.color+"55";e.currentTarget.style.boxShadow="0 6px 16px "+p.color+"15";}}
+                  onMouseLeave={function(e){e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.03)";}}>
+                  {/* Header do mini-card */}
+                  <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+                    <div style={{width:24,height:24,borderRadius:7,background:p.color+"15",border:"1px solid "+p.color+"33",color:p.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      {typeof Ico==="function" && <Ico n={p.ico} size={11} color={p.color}/>}
+                    </div>
+                    <div style={{color:"#0f172a",fontWeight:800,fontSize:12.5,letterSpacing:-.2,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.label}</div>
+                    {lastPoint && <div style={{display:"flex",alignItems:"baseline",gap:5,flexShrink:0}}>
+                      <span style={{color:p.color,fontSize:13,fontWeight:900,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{_fmtNum(lastPoint.current,p.unit)}</span>
+                      <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>/ {_fmtNum(lastPoint.target,p.unit)}</span>
+                      {lastPct!=null && <span style={{color:pctColor,fontSize:10,fontWeight:800,fontFeatureSettings:"'tnum'",background:pctColor+"15",border:"1px solid "+pctColor+"33",borderRadius:99,padding:"1px 7px",marginLeft:3}}>{lastPct}%</span>}
+                    </div>}
+                  </div>
+
+                  {/* Sem dados nesse pilar */}
+                  {!s.hasData
+                    ? <div style={{padding:"22px 0",textAlign:"center",color:"#cbd5e1",fontSize:11,fontStyle:"italic"}}>Sem dados</div>
+                    : <div style={{position:"relative"}}>
+                      <svg width="100%" viewBox={"0 0 "+W+" "+H} style={{display:"block",userSelect:"none"}}>
+                        <defs>
+                          <linearGradient id={"miniFill-"+cl.id+"-"+p.key} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={p.color} stopOpacity="0.22"/>
+                            <stop offset="100%" stopColor={p.color} stopOpacity="0"/>
+                          </linearGradient>
+                        </defs>
+                        {/* Eixo Y: 3 guides (0, mid, max) */}
+                        {[0, 0.5, 1].map(function(frac, i){
+                          const val = maxY*frac;
+                          const y = padT + innerH - frac*innerH;
+                          return <g key={i}>
+                            <line x1={padL} x2={W-padR} y1={y} y2={y} stroke="#f1f5f9" strokeWidth="1"/>
+                            <text x={padL-6} y={y+3} textAnchor="end" fontSize="8.5" fill="#94a3b8" fontWeight="600" fontFamily="inherit">{val>=1000?Math.round(val/100)/10+"k":(Math.round(val*10)/10)}</text>
+                          </g>;
+                        })}
+                        {/* Eixo X: só meses inicial, meio e final pra economizar espaço */}
+                        {[0,Math.floor(s.points.length/2),s.points.length-1].map(function(i){
+                          const x = _xFor(i);
+                          return <text key={i} x={x} y={H-padB+13} textAnchor="middle" fontSize="8.5" fill="#94a3b8" fontWeight="600" fontFamily="inherit">{_ymShortLabel(s.points[i].ym)}</text>;
+                        })}
+                        {/* Área sob a linha Atual */}
+                        {lineAtual && (function(){
+                          const valid = s.points.map(function(pt,i){return pt.hasAtual?{x:_xFor(i),y:_yFor(pt.current)}:null;}).filter(Boolean);
+                          if(valid.length===0) return null;
+                          const area = lineAtual+" L"+valid[valid.length-1].x.toFixed(1)+" "+(padT+innerH).toFixed(1)+" L"+valid[0].x.toFixed(1)+" "+(padT+innerH).toFixed(1)+" Z";
+                          return <path d={area} fill={"url(#miniFill-"+cl.id+"-"+p.key+")"} stroke="none"/>;
+                        })()}
+                        {/* Linha Meta tracejada (atrás) */}
+                        {lineMeta && <path d={lineMeta} fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 3" opacity="0.7"/>}
+                        {/* Linha Atual sólida (frente) */}
+                        {lineAtual && <path d={lineAtual} fill="none" stroke={p.color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>}
+                        {/* Pontos interativos */}
+                        {s.points.map(function(pt,i){
+                          if(!pt.hasAtual && !pt.hasMeta) return null;
+                          const x=_xFor(i);
+                          const yAtual=pt.hasAtual?_yFor(pt.current):null;
+                          const yMeta=pt.hasMeta?_yFor(pt.target):null;
+                          const isHover = hover && hover.pilarKey===p.key && hover.pointIdx===i;
+                          return <g key={i}>
+                            {/* Hit area sobre a coluna inteira */}
+                            <rect x={x-10} y={padT} width="20" height={innerH} fill="transparent" style={{cursor:"pointer"}}
+                              onMouseEnter={function(){setHover({pilarKey:p.key,pointIdx:i});}}
+                              onMouseLeave={function(){setHover(null);}}/>
+                            {yMeta!=null && <circle cx={x} cy={yMeta} r={isHover?3.5:2.5} fill="#fff" stroke="#94a3b8" strokeWidth="1.5" style={{pointerEvents:"none",transition:"r .12s"}}/>}
+                            {yAtual!=null && <circle cx={x} cy={yAtual} r={isHover?5:3.5} fill="#fff" stroke={p.color} strokeWidth={isHover?3:2.2} style={{pointerEvents:"none",transition:"r .12s"}}/>}
+                          </g>;
+                        })}
+                      </svg>
+                      {/* Tooltip flutuante */}
+                      {hover && hover.pilarKey===p.key && (function(){
+                        const pt = s.points[hover.pointIdx];
+                        if(!pt) return null;
+                        const leftPct = ((padL+(hover.pointIdx/(s.points.length-1))*innerW)/W)*100;
+                        const pctNow = pt.hasMeta && pt.target>0 ? Math.round((pt.current/pt.target)*100) : null;
+                        return <div style={{position:"absolute",left:"calc("+leftPct.toFixed(2)+"% + 0px)",top:"-6px",transform:"translate(-50%,-100%)",background:"#0f172a",color:"#fff",borderRadius:9,padding:"8px 11px",fontSize:10.5,fontFamily:FF,minWidth:120,boxShadow:"0 8px 22px rgba(15,23,42,0.30)",pointerEvents:"none",zIndex:5,whiteSpace:"nowrap"}}>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:5}}>
+                            <span style={{fontWeight:800,fontSize:10.5,letterSpacing:-.1,textTransform:"capitalize"}}>{_ymLabel(pt.ym)}</span>
+                            {pctNow!=null && <span style={{color:pctNow>=100?"#22c55e":(pctNow>=70?"#fbbf24":"#f87171"),fontSize:10,fontWeight:900,fontFeatureSettings:"'tnum'"}}>{pctNow}%</span>}
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"auto 1fr",gap:"3px 9px",fontSize:10}}>
+                            <span style={{color:"#94a3b8",fontWeight:600}}>Atual</span>
+                            <span style={{color:"#fff",fontWeight:800,fontFeatureSettings:"'tnum'",textAlign:"right"}}>{_fmtNum(pt.current,p.unit)}</span>
+                            <span style={{color:"#94a3b8",fontWeight:600}}>Meta</span>
+                            <span style={{color:"#fff",fontWeight:800,fontFeatureSettings:"'tnum'",textAlign:"right"}}>{_fmtNum(pt.target,p.unit)}</span>
+                          </div>
+                        </div>;
+                      })()}
+                    </div>
                   }
-                }
-                return <g key={si}>
-                  {area && <path d={area} fill={"url(#gradFill-"+cl.id+"-"+s.pilar.key+")"} stroke="none"/>}
-                  <path d={line} fill="none" stroke={s.pilar.color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
-                  {pts.map(function(pt,i){
-                    if(pt.y==null) return null;
-                    const isHover = hover && hover.seriesIdx===si && hover.pointIdx===i;
-                    return <g key={i}>
-                      {/* Hit area maior pra hover ser fácil */}
-                      <circle cx={pt.x} cy={pt.y} r={14} fill="transparent" style={{cursor:"pointer"}}
-                        onMouseEnter={function(){setHover({seriesIdx:si,pointIdx:i});}}
-                        onMouseLeave={function(){setHover(null);}}/>
-                      <circle cx={pt.x} cy={pt.y} r={isHover?5.5:4} fill="#fff" stroke={s.pilar.color} strokeWidth={isHover?3:2.4} style={{pointerEvents:"none",transition:"r .12s"}}/>
-                    </g>;
-                  })}
-                </g>;
+                </div>;
               })}
-            </svg>
-
-            {/* Tooltip flutuante (HTML, não SVG — escala bem) */}
-            {hover && (function(){
-              const s = series[hover.seriesIdx];
-              const pt = s.points[hover.pointIdx];
-              if(!pt) return null;
-              const ym = months[hover.pointIdx];
-              const xPct = padL + (hover.pointIdx/(months.length-1))*innerW;
-              const left = (xPct/W)*100;
-              const yPct = padT + innerH - (Math.min(maxY,pt.pct)/maxY)*innerH;
-              const top = (yPct/H)*100;
-              const unit = s.pilar.unit||"";
-              return <div style={{position:"absolute",left:"calc("+left.toFixed(2)+"% + 0px)",top:"calc("+top.toFixed(2)+"% - 10px)",transform:"translate(-50%,-100%)",background:"#0f172a",color:"#fff",borderRadius:10,padding:"10px 13px",fontSize:11,fontFamily:FF,minWidth:170,boxShadow:"0 12px 28px rgba(15,23,42,0.30)",pointerEvents:"none",zIndex:5}}>
-                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
-                  <span style={{width:9,height:9,borderRadius:99,background:s.pilar.color}}></span>
-                  <span style={{fontWeight:800,fontSize:11.5,letterSpacing:-.1}}>{s.pilar.label}</span>
-                  <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"capitalize"}}>{_ymFullLabel(ym)}</span>
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,paddingTop:7,borderTop:"1px solid rgba(255,255,255,0.10)"}}>
-                  <div>
-                    <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Atual</div>
-                    <div style={{color:"#fff",fontSize:13.5,fontWeight:800,marginTop:2,fontFeatureSettings:"'tnum'"}}>{_fmtNum(pt.current)}{unit}</div>
-                  </div>
-                  <div>
-                    <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Meta</div>
-                    <div style={{color:"#fff",fontSize:13.5,fontWeight:800,marginTop:2,fontFeatureSettings:"'tnum'"}}>{_fmtNum(pt.target)}{unit}</div>
-                  </div>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,paddingTop:7,borderTop:"1px solid rgba(255,255,255,0.10)"}}>
-                  <span style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>% atingido</span>
-                  <span style={{marginLeft:"auto",color:pt.pct>=100?"#22c55e":(pt.pct>=70?"#fbbf24":"#f87171"),fontSize:13,fontWeight:900,fontFeatureSettings:"'tnum'"}}>{pt.pct}%</span>
-                </div>
-              </div>;
-            })()}
-          </div>
+            </div>
         }
       </div>;
     })()}
