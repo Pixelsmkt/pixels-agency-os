@@ -9992,24 +9992,19 @@ function Sparkline({data, color, width, height}){
 }
 
 function PageClientes({isMob, tasks}){
-  let TASKS = tasks || (typeof [] !== "undefined" ? [] : []);
+  let TASKS = tasks || [];
   const [activeClient,setActiveClient]=useState(null);
   const [activeSection,setActiveSection]=useState("dashboard");
-  const [dashTab,setDashTab]=useState("meta");
-  const [concTab,setConcTab]=useState("meta");
   const [mindmapActive,setMindmapActive]=useState(false);
   const [search,setSearch]=useState("");
   const [showNovo,setShowNovo]=useState(false);
   const [extraClients,setExtraClients]=useState([]);
   const [filterStatus,setFilterStatus]=useState("todos");
-  const [sortCol,setSortCol]=useState(null);
-  const [sortDir,setSortDir]=useState("asc");
-  const [viewMode,setViewMode]=useState("table"); // table | card (legado — não usado no render novo)
   const [bioterExpanded,setBioterExpanded]=useState(false);
 
   const allClients=[...CLIENTS,...extraClients];
 
-  // Keyboard shortcut: / to focus search
+  // Atalho "/" pra focar busca — sem hint visual ("pressione /" removido)
   const searchRef=useRef(null);
   useEffect(()=>{
     const handler=(e)=>{
@@ -10030,203 +10025,302 @@ function PageClientes({isMob, tasks}){
       onMindmap={()=>setMindmapActive(true)}
       onBack={()=>{setActiveClient(null);setActiveSection("dashboard");}}/>;
 
-  // Filter
+  // ── Helpers de data BR (DD/MM/YYYY) ──
+  function _parseBR(iso){
+    if(!iso) return null;
+    const m=String(iso).match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if(m) return new Date(parseInt(m[3]),parseInt(m[2])-1,parseInt(m[1]));
+    const d=new Date(iso);
+    return isNaN(d.getTime())?null:d;
+  }
+  function _daysBetween(a,b){
+    if(!a||!b) return null;
+    const da=new Date(a.getFullYear(),a.getMonth(),a.getDate());
+    const db=new Date(b.getFullYear(),b.getMonth(),b.getDate());
+    return Math.round((db.getTime()-da.getTime())/86400000);
+  }
+  function _fmtRelative(iso){
+    const d=_parseBR(iso); if(!d) return "—";
+    const now=new Date();
+    const days=_daysBetween(d,now);
+    if(days===0) return "hoje";
+    if(days===1) return "ontem";
+    if(days>0&&days<7) return "há "+days+" dias";
+    if(days>=7&&days<30) return "há "+Math.floor(days/7)+(Math.floor(days/7)===1?" semana":" semanas");
+    if(days>=30&&days<365) return "há "+Math.floor(days/30)+(Math.floor(days/30)===1?" mês":" meses");
+    if(days>=365) return "há "+Math.floor(days/365)+(Math.floor(days/365)===1?" ano":" anos");
+    // futuro
+    const a=-days;
+    if(a===1) return "amanhã";
+    if(a<7) return "em "+a+" dias";
+    return "em "+a+" dias";
+  }
+  function _fmtShort(iso){
+    const d=_parseBR(iso); if(!d) return "—";
+    return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+  }
+
+  // ── Helpers de tarefa ── última atualização e próxima ação derivadas
+  function _lastUpdateForClient(clId){
+    const cands=TASKS.filter(function(t){return t&&t.client===clId&&!t.deletedAt;});
+    let latest=null;
+    cands.forEach(function(t){
+      const ts=t.updated_at||t.completedAt||(t.timeline&&t.timeline.length?t.timeline[t.timeline.length-1].at:null);
+      if(!ts) return;
+      const d=new Date(ts);
+      if(isNaN(d.getTime())) return;
+      if(!latest||d>latest) latest=d;
+    });
+    return latest;
+  }
+  function _nextActionForClient(cl){
+    // Prioridade: próxima publishDate futura > demandas em aprovação > nextMeeting
+    const today=new Date(); today.setHours(0,0,0,0);
+    const upcoming=TASKS.filter(function(t){
+      if(!t||t.client!==cl.id||t.deletedAt) return false;
+      if(!t.publishDate) return false;
+      const d=new Date(t.publishDate+"T12:00:00");
+      return !isNaN(d.getTime())&&d>=today&&t.status!=="publicado";
+    }).sort(function(a,b){return String(a.publishDate).localeCompare(String(b.publishDate));});
+    if(upcoming.length>0){
+      const t=upcoming[0];
+      const d=new Date(t.publishDate+"T12:00:00");
+      return {ico:"calendar", color:"#0ea5e9", label:"Publicar "+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0"), sub:(t.title||"sem título").slice(0,32)};
+    }
+    const aprov=TASKS.filter(function(t){return t&&t.client===cl.id&&!t.deletedAt&&(t.status==="demanda"||t.status==="avaliacao"||t.status==="aprovacao_final");}).length;
+    if(aprov>0) return {ico:"check", color:"#a855f7", label:aprov+" em aprovação", sub:"aguardando avaliação"};
+    if(cl.nextMeeting){
+      return {ico:"users", color:"#16a34a", label:"Reunião "+_fmtShort(cl.nextMeeting), sub:_fmtRelative(cl.nextMeeting)};
+    }
+    return null;
+  }
+
+  // ── Filtro principal (somente Todos + Ativos) ──
   let filtered=allClients.filter(function(cl){
-    let matchSearch=search===""||cl.name.toLowerCase().includes(search.toLowerCase())||cl.sector.toLowerCase().includes(search.toLowerCase());
-    let live=getLiveClient(cl.id)||cl;
-    let matchStatus=filterStatus==="todos"||
-      (filterStatus==="ativo"&&cl.status==="ativo")||
-      (filterStatus==="atencao"&&(cl.status==="atencao"||cl.status==="alerta"||live.health<60))||
-      (filterStatus==="pagamento"&&cl.payment&&cl.payment.status==="atrasado");
+    const q=search.trim().toLowerCase();
+    const matchSearch=q===""||(cl.name||"").toLowerCase().indexOf(q)>=0||(cl.sector||"").toLowerCase().indexOf(q)>=0;
+    const matchStatus=filterStatus==="todos"||(filterStatus==="ativo"&&(cl.status||"ativo")==="ativo");
     return matchSearch&&matchStatus;
   });
 
-  // Sort
-  if(sortCol){
-    filtered=[...filtered].sort(function(a,b){
-      let va,vb;
-      if(sortCol==="score"){va=calcScore(a,TASKS);vb=calcScore(b,TASKS);}
-      else if(sortCol==="saude"){va=getLiveClient(a.id).health||a.health;vb=getLiveClient(b.id).health||b.health;}
-      else if(sortCol==="mrr"){va=getLiveClient(a.id).contract||a.contract;vb=getLiveClient(b.id).contract||b.contract;}
-      else if(sortCol==="nome"){va=a.name;vb=b.name;return sortDir==="asc"?va.localeCompare(vb):vb.localeCompare(va);}
-      else {va=0;vb=0;}
-      return sortDir==="asc"?va-vb:vb-va;
-    });
-  }
+  // ── Indicadores ──
+  const _now=new Date();
+  const totalCount=allClients.length;
+  const ativosCount=allClients.filter(function(c){return (c.status||"ativo")==="ativo";}).length;
+  const gruposCount=allClients.filter(function(c){return c.id==="bioter";}).length;  // expansível pra outros grupos no futuro
+  const reunioesProx=allClients.filter(function(c){
+    const d=_parseBR(c.nextMeeting); if(!d) return false;
+    const dd=_daysBetween(_now,d);
+    return dd!=null&&dd>=0&&dd<=14;
+  }).length;
+  const semAtualiz=allClients.filter(function(c){
+    const lastTask=_lastUpdateForClient(c.id);
+    const lastMeet=_parseBR(c.lastMeeting);
+    const last=lastTask&&lastMeet?(lastTask>lastMeet?lastTask:lastMeet):(lastTask||lastMeet);
+    if(!last) return true;
+    return _daysBetween(last,_now)>30;
+  }).length;
 
-  // CSV export
-  const exportCSV=()=>{
-    let rows=[["Cliente","Setor","Saúde","Score","MRR","Pagamento","Última Reunião","Próxima Reunião"]];
-    filtered.forEach(function(cl){
-      let lv=getLiveClient(cl.id)||cl;
-      rows.push([cl.name,cl.sector,lv.health,calcScore(cl,TASKS),lv.contract,cl.payment&&cl.payment.status||"—",cl.lastMeeting||"—",cl.nextMeeting||"—"]);
-    });
-    let csv=rows.map(function(r){return r.join(",");}).join("\n");
-    let a=document.createElement("a");
-    a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
-    a.download="clientes_pixels.csv";a.click();
-  };
-
-  const handleSort=(col)=>{
-    if(sortCol===col)setSortDir(d=>d==="asc"?"desc":"asc");
-    else{setSortCol(col);setSortDir("asc");}
-  };
-
-  const SortIcon=({col})=>{
-    if(sortCol!==col)return<span style={{color:C.td,fontSize:8,marginLeft:3}}>↕</span>;
-    return<span style={{color:C.a,fontSize:9,marginLeft:3}}>{sortDir==="asc"?"↑":"↓"}</span>;
-  };
-
-  const FILTERS=[
-    {id:"todos",    label:"Todos",       count:allClients.length},
-    {id:"ativo",    label:"Ativos",      count:allClients.filter(c=>c.status==="ativo").length},
-    {id:"atencao",  label:"Atenção",     count:allClients.filter(c=>c.status==="atencao"||c.status==="alerta"||c.health<60).length},
-    {id:"pagamento",label:"Pag. Atrasado",count:allClients.filter(c=>c.payment&&c.payment.status==="atrasado").length},
+  const _indicadores=[
+    {l:"Total de clientes",            v:totalCount,    ico:"users",      color:"#64748b"},
+    {l:"Ativos",                       v:ativosCount,   ico:"check",      color:"#16a34a"},
+    {l:"Grupos / multiunidades",       v:gruposCount,   ico:"layers",     color:"#7c3aed"},
+    {l:"Reuniões próximas (14 dias)",  v:reunioesProx,  ico:"calendar",   color:"#0ea5e9"},
+    {l:"Sem atualização recente",      v:semAtualiz,    ico:"flame",      color:"#f59e0b"},
   ];
 
-  return(<div style={{display:"flex",flexDirection:"column",gap:20,fontFamily:"'Inter',system-ui,sans-serif"}}>
+  return (<div style={{display:"flex",flexDirection:"column",gap:22,fontFamily:"'Inter',system-ui,sans-serif"}}>
     {showNovo&&<NovoClienteModal onClose={()=>setShowNovo(false)} onSave={cl=>setExtraClients(p=>[...p,cl])}/>}
 
-    {/* ── HEADER ── modernizado, simétrico, altura 40 ── */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
-      <div>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:26,letterSpacing:-.6}}>Clientes</div>
-        <div style={{color:"#64748b",fontSize:12.5,marginTop:4,fontWeight:500}}>
-          {allClients.length} {allClients.length===1?"cliente ativo":"clientes ativos"} · pressione <kbd style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:5,padding:"1px 6px",fontSize:10,fontWeight:600,color:"#475569",fontFamily:"'Inter',system-ui,sans-serif"}}>/</kbd> pra buscar
-        </div>
+    {/* ── HEADER ── */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:28,letterSpacing:-.7,lineHeight:1.1}}>Clientes</div>
+        <div style={{color:"#64748b",fontSize:13,marginTop:6,fontWeight:500,lineHeight:1.45}}>Central de relacionamento e acompanhamento dos clientes da agência.</div>
       </div>
       <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
         <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
-          <span style={{position:"absolute",left:13,top:"50%",transform:"translateY(-50%)",color:search?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
+          <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:search?"#0f172a":"#94a3b8",pointerEvents:"none",display:"flex"}}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           </span>
           <input ref={searchRef} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar cliente..."
-            style={{background:"#fff",border:`1px solid ${search?"#0f172a":"#e2e8f0"}`,borderRadius:11,padding:"0 36px 0 36px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",width:280,height:40,boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s"}}/>
+            style={{background:"#fff",border:"1px solid "+(search?"#0f172a":"#e2e8f0"),borderRadius:12,padding:"0 36px 0 38px",color:"#0f172a",fontSize:13,fontWeight:500,outline:"none",width:300,height:42,boxSizing:"border-box",fontFamily:"inherit",transition:"border-color .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}/>
           {search&&<button onClick={()=>setSearch("")} title="Limpar busca"
-            style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
+            style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#94a3b8",display:"flex",alignItems:"center",padding:2}}
             onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
             onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>}
         </div>
         <button onClick={()=>setShowNovo(true)}
-          style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:11,padding:"0 18px",height:40,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 4px 12px rgba(15,23,42,0.18)",transition:"all .15s",boxSizing:"border-box"}}
-          onMouseEnter={e=>{e.currentTarget.style.background="#1e293b";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.25)";}}
-          onMouseLeave={e=>{e.currentTarget.style.background="#0f172a";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.18)";}}>
+          style={{background:"linear-gradient(135deg,#7c3aed,#a855f7)",color:"#fff",border:"none",borderRadius:12,padding:"0 20px",height:42,fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 6px 18px rgba(124,58,237,0.30)",transition:"all .15s",boxSizing:"border-box",letterSpacing:.1}}
+          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(124,58,237,0.40)";}}
+          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 18px rgba(124,58,237,0.30)";}}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           Novo cliente
         </button>
       </div>
     </div>
 
-    {/* ── FILTROS POR STATUS ── */}
-    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+    {/* ── INDICADORES — faixa horizontal ── */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
+      {_indicadores.map(function(i,idx){
+        return <div key={idx} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"center",gap:12,boxShadow:"0 1px 2px rgba(15,23,42,0.03)",transition:"all .15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=i.color+"55";e.currentTarget.style.transform="translateY(-1px)";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.transform="";}}>
+          <div style={{width:36,height:36,borderRadius:10,background:i.color+"14",color:i.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n={i.ico} size={16} color={i.color}/>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{i.v}</div>
+            <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginTop:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.l}</div>
+          </div>
+        </div>;
+      })}
+    </div>
+
+    {/* ── FILTROS (só Todos + Ativos) ── */}
+    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
       {[
-        {id:"todos",label:"Todos",count:allClients.length},
-        {id:"ativo",label:"Ativos",count:allClients.filter(c=>c.status==="ativo").length},
-        {id:"atencao",label:"Atenção",count:allClients.filter(c=>c.status==="atencao"||c.status==="alerta"||(c.health||100)<60).length},
-        {id:"pagamento",label:"Pagamento atrasado",count:allClients.filter(c=>c.payment&&c.payment.status==="atrasado").length},
+        {id:"todos",label:"Todos", count:totalCount},
+        {id:"ativo",label:"Ativos",count:ativosCount},
       ].map(function(f){
         const active=filterStatus===f.id;
         return <button key={f.id} onClick={()=>setFilterStatus(f.id)}
-          style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"6px 14px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:"inherit",transition:"all .12s"}}>
+          style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:99,padding:"7px 16px",fontSize:12,fontWeight:active?700:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,fontFamily:"inherit",transition:"all .12s"}}>
           {f.label}
-          {f.count>0&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700}}>{f.count}</span>}
+          {f.count>0&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{f.count}</span>}
         </button>;
       })}
     </div>
 
-    {/* ── GRID DE CARDS ── */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14}}>
+    {/* ── GRID DE CARDS ── compactos e estratégicos ── */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
       {filtered.map(function(cl){
         const profile=getClientProfile(cl.id);
         const isBioterGroup=cl.id==="bioter";
         const isExpanded=bioterExpanded&&isBioterGroup;
-        const mrr=isBioterGroup?getBioterGroupMRR():(profile&&profile.mrr)||cl.contract||0;
-        const stCfg=getStatusConfig((profile&&profile.status)||cl.status||"ativo");
+        const isAtivo=(cl.status||"ativo")==="ativo";
         const responsavelId=(profile&&profile.responsavel_interno)||cl.manager;
         const respUser=responsavelId&&typeof TEAM!=="undefined"?TEAM.find(function(u){return u.id===responsavelId;}):null;
         const _accentCl = cl.color || "#94a3b8";
+        const lastUpdate = _lastUpdateForClient(cl.id);
+        const lastMeetD = _parseBR(cl.lastMeeting);
+        const _lastEff = lastUpdate&&lastMeetD ? (lastUpdate>lastMeetD?lastUpdate:lastMeetD) : (lastUpdate||lastMeetD);
+        const _lastLabel = _lastEff ? "há "+_daysBetween(_lastEff,_now)+" dia"+(_daysBetween(_lastEff,_now)===1?"":"s") : "sem atividade";
+        const _nextAct = _nextActionForClient(cl);
+        const _nextMeetDays = cl.nextMeeting ? _daysBetween(_now,_parseBR(cl.nextMeeting)) : null;
+
         return <div key={cl.id}
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:0,boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",transition:"all .2s cubic-bezier(.4,0,.2,1)",cursor:"pointer",overflow:"hidden",position:"relative"}}
-          onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 10px 28px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=_accentCl+"55";e.currentTarget.style.transform="translateY(-2px)";}}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:0,boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",transition:"all .2s cubic-bezier(.4,0,.2,1)",cursor:"pointer",overflow:"hidden",position:"relative"}}
+          onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=_accentCl+"55";e.currentTarget.style.transform="translateY(-2px)";}}
           onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}
           onClick={function(e){if(e.target.tagName!=="BUTTON"&&!e.target.closest("button"))setActiveClient(cl);}}>
 
-          {/* Faixa fina de accent no topo */}
+          {/* Faixa accent topo */}
           <div style={{height:3,background:_accentCl}}/>
 
-          {/* HEADER do card — logo grande + nome + status pill */}
-          <div style={{padding:"18px 18px 14px",display:"flex",alignItems:"flex-start",gap:13}}>
-            <div style={{width:52,height:52,borderRadius:13,background:_accentCl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 4px 12px "+_accentCl+"30"}}>
+          {/* HEADER — logo + nome + segmento + status */}
+          <div style={{padding:"16px 16px 12px",display:"flex",alignItems:"flex-start",gap:12}}>
+            <div style={{width:46,height:46,borderRadius:12,background:_accentCl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 3px 10px "+_accentCl+"30"}}>
               {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
-                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:38,maxWidth:44,objectFit:"contain"}}/>
-                : <span style={{color:"#fff",fontWeight:800,fontSize:18,letterSpacing:-.5}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</span>
+                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:34,maxWidth:40,objectFit:"contain"}}/>
+                : <span style={{color:"#fff",fontWeight:800,fontSize:16,letterSpacing:-.5}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</span>
               }
             </div>
-            <div style={{flex:1,minWidth:0,paddingTop:2}}>
-              <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:3}}>
-                <span style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.2}}>{(profile&&profile.name)||cl.name}</span>
-                {isBioterGroup&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.5,border:"1px solid #ddd6fe"}}>GRUPO · {BIOTER_GROUP_UNITS.length} UNID</span>}
+            <div style={{flex:1,minWidth:0,paddingTop:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:3}}>
+                <span style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.3,lineHeight:1.2}}>{(profile&&profile.name)||cl.name}</span>
+                {isBioterGroup&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,border:"1px solid #ddd6fe"}}>{BIOTER_GROUP_UNITS.length} UNIDADES</span>}
               </div>
-              <div style={{color:"#64748b",fontSize:11.5,fontWeight:500,lineHeight:1.45,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
+              <div style={{color:"#64748b",fontSize:11,fontWeight:500,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
                 {(profile&&profile.segmento)||cl.sector}
               </div>
             </div>
-            <span style={{background:stCfg.bg,color:stCfg.color,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+stCfg.color+"33"}}>{stCfg.label}</span>
+            <span style={{background:isAtivo?"#dcfce7":"#f1f5f9",color:isAtivo?"#15803d":"#64748b",fontSize:9,fontWeight:800,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+(isAtivo?"#bbf7d0":"#e2e8f0")}}>{isAtivo?"Ativo":"Inativo"}</span>
           </div>
 
-          {/* DADOS CADASTRAIS — ícones SVG, visual clean */}
-          {!isBioterGroup&&profile&&(profile.cnpj||profile.ruc||profile.cidade||profile.estado||profile.telefone)&&<div style={{padding:"12px 18px 16px",borderTop:"1px solid #f1f5f9",display:"flex",flexDirection:"column",gap:8}}>
-            {profile.cnpj&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
-              <span style={{width:18,height:18,borderRadius:5,background:"#f1f5f9",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/></svg>
+          {/* LINHA — cidade · responsável (avatar) */}
+          <div style={{padding:"0 16px 12px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            {(profile&&(profile.cidade||profile.estado))&&<span style={{display:"inline-flex",alignItems:"center",gap:5,color:"#475569",fontSize:11.5,fontWeight:600}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              {[profile.cidade,profile.estado].filter(Boolean).join("/")}
+            </span>}
+            {respUser&&<span style={{display:"inline-flex",alignItems:"center",gap:6,color:"#475569",fontSize:11.5,fontWeight:600,marginLeft:"auto"}}>
+              {(function(){
+                if(typeof UserAvatar==="function") return <UserAvatar user={respUser} size={22}/>;
+                return <span style={{width:22,height:22,borderRadius:"50%",background:respUser.color||"#94a3b8",color:"#fff",fontSize:9.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{respUser.av||(respUser.name||"?")[0]}</span>;
+              })()}
+              <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:100}}>{respUser.name?respUser.name.split(" ")[0]:"—"}</span>
+            </span>}
+          </div>
+
+          {/* ─── BLOCO ESTRATÉGICO — última atualização + próxima ação + próxima reunião ─── */}
+          {!isBioterGroup&&<div style={{padding:"12px 16px",borderTop:"1px solid #f1f5f9",background:"#fafbfc",display:"flex",flexDirection:"column",gap:9}}>
+            {/* Última atualização */}
+            <div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
+              <span style={{width:22,height:22,borderRadius:6,background:"#fff",border:"1px solid #e2e8f0",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",flexShrink:0}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               </span>
-              <span style={{color:"#0f172a",fontWeight:600,fontFamily:"monospace",fontSize:11.5,fontFeatureSettings:"'tnum'"}}>{profile.cnpj}</span>
-            </div>}
-            {profile.ruc&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
-              <span style={{width:18,height:18,borderRadius:5,background:"#f1f5f9",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0,fontSize:8.5,fontWeight:800}}>R</span>
-              <span style={{color:"#0f172a",fontWeight:600,fontFamily:"monospace",fontSize:11.5,fontFeatureSettings:"'tnum'"}}>{profile.ruc}</span>
-            </div>}
-            {(profile.cidade||profile.estado)&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
-              <span style={{width:18,height:18,borderRadius:5,background:"#f1f5f9",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span style={{color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,fontSize:9.5}}>Última atualização</span>
+              <span style={{marginLeft:"auto",color:"#0f172a",fontWeight:700,fontSize:11.5}}>{_lastLabel}</span>
+            </div>
+            {/* Próxima ação */}
+            {_nextAct&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
+              <span style={{width:22,height:22,borderRadius:6,background:_nextAct.color+"14",border:"1px solid "+_nextAct.color+"33",display:"inline-flex",alignItems:"center",justifyContent:"center",color:_nextAct.color,flexShrink:0}}>
+                <Ico n={_nextAct.ico} size={11} color={_nextAct.color}/>
               </span>
-              <span style={{color:"#0f172a",fontWeight:600}}>{[profile.cidade,profile.estado].filter(Boolean).join("/")}</span>
+              <span style={{color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,fontSize:9.5}}>Próxima ação</span>
+              <span style={{marginLeft:"auto",color:_nextAct.color,fontWeight:800,fontSize:11.5,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{_nextAct.label}</span>
             </div>}
-            {profile.telefone&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
-              <span style={{width:18,height:18,borderRadius:5,background:"#f1f5f9",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",flexShrink:0}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+            {/* Próxima reunião — só se existir */}
+            {cl.nextMeeting&&_nextMeetDays!=null&&_nextMeetDays>=0&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
+              <span style={{width:22,height:22,borderRadius:6,background:(_nextMeetDays<=7?"#dcfce7":"#eff6ff"),border:"1px solid "+(_nextMeetDays<=7?"#86efac":"#bfdbfe"),display:"inline-flex",alignItems:"center",justifyContent:"center",color:(_nextMeetDays<=7?"#16a34a":"#0ea5e9"),flexShrink:0}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               </span>
-              <span style={{color:"#0f172a",fontWeight:600,fontFamily:"monospace",fontSize:11.5,fontFeatureSettings:"'tnum'"}}>{profile.telefone}</span>
+              <span style={{color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,fontSize:9.5}}>Próxima reunião</span>
+              <span style={{marginLeft:"auto",color:"#0f172a",fontWeight:700,fontSize:11.5}}>{_fmtShort(cl.nextMeeting)}{_nextMeetDays===0?" · hoje":_nextMeetDays===1?" · amanhã":_nextMeetDays<=7?" · em "+_nextMeetDays+"d":""}</span>
             </div>}
           </div>}
 
-          {/* BOTÃO EXPANDIR — só Bioter (visual igual aos outros campos pra ficar coerente) */}
-          {isBioterGroup&&<div style={{padding:"12px 18px 16px",borderTop:"1px solid #f1f5f9"}}>
+          {/* ─── GRUPO BIOTER — botão Ver unidades ─── */}
+          {isBioterGroup&&<div style={{padding:"12px 16px 14px",borderTop:"1px solid #f1f5f9",background:"#fafbfc"}}>
             <button onClick={function(e){e.stopPropagation();setBioterExpanded(!bioterExpanded);}}
-              style={{width:"100%",background:bioterExpanded?"#f5f3ff":"#fafbfc",color:bioterExpanded?"#7c3aed":"#475569",border:`1px solid ${bioterExpanded?"#ddd6fe":"#e2e8f0"}`,borderRadius:10,padding:"10px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s"}}
+              style={{width:"100%",background:bioterExpanded?"#f5f3ff":"#fff",color:bioterExpanded?"#7c3aed":"#475569",border:"1px solid "+(bioterExpanded?"#ddd6fe":"#e2e8f0"),borderRadius:10,padding:"10px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s"}}
               onMouseEnter={e=>{if(!bioterExpanded){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.borderColor="#cbd5e1";}}}
-              onMouseLeave={e=>{if(!bioterExpanded){e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderColor="#e2e8f0";}}}>
+              onMouseLeave={e=>{if(!bioterExpanded){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:bioterExpanded?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
               {bioterExpanded?"Ocultar":"Ver"} unidades
-              <span style={{background:bioterExpanded?"#7c3aed":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,marginLeft:2}}>{BIOTER_GROUP_UNITS.length}</span>
+              <span style={{background:bioterExpanded?"#7c3aed":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,marginLeft:2,fontFeatureSettings:"'tnum'"}}>{BIOTER_GROUP_UNITS.length}</span>
             </button>
           </div>}
 
-          {/* LISTA DE UNIDADES — quando expandida */}
-          {isExpanded&&<div style={{padding:"0 18px 16px",display:"flex",flexDirection:"column",gap:6}}>
+          {/* Lista de unidades expandida */}
+          {isExpanded&&<div style={{padding:"0 16px 14px",display:"flex",flexDirection:"column",gap:6}}>
             {BIOTER_GROUP_UNITS.map(function(u){
-              return <div key={u.id}
-                style={{padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10}}>
-                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700}}>{u.name}</div>
-                <div style={{color:"#94a3b8",fontSize:10.5,marginTop:3,fontWeight:500}}>{u.cidade}/{u.estado}{u.cnpj?" · "+u.cnpj:""}{u.ruc?" · RUC "+u.ruc:""}</div>
+              return <div key={u.id} style={{padding:"10px 12px",background:"#fff",border:"1px solid #f1f5f9",borderRadius:10,display:"flex",alignItems:"center",gap:9}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.1}}>{u.name}</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600,display:"flex",alignItems:"center",gap:7}}>
+                    <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                      {u.cidade}/{u.estado}
+                    </span>
+                  </div>
+                </div>
+                <span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",border:"1px solid #bbf7d0"}}>Ativa</span>
               </div>;
             })}
           </div>}
         </div>;
       })}
-      {filtered.length===0&&<div style={{gridColumn:"1/-1",background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:12,padding:48,textAlign:"center",color:"#94a3b8",fontSize:13}}>Nenhum cliente encontrado.</div>}
+      {filtered.length===0&&<div style={{gridColumn:"1/-1",background:"#fff",border:"1px dashed #e2e8f0",borderRadius:14,padding:"56px 32px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+        <div style={{width:56,height:56,borderRadius:"50%",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </div>
+        <div style={{color:"#0f172a",fontSize:14,fontWeight:700,letterSpacing:-.2}}>Nenhum cliente encontrado</div>
+        <div style={{color:"#94a3b8",fontSize:12,fontWeight:500,maxWidth:320,lineHeight:1.45}}>Tente outra busca ou ajuste o filtro acima.</div>
+      </div>}
     </div>
   </div>);
 }
