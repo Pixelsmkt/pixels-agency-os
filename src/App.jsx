@@ -9108,9 +9108,11 @@ function CMetas({cl, accentColor, readOnly}){
      desc:"Taxa media de engajamento por publicacao",          unit:"%", scope:"mensal"},
     {key:"leads",       label:"Leads",       ico:"flame",       color:"#f59e0b",
      desc:"Leads gerados via trafego pago e organico",         unit:"", scope:"mensal"},
-    {key:"vendas",      label:"Vendas digital", ico:"trending-up", color:"#16a34a",
-     desc:"Vendas/conversoes atribuidas ao marketing",         unit:"", scope:"mensal"},
-    {key:"roi",         label:"ROI",         ico:"dollar",      color:"#7c3aed",
+    {key:"vendas",      label:"Vendas digital",     ico:"trending-up", color:"#16a34a",
+     desc:"Vendas/conversoes atribuidas ao marketing",         unit:"",  scope:"mensal"},
+    {key:"faturamento", label:"Faturamento digital",ico:"dollar",      color:"#14b8a6",
+     desc:"Receita gerada por canais digitais (R$)",           unit:"",  scope:"mensal"},
+    {key:"roi",         label:"ROI",                ico:"chart",       color:"#7c3aed",
      desc:"Retorno sobre investimento em midia paga",          unit:"x", scope:"mensal"},
   ];
 
@@ -9123,6 +9125,7 @@ function CMetas({cl, accentColor, readOnly}){
       else if(t.indexOf("engaj")>=0||t.indexOf("eng.")>=0) k="engajamento";
       else if(t.indexOf("lead")>=0) k="leads";
       else if(t.indexOf("venda")>=0||t.indexOf("conver")>=0) k="vendas";
+      else if(t.indexOf("faturament")>=0||t.indexOf("receita")>=0) k="faturamento";
       else if(t.indexOf("roi")>=0||t.indexOf("retorno")>=0) k="roi";
       if(k && !out[k]) out[k]={target:Number(g.target)||0,current:Number(g.current)||0};
     });
@@ -9238,7 +9241,7 @@ function CMetas({cl, accentColor, readOnly}){
         </div>
         <div>
           <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Metas — {cl.name}</div>
-          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>5 pilares fixos: o que combinamos no inicio do ciclo e onde estamos agora</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>6 pilares fixos: o que combinamos no inicio do ciclo e onde estamos agora</div>
         </div>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -9332,95 +9335,192 @@ function CMetas({cl, accentColor, readOnly}){
       })}
     </div>
 
-    {/* ── GRÁFICO DE EVOLUÇÃO — % de meta atingida por pilar nos últimos 6 meses ── */}
+    {/* ── GRÁFICO DE EVOLUÇÃO — % atingido por pilar (anchora no mês selecionado) ── */}
     {(function(){
-      // Coleta os últimos 6 meses (do mais antigo pro mais recente)
+      // Janela de 6 meses TERMINANDO no refMonth (não no mês corrente do calendário)
       const months = [];
-      for(let i=5;i>=0;i--) months.push(_ymShift(_currentYM,-i));
-      // Calcula % atingido por pilar por mês
+      for(let i=5;i>=0;i--) months.push(_ymShift(refMonth,-i));
+      // Calcula % + valores absolutos por pilar por mês
       const series = PILARES.map(function(p){
         const points = months.map(function(ym){
           const snap = _readSnapshot(p.key, ym);
           if(!snap.target||snap.target<=0) return null;
-          return Math.round(Math.min(150, (snap.current/snap.target)*100));
+          const pct = Math.round((snap.current/snap.target)*100);
+          return {pct: Math.min(150, pct), current: snap.current, target: snap.target};
         });
-        const hasData = points.some(function(v){return v!=null&&v>0;});
+        const hasData = points.some(function(v){return v!=null;});
         return {pilar:p, points:points, hasData:hasData};
       });
       const anySeries = series.some(function(s){return s.hasData;});
-      const W=720, H=180, padL=38, padR=18, padT=18, padB=34;
+      const W=820, H=240, padL=44, padR=24, padT=26, padB=46;
       const innerW=W-padL-padR, innerH=H-padT-padB;
-      const maxY=Math.max(110, ...series.flatMap(function(s){return s.points.filter(function(v){return v!=null;});}));
-      return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"18px 20px",fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0}}>
-            <div style={{width:36,height:36,borderRadius:10,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              {typeof Ico==="function" && <Ico n="trending-up" size={17} color={accent}/>}
+      const maxYRaw=Math.max(110, ...series.flatMap(function(s){return s.points.filter(function(v){return v!=null;}).map(function(p){return p.pct;});}));
+      const maxY = Math.min(150, Math.max(110, Math.ceil(maxYRaw/25)*25));
+      // Hover state
+      const [hover, setHover] = useState(null); // {seriesIdx, pointIdx}
+      function _fmtNum(n){
+        if(n==null) return "—";
+        try{return Number(n).toLocaleString("pt-BR",{maximumFractionDigits:2});}catch(e){return String(n);}
+      }
+      function _ymShortLabel(ym){
+        const parts=ym.split("-");
+        const mn=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+        return (mn[parseInt(parts[1],10)-1]||"?")+"/"+parts[0].slice(-2);
+      }
+      function _ymFullLabel(ym){ return _ymLabel(ym); }
+
+      return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"20px 22px",fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)",position:"relative"}}>
+        {/* Header + legenda */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+            <div style={{width:38,height:38,borderRadius:11,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+accent+"22"}}>
+              {typeof Ico==="function" && <Ico n="trending-up" size={18} color={accent}/>}
             </div>
             <div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>Evolução das metas</div>
-              <div style={{color:"#64748b",fontSize:11,marginTop:2,fontWeight:500}}>% atingido por pilar nos últimos 6 meses</div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3,lineHeight:1.1}}>Evolução das metas</div>
+              <div style={{color:"#64748b",fontSize:11.5,marginTop:3,fontWeight:500}}>Últimos 6 meses · passe o mouse nos pontos pra ver atual e meta</div>
             </div>
           </div>
-          {/* Legenda */}
-          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:11,flexWrap:"wrap"}}>
             {PILARES.map(function(p){
-              return <span key={p.key} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10.5,fontWeight:700,color:"#475569",letterSpacing:-.05}}>
-                <span style={{width:9,height:9,borderRadius:3,background:p.color,boxShadow:"0 0 0 2px "+p.color+"22"}}></span>
+              const s = series.find(function(x){return x.pilar.key===p.key;});
+              const active = s && s.hasData;
+              return <span key={p.key} style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:700,color:active?"#0f172a":"#cbd5e1",letterSpacing:-.05,padding:"3px 9px",background:active?p.color+"0d":"#f8fafc",border:"1px solid "+(active?p.color+"22":"#eef0f3"),borderRadius:99,transition:"all .15s"}}>
+                <span style={{width:8,height:8,borderRadius:99,background:active?p.color:"#e2e8f0"}}></span>
                 {p.label}
               </span>;
             })}
           </div>
         </div>
+
         {!anySeries
-          ? <div style={{padding:"42px 0",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontStyle:"italic"}}>Sem dados de evolução ainda. Preencha o atual/meta de cada pilar nos meses pra ver o gráfico.</div>
-          : <div style={{overflowX:"auto"}}>
-            <svg width={W} height={H} viewBox={"0 0 "+W+" "+H} style={{display:"block",maxWidth:"100%"}}>
-              {/* Eixo Y guias */}
-              {[0,25,50,75,100].map(function(g,i){
+          ? <div style={{padding:"50px 0",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:9}}>
+              <div style={{width:48,height:48,borderRadius:"50%",background:"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
+                {typeof Ico==="function" && <Ico n="trending-up" size={20} color="#cbd5e1"/>}
+              </div>
+              <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Sem dados de evolução ainda</div>
+              <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,maxWidth:380,lineHeight:1.5}}>Preencha o ATUAL e a META de cada pilar no seletor de mês acima — o gráfico vai sendo desenhado mês a mês.</div>
+            </div>
+          : <div style={{overflowX:"auto",position:"relative"}}>
+            <svg width={W} height={H} viewBox={"0 0 "+W+" "+H} style={{display:"block",maxWidth:"100%",userSelect:"none"}}>
+              <defs>
+                {PILARES.map(function(p){
+                  return <linearGradient key={p.key} id={"gradFill-"+cl.id+"-"+p.key} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={p.color} stopOpacity="0.18"/>
+                    <stop offset="100%" stopColor={p.color} stopOpacity="0"/>
+                  </linearGradient>;
+                })}
+              </defs>
+
+              {/* Eixo Y guias (mais leves) */}
+              {[0,25,50,75,100].concat(maxY>100?[maxY]:[]).map(function(g,i){
                 const y = padT + innerH - (g/maxY)*innerH;
+                const isMeta = g===100;
                 return <g key={i}>
-                  <line x1={padL} x2={W-padR} y1={y} y2={y} stroke={g===100?"#16a34a44":"#e2e8f0"} strokeWidth={g===100?1.5:1} strokeDasharray={g===100?"":""}/>
-                  <text x={padL-6} y={y+3} textAnchor="end" fontSize="9.5" fill="#94a3b8" fontWeight="600" fontFamily="inherit">{g}%</text>
+                  <line x1={padL} x2={W-padR} y1={y} y2={y}
+                    stroke={isMeta?"#16a34a":"#f1f5f9"}
+                    strokeWidth={isMeta?1.5:1}
+                    strokeDasharray={isMeta?"4 3":""}/>
+                  <text x={padL-8} y={y+3} textAnchor="end" fontSize="9.5" fill={isMeta?"#16a34a":"#94a3b8"} fontWeight={isMeta?800:600} fontFamily="inherit">{g}%</text>
                 </g>;
               })}
-              {/* Eixo X — meses */}
+              {/* Label da linha de meta */}
+              <text x={W-padR} y={padT+innerH-(100/maxY)*innerH-5} textAnchor="end" fontSize="8.5" fill="#16a34a" fontWeight="800" fontFamily="inherit" letterSpacing=".4">META 100%</text>
+
+              {/* Highlight do mês selecionado (refMonth) */}
+              {(function(){
+                const idx = months.indexOf(refMonth);
+                if(idx<0) return null;
+                const x = padL + (idx/(months.length-1))*innerW;
+                return <g>
+                  <line x1={x} x2={x} y1={padT} y2={H-padB} stroke={accent} strokeWidth="1.2" strokeDasharray="2 4" opacity="0.35"/>
+                  <rect x={x-26} y={H-padB+2} width="52" height="18" rx="9" fill={accent}/>
+                  <text x={x} y={H-padB+15} textAnchor="middle" fontSize="9.5" fill="#fff" fontWeight="800" fontFamily="inherit" letterSpacing=".2">{_ymShortLabel(refMonth)}</text>
+                </g>;
+              })()}
+
+              {/* Eixo X — meses (label menor pros não-selecionados) */}
               {months.map(function(ym,i){
+                if(ym===refMonth) return null; // já mostrado destacado acima
                 const x = padL + (i/(months.length-1))*innerW;
-                const parts=ym.split("-");
-                const mn=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
-                const label=(mn[parseInt(parts[1],10)-1]||"?")+"/"+parts[0].slice(-2);
-                const isCurrent = ym===_currentYM;
-                return <g key={ym}>
-                  <text x={x} y={H-padB+18} textAnchor="middle" fontSize="10" fill={isCurrent?accent:"#64748b"} fontWeight={isCurrent?800:600} fontFamily="inherit">{label}</text>
-                </g>;
+                return <text key={ym} x={x} y={H-padB+15} textAnchor="middle" fontSize="9.5" fill="#94a3b8" fontWeight="600" fontFamily="inherit">{_ymShortLabel(ym)}</text>;
               })}
-              {/* Linha de meta = 100% (já desenhada acima) */}
-              {/* Séries por pilar */}
+
+              {/* Séries: área preenchida + linha + pontos */}
               {series.map(function(s,si){
                 if(!s.hasData) return null;
                 const pts = s.points.map(function(v,i){
                   const x = padL + (i/(months.length-1))*innerW;
-                  const y = v==null ? null : padT + innerH - (Math.min(maxY,v)/maxY)*innerH;
+                  const y = v==null ? null : padT + innerH - (Math.min(maxY,v.pct)/maxY)*innerH;
                   return {x,y,v};
                 });
-                // Path connecting non-null points
-                let path="";
+                // Path da linha (skipping null)
+                let line="";
                 let started=false;
                 pts.forEach(function(pt){
                   if(pt.y==null){started=false;return;}
-                  if(!started){path += "M"+pt.x.toFixed(1)+" "+pt.y.toFixed(1); started=true;}
-                  else path += " L"+pt.x.toFixed(1)+" "+pt.y.toFixed(1);
+                  if(!started){line += "M"+pt.x.toFixed(1)+" "+pt.y.toFixed(1); started=true;}
+                  else line += " L"+pt.x.toFixed(1)+" "+pt.y.toFixed(1);
                 });
+                // Path da área (linha + fechamento na base)
+                let area="";
+                if(line){
+                  const valid = pts.filter(function(p){return p.y!=null;});
+                  if(valid.length>0){
+                    area = line + " L"+valid[valid.length-1].x.toFixed(1)+" "+(padT+innerH).toFixed(1)+" L"+valid[0].x.toFixed(1)+" "+(padT+innerH).toFixed(1)+" Z";
+                  }
+                }
                 return <g key={si}>
-                  <path d={path} fill="none" stroke={s.pilar.color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.92"/>
+                  {area && <path d={area} fill={"url(#gradFill-"+cl.id+"-"+s.pilar.key+")"} stroke="none"/>}
+                  <path d={line} fill="none" stroke={s.pilar.color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"/>
                   {pts.map(function(pt,i){
                     if(pt.y==null) return null;
-                    return <circle key={i} cx={pt.x} cy={pt.y} r={3.5} fill="#fff" stroke={s.pilar.color} strokeWidth="2.2"/>;
+                    const isHover = hover && hover.seriesIdx===si && hover.pointIdx===i;
+                    return <g key={i}>
+                      {/* Hit area maior pra hover ser fácil */}
+                      <circle cx={pt.x} cy={pt.y} r={14} fill="transparent" style={{cursor:"pointer"}}
+                        onMouseEnter={function(){setHover({seriesIdx:si,pointIdx:i});}}
+                        onMouseLeave={function(){setHover(null);}}/>
+                      <circle cx={pt.x} cy={pt.y} r={isHover?5.5:4} fill="#fff" stroke={s.pilar.color} strokeWidth={isHover?3:2.4} style={{pointerEvents:"none",transition:"r .12s"}}/>
+                    </g>;
                   })}
                 </g>;
               })}
             </svg>
+
+            {/* Tooltip flutuante (HTML, não SVG — escala bem) */}
+            {hover && (function(){
+              const s = series[hover.seriesIdx];
+              const pt = s.points[hover.pointIdx];
+              if(!pt) return null;
+              const ym = months[hover.pointIdx];
+              const xPct = padL + (hover.pointIdx/(months.length-1))*innerW;
+              const left = (xPct/W)*100;
+              const yPct = padT + innerH - (Math.min(maxY,pt.pct)/maxY)*innerH;
+              const top = (yPct/H)*100;
+              const unit = s.pilar.unit||"";
+              return <div style={{position:"absolute",left:"calc("+left.toFixed(2)+"% + 0px)",top:"calc("+top.toFixed(2)+"% - 10px)",transform:"translate(-50%,-100%)",background:"#0f172a",color:"#fff",borderRadius:10,padding:"10px 13px",fontSize:11,fontFamily:FF,minWidth:170,boxShadow:"0 12px 28px rgba(15,23,42,0.30)",pointerEvents:"none",zIndex:5}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
+                  <span style={{width:9,height:9,borderRadius:99,background:s.pilar.color}}></span>
+                  <span style={{fontWeight:800,fontSize:11.5,letterSpacing:-.1}}>{s.pilar.label}</span>
+                  <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"capitalize"}}>{_ymFullLabel(ym)}</span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,paddingTop:7,borderTop:"1px solid rgba(255,255,255,0.10)"}}>
+                  <div>
+                    <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Atual</div>
+                    <div style={{color:"#fff",fontSize:13.5,fontWeight:800,marginTop:2,fontFeatureSettings:"'tnum'"}}>{_fmtNum(pt.current)}{unit}</div>
+                  </div>
+                  <div>
+                    <div style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Meta</div>
+                    <div style={{color:"#fff",fontSize:13.5,fontWeight:800,marginTop:2,fontFeatureSettings:"'tnum'"}}>{_fmtNum(pt.target)}{unit}</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6,marginTop:8,paddingTop:7,borderTop:"1px solid rgba(255,255,255,0.10)"}}>
+                  <span style={{color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>% atingido</span>
+                  <span style={{marginLeft:"auto",color:pt.pct>=100?"#22c55e":(pt.pct>=70?"#fbbf24":"#f87171"),fontSize:13,fontWeight:900,fontFeatureSettings:"'tnum'"}}>{pt.pct}%</span>
+                </div>
+              </div>;
+            })()}
           </div>
         }
       </div>;
@@ -9623,10 +9723,76 @@ function COngoing({cl, isMob}){
     return parts[1]+"º trimestre de "+parts[0];
   }
 
-  const TEAM_OPTS = (typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u.level && u.level<=2;});
+  // Whitelist explícito da agência pra Responsável (Gustavo, Vinicius, Hellen, Ocsana, Erick)
+  const _RESP_IDS = ["gustavo","vinicius","ellen","ocsana","erick"];
+  const TEAM_OPTS = (typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return _RESP_IDS.indexOf(u.id)>=0;});
 
   function _sectionCard(){
     return {background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"};
+  }
+
+  // ── DateField — botão moderno que abre o picker nativo ao clicar ──
+  function DateField(props){
+    const inputRef = useRef(null);
+    function _open(){
+      try{
+        if(inputRef.current){
+          if(typeof inputRef.current.showPicker==="function") inputRef.current.showPicker();
+          else inputRef.current.focus();
+        }
+      }catch(e){
+        if(inputRef.current) inputRef.current.focus();
+      }
+    }
+    const hasVal = !!props.value;
+    const labelBR = hasVal ? (props.value.slice(8,10)+"/"+props.value.slice(5,7)+"/"+props.value.slice(0,4)) : (props.placeholder||"Selecionar data");
+    const _size = props.size||"sm"; // sm | md
+    const _h = _size==="md" ? 38 : 32;
+    const _fs = _size==="md" ? 13 : 11.5;
+    return <div onClick={function(e){e.stopPropagation();_open();}}
+      style={{display:"inline-flex",alignItems:"center",gap:7,background:hasVal?"#fff":"#fafbfc",border:"1px solid "+(hasVal?accent+"33":"#e2e8f0"),borderRadius:9,padding:"0 11px",height:_h,fontSize:_fs,color:hasVal?"#0f172a":"#94a3b8",fontWeight:hasVal?700:600,fontFamily:FF,cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",minWidth:_size==="md"?160:120,boxSizing:"border-box"}}
+      onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"66";e.currentTarget.style.background="#fff";}}
+      onMouseLeave={function(e){e.currentTarget.style.borderColor=hasVal?accent+"33":"#e2e8f0";e.currentTarget.style.background=hasVal?"#fff":"#fafbfc";}}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={hasVal?accent:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <span style={{whiteSpace:"nowrap"}}>{labelBR}</span>
+      {hasVal && !props.readOnly && <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();props.onChange&&props.onChange("");}} title="Limpar data"
+        style={{marginLeft:"auto",background:"transparent",border:"none",cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center",color:"#94a3b8"}}
+        onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+        onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>}
+      <input ref={inputRef} type="date" value={props.value||""} onChange={function(e){props.onChange&&props.onChange(e.target.value);}}
+        style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
+    </div>;
+  }
+
+  // ── RespAvatars — fileira de fotos circulares pra selecionar responsável ──
+  function RespAvatars(props){
+    const sel = props.value||"";
+    const sz = props.size||26;
+    return <div style={{display:"inline-flex",alignItems:"center",gap:5,flexShrink:0}}>
+      {TEAM_OPTS.map(function(u){
+        const active = sel===u.id;
+        const photo = (u.profile_data && u.profile_data.photo) || ((typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id))||null);
+        const ini = (u.av||(u.name||"?")[0]||"?").toUpperCase();
+        return <button key={u.id} type="button"
+          title={u.name+(active?" (selecionado)":" — clique pra atribuir")}
+          onClick={function(e){e.stopPropagation();props.onChange&&props.onChange(active?"":u.id);}}
+          style={{background:"transparent",border:"none",padding:0,cursor:"pointer",borderRadius:"50%",lineHeight:0,position:"relative",transition:"transform .12s",transform:active?"scale(1.0)":"scale(.94)",opacity:sel&&!active?0.45:1,filter:sel&&!active?"grayscale(.6)":"none"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.05)";e.currentTarget.style.opacity=1;e.currentTarget.style.filter="none";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform=active?"scale(1.0)":"scale(.94)";e.currentTarget.style.opacity=sel&&!active?0.45:1;e.currentTarget.style.filter=sel&&!active?"grayscale(.6)":"none";}}>
+          {photo
+            ? <img src={photo} alt={u.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",display:"block",boxShadow:active?"0 0 0 2.5px "+(u.color||accent)+", 0 2px 6px rgba(15,23,42,0.15)":"0 0 0 1.5px #e2e8f0"}}/>
+            : <span style={{display:"inline-flex",width:sz,height:sz,borderRadius:"50%",background:u.color||"#94a3b8",color:"#fff",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.42),fontFamily:FF,boxShadow:active?"0 0 0 2.5px "+(u.color||accent)+", 0 2px 6px rgba(15,23,42,0.15)":"0 0 0 1.5px #e2e8f0"}}>{ini}</span>
+          }
+          {active && <span style={{position:"absolute",right:-2,bottom:-2,width:11,height:11,borderRadius:"50%",background:"#16a34a",border:"2px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+            <svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>}
+        </button>;
+      })}
+    </div>;
   }
 
   function MiniResume(props){
@@ -9678,13 +9844,11 @@ function COngoing({cl, isMob}){
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
         <div>
           <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Última reunião</div>
-          <input type="date" value={data.reunioes.ultima||""} onChange={function(e){setReuniaoField("ultima",e.target.value);}}
-            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+          <DateField size="md" value={data.reunioes.ultima||""} onChange={function(v){setReuniaoField("ultima",v);}}/>
         </div>
         <div>
           <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Próxima reunião</div>
-          <input type="date" value={data.reunioes.proxima||""} onChange={function(e){setReuniaoField("proxima",e.target.value);}}
-            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+          <DateField size="md" value={data.reunioes.proxima||""} onChange={function(v){setReuniaoField("proxima",v);}}/>
         </div>
         <div>
           <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Tipo da reunião</div>
@@ -9732,7 +9896,7 @@ function COngoing({cl, isMob}){
         {MONTHLY_ITEMS.map(function(item){
           const it = getChecklistItem("mensal", periodMonth, item.id);
           const st = _itemStatus(it);
-          return <ChecklistRow key={item.id} item={item} it={it} st={st} accent={accent} teamOpts={TEAM_OPTS}
+          return <ChecklistRow key={item.id} item={item} it={it} st={st} accent={accent} teamOpts={TEAM_OPTS} RespAvatars={RespAvatars} DateField={DateField}
             onToggle={function(){setChecklistField("mensal", periodMonth, item.id, "done", !it.done);}}
             onResp={function(v){setChecklistField("mensal", periodMonth, item.id, "resp", v);}}
             onDue={function(v){setChecklistField("mensal", periodMonth, item.id, "due", v);}}/>;
@@ -9760,7 +9924,7 @@ function COngoing({cl, isMob}){
         {QUARTERLY_ITEMS.map(function(item){
           const it = getChecklistItem("trimestral", periodQuarter, item.id);
           const st = _itemStatus(it);
-          return <ChecklistRow key={item.id} item={item} it={it} st={st} accent={accent} teamOpts={TEAM_OPTS}
+          return <ChecklistRow key={item.id} item={item} it={it} st={st} accent={accent} teamOpts={TEAM_OPTS} RespAvatars={RespAvatars} DateField={DateField}
             onToggle={function(){setChecklistField("trimestral", periodQuarter, item.id, "done", !it.done);}}
             onResp={function(v){setChecklistField("trimestral", periodQuarter, item.id, "resp", v);}}
             onDue={function(v){setChecklistField("trimestral", periodQuarter, item.id, "due", v);}}/>;
@@ -9792,8 +9956,7 @@ function COngoing({cl, isMob}){
                   style={{width:16,height:16,cursor:"pointer",accentColor:accent}}/>
                 <input value={p.title||""} onChange={function(e){updatePendencia(p.id, "title", e.target.value);}} placeholder="O que está faltando do cliente..."
                   style={{flex:1,minWidth:0,background:"transparent",border:"none",outline:"none",color:"#0f172a",fontSize:13,fontWeight:600,fontFamily:FF,textDecoration:p.status==="resolvido"?"line-through":"none"}}/>
-                <input type="date" value={p.date||""} onChange={function(e){updatePendencia(p.id, "date", e.target.value);}}
-                  style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11.5,color:"#475569",outline:"none",fontFamily:FF}}/>
+                <DateField value={p.date||""} onChange={function(v){updatePendencia(p.id, "date", v);}} placeholder="Sem prazo"/>
                 <span style={{background:stColor.bg,color:stColor.color,border:"1px solid "+stColor.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{p.status==="resolvido"?"Resolvido":"Pendente"}</span>
                 <button onClick={function(){removePendencia(p.id);}} title="Remover pendência" style={{background:"transparent",border:"none",cursor:"pointer",color:"#94a3b8",padding:4,display:"inline-flex",alignItems:"center"}}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -9812,18 +9975,15 @@ function COngoing({cl, isMob}){
       <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
         <div>
           <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Próximo planejamento mensal</div>
-          <input type="date" value={data.proximos.planMensal||""} onChange={function(e){setProximoField("planMensal",e.target.value);}}
-            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+          <DateField size="md" value={data.proximos.planMensal||""} onChange={function(v){setProximoField("planMensal",v);}}/>
         </div>
         <div>
           <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Próximo planejamento trimestral</div>
-          <input type="date" value={data.proximos.planTrimestral||""} onChange={function(e){setProximoField("planTrimestral",e.target.value);}}
-            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+          <DateField size="md" value={data.proximos.planTrimestral||""} onChange={function(v){setProximoField("planTrimestral",v);}}/>
         </div>
         <div>
           <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:5}}>Próximo pedido de indicação</div>
-          <input type="date" value={data.proximos.indicacao||""} onChange={function(e){setProximoField("indicacao",e.target.value);}}
-            style={{width:"100%",boxSizing:"border-box",background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF}}/>
+          <DateField size="md" value={data.proximos.indicacao||""} onChange={function(v){setProximoField("indicacao",v);}}/>
         </div>
       </div>
     </div>
@@ -9831,20 +9991,15 @@ function COngoing({cl, isMob}){
   </div>;
 }
 
-function ChecklistRow({item, it, st, accent, teamOpts, onToggle, onResp, onDue}){
+function ChecklistRow({item, it, st, accent, teamOpts, onToggle, onResp, onDue, RespAvatars, DateField}){
   const FF = "'Inter',system-ui,-apple-system,sans-serif";
-  return <div style={{display:"flex",alignItems:"center",gap:10,background:it.done?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"9px 12px",opacity:it.done?0.75:1,transition:"all .15s"}}>
+  return <div style={{display:"flex",alignItems:"center",gap:12,background:it.done?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 14px",opacity:it.done?0.75:1,transition:"all .15s",flexWrap:"wrap"}}>
     <input type="checkbox" checked={!!it.done} onChange={onToggle}
       style={{width:17,height:17,cursor:"pointer",accentColor:accent,flexShrink:0}}/>
-    <span style={{flex:1,minWidth:0,color:"#0f172a",fontSize:13,fontWeight:600,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:FF}}>{item.label}</span>
-    <select value={it.resp||""} onChange={function(e){onResp(e.target.value);}}
-      style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11.5,color:it.resp?"#0f172a":"#94a3b8",outline:"none",fontFamily:FF,cursor:"pointer",minWidth:110}}>
-      <option value="">Responsável</option>
-      {teamOpts.map(function(u){return <option key={u.id} value={u.id}>{u.name}</option>;})}
-    </select>
-    <input type="date" value={it.due||""} onChange={function(e){onDue(e.target.value);}}
-      style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11.5,color:"#475569",outline:"none",fontFamily:FF}}/>
-    <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{st.label}</span>
+    <span style={{flex:1,minWidth:200,color:"#0f172a",fontSize:13,fontWeight:600,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:FF}}>{item.label}</span>
+    {RespAvatars ? <RespAvatars value={it.resp||""} onChange={function(v){onResp(v);}}/> : null}
+    {DateField  ? <DateField  value={it.due||""}  onChange={function(v){onDue(v);}} placeholder="Sem prazo"/> : null}
+    <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
   </div>;
 }
 
