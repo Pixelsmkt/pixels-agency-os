@@ -944,8 +944,8 @@ function calcFunnelConversions(stages){
 
 /* ─── TEAM ───────────────────────────────── */
 const TEAM = [
-  { id:"vinicius",  name:"Vinicius",  role:"Gestão de projetos",    av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
-  { id:"gustavo",   name:"Gustavo",   role:"Gestão de performance", av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true  },
+  { id:"vinicius",  name:"Vinicius",  role:"Gestão de projetos",    av:"V", color:C.a,   level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true,  birthday:"25/02" },
+  { id:"gustavo",   name:"Gustavo",   role:"Gestão de performance", av:"G", color:C.aL,  level:1, status:"online",  dash:"partner",     canDelete:true,  canPixelsIA:true,  birthday:"21/09" },
   { id:"ellen",     name:"Hellen",     role:"Estratégia",           av:"H", color:C.pk,  level:2, status:"online",  dash:"coordinator", canDelete:true,  canPixelsIA:false },
   { id:"erick",     name:"Erick",     role:"Gestão de mídia"     , av:"K", color:C.or,  level:2, status:"online",  dash:"gestor",      canDelete:false, canPixelsIA:false },
   { id:"andre",     name:"André",     role:"Design",             av:"A", color:"#e040fb", level:3, status:"online",  dash:"designer",    canDelete:false, canPixelsIA:false, pagamentoPorDemanda:true, supervisor:["gustavo","vinicius","hellen"] },
@@ -12057,11 +12057,21 @@ function CalendarGrid({WEEKDAYS, days, renderDay}){
 // não ficar vazia em ambientes sem dados reais). Sócios podem editar depois.
 const _BDAY_FALLBACK_DM=[[15,3],[22,4],[8,5],[30,6],[12,7],[5,8],[18,9],[25,10],[3,11],[14,12]];
 function _getTeamBdayDM(userId, idx){
+  // 1) Aniversário da biografia do TEAM tem prioridade (pixels-app/00_clientes_data.jsx)
+  try{
+    const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===userId;});
+    if(u&&u.birthday){
+      const m=String(u.birthday).match(/^(\d{1,2})[\/\-](\d{1,2})/);
+      if(m) return [parseInt(m[1],10),parseInt(m[2],10)];
+    }
+  }catch(e){}
+  // 2) Override manual em localStorage
   try{
     const raw=localStorage.getItem("pixels-bday-team-"+userId);
     if(raw){const m=raw.match(/^(\d{1,2})\/(\d{1,2})/);if(m)return [parseInt(m[1],10),parseInt(m[2],10)];}
   }catch(e){}
-  return _BDAY_FALLBACK_DM[idx%_BDAY_FALLBACK_DM.length];
+  // 3) Sem dado real — NÃO mockar mais (evita aniversário falso aparecer)
+  return null;
 }
 function _getClientBdaysDM(clientId){
   try{
@@ -12079,21 +12089,49 @@ function _getClientBdaysDM(clientId){
 
 function PageCalendarioInterno({isMob}){
   const [calMonth,setCalMonth]=useState(new Date());
-  const [filterType,setFilterType]=useState("todos"); // "todos"|"equipe"|"clientes"
+  const [filterType,setFilterType]=useState("todos"); // "todos"|"equipe"|"clientes"|"marcos"
+  const [marcosByClient,setMarcosByClient]=useState({}); // {clientId:[...marcos]}
+  const [loadingMarcos,setLoadingMarcos]=useState(true);
+  const [openMarco,setOpenMarco]=useState(null); // {marco, cl}
 
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+  // ── Carrega TODOS os marcos de TODOS os clientes (uma vez por sessão) ──
+  useEffect(function(){
+    if(typeof window==="undefined"||!window._sb){ setLoadingMarcos(false); return; }
+    let canceled=false;
+    window._sb.from("client_milestones").select("*").order("date",{ascending:true}).then(function(r){
+      if(canceled) return;
+      if(!r||!r.data){ setLoadingMarcos(false); return; }
+      const map={};
+      r.data.forEach(function(m){
+        const cid=m.client_id;
+        if(!map[cid]) map[cid]=[];
+        map[cid].push(m);
+      });
+      setMarcosByClient(map);
+      setLoadingMarcos(false);
+    }).catch(function(e){
+      console.warn("[cal-interno marcos]",e&&e.message?e.message:e);
+      setLoadingMarcos(false);
+    });
+    return function(){canceled=true;};
+  },[]);
 
   // ── Constrói lista de eventos do MÊS VISÍVEL ──
   const eventsThisMonth=useMemo(function(){
     const m=calMonth.getMonth()+1;
     const out=[];
-    // Aniversários equipe
+    // Aniversários equipe (puxados de TEAM.birthday)
     if(filterType==="todos"||filterType==="equipe"){
       (typeof TEAM!=="undefined"?TEAM:[]).forEach(function(u,i){
-        const [day,month]=_getTeamBdayDM(u.id,i);
+        const dm=_getTeamBdayDM(u.id,i);
+        if(!dm) return;
+        const day=dm[0], month=dm[1];
         if(month===m){
           out.push({
+            kind:"equipe",
             type:"equipe",
             title:u.name,
             subtitle:u.role||"Equipe",
@@ -12112,6 +12150,7 @@ function PageCalendarioInterno({isMob}){
         bdays.forEach(function(b){
           if(b.month===m){
             out.push({
+              kind:"cliente",
               type:"cliente",
               title:b.name,
               subtitle:cl.name,
@@ -12124,10 +12163,36 @@ function PageCalendarioInterno({isMob}){
         });
       });
     }
+    // Marcos dos clientes — todos os tipos
+    if(filterType==="todos"||filterType==="marcos"){
+      const _year=calMonth.getFullYear();
+      Object.keys(marcosByClient).forEach(function(cid){
+        const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===cid;});
+        if(!cl) return;
+        (marcosByClient[cid]||[]).forEach(function(mc){
+          if(!mc.date) return;
+          const dParts=String(mc.date).match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if(!dParts) return;
+          const my=parseInt(dParts[1],10), mm=parseInt(dParts[2],10), md=parseInt(dParts[3],10);
+          if(my!==_year||mm!==m) return;
+          out.push({
+            kind:"marco",
+            type:"marco",
+            title:mc.title||"Marco",
+            subtitle:cl.name,
+            icon:"⭐",
+            day:md,month:mm,
+            color:cl.color||"#0ea5e9",
+            id:"marco_"+mc.id,
+            _marco:mc,
+            _cl:cl,
+          });
+        });
+      });
+    }
     return out;
-  },[calMonth,filterType]);
+  },[calMonth,filterType,marcosByClient]);
 
-  // Eventos agrupados por dia
   const eventsByDay=function(date){
     if(!date)return [];
     const d=date.getDate(), m=date.getMonth()+1;
@@ -12145,26 +12210,86 @@ function PageCalendarioInterno({isMob}){
   };
 
   const total=eventsThisMonth.length;
-  const teamCount=eventsThisMonth.filter(function(e){return e.type==="equipe";}).length;
-  const clientCount=eventsThisMonth.filter(function(e){return e.type==="cliente";}).length;
+  const teamCount=eventsThisMonth.filter(function(e){return e.kind==="equipe";}).length;
+  const clientCount=eventsThisMonth.filter(function(e){return e.kind==="cliente";}).length;
+  const marcoCount=eventsThisMonth.filter(function(e){return e.kind==="marco";}).length;
+
+  // Modal: marco detail
+  function MarcoDetailModal(){
+    if(!openMarco) return null;
+    const m=openMarco.marco, cl=openMarco.cl;
+    const _ac=cl.color||"#0ea5e9";
+    const tk=_normMarcoTipo(m.type);
+    const t=MARCO_TIPOS[tk];
+    const dataFmt=m.date?(m.date.slice(8,10)+"/"+m.date.slice(5,7)+"/"+m.date.slice(0,4)):"—";
+    const participants=Array.isArray(m.metrics&&m.metrics.participants)?m.metrics.participants:[];
+    return <div onClick={function(){setOpenMarco(null);}} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(560px,92%)",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.30)"}}>
+        <div style={{height:4,background:_ac}}/>
+        <div style={{padding:"22px 26px 20px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+            <div style={{width:42,height:42,borderRadius:12,background:_ac,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+_ac+"40",fontSize:13,fontWeight:800,letterSpacing:-.3,overflow:"hidden"}}>
+              {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
+                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:32,maxHeight:30,objectFit:"contain"}}/>
+                : (cl.abbr||cl.name.slice(0,2).toUpperCase())}
+            </div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3,flexWrap:"wrap"}}>
+                <span style={{background:t.bg,color:t.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>{t.label}</span>
+                <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{dataFmt}</span>
+              </div>
+              <div style={{color:"#0f172a",fontSize:17,fontWeight:800,letterSpacing:-.3,lineHeight:1.2}}>{m.title}</div>
+              <div style={{color:"#64748b",fontSize:12.5,marginTop:2,fontWeight:500}}>{cl.name}</div>
+            </div>
+            <button onClick={function(){setOpenMarco(null);}} style={{background:"#f1f5f9",border:"none",borderRadius:9,width:32,height:32,cursor:"pointer",color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          {m.description && <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"12px 14px",color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap",marginBottom:participants.length>0?14:0}}>{m.description}</div>}
+          {participants.length>0 && <div>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8}}>Equipe envolvida</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+              {participants.map(function(uid){
+                const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===uid;});
+                if(!u) return null;
+                const photo=(u.profile_data&&u.profile_data.photo)||((typeof getProfilePhoto!=="undefined"&&getProfilePhoto(u.id))||null);
+                return <div key={uid} style={{display:"inline-flex",alignItems:"center",gap:7,background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:99,padding:"4px 11px 4px 4px"}}>
+                  {photo
+                    ? <img src={photo} alt={u.name} style={{width:24,height:24,borderRadius:"50%",objectFit:"cover",display:"block",boxShadow:"0 0 0 1.5px "+(u.color||"#94a3b8")}}/>
+                    : <span style={{display:"inline-flex",width:24,height:24,borderRadius:"50%",background:u.color||"#94a3b8",color:"#fff",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:10}}>{(u.av||(u.name||"?")[0]).toUpperCase()}</span>}
+                  <span style={{color:"#0f172a",fontSize:12,fontWeight:700}}>{u.name.split(" ")[0]}</span>
+                </div>;
+              })}
+            </div>
+          </div>}
+        </div>
+      </div>
+    </div>;
+  }
 
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <MarcoDetailModal/>
       {/* Cabeçalho */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div>
           <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?18:24,letterSpacing:-.5}}>Calendário interno</div>
           <div style={{color:"#64748b",fontSize:12,marginTop:2,fontWeight:500}}>
-            {total} evento{total!==1?"s":""} em {MONTHS[calMonth.getMonth()].toLowerCase()}
+            {loadingMarcos?"carregando marcos…":(total+" evento"+(total!==1?"s":"")+" em "+MONTHS[calMonth.getMonth()].toLowerCase())}
           </div>
         </div>
         <CalendarMonthNav calMonth={calMonth} setCalMonth={setCalMonth} MONTHS={MONTHS}/>
       </div>
 
-      {/* Filtros tipo de evento + legenda inline */}
+      {/* Filtros tipo de evento */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {[{id:"todos",label:"Todos"},{id:"equipe",label:"🎂 Aniversários equipe",count:teamCount},{id:"clientes",label:"🎁 Aniversários clientes",count:clientCount}].map(function(o){
+          {[
+            {id:"todos",   label:"Todos"},
+            {id:"equipe",  label:"🎂 Aniversários equipe",  count:teamCount},
+            {id:"clientes",label:"🎁 Aniversários clientes",count:clientCount},
+            {id:"marcos",  label:"⭐ Marcos do cliente",   count:marcoCount},
+          ].map(function(o){
             const active=filterType===o.id;
             return <button key={o.id} onClick={function(){setFilterType(o.id);}}
               style={{background:active?"#0f172a":"#fff",color:active?"#fff":"#0f172a",border:"1px solid "+(active?"#0f172a":"#e2e8f0"),borderRadius:10,padding:"6px 12px",fontSize:11.5,fontWeight:active?700:500,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}>
@@ -12175,7 +12300,7 @@ function PageCalendarioInterno({isMob}){
         </div>
       </div>
 
-      {/* Grid do calendário (mesmo padrão visual) */}
+      {/* Grid do calendário */}
       <CalendarGrid
         WEEKDAYS={WEEKDAYS}
         days={calDays()}
@@ -12187,8 +12312,13 @@ function PageCalendarioInterno({isMob}){
             <CalendarDayNumber day={date} isToday={isToday}/>
             <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:4,overflow:"hidden",flex:1}}>
               {evs.slice(0,3).map(function(ev){
+                const isMarco = ev.kind==="marco";
+                const onClick = isMarco ? function(){setOpenMarco({marco:ev._marco, cl:ev._cl});} : null;
                 return <div key={ev.id} title={ev.title+" — "+ev.subtitle}
-                  style={{background:ev.color+"18",border:"1px solid "+ev.color+"55",borderRadius:6,padding:"3px 6px",fontSize:9.5,color:"#0f172a",lineHeight:1.25,display:"flex",alignItems:"center",gap:4,overflow:"hidden"}}>
+                  onClick={onClick}
+                  style={{background:ev.color+"18",border:"1px solid "+ev.color+"55",borderRadius:6,padding:"3px 6px",fontSize:9.5,color:"#0f172a",lineHeight:1.25,display:"flex",alignItems:"center",gap:4,overflow:"hidden",cursor:isMarco?"pointer":"default",transition:"all .12s"}}
+                  onMouseEnter={isMarco?function(e){e.currentTarget.style.background=ev.color+"30";e.currentTarget.style.borderColor=ev.color;}:null}
+                  onMouseLeave={isMarco?function(e){e.currentTarget.style.background=ev.color+"18";e.currentTarget.style.borderColor=ev.color+"55";}:null}>
                   <span style={{fontSize:11,flexShrink:0}}>{ev.icon}</span>
                   <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
                 </div>;
@@ -12200,14 +12330,15 @@ function PageCalendarioInterno({isMob}){
       />
 
       {/* Estado vazio */}
-      {total===0&&<div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:12,padding:"32px 20px",textAlign:"center"}}>
+      {!loadingMarcos&&total===0&&<div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:12,padding:"32px 20px",textAlign:"center"}}>
         <div style={{fontSize:32,marginBottom:8}}>🗓</div>
         <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>Nenhum evento interno em {MONTHS[calMonth.getMonth()].toLowerCase()}</div>
-        <div style={{color:"#64748b",fontSize:11,marginTop:4}}>Aniversários da equipe e contatos dos clientes aparecem aqui automaticamente.</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:4}}>Aniversários da equipe, dos contatos dos clientes e marcos dos projetos aparecem aqui automaticamente.</div>
       </div>}
     </div>
   );
 }
+
 
 function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const tasks = propTasks||[];
@@ -43044,28 +43175,51 @@ function useClientOnboarding(clientId){
     });
   }, [clientId]);
 
-  function toggle(itemId, currentUserId){
-    const cur = items[itemId];
-    const isDone = cur&&cur.done;
-    let next;
-    if(isDone){
-      // Desmarcar (com confirmação)
-      if(!window.confirm("Desmarcar este item do onboarding? A data de conclusão será removida."))return;
-      next = Object.assign({}, items);
-      delete next[itemId];
-    }else{
-      next = Object.assign({}, items, {
-        [itemId]:{ done:true, completed_at:new Date().toISOString(), completed_by:currentUserId||"" }
-      });
-    }
+  function _persist(next){
     setItems(next);
     if(window._sb){
       window._sb.from("client_onboarding").upsert({client_id:clientId, items:next}, {onConflict:"client_id"});
     }
   }
+  function toggle(itemId, currentUserId){
+    const cur = items[itemId];
+    const isDone = cur&&cur.done;
+    let next;
+    if(isDone){
+      // Desmarcar — SEM confirmação (usuário pediu)
+      const prev = Object.assign({}, items[itemId]||{});
+      delete prev.done;
+      delete prev.completed_at;
+      delete prev.completed_by;
+      // Mantém resp/due se já existiam
+      if(prev.resp||prev.due){
+        next = Object.assign({}, items, {[itemId]: prev});
+      }else{
+        next = Object.assign({}, items);
+        delete next[itemId];
+      }
+    }else{
+      next = Object.assign({}, items, {
+        [itemId]: Object.assign({}, items[itemId]||{}, { done:true, completed_at:new Date().toISOString(), completed_by:currentUserId||"" })
+      });
+    }
+    _persist(next);
+  }
+  function setResp(itemId, respId){
+    const next = Object.assign({}, items, {
+      [itemId]: Object.assign({}, items[itemId]||{}, { resp: respId||"" })
+    });
+    _persist(next);
+  }
+  function setDue(itemId, due){
+    const next = Object.assign({}, items, {
+      [itemId]: Object.assign({}, items[itemId]||{}, { due: due||"" })
+    });
+    _persist(next);
+  }
 
   const doneCount = Object.values(items).filter(function(x){return x&&x.done;}).length;
-  return { items, toggle, doneCount, loading };
+  return { items, toggle, setResp, setDue, doneCount, loading };
 }
 
 /* ─── COMPONENTE: ClientMetricsCards (visão geral) ───────────── */
@@ -43228,87 +43382,117 @@ function ClientAlertsPanel(props){
   </div>;
 }
 
-/* ─── COMPONENTE: OnboardingItem (linha do checklist) — padrão Ongoing ─── */
+/* ═══ COMPONENTES INTERNOS — DateField e RespAvatars (IDÊNTICOS ao Ongoing) ═══ */
+
+// Whitelist explícito da agência (mesmo do Ongoing)
+const _ONB_RESP_IDS = ["gustavo","vinicius","ellen","ocsana","erick"];
+const _ONB_FF = "'Inter',system-ui,-apple-system,sans-serif";
+
+function _OnbDateField(props){
+  const accent = props.accent||"#7c3aed";
+  const inputRef = useRef(null);
+  function _open(){
+    try{
+      if(inputRef.current){
+        if(typeof inputRef.current.showPicker==="function") inputRef.current.showPicker();
+        else inputRef.current.focus();
+      }
+    }catch(e){
+      if(inputRef.current) inputRef.current.focus();
+    }
+  }
+  const hasVal = !!props.value;
+  const labelBR = hasVal ? (props.value.slice(8,10)+"/"+props.value.slice(5,7)+"/"+props.value.slice(0,4)) : (props.placeholder||"Selecionar data");
+  return <div onClick={function(e){e.stopPropagation();_open();}}
+    style={{display:"inline-flex",alignItems:"center",gap:7,background:hasVal?"#fff":"#fafbfc",border:"1px solid "+(hasVal?accent+"33":"#e2e8f0"),borderRadius:9,padding:"0 11px",height:32,fontSize:11.5,color:hasVal?"#0f172a":"#94a3b8",fontWeight:hasVal?700:600,fontFamily:_ONB_FF,cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",minWidth:120,boxSizing:"border-box"}}
+    onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"66";e.currentTarget.style.background="#fff";}}
+    onMouseLeave={function(e){e.currentTarget.style.borderColor=hasVal?accent+"33":"#e2e8f0";e.currentTarget.style.background=hasVal?"#fff":"#fafbfc";}}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={hasVal?accent:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+    <span style={{whiteSpace:"nowrap"}}>{labelBR}</span>
+    {hasVal && <button type="button" onClick={function(e){e.preventDefault();e.stopPropagation();props.onChange&&props.onChange("");}} title="Limpar data"
+      style={{marginLeft:"auto",background:"transparent",border:"none",cursor:"pointer",padding:0,display:"inline-flex",alignItems:"center",color:"#94a3b8"}}
+      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+      onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";}}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>}
+    <input ref={inputRef} type="date" value={props.value||""} onChange={function(e){props.onChange&&props.onChange(e.target.value);}}
+      style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
+  </div>;
+}
+
+function _OnbRespAvatars(props){
+  const accent = props.accent||"#7c3aed";
+  const TEAM_OPTS = (typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return _ONB_RESP_IDS.indexOf(u.id)>=0;});
+  const sel = props.value||"";
+  const sz = 26;
+  return <div style={{display:"inline-flex",alignItems:"center",gap:5,flexShrink:0}}>
+    {TEAM_OPTS.map(function(u){
+      const active = sel===u.id;
+      const photo = (u.profile_data && u.profile_data.photo) || ((typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id))||null);
+      const ini = (u.av||(u.name||"?")[0]||"?").toUpperCase();
+      return <button key={u.id} type="button"
+        title={u.name+(active?" (selecionado)":" — clique pra atribuir")}
+        onClick={function(e){e.stopPropagation();props.onChange&&props.onChange(active?"":u.id);}}
+        style={{background:"transparent",border:"none",padding:0,cursor:"pointer",borderRadius:"50%",lineHeight:0,position:"relative",transition:"transform .12s",transform:active?"scale(1.0)":"scale(.94)",opacity:sel&&!active?0.45:1,filter:sel&&!active?"grayscale(.6)":"none"}}
+        onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.05)";e.currentTarget.style.opacity=1;e.currentTarget.style.filter="none";}}
+        onMouseLeave={function(e){e.currentTarget.style.transform=active?"scale(1.0)":"scale(.94)";e.currentTarget.style.opacity=sel&&!active?0.45:1;e.currentTarget.style.filter=sel&&!active?"grayscale(.6)":"none";}}>
+        {photo
+          ? <img src={photo} alt={u.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",display:"block",boxShadow:active?"0 0 0 2.5px "+(u.color||accent)+", 0 2px 6px rgba(15,23,42,0.15)":"0 0 0 1.5px #e2e8f0"}}/>
+          : <span style={{display:"inline-flex",width:sz,height:sz,borderRadius:"50%",background:u.color||"#94a3b8",color:"#fff",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.42),fontFamily:_ONB_FF,boxShadow:active?"0 0 0 2.5px "+(u.color||accent)+", 0 2px 6px rgba(15,23,42,0.15)":"0 0 0 1.5px #e2e8f0"}}>{ini}</span>
+        }
+        {active && <span style={{position:"absolute",right:-2,bottom:-2,width:11,height:11,borderRadius:"50%",background:"#16a34a",border:"2px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="6" height="6" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>}
+      </button>;
+    })}
+  </div>;
+}
+
+// Status do item — mesma lógica do Ongoing
+function _onbItemStatus(it){
+  if(!it) return {label:"Pendente", color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"};
+  if(it.done) return {label:"Concluído", color:"#15803d", bg:"#dcfce7", border:"#bbf7d0"};
+  if(it.due){
+    const d=new Date(it.due+"T00:00:00");
+    const today=new Date(); today.setHours(0,0,0,0);
+    const days=Math.round((d-today)/(1000*60*60*24));
+    if(days<0) return {label:"Atrasado", color:"#991b1b", bg:"#fee2e2", border:"#fecaca"};
+    if(days<=7) return {label:"Próximo", color:"#a16207", bg:"#fef3c7", border:"#fde68a"};
+    return {label:"Em dia", color:"#15803d", bg:"#dcfce7", border:"#bbf7d0"};
+  }
+  return {label:"Pendente", color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"};
+}
+
+/* ─── OnboardingItem — IDÊNTICO ao ChecklistRow do Ongoing ─── */
 function OnboardingItem(props){
-  const { item, items, toggle, level, currentUserId, accent } = props;
-  const st = items[item.id];
-  const done = st&&st.done;
-  const hasSub = item.sub&&item.sub.length>0;
-  const [expanded, setExpanded] = useState(hasSub);
-
-  const allSubDone = hasSub && item.sub.every(function(s){return items[s.id]&&items[s.id].done;});
-  const someSubDone = hasSub && item.sub.some(function(s){return items[s.id]&&items[s.id].done;});
-  const isChecked = done || (hasSub && allSubDone);
-  const isPartial = hasSub && someSubDone && !allSubDone;
-
-  function fmtDate(iso){
-    if(!iso)return "";
-    const d=new Date(iso);
-    return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
-  }
-
-  // Cor padrão (fallback) caso accent não venha
+  const { item, items, toggle, setResp, setDue, currentUserId, accent, level } = props;
+  const it = items[item.id] || {};
+  const st = _onbItemStatus(it);
   const _ac = accent || "#7c3aed";
+  const hasSub = item.sub && item.sub.length>0;
 
-  if(level>0){
-    // Sub-item — visual mais discreto, indent
-    return <div style={{paddingLeft:32,position:"relative"}}>
-      <div style={{position:"absolute",left:14,top:6,bottom:6,width:1.5,background:_ac+"22"}}/>
-      <div style={{display:"flex",alignItems:"flex-start",gap:9,padding:"7px 10px",borderRadius:8,transition:"background .12s",cursor:hasSub?"default":"pointer"}}
-        onMouseEnter={function(e){if(!hasSub)e.currentTarget.style.background=_ac+"08";}}
-        onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}
-        onClick={hasSub?null:function(){toggle(item.id, currentUserId);}}>
-        <div onClick={function(e){e.stopPropagation();if(!hasSub)toggle(item.id, currentUserId);}}
-          style={{width:17,height:17,borderRadius:5,border:"1.5px solid "+(isChecked?_ac:"#cbd5e1"),background:isChecked?_ac:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,cursor:"pointer",transition:"all .15s"}}>
-          {isChecked&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-        </div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{color:isChecked?"#94a3b8":"#475569",fontSize:12,fontWeight:isChecked?500:600,textDecoration:isChecked?"line-through":"none",lineHeight:1.4}}>{item.label}</div>
-          {done&&st.completed_at&&<div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>
-            {fmtDate(st.completed_at)}{st.completed_by?" · "+st.completed_by:""}
-          </div>}
-        </div>
-      </div>
-    </div>;
-  }
-
-  // Item principal — visual cleaner, parecido com ChecklistRow do Ongoing
   return <div style={{display:"flex",flexDirection:"column",gap:0}}>
-    <div style={{display:"flex",alignItems:"flex-start",gap:11,background:isChecked?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 13px",opacity:isChecked?0.85:1,transition:"all .15s",cursor:hasSub?"default":"pointer"}}
-      onMouseEnter={function(e){if(!hasSub){e.currentTarget.style.borderColor=_ac+"44";e.currentTarget.style.background=_ac+"06";}}}
-      onMouseLeave={function(e){e.currentTarget.style.borderColor="#f1f5f9";e.currentTarget.style.background=isChecked?"#fafbfc":"#fff";}}
-      onClick={hasSub?null:function(){toggle(item.id, currentUserId);}}>
-      <div onClick={function(e){e.stopPropagation();if(!hasSub)toggle(item.id, currentUserId);}}
-        style={{width:19,height:19,borderRadius:5.5,border:"1.5px solid "+(isChecked?_ac:(isPartial?_ac:"#cbd5e1")),background:isChecked?_ac:(isPartial?_ac+"22":"transparent"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,cursor:"pointer",transition:"all .15s"}}>
-        {isChecked&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-        {isPartial&&!isChecked&&<div style={{width:7,height:7,borderRadius:2,background:_ac}}/>}
-      </div>
-      <div style={{flex:1,minWidth:0}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-          <div style={{color:isChecked?"#94a3b8":"#0f172a",fontSize:13,fontWeight:isChecked?500:700,textDecoration:isChecked&&!hasSub?"line-through":"none",lineHeight:1.4,letterSpacing:-.1,flex:1,minWidth:0}}>{item.label}</div>
-          {hasSub&&<button onClick={function(e){e.stopPropagation();setExpanded(function(p){return !p;});}}
-            title={expanded?"Recolher":"Expandir"}
-            style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",padding:"2px 4px",flexShrink:0,transform:expanded?"rotate(180deg)":"rotate(0)",transition:"transform .18s",display:"inline-flex",alignItems:"center"}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>}
-        </div>
-        {done&&st.completed_at&&<div style={{color:_ac,fontSize:10,fontWeight:700,marginTop:4,display:"inline-flex",alignItems:"center",gap:4,fontFeatureSettings:"'tnum'"}}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          {fmtDate(st.completed_at)}{st.completed_by?" · "+st.completed_by:""}
-        </div>}
-      </div>
+    <div style={{display:"flex",alignItems:"center",gap:12,background:it.done?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 14px",opacity:it.done?0.75:1,transition:"all .15s",flexWrap:"wrap",marginLeft:level>0?28:0}}>
+      <input type="checkbox" checked={!!it.done} onChange={function(){toggle(item.id, currentUserId);}}
+        style={{width:17,height:17,cursor:"pointer",accentColor:_ac,flexShrink:0}}/>
+      <span style={{flex:1,minWidth:200,color:"#0f172a",fontSize:13,fontWeight:600,textDecoration:it.done?"line-through":"none",overflow:"hidden",textOverflow:"ellipsis",fontFamily:_ONB_FF}}>{item.label}</span>
+      <_OnbRespAvatars value={it.resp||""} accent={_ac} onChange={function(v){setResp(item.id, v);}}/>
+      <_OnbDateField value={it.due||""} accent={_ac} onChange={function(v){setDue(item.id, v);}} placeholder="Sem prazo"/>
+      <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
     </div>
-    {hasSub&&expanded&&<div style={{marginTop:4,display:"flex",flexDirection:"column",gap:0}}>
+    {hasSub && <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:6}}>
       {item.sub.map(function(s){
-        return <OnboardingItem key={s.id} item={s} items={items} toggle={toggle} level={level+1} currentUserId={currentUserId} accent={_ac}/>;
+        return <OnboardingItem key={s.id} item={s} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={_ac} level={(level||0)+1}/>;
       })}
     </div>}
   </div>;
 }
 
-/* ─── COMPONENTE: OnboardingSection (bloco) — padrão Ongoing _sectionCard ─── */
+/* ─── OnboardingSection — mesmo padrão de _sectionCard do Ongoing ─── */
 function OnboardingSection(props){
-  const { block, items, toggle, currentUserId, accent, ico } = props;
+  const { block, items, toggle, setResp, setDue, currentUserId, accent, ico } = props;
   const _ac = accent || "#7c3aed";
   let total=0, feitos=0;
   block.items.forEach(function(it){
@@ -43324,48 +43508,39 @@ function OnboardingSection(props){
   const pct = total>0?Math.round(feitos/total*100):0;
   const allDone = total>0&&feitos===total;
 
-  return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:12}}>
-    {/* Header — mesmo padrão das seções do Ongoing */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0}}>
-        <div style={{width:36,height:36,borderRadius:10,background:allDone?"#dcfce7":_ac+"15",border:"1px solid "+(allDone?"#bbf7d0":_ac+"33"),color:allDone?"#16a34a":_ac,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          {allDone
-            ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            : (typeof Ico==="function" ? <Ico n={ico||"calendar"} size={16} color={_ac}/> : <span style={{fontWeight:800,fontSize:11,letterSpacing:-.3}}>{feitos}/{total}</span>)}
-        </div>
-        <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{block.title}</div>
-          {block.subtitle&&<div style={{color:"#64748b",fontSize:11.5,marginTop:2,fontWeight:500}}>{block.subtitle}</div>}
-        </div>
+  return <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 20px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:14,fontFamily:_ONB_FF}}>
+    {/* Header IGUAL ao Ongoing: ícone + título 15px + subtítulo + chip à direita */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",marginBottom:0}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        {typeof Ico==="function" && <Ico n={ico||"checkCircle"} size={16} color={_ac}/>}
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{block.title}</div>
+        <span style={{background:allDone?"#dcfce7":"#f1f5f9",color:allDone?"#15803d":"#64748b",fontSize:10.5,fontWeight:700,padding:"2px 8px",borderRadius:99,fontFeatureSettings:"'tnum'"}}>{feitos}/{total}</span>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <span style={{background:allDone?"#dcfce7":"#f1f5f9",color:allDone?"#15803d":"#64748b",border:"1px solid "+(allDone?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"3px 11px",fontSize:11,fontWeight:800,letterSpacing:.2,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{feitos}/{total}</span>
-        <div style={{minWidth:120,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
-          <div style={{color:allDone?"#16a34a":_ac,fontWeight:800,fontSize:14,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
-          <div style={{background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden",width:110}}>
-            <div style={{width:pct+"%",height:"100%",background:allDone?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_ac+","+_ac+"cc)",borderRadius:99,transition:"width .35s ease"}}/>
-          </div>
+      <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
+        <div style={{background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden",width:110}}>
+          <div style={{width:pct+"%",height:"100%",background:allDone?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+_ac+","+_ac+"cc)",borderRadius:99,transition:"width .35s ease"}}/>
         </div>
+        <span style={{color:allDone?"#16a34a":_ac,fontWeight:800,fontSize:12,letterSpacing:-.2,fontFeatureSettings:"'tnum'",minWidth:38,textAlign:"right"}}>{pct}%</span>
       </div>
     </div>
+    {block.subtitle && <div style={{color:"#64748b",fontSize:11.5,fontWeight:500,marginTop:-8}}>{block.subtitle}</div>}
     {/* Lista de items */}
-    <div style={{display:"flex",flexDirection:"column",gap:6,paddingTop:4}}>
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
       {block.items.map(function(it){
-        return <OnboardingItem key={it.id} item={it} items={items} toggle={toggle} level={0} currentUserId={currentUserId} accent={_ac}/>;
+        return <OnboardingItem key={it.id} item={it} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={_ac} level={0}/>;
       })}
     </div>
   </section>;
 }
 
-/* ─── COMPONENTE: OnboardingChecklist (raiz) — padrão Ongoing ─── */
+/* ─── OnboardingChecklist (raiz) — mesmo padrão Ongoing ─── */
 function OnboardingChecklist(props){
   const { cl, currentUserId } = props;
-  const { items, toggle, doneCount, loading } = useClientOnboarding(cl.id);
+  const { items, toggle, setResp, setDue, doneCount, loading } = useClientOnboarding(cl.id);
   const total = ONBOARDING_TOTAL;
   const pct = total>0?Math.round(doneCount/total*100):0;
   const accent = (cl && cl.color) || "#7c3aed";
 
-  // Ícone por bloco — alinha com a fase do projeto
   const _ICO_BY_BLOCK = {
     inicial: "sparkles",
     dia1:    "flame",
@@ -43379,36 +43554,29 @@ function OnboardingChecklist(props){
 
   if(loading)return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando onboarding...</div>;
 
-  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,-apple-system,sans-serif"}}>
-    {/* Header principal — card branco com accent (padrão Ongoing) em vez de gradiente roxo full */}
-    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"20px 22px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,"+accent+", "+accent+"99)"}}></div>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0}}>
-          <div style={{width:48,height:48,borderRadius:13,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+accent+"22"}}>
-            {typeof Ico==="function" && <Ico n="checkCircle" size={22} color={accent}/>}
-          </div>
-          <div>
-            <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4,lineHeight:1.1}}>Onboarding</div>
-            <div style={{color:"#64748b",fontSize:12.5,marginTop:4,fontWeight:500}}>Checklist do projeto de {cl.name} · {doneCount} de {total} etapas concluídas</div>
-          </div>
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_ONB_FF}}>
+    {/* Header — mesmo card branco do Ongoing (sem gradiente roxo) */}
+    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap",fontFamily:_ONB_FF}}>
+      <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+        <div style={{width:44,height:44,borderRadius:12,background:accent+"15",border:"1px solid "+accent+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          {typeof Ico==="function" && <Ico n="checkCircle" size={20} color={accent}/>}
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
-          <div style={{minWidth:160,display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{display:"flex",alignItems:"baseline",justifyContent:"flex-end",gap:7}}>
-              <span style={{color:accent,fontSize:30,fontWeight:900,letterSpacing:-.8,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{pct}<span style={{fontSize:16,opacity:.65}}>%</span></span>
-            </div>
-            <div style={{background:"#f1f5f9",borderRadius:99,height:6,overflow:"hidden"}}>
-              <div style={{width:pct+"%",height:"100%",background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+accent+","+accent+"cc)",borderRadius:99,transition:"width .5s ease"}}/>
-            </div>
-          </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2}}>Onboarding — {cl.name}</div>
+          <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>{doneCount} de {total} etapas concluídas · checklist completo do projeto</div>
         </div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden",width:130}}>
+          <div style={{width:pct+"%",height:"100%",background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+accent+","+accent+"cc)",borderRadius:99,transition:"width .5s ease"}}/>
+        </div>
+        <div style={{background:pct>=100?"#dcfce7":"#f1f5f9",color:pct>=100?"#15803d":"#0f172a",border:"1px solid "+(pct>=100?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
       </div>
     </div>
 
-    {/* Blocos — cada um com ícone próprio */}
+    {/* Blocos com seu ícone próprio */}
     {ONBOARDING_BLOCKS.map(function(b){
-      return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} currentUserId={currentUserId} accent={accent} ico={_ICO_BY_BLOCK[b.id]||"calendar"}/>;
+      return <OnboardingSection key={b.id} block={b} items={items} toggle={toggle} setResp={setResp} setDue={setDue} currentUserId={currentUserId} accent={accent} ico={_ICO_BY_BLOCK[b.id]||"checkCircle"}/>;
     })}
   </div>;
 }
