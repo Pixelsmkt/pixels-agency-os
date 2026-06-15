@@ -9583,7 +9583,8 @@ function COngoing({cl, isMob}){
     proximos: {planMensal:"", planTrimestral:"", indicacao:""},
     mensal: {},        // {"2026-06": {resultados:{done:true,resp:"vinicius",due:"2026-06-30",at:"..."}}}
     trimestral: {},    // {"2026-Q2": {...}}
-    pendencias: []     // [{id, title, date, status}]
+    pendencias: [],    // [{id, title, date, status}]
+    atas: []           // [{id, date, title, notes, participants:[uid], by, createdAt}]
   });
   const [savedAt, setSavedAt] = useState(0);
   const [periodMonth, setPeriodMonth] = useState(_currentMonth());
@@ -9604,7 +9605,8 @@ function COngoing({cl, isMob}){
               proximos: Object.assign({}, prev.proximos, remote.proximos||{}),
               mensal: remote.mensal||{},
               trimestral: remote.trimestral||{},
-              pendencias: Array.isArray(remote.pendencias)?remote.pendencias:[]
+              pendencias: Array.isArray(remote.pendencias)?remote.pendencias:[],
+              atas: Array.isArray(remote.atas)?remote.atas:[]
             });
           });
         }
@@ -9987,6 +9989,111 @@ function COngoing({cl, isMob}){
         </div>
       </div>
     </div>
+
+    {/* ── ATAS DAS REUNIÕES — histórico ── */}
+    {(function(){
+      function _addAta(){
+        const newAta = {
+          id: "ata_"+Date.now(),
+          date: new Date().toISOString().slice(0,10),
+          title: "",
+          notes: "",
+          participants: [],
+          by: (typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""),
+          createdAt: new Date().toISOString()
+        };
+        const next = Object.assign({}, data, {atas: [newAta, ...(data.atas||[])]});
+        persist(next);
+      }
+      function _updAta(id, field, val){
+        const next = Object.assign({}, data, {atas: (data.atas||[]).map(function(a){return a.id===id?Object.assign({},a,{[field]:val}):a;})});
+        persist(next);
+      }
+      function _delAta(id){
+        const next = Object.assign({}, data, {atas: (data.atas||[]).filter(function(a){return a.id!==id;})});
+        persist(next);
+      }
+      function _togglePart(id, uid){
+        const ata = (data.atas||[]).find(function(a){return a.id===id;});
+        if(!ata) return;
+        const cur = Array.isArray(ata.participants)?ata.participants:[];
+        const next_parts = cur.indexOf(uid)>=0 ? cur.filter(function(x){return x!==uid;}) : cur.concat([uid]);
+        _updAta(id, "participants", next_parts);
+      }
+      const atas = data.atas||[];
+      const sorted = atas.slice().sort(function(a,b){return String(b.date||b.createdAt||"").localeCompare(String(a.date||a.createdAt||""));});
+      return <div style={_sectionCard()}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            {typeof Ico==="function" && <Ico n="fileText" size={16} color={accent}/>}
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Atas das reuniões</div>
+            <span style={{background:"#f1f5f9",color:"#64748b",fontSize:10.5,fontWeight:700,padding:"2px 8px",borderRadius:99}}>{sorted.length} {sorted.length===1?"registrada":"registradas"}</span>
+          </div>
+          <button onClick={_addAta}
+            style={{background:accent+"15",border:"1px solid "+accent+"33",borderRadius:9,padding:"7px 13px",color:accent,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:FF,display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background=accent;e.currentTarget.style.color="#fff";}}
+            onMouseLeave={function(e){e.currentTarget.style.background=accent+"15";e.currentTarget.style.color=accent;}}>
+            + Nova ata
+          </button>
+        </div>
+        {sorted.length===0
+          ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:10,padding:"30px 20px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+              <div style={{width:46,height:46,borderRadius:"50%",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",color:"#cbd5e1"}}>
+                {typeof Ico==="function" && <Ico n="fileText" size={20} color="#cbd5e1"/>}
+              </div>
+              <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Nenhuma ata registrada ainda</div>
+              <div style={{color:"#94a3b8",fontSize:11.5,fontWeight:500,maxWidth:380,lineHeight:1.5}}>Use "+ Nova ata" depois de cada reunião pra registrar decisões, encaminhamentos e participantes. O histórico aparece aqui.</div>
+            </div>
+          : <div style={{display:"flex",flexDirection:"column",gap:11}}>
+              {sorted.map(function(ata){
+                const dataFmtBR = ata.date ? (ata.date.slice(8,10)+"/"+ata.date.slice(5,7)+"/"+ata.date.slice(0,4)) : "—";
+                const participants = Array.isArray(ata.participants)?ata.participants:[];
+                return <div key={ata.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                  {/* Header: data + título + delete */}
+                  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                    <DateField value={ata.date||""} onChange={function(v){_updAta(ata.id,"date",v);}}/>
+                    <input value={ata.title||""} onChange={function(e){_updAta(ata.id,"title",e.target.value);}} placeholder="Título da reunião (ex: Planejamento de junho)"
+                      style={{flex:1,minWidth:200,background:"transparent",border:"none",outline:"none",color:"#0f172a",fontSize:14.5,fontWeight:800,letterSpacing:-.2,fontFamily:FF}}/>
+                    <button onClick={function(){if(window.confirm("Apagar essa ata?")) _delAta(ata.id);}} title="Apagar ata"
+                      style={{background:"transparent",border:"none",cursor:"pointer",color:"#94a3b8",padding:6,borderRadius:6,display:"inline-flex",alignItems:"center"}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.background="#fef2f2";}}
+                      onMouseLeave={function(e){e.currentTarget.style.color="#94a3b8";e.currentTarget.style.background="transparent";}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                    </button>
+                  </div>
+
+                  {/* Participantes */}
+                  <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap"}}>
+                    <span style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Participantes</span>
+                    <div style={{display:"inline-flex",gap:5,alignItems:"center"}}>
+                      {TEAM_OPTS.map(function(u){
+                        const active = participants.indexOf(u.id)>=0;
+                        const photo = (u.profile_data && u.profile_data.photo) || ((typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id))||null);
+                        const ini = (u.av||(u.name||"?")[0]||"?").toUpperCase();
+                        const sz = 24;
+                        return <button key={u.id} type="button" title={u.name}
+                          onClick={function(){_togglePart(ata.id, u.id);}}
+                          style={{background:"transparent",border:"none",padding:0,cursor:"pointer",borderRadius:"50%",lineHeight:0,transition:"all .12s",transform:active?"scale(1.0)":"scale(.9)",opacity:active?1:0.45,filter:active?"none":"grayscale(.6)"}}
+                          onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.05)";e.currentTarget.style.opacity=1;e.currentTarget.style.filter="none";}}
+                          onMouseLeave={function(e){e.currentTarget.style.transform=active?"scale(1.0)":"scale(.9)";e.currentTarget.style.opacity=active?1:0.45;e.currentTarget.style.filter=active?"none":"grayscale(.6)";}}>
+                          {photo
+                            ? <img src={photo} alt={u.name} style={{width:sz,height:sz,borderRadius:"50%",objectFit:"cover",display:"block",boxShadow:active?"0 0 0 2.5px "+(u.color||accent):"0 0 0 1.5px #e2e8f0"}}/>
+                            : <span style={{display:"inline-flex",width:sz,height:sz,borderRadius:"50%",background:u.color||"#94a3b8",color:"#fff",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:Math.floor(sz*0.42),fontFamily:FF,boxShadow:active?"0 0 0 2.5px "+(u.color||accent):"0 0 0 1.5px #e2e8f0"}}>{ini}</span>}
+                        </button>;
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Notas */}
+                  <textarea value={ata.notes||""} onChange={function(e){_updAta(ata.id,"notes",e.target.value);}} placeholder="Decisões, encaminhamentos, próximos passos..."
+                    rows={3}
+                    style={{width:"100%",boxSizing:"border-box",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"10px 12px",fontSize:13,color:"#0f172a",outline:"none",fontFamily:FF,resize:"vertical",lineHeight:1.55}}/>
+                </div>;
+              })}
+            </div>
+        }
+      </div>;
+    })()}
 
   </div>;
 }
@@ -11158,7 +11265,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"ongoing",       label:"Ongoing",             ico:"infinity"},
     {id:"nps",           label:"NPS",                 ico:"sparkles"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
-    {id:"planejamento",  label:"Planejamento mensal", ico:"layers"},
+    {id:"planejamento",  label:"Planejamento",         ico:"layers"},
     {id:"metas",         label:"Metas",               ico:"target"},
   ];
 
@@ -41256,20 +41363,63 @@ function useMonthlyPlan(clientId, clientUnit, year, month){
    PageMonthlyPlanInterno — visão da equipe Pixels
 ═══════════════════════════════════════════════════════════════════ */
 function PageMonthlyPlanInterno({isMob,cl:clProp,hideClientSelector}){
+  // Wrapper "Planejamento" — duas seções: mensal + trimestral.
+  // Cada seção tem seu próprio period picker (estilo Ongoing, cor do cliente),
+  // sua própria instância do hook e seu próprio form.
   const _now=new Date();
   const isSocio=CURRENT_USER&&CURRENT_USER.level===1;
   const clientesVisiveis=(CLIENTS||[]).filter(function(c){return c.status!=="interno";});
-  // Quando vindo de ClienteDetail (clProp definido), trava no cliente
   const [selCl,setSelCl]=useState(clProp?.id||(clientesVisiveis[0]||{}).id||"");
   const [selUnit,setSelUnit]=useState("grupo");
-  const [month,setMonth]=useState(_now.getMonth()+1);
   const [year,setYear]=useState(_now.getFullYear());
   const cl=CLIENTS.find(function(c){return c.id===selCl;})||clientesVisiveis[0];
   const isBioter=cl&&cl.id==="bioter";
   const unit=_mpUnit(cl,selUnit);
+  const accent = (cl&&cl.color)||C.a;
 
-  const {data,loading,saving,save}=useMonthlyPlan(selCl,unit,year,month);
-  // Form state espelha data, com edição local antes de salvar
+  return <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    {/* Header principal */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div>
+        <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4}}>Planejamento</div>
+        <div style={{color:C.td,fontSize:12,marginTop:2}}>Mensal e trimestral — estruturado pela equipe, visível pro cliente no portal.</div>
+      </div>
+      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+        {!hideClientSelector&&<select value={selCl} onChange={function(e){setSelCl(e.target.value);}}
+          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {clientesVisiveis.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
+        </select>}
+        {isBioter&&(typeof BIOTER_UNITS!=="undefined")&&<select value={selUnit} onChange={function(e){setSelUnit(e.target.value);}}
+          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          <option value="grupo">Grupo Bioter</option>
+          {BIOTER_UNITS.map(function(u){return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>;})}
+        </select>}
+        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
+          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
+          {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y}>{y}</option>;})}
+        </select>
+      </div>
+    </div>
+
+    {/* ─── SEÇÃO MENSAL ─── */}
+    <_PlanSection kind="mensal" cl={cl} unit={unit} year={year} accent={accent} isMob={isMob}/>
+
+    {/* ─── SEÇÃO TRIMESTRAL ─── */}
+    <_PlanSection kind="trimestral" cl={cl} unit={unit} year={year} accent={accent} isMob={isMob}/>
+  </div>;
+}
+
+/* Reusable section — mensal OU trimestral. Encoding: mensal usa month 1-12,
+   trimestral usa month = 20 + quarter (21..24) na mesma tabela monthly_plans.
+   Isso evita migração de schema e mantém RLS/persistência idênticos. */
+function _PlanSection({cl, unit, year, accent, isMob, kind}){
+  const _now = new Date();
+  const isMensal = kind==="mensal";
+  const initialPeriod = isMensal ? (_now.getMonth()+1) : (Math.floor(_now.getMonth()/3)+1);
+  const [period,setPeriod] = useState(initialPeriod);
+  const monthEncoded = isMensal ? period : (20+period);
+  const {data,loading,saving,save}=useMonthlyPlan(cl?cl.id:"", unit||"", year, monthEncoded);
+
   const [form,setForm]=useState({});
   const [dirty,setDirty]=useState(false);
   useEffect(function(){
@@ -41279,7 +41429,7 @@ function PageMonthlyPlanInterno({isMob,cl:clProp,hideClientSelector}){
     init.status_cliente=(data&&data.status_cliente)||"pendente";
     setForm(init);
     setDirty(false);
-  },[data,selCl,unit,year,month]);
+  },[data,cl&&cl.id,unit,year,monthEncoded]);
 
   function _set(k,v){setForm(function(p){return Object.assign({},p,{[k]:v});});setDirty(true);}
 
@@ -41317,31 +41467,46 @@ function PageMonthlyPlanInterno({isMob,cl:clProp,hideClientSelector}){
   const stInterno=STATUS_INTERNO_OPTS.find(function(s){return s.id===form.status_interno;})||STATUS_INTERNO_OPTS[0];
   const stCliente=STATUS_CLIENTE_OPTS.find(function(s){return s.id===form.status_cliente;})||STATUS_CLIENTE_OPTS[0];
 
-  return <div style={{display:"flex",flexDirection:"column",gap:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {/* Header + filtros */}
+  function _shift(delta){
+    const limit = isMensal ? 12 : 4;
+    let v = period + delta;
+    if(v<1) v = limit;
+    if(v>limit) v = 1;
+    setPeriod(v);
+  }
+  const labelPeriod = isMensal
+    ? (_MP_MESES[period-1]+" de "+year)
+    : (period+"º trimestre de "+year);
+
+  return <div style={{background:C.card,border:"1px solid "+C.b1,borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header da seção com period picker accent */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-      <div>
-        <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4}}>Planejamento mensal</div>
-        <div style={{color:C.td,fontSize:12,marginTop:2}}>Estruture o mês de conteúdo de cada cliente. Mesma fonte de dados que aparece pro cliente no portal.</div>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:36,height:36,borderRadius:10,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Ico n={isMensal?"calendar":"layers"} size={17} color={accent}/>
+        </div>
+        <div>
+          <div style={{color:C.tx,fontWeight:800,fontSize:15.5,letterSpacing:-.2}}>{isMensal?"Planejamento mensal":"Planejamento trimestral"}</div>
+          <div style={{color:C.td,fontSize:11.5,marginTop:2,fontWeight:500}}>{isMensal?"Objetivos, conteúdos e campanhas do mês":"Visão de 3 meses + revisões estratégicas"}</div>
+        </div>
       </div>
-      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-        {!hideClientSelector&&<select value={selCl} onChange={function(e){setSelCl(e.target.value);}}
-          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {clientesVisiveis.map(function(c){return <option key={c.id} value={c.id}>{c.name}</option>;})}
-        </select>}
-        {isBioter&&(typeof BIOTER_UNITS!=="undefined")&&<select value={selUnit} onChange={function(e){setSelUnit(e.target.value);}}
-          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          <option value="grupo">Grupo Bioter</option>
-          {BIOTER_UNITS.map(function(u){return <option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>;})}
-        </select>}
-        <select value={month} onChange={function(e){setMonth(parseInt(e.target.value,10));}}
-          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {_MP_MESES.map(function(n,i){return <option key={i} value={i+1}>{n}</option>;})}
-        </select>
-        <select value={year} onChange={function(e){setYear(parseInt(e.target.value,10));}}
-          style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"8px 12px",color:C.tx,fontSize:13,fontWeight:600,outline:"none",cursor:"pointer"}}>
-          {[_now.getFullYear()-1,_now.getFullYear(),_now.getFullYear()+1].map(function(y){return <option key={y} value={y}>{y}</option>;})}
-        </select>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        {/* Picker estilo Ongoing — accent do cliente */}
+        <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:3,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+          <button type="button" title="Anterior" onClick={function(){_shift(-1);}}
+            style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{padding:"0 14px",minWidth:isMensal?160:170,textAlign:"center",fontSize:12.5,fontWeight:700,color:accent,letterSpacing:-.1,fontFeatureSettings:"'tnum'",textTransform:"capitalize"}}>{labelPeriod}</div>
+          <button type="button" title="Próximo" onClick={function(){_shift(1);}}
+            style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -41356,13 +41521,11 @@ function PageMonthlyPlanInterno({isMob,cl:clProp,hideClientSelector}){
     </div>
 
     {loading?<div style={{padding:30,textAlign:"center",color:C.td}}>Carregando…</div>:<>
-
-      {/* Campos do plano */}
-      <div style={{background:C.card,border:"1px solid "+C.b1,borderRadius:14,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
         {MP_CAMPOS.map(function(c){
           return <div key={c.k}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-              <Ico n={c.icon} size={13} color={cl&&cl.color||C.a}/>
+              <Ico n={c.icon} size={13} color={accent}/>
               <div style={{color:C.tx,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>{c.label}</div>
             </div>
             <textarea value={form[c.k]||""} onChange={function(e){_set(c.k,e.target.value);}}
@@ -41370,7 +41533,6 @@ function PageMonthlyPlanInterno({isMob,cl:clProp,hideClientSelector}){
               style={{width:"100%",border:"1px solid "+C.b1,borderRadius:8,padding:"9px 12px",fontSize:13,fontFamily:"inherit",color:C.tx,outline:"none",resize:"vertical",boxSizing:"border-box",background:C.s1}}/>
           </div>;
         })}
-        {/* Status do plano */}
         <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14,paddingTop:6,borderTop:"1px solid "+C.b1+"66"}}>
           <div>
             <div style={{color:C.tx,fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Status interno</div>
@@ -41397,7 +41559,6 @@ function PageMonthlyPlanInterno({isMob,cl:clProp,hideClientSelector}){
             </div>
           </div>
         </div>
-        {/* Botão salvar */}
         {dirty&&<div style={{display:"flex",justifyContent:"flex-end",borderTop:"1px solid "+C.b1+"66",paddingTop:12}}>
           <button onClick={handleSave} disabled={saving}
             style={{background:saving?"#94a3b8":"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"10px 22px",fontWeight:800,fontSize:13,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit"}}>
@@ -41405,9 +41566,7 @@ function PageMonthlyPlanInterno({isMob,cl:clProp,hideClientSelector}){
           </button>
         </div>}
       </div>
-
-      {/* Comentários */}
-      <MonthlyPlanComments data={data} onAdd={addComment} clColor={cl&&cl.color||C.a}/>
+      <MonthlyPlanComments data={data} onAdd={addComment} clColor={accent}/>
     </>}
   </div>;
 }
