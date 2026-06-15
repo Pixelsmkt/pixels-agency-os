@@ -12029,21 +12029,41 @@ const MARCO_TIPOS={
 const _LEGACY_MARCO_MAP={kickoff:"comercial",meta:"resultado",venda:"resultado",conquista:"resultado",estrategia:"entrega",producao:"captacao"};
 function _normMarcoTipo(t){return MARCO_TIPOS[t]?t:(_LEGACY_MARCO_MAP[t]||"entrega");}
 
-function CMarcos({cl,canEdit}){
+function CMarcos({cl,canEdit,selUnit}){
   const sb=window._sb;
   const [marcos,setMarcos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [showForm,setShowForm]=useState(false);
 
+  // ── Resolução de cliente raiz pra busca no Supabase ──
+  // Marcos do Bioter ficam SEMPRE em client_id="bioter" (mesmo de uma unidade).
+  // O campo metrics.unit é que segmenta a unidade.
+  const _rootId = (cl && cl.id && cl.id.indexOf("bioter_")===0) ? "bioter" : (cl.id||"");
+  const _isBioterCtx = _rootId === "bioter";
+  // Unidade selecionada — se cl.id já é uma unidade, usa ela.
+  // Senão, usa selUnit (do portal). Default = "grupo" (mostra tudo).
+  const _resolvedUnit = (cl && cl.id && cl.id.indexOf("bioter_")===0)
+    ? cl.id.slice("bioter_".length)
+    : (selUnit||"grupo");
+
   const reload=async function(){
     if(!sb){setLoading(false);return;}
     try{
-      const r=await sb.from("client_milestones").select("*").eq("client_id",cl.id).order("date",{ascending:false});
+      const r=await sb.from("client_milestones").select("*").eq("client_id",_rootId).order("date",{ascending:false});
       setMarcos(r.data||[]);
     }catch(e){console.warn("[marcos] load:",e?.message||e);}
     setLoading(false);
   };
-  useEffect(function(){reload();},[cl.id]);
+  useEffect(function(){reload();},[_rootId]);
+
+  // Filtra marcos pela unidade resolvida.
+  // "grupo" mostra TODOS (group + qualquer unidade).
+  // Unidade específica (ex: "chapeco") mostra os do "grupo" + os daquela unidade.
+  const _marcosVisiveis = !_isBioterCtx ? marcos : marcos.filter(function(m){
+    if(_resolvedUnit==="grupo") return true;
+    const mu = (m.metrics && m.metrics.unit) || "grupo";
+    return mu==="grupo" || mu===_resolvedUnit;
+  });
 
   const fmtDate=function(d){
     if(!d)return"—";
@@ -12059,7 +12079,9 @@ function CMarcos({cl,canEdit}){
         <div style={{fontSize:13,color:"#64748b",marginTop:3}}>Acompanhe os principais acontecimentos e conquistas da parceria.</div>
       </div>
       {canEdit&&<button onClick={function(){setShowForm(true);}}
-        style={{background:"#9F43F6",color:"#fff",border:"none",padding:"9px 16px",borderRadius:9,fontSize:12.5,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+        style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",padding:"10px 18px",borderRadius:11,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:7,letterSpacing:.1,boxShadow:"0 6px 16px rgba(124,58,237,0.28)",transition:"all .15s"}}
+        onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 22px rgba(124,58,237,0.38)";}}
+        onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.28)";}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
         Adicionar marco
       </button>}
@@ -12067,7 +12089,7 @@ function CMarcos({cl,canEdit}){
 
     {loading?(
       <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13}}>Carregando marcos...</div>
-    ):marcos.length===0?(
+    ):_marcosVisiveis.length===0?(
       <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"44px 28px",textAlign:"center"}}>
         <div style={{width:52,height:52,borderRadius:14,background:"#f1f5f9",margin:"0 auto 14px",display:"flex",alignItems:"center",justifyContent:"center"}}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -12075,19 +12097,30 @@ function CMarcos({cl,canEdit}){
         <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:6,letterSpacing:-.1}}>Nenhum marco registrado ainda</div>
         <div style={{fontSize:12.5,color:"#64748b",maxWidth:380,margin:"0 auto",lineHeight:1.55}}>Os principais acontecimentos da parceria aparecerão aqui conforme forem registrados pela equipe.</div>
         {canEdit&&<button onClick={function(){setShowForm(true);}}
-          style={{marginTop:18,background:"#fff",color:"#9F43F6",border:"1px solid #e9d5ff",padding:"8px 16px",borderRadius:9,fontSize:12.5,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6}}>
+          style={{marginTop:18,background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",padding:"10px 20px",borderRadius:11,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,0.28)",transition:"all .15s"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 22px rgba(124,58,237,0.38)";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.28)";}}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
           Adicionar marco
         </button>}
       </div>
     ):(
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
-        {marcos.map(function(m){
+        {_marcosVisiveis.map(function(m){
           const tk=_normMarcoTipo(m.type);
           const t=MARCO_TIPOS[tk];
+          const _mu = (m.metrics && m.metrics.unit) || "grupo";
+          const _muLabel = _mu==="grupo" ? null : (function(){
+            const u=BIOTER_GROUP_UNITS.find(function(x){return x.id==="bioter_"+_mu;});
+            return u ? (u.name.replace("Bioter ","")) : _mu;
+          })();
           return(<div key={m.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",position:"relative",transition:"border-color .15s"}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
               <span style={{background:t.bg,color:t.color,fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:6,letterSpacing:.2}}>{t.label}</span>
+              {_muLabel && <span style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:6,letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:5}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                {_muLabel}
+              </span>}
               <span style={{fontSize:12,color:"#94a3b8",fontWeight:500}}>{fmtDate(m.date)}</span>
             </div>
             <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:m.description?5:0,letterSpacing:-.1,paddingRight:canEdit?28:0}}>{m.title}</div>
@@ -12133,22 +12166,29 @@ function _MarcoDateField({value, onChange, accent}){
   </div>;
 }
 
-function MarcoForm({cl,onClose,onSaved}){
+function MarcoForm({cl,onClose,onSaved,defaultUnit}){
   const sb=window._sb;
+  const _rootId = (cl && cl.id && cl.id.indexOf("bioter_")===0) ? "bioter" : (cl.id||"");
+  const _isBioter = _rootId==="bioter";
+  const _initialUnit = (cl && cl.id && cl.id.indexOf("bioter_")===0)
+    ? cl.id.slice("bioter_".length)
+    : (defaultUnit||"grupo");
   const [type,setType]=useState("comercial");
   const [date,setDate]=useState(function(){return new Date().toISOString().split("T")[0];});
   const [title,setTitle]=useState("");
   const [description,setDescription]=useState("");
+  const [unit,setUnit]=useState(_initialUnit);
   const [saving,setSaving]=useState(false);
 
   const save=async function(){
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     setSaving(true);
     try{
+      const _metrics = _isBioter ? {unit:unit||"grupo"} : {};
       await sb.from("client_milestones").insert({
-        client_id:cl.id,date,type,title:title.trim(),
+        client_id:_rootId, date, type, title:title.trim(),
         description:description.trim()||null,
-        metrics:{},
+        metrics:_metrics,
         created_by:typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:""
       });
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Marco registrado!");
@@ -12175,6 +12215,21 @@ function MarcoForm({cl,onClose,onSaved}){
             );})}
           </div>
         </div>
+
+        {_isBioter && <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Unidade Bioter</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {[{id:"grupo",label:"Grupo Bioter"}].concat((typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]).map(function(u){
+              return {id:u.id.replace("bioter_",""), label:u.name.replace("Bioter ","")};
+            })).map(function(u){
+              const active=unit===u.id;
+              return <button key={u.id} type="button" onClick={function(){setUnit(u.id);}}
+                style={{background:active?"#f3e8ff":"#fff",color:active?"#7c3aed":"#64748b",border:"1px solid "+(active?"#7c3aed40":"#e2e8f0"),padding:"6px 12px",borderRadius:7,fontSize:11.5,fontWeight:600,cursor:"pointer",transition:"all .12s",fontFamily:"inherit"}}>
+                {u.label}
+              </button>;
+            })}
+          </div>
+        </div>}
 
         <div style={{display:"grid",gridTemplateColumns:"180px 1fr",gap:12}}>
           <div>
@@ -13672,50 +13727,52 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
               if(l.includes("foto"))return "camera";
               return "dot";
             };
-            return <div key={r.id} style={{position:"relative",background:"#fff",borderRadius:11,padding:"10px 12px",border:"1px solid #eef0f3",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",transition:"transform .15s, box-shadow .15s, border-color .15s",display:"flex",alignItems:"center",gap:11}}
-              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 14px rgba(15,23,42,0.06)";e.currentTarget.style.borderColor="#cbd5e1";}}
-              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.025)";e.currentTarget.style.borderColor="#eef0f3";}}>
-              {/* Donut compacto à esquerda */}
-              <div style={{position:"relative",width:48,height:48,flexShrink:0,filter:ok?"drop-shadow(0 0 6px rgba(34,197,94,0.30))":"none"}}>
-                <svg width="48" height="48" viewBox="0 0 48 48" style={{transform:"rotate(-90deg)"}}>
+            return <div key={r.id} style={{position:"relative",background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid #eef0f3",boxShadow:"0 2px 6px rgba(15,23,42,0.04)",transition:"transform .15s, box-shadow .15s, border-color .15s",display:"flex",alignItems:"center",gap:16}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=accent+"55";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 6px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#eef0f3";}}>
+              {/* Donut maior à esquerda */}
+              <div style={{position:"relative",width:58,height:58,flexShrink:0,filter:ok?"drop-shadow(0 0 8px rgba(34,197,94,0.35))":"none"}}>
+                <svg width="58" height="58" viewBox="0 0 58 58" style={{transform:"rotate(-90deg)"}}>
                   <defs>
                     <linearGradient id={"grad-"+r.id} x1="0%" y1="0%" x2="100%" y2="100%">
                       <stop offset="0%" stopColor={accent}/>
                       <stop offset="100%" stopColor={ok?"#16a34a":accent}/>
                     </linearGradient>
                   </defs>
-                  <circle cx="24" cy="24" r="19" fill="none" stroke="#f1f5f9" strokeWidth="5"/>
-                  {r.totalMeta>0&&<circle cx="24" cy="24" r="19" fill="none" stroke={"url(#grad-"+r.id+")"} strokeWidth="5" strokeLinecap="round" strokeDasharray={2*Math.PI*19} strokeDashoffset={2*Math.PI*19*(1-cpct/100)} style={{transition:"stroke-dashoffset .5s ease-out, stroke .3s"}}/>}
+                  <circle cx="29" cy="29" r="23" fill="none" stroke="#f1f5f9" strokeWidth="5.5"/>
+                  {r.totalMeta>0&&<circle cx="29" cy="29" r="23" fill="none" stroke={"url(#grad-"+r.id+")"} strokeWidth="5.5" strokeLinecap="round" strokeDasharray={2*Math.PI*23} strokeDashoffset={2*Math.PI*23*(1-cpct/100)} style={{transition:"stroke-dashoffset .5s ease-out, stroke .3s"}}/>}
                 </svg>
                 <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{color:accent,fontSize:11.5,fontWeight:900,letterSpacing:-.4,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{cpct}<span style={{fontSize:7.5,fontWeight:800}}>%</span></span>
+                  <span style={{color:accent,fontSize:14,fontWeight:900,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{cpct}<span style={{fontSize:9,fontWeight:800,opacity:.85}}>%</span></span>
                 </div>
               </div>
 
               {/* Conteúdo: header (logo+nome+fração) + tipos compactos */}
-              <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:5}}>
-                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
+              <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:9}}>
+                <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
                   {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]
-                    ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:16,maxWidth:48,objectFit:"contain",flexShrink:0}}/>
+                    ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:20,maxWidth:60,objectFit:"contain",flexShrink:0}}/>
                     : null}
-                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1,lineHeight:1.1}}>{r.name}</span>
-                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
+                  <span style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1,lineHeight:1.15}}>{r.name}</span>
+                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'",background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:99,padding:"2px 8px"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
                 </div>
                 {tiposAtivos.length===0
-                  ? <div style={{color:"#cbd5e1",fontSize:10,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
-                  : <div style={{display:"flex",flexWrap:"wrap",gap:9,rowGap:3}}>
+                  ? <div style={{color:"#cbd5e1",fontSize:11,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
+                  : <div style={{display:"flex",flexWrap:"wrap",gap:14,rowGap:6}}>
                       {tiposAtivos.map(tt=>{
                         const tOk=tt.meta&&tt.done>=tt.meta;
                         const tPct=tt.meta?Math.round(tt.done/tt.meta*100):0;
                         const tCor=tOk?"#16a34a":(tPct>=70?"#0369a1":(tPct>=40?"#a16207":(tt.done>0?"#dc2626":"#94a3b8")));
                         const tIco=_tipoIcon(tt.l);
-                        return <span key={tt.l} title={tt.l+": "+tt.done+"/"+(tt.meta||0)} style={{display:"inline-flex",alignItems:"center",gap:4,color:"#64748b",fontSize:10.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.2}}>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={tCor} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-                            {tIco==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
-                            {tIco==="play"&&<polygon points="5 3 19 12 5 21 5 3"/>}
-                            {tIco==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
-                            {tIco==="dot"&&<circle cx="12" cy="12" r="5" fill={tCor}/>}
-                          </svg>
+                        return <span key={tt.l} title={tt.l+": "+tt.done+"/"+(tt.meta||0)} style={{display:"inline-flex",alignItems:"center",gap:6,color:"#475569",fontSize:11.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.2}}>
+                          <span style={{width:18,height:18,borderRadius:6,background:tCor+"15",border:"1px solid "+tCor+"30",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={tCor} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                              {tIco==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
+                              {tIco==="play"&&<polygon points="5 3 19 12 5 21 5 3" fill={tCor}/>}
+                              {tIco==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
+                              {tIco==="dot"&&<circle cx="12" cy="12" r="5" fill={tCor}/>}
+                            </svg>
+                          </span>
                           <span>{tt.l}</span>
                           <span style={{color:tCor,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{tt.done}<span style={{color:"#cbd5e1",fontWeight:600}}>/{tt.meta||"-"}</span></span>
                         </span>;
@@ -13725,11 +13782,11 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
               </div>
             </div>;
           };
-          return <div style={{padding:"14px 16px 16px",background:"#f8f9fc"}}>
-            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:8,marginBottom:bioter.length>0?8:0}}>
+          return <div style={{padding:"18px 20px 22px",background:"#f8f9fc"}}>
+            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:12,marginBottom:bioter.length>0?14:0}}>
               {padrao.map(renderCard)}
             </div>}
-            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:8}}>
+            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:12}}>
               {bioter.map(renderCard)}
             </div>}
           </div>;
@@ -38814,7 +38871,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
       // Edição de Marcos no portal: liberada pra gestores Pixels (level<=2: sócios+coordinator+gestor mídia).
       // Cliente que acessa o portal vê tudo em read-only.
       const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
-      return <CMarcos cl={cl} canEdit={!!_gestor}/>;
+      return <CMarcos cl={cl} canEdit={!!_gestor} selUnit={selUnit}/>;
     })()}
     {tab==="metas"&&typeof CMetas==="function"&&(function(){
       // Metas no portal: gestores Pixels editam, cliente que acessa o portal vê em read-only.
