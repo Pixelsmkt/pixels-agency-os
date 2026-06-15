@@ -9083,6 +9083,24 @@ function CMetas({cl, accentColor, readOnly}){
   const accent = accentColor || cl.color || "#9F43F6";
   const sb = window._sb;
 
+  // ── Mês de referência (YYYY-MM) — controla qual snapshot é editado e gráfico ──
+  function _ymKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+  function _ymLabel(ym){
+    const parts=String(ym||"").split("-"); if(parts.length<2) return ym||"";
+    const mn=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+    const m=parseInt(parts[1],10)-1;
+    return (mn[m]||"?")+" "+parts[0];
+  }
+  function _ymShift(ym, delta){
+    const p=String(ym||"").split("-"); if(p.length<2) return ym;
+    let y=parseInt(p[0],10), m=parseInt(p[1],10)-1+delta;
+    while(m<0){m+=12;y-=1;}
+    while(m>11){m-=12;y+=1;}
+    return y+"-"+String(m+1).padStart(2,"0");
+  }
+  const _currentYM = _ymKey(new Date());
+  const [refMonth, setRefMonth] = useState(_currentYM);
+
   const PILARES = [
     {key:"seguidores",  label:"Seguidores",  ico:"users",       color:"#0ea5e9",
      desc:"Crescimento da audiência (Instagram, TikTok, etc)", unit:"", scope:"acumulado"},
@@ -9170,19 +9188,43 @@ function CMetas({cl, accentColor, readOnly}){
       .catch(function(e){ console.warn("[metas] save:",e?.message||e); });
   }
 
+  function _readSnapshot(key, ym){
+    const m = metas[key] || {};
+    if(m.history && m.history[ym]) return {target:Number(m.history[ym].target||0), current:Number(m.history[ym].current||0)};
+    // Fallback: se ainda não tem history mas é o mês atual, usa o root (legado)
+    if(ym===_currentYM) return {target:Number(m.target||0), current:Number(m.current||0)};
+    // Pra meses sem dado, herdamos a meta (target) do snapshot mais recente conhecido pra não obrigar redigitar
+    let inheritedTarget = 0;
+    if(m.history){
+      const keys = Object.keys(m.history).filter(function(k){return k<=ym;}).sort();
+      if(keys.length>0) inheritedTarget = Number(m.history[keys[keys.length-1]].target||0);
+    }
+    if(!inheritedTarget) inheritedTarget = Number(m.target||0);
+    return {target: inheritedTarget, current: 0};
+  }
   function setField(key,field,val){
     if(readOnly) return;
-    const cur = metas[key] || {target:0,current:0};
     const num = val===""?0:Number(val);
-    const next = Object.assign({}, metas, {[key]: Object.assign({}, cur, {[field]: isFinite(num)?num:0})});
+    const safeVal = isFinite(num)?num:0;
+    const cur = metas[key] || {};
+    const history = Object.assign({}, cur.history||{});
+    const prevSnap = _readSnapshot(key, refMonth);
+    history[refMonth] = Object.assign({}, prevSnap, {[field]: safeVal});
+    const nextPilar = Object.assign({}, cur, {history:history});
+    // Mantém root current/target sincronizados com o mês CORRENTE (não com refMonth) pra leituras legacy
+    if(refMonth===_currentYM){
+      nextPilar[field] = safeVal;
+    }
+    const next = Object.assign({}, metas, {[key]: nextPilar});
     persist(next);
   }
 
   const FF="'Inter',system-ui,-apple-system,sans-serif";
 
   const atingidos = PILARES.filter(function(p){
-    const m=metas[p.key]; if(!m||!m.target) return false;
-    return Number(m.current||0) >= Number(m.target||0);
+    const snap = _readSnapshot(p.key, refMonth);
+    if(!snap.target) return false;
+    return snap.current >= snap.target;
   }).length;
 
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:FF}}>
@@ -9199,8 +9241,24 @@ function CMetas({cl, accentColor, readOnly}){
           <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>5 pilares fixos: o que combinamos no inicio do ciclo e onde estamos agora</div>
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         {savedAt>0 && Date.now()-savedAt<3000 && <span style={{color:"#16a34a",fontSize:11,fontWeight:600}}>Salvo</span>}
+        {/* Seletor de mês de referência */}
+        <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:3,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+          <button type="button" title="Mês anterior" onClick={function(e){e.preventDefault();e.stopPropagation();setRefMonth(_ymShift(refMonth,-1));}}
+            style={{background:"transparent",border:"none",borderRadius:8,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <div style={{padding:"0 12px",minWidth:120,textAlign:"center",fontSize:11.5,fontWeight:700,color:accent,letterSpacing:-.1,fontFeatureSettings:"'tnum'",textTransform:"capitalize"}}>{_ymLabel(refMonth)}</div>
+          <button type="button" title="Próximo mês" onClick={function(e){e.preventDefault();e.stopPropagation();setRefMonth(_ymShift(refMonth,1));}}
+            style={{background:"transparent",border:"none",borderRadius:8,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        </div>
         <div style={{background:atingidos===PILARES.length?"#dcfce7":"#f1f5f9",color:atingidos===PILARES.length?"#15803d":"#0f172a",border:"1px solid "+(atingidos===PILARES.length?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1}}>
           {atingidos}/{PILARES.length} atingidas
         </div>
@@ -9209,7 +9267,7 @@ function CMetas({cl, accentColor, readOnly}){
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",gap:12}}>
       {PILARES.map(function(p){
-        const m = metas[p.key] || {target:0,current:0};
+        const m = _readSnapshot(p.key, refMonth);
         const tgt = Number(m.target||0);
         const cur = Number(m.current||0);
         const pct = tgt>0 ? Math.min(100, Math.round(cur/tgt*100)) : 0;
@@ -9273,6 +9331,100 @@ function CMetas({cl, accentColor, readOnly}){
         </div>;
       })}
     </div>
+
+    {/* ── GRÁFICO DE EVOLUÇÃO — % de meta atingida por pilar nos últimos 6 meses ── */}
+    {(function(){
+      // Coleta os últimos 6 meses (do mais antigo pro mais recente)
+      const months = [];
+      for(let i=5;i>=0;i--) months.push(_ymShift(_currentYM,-i));
+      // Calcula % atingido por pilar por mês
+      const series = PILARES.map(function(p){
+        const points = months.map(function(ym){
+          const snap = _readSnapshot(p.key, ym);
+          if(!snap.target||snap.target<=0) return null;
+          return Math.round(Math.min(150, (snap.current/snap.target)*100));
+        });
+        const hasData = points.some(function(v){return v!=null&&v>0;});
+        return {pilar:p, points:points, hasData:hasData};
+      });
+      const anySeries = series.some(function(s){return s.hasData;});
+      const W=720, H=180, padL=38, padR=18, padT=18, padB=34;
+      const innerW=W-padL-padR, innerH=H-padT-padB;
+      const maxY=Math.max(110, ...series.flatMap(function(s){return s.points.filter(function(v){return v!=null;});}));
+      return <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"18px 20px",fontFamily:FF,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:11,minWidth:0}}>
+            <div style={{width:36,height:36,borderRadius:10,background:accent+"15",border:"1px solid "+accent+"33",color:accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              {typeof Ico==="function" && <Ico n="trending-up" size={17} color={accent}/>}
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2}}>Evolução das metas</div>
+              <div style={{color:"#64748b",fontSize:11,marginTop:2,fontWeight:500}}>% atingido por pilar nos últimos 6 meses</div>
+            </div>
+          </div>
+          {/* Legenda */}
+          <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            {PILARES.map(function(p){
+              return <span key={p.key} style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10.5,fontWeight:700,color:"#475569",letterSpacing:-.05}}>
+                <span style={{width:9,height:9,borderRadius:3,background:p.color,boxShadow:"0 0 0 2px "+p.color+"22"}}></span>
+                {p.label}
+              </span>;
+            })}
+          </div>
+        </div>
+        {!anySeries
+          ? <div style={{padding:"42px 0",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontStyle:"italic"}}>Sem dados de evolução ainda. Preencha o atual/meta de cada pilar nos meses pra ver o gráfico.</div>
+          : <div style={{overflowX:"auto"}}>
+            <svg width={W} height={H} viewBox={"0 0 "+W+" "+H} style={{display:"block",maxWidth:"100%"}}>
+              {/* Eixo Y guias */}
+              {[0,25,50,75,100].map(function(g,i){
+                const y = padT + innerH - (g/maxY)*innerH;
+                return <g key={i}>
+                  <line x1={padL} x2={W-padR} y1={y} y2={y} stroke={g===100?"#16a34a44":"#e2e8f0"} strokeWidth={g===100?1.5:1} strokeDasharray={g===100?"":""}/>
+                  <text x={padL-6} y={y+3} textAnchor="end" fontSize="9.5" fill="#94a3b8" fontWeight="600" fontFamily="inherit">{g}%</text>
+                </g>;
+              })}
+              {/* Eixo X — meses */}
+              {months.map(function(ym,i){
+                const x = padL + (i/(months.length-1))*innerW;
+                const parts=ym.split("-");
+                const mn=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+                const label=(mn[parseInt(parts[1],10)-1]||"?")+"/"+parts[0].slice(-2);
+                const isCurrent = ym===_currentYM;
+                return <g key={ym}>
+                  <text x={x} y={H-padB+18} textAnchor="middle" fontSize="10" fill={isCurrent?accent:"#64748b"} fontWeight={isCurrent?800:600} fontFamily="inherit">{label}</text>
+                </g>;
+              })}
+              {/* Linha de meta = 100% (já desenhada acima) */}
+              {/* Séries por pilar */}
+              {series.map(function(s,si){
+                if(!s.hasData) return null;
+                const pts = s.points.map(function(v,i){
+                  const x = padL + (i/(months.length-1))*innerW;
+                  const y = v==null ? null : padT + innerH - (Math.min(maxY,v)/maxY)*innerH;
+                  return {x,y,v};
+                });
+                // Path connecting non-null points
+                let path="";
+                let started=false;
+                pts.forEach(function(pt){
+                  if(pt.y==null){started=false;return;}
+                  if(!started){path += "M"+pt.x.toFixed(1)+" "+pt.y.toFixed(1); started=true;}
+                  else path += " L"+pt.x.toFixed(1)+" "+pt.y.toFixed(1);
+                });
+                return <g key={si}>
+                  <path d={path} fill="none" stroke={s.pilar.color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" opacity="0.92"/>
+                  {pts.map(function(pt,i){
+                    if(pt.y==null) return null;
+                    return <circle key={i} cx={pt.x} cy={pt.y} r={3.5} fill="#fff" stroke={s.pilar.color} strokeWidth="2.2"/>;
+                  })}
+                </g>;
+              })}
+            </svg>
+          </div>
+        }
+      </div>;
+    })()}
 
     <div style={{background:"#f8fafc",border:"0.5px dashed #cbd5e1",borderRadius:12,padding:"11px 14px",color:"#64748b",fontSize:11.5,lineHeight:1.5,fontFamily:FF}}>
       Atualizado em tempo real entre Estrategia &gt; Clientes e o Portal do cliente. Socios e gestores editam, cliente acompanha em modo leitura no portal.
@@ -10778,7 +10930,6 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
     {id:"ongoing",       label:"Ongoing",             ico:"infinity"},
     {id:"nps",           label:"NPS",                 ico:"sparkles"},
-    {id:"evolucao",      label:"Evolução",            ico:"trending-up"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
     {id:"planejamento",  label:"Planejamento mensal", ico:"layers"},
     {id:"metas",         label:"Metas",               ico:"target"},
@@ -10914,7 +11065,6 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
-    {tab==="evolucao"&&<CEvolucao cl={cl} isSocio={canEditarEvolucao}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
     {tab==="metas"&&<CMetas cl={cl}/>}
