@@ -2645,6 +2645,12 @@ function _useBriefing(clientId){
         if(remote && typeof remote==="object"){
           // Merge: seed (vetservice) é só pra primeira vez. Remote sempre prevalece.
           setData(remote);
+          // Espelha seção Identidade pra localStorage — outros componentes leem dali
+          try{
+            if(remote.identidade && typeof saveClientIdentity==="function"){
+              saveClientIdentity(clientId, remote.identidade);
+            }
+          }catch(e){}
         }
         setLoading(false);
       })
@@ -10186,181 +10192,371 @@ function CDrive({cl}){
 
 /* ─── NOVO CLIENTE MODAL ─────────────────────── */
 function NovoClienteModal({onClose,onSave}){
-  const inp={background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 12px",color:"#1e293b",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
-  const LBL=({t})=>(<div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:5}}>{t}</div>);
+  const FF = "'Inter',system-ui,-apple-system,sans-serif";
+  const inp = {background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:FF,transition:"all .15s",fontWeight:500};
+  const LBL = ({t})=>(<div style={{color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:7}}>{t}</div>);
 
-  // Dados principais
-  const [name,setName]=useState("");
-  const [abbr,setAbbr]=useState("");
-  const [color,setColor]=useState("#a140ff");
-  const [sector,setSector]=useState("");
-  const [contract,setContract]=useState("");
-  const [status,setStatus]=useState("ativo");
-  const [since,setSince]=useState("");
-  const [manager,setManager]=useState("vinicius");
-  const [health,setHealth]=useState("80");
-  const [nps,setNps]=useState("75");
-  // Contato / IDs
-  const [metaId,setMetaId]=useState("");
-  const [googleId,setGoogleId]=useState("");
-  const [reporteiUrl,setReporteiUrl]=useState("");
-  const [upsell,setUpsell]=useState("");
-  // Meta Ads
-  const [metaSpend,setMetaSpend]=useState("");
-  const [metaBudget,setMetaBudget]=useState("");
-  const [metaRoas,setMetaRoas]=useState("");
-  const [metaLeads,setMetaLeads]=useState("");
-  const [metaCpc,setMetaCpc]=useState("");
-  const [metaCtr,setMetaCtr]=useState("");
-  // Google Ads
-  const [googleSpend,setGoogleSpend]=useState("");
-  const [googleBudget,setGoogleBudget]=useState("");
-  const [googleRoas,setGoogleRoas]=useState("");
-  const [googleLeads,setGoogleLeads]=useState("");
-  const [googleCpc,setGoogleCpc]=useState("");
-  const [googleCtr,setGoogleCtr]=useState("");
-  // Social
-  const [followers,setFollowers]=useState("");
-  const [growth,setGrowth]=useState("");
-  const [reach,setReach]=useState("");
-  const [eng,setEng]=useState("");
+  // ── DADOS BÁSICOS ──
+  const [name,setName] = useState("");
+  const [setor,setSetor] = useState("");
+  const [cidade,setCidade] = useState("");
+  const [estado,setEstado] = useState("");
+  const [logoUrl,setLogoUrl] = useState(""); // data URL p/ preview/persistência
+  const [logoFileName,setLogoFileName] = useState("");
 
-  const [tab,setTab]=useState("dados");
-  const [error,setError]=useState("");
+  // ── TRÁFEGO PAGO ──
+  const [metaSpend,setMetaSpend] = useState("");
+  const [metaBudget,setMetaBudget] = useState("");
+  const [metaRoas,setMetaRoas] = useState("");
+  const [metaLeads,setMetaLeads] = useState("");
+  const [metaCpc,setMetaCpc] = useState("");
+  const [metaCtr,setMetaCtr] = useState("");
+  const [googleSpend,setGoogleSpend] = useState("");
+  const [googleBudget,setGoogleBudget] = useState("");
+  const [googleRoas,setGoogleRoas] = useState("");
+  const [googleLeads,setGoogleLeads] = useState("");
+  const [googleCpc,setGoogleCpc] = useState("");
+  const [googleCtr,setGoogleCtr] = useState("");
 
-  const TABS=[{id:"dados",label:"Dados"},{id:"ads",label:"Meta & Google"},{id:"social",label:"Social"},{id:"extras",label:"Extras"}];
+  // ── SOCIAL ──
+  const [igUrl,setIgUrl] = useState("");
+  const [fbUrl,setFbUrl] = useState("");
+  const [ttUrl,setTtUrl] = useState("");
+  const [ytUrl,setYtUrl] = useState("");
+  const [followers,setFollowers] = useState("");
+  const [reach,setReach] = useState("");
+  const [eng,setEng] = useState("");
 
-  const handleSave=()=>{
-    if(!name.trim()){setError("Nome do cliente e obrigatorio.");return;}
-    const id=name.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,20)||"cliente"+Date.now();
-    const newCl={
-      id, name:name.trim(), abbr:abbr.trim()||name.slice(0,2).toUpperCase(),
-      color, sector:sector.trim(), contract:parseInt(contract)||0,
-      health:parseInt(health)||80, nps:parseInt(nps)||75,
-      status, since:since||new Date().toLocaleDateString("pt-BR",{month:"short",year:"numeric"}),
-      manager, connected:false,
-      metaId:metaId.trim(), googleId:googleId.trim(),
-      reporteiUrl:reporteiUrl.trim(),
-      upsell:upsell.split(",").map(s=>s.trim()).filter(Boolean),
+  // ── EXTRAS ──
+  const [reporteiUrl,setReporteiUrl] = useState("");
+  const [upsell,setUpsell] = useState("");
+
+  const [tab,setTab] = useState("dados");
+  const [error,setError] = useState("");
+  const [saving,setSaving] = useState(false);
+
+  const TABS = [
+    {id:"dados",   label:"Dados básicos", ico:"building"},
+    {id:"trafego", label:"Tráfego pago",  ico:"target"},
+    {id:"social",  label:"Social",        ico:"sparkles"},
+    {id:"extras",  label:"Extras",        ico:"layers"},
+  ];
+
+  function _handleLogoUpload(e){
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    if(f.size > 5*1024*1024){ setError("Arquivo muito grande (máx 5MB)"); return; }
+    setError("");
+    setLogoFileName(f.name);
+    const reader = new FileReader();
+    reader.onload = function(){ setLogoUrl(reader.result); };
+    reader.readAsDataURL(f);
+  }
+  function _clearLogo(){ setLogoUrl(""); setLogoFileName(""); }
+
+  function handleSave(){
+    if(!name.trim()){ setError("Nome do cliente é obrigatório."); setTab("dados"); return; }
+    setSaving(true);
+    setError("");
+    const id = name.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,20) || ("cli"+Date.now());
+
+    const newCl = {
+      id, name: name.trim(),
+      abbr: name.slice(0,2).toUpperCase(),
+      color: "#7c3aed",
+      sector: setor.trim(),
+      cidade: cidade.trim(),
+      estado: estado.trim().toUpperCase(),
+      status: "ativo",
+      since: new Date().toLocaleDateString("pt-BR",{month:"short",year:"numeric"}),
+      logoUrl: logoUrl || null,
+      contract: 0,
+      health: 80, nps: 75,
+      manager: "vinicius",
+      connected: false,
+      metaId: "", googleId: "", reporteiUrl: reporteiUrl.trim(),
+      upsell: upsell.split(",").map(function(s){return s.trim();}).filter(Boolean),
       meta:{
         spend:parseFloat(metaSpend)||0, budget:parseFloat(metaBudget)||0,
         roas:parseFloat(metaRoas)||0, leads:parseInt(metaLeads)||0,
         cpc:parseFloat(metaCpc)||0, ctr:parseFloat(metaCtr)||0,
-        cpm:0,impressions:0,clicks:0,reach:0,frequency:0,conversions:0,
-        costPerConv:0,videoViews:0,vtr:0,campaigns:0,adsets:0,ads:0,topAd:""
+        cpm:0, impressions:0, clicks:0, reach:0, frequency:0, conversions:0,
+        costPerConv:0, videoViews:0, vtr:0, campaigns:0, adsets:0, ads:0, topAd:""
       },
       google:{
         spend:parseFloat(googleSpend)||0, budget:parseFloat(googleBudget)||0,
         roas:parseFloat(googleRoas)||0, leads:parseInt(googleLeads)||0,
         cpc:parseFloat(googleCpc)||0, ctr:parseFloat(googleCtr)||0,
-        cpm:0,impressions:0,clicks:0,conversions:0,costPerConv:0,
-        searchImpr:0,displayImpr:0,qualityScore:0,campaigns:0,adgroups:0,topKw:""
+        cpm:0, impressions:0, clicks:0, conversions:0, costPerConv:0,
+        searchImpr:0, displayImpr:0, qualityScore:0, campaigns:0, adgroups:0, topKw:""
       },
       social:{
-        followers:parseInt(followers)||0, growth:parseFloat(growth)||0,
+        followers:parseInt(followers)||0, growth:0,
         reach:parseInt(reach)||0, eng:parseFloat(eng)||0,
-        posts:0,stories:0,reels:0,saved:0,likes:0
+        posts:0, stories:0, reels:0, saved:0, likes:0
       },
-      history:[],
-      driveUrl:"",
+      socialUrls:{ instagram:igUrl.trim(), facebook:fbUrl.trim(), tiktok:ttUrl.trim(), youtube:ytUrl.trim() },
+      history:[], driveUrl:"",
       payment:{status:"pendente",date:""},
-      contacts:[],
-      goals:[],
-      meetingNotes:[],
+      contacts:[], goals:[], meetingNotes:[],
     };
+
     onSave(newCl);
-    // Seed automático do Onboarding com prazos em dias úteis (defined em 21_cliente_onboarding.jsx)
-    try{ if(typeof seedClientOnboarding==="function") seedClientOnboarding(id); }catch(e){console.warn("[onb seed]",e&&e.message||e);}
+
+    // Seed Onboarding com prazos em dias úteis
+    try{ if(typeof seedClientOnboarding==="function") seedClientOnboarding(id); }catch(e){console.warn("[onb seed]",e);}
+
+    // Seed Metas no Supabase — popula pilares Seguidores e Engajamento com o valor atual.
+    // Esses dados aparecem direto na aba Estratégia > Clientes > Metas (sem precisar redigitar).
+    try{
+      if(window._sb){
+        const _d=new Date();
+        const _ymKey=_d.getFullYear()+"-"+String(_d.getMonth()+1).padStart(2,"0");
+        const metas={};
+        const fNum=parseInt(followers)||0;
+        const eNum=parseFloat(eng)||0;
+        if(fNum>0){
+          metas.seguidores={target:0,current:fNum,history:{[_ymKey]:{target:0,current:fNum}}};
+        }
+        if(eNum>0){
+          metas.engajamento={target:0,current:eNum,history:{[_ymKey]:{target:0,current:eNum}}};
+        }
+        if(Object.keys(metas).length>0){
+          window._sb.from("clients").upsert({client_id:id, metas:metas}, {onConflict:"client_id"})
+            .then(function(r){ if(r&&r.error) console.warn("[metas seed]", r.error.message); });
+        }
+      }
+    }catch(e){console.warn("[metas seed]",e);}
+
+    setSaving(false);
     onClose();
-  };
+  }
 
-  return (<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto",backdropFilter:"blur(4px)"}} onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:20,width:"100%",maxWidth:600,marginTop:8,boxShadow:"0 32px 80px rgba(0,0,0,0.25)"}}>
+  return (<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"24px 16px",overflowY:"auto",backdropFilter:"blur(6px)",fontFamily:FF}} onClick={onClose}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:680,marginTop:24,boxShadow:"0 32px 80px rgba(15,23,42,0.25)",overflow:"hidden"}}>
 
-      {/* Header */}
-      <div style={{padding:"20px 24px 0",borderBottom:"1px solid #f1f5f9",paddingBottom:0}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
-          <div>
-            <div style={{color:"#0f172a",fontWeight:900,fontSize:18}}>Novo Cliente</div>
-            <div style={{color:"#94a3b8",fontSize:12,marginTop:2}}>Preencha os dados do novo cliente</div>
+      {/* ── HEADER ── */}
+      <div style={{padding:"22px 26px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0}}>
+          <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px rgba(124,58,237,0.30)"}}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
           </div>
-          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:10,width:36,height:36,cursor:"pointer",fontSize:18,color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center"}}>x</button>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.4}}>Novo cliente</div>
+            <div style={{color:"#94a3b8",fontSize:12,marginTop:3,fontWeight:500}}>Cadastro inicial · metas começam a contar a partir de hoje</div>
+          </div>
         </div>
-        {/* Tabs */}
-        <div style={{display:"flex",gap:0}}>
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)}
-              style={{background:"none",border:"none",borderBottom:tab===t.id?"2px solid "+C.a:"2px solid transparent",padding:"10px 18px",fontSize:12,fontWeight:tab===t.id?700:400,color:tab===t.id?C.a:"#94a3b8",cursor:"pointer",marginBottom:-1}}>
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <button onClick={onClose} title="Fechar" style={{background:"#f1f5f9",border:"none",borderRadius:10,width:34,height:34,cursor:"pointer",color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
 
-      {/* Content */}
-      <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
+      {/* ── TABS ── */}
+      <div style={{display:"flex",gap:0,padding:"0 26px",borderBottom:"1px solid #f1f5f9",overflowX:"auto"}}>
+        {TABS.map(function(t){
+          const active=tab===t.id;
+          return <button key={t.id} onClick={function(){setTab(t.id);}}
+            style={{background:"none",border:"none",borderBottom:active?"2px solid #7c3aed":"2px solid transparent",padding:"13px 16px",fontSize:13,fontWeight:active?700:500,color:active?"#7c3aed":"#94a3b8",cursor:"pointer",marginBottom:-1,fontFamily:FF,letterSpacing:-.1,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:7,transition:"color .12s"}}
+            onMouseEnter={function(e){if(!active) e.currentTarget.style.color="#475569";}}
+            onMouseLeave={function(e){if(!active) e.currentTarget.style.color="#94a3b8";}}>
+            {typeof Ico==="function" && <Ico n={t.ico} size={13} color={active?"#7c3aed":"#94a3b8"}/>}
+            {t.label}
+          </button>;
+        })}
+      </div>
 
-        {error&&<div style={{background:"#fff1f2",border:"1px solid #fecdd3",borderRadius:8,padding:"8px 12px",color:"#e11d48",fontSize:12}}>{error}</div>}
+      {/* ── CONTENT ── */}
+      <div style={{padding:"24px 26px",display:"flex",flexDirection:"column",gap:18,maxHeight:"60vh",overflowY:"auto"}}>
+        {error && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",color:"#b91c1c",fontSize:12.5,fontWeight:600}}>{error}</div>}
 
-        {/* ── DADOS ── */}
-        {tab==="dados"&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div style={{gridColumn:"1/-1"}}><LBL t="Nome do cliente"/><input value={name} onChange={e=>{setName(e.target.value);if(!abbr)setAbbr(e.target.value.slice(0,2).toUpperCase());}} style={inp} placeholder="Ex: Construschorr"/></div>
-          <div><LBL t="Sigla (abbr)"/><input value={abbr} onChange={e=>setAbbr(e.target.value.toUpperCase().slice(0,4))} style={inp} placeholder="Ex: CS"/></div>
-          <div><LBL t="Cor do cliente"/><input type="color" value={color} onChange={e=>setColor(e.target.value)} style={{...inp,height:38,padding:"4px 8px",cursor:"pointer"}}/></div>
-          <div><LBL t="Setor"/><input value={sector} onChange={e=>setSector(e.target.value)} style={inp} placeholder="Ex: Construcao Civil"/></div>
-          <div><LBL t="Status"/><select value={status} onChange={e=>setStatus(e.target.value)} style={inp}>
-            <option value="ativo">Ativo</option><option value="atencao">Atencao</option><option value="pausado">Pausado</option><option value="interno">Interno</option>
-          </select></div>
-          <div><LBL t="Contrato mensal (R$)"/><input type="number" value={contract} onChange={e=>setContract(e.target.value)} style={inp} placeholder="Ex: 5000"/></div>
-          <div><LBL t="Saude (0-100)"/><input type="number" value={health} onChange={e=>setHealth(e.target.value)} style={inp} placeholder="Ex: 85"/></div>
-          <div><LBL t="NPS (0-100)"/><input type="number" value={nps} onChange={e=>setNps(e.target.value)} style={inp} placeholder="Ex: 80"/></div>
-          <div><LBL t="Cliente desde"/><input value={since} onChange={e=>setSince(e.target.value)} style={inp} placeholder="Ex: Mar 2025"/></div>
-          <div><LBL t="Gestor responsavel"/><select value={manager} onChange={e=>setManager(e.target.value)} style={inp}>
-            {TEAM.filter(u=>u.level<=2).map(u=>(<option key={u.id} value={u.id}>{u.name}</option>))}
-          </select></div>
-        </div>)}
+        {/* ── DADOS BÁSICOS ── */}
+        {tab==="dados" && <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {/* Upload logo grande */}
+          <div>
+            <LBL t="Logo do cliente"/>
+            <label htmlFor="_novo_cl_logo" style={{display:"block",cursor:"pointer"}}>
+              <div style={{background:logoUrl?"#fff":"#fafbfc",border:"1.5px dashed "+(logoUrl?"#c4b5fd":"#cbd5e1"),borderRadius:14,padding:logoUrl?"16px":"24px 18px",display:"flex",alignItems:"center",gap:14,transition:"all .15s"}}
+                onMouseEnter={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.background="#faf5ff";}}
+                onMouseLeave={function(e){e.currentTarget.style.borderColor=logoUrl?"#c4b5fd":"#cbd5e1";e.currentTarget.style.background=logoUrl?"#fff":"#fafbfc";}}>
+                {logoUrl
+                  ? <>
+                      <div style={{width:64,height:64,borderRadius:12,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
+                        <img src={logoUrl} alt="preview" style={{maxWidth:"80%",maxHeight:"80%",objectFit:"contain"}}/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#0f172a",fontWeight:700,fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{logoFileName||"Logo carregada"}</div>
+                        <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:500}}>Clique pra trocar · ou remova abaixo</div>
+                      </div>
+                      <button type="button" onClick={function(e){e.preventDefault();_clearLogo();}} title="Remover logo"
+                        style={{background:"#fee2e2",border:"none",borderRadius:9,width:32,height:32,cursor:"pointer",color:"#dc2626",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                      </button>
+                    </>
+                  : <>
+                      <div style={{width:48,height:48,borderRadius:12,background:"#f1f5f9",color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5}}>Subir logo do cliente</div>
+                        <div style={{color:"#94a3b8",fontSize:11.5,marginTop:3,fontWeight:500}}>PNG, JPG ou PDF · até 5MB</div>
+                      </div>
+                    </>
+                }
+              </div>
+              <input id="_novo_cl_logo" type="file" accept="image/png,image/jpeg,application/pdf" onChange={_handleLogoUpload} style={{display:"none"}}/>
+            </label>
+          </div>
 
-        {/* ── ADS ── */}
-        {tab==="ads"&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div style={{gridColumn:"1/-1",color:"#1877f2",fontWeight:700,fontSize:12,borderBottom:"1px solid #e2e8f0",paddingBottom:6}}>Meta Ads</div>
-          <div><LBL t="Investimento (R$)"/><input type="number" value={metaSpend} onChange={e=>setMetaSpend(e.target.value)} style={inp} placeholder="Ex: 5000"/></div>
-          <div><LBL t="Budget (R$)"/><input type="number" value={metaBudget} onChange={e=>setMetaBudget(e.target.value)} style={inp} placeholder="Ex: 6000"/></div>
-          <div><LBL t="ROAS"/><input type="number" value={metaRoas} onChange={e=>setMetaRoas(e.target.value)} style={inp} placeholder="Ex: 4.2"/></div>
-          <div><LBL t="Leads"/><input type="number" value={metaLeads} onChange={e=>setMetaLeads(e.target.value)} style={inp} placeholder="Ex: 120"/></div>
-          <div><LBL t="CPC (R$)"/><input type="number" value={metaCpc} onChange={e=>setMetaCpc(e.target.value)} style={inp} placeholder="Ex: 1.50"/></div>
-          <div><LBL t="CTR (%)"/><input type="number" value={metaCtr} onChange={e=>setMetaCtr(e.target.value)} style={inp} placeholder="Ex: 3.2"/></div>
-          <div style={{gridColumn:"1/-1",color:"#34a853",fontWeight:700,fontSize:12,borderBottom:"1px solid #e2e8f0",paddingBottom:6,marginTop:4}}>Google Ads</div>
-          <div><LBL t="Investimento (R$)"/><input type="number" value={googleSpend} onChange={e=>setGoogleSpend(e.target.value)} style={inp} placeholder="Ex: 3000"/></div>
-          <div><LBL t="Budget (R$)"/><input type="number" value={googleBudget} onChange={e=>setGoogleBudget(e.target.value)} style={inp} placeholder="Ex: 3500"/></div>
-          <div><LBL t="ROAS"/><input type="number" value={googleRoas} onChange={e=>setGoogleRoas(e.target.value)} style={inp} placeholder="Ex: 4.5"/></div>
-          <div><LBL t="Leads"/><input type="number" value={googleLeads} onChange={e=>setGoogleLeads(e.target.value)} style={inp} placeholder="Ex: 80"/></div>
-          <div><LBL t="CPC (R$)"/><input type="number" value={googleCpc} onChange={e=>setGoogleCpc(e.target.value)} style={inp} placeholder="Ex: 1.20"/></div>
-          <div><LBL t="CTR (%)"/><input type="number" value={googleCtr} onChange={e=>setGoogleCtr(e.target.value)} style={inp} placeholder="Ex: 3.8"/></div>
-        </div>)}
+          {/* Nome */}
+          <div>
+            <LBL t="Nome do cliente *"/>
+            <input value={name} onChange={function(e){setName(e.target.value);}} style={inp} placeholder="Ex: Construschorr" autoFocus
+              onFocus={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.boxShadow="0 0 0 3px rgba(167,139,250,0.18)";}}
+              onBlur={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}/>
+          </div>
+
+          {/* Setor */}
+          <div>
+            <LBL t="Setor"/>
+            <input value={setor} onChange={function(e){setSetor(e.target.value);}} style={inp} placeholder="Ex: Construção civil"
+              onFocus={function(e){e.currentTarget.style.borderColor="#a78bfa";e.currentTarget.style.boxShadow="0 0 0 3px rgba(167,139,250,0.18)";}}
+              onBlur={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}/>
+          </div>
+
+          {/* Cidade + UF */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 90px",gap:12}}>
+            <div>
+              <LBL t="Cidade"/>
+              <input value={cidade} onChange={function(e){setCidade(e.target.value);}} style={inp} placeholder="Ex: Chapecó"/>
+            </div>
+            <div>
+              <LBL t="UF"/>
+              <input value={estado} onChange={function(e){setEstado(e.target.value.toUpperCase().slice(0,2));}} style={inp} placeholder="SC"/>
+            </div>
+          </div>
+        </div>}
+
+        {/* ── TRÁFEGO PAGO ── */}
+        {tab==="trafego" && <div style={{display:"flex",flexDirection:"column",gap:18}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <span style={{width:26,height:26,borderRadius:8,background:"#1877F215",color:"#1877F2",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
+              </span>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Meta Ads</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              <div><LBL t="Investimento (R$)"/><input type="number" value={metaSpend} onChange={function(e){setMetaSpend(e.target.value);}} style={inp} placeholder="5000"/></div>
+              <div><LBL t="Budget (R$)"/><input type="number" value={metaBudget} onChange={function(e){setMetaBudget(e.target.value);}} style={inp} placeholder="6000"/></div>
+              <div><LBL t="ROAS"/><input type="number" step="0.1" value={metaRoas} onChange={function(e){setMetaRoas(e.target.value);}} style={inp} placeholder="4.2"/></div>
+              <div><LBL t="Leads"/><input type="number" value={metaLeads} onChange={function(e){setMetaLeads(e.target.value);}} style={inp} placeholder="120"/></div>
+              <div><LBL t="CPC (R$)"/><input type="number" step="0.01" value={metaCpc} onChange={function(e){setMetaCpc(e.target.value);}} style={inp} placeholder="1.50"/></div>
+              <div><LBL t="CTR (%)"/><input type="number" step="0.1" value={metaCtr} onChange={function(e){setMetaCtr(e.target.value);}} style={inp} placeholder="3.2"/></div>
+            </div>
+          </div>
+
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+              <span style={{width:26,height:26,borderRadius:8,background:"#34A85315",color:"#34A853",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M21.35 11.1H12v2.7h5.35c-.55 2.45-2.7 4.2-5.35 4.2-3.31 0-6-2.69-6-6s2.69-6 6-6c1.42 0 2.74.5 3.78 1.34l2-2C16.45 4.04 14.4 3 12 3 7.03 3 3 7.03 3 12s4.03 9 9 9c5.13 0 8.62-3.6 8.62-8.66 0-.58-.07-1.13-.18-1.65-.03-.13-.06-.26-.09-.39z"/></svg>
+              </span>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Google Ads</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              <div><LBL t="Investimento (R$)"/><input type="number" value={googleSpend} onChange={function(e){setGoogleSpend(e.target.value);}} style={inp} placeholder="3000"/></div>
+              <div><LBL t="Budget (R$)"/><input type="number" value={googleBudget} onChange={function(e){setGoogleBudget(e.target.value);}} style={inp} placeholder="3500"/></div>
+              <div><LBL t="ROAS"/><input type="number" step="0.1" value={googleRoas} onChange={function(e){setGoogleRoas(e.target.value);}} style={inp} placeholder="4.5"/></div>
+              <div><LBL t="Leads"/><input type="number" value={googleLeads} onChange={function(e){setGoogleLeads(e.target.value);}} style={inp} placeholder="80"/></div>
+              <div><LBL t="CPC (R$)"/><input type="number" step="0.01" value={googleCpc} onChange={function(e){setGoogleCpc(e.target.value);}} style={inp} placeholder="0.95"/></div>
+              <div><LBL t="CTR (%)"/><input type="number" step="0.1" value={googleCtr} onChange={function(e){setGoogleCtr(e.target.value);}} style={inp} placeholder="3.8"/></div>
+            </div>
+          </div>
+        </div>}
 
         {/* ── SOCIAL ── */}
-        {tab==="social"&&(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-          <div><LBL t="Seguidores"/><input type="number" value={followers} onChange={e=>setFollowers(e.target.value)} style={inp} placeholder="Ex: 5000"/></div>
-          <div><LBL t="Crescimento (%)"/><input type="number" value={growth} onChange={e=>setGrowth(e.target.value)} style={inp} placeholder="Ex: 4.2"/></div>
-          <div><LBL t="Alcance mensal"/><input type="number" value={reach} onChange={e=>setReach(e.target.value)} style={inp} placeholder="Ex: 20000"/></div>
-          <div><LBL t="Engajamento (%)"/><input type="number" value={eng} onChange={e=>setEng(e.target.value)} style={inp} placeholder="Ex: 3.5"/></div>
-        </div>)}
+        {tab==="social" && <div style={{display:"flex",flexDirection:"column",gap:18}}>
+          {/* Redes — URLs ou @usernames */}
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,marginBottom:12}}>Redes do cliente</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {/* Instagram */}
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <span style={{width:36,height:36,borderRadius:9,background:"linear-gradient(135deg,#feda75,#fa7e1e,#d62976,#962fbf,#4f5bd5)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>
+                </span>
+                <input value={igUrl} onChange={function(e){setIgUrl(e.target.value);}} style={inp} placeholder="@usuario ou link do Instagram"/>
+              </div>
+              {/* Facebook */}
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <span style={{width:36,height:36,borderRadius:9,background:"#1877F2",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
+                </span>
+                <input value={fbUrl} onChange={function(e){setFbUrl(e.target.value);}} style={inp} placeholder="link da página no Facebook"/>
+              </div>
+              {/* TikTok */}
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <span style={{width:36,height:36,borderRadius:9,background:"#000",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M19.589 6.686a4.793 4.793 0 0 1-3.77-4.245V2h-3.445v13.672a2.896 2.896 0 0 1-5.201 1.743l-.002-.001.002.001a2.895 2.895 0 0 1 3.183-4.51v-3.5a6.329 6.329 0 0 0-5.394 10.692 6.33 6.33 0 0 0 10.857-4.424V8.687a8.182 8.182 0 0 0 4.773 1.526V6.79a4.831 4.831 0 0 1-1.003-.104z"/></svg>
+                </span>
+                <input value={ttUrl} onChange={function(e){setTtUrl(e.target.value);}} style={inp} placeholder="@usuario ou link do TikTok"/>
+              </div>
+              {/* YouTube */}
+              <div style={{display:"flex",alignItems:"center",gap:11}}>
+                <span style={{width:36,height:36,borderRadius:9,background:"#FF0000",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#fff"}}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+                </span>
+                <input value={ytUrl} onChange={function(e){setYtUrl(e.target.value);}} style={inp} placeholder="link do canal no YouTube"/>
+              </div>
+            </div>
+          </div>
+
+          {/* Números */}
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,marginBottom:12}}>Números atuais</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+              <div><LBL t="Seguidores"/><input type="number" value={followers} onChange={function(e){setFollowers(e.target.value);}} style={inp} placeholder="12500"/></div>
+              <div><LBL t="Alcance mensal"/><input type="number" value={reach} onChange={function(e){setReach(e.target.value);}} style={inp} placeholder="48000"/></div>
+              <div><LBL t="Engajamento (%)"/><input type="number" step="0.1" value={eng} onChange={function(e){setEng(e.target.value);}} style={inp} placeholder="4.2"/></div>
+            </div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:10,lineHeight:1.5,fontWeight:500}}>
+              Seguidores e Engajamento vão direto pros pilares de <span style={{color:"#7c3aed",fontWeight:700}}>Estratégia &gt; Metas</span> — sem precisar redigitar.
+            </div>
+          </div>
+        </div>}
 
         {/* ── EXTRAS ── */}
-        {tab==="extras"&&(<div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div><LBL t="Meta Account ID"/><input value={metaId} onChange={e=>setMetaId(e.target.value)} style={inp} placeholder="Ex: act_1234567890"/></div>
-          <div><LBL t="Google Account ID"/><input value={googleId} onChange={e=>setGoogleId(e.target.value)} style={inp} placeholder="Ex: 123-456-7890"/></div>
-          <div><LBL t="Reportei URL (dashboard)"/><input value={reporteiUrl} onChange={e=>setReporteiUrl(e.target.value)} style={inp} placeholder="https://app.reportei.com/d/..."/></div>
-          <div><LBL t="Upsell potencial (separado por virgula)"/><input value={upsell} onChange={e=>setUpsell(e.target.value)} style={inp} placeholder="Ex: Google Display, Remarketing"/></div>
-        </div>)}
+        {tab==="extras" && <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          <div>
+            <LBL t="URL do Reportei"/>
+            <input value={reporteiUrl} onChange={function(e){setReporteiUrl(e.target.value);}} style={inp} placeholder="https://reportei.com/..."/>
+          </div>
+          <div>
+            <LBL t="Upsell (separar por vírgula)"/>
+            <input value={upsell} onChange={function(e){setUpsell(e.target.value);}} style={inp} placeholder="LinkedIn Ads, WhatsApp Ads"/>
+          </div>
+        </div>}
+      </div>
 
-        {/* Footer buttons */}
-        <div style={{display:"flex",gap:10,marginTop:8,paddingTop:14,borderTop:"1px solid #f1f5f9"}}>
-          <button onClick={onClose} style={{flex:1,background:"#f1f5f9",border:"none",borderRadius:12,padding:"12px 0",color:"#64748b",fontWeight:700,cursor:"pointer",fontSize:13}}>Cancelar</button>
-          <button onClick={handleSave} style={{flex:2,background:"linear-gradient(135deg,"+C.a+","+C.aD+")",color:"#fff",border:"none",borderRadius:12,padding:"12px 0",fontWeight:900,cursor:"pointer",fontSize:14,boxShadow:"0 4px 18px "+C.a+"40"}}>
-            Salvar Cliente
-          </button>
-        </div>
+      {/* ── FOOTER ── */}
+      <div style={{padding:"16px 26px 22px",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+        <button onClick={onClose}
+          style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:FF,transition:"all .15s"}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#f8fafc";}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}>
+          Cancelar
+        </button>
+        <button onClick={handleSave} disabled={saving||!name.trim()}
+          style={{background:(saving||!name.trim())?"#cbd5e1":"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:11,padding:"10px 26px",fontSize:13,fontWeight:800,cursor:(saving||!name.trim())?"not-allowed":"pointer",fontFamily:FF,letterSpacing:.1,boxShadow:(saving||!name.trim())?"none":"0 6px 16px rgba(124,58,237,0.30)",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:7}}
+          onMouseEnter={function(e){if(!saving&&name.trim()){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 22px rgba(124,58,237,0.40)";}}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow=(saving||!name.trim())?"none":"0 6px 16px rgba(124,58,237,0.30)";}}>
+          {saving
+            ? "Salvando..."
+            : <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Cadastrar cliente
+              </>
+          }
+        </button>
       </div>
     </div>
   </div>);
@@ -10417,6 +10613,16 @@ function PageClientes({isMob, tasks}){
   const [extraClients,setExtraClients]=useState([]);
   const [filterStatus,setFilterStatus]=useState("todos");
   const [bioterExpanded,setBioterExpanded]=useState(false);
+  const [_identTick,_setIdentTick]=useState(0);
+  useEffect(function(){
+    function _bump(){ _setIdentTick(function(n){return n+1;}); }
+    window.addEventListener("pixels:identity-updated", _bump);
+    window.addEventListener("storage", _bump);
+    return function(){
+      window.removeEventListener("pixels:identity-updated", _bump);
+      window.removeEventListener("storage", _bump);
+    };
+  },[]);
 
   const allClients=[...CLIENTS,...extraClients];
 
@@ -10614,13 +10820,21 @@ function PageClientes({isMob, tasks}){
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
       {filtered.map(function(cl){
         const profile=getClientProfile(cl.id);
+        // Identidade vinda do Briefing — prioridade máxima (sócio cadastrou explicitamente)
+        const _ident = (typeof getClientIdentity==="function"?getClientIdentity(cl.id):null) || {};
         const isBioterGroup=cl.id==="bioter";
         const isExpanded=bioterExpanded&&isBioterGroup;
         const isAtivo=(cl.status||"ativo")==="ativo";
         const _accentCl = cl.color || "#94a3b8";
-        const hasLogo = typeof CLIENT_LOGOS!=="undefined" && !!CLIENT_LOGOS[cl.id];
+        const _logoSrc = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[cl.id]) || cl.logoUrl || null;
+        const hasLogo = !!_logoSrc;
         const _segmento = (profile&&profile.segmento)||cl.sector;
-        const _cidadeUf = profile&&(profile.cidade||profile.estado) ? [profile.cidade,profile.estado].filter(Boolean).join("/") : null;
+        // Cidade — preferir Briefing > Identidade; fallback pra perfil estendido ou cl.cidade
+        const _cidadeBr = (_ident.cidade||"").trim();
+        const _cidadeUf = _cidadeBr ? _cidadeBr
+          : (profile&&(profile.cidade||profile.estado) ? [profile.cidade,profile.estado].filter(Boolean).join("/") : (cl.cidade ? [cl.cidade,cl.estado].filter(Boolean).join("/") : null));
+        // Nome — preferir Razão social do Briefing se cadastrada
+        const _displayName = (_ident.nome_empresarial||"").trim() || (profile&&profile.name) || cl.name;
 
         return <div key={cl.id}
           style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:0,boxShadow:"0 1px 2px rgba(15,23,42,0.03)",display:"flex",flexDirection:"column",transition:"all .2s cubic-bezier(.4,0,.2,1)",cursor:"pointer",overflow:"hidden",position:"relative"}}
@@ -10635,7 +10849,7 @@ function PageClientes({isMob, tasks}){
           <div style={{padding:"20px 20px 14px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
             <div style={{width:60,height:60,borderRadius:14,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
               {hasLogo
-                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:"75%",maxHeight:"75%",objectFit:"contain",display:"block"}}/>
+                ? <img src={_logoSrc} alt={cl.name} style={{maxWidth:"75%",maxHeight:"75%",objectFit:"contain",display:"block"}}/>
                 : <span style={{color:_accentCl,fontWeight:900,fontSize:22,letterSpacing:-.6}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</span>
               }
             </div>
@@ -10645,7 +10859,7 @@ function PageClientes({isMob, tasks}){
           {/* NOME + SEGMENTO */}
           <div style={{padding:"0 20px 14px"}}>
             <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:5}}>
-              <span style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4,lineHeight:1.15}}>{(profile&&profile.name)||cl.name}</span>
+              <span style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4,lineHeight:1.15}}>{_displayName}</span>
               {isBioterGroup&&<span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.4,border:"1px solid #ddd6fe"}}>
                 <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
                 {BIOTER_GROUP_UNITS.length} UNIDADES
@@ -11283,6 +11497,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {id:"onboarding",    label:"Onboarding",          ico:"checkCircle"},
     {id:"ongoing",       label:"Ongoing",             ico:"infinity"},
     {id:"nps",           label:"NPS",                 ico:"sparkles"},
+    {id:"marcos",        label:"Marcos",              ico:"flame"},
     {id:"briefing",      label:"Briefing",            ico:"fileText"},
     {id:"planejamento",  label:"Planejamento",         ico:"layers"},
     {id:"metas",         label:"Metas",               ico:"target"},
@@ -11391,6 +11606,7 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
     {tab==="analises"&&<CAnalises cl={cl} isMob={isMob} tasks={tasks}/>}
     {tab==="onboarding"&&<OnboardingChecklist cl={cl} currentUserId={typeof CURRENT_USER!=="undefined"?CURRENT_USER.id:""}/>}
     {tab==="nps"&&<CClienteNPS cl={cl} isMob={isMob}/>}
+    {tab==="marcos"&&<CMarcos cl={cl} canEdit={canEditarBriefing}/>}
     {tab==="briefing"&&<CBriefingTab cl={cl} isSocio={canEditarBriefing}/>}
     {tab==="planejamento"&&<PageMonthlyPlanInterno cl={cl} hideClientSelector={true} isMob={isMob}/>}
     {tab==="metas"&&<CMetas cl={cl}/>}
@@ -11805,12 +12021,12 @@ function CBriefingTab({cl,isSocio}){
 const MARCO_TIPOS={
   comercial: {label:"Comercial",color:"#7c3aed",bg:"#f3e8ff"},
   reuniao:   {label:"Reunião",  color:"#0ea5e9",bg:"#e0f2fe"},
-  producao:  {label:"Produção", color:"#ea580c",bg:"#ffedd5"},
+  captacao:  {label:"Captação", color:"#ea580c",bg:"#ffedd5"},
   campanha:  {label:"Campanha", color:"#db2777",bg:"#fce7f3"},
   resultado: {label:"Resultado",color:"#16a34a",bg:"#dcfce7"},
   entrega:   {label:"Entrega",  color:"#475569",bg:"#f1f5f9"},
 };
-const _LEGACY_MARCO_MAP={kickoff:"comercial",meta:"resultado",venda:"resultado",conquista:"resultado",estrategia:"entrega"};
+const _LEGACY_MARCO_MAP={kickoff:"comercial",meta:"resultado",venda:"resultado",conquista:"resultado",estrategia:"entrega",producao:"captacao"};
 function _normMarcoTipo(t){return MARCO_TIPOS[t]?t:(_LEGACY_MARCO_MAP[t]||"entrega");}
 
 function CMarcos({cl,canEdit}){
@@ -11890,6 +12106,33 @@ function CMarcos({cl,canEdit}){
   </div>);
 }
 
+// DateField moderno reutilizável do padrão Ongoing — clique abre o picker nativo
+function _MarcoDateField({value, onChange, accent}){
+  const inputRef = useRef(null);
+  function _open(){
+    try{
+      if(inputRef.current){
+        if(typeof inputRef.current.showPicker==="function") inputRef.current.showPicker();
+        else inputRef.current.focus();
+      }
+    }catch(e){ if(inputRef.current) inputRef.current.focus(); }
+  }
+  const _ac = accent || "#7c3aed";
+  const hasVal = !!value;
+  const labelBR = hasVal ? (value.slice(8,10)+"/"+value.slice(5,7)+"/"+value.slice(0,4)) : "Selecionar data";
+  return <div onClick={function(e){e.stopPropagation();_open();}}
+    style={{display:"inline-flex",alignItems:"center",gap:8,background:hasVal?"#fff":"#fafbfc",border:"1px solid "+(hasVal?_ac+"33":"#e2e8f0"),borderRadius:10,padding:"0 13px",height:38,fontSize:13,color:hasVal?"#0f172a":"#94a3b8",fontWeight:hasVal?700:600,fontFamily:"inherit",cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",minWidth:160,boxSizing:"border-box"}}
+    onMouseEnter={function(e){e.currentTarget.style.borderColor=_ac+"66";e.currentTarget.style.background="#fff";}}
+    onMouseLeave={function(e){e.currentTarget.style.borderColor=hasVal?_ac+"33":"#e2e8f0";e.currentTarget.style.background=hasVal?"#fff":"#fafbfc";}}>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hasVal?_ac:"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+    <span style={{whiteSpace:"nowrap"}}>{labelBR}</span>
+    <input ref={inputRef} type="date" value={value||""} onChange={function(e){onChange&&onChange(e.target.value);}}
+      style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
+  </div>;
+}
+
 function MarcoForm({cl,onClose,onSaved}){
   const sb=window._sb;
   const [type,setType]=useState("comercial");
@@ -11933,14 +12176,14 @@ function MarcoForm({cl,onClose,onSaved}){
           </div>
         </div>
 
-        <div style={{display:"grid",gridTemplateColumns:"140px 1fr",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"180px 1fr",gap:12}}>
           <div>
             <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Data</div>
-            <input type="date" value={date} onChange={function(e){setDate(e.target.value);}} style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+            <_MarcoDateField value={date} onChange={function(v){setDate(v);}} accent="#7c3aed"/>
           </div>
           <div>
             <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Título</div>
-            <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="Ex: Contrato fechado" style={{width:"100%",padding:"8px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+            <input value={title} onChange={function(e){setTitle(e.target.value);}} placeholder="Ex: Contrato fechado" style={{width:"100%",padding:"9px 12px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",height:38}}/>
           </div>
         </div>
 
