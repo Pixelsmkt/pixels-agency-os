@@ -32838,7 +32838,9 @@ export default function AgencyOS(){
     if(sect==="video"||sect==="vídeo"||sect==="edicao"||sect==="edição")return true;
     return false;
   };
-  const pendingCopys=tasks.filter(t=>!t.deletedAt&&t.status==="demanda"&&!t.ajustar).length;
+  // Alinhado com copyQueue do 06_aprovacoes.jsx: TODOS os cards em status "demanda" entram (sem filtrar `ajustar`,
+  // que era flag legada da época pré-coluna "Alteração de copy"). Garante badge da sidebar = contador da paginação.
+  const pendingCopys=tasks.filter(t=>!t.deletedAt&&t.status==="demanda").length;
   const _pubAvail=tasks.filter(t=>!t.deletedAt&&t.status==="avaliacao");
   const pendingDesign=_pubAvail.filter(t=>!_isVideoTask(t)).length;
   const pendingVideo =_pubAvail.filter(t=> _isVideoTask(t)).length;
