@@ -33455,6 +33455,11 @@ export default function AgencyOS(){
   const unreadNotifs   = notifs.filter(n=>!n.read).length;
   const nav=useCallback((id)=>{setPage(id);setActiveCl(null);setMindmapActiveCl(false);setSideOpen(false);},[]);
   const goClient=useCallback((id)=>{setActiveCl(id);setMindmapActiveCl(false);setPage("clientes");setSideOpen(false);},[]);
+  // Expõe nav pra DashGustavo/outros componentes navegarem (ex: card "Avaliar agora" → aprovacoes_copys)
+  useEffect(function(){
+    window.pixelsNav = nav;
+    return function(){ try{ delete window.pixelsNav; }catch(e){} };
+  },[nav]);
 
   // Listener global pra navegação cross-module (ListaView/Kanban → Chat).
   // Quem dispara: window.dispatchEvent(new CustomEvent("pixels:goto-chat",{detail:{channelId:"cliente_xxx"}}))
@@ -47658,8 +47663,9 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   });
 
   // ── Indicadores do header ──
+  // Avaliações pendentes — mesmo filtro do 06_aprovacoes.jsx (sem `!t.ajustar` no de copys)
   const apvDesign = allTasks.filter(t=>t.status==="avaliacao");
-  const apvCopys  = allTasks.filter(t=>t.status==="demanda" && !t.ajustar);
+  const apvCopys  = allTasks.filter(t=>t.status==="demanda");
   const apvInternas = allTasks.filter(t=>t.status==="interno_avaliacao");
   const apvTotal = apvDesign.length + apvCopys.length + apvInternas.length;
   const demandasAbertas = allTasks.filter(t=>!["aprovado","publicado","interno_executado","interno_aprovado"].includes(t.status));
@@ -47752,6 +47758,107 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       <div style={{color:"#0f172a",fontSize:isMob?20:24,fontWeight:800,letterSpacing:-.6,marginTop:4,lineHeight:1.15}}>Sua semana num só lugar</div>
       <div style={{color:"#64748b",fontSize:12.5,marginTop:5,fontWeight:500}}>{_dgDateLong()} · Semana {weekKey.slice(-3)}</div>
     </div>
+
+    {/* ══════════ AVALIAÇÕES PENDENTES — filtrado por sócio (Vinicius=copys+vídeo+internas; Gustavo=design+internas) ══════════ */}
+    {(function(){
+      // Divisão de responsabilidades entre sócios
+      // Vinicius: copys + vídeo + internas
+      // Gustavo:  design + internas
+      // Ocsana (vê como sócio): tudo (fallback)
+      const _RESPS = {
+        vinicius: ["copys","video","internas"],
+        gustavo:  ["design","internas"],
+      };
+      const _resps = _RESPS[user.id] || ["copys","design","video","internas"];
+
+      // Counts por tipo
+      const _nCopys  = apvCopys.length;
+      const _nDesign = apvDesign.filter(t=>!(t.contentType||"").toLowerCase().includes("video")&&!(t.contentType||"").toLowerCase().includes("corte")).length;
+      const _nVideo  = apvDesign.filter(t=>(t.contentType||"").toLowerCase().includes("video")||(t.contentType||"").toLowerCase().includes("corte")).length;
+      const _nIntern = apvInternas.length;
+
+      // Constrói cells SÓ com os tipos que o sócio logado avalia
+      const _allCells = {
+        copys:    {l:"Copys",    n:_nCopys,  pageId:"aprovacoes_copys",      ico:"fileText", cor:"#7c3aed"},
+        design:   {l:"Design",   n:_nDesign, pageId:"aprovacoes_publicacao", ico:"image",    cor:"#16a34a"},
+        video:    {l:"Vídeo",    n:_nVideo,  pageId:"aprovacoes_video",      ico:"film",     cor:"#0ea5e9"},
+        internas: {l:"Internas", n:_nIntern, pageId:"aprovacoes_internas",   ico:"users",    cor:"#8b5cf6"},
+      };
+      const cells = _resps.map(function(k){return _allCells[k];}).filter(function(c){return c && c.n>0;});
+
+      // Total relevante PRO SÓCIO (não o global)
+      const totalMeus = cells.reduce(function(a,c){return a+c.n;},0);
+      if(totalMeus===0) return null;
+
+      // Urgência baseada no total relevante
+      const urgent = totalMeus>=15;
+      const moderate = totalMeus>=5 && totalMeus<15;
+      const accent = urgent ? "#dc2626" : moderate ? "#ea580c" : DG_PURPLE;
+      const bgGrad = urgent
+        ? "linear-gradient(135deg,#fef2f2 0%,#fff 70%)"
+        : moderate
+        ? "linear-gradient(135deg,#fff7ed 0%,#fff 70%)"
+        : "linear-gradient(135deg,#faf5ff 0%,#fff 70%)";
+      function _goTo(pageId){
+        try{
+          if(typeof window!=="undefined" && typeof window.pixelsNav==="function") window.pixelsNav(pageId);
+        }catch(e){console.warn("[nav]",e);}
+      }
+
+      return <div style={{background:bgGrad,border:"1px solid "+accent+"33",borderRadius:18,padding:isMob?"20px 22px":"24px 26px",boxShadow:"0 6px 22px "+accent+"15, 0 1px 3px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden"}}>
+        {/* Faixa accent no topo */}
+        <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,"+accent+","+accent+"cc)"}}/>
+
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:14,minWidth:0}}>
+            <div style={{width:54,height:54,borderRadius:14,background:accent,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 18px "+accent+"40",position:"relative"}}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              {/* Badge total */}
+              <span style={{position:"absolute",top:-6,right:-8,background:"#fff",color:accent,fontWeight:900,fontSize:11.5,minWidth:22,height:22,padding:"0 6px",borderRadius:99,display:"inline-flex",alignItems:"center",justifyContent:"center",border:"2px solid "+accent,boxShadow:"0 2px 6px rgba(15,23,42,0.10)",fontFeatureSettings:"'tnum'"}}>{totalMeus}</span>
+            </div>
+            <div style={{minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,flexWrap:"wrap",marginBottom:4}}>
+                <span style={{color:"#0f172a",fontWeight:800,fontSize:isMob?16:18.5,letterSpacing:-.4,lineHeight:1.15}}>Aguardando sua avaliação</span>
+                {urgent && <span style={{background:accent,color:"#fff",fontSize:9,fontWeight:900,padding:"3px 9px",borderRadius:99,letterSpacing:.6,textTransform:"uppercase"}}>Urgente</span>}
+                {moderate && <span style={{background:accent+"18",color:accent,border:"1px solid "+accent+"33",fontSize:9,fontWeight:900,padding:"3px 9px",borderRadius:99,letterSpacing:.6,textTransform:"uppercase"}}>Atenção</span>}
+              </div>
+              <div style={{color:"#475569",fontSize:12.5,fontWeight:500,lineHeight:1.5}}>{totalMeus} {totalMeus===1?"item parado":"itens parados"} esperando seu sim ou ajuste · cada hora aqui é hora travada na operação.</div>
+            </div>
+          </div>
+          <button onClick={function(){
+            const first=cells[0]; if(first) _goTo(first.pageId);
+          }}
+            style={{background:accent,color:"#fff",border:"none",borderRadius:12,padding:isMob?"10px 18px":"12px 22px",fontWeight:800,fontSize:13,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:8,boxShadow:"0 8px 20px "+accent+"40",transition:"all .15s",letterSpacing:.2,whiteSpace:"nowrap"}}
+            onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 12px 28px "+accent+"55";}}
+            onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 8px 20px "+accent+"40";}}>
+            Avaliar agora
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </div>
+
+        {/* Breakdown — cards clicáveis por tipo */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat("+Math.max(1,cells.length)+",1fr)",gap:10,marginTop:18}}>
+          {cells.map(function(c,i){
+            return <button key={i} onClick={function(){_goTo(c.pageId);}}
+              style={{background:"#fff",border:"1px solid "+c.cor+"22",borderRadius:13,padding:"14px 16px",display:"flex",alignItems:"center",gap:11,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s",textAlign:"left",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}
+              onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.borderColor=c.cor+"66";e.currentTarget.style.boxShadow="0 8px 18px "+c.cor+"22";}}
+              onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.borderColor=c.cor+"22";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.03)";}}>
+              <div style={{width:36,height:36,borderRadius:10,background:c.cor+"15",border:"1px solid "+c.cor+"33",color:c.cor,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Ico n={c.ico} size={16} color={c.cor}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{c.l}</div>
+                <div style={{display:"flex",alignItems:"baseline",gap:5,marginTop:3}}>
+                  <span style={{color:c.cor,fontSize:24,fontWeight:900,letterSpacing:-.6,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{c.n}</span>
+                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{c.n===1?"item":"itens"}</span>
+                </div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
+            </button>;
+          })}
+        </div>
+      </div>;
+    })()}
 
     {/* ══════════ METAS DO DIA + METAS DA SEMANA — visual unificado ══════════ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:14}}>
