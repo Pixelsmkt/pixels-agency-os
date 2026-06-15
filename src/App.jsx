@@ -18320,8 +18320,11 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     if(ia!==ib)return ia-ib;
     return String(a.id).localeCompare(String(b.id));
   });
-  // Copy queue: cards in "demanda" without ajustar flag
-  const copyQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"&&!t.ajustar));
+  // Copy queue: TODOS os cards na coluna Copys (status="demanda") entram na fila.
+  // Não filtra por `ajustar` — esse flag era usado antes da coluna Alteração de copy existir,
+  // hoje cards reprovados vão pra status="alteracao_copy" (não ficam mais em demanda com o flag).
+  // Mantemos a tolerância pra dados legados aparecerem na fila normalmente.
+  const copyQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.status==="demanda"));
   // Ajuste queue: cards marcados para ajuste
   const ajusteQueue=sortStable((tasks||[]).filter(t=>!t.deletedAt&&t.ajustar&&t.status!=="aprovado"&&!t.status?.startsWith("interno_")));
   // Publication queue: cards in "avaliacao" — separada por tipo (design vs vídeo)
