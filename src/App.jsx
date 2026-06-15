@@ -26059,9 +26059,20 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 Concluir p/ avaliação
               </button>}
-              {/* Enviar para Aprovação — só pra cards de copy marcados como "ajustar" */}
-              {canEdit&&task.ajustar===true&&task.status==="demanda"&&<button
-                onClick={()=>{setTasks(p=>p.map(t=>t.id===task.id?{...t,ajustar:false,timeline:[...(t.timeline||[]),{type:"edit",label:"Reenviada para aprovação por "+user.name,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name}]}:t));onClose();}}
+              {/* Enviar p/ aprovação — só pra cards em "Alteração de copy"; volta pra Copys (demanda) e entra na fila de Avaliação. */}
+              {canEdit&&task.status==="alteracao_copy"&&<button
+                onClick={()=>{
+                  const _now=new Date().toISOString();
+                  setTasks(p=>p.map(t=>t.id===task.id?{
+                    ...t,
+                    status:"demanda",
+                    ajustar:false,
+                    isAlteracao:false,
+                    colEnteredAt:_now,
+                    timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Alteração de copy",toLabel:"Copys",from:"alteracao_copy",to:"demanda",at:_now,atFmt:nowFmt(),user:user.name,note:"Reenviada pra Avaliação de copys por "+user.name}]
+                  }:t));
+                  onClose();
+                }}
                 style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:10,padding:"9px 18px",fontWeight:700,fontSize:12.5,cursor:"pointer",whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(161,64,255,0.28)",minWidth:170,textAlign:"center",letterSpacing:.1}}>
                 Enviar p/ aprovação
               </button>}
