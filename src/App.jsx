@@ -10269,6 +10269,8 @@ function NovoClienteModal({onClose,onSave}){
       meetingNotes:[],
     };
     onSave(newCl);
+    // Seed automático do Onboarding com prazos em dias úteis (defined em 21_cliente_onboarding.jsx)
+    try{ if(typeof seedClientOnboarding==="function") seedClientOnboarding(id); }catch(e){console.warn("[onb seed]",e&&e.message||e);}
     onClose();
   };
 
@@ -43218,8 +43220,18 @@ function useClientOnboarding(clientId){
     _persist(next);
   }
 
-  const doneCount = Object.values(items).filter(function(x){return x&&x.done;}).length;
-  return { items, toggle, setResp, setDue, doneCount, loading };
+  const doneCount = Object.keys(items).filter(function(k){return k!=="__finalizado__" && items[k] && items[k].done;}).length;
+  const finalizado = !!items.__finalizado__;
+  function setFinalizado(value){
+    const next = Object.assign({}, items);
+    if(value){
+      next.__finalizado__ = true;
+    }else{
+      delete next.__finalizado__;
+    }
+    _persist(next);
+  }
+  return { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado };
 }
 
 /* ─── COMPONENTE: ClientMetricsCards (visão geral) ───────────── */
@@ -43536,7 +43548,7 @@ function OnboardingSection(props){
 /* ─── OnboardingChecklist (raiz) — mesmo padrão Ongoing ─── */
 function OnboardingChecklist(props){
   const { cl, currentUserId } = props;
-  const { items, toggle, setResp, setDue, doneCount, loading } = useClientOnboarding(cl.id);
+  const { items, toggle, setResp, setDue, doneCount, loading, finalizado, setFinalizado } = useClientOnboarding(cl.id);
   const total = ONBOARDING_TOTAL;
   const pct = total>0?Math.round(doneCount/total*100):0;
   const accent = (cl && cl.color) || "#7c3aed";
@@ -43554,6 +43566,31 @@ function OnboardingChecklist(props){
 
   if(loading)return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:13}}>Carregando onboarding...</div>;
 
+  // ── ESTADO "Onboarding finalizado" — esconde toda a checklist e mostra o selo ──
+  if(finalizado){
+    return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_ONB_FF}}>
+      <div style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:14,padding:"22px 26px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,#16a34a,#22c55e)"}}></div>
+        <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+          <div style={{width:52,height:52,borderRadius:14,background:"#dcfce7",border:"1px solid #bbf7d0",color:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(22,163,74,0.22)"}}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#15803d",fontWeight:800,fontSize:17,letterSpacing:-.3,lineHeight:1.1}}>Onboarding finalizado</div>
+            <div style={{color:"#475569",fontSize:12.5,marginTop:5,fontWeight:500,lineHeight:1.5}}>O processo de onboarding deste cliente já foi concluído. As tarefas da checklist não se aplicam mais ao acompanhamento dele.</div>
+          </div>
+          <button onClick={function(){setFinalizado(false);}}
+            style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",flexShrink:0}}
+            onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#f8fafc";}}
+            onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            Reabrir checklist
+          </button>
+        </div>
+      </div>
+    </div>;
+  }
+
   return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:_ONB_FF}}>
     {/* Header — mesmo card branco do Ongoing (sem gradiente roxo) */}
     <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap",fontFamily:_ONB_FF}}>
@@ -43566,11 +43603,19 @@ function OnboardingChecklist(props){
           <div style={{color:"#64748b",fontSize:11.5,marginTop:2}}>{doneCount} de {total} etapas concluídas · checklist completo do projeto</div>
         </div>
       </div>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
         <div style={{background:"#f1f5f9",borderRadius:99,height:5,overflow:"hidden",width:130}}>
           <div style={{width:pct+"%",height:"100%",background:pct>=100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+accent+","+accent+"cc)",borderRadius:99,transition:"width .5s ease"}}/>
         </div>
         <div style={{background:pct>=100?"#dcfce7":"#f1f5f9",color:pct>=100?"#15803d":"#0f172a",border:"1px solid "+(pct>=100?"#bbf7d0":"#e2e8f0"),borderRadius:99,padding:"4px 11px",fontSize:11,fontWeight:700,letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>{pct}%</div>
+        <button onClick={function(){setFinalizado(true);}}
+          title="Marca o onboarding como concluído e esconde toda a checklist"
+          style={{background:"#16a34a",color:"#fff",border:"none",borderRadius:10,padding:"7px 13px",fontSize:11.5,fontWeight:800,cursor:"pointer",fontFamily:_ONB_FF,display:"inline-flex",alignItems:"center",gap:6,letterSpacing:.2,transition:"all .15s",boxShadow:"0 4px 12px rgba(22,163,74,0.25)"}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#15803d";e.currentTarget.style.transform="translateY(-1px)";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="#16a34a";e.currentTarget.style.transform="";}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Onboarding finalizado
+        </button>
       </div>
     </div>
 
