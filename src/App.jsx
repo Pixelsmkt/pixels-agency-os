@@ -10610,118 +10610,82 @@ function PageClientes({isMob, tasks}){
       })}
     </div>
 
-    {/* ── GRID DE CARDS ── compactos e estratégicos ── */}
-    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(320px,1fr))",gap:14}}>
+    {/* ── GRID DE CARDS ── visual clean SaaS premium ── */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
       {filtered.map(function(cl){
         const profile=getClientProfile(cl.id);
         const isBioterGroup=cl.id==="bioter";
         const isExpanded=bioterExpanded&&isBioterGroup;
         const isAtivo=(cl.status||"ativo")==="ativo";
-        const responsavelId=(profile&&profile.responsavel_interno)||cl.manager;
-        const respUser=responsavelId&&typeof TEAM!=="undefined"?TEAM.find(function(u){return u.id===responsavelId;}):null;
         const _accentCl = cl.color || "#94a3b8";
-        const lastUpdate = _lastUpdateForClient(cl.id);
-        const lastMeetD = _parseBR(cl.lastMeeting);
-        const _lastEff = lastUpdate&&lastMeetD ? (lastUpdate>lastMeetD?lastUpdate:lastMeetD) : (lastUpdate||lastMeetD);
-        const _lastLabel = _lastEff ? "há "+_daysBetween(_lastEff,_now)+" dia"+(_daysBetween(_lastEff,_now)===1?"":"s") : "sem atividade";
-        const _nextAct = _nextActionForClient(cl);
-        const _nextMeetDays = cl.nextMeeting ? _daysBetween(_now,_parseBR(cl.nextMeeting)) : null;
+        const hasLogo = typeof CLIENT_LOGOS!=="undefined" && !!CLIENT_LOGOS[cl.id];
+        const _segmento = (profile&&profile.segmento)||cl.sector;
+        const _cidadeUf = profile&&(profile.cidade||profile.estado) ? [profile.cidade,profile.estado].filter(Boolean).join("/") : null;
 
         return <div key={cl.id}
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:0,boxShadow:"0 1px 3px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",transition:"all .2s cubic-bezier(.4,0,.2,1)",cursor:"pointer",overflow:"hidden",position:"relative"}}
-          onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=_accentCl+"55";e.currentTarget.style.transform="translateY(-2px)";}}
-          onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.transform="translateY(0)";}}
+          style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:0,boxShadow:"0 1px 2px rgba(15,23,42,0.03)",display:"flex",flexDirection:"column",transition:"all .2s cubic-bezier(.4,0,.2,1)",cursor:"pointer",overflow:"hidden",position:"relative"}}
+          onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 14px 30px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=_accentCl+"66";e.currentTarget.style.transform="translateY(-3px)";}}
+          onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.03)";e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.transform="translateY(0)";}}
           onClick={function(e){if(e.target.tagName!=="BUTTON"&&!e.target.closest("button"))setActiveClient(cl);}}>
 
-          {/* Faixa accent topo */}
+          {/* Faixa accent fina topo */}
           <div style={{height:3,background:_accentCl}}/>
 
-          {/* HEADER — logo + nome + segmento + status */}
-          <div style={{padding:"16px 16px 12px",display:"flex",alignItems:"flex-start",gap:12}}>
-            <div style={{width:46,height:46,borderRadius:12,background:_accentCl,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 3px 10px "+_accentCl+"30"}}>
-              {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
-                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxHeight:34,maxWidth:40,objectFit:"contain"}}/>
-                : <span style={{color:"#fff",fontWeight:800,fontSize:16,letterSpacing:-.5}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</span>
+          {/* TOPO — logo branca + status pill */}
+          <div style={{padding:"20px 20px 14px",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12}}>
+            <div style={{width:60,height:60,borderRadius:14,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,0.04)"}}>
+              {hasLogo
+                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:"75%",maxHeight:"75%",objectFit:"contain",display:"block"}}/>
+                : <span style={{color:_accentCl,fontWeight:900,fontSize:22,letterSpacing:-.6}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</span>
               }
             </div>
-            <div style={{flex:1,minWidth:0,paddingTop:1}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:3}}>
-                <span style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.3,lineHeight:1.2}}>{(profile&&profile.name)||cl.name}</span>
-                {isBioterGroup&&<span style={{background:"#f5f3ff",color:"#7c3aed",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,border:"1px solid #ddd6fe"}}>{BIOTER_GROUP_UNITS.length} UNIDADES</span>}
-              </div>
-              <div style={{color:"#64748b",fontSize:11,fontWeight:500,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
-                {(profile&&profile.segmento)||cl.sector}
-              </div>
-            </div>
-            <span style={{background:isAtivo?"#dcfce7":"#f1f5f9",color:isAtivo?"#15803d":"#64748b",fontSize:9,fontWeight:800,padding:"3px 9px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0,letterSpacing:.4,textTransform:"uppercase",border:"1px solid "+(isAtivo?"#bbf7d0":"#e2e8f0")}}>{isAtivo?"Ativo":"Inativo"}</span>
+            <span style={{background:isAtivo?"#dcfce7":"#f1f5f9",color:isAtivo?"#15803d":"#64748b",fontSize:9.5,fontWeight:800,padding:"4px 10px",borderRadius:99,whiteSpace:"nowrap",flexShrink:0,letterSpacing:.5,textTransform:"uppercase",border:"1px solid "+(isAtivo?"#bbf7d0":"#e2e8f0")}}>{isAtivo?"Ativo":"Inativo"}</span>
           </div>
 
-          {/* LINHA — cidade · responsável (avatar) */}
-          <div style={{padding:"0 16px 12px",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            {(profile&&(profile.cidade||profile.estado))&&<span style={{display:"inline-flex",alignItems:"center",gap:5,color:"#475569",fontSize:11.5,fontWeight:600}}>
+          {/* NOME + SEGMENTO */}
+          <div style={{padding:"0 20px 14px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap",marginBottom:5}}>
+              <span style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4,lineHeight:1.15}}>{(profile&&profile.name)||cl.name}</span>
+              {isBioterGroup&&<span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#f5f3ff",color:"#7c3aed",fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.4,border:"1px solid #ddd6fe"}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                {BIOTER_GROUP_UNITS.length} UNIDADES
+              </span>}
+            </div>
+            <div style={{color:"#64748b",fontSize:12,fontWeight:500,lineHeight:1.5,overflow:"hidden",textOverflow:"ellipsis",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>
+              {_segmento||"Sem segmento definido"}
+            </div>
+          </div>
+
+          {/* RODAPÉ — cidade + tempo de projeto */}
+          {!isBioterGroup && (_cidadeUf || cl.since) && <div style={{padding:"12px 20px 18px",borderTop:"1px solid #f5f7fa",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",fontSize:11.5}}>
+            {_cidadeUf && <span style={{display:"inline-flex",alignItems:"center",gap:5,color:"#475569",fontWeight:600}}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              {[profile.cidade,profile.estado].filter(Boolean).join("/")}
+              {_cidadeUf}
             </span>}
-            {respUser&&<span style={{display:"inline-flex",alignItems:"center",gap:6,color:"#475569",fontSize:11.5,fontWeight:600,marginLeft:"auto"}}>
-              {(function(){
-                if(typeof UserAvatar==="function") return <UserAvatar user={respUser} size={22}/>;
-                return <span style={{width:22,height:22,borderRadius:"50%",background:respUser.color||"#94a3b8",color:"#fff",fontSize:9.5,fontWeight:800,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>{respUser.av||(respUser.name||"?")[0]}</span>;
-              })()}
-              <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:100}}>{respUser.name?respUser.name.split(" ")[0]:"—"}</span>
-            </span>}
-          </div>
-
-          {/* ─── BLOCO ESTRATÉGICO — última atualização + próxima ação + próxima reunião ─── */}
-          {!isBioterGroup&&<div style={{padding:"12px 16px",borderTop:"1px solid #f1f5f9",background:"#fafbfc",display:"flex",flexDirection:"column",gap:9}}>
-            {/* Última atualização */}
-            <div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
-              <span style={{width:22,height:22,borderRadius:6,background:"#fff",border:"1px solid #e2e8f0",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",flexShrink:0}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-              </span>
-              <span style={{color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,fontSize:9.5}}>Última atualização</span>
-              <span style={{marginLeft:"auto",color:"#0f172a",fontWeight:700,fontSize:11.5}}>{_lastLabel}</span>
-            </div>
-            {/* Próxima ação */}
-            {_nextAct&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
-              <span style={{width:22,height:22,borderRadius:6,background:_nextAct.color+"14",border:"1px solid "+_nextAct.color+"33",display:"inline-flex",alignItems:"center",justifyContent:"center",color:_nextAct.color,flexShrink:0}}>
-                <Ico n={_nextAct.ico} size={11} color={_nextAct.color}/>
-              </span>
-              <span style={{color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,fontSize:9.5}}>Próxima ação</span>
-              <span style={{marginLeft:"auto",color:_nextAct.color,fontWeight:800,fontSize:11.5,textAlign:"right",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:180}}>{_nextAct.label}</span>
-            </div>}
-            {/* Próxima reunião — só se existir */}
-            {cl.nextMeeting&&_nextMeetDays!=null&&_nextMeetDays>=0&&<div style={{display:"flex",alignItems:"center",gap:9,fontSize:11.5}}>
-              <span style={{width:22,height:22,borderRadius:6,background:(_nextMeetDays<=7?"#dcfce7":"#eff6ff"),border:"1px solid "+(_nextMeetDays<=7?"#86efac":"#bfdbfe"),display:"inline-flex",alignItems:"center",justifyContent:"center",color:(_nextMeetDays<=7?"#16a34a":"#0ea5e9"),flexShrink:0}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              </span>
-              <span style={{color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:.4,fontSize:9.5}}>Próxima reunião</span>
-              <span style={{marginLeft:"auto",color:"#0f172a",fontWeight:700,fontSize:11.5}}>{_fmtShort(cl.nextMeeting)}{_nextMeetDays===0?" · hoje":_nextMeetDays===1?" · amanhã":_nextMeetDays<=7?" · em "+_nextMeetDays+"d":""}</span>
-            </div>}
+            {cl.since && <span style={{color:"#94a3b8",fontWeight:600,marginLeft:"auto"}}>Cliente desde {cl.since}</span>}
           </div>}
 
-          {/* ─── GRUPO BIOTER — botão Ver unidades ─── */}
-          {isBioterGroup&&<div style={{padding:"12px 16px 14px",borderTop:"1px solid #f1f5f9",background:"#fafbfc"}}>
+          {/* GRUPO BIOTER — botão Ver unidades */}
+          {isBioterGroup&&<div style={{padding:"12px 20px 18px",borderTop:"1px solid #f5f7fa"}}>
             <button onClick={function(e){e.stopPropagation();setBioterExpanded(!bioterExpanded);}}
               style={{width:"100%",background:bioterExpanded?"#f5f3ff":"#fff",color:bioterExpanded?"#7c3aed":"#475569",border:"1px solid "+(bioterExpanded?"#ddd6fe":"#e2e8f0"),borderRadius:10,padding:"10px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s"}}
-              onMouseEnter={e=>{if(!bioterExpanded){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.borderColor="#cbd5e1";}}}
+              onMouseEnter={e=>{if(!bioterExpanded){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}}
               onMouseLeave={e=>{if(!bioterExpanded){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:bioterExpanded?"rotate(180deg)":"none",transition:"transform .15s"}}><polyline points="6 9 12 15 18 9"/></svg>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:bioterExpanded?"rotate(180deg)":"none",transition:"transform .18s"}}><polyline points="6 9 12 15 18 9"/></svg>
               {bioterExpanded?"Ocultar":"Ver"} unidades
-              <span style={{background:bioterExpanded?"#7c3aed":"#cbd5e1",color:"#fff",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,marginLeft:2,fontFeatureSettings:"'tnum'"}}>{BIOTER_GROUP_UNITS.length}</span>
+              <span style={{background:bioterExpanded?"#7c3aed":"#e2e8f0",color:bioterExpanded?"#fff":"#64748b",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:800,marginLeft:2,fontFeatureSettings:"'tnum'"}}>{BIOTER_GROUP_UNITS.length}</span>
             </button>
           </div>}
 
           {/* Lista de unidades expandida */}
-          {isExpanded&&<div style={{padding:"0 16px 14px",display:"flex",flexDirection:"column",gap:6}}>
+          {isExpanded&&<div style={{padding:"0 20px 16px",display:"flex",flexDirection:"column",gap:6}}>
             {BIOTER_GROUP_UNITS.map(function(u){
-              return <div key={u.id} style={{padding:"10px 12px",background:"#fff",border:"1px solid #f1f5f9",borderRadius:10,display:"flex",alignItems:"center",gap:9}}>
+              return <div key={u.id} style={{padding:"10px 12px",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,display:"flex",alignItems:"center",gap:9}}>
                 <div style={{minWidth:0,flex:1}}>
                   <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.1}}>{u.name}</div>
-                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600,display:"flex",alignItems:"center",gap:7}}>
-                    <span style={{display:"inline-flex",alignItems:"center",gap:4}}>
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                      {u.cidade}/{u.estado}
-                    </span>
+                  <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    {u.cidade}/{u.estado}
                   </div>
                 </div>
                 <span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",border:"1px solid #bbf7d0"}}>Ativa</span>
