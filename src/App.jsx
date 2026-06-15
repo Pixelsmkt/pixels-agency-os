@@ -12307,7 +12307,12 @@ function CalendarDayNumber({day,isToday}){
     </div>
   );
 }
-function CalendarGrid({WEEKDAYS, days, renderDay}){
+function CalendarGrid({WEEKDAYS, days, renderDay, compact}){
+  // compact=true (calendário interno) — células com altura fixa baixa em vez de quadradas
+  // compact=false (default, publicações) — quadradas via aspect-ratio
+  const _cellStyle = compact
+    ? {minHeight:110, maxHeight:130, padding:"7px 9px"}
+    : {aspectRatio:"1 / 1", padding:"8px 8px"};
   return(
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
       {/* Header dos dias da semana */}
@@ -12316,19 +12321,16 @@ function CalendarGrid({WEEKDAYS, days, renderDay}){
           <div key={d} style={{padding:"10px 0",textAlign:"center",color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>{d}</div>
         ))}
       </div>
-      {/* Células simétricas — aspect-ratio garante quadrado em qualquer tela */}
       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
         {days.map((day,i)=>(
-          <div key={i} style={{
-            aspectRatio:"1 / 1",
+          <div key={i} style={Object.assign({
             borderRight:(i%7===6)?"none":"1px solid #f1f5f9",
             borderBottom:(i>=days.length-7)?"none":"1px solid #f1f5f9",
-            padding:"8px 8px",
             background:day?"#fff":"#fafbfc",
             display:"flex",flexDirection:"column",
             overflow:"hidden",
             transition:"background .15s",
-          }}>{renderDay(day,i)}</div>
+          }, _cellStyle)}>{renderDay(day,i)}</div>
         ))}
       </div>
     </div>
@@ -12597,32 +12599,33 @@ function PageCalendarioInterno({isMob}){
       <CalendarGrid
         WEEKDAYS={WEEKDAYS}
         days={calDays()}
+        compact={true}
         renderDay={function(date,i){
           if(!date)return null;
           const evs=eventsByDay(date);
           const isToday=date.toDateString()===new Date().toDateString();
           return <>
             <CalendarDayNumber day={date} isToday={isToday}/>
-            <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:4,overflow:"hidden",flex:1}}>
-              {evs.slice(0,3).map(function(ev){
+            <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:5,overflow:"hidden",flex:1}}>
+              {evs.slice(0,2).map(function(ev){
                 const isMarco = ev.kind==="marco";
                 const onClick = isMarco ? function(){setOpenMarco({marco:ev._marco, cl:ev._cl});} : null;
                 // Ícone SVG por tipo de evento
                 const _evIcon = ev.kind==="equipe"
-                  ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>
+                  ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>
                   : ev.kind==="cliente"
-                    ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/></svg>
-                    : <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
+                    ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/></svg>
+                    : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
                 return <div key={ev.id} title={ev.title+" — "+ev.subtitle}
                   onClick={onClick}
-                  style={{background:ev.color,color:"#fff",borderRadius:7,padding:"4px 8px",fontSize:10.5,lineHeight:1.25,display:"flex",alignItems:"center",gap:6,overflow:"hidden",cursor:isMarco?"pointer":"default",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"inherit"}}
-                  onMouseEnter={isMarco?function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 10px "+ev.color+"55";}:null}
+                  style={{background:ev.color,color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12.5,lineHeight:1.25,display:"flex",alignItems:"center",gap:7,overflow:"hidden",cursor:isMarco?"pointer":"default",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"inherit"}}
+                  onMouseEnter={isMarco?function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+ev.color+"55";}:null}
                   onMouseLeave={isMarco?function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}:null}>
                   <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:.92}}>{_evIcon}</span>
                   <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:700,letterSpacing:-.1}}>{ev.title}</span>
                 </div>;
               })}
-              {evs.length>3&&<div style={{color:"#94a3b8",fontSize:9,fontWeight:600,textAlign:"center"}}>+{evs.length-3} mais</div>}
+              {evs.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textAlign:"left",paddingLeft:4,marginTop:1}}>+{evs.length-2} mais</div>}
             </div>
           </>;
         }}
@@ -13736,46 +13739,46 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
               if(l.includes("foto"))return "camera";
               return "dot";
             };
-            return <div key={r.id} style={{position:"relative",background:"#fff",borderRadius:14,padding:"16px 18px",border:"1px solid #eef0f3",boxShadow:"0 2px 6px rgba(15,23,42,0.04)",transition:"transform .15s, box-shadow .15s, border-color .15s",display:"flex",alignItems:"center",gap:16}}
+            return <div key={r.id} style={{position:"relative",background:"#fff",borderRadius:13,padding:"13px 14px",border:"1px solid #eef0f3",boxShadow:"0 2px 6px rgba(15,23,42,0.04)",transition:"transform .15s, box-shadow .15s, border-color .15s",display:"flex",alignItems:"center",gap:12}}
               onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 10px 24px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=accent+"55";}}
               onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 6px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#eef0f3";}}>
-              {/* Donut maior à esquerda */}
-              <div style={{position:"relative",width:58,height:58,flexShrink:0,filter:ok?"drop-shadow(0 0 8px rgba(34,197,94,0.35))":"none"}}>
-                <svg width="58" height="58" viewBox="0 0 58 58" style={{transform:"rotate(-90deg)"}}>
+              {/* Donut compacto à esquerda */}
+              <div style={{position:"relative",width:50,height:50,flexShrink:0,filter:ok?"drop-shadow(0 0 7px rgba(34,197,94,0.32))":"none"}}>
+                <svg width="50" height="50" viewBox="0 0 50 50" style={{transform:"rotate(-90deg)"}}>
                   <defs>
                     <linearGradient id={"grad-"+r.id} x1="0%" y1="0%" x2="100%" y2="100%">
                       <stop offset="0%" stopColor={accent}/>
                       <stop offset="100%" stopColor={ok?"#16a34a":accent}/>
                     </linearGradient>
                   </defs>
-                  <circle cx="29" cy="29" r="23" fill="none" stroke="#f1f5f9" strokeWidth="5.5"/>
-                  {r.totalMeta>0&&<circle cx="29" cy="29" r="23" fill="none" stroke={"url(#grad-"+r.id+")"} strokeWidth="5.5" strokeLinecap="round" strokeDasharray={2*Math.PI*23} strokeDashoffset={2*Math.PI*23*(1-cpct/100)} style={{transition:"stroke-dashoffset .5s ease-out, stroke .3s"}}/>}
+                  <circle cx="25" cy="25" r="19.5" fill="none" stroke="#f1f5f9" strokeWidth="5"/>
+                  {r.totalMeta>0&&<circle cx="25" cy="25" r="19.5" fill="none" stroke={"url(#grad-"+r.id+")"} strokeWidth="5" strokeLinecap="round" strokeDasharray={2*Math.PI*19.5} strokeDashoffset={2*Math.PI*19.5*(1-cpct/100)} style={{transition:"stroke-dashoffset .5s ease-out, stroke .3s"}}/>}
                 </svg>
                 <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{color:accent,fontSize:14,fontWeight:900,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{cpct}<span style={{fontSize:9,fontWeight:800,opacity:.85}}>%</span></span>
+                  <span style={{color:accent,fontSize:12.5,fontWeight:900,letterSpacing:-.4,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{cpct}<span style={{fontSize:8,fontWeight:800,opacity:.85}}>%</span></span>
                 </div>
               </div>
 
               {/* Conteúdo: header (logo+nome+fração) + tipos compactos */}
-              <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:9}}>
-                <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0}}>
+              <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:7}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0}}>
                   {r.clientLogo&&typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[r.clientLogo]
-                    ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:20,maxWidth:60,objectFit:"contain",flexShrink:0}}/>
+                    ? <img src={CLIENT_LOGOS[r.clientLogo]} alt={r.name} style={{height:16,maxWidth:46,objectFit:"contain",flexShrink:0}}/>
                     : null}
-                  <span style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1,lineHeight:1.15}}>{r.name}</span>
-                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'",background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:99,padding:"2px 8px"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
+                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.25,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",minWidth:0,flex:1,lineHeight:1.15}}>{r.name}</span>
+                  <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,flexShrink:0,fontFeatureSettings:"'tnum'",background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:99,padding:"1px 7px"}}>{r.totalDone}<span style={{color:"#cbd5e1",fontWeight:600}}>/{r.totalMeta||"-"}</span></span>
                 </div>
                 {tiposAtivos.length===0
                   ? <div style={{color:"#cbd5e1",fontSize:11,fontWeight:600,fontStyle:"italic"}}>Sem meta</div>
-                  : <div style={{display:"flex",flexWrap:"wrap",gap:14,rowGap:6}}>
+                  : <div style={{display:"flex",flexWrap:"wrap",gap:8,rowGap:4}}>
                       {tiposAtivos.map(tt=>{
                         const tOk=tt.meta&&tt.done>=tt.meta;
                         const tPct=tt.meta?Math.round(tt.done/tt.meta*100):0;
                         const tCor=tOk?"#16a34a":(tPct>=70?"#0369a1":(tPct>=40?"#a16207":(tt.done>0?"#dc2626":"#94a3b8")));
                         const tIco=_tipoIcon(tt.l);
-                        return <span key={tt.l} title={tt.l+": "+tt.done+"/"+(tt.meta||0)} style={{display:"inline-flex",alignItems:"center",gap:6,color:"#475569",fontSize:11.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.2}}>
-                          <span style={{width:18,height:18,borderRadius:6,background:tCor+"15",border:"1px solid "+tCor+"30",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={tCor} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                        return <span key={tt.l} title={tt.l+": "+tt.done+"/"+(tt.meta||0)} style={{display:"inline-flex",alignItems:"center",gap:5,color:"#475569",fontSize:10.5,fontWeight:600,letterSpacing:-.1,lineHeight:1.2}}>
+                          <span style={{width:16,height:16,borderRadius:5,background:tCor+"15",border:"1px solid "+tCor+"30",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={tCor} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
                               {tIco==="image"&&<><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>}
                               {tIco==="play"&&<polygon points="5 3 19 12 5 21 5 3" fill={tCor}/>}
                               {tIco==="camera"&&<><path d="M14.5 4h-5L7 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></>}
@@ -13792,10 +13795,10 @@ function ProgressoDoMes({visible,mode="produzir",externalDate,setExternalDate}){
             </div>;
           };
           return <div style={{padding:"18px 20px 22px",background:"#f8f9fc"}}>
-            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:12,marginBottom:bioter.length>0?14:0}}>
+            {padrao.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginBottom:bioter.length>0?12:0}}>
               {padrao.map(renderCard)}
             </div>}
-            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:12}}>
+            {bioter.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(195px,1fr))",gap:10}}>
               {bioter.map(renderCard)}
             </div>}
           </div>;
