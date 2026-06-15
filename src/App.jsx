@@ -12067,6 +12067,7 @@ function CMarcos({cl,canEdit,selUnit}){
   const [marcos,setMarcos]=useState([]);
   const [loading,setLoading]=useState(true);
   const [showForm,setShowForm]=useState(false);
+  const [editingMarco,setEditingMarco]=useState(null); // marco sendo editado (passa pro MarcoForm)
 
   // ── Resolução de cliente raiz pra busca no Supabase ──
   // Marcos do Bioter ficam SEMPRE em client_id="bioter" (mesmo de uma unidade).
@@ -12123,19 +12124,12 @@ function CMarcos({cl,canEdit,selUnit}){
     {loading?(
       <div style={{textAlign:"center",padding:40,color:"#94a3b8",fontSize:13}}>Carregando marcos...</div>
     ):_marcosVisiveis.length===0?(
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"44px 28px",textAlign:"center"}}>
-        <div style={{width:52,height:52,borderRadius:14,background:"#f1f5f9",margin:"0 auto 14px",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"48px 28px",textAlign:"center",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+        <div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#faf5ff,#f3e8ff)",border:"1px solid #ede9fe",display:"flex",alignItems:"center",justifyContent:"center",color:"#a78bfa"}}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
-        <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:6,letterSpacing:-.1}}>Nenhum marco registrado ainda</div>
-        <div style={{fontSize:12.5,color:"#64748b",maxWidth:380,margin:"0 auto",lineHeight:1.55}}>Os principais acontecimentos da parceria aparecerão aqui conforme forem registrados pela equipe.</div>
-        {canEdit&&<button onClick={function(){setShowForm(true);}}
-          style={{marginTop:18,background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",padding:"10px 20px",borderRadius:11,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px rgba(124,58,237,0.28)",transition:"all .15s"}}
-          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 22px rgba(124,58,237,0.38)";}}
-          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.28)";}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          Adicionar marco
-        </button>}
+        <div style={{fontSize:15,fontWeight:800,color:"#0f172a",letterSpacing:-.2,marginTop:4}}>Nenhum marco registrado ainda</div>
+        <div style={{fontSize:12.5,color:"#64748b",maxWidth:380,margin:"0 auto",lineHeight:1.55,fontWeight:500}}>Os principais acontecimentos da parceria aparecerão aqui conforme forem registrados pela equipe.</div>
       </div>
     ):(
       <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -12156,19 +12150,32 @@ function CMarcos({cl,canEdit,selUnit}){
               </span>}
               <span style={{fontSize:12,color:"#94a3b8",fontWeight:500}}>{fmtDate(m.date)}</span>
             </div>
-            <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:m.description?5:0,letterSpacing:-.1,paddingRight:canEdit?28:0}}>{m.title}</div>
+            <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:m.description?5:0,letterSpacing:-.1,paddingRight:canEdit?72:0}}>{m.title}</div>
             {m.description&&<div style={{fontSize:13,color:"#475569",lineHeight:1.55,whiteSpace:"pre-wrap"}}>{m.description}</div>}
-            {canEdit&&<button onClick={async function(){
-              if(!confirm("Excluir este marco?"))return;
-              await sb.from("client_milestones").delete().eq("id",m.id);
-              reload();
-            }} title="Excluir marco" style={{position:"absolute",top:13,right:13,background:"none",border:"none",color:"#cbd5e1",fontSize:18,cursor:"pointer",padding:0,width:24,height:24,borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>×</button>}
+            {canEdit&&<div style={{position:"absolute",top:11,right:11,display:"flex",gap:4}}>
+              <button onClick={function(){setEditingMarco(m);setShowForm(true);}} title="Editar marco"
+                style={{background:"#f1f5f9",border:"none",color:"#64748b",cursor:"pointer",width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#e0e7ff";e.currentTarget.style.color="#4f46e5";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button onClick={async function(){
+                if(!confirm("Excluir este marco?"))return;
+                await sb.from("client_milestones").delete().eq("id",m.id);
+                reload();
+              }} title="Excluir marco"
+                style={{background:"#f1f5f9",border:"none",color:"#64748b",cursor:"pointer",width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              </button>
+            </div>}
           </div>);
         })}
       </div>
     )}
 
-    {showForm&&<MarcoForm cl={cl} onClose={function(){setShowForm(false);}} onSaved={function(){setShowForm(false);reload();}}/>}
+    {showForm&&<MarcoForm cl={cl} initial={editingMarco} onClose={function(){setShowForm(false);setEditingMarco(null);}} onSaved={function(){setShowForm(false);setEditingMarco(null);reload();}}/>}
   </div>);
 }
 
@@ -12199,17 +12206,21 @@ function _MarcoDateField({value, onChange, accent}){
   </div>;
 }
 
-function MarcoForm({cl,onClose,onSaved,defaultUnit}){
+function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
   const sb=window._sb;
   const _rootId = (cl && cl.id && cl.id.indexOf("bioter_")===0) ? "bioter" : (cl.id||"");
   const _isBioter = _rootId==="bioter";
-  const _initialUnit = (cl && cl.id && cl.id.indexOf("bioter_")===0)
-    ? cl.id.slice("bioter_".length)
-    : (defaultUnit||"grupo");
-  const [type,setType]=useState("comercial");
-  const [date,setDate]=useState(function(){return new Date().toISOString().split("T")[0];});
-  const [title,setTitle]=useState("");
-  const [description,setDescription]=useState("");
+  const _isEdit = !!(initial && initial.id);
+  // Unidade inicial: se editando, vem do metrics.unit; senão do contexto
+  const _initialUnit = _isEdit
+    ? ((initial.metrics && initial.metrics.unit) || "grupo")
+    : ((cl && cl.id && cl.id.indexOf("bioter_")===0)
+        ? cl.id.slice("bioter_".length)
+        : (defaultUnit||"grupo"));
+  const [type,setType]=useState(_isEdit?(initial.type||"comercial"):"comercial");
+  const [date,setDate]=useState(_isEdit?(initial.date||new Date().toISOString().split("T")[0]):new Date().toISOString().split("T")[0]);
+  const [title,setTitle]=useState(_isEdit?(initial.title||""):"");
+  const [description,setDescription]=useState(_isEdit?(initial.description||""):"");
   const [unit,setUnit]=useState(_initialUnit);
   const [saving,setSaving]=useState(false);
 
@@ -12217,34 +12228,49 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit}){
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     setSaving(true);
     try{
-      const _metrics = _isBioter ? {unit:unit||"grupo"} : {};
-      await sb.from("client_milestones").insert({
-        client_id:_rootId, date, type, title:title.trim(),
-        description:description.trim()||null,
-        metrics:_metrics,
-        created_by:typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:""
-      });
-      if(typeof pixelsToast!=="undefined")pixelsToast.success("Marco registrado!");
+      const _metrics = _isBioter ? Object.assign({}, initial&&initial.metrics||{}, {unit:unit||"grupo"}) : (initial&&initial.metrics||{});
+      if(_isEdit){
+        const r = await sb.from("client_milestones").update({
+          date, type, title:title.trim(),
+          description:description.trim()||null,
+          metrics:_metrics,
+        }).eq("id", initial.id);
+        if(r&&r.error) throw r.error;
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Marco atualizado!");
+      }else{
+        await sb.from("client_milestones").insert({
+          client_id:_rootId, date, type, title:title.trim(),
+          description:description.trim()||null,
+          metrics:_metrics,
+          created_by:typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:""
+        });
+        if(typeof pixelsToast!=="undefined")pixelsToast.success("Marco registrado!");
+      }
       onSaved();
     }catch(e){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e?.message||e));}
     setSaving(false);
   };
 
   return(<div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"Inter,system-ui,sans-serif"}}>
-    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:14,width:"min(500px,92%)",padding:"22px 24px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
-      <div style={{fontSize:16,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.2}}>Novo marco</div>
-      <div style={{fontSize:12,color:"#94a3b8",marginBottom:18}}>{cl.name}</div>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(720px,94%)",padding:"24px 28px",boxShadow:"0 32px 80px rgba(15,23,42,0.30)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{_isEdit?"Editar marco":"Novo marco"}</div>
+      <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20,fontWeight:500}}>{cl.name}</div>
 
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Tipo</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {Object.entries(MARCO_TIPOS).map(function(e){const id=e[0];const t=e[1];return(
+          <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:7}}>
+            {Object.entries(MARCO_TIPOS).map(function(e){const id=e[0];const t=e[1];const active=type===id;return(
               <button key={id} onClick={function(){setType(id);}} style={{
-                background:type===id?t.bg:"#fff",color:type===id?t.color:"#64748b",
-                border:"1px solid "+(type===id?t.color+"40":"#e2e8f0"),
-                padding:"6px 12px",borderRadius:7,fontSize:11.5,fontWeight:600,cursor:"pointer",transition:"all .12s"
-              }}>{t.label}</button>
+                background:active?t.bg:"#fff",color:active?t.color:"#64748b",
+                border:"1px solid "+(active?t.color+"55":"#e2e8f0"),
+                padding:"9px 8px",borderRadius:9,fontSize:11.5,fontWeight:active?700:600,cursor:"pointer",transition:"all .15s",
+                fontFamily:"inherit",letterSpacing:-.1,boxShadow:active?"0 2px 8px "+t.color+"22":"none"
+              }}
+              onMouseEnter={function(e){if(!active){e.currentTarget.style.borderColor=t.color+"55";e.currentTarget.style.color=t.color;}}}
+              onMouseLeave={function(e){if(!active){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";}}}>
+                {t.label}
+              </button>
             );})}
           </div>
         </div>
@@ -12283,7 +12309,7 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit}){
 
       <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:18}}>
         <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:8,padding:"9px 16px",fontSize:12.5,fontWeight:600,cursor:"pointer"}}>Cancelar</button>
-        <button onClick={save} disabled={saving} style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:600,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1}}>{saving?"Salvando...":"Salvar marco"}</button>
+        <button onClick={save} disabled={saving} style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12.5,fontWeight:600,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1}}>{saving?"Salvando...":(_isEdit?"Salvar alterações":"Salvar marco")}</button>
       </div>
     </div>
   </div>);
@@ -12420,6 +12446,46 @@ function PageCalendarioInterno({isMob}){
   const [loadingMarcos,setLoadingMarcos]=useState(true);
   const [openMarco,setOpenMarco]=useState(null); // {marco, cl}
   const [openEvento,setOpenEvento]=useState(null); // {evento, cl}
+  // ── Drag-and-drop pra remarcar a data do marco ──
+  const [dragItem,setDragItem]=useState(null); // {kind:"marco"|"evento", id, clientId}
+  function _moveItemTo(item, targetDateIso){
+    if(!item || !targetDateIso) return;
+    if(!window._sb) return;
+    if(item.kind==="marco"){
+      // Update marco no Supabase + atualiza state local
+      window._sb.from("client_milestones").update({date:targetDateIso}).eq("id",item.id).then(function(r){
+        if(r&&r.error){
+          if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao mover marco: "+r.error.message,4000);
+          return;
+        }
+        setMarcosByClient(function(prev){
+          const next=Object.assign({},prev);
+          const arr=(next[item.clientId]||[]).map(function(m){return m.id===item.id?Object.assign({},m,{date:targetDateIso}):m;});
+          next[item.clientId]=arr;
+          return next;
+        });
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Marco remarcado pra "+(targetDateIso.slice(8,10)+"/"+targetDateIso.slice(5,7)),2500);
+      });
+    } else if(item.kind==="evento"){
+      // Eventos vivem em clients.client_events JSONB — precisa reescrever o array todo
+      window._sb.from("clients").select("client_events").eq("client_id",item.clientId).single().then(function(res){
+        if(!res||!res.data||!Array.isArray(res.data.client_events)) return;
+        const next=res.data.client_events.map(function(e){return e.id===item.id?Object.assign({},e,{date:targetDateIso}):e;});
+        window._sb.from("clients").update({client_events:next}).eq("client_id",item.clientId).then(function(r2){
+          if(r2&&r2.error){
+            if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao mover evento: "+r2.error.message,4000);
+            return;
+          }
+          setEventosByClient(function(prev){
+            const nxt=Object.assign({},prev);
+            nxt[item.clientId]=next;
+            return nxt;
+          });
+          if(typeof pixelsToast!=="undefined") pixelsToast.success("Evento remarcado pra "+(targetDateIso.slice(8,10)+"/"+targetDateIso.slice(5,7)),2500);
+        });
+      });
+    }
+  }
 
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -12719,7 +12785,16 @@ function PageCalendarioInterno({isMob}){
           if(!date)return null;
           const evs=eventsByDay(date);
           const isToday=date.toDateString()===new Date().toDateString();
-          return <>
+          const _dayIso=date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
+          return <div
+            onDragOver={function(e){if(dragItem){e.preventDefault();e.currentTarget.style.background="#faf5ff";}}}
+            onDragLeave={function(e){e.currentTarget.style.background="";}}
+            onDrop={function(e){
+              e.preventDefault();
+              e.currentTarget.style.background="";
+              if(dragItem){ _moveItemTo(dragItem, _dayIso); setDragItem(null); }
+            }}
+            style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s"}}>
             <CalendarDayNumber day={date} isToday={isToday}/>
             <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:5,overflow:"hidden",flex:1}}>
               {evs.slice(0,2).map(function(ev){
@@ -12740,9 +12815,20 @@ function PageCalendarioInterno({isMob}){
                 const _click = isMarco ? function(){setOpenMarco({marco:ev._marco, cl:ev._cl});}
                               : isEvento ? function(){setOpenEvento({evento:ev._evento, cl:ev._cl});}
                               : null;
-                return <div key={ev.id} title={ev.title+" — "+ev.subtitle}
+                const _draggableKind = ev.kind==="marco" ? "marco" : ev.kind==="evento" ? "evento" : null;
+                const _draggable = !!_draggableKind;
+                return <div key={ev.id} title={ev.title+" — "+ev.subtitle+(_draggable?" — arraste pra outro dia pra remarcar":"")}
                   onClick={_click}
-                  style={{background:ev.color,color:"#fff",borderRadius:8,padding:"5px 9px 5px 5px",fontSize:12.5,lineHeight:1.25,display:"flex",alignItems:"center",gap:7,overflow:"hidden",cursor:_isClickable?"pointer":"default",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"inherit"}}
+                  draggable={_draggable}
+                  onDragStart={_draggable?function(e){
+                    const _ident = ev.kind==="marco"
+                      ? {kind:"marco", id:ev._marco.id, clientId:ev._marco.client_id}
+                      : {kind:"evento", id:ev._evento.id, clientId:ev._cl.id};
+                    setDragItem(_ident);
+                    try{ e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain","marco-"+ev.id); }catch(_){}
+                  }:null}
+                  onDragEnd={_draggable?function(){setDragItem(null);}:null}
+                  style={{background:ev.color,color:"#fff",borderRadius:8,padding:"5px 9px 5px 5px",fontSize:12.5,lineHeight:1.25,display:"flex",alignItems:"center",gap:7,overflow:"hidden",cursor:_draggable?"grab":(_isClickable?"pointer":"default"),transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"inherit"}}
                   onMouseEnter={_isClickable?function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+ev.color+"55";}:null}
                   onMouseLeave={_isClickable?function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}:null}>
                   {_clLogo
@@ -12756,7 +12842,7 @@ function PageCalendarioInterno({isMob}){
               })}
               {evs.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textAlign:"left",paddingLeft:4,marginTop:1}}>+{evs.length-2} mais</div>}
             </div>
-          </>;
+          </div>;
         }}
       />
 
