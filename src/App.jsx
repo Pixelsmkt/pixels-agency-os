@@ -1436,12 +1436,12 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
           :[{l:"Foto",n:c.fotoObra,p:DESIGNER_PRICES.fotoObra},{l:"Arte",n:c.arte,p:DESIGNER_PRICES.arte},{l:"Carrossel",n:c.carrossel,p:DESIGNER_PRICES.carrossel},{l:"Folder",n:c.folder,p:DESIGNER_PRICES.folder}];
         // Mostra TODOS os tipos (inclusive 0) com preço unitário visível
         const hasAny=items.some(function(it){return it.n>0;});
-        return <div key={fr.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
-          onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"55";e.currentTarget.style.boxShadow="0 8px 20px rgba(15,23,42,0.06)";e.currentTarget.style.transform="translateY(-2px)";}}
-          onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,0.04)";e.currentTarget.style.transform="translateY(0)";}}>
+        return <div key={fr.id} style={{background:"linear-gradient(180deg,"+accent+"08 0%, #fff 60%)",border:"1px solid "+accent+"22",borderRadius:14,padding:0,display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 4px 14px "+accent+"10, 0 1px 3px rgba(15,23,42,0.04)",transition:"all .2s cubic-bezier(.4,0,.2,1)"}}
+          onMouseEnter={function(e){e.currentTarget.style.borderColor=accent+"66";e.currentTarget.style.boxShadow="0 14px 32px "+accent+"22, 0 2px 6px rgba(15,23,42,0.05)";e.currentTarget.style.transform="translateY(-3px)";}}
+          onMouseLeave={function(e){e.currentTarget.style.borderColor=accent+"22";e.currentTarget.style.boxShadow="0 4px 14px "+accent+"10, 0 1px 3px rgba(15,23,42,0.04)";e.currentTarget.style.transform="translateY(0)";}}>
 
           {/* HEADER — sóbrio, fundo branco, accent só no anel do avatar e no chip da função */}
-          <div style={{padding:"22px 18px 16px",display:"flex",flexDirection:"column",alignItems:"center",gap:10,borderBottom:"1px solid #f1f5f9"}}>
+          <div style={{padding:"22px 18px 16px",display:"flex",flexDirection:"column",alignItems:"center",gap:10,borderBottom:"1px solid "+accent+"22"}}>
             <div style={{position:"relative",width:80,height:80,borderRadius:"50%",overflow:"hidden",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 0 0 3px "+accent+", 0 4px 12px "+accent+"30"}}>
               {photo
                 ?<img src={photo} alt={fr.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
@@ -1457,7 +1457,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
           <div style={{padding:"14px 14px 12px",display:"flex",flexDirection:"column",gap:5,flex:1}}>
             {items.map(function(it,i){
               const has=it.n>0;
-              return <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"8px 11px",background:has?"#fafbfc":"transparent",border:"1px solid "+(has?"#f1f5f9":"transparent"),borderRadius:9,opacity:has?1:0.5}}>
+              return <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"8px 11px",background:has?accent+"0e":"transparent",border:"1px solid "+(has?accent+"22":"transparent"),borderRadius:9,opacity:has?1:0.5}}>
                 <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
                   <span style={{background:has?accent:"#f1f5f9",color:has?"#fff":"#94a3b8",fontWeight:800,fontSize:11.5,padding:"2px 8px",borderRadius:6,fontFeatureSettings:"'tnum'",letterSpacing:-.2,flexShrink:0,minWidth:24,textAlign:"center"}}>{it.n}×</span>
                   <span style={{color:has?"#0f172a":"#94a3b8",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.l}</span>
@@ -1469,74 +1469,59 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
 
             {/* Miniaturas dos cards a pagar — visual neutro, thumbs grandes (84px) */}
             {(function(){
-              function _shiftRef(rm, delta){
-                if(!rm) return null;
-                const parts=rm.split("-");
-                let y=parseInt(parts[0],10); let m=parseInt(parts[1],10)+delta;
-                while(m<1){m+=12;y--;} while(m>12){m-=12;y++;}
-                return y+"-"+String(m).padStart(2,"0");
-              }
               function _monthShortLabel(rm){
                 if(!rm) return "";
                 const mn=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
                 const parts=rm.split("-");
                 return (mn[parseInt(parts[1],10)-1]||"?")+"/"+parts[0].slice(-2);
               }
-              function _cardsFor(month){
-                if(!month) return [];
-                const cc=calcDesignerPayments(tasks||[], fr.id, month);
-                return [].concat(cc.tasksFotoObra,cc.tasksArte,cc.tasksCarrossel,cc.tasksFolder,cc.tasksVideo,cc.tasksCorte,cc.tasksVideoComplexo,cc.tasksVideoFeira);
-              }
+              // Pega a ÚLTIMA imagem subida no card (arte final, depois de ajustes) — não a primeira nem a cover legada.
+              // Ignora anotações (imagens com riscos vermelhos de revisão).
               function _thumb(t){
+                const imgs=(t.files||[]).filter(function(f){
+                  if(!f||!f.type||f.type.indexOf("image/")!==0) return false;
+                  if(f.isAnnotation===true) return false;
+                  const name=String(f.name||"").toLowerCase();
+                  if(name.indexOf("annotation-")===0) return false;
+                  return true;
+                });
+                if(imgs.length>0) return imgs[imgs.length-1].url;
                 if(t.cover) return t.cover;
-                const img=(t.files||[]).find(function(f){return f && f.type && f.type.indexOf("image/")===0;});
-                return img?img.url:null;
+                return null;
               }
-              const prev=_shiftRef(refMonth,-1);
-              const next=_shiftRef(refMonth,1);
-              const buckets=[
-                {key:"prev",  label:_monthShortLabel(prev),     month:prev, items:_cardsFor(prev),     muted:true},
-                {key:"cur",   label:_monthShortLabel(refMonth), month:refMonth, items:_cardsFor(refMonth), muted:false},
-                {key:"next",  label:_monthShortLabel(next),     month:next, items:_cardsFor(next),     muted:true},
-              ];
-              const totalCards=buckets.reduce(function(s,b){return s+b.items.length;},0);
-              if(totalCards===0) return null;
-              return <div style={{marginTop:12,paddingTop:14,borderTop:"1px solid #f1f5f9",display:"flex",flexDirection:"column",gap:12}}>
-                <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Cards a pagar</div>
-                {buckets.map(function(b){
-                  return <div key={b.key} style={{display:"flex",flexDirection:"column",gap:6,opacity:b.muted?0.6:1}}>
-                    <div style={{display:"flex",alignItems:"center",gap:7}}>
-                      <span style={{background:"#f1f5f9",color:"#64748b",fontSize:10,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",padding:"2px 8px",borderRadius:99}}>{b.label||"—"}</span>
-                      <span style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>{b.items.length}{b.items.length===1?" card":" cards"}</span>
-                    </div>
-                    {b.items.length===0
-                      ? <div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",paddingLeft:2}}>nenhum</div>
-                      : <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(84px,1fr))",gap:7}}>
-                          {b.items.slice(0,6).map(function(t){
-                            const url=_thumb(t);
-                            const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===t.client;});
-                            const tip=(t.title||"Sem título")+(cl?" · "+cl.name:"");
-                            return <div key={t.id} title={tip} style={{aspectRatio:"1/1",borderRadius:10,overflow:"hidden",background:url?"#f1f5f9":"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#94a3b8",cursor:"default",transition:"all .15s"}}
-                              onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.04)";e.currentTarget.style.borderColor="#cbd5e1";}}
-                              onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";e.currentTarget.style.borderColor="#e2e8f0";}}>
-                              {url
-                                ? <img src={url} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
-                                : (cl?cl.name.slice(0,2).toUpperCase():"?")
-                              }
-                            </div>;
-                          })}
-                          {b.items.length>6 && <div title={(b.items.length-6)+" cards a mais"} style={{aspectRatio:"1/1",borderRadius:10,background:"#f8fafc",border:"1px dashed #cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:"#64748b"}}>+{b.items.length-6}</div>}
-                        </div>
-                    }
-                  </div>;
-                })}
+              // Só o mês selecionado — sem prev/next pra não confundir.
+              const cc=calcDesignerPayments(tasks||[], fr.id, refMonth);
+              const items=[].concat(cc.tasksFotoObra,cc.tasksArte,cc.tasksCarrossel,cc.tasksFolder,cc.tasksVideo,cc.tasksCorte,cc.tasksVideoComplexo,cc.tasksVideoFeira);
+              if(items.length===0) return null;
+              return <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+accent+"22",display:"flex",flexDirection:"column",gap:10}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Cards a pagar</div>
+                  <span style={{background:accent+"15",color:accent,fontSize:10,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",padding:"2px 9px",borderRadius:99,border:"1px solid "+accent+"33"}}>{_monthShortLabel(refMonth)}</span>
+                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{items.length}{items.length===1?" card":" cards"}</span>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(110px,1fr))",gap:8}}>
+                  {items.slice(0,8).map(function(t){
+                    const url=_thumb(t);
+                    const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===t.client;});
+                    const tip=(t.title||"Sem título")+(cl?" · "+cl.name:"");
+                    return <div key={t.id} title={tip} style={{aspectRatio:"4/5",borderRadius:11,overflow:"hidden",background:url?"#f1f5f9":(cl&&cl.color?cl.color+"15":"#f8fafc"),border:"1px solid "+accent+"22",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:800,color:cl&&cl.color?cl.color:"#94a3b8",cursor:"default",transition:"all .18s",boxShadow:"0 2px 6px "+accent+"10"}}
+                      onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.04)";e.currentTarget.style.borderColor=accent+"66";e.currentTarget.style.boxShadow="0 6px 18px "+accent+"22";}}
+                      onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";e.currentTarget.style.borderColor=accent+"22";e.currentTarget.style.boxShadow="0 2px 6px "+accent+"10";}}>
+                      {url
+                        ? <img src={url} alt="" referrerPolicy="no-referrer" loading="lazy" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={function(e){e.currentTarget.style.display="none";}}/>
+                        : (cl?cl.name.slice(0,2).toUpperCase():"?")
+                      }
+                    </div>;
+                  })}
+                  {items.length>8 && <div title={(items.length-8)+" cards a mais"} style={{aspectRatio:"4/5",borderRadius:11,background:accent+"08",border:"1px dashed "+accent+"55",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,color:accent}}>+{items.length-8}</div>}
+                </div>
               </div>;
             })()}
           </div>
 
           {/* TOTAL — separador limpo */}
-          <div style={{padding:"14px 18px",background:"#fafbfc",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-            <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Total</span>
+          <div style={{padding:"14px 18px",background:"linear-gradient(180deg,"+accent+"08, "+accent+"14)",borderTop:"1px solid "+accent+"22",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+            <span style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Total</span>
             <div style={{color:c.total>0?"#16a34a":"#94a3b8",fontWeight:800,fontSize:18,fontFeatureSettings:"'tnum'",letterSpacing:-.4,lineHeight:1}}>{fmtBRL(c.total)}</div>
           </div>
 
