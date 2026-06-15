@@ -12383,16 +12383,19 @@ function PageCalendarioInterno({isMob}){
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterType,setFilterType]=useState("todos"); // "todos"|"equipe"|"clientes"|"marcos"
   const [marcosByClient,setMarcosByClient]=useState({}); // {clientId:[...marcos]}
+  const [eventosByClient,setEventosByClient]=useState({}); // {clientId:[...client_events]}
   const [loadingMarcos,setLoadingMarcos]=useState(true);
   const [openMarco,setOpenMarco]=useState(null); // {marco, cl}
+  const [openEvento,setOpenEvento]=useState(null); // {evento, cl}
 
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 
-  // ── Carrega TODOS os marcos de TODOS os clientes (uma vez por sessão) ──
+  // ── Carrega marcos + eventos dos clientes ──
   useEffect(function(){
     if(typeof window==="undefined"||!window._sb){ setLoadingMarcos(false); return; }
     let canceled=false;
+    // Marcos
     window._sb.from("client_milestones").select("*").order("date",{ascending:true}).then(function(r){
       if(canceled) return;
       if(!r||!r.data){ setLoadingMarcos(false); return; }
@@ -12408,12 +12411,25 @@ function PageCalendarioInterno({isMob}){
       console.warn("[cal-interno marcos]",e&&e.message?e.message:e);
       setLoadingMarcos(false);
     });
+    // Eventos do cliente (registrados no Portal do Cliente)
+    window._sb.from("clients").select("client_id,client_events").then(function(res){
+      if(canceled) return;
+      if(!res||!res.data) return;
+      const map={};
+      res.data.forEach(function(row){
+        if(Array.isArray(row.client_events) && row.client_events.length>0){
+          map[row.client_id] = row.client_events;
+        }
+      });
+      setEventosByClient(map);
+    }).catch(function(e){console.warn("[cal-interno eventos]",e&&e.message?e.message:e);});
     return function(){canceled=true;};
   },[]);
 
   // ── Constrói lista de eventos do MÊS VISÍVEL ──
   const eventsThisMonth=useMemo(function(){
     const m=calMonth.getMonth()+1;
+    const _year=calMonth.getFullYear();
     const out=[];
     // Aniversários equipe (puxados de TEAM.birthday)
     if(filterType==="todos"||filterType==="equipe"){
@@ -12457,7 +12473,6 @@ function PageCalendarioInterno({isMob}){
     }
     // Marcos dos clientes — todos os tipos
     if(filterType==="todos"||filterType==="marcos"){
-      const _year=calMonth.getFullYear();
       Object.keys(marcosByClient).forEach(function(cid){
         const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===cid;});
         if(!cl) return;
@@ -12482,8 +12497,34 @@ function PageCalendarioInterno({isMob}){
         });
       });
     }
+    // Eventos dos clientes — registrados pelo cliente no Portal
+    if(filterType==="todos"||filterType==="eventos"){
+      Object.keys(eventosByClient).forEach(function(cid){
+        const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===cid;});
+        if(!cl) return;
+        (eventosByClient[cid]||[]).forEach(function(ev){
+          if(!ev.date) return;
+          const dParts=String(ev.date).match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if(!dParts) return;
+          const my=parseInt(dParts[1],10), mm=parseInt(dParts[2],10), md=parseInt(dParts[3],10);
+          if(my!==_year||mm!==m) return;
+          out.push({
+            kind:"evento",
+            type:"evento",
+            title:ev.title||"Evento",
+            subtitle:cl.name,
+            icon:"📅",
+            day:md, month:mm,
+            color:cl.color||"#a855f7",
+            id:"evento_"+(ev.id||(cid+"_"+ev.date+"_"+(ev.title||""))),
+            _evento:ev,
+            _cl:cl,
+          });
+        });
+      });
+    }
     return out;
-  },[calMonth,filterType,marcosByClient]);
+  },[calMonth,filterType,marcosByClient,eventosByClient]);
 
   const eventsByDay=function(date){
     if(!date)return [];
@@ -12505,6 +12546,7 @@ function PageCalendarioInterno({isMob}){
   const teamCount=eventsThisMonth.filter(function(e){return e.kind==="equipe";}).length;
   const clientCount=eventsThisMonth.filter(function(e){return e.kind==="cliente";}).length;
   const marcoCount=eventsThisMonth.filter(function(e){return e.kind==="marco";}).length;
+  const eventoCount=eventsThisMonth.filter(function(e){return e.kind==="evento";}).length;
 
   // Modal: marco detail
   function MarcoDetailModal(){
@@ -12559,9 +12601,47 @@ function PageCalendarioInterno({isMob}){
     </div>;
   }
 
+  // Modal: detalhe do Evento do cliente
+  function EventoDetailModal(){
+    if(!openEvento) return null;
+    const ev=openEvento.evento, cl=openEvento.cl;
+    const _ac=cl.color||"#a855f7";
+    const dataFmt=ev.date?(ev.date.slice(8,10)+"/"+ev.date.slice(5,7)+"/"+ev.date.slice(0,4)):"—";
+    return <div onClick={function(){setOpenEvento(null);}} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"min(540px,92%)",overflow:"hidden",boxShadow:"0 24px 80px rgba(0,0,0,0.30)"}}>
+        <div style={{height:4,background:_ac}}/>
+        <div style={{padding:"22px 26px 20px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+            <div style={{width:42,height:42,borderRadius:12,background:_ac,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px "+_ac+"40",fontSize:13,fontWeight:800,letterSpacing:-.3,overflow:"hidden"}}>
+              {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])
+                ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:32,maxHeight:30,objectFit:"contain"}}/>
+                : (cl.abbr||cl.name.slice(0,2).toUpperCase())}
+            </div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3,flexWrap:"wrap"}}>
+                <span style={{background:_ac+"15",color:_ac,border:"1px solid "+_ac+"33",fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>Evento</span>
+                <span style={{color:"#94a3b8",fontSize:11.5,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{dataFmt}</span>
+              </div>
+              <div style={{color:"#0f172a",fontSize:17,fontWeight:800,letterSpacing:-.3,lineHeight:1.2}}>{ev.title||"Evento"}</div>
+              <div style={{color:"#64748b",fontSize:12.5,marginTop:2,fontWeight:500}}>{cl.name}</div>
+            </div>
+            <button onClick={function(){setOpenEvento(null);}} style={{background:"#f1f5f9",border:"none",borderRadius:9,width:32,height:32,cursor:"pointer",color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          {ev.description && <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:10,padding:"12px 14px",color:"#0f172a",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{ev.description}</div>}
+          <div style={{marginTop:14,padding:"10px 14px",background:"#f5f3ff",border:"1px solid #ddd6fe",borderRadius:10,color:"#5b21b6",fontSize:11.5,fontWeight:600,lineHeight:1.5}}>
+            Registrado pelo cliente no Portal · sincronizado automaticamente.
+          </div>
+        </div>
+      </div>
+    </div>;
+  }
+
   return(
     <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif"}}>
       <MarcoDetailModal/>
+      <EventoDetailModal/>
       {/* Cabeçalho */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div>
@@ -12581,6 +12661,7 @@ function PageCalendarioInterno({isMob}){
             {id:"equipe",  label:"Aniversários equipe",  count:teamCount,   icoColor:"#ec4899", icoType:"cake"},
             {id:"clientes",label:"Aniversários clientes",count:clientCount, icoColor:"#f97316", icoType:"gift"},
             {id:"marcos",  label:"Marcos",               count:marcoCount,  icoColor:"#0ea5e9", icoType:"flag"},
+            {id:"eventos", label:"Evento",               count:eventoCount, icoColor:"#a855f7", icoType:"calendar"},
           ].map(function(o){
             const active=filterType===o.id;
             return <button key={o.id} onClick={function(){setFilterType(o.id);}}
@@ -12588,6 +12669,7 @@ function PageCalendarioInterno({isMob}){
               {o.icoType==="cake" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/><line x1="8" y1="9" x2="8" y2="6"/><line x1="16" y1="9" x2="16" y2="6"/><line x1="12" y1="9" x2="12" y2="6"/></svg>}
               {o.icoType==="gift" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>}
               {o.icoType==="flag" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>}
+              {o.icoType==="calendar" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
               {o.label}
               {typeof o.count==="number"&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 8px",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{o.count}</span>}
             </button>;
@@ -12615,13 +12697,27 @@ function PageCalendarioInterno({isMob}){
                   ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>
                   : ev.kind==="cliente"
                     ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/></svg>
-                    : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
+                    : ev.kind==="evento"
+                      ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>;
+                // Logo do cliente quando o evento tem cliente associado (marcos, eventos, aniversários de cliente)
+                const _clLogo = ev._cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[ev._cl.id];
+                const isEvento = ev.kind==="evento";
+                const _isClickable = isMarco || isEvento;
+                const _click = isMarco ? function(){setOpenMarco({marco:ev._marco, cl:ev._cl});}
+                              : isEvento ? function(){setOpenEvento({evento:ev._evento, cl:ev._cl});}
+                              : null;
                 return <div key={ev.id} title={ev.title+" — "+ev.subtitle}
-                  onClick={onClick}
-                  style={{background:ev.color,color:"#fff",borderRadius:8,padding:"6px 10px",fontSize:12.5,lineHeight:1.25,display:"flex",alignItems:"center",gap:7,overflow:"hidden",cursor:isMarco?"pointer":"default",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"inherit"}}
-                  onMouseEnter={isMarco?function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+ev.color+"55";}:null}
-                  onMouseLeave={isMarco?function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}:null}>
-                  <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:.92}}>{_evIcon}</span>
+                  onClick={_click}
+                  style={{background:ev.color,color:"#fff",borderRadius:8,padding:"5px 9px 5px 5px",fontSize:12.5,lineHeight:1.25,display:"flex",alignItems:"center",gap:7,overflow:"hidden",cursor:_isClickable?"pointer":"default",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"inherit"}}
+                  onMouseEnter={_isClickable?function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+ev.color+"55";}:null}
+                  onMouseLeave={_isClickable?function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}:null}>
+                  {_clLogo
+                    ? <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"#fff",flexShrink:0,overflow:"hidden",padding:1}}>
+                        <img src={_clLogo} alt={ev._cl.name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+                      </span>
+                    : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:.92,marginLeft:4}}>{_evIcon}</span>
+                  }
                   <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:700,letterSpacing:-.1}}>{ev.title}</span>
                 </div>;
               })}
@@ -12635,7 +12731,7 @@ function PageCalendarioInterno({isMob}){
       {!loadingMarcos&&total===0&&<div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:12,padding:"32px 20px",textAlign:"center"}}>
         <div style={{fontSize:32,marginBottom:8}}>🗓</div>
         <div style={{color:"#0f172a",fontWeight:600,fontSize:13}}>Nenhum evento interno em {MONTHS[calMonth.getMonth()].toLowerCase()}</div>
-        <div style={{color:"#64748b",fontSize:11,marginTop:4}}>Aniversários da equipe, dos contatos dos clientes e marcos dos projetos aparecem aqui automaticamente.</div>
+        <div style={{color:"#64748b",fontSize:11,marginTop:4}}>Aniversários da equipe, dos contatos dos clientes, marcos dos projetos e eventos sinalizados pelo cliente aparecem aqui automaticamente.</div>
       </div>}
     </div>
   );
