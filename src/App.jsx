@@ -45341,10 +45341,169 @@ function _dcThumb(t){
 const _DC_DONE_STATUSES = ["aprovacao_final","aprovado","agendado","publicado","reprovado"];
 const _DC_ACT_STATUSES = ["recebida","execucao","ajustes","avaliacao","aprovacao_final","aprovado","agendado","publicado"];
 
+/* ─── Catálogos de Ongoing — pra resolver label por id no DashColab ─── */
+const _DC_ONG_MENSAL = [
+  {id:"resultados",  label:"Analisar resultados do mês"},
+  {id:"relatorio",   label:"Preparar relatório mensal"},
+  {id:"reuniao",     label:"Realizar reunião mensal com o cliente"},
+  {id:"metas",       label:"Atualizar metas do cliente"},
+  {id:"conteudos",   label:"Planejar conteúdos do próximo mês"},
+  {id:"campanhas",   label:"Verificar campanhas e oportunidades"},
+  {id:"materiais",   label:"Solicitar materiais importantes para o cliente"},
+];
+const _DC_ONG_TRIM = [
+  {id:"posicionamento", label:"Revisar posicionamento do cliente"},
+  {id:"ofertas",        label:"Revisar principais ofertas/produtos/serviços"},
+  {id:"plano3m",        label:"Planejar próximos 3 meses"},
+  {id:"evolucao",       label:"Analisar evolução dos resultados"},
+  {id:"oportunidades",  label:"Levantar novas oportunidades comerciais"},
+  {id:"indicacao",      label:"Pedir indicação para o cliente"},
+  {id:"depoimento",     label:"Solicitar depoimento/case (se fizer sentido)"},
+];
+function _dcOnbResolve(itemId){
+  // Procura em ONBOARDING_BLOCKS (definido em 21_cliente_onboarding.jsx)
+  if(typeof ONBOARDING_BLOCKS === "undefined") return null;
+  for(let i=0;i<ONBOARDING_BLOCKS.length;i++){
+    const b=ONBOARDING_BLOCKS[i];
+    for(let j=0;j<b.items.length;j++){
+      const it=b.items[j];
+      if(it.id===itemId) return {label:it.label, blockTitle:b.title};
+      if(it.sub){
+        for(let k=0;k<it.sub.length;k++){
+          if(it.sub[k].id===itemId) return {label:it.sub[k].label, blockTitle:b.title+" › "+it.label};
+        }
+      }
+    }
+  }
+  return null;
+}
+function _dcOngResolveMensal(id){const r=_DC_ONG_MENSAL.find(function(x){return x.id===id;});return r||null;}
+function _dcOngResolveTrim(id){const r=_DC_ONG_TRIM.find(function(x){return x.id===id;});return r||null;}
+function _dcOngMonthLabel(ym){
+  const mn=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+  const parts=String(ym||"").split("-");
+  if(parts.length<2) return ym||"";
+  return (mn[parseInt(parts[1],10)-1]||"?")+" "+parts[0];
+}
+function _dcOngQuarterLabel(yq){
+  const parts=String(yq||"").split("-Q");
+  if(parts.length<2) return yq||"";
+  return parts[1]+"º trimestre de "+parts[0];
+}
+function _dcItemStatus(it){
+  if(!it) return {label:"Pendente", color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"};
+  if(it.done) return {label:"Concluído", color:"#15803d", bg:"#dcfce7", border:"#bbf7d0"};
+  if(it.due){
+    const d=new Date(it.due+"T00:00:00");
+    const today=new Date(); today.setHours(0,0,0,0);
+    const days=Math.round((d-today)/86400000);
+    if(days<0) return {label:"Atrasado", color:"#991b1b", bg:"#fee2e2", border:"#fecaca"};
+    if(days<=7) return {label:"Próximo", color:"#a16207", bg:"#fef3c7", border:"#fde68a"};
+    return {label:"Em dia", color:"#15803d", bg:"#dcfce7", border:"#bbf7d0"};
+  }
+  return {label:"Pendente", color:"#64748b", bg:"#f1f5f9", border:"#e2e8f0"};
+}
+
 /* ─── COMPONENTE PRINCIPAL ────────────────────────────────── */
 function DashColabV2(props){
   const { user, tasks, allTasks, setTasks, isViewing, currentUser, isMob } = props;
   const [refMonth, setRefMonth] = useState(_dcCurrentMonth());
+  const [myOnboarding, setMyOnboarding] = useState([]);
+  const [myOngoing, setMyOngoing] = useState([]);
+
+  // Carrega itens de Onboarding + Ongoing onde user é responsável (resp = user.id) — em todos clientes
+  useEffect(function(){
+    if(typeof window==="undefined"||!window._sb) return;
+    let canceled=false;
+    // Onboarding
+    window._sb.from("client_onboarding").select("client_id, items").then(function(r){
+      if(canceled||!r||!r.data) return;
+      const out=[];
+      r.data.forEach(function(row){
+        const items=row.items||{};
+        Object.keys(items).forEach(function(itemId){
+          const it=items[itemId];
+          if(!it||it.resp!==user.id) return;
+          const meta=_dcOnbResolve(itemId);
+          out.push({
+            kind:"onboarding",
+            clientId:row.client_id,
+            itemId:itemId,
+            label:meta?meta.label:itemId,
+            blockTitle:meta?meta.blockTitle:"",
+            done:!!it.done,
+            due:it.due||"",
+            completed_at:it.completed_at||"",
+          });
+        });
+      });
+      // Ordem: pendentes antes (com prazo crescente), concluídos depois
+      out.sort(function(a,b){
+        if(a.done!==b.done) return a.done?1:-1;
+        const ad=a.due||"9999", bd=b.due||"9999";
+        return ad.localeCompare(bd);
+      });
+      setMyOnboarding(out);
+    }).catch(function(e){console.warn("[dashcolab onboarding]",e&&e.message?e.message:e);});
+
+    // Ongoing (mensal + trimestral) — usa clients.ongoing JSONB
+    window._sb.from("clients").select("client_id, ongoing").then(function(r){
+      if(canceled||!r||!r.data) return;
+      const out=[];
+      r.data.forEach(function(row){
+        const ong=row.ongoing||{};
+        // Mensal
+        const mensal=ong.mensal||{};
+        Object.keys(mensal).forEach(function(period){
+          const items=mensal[period]||{};
+          Object.keys(items).forEach(function(itemId){
+            const it=items[itemId];
+            if(!it||it.resp!==user.id) return;
+            const meta=_dcOngResolveMensal(itemId);
+            out.push({
+              kind:"ongoing-mensal",
+              clientId:row.client_id,
+              itemId:itemId,
+              period:period,
+              periodLabel:_dcOngMonthLabel(period),
+              label:meta?meta.label:itemId,
+              done:!!it.done,
+              due:it.due||"",
+            });
+          });
+        });
+        // Trimestral
+        const trim=ong.trimestral||{};
+        Object.keys(trim).forEach(function(period){
+          const items=trim[period]||{};
+          Object.keys(items).forEach(function(itemId){
+            const it=items[itemId];
+            if(!it||it.resp!==user.id) return;
+            const meta=_dcOngResolveTrim(itemId);
+            out.push({
+              kind:"ongoing-trimestral",
+              clientId:row.client_id,
+              itemId:itemId,
+              period:period,
+              periodLabel:_dcOngQuarterLabel(period),
+              label:meta?meta.label:itemId,
+              done:!!it.done,
+              due:it.due||"",
+            });
+          });
+        });
+      });
+      out.sort(function(a,b){
+        if(a.done!==b.done) return a.done?1:-1;
+        const ad=a.due||"9999", bd=b.due||"9999";
+        return ad.localeCompare(bd);
+      });
+      setMyOngoing(out);
+    }).catch(function(e){console.warn("[dashcolab ongoing]",e&&e.message?e.message:e);});
+
+    return function(){canceled=true;};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[user.id]);
 
   // Tasks do colaborador (já filtradas no pai por assignee)
   const my = (tasks||[]).filter(function(t){return !t.deletedAt;});
@@ -45557,6 +45716,62 @@ function DashColabV2(props){
           </div>
       }
     </section>
+
+    {/* ═══ 3.5 ONBOARDING + ONGOING ATRIBUÍDOS AO COLABORADOR ═══ */}
+    {(myOnboarding.length>0 || myOngoing.length>0) && (function(){
+      function _renderRow(it, sub){
+        const cl = clientObj(it.clientId);
+        const st = _dcItemStatus(it);
+        return <div key={it.kind+"-"+it.clientId+"-"+it.itemId+(it.period?"-"+it.period:"")} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 13px",background:it.done?"#fafbfc":"#fff",border:"1px solid #f1f5f9",borderRadius:10,opacity:it.done?0.7:1,transition:"all .15s",flexWrap:"wrap"}}>
+          {cl && <div style={{width:30,height:30,borderRadius:8,background:cl.color+"15",border:"1px solid "+cl.color+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+            {typeof ClientLogo==="function" ? <ClientLogo clientId={cl.id} size="xs"/> : <span style={{color:cl.color,fontWeight:800,fontSize:11}}>{cl.abbr||cl.name.slice(0,2)}</span>}
+          </div>}
+          <div style={{flex:1,minWidth:160}}>
+            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,textDecoration:it.done?"line-through":"none",letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis"}}>{it.label}</div>
+            <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:600,letterSpacing:.2,textTransform:"uppercase"}}>{cl?cl.name:it.clientId} · {sub||""}</div>
+          </div>
+          {it.due && <span style={{background:"#f1f5f9",color:"#475569",fontSize:10.5,fontWeight:700,padding:"3px 9px",borderRadius:99,fontFeatureSettings:"'tnum'",letterSpacing:.2,whiteSpace:"nowrap",flexShrink:0}}>
+            {it.due.slice(8,10)+"/"+it.due.slice(5,7)}
+          </span>}
+          <span style={{background:st.bg,color:st.color,border:"1px solid "+st.border,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap",flexShrink:0}}>{st.label}</span>
+        </div>;
+      }
+
+      return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+        {/* ── ONBOARDING DE CLIENTES ── */}
+        <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Onboarding atribuído a você</div>
+            <span style={{background:accent+"15",color:accent,fontSize:10.5,fontWeight:800,padding:"2px 8px",borderRadius:99,fontFeatureSettings:"'tnum'",marginLeft:"auto"}}>{myOnboarding.filter(function(x){return !x.done;}).length}</span>
+          </div>
+          {myOnboarding.length===0
+            ? <div style={{color:"#cbd5e1",fontSize:12,fontStyle:"italic",padding:"14px 0",textAlign:"center"}}>Nenhum item de onboarding atribuído</div>
+            : <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:isMob?"none":380,overflowY:"auto"}}>
+                {myOnboarding.map(function(it){return _renderRow(it, it.blockTitle);})}
+              </div>
+          }
+        </section>
+
+        {/* ── ONGOING DE CLIENTES ── */}
+        <section style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.585 0-4.585 8 0 8 5.606 0 7.644-8 12.739-8z"/></svg>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Ongoing atribuído a você</div>
+            <span style={{background:accent+"15",color:accent,fontSize:10.5,fontWeight:800,padding:"2px 8px",borderRadius:99,fontFeatureSettings:"'tnum'",marginLeft:"auto"}}>{myOngoing.filter(function(x){return !x.done;}).length}</span>
+          </div>
+          {myOngoing.length===0
+            ? <div style={{color:"#cbd5e1",fontSize:12,fontStyle:"italic",padding:"14px 0",textAlign:"center"}}>Nenhuma rotina atribuída</div>
+            : <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:isMob?"none":380,overflowY:"auto"}}>
+                {myOngoing.map(function(it){
+                  const sub=(it.kind==="ongoing-mensal"?"Mensal · ":"Trimestral · ")+(it.periodLabel||"");
+                  return _renderRow(it, sub);
+                })}
+              </div>
+          }
+        </section>
+      </div>;
+    })()}
 
     {/* ═══ 4. PRODUÇÃO ATUAL (3 colunas) ═══ */}
     <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr 1fr",gap:12}}>
