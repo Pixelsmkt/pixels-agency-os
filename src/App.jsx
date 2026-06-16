@@ -13956,7 +13956,7 @@ function PixelsIAModal({onClose,setTasks,tasks}){
       startDate:new Date().toISOString().split("T")[0],deadline,
       completedAt:null,score:null,tags:[...(aiResult.tags||[]),"pixels-ia"],
       comments:[{id:Date.now(),user:"Pixels IA",av:"⚡",color:C.a,text:`💡 Ideia: "${idea||"Áudio enviado"}"`,time:new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}],
-      files:[],cover:C.a,deletedAt:null,bioterUnit:null,isAlteracao:false,ajustar:false,caption:"",publishDate:"",publishTime:"09:00",referenceMonth:(new Date()).getFullYear()+"-"+String((new Date()).getMonth()+1).padStart(2,"0"),checklist:[],timeline:[{type:"created",label:"Demanda criada via Pixels IA",atFmt:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name}],colEnteredAt:new Date().toISOString(),createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:CURRENT_USER.name
+      files:[],cover:C.a,deletedAt:null,bioterUnit:null,isAlteracao:false,ajustar:false,caption:"",publishDate:"",publishTime:"09:00",referenceMonth:(function(){const d=new Date();const off=d.getDate()>10?1:0;const m=d.getMonth()+1+off;const y=d.getFullYear()+(m>12?1:0);const mm=((m-1)%12)+1;return y+"-"+String(mm).padStart(2,"0");})(),checklist:[],timeline:[{type:"created",label:"Demanda criada via Pixels IA",atFmt:new Date().toLocaleDateString("pt-BR"),user:CURRENT_USER.name}],colEnteredAt:new Date().toISOString(),createdAt:new Date().toLocaleDateString("pt-BR"),createdBy:CURRENT_USER.name
     };
     const cards=[];
     if(recipient==="ellen"||recipient==="both") cards.push({...base,id:mkId(),assignee:"ellen",title:`[Hellen] ${base.title}`,tags:[...base.tags,"social"]});
@@ -14699,7 +14699,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       startDate:now.toISOString().split("T")[0],
       deadline:new Date(Date.now()+7*86400000).toISOString().split("T")[0],
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
-      deletedAt:null,bioterUnit:null,referenceMonth:(new Date()).getFullYear()+"-"+String((new Date()).getMonth()+1).padStart(2,"0"),  // auto referenceMonth
+      deletedAt:null,bioterUnit:null,referenceMonth:(function(){const d=new Date();const off=d.getDate()>10?1:0;const m=d.getMonth()+1+off;const y=d.getFullYear()+(m>12?1:0);const mm=((m-1)%12)+1;return y+"-"+String(mm).padStart(2,"0");})(),  // auto referenceMonth
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:activeUserName,
       timeline:[{type:"created",label:`Demanda criada por ${activeUserName} → ${TEAM.find(u=>u.id===respId)?.name||respId}`,atFmt:nowFmt,user:activeUserName}],
@@ -18683,6 +18683,8 @@ function PublicacaoEditModal({task, onClose, onReject}){
   // shapeTool: null = livre (caneta), ou "line" | "arrow" | "rect" | "circle"
   // Click-drag desenha a forma com penColor + penSize.
   const [shapeTool,setShapeTool]=useState(null);
+  // stampTool: null | "check" | "x" | "star" — carimbo de selo (click único)
+  const [stampTool,setStampTool]=useState(null);
   const shapeStartRef=useRef(null); // {x, y}
   const shapeSnapshotRef=useRef(null); // ImageData do canvas no momento do click
 
@@ -18764,6 +18766,52 @@ function PublicacaoEditModal({task, onClose, onReject}){
     setIsEraser(mode==="eraser");
     setTextMode(mode==="text");
     setShapeTool(mode==="line"||mode==="arrow"||mode==="rect"||mode==="circle"?mode:null);
+    setStampTool(mode==="check"||mode==="x"||mode==="star"?mode:null);
+  };
+  // Carimbo: selo circular preenchido no ponto clicado (cor fixa por tipo)
+  const drawStamp=(ctx,x,y)=>{
+    const kind=stampTool;
+    if(!kind)return;
+    const R=Math.max(26,penSize*6);
+    const fill=kind==="check"?"#16a34a":kind==="x"?"#dc2626":"#f59e0b";
+    ctx.save();
+    ctx.globalCompositeOperation="source-over";
+    ctx.fillStyle=fill;
+    ctx.beginPath();ctx.arc(x,y,R,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle="#fff";
+    ctx.lineWidth=Math.max(2,R*0.08);
+    ctx.beginPath();ctx.arc(x,y,R,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle="#fff";
+    ctx.lineWidth=Math.max(3,R*0.18);
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    if(kind==="check"){
+      ctx.beginPath();
+      ctx.moveTo(x-R*0.42,y+R*0.02);
+      ctx.lineTo(x-R*0.10,y+R*0.36);
+      ctx.lineTo(x+R*0.48,y-R*0.32);
+      ctx.stroke();
+    }else if(kind==="x"){
+      const o=R*0.42;
+      ctx.beginPath();
+      ctx.moveTo(x-o,y-o);ctx.lineTo(x+o,y+o);
+      ctx.moveTo(x+o,y-o);ctx.lineTo(x-o,y+o);
+      ctx.stroke();
+    }else if(kind==="star"){
+      ctx.fillStyle="#fff";
+      ctx.beginPath();
+      const spikes=5,outer=R*0.62,inner=R*0.28;
+      let rot=-Math.PI/2;
+      for(let i=0;i<spikes;i++){
+        ctx.lineTo(x+Math.cos(rot)*outer,y+Math.sin(rot)*outer);
+        rot+=Math.PI/spikes;
+        ctx.lineTo(x+Math.cos(rot)*inner,y+Math.sin(rot)*inner);
+        rot+=Math.PI/spikes;
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
   };
   // Desenha a forma (preview ou final) — usa snapshot+restore pra atualizar
   const drawShape=(ctx,start,end)=>{
@@ -18907,6 +18955,11 @@ function PublicacaoEditModal({task, onClose, onReject}){
     if(textMode){onCanvasClickForText(e);return;}
     e.preventDefault();
     const cv=canvasRef.current;const ctx=cv.getContext("2d");const p=getPos(e);
+    if(stampTool){
+      drawStamp(ctx,p.x,p.y);
+      pushHistory();
+      return;
+    }
     if(shapeTool){
       // Salva snapshot pra restaurar durante o preview
       shapeStartRef.current=p;
@@ -19125,7 +19178,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
             {/* Modo livre — caneta normal (default) */}
             <button onClick={()=>activateMode("pen")}
               title="Caneta livre"
-              style={{background:!isEraser&&!textMode&&!shapeTool?C.a+"15":C.s1,color:!isEraser&&!textMode&&!shapeTool?C.a:C.ts,border:!isEraser&&!textMode&&!shapeTool?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              style={{background:!isEraser&&!textMode&&!shapeTool&&!stampTool?C.a+"15":C.s1,color:!isEraser&&!textMode&&!shapeTool&&!stampTool?C.a:C.ts,border:!isEraser&&!textMode&&!shapeTool&&!stampTool?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
               <span>Caneta</span>
             </button>
@@ -19149,6 +19202,22 @@ function PublicacaoEditModal({task, onClose, onReject}){
               style={{background:shapeTool==="circle"?C.a+"15":C.s1,color:shapeTool==="circle"?C.a:C.ts,border:shapeTool==="circle"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="9"/></svg>
               <span>Círculo</span>
+            </button>
+            {/* ── Carimbos: click único larga selo no ponto clicado ── */}
+            <button onClick={()=>activateMode("check")} title="Certinho — aponta o que está bom"
+              style={{background:stampTool==="check"?"#16a34a18":C.s1,color:stampTool==="check"?"#16a34a":C.ts,border:stampTool==="check"?"1px solid #16a34a44":"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Certinho</span>
+            </button>
+            <button onClick={()=>activateMode("x")} title="Errado — aponta o que precisa mudar"
+              style={{background:stampTool==="x"?"#dc262618":C.s1,color:stampTool==="x"?"#dc2626":C.ts,border:stampTool==="x"?"1px solid #dc262644":"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <span>Errado</span>
+            </button>
+            <button onClick={()=>activateMode("star")} title="Destaque — aponta o que está incrível"
+              style={{background:stampTool==="star"?"#f59e0b18":C.s1,color:stampTool==="star"?"#f59e0b":C.ts,border:stampTool==="star"?"1px solid #f59e0b44":"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span>Destaque</span>
             </button>
             <button onClick={()=>activateMode("eraser")}
               title="Borracha"
@@ -19201,7 +19270,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
               :<div style={{minHeight:200,display:"flex",alignItems:"center",justifyContent:"center",color:C.td,fontSize:13}}>Sem imagem</div>
             }
             <canvas ref={canvasRef} width={800} height={600}
-              style={{position:"absolute",inset:0,width:"100%",height:"100%",cursor:textMode?"text":(isEraser?"cell":(shapeTool?"crosshair":"crosshair"))}}
+              style={{position:"absolute",inset:0,width:"100%",height:"100%",cursor:textMode?"text":(isEraser?"cell":(stampTool?"copy":(shapeTool?"crosshair":"crosshair")))}}
               onMouseDown={onMD} onMouseMove={onMM} onMouseUp={onMU} onMouseLeave={onMU}
               onTouchStart={onMD} onTouchMove={onMM} onTouchEnd={onMU}/>
             {/* Input flutuante quando textMode + click ativos */}
@@ -26915,9 +26984,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   },[adjustChecked,adjustChecklistKey]);
   const toggleAdjustCheck=(id)=>setAdjustChecked(p=>({...p,[id]:!p[id]}));
 
-  // Show "move to execution" prompt to assignees OR to editors/designers who can pick up the work
+  // Prompt "mover pra execução" só aparece pra executores (designers/editores level >= 3).
+  // Sócios/coordenadores não recebem esse passo — eles passeiam livremente entre as colunas.
   const [showMovePrompt,setShowMovePrompt]=useState(
-    task.status==="recebida"&&canEdit&&(isAssigned||(user.level>=3))  // assignees or level-3 crew (designers, editors)
+    task.status==="recebida"&&canEdit&&user.level>=3
   );
 
   const moveToExecucao=()=>{
@@ -26949,24 +27019,37 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:200,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"16px",overflowY:"auto",backdropFilter:"blur(6px)"}} onMouseDown={handleClose}>
 
     {/* ── MOVER PARA EM EXECUÇÃO ── */}
-    {showMovePrompt&&<div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(4px)"}}>
-      <div style={{background:"#fff",borderRadius:20,padding:"32px 36px",maxWidth:400,width:"90%",boxShadow:"0 24px 80px rgba(0,0,0,0.3)",textAlign:"center"}}>
-        <div style={{width:56,height:56,borderRadius:18,background:"#fef3c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,margin:"0 auto 16px"}}>⚡</div>
-        <div style={{color:"#0f172a",fontWeight:900,fontSize:18,marginBottom:8,letterSpacing:-.3}}>Mover para Em Execucao</div>
-        <div style={{color:"#64748b",fontSize:13,marginBottom:8,lineHeight:1.6}}>
-          Este cartao esta em <strong>Demanda</strong>. Para trabalhar nele, voce precisa mova-lo para <strong>Em Execução</strong>.
+    {showMovePrompt&&<div onClick={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()}
+      style={{position:"fixed",inset:0,zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{background:"#fff",borderRadius:18,padding:"28px 28px 22px",maxWidth:420,width:"90%",boxShadow:"0 20px 60px rgba(15,23,42,0.18)",border:"1px solid #f1f5f9"}}>
+        {/* Header — selo Em execução */}
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
+          <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,#fff7ed,#ffedd5)",display:"flex",alignItems:"center",justifyContent:"center",border:"1px solid #fed7aa"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ea580c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2,lineHeight:1.25}}>Mover para Em execução</div>
+            <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.4,textTransform:"uppercase",marginTop:2}}>Demanda → Em execução</div>
+          </div>
         </div>
-        <div style={{background:"#f1f5f9",borderRadius:10,padding:"10px 14px",marginBottom:24,fontSize:12,color:"#475569",lineHeight:1.5}}>
-          Isso indica para a equipe que você ja esta trabalhando nessa demanda.
+        {/* Texto explicativo */}
+        <div style={{color:"#475569",fontSize:13,marginBottom:14,lineHeight:1.55}}>
+          Este cartão está em <strong style={{color:"#0f172a",fontWeight:600}}>Demanda</strong>. Pra trabalhar nele, mova pra <strong style={{color:"#ea580c",fontWeight:600}}>Em execução</strong> — assim a equipe sabe que você já pegou.
         </div>
-        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+        {/* Botões */}
+        <div style={{display:"flex",gap:8,marginTop:20}}>
           <button onClick={()=>{setShowMovePrompt(false);onClose();}}
-            style={{background:"#f1f5f9",border:"none",borderRadius:10,padding:"11px 24px",fontWeight:700,fontSize:13,color:"#64748b",cursor:"pointer"}}>
-            Agora nao
+            style={{flex:1,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 16px",fontWeight:600,fontSize:13,color:"#475569",cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>
+            Agora não
           </button>
           <button onClick={moveToExecucao}
-            style={{background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:10,padding:"11px 28px",fontWeight:800,fontSize:14,color:"#fff",cursor:"pointer",boxShadow:"0 4px 14px rgba(245,158,11,0.4)"}}>
-            ⚡ Mover agora
+            style={{flex:1,background:"linear-gradient(135deg,#f97316,#ea580c)",border:"none",borderRadius:10,padding:"10px 16px",fontWeight:700,fontSize:13,color:"#fff",cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(249,115,22,0.28)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .12s"}}
+            onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(249,115,22,0.38)";}}
+            onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 12px rgba(249,115,22,0.28)";}}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff" stroke="#fff" strokeWidth="1.4" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            Mover agora
           </button>
         </div>
       </div>
