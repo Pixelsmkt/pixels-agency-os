@@ -19342,7 +19342,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
                 </>;
               })()}
             </div>
-          </div>          </div>
+          </div>
 
           {/* Canvas over image */}
           <div style={{position:"relative",userSelect:"none",borderRadius:12,overflow:"hidden",background:"#f1f5f9",lineHeight:0,flex:1}}>
