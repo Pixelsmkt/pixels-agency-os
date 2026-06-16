@@ -14496,7 +14496,21 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       setPendingOpenId(null);
     }
   },[tasks,pendingOpenId]);
-  const [quickCreate,setQuickCreate]=useState(null); // {colId} — seletor rápido
+  // Wrapper de setOpenCard que descarta drafts não-salvos ao fechar
+  const closeCardCheckingDraft=()=>{
+    const closing=openCard;
+    if(closing){
+      const current=(tasks||[]).find(t=>String(t.id)===String(closing.id));
+      if(current&&current._isDraft){
+        // User fechou sem salvar — remove a task draft do state
+        setTasks(p=>p.filter(t=>String(t.id)!==String(closing.id)));
+      }
+    }
+    setOpenCard(null);
+  };
+  const [quickCreate,setQuickCreate]=useState(null); // {colId} — seletor rápido (legacy)
+  // Picker de coluna ao clicar em "+ Nova" — usuário escolhe Rascunhos/Copys/Demanda
+  const [newColPicker,setNewColPicker]=useState(null); // null | {extraProps}
   const [viewMode,setViewMode]=useState("cartao");
   const [filterUser,setFilterUser]=useState("todos");
   const [filterSector,setFilterSector]=useState("todos_setores");
@@ -14719,13 +14733,20 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     setPendingOpenId(newTask.id);
   };
 
-  // Cria demanda direto e abre o CardModal completo (com Briefing, tipo de conteúdo, cliente, etc).
-  // O CardModal abre automaticamente via `pendingOpenId` definido dentro de createTask.
+  // Quando clica no "+ Nova" do header, abre picker pra escolher Rascunhos/Copys/Demanda.
+  // Quando clica no "+ Adicionar" dentro de uma coluna específica, cria direto nela.
   const addNewTask=(colId,extraProps={})=>{
-    // Quando criado direto numa coluna específica (Rascunhos ou Copys), respeita;
-    // caso contrário, default = "demanda" (Copys).
-    const targetCol=(colId==="rascunhos"||colId==="demanda")?colId:"demanda";
-    createTask(targetCol,activeUserId,"Nova Demanda",extraProps);
+    if(colId==="rascunhos"||colId==="demanda"||colId==="recebida"){
+      // Coluna já especificada (botão "+" inline da coluna) — cria direto
+      createTaskDraft(colId,activeUserId,"Nova Demanda",extraProps);
+      return;
+    }
+    // "+ Nova" do header — pergunta qual coluna
+    setNewColPicker({extraProps});
+  };
+  // Variante de createTask que marca a task como _isDraft (descartável se fechar sem salvar)
+  const createTaskDraft=(colId,assigneeId,titleStr,extraProps={})=>{
+    createTask(colId,assigneeId,titleStr,{...extraProps,_isDraft:true});
   };
 
   const addCol=()=>{
@@ -15031,6 +15052,35 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   return <>
     {showPixelsIA&&<PixelsIAModal onClose={()=>setShowPixelsIA(false)} setTasks={setTasks} tasks={tasks}/>}
     {showScan&&<ScanModal tasks={tasks} onClose={()=>setShowScan(false)} onFilter={seg=>{setViewMode("lista");}}/>}
+    {/* ── PICKER DE COLUNA pro "+ Nova" ── */}
+    {newColPicker&&<div onMouseDown={e=>{if(e.target===e.currentTarget)setNewColPicker(null);}}
+      style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",WebkitBackdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{background:"#fff",borderRadius:18,padding:"24px 26px 20px",maxWidth:460,width:"100%",boxShadow:"0 24px 60px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9"}}>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.2,marginBottom:4}}>Onde criar a demanda?</div>
+        <div style={{color:"#94a3b8",fontSize:12,marginBottom:18}}>Escolha em qual coluna o cartão deve aparecer.</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          {[
+            {id:"rascunhos",label:"Rascunhos",desc:"Esboço inicial",color:"#64748b",bg:"#f8fafc",bd:"#e2e8f0"},
+            {id:"demanda",label:"Copys",desc:"Escrever copy",color:"#7c3aed",bg:"#f5f3ff",bd:"#ddd6fe"},
+            {id:"recebida",label:"Demandas",desc:"Pra executar",color:"#0ea5e9",bg:"#f0f9ff",bd:"#bae6fd"},
+          ].map(opt=>
+            <button key={opt.id} onClick={()=>{const ex=newColPicker.extraProps||{};setNewColPicker(null);createTaskDraft(opt.id,activeUserId,"Nova Demanda",ex);}}
+              style={{background:opt.bg,border:`1px solid ${opt.bd}`,borderRadius:12,padding:"14px 10px",cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:4,transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif"}}
+              onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 14px rgba(15,23,42,0.08)";}}
+              onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="";}}>
+              <div style={{color:opt.color,fontWeight:700,fontSize:13,letterSpacing:-.1}}>{opt.label}</div>
+              <div style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>{opt.desc}</div>
+            </button>
+          )}
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+          <button onClick={()=>setNewColPicker(null)}
+            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",fontWeight:600,fontSize:12,color:"#64748b",cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>}
     {quickCreate&&<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",WebkitBackdropFilter:"blur(4px)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}} onMouseDown={e=>{if(e.target===e.currentTarget)setQuickCreate(null);}}>
       <div onMouseDown={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,width:"100%",maxWidth:420,boxShadow:"0 24px 64px rgba(15,23,42,0.28), 0 4px 12px rgba(15,23,42,0.10)"}}>
         <div style={{color:"#0f172a",fontWeight:700,fontSize:18,letterSpacing:-.3,marginBottom:4}}>Nova demanda</div>
@@ -15038,7 +15088,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
         <QuickCreateBody colId={quickCreate.colId} extraProps={quickCreate.extraProps} onConfirm={(assigneeId,title)=>{setQuickCreate(null);createTask(quickCreate.colId,assigneeId,title,quickCreate.extraProps);}} onCancel={()=>setQuickCreate(null)}/>
       </div>
     </div>}
-    {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={()=>setOpenCard(null)} currentUser={effectiveUser||CURRENT_USER} canDelete={canDelete} onTrash={id=>{setOpenCard(null);setShowTrashConfirm(id);}} cardPerms={myPerms}/>}
+    {openCard&&<CardModal task={openCard} tasks={tasks} setTasks={setTasks} onClose={closeCardCheckingDraft} currentUser={effectiveUser||CURRENT_USER} canDelete={canDelete} onTrash={id=>{setOpenCard(null);setShowTrashConfirm(id);}} cardPerms={myPerms}/>}
     {/* Modal exclusão de coluna — senha ADM + PIN */}
     {deleteColConfirm&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}} onClick={()=>setDeleteColConfirm(null)}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.card,border:`1px solid ${C.rd}`,borderRadius:20,padding:28,maxWidth:360,width:"100%",textAlign:"center"}}>
@@ -19160,108 +19210,139 @@ function PublicacaoEditModal({task, onClose, onReject}){
         {/* Center — canvas */}
         <div style={{flex:1,minWidth:0,padding:16,display:"flex",flexDirection:"column",gap:10}}>
 
-          {/* Toolbar — moderno, em cápsulas separadas */}
-          <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-            {/* Cores em uma cápsula */}
-            <div style={{display:"flex",alignItems:"center",gap:6,background:C.s1,borderRadius:99,padding:"5px 10px"}}>
-              <span style={{color:C.td,fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Cor</span>
-              {PEN_COLORS.map(c=><button key={c} onClick={()=>{setPenColor(c);setIsEraser(false);}}
-                style={{width:18,height:18,borderRadius:"50%",background:c,border:penColor===c&&!isEraser?"2px solid "+C.tx:"2px solid transparent",boxShadow:penColor===c&&!isEraser?"0 0 0 1.5px #fff inset":"none",cursor:"pointer",padding:0,transition:"all .12s"}}/>)}
-            </div>
-            {/* Tamanho em outra cápsula */}
-            <div style={{display:"flex",alignItems:"center",gap:5,background:C.s1,borderRadius:99,padding:"5px 10px"}}>
-              <span style={{color:C.td,fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Tamanho</span>
-              {[2,4,8,14].map(s=><button key={s} onClick={()=>setPenSize(s)}
-                style={{minWidth:24,height:22,background:penSize===s?C.a:"transparent",color:penSize===s?"#fff":C.ts,border:"none",borderRadius:6,cursor:"pointer",fontSize:10.5,fontWeight:700,padding:"0 6px",transition:"all .12s"}}>{s}</button>)}
-            </div>
-            {/* Ferramentas */}
-            {/* Modo livre — caneta normal (default) */}
-            <button onClick={()=>activateMode("pen")}
-              title="Caneta livre"
-              style={{background:!isEraser&&!textMode&&!shapeTool&&!stampTool?C.a+"15":C.s1,color:!isEraser&&!textMode&&!shapeTool&&!stampTool?C.a:C.ts,border:!isEraser&&!textMode&&!shapeTool&&!stampTool?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-              <span>Caneta</span>
-            </button>
-            {/* Formas geométricas */}
-            <button onClick={()=>activateMode("line")} title="Linha reta"
-              style={{background:shapeTool==="line"?C.a+"15":C.s1,color:shapeTool==="line"?C.a:C.ts,border:shapeTool==="line"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="4" y1="20" x2="20" y2="4"/></svg>
-              <span>Linha</span>
-            </button>
-            <button onClick={()=>activateMode("arrow")} title="Seta"
-              style={{background:shapeTool==="arrow"?C.a+"15":C.s1,color:shapeTool==="arrow"?C.a:C.ts,border:shapeTool==="arrow"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>
-              <span>Seta</span>
-            </button>
-            <button onClick={()=>activateMode("rect")} title="Retângulo"
-              style={{background:shapeTool==="rect"?C.a+"15":C.s1,color:shapeTool==="rect"?C.a:C.ts,border:shapeTool==="rect"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-              <span>Retângulo</span>
-            </button>
-            <button onClick={()=>activateMode("circle")} title="Círculo"
-              style={{background:shapeTool==="circle"?C.a+"15":C.s1,color:shapeTool==="circle"?C.a:C.ts,border:shapeTool==="circle"?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="9"/></svg>
-              <span>Círculo</span>
-            </button>
-            {/* ── Carimbos: click único larga selo no ponto clicado ── */}
-            <button onClick={()=>activateMode("check")} title="Certinho — aponta o que está bom"
-              style={{background:stampTool==="check"?"#16a34a18":C.s1,color:stampTool==="check"?"#16a34a":C.ts,border:stampTool==="check"?"1px solid #16a34a44":"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-              <span>Certinho</span>
-            </button>
-            <button onClick={()=>activateMode("x")} title="Errado — aponta o que precisa mudar"
-              style={{background:stampTool==="x"?"#dc262618":C.s1,color:stampTool==="x"?"#dc2626":C.ts,border:stampTool==="x"?"1px solid #dc262644":"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              <span>Errado</span>
-            </button>
-            <button onClick={()=>activateMode("star")} title="Destaque — aponta o que está incrível"
-              style={{background:stampTool==="star"?"#f59e0b18":C.s1,color:stampTool==="star"?"#f59e0b":C.ts,border:stampTool==="star"?"1px solid #f59e0b44":"1px solid transparent",borderRadius:8,padding:"6px 10px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              <span>Destaque</span>
-            </button>
-            <button onClick={()=>activateMode("eraser")}
-              title="Borracha"
-              style={{background:isEraser?C.rd+"15":C.s1,color:isEraser?C.rd:C.ts,border:isEraser?`1px solid ${C.rd}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <Ico n="trash" size={11}/>
-              <span>Borracha</span>
-            </button>
-            <button onClick={()=>activateMode("text")}
-              title="Inserir texto digitando"
-              style={{background:textMode?C.a+"15":C.s1,color:textMode?C.a:C.ts,border:textMode?`1px solid ${C.a}44`:"1px solid transparent",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
-              <span>Texto</span>
-            </button>
-            {/* Undo / Redo */}
-            {(()=>{
-              const h=historyRef.current[activeIdx]||{stack:[],pointer:-1};
-              const canUndo=h.pointer>=0;
-              const canRedo=h.pointer<h.stack.length-1;
-              return <>
-                <button onClick={undo} disabled={!canUndo} title="Desfazer (Ctrl+Z)"
-                  style={{background:C.s1,color:canUndo?C.ts:C.td,border:"none",borderRadius:8,padding:"6px 9px",cursor:canUndo?"pointer":"not-allowed",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",opacity:canUndo?1:.4}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
+          {/* Toolbar — 2 linhas: (1) Cor + Tamanho + Histórico/Nav · (2) Ferramentas agrupadas */}
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+
+            {/* ─── LINHA 1: Cor + Tamanho + Histórico + Navegação ─── */}
+            <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+              {/* Cor */}
+              <div style={{display:"flex",alignItems:"center",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"7px 12px",height:40,boxSizing:"border-box"}}>
+                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase"}}>Cor</span>
+                <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                  {PEN_COLORS.map(c=>{
+                    const active=penColor===c&&!isEraser;
+                    return <button key={c} onClick={()=>{setPenColor(c);setIsEraser(false);}} title={c}
+                      style={{width:22,height:22,borderRadius:"50%",background:c,border:active?"2px solid #0f172a":(c==="#ffffff"||c==="#FFFFFF"?"1.5px solid #e2e8f0":"1.5px solid transparent"),boxShadow:active?"0 0 0 2px #fff inset, 0 0 0 3.5px "+c:"none",cursor:"pointer",padding:0,transition:"transform .12s, box-shadow .12s"}}
+                      onMouseEnter={e=>{if(!active)e.currentTarget.style.transform="scale(1.12)";}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform="";}}/>;
+                  })}
+                </div>
+              </div>
+
+              {/* Tamanho */}
+              <div style={{display:"flex",alignItems:"center",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"7px 12px",height:40,boxSizing:"border-box"}}>
+                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase"}}>Tamanho</span>
+                <div style={{display:"flex",gap:4}}>
+                  {[2,4,8,14].map(s=>{
+                    const active=penSize===s;
+                    return <button key={s} onClick={()=>setPenSize(s)}
+                      style={{minWidth:30,height:26,background:active?"#7c3aed":"#fff",color:active?"#fff":"#475569",border:active?"none":"1px solid #e2e8f0",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:700,padding:"0 8px",transition:"all .12s",fontFamily:"'Inter',system-ui,sans-serif"}}>{s}</button>;
+                  })}
+                </div>
+              </div>
+
+              {/* spacer */}
+              <div style={{flex:1}}/>
+
+              {/* Histórico (Undo/Redo/Limpar) */}
+              {(()=>{
+                const h=historyRef.current[activeIdx]||{stack:[],pointer:-1};
+                const canUndo=h.pointer>=0;
+                const canRedo=h.pointer<h.stack.length-1;
+                const btn=(cb,enabled,title,svgPath)=>(
+                  <button onClick={cb} disabled={!enabled} title={title}
+                    style={{width:34,height:34,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,cursor:enabled?"pointer":"not-allowed",color:enabled?"#475569":"#cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",opacity:enabled?1:.55,transition:"all .12s"}}
+                    onMouseEnter={e=>{if(enabled){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#cbd5e1";}}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                    {svgPath}
+                  </button>
+                );
+                return <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  {btn(undo,canUndo,"Desfazer (Ctrl+Z)",
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 00-4-4H4"/></svg>
+                  )}
+                  {btn(redo,canRedo,"Refazer (Ctrl+Shift+Z)",
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>
+                  )}
+                  <button onClick={clearCurrent} title="Limpar todas as marcações"
+                    style={{height:34,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"0 12px",cursor:"pointer",color:"#475569",fontSize:12,fontWeight:600,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",fontFamily:"'Inter',system-ui,sans-serif"}}
+                    onMouseEnter={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#cbd5e1";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                    <span>Limpar</span>
+                  </button>
+                </div>;
+              })()}
+
+              {/* Navegação prev/next entre artes */}
+              {allImgs.length>1&&<div style={{display:"flex",gap:5,alignItems:"center",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:"4px 6px",height:40,boxSizing:"border-box"}}>
+                <button onClick={()=>switchTo(Math.max(0,activeIdx-1))} disabled={activeIdx===0} title="Anterior"
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,cursor:activeIdx===0?"not-allowed":"pointer",color:"#475569",display:"flex",alignItems:"center",justifyContent:"center",opacity:activeIdx===0?.4:1,transition:"all .12s"}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
-                <button onClick={redo} disabled={!canRedo} title="Refazer (Ctrl+Shift+Z)"
-                  style={{background:C.s1,color:canRedo?C.ts:C.td,border:"none",borderRadius:8,padding:"6px 9px",cursor:canRedo?"pointer":"not-allowed",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",opacity:canRedo?1:.4}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 014-4h12"/></svg>
+                <span style={{color:"#475569",fontSize:12,fontWeight:700,letterSpacing:.3,minWidth:42,textAlign:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>{activeIdx+1} / {allImgs.length}</span>
+                <button onClick={()=>switchTo(Math.min(allImgs.length-1,activeIdx+1))} disabled={activeIdx>=allImgs.length-1} title="Próxima"
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,cursor:activeIdx>=allImgs.length-1?"not-allowed":"pointer",color:"#475569",display:"flex",alignItems:"center",justifyContent:"center",opacity:activeIdx>=allImgs.length-1?.4:1,transition:"all .12s"}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
-              </>;
-            })()}
-            <button onClick={clearCurrent}
-              style={{background:C.s1,color:C.ts,border:"none",borderRadius:8,padding:"6px 11px",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
-              onMouseEnter={e=>e.currentTarget.style.background=C.b1}
-              onMouseLeave={e=>e.currentTarget.style.background=C.s1}>
-              <Ico n="refresh" size={11}/>
-              <span>Limpar</span>
-            </button>
-            {allImgs.length>1&&<div style={{marginLeft:"auto",display:"flex",gap:5,alignItems:"center"}}>
-              <button onClick={()=>switchTo(Math.max(0,activeIdx-1))} disabled={activeIdx===0}
-                style={{background:C.s1,border:"none",borderRadius:99,width:28,height:28,cursor:activeIdx===0?"not-allowed":"pointer",color:C.tx,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",opacity:activeIdx===0?.3:1,transition:"all .15s"}}>←</button>
-              <span style={{color:C.td,fontSize:11,fontWeight:600,letterSpacing:.2,minWidth:34,textAlign:"center"}}>{activeIdx+1}/{allImgs.length}</span>
-              <button onClick={()=>switchTo(Math.min(allImgs.length-1,activeIdx+1))} disabled={activeIdx>=allImgs.length-1}
-                style={{background:C.s1,border:"none",borderRadius:99,width:28,height:28,cursor:activeIdx>=allImgs.length-1?"not-allowed":"pointer",color:C.tx,fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",opacity:activeIdx>=allImgs.length-1?.3:1,transition:"all .15s"}}>→</button>
-            </div>}
-          </div>
+              </div>}
+            </div>
+
+            {/* ─── LINHA 2: Ferramentas agrupadas (Básicas · Formas · Carimbos) ─── */}
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:12,padding:8}}>
+              {(()=>{
+                // Helper pra renderizar botões com visual uniforme
+                const TOOL = (key, label, svg, isActive, accent, onClickFn) => {
+                  return <button key={key} onClick={onClickFn} title={label}
+                    style={{height:36,background:isActive?accent+"15":"#fff",color:isActive?accent:"#475569",border:isActive?"1.5px solid "+accent+"66":"1px solid #e2e8f0",borderRadius:9,padding:"0 12px",cursor:"pointer",fontSize:12,fontWeight:600,display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s",fontFamily:"'Inter',system-ui,sans-serif"}}
+                    onMouseEnter={e=>{if(!isActive){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.borderColor="#cbd5e1";}}}
+                    onMouseLeave={e=>{if(!isActive){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}}>
+                    {svg}
+                    <span>{label}</span>
+                  </button>;
+                };
+                const penActive = !isEraser&&!textMode&&!shapeTool&&!stampTool;
+                const DIV = (key) => <div key={key} style={{width:1,height:24,background:"#e2e8f0",margin:"0 2px"}}/>;
+                return <>
+                  {/* Básicas */}
+                  {TOOL("pen","Caneta",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>,
+                    penActive,"#7c3aed",()=>activateMode("pen"))}
+                  {TOOL("text","Texto",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>,
+                    textMode,"#7c3aed",()=>activateMode("text"))}
+                  {TOOL("eraser","Borracha",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>,
+                    isEraser,"#dc2626",()=>activateMode("eraser"))}
+                  {DIV("d1")}
+                  {/* Formas */}
+                  {TOOL("line","Linha",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><line x1="4" y1="20" x2="20" y2="4"/></svg>,
+                    shapeTool==="line","#7c3aed",()=>activateMode("line"))}
+                  {TOOL("arrow","Seta",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="19" x2="19" y2="5"/><polyline points="9 5 19 5 19 15"/></svg>,
+                    shapeTool==="arrow","#7c3aed",()=>activateMode("arrow"))}
+                  {TOOL("rect","Retângulo",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>,
+                    shapeTool==="rect","#7c3aed",()=>activateMode("rect"))}
+                  {TOOL("circle","Círculo",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="9"/></svg>,
+                    shapeTool==="circle","#7c3aed",()=>activateMode("circle"))}
+                  {DIV("d2")}
+                  {/* Carimbos */}
+                  {TOOL("check","Certinho",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+                    stampTool==="check","#16a34a",()=>activateMode("check"))}
+                  {TOOL("x","Errado",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+                    stampTool==="x","#dc2626",()=>activateMode("x"))}
+                  {TOOL("star","Destaque",
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+                    stampTool==="star","#f59e0b",()=>activateMode("star"))}
+                </>;
+              })()}
+            </div>
+          </div>          </div>
 
           {/* Canvas over image */}
           <div style={{position:"relative",userSelect:"none",borderRadius:12,overflow:"hidden",background:"#f1f5f9",lineHeight:0,flex:1}}>
@@ -26473,7 +26554,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       const nextReferenceMonth = isAdmin ? (referenceMonth||null) : (t.referenceMonth||null);
       // contentType: admin + editor de vídeo podem. Designers NÃO (afeta cálculo de pagamento).
       const nextContentType = canEditContentType ? (contentType||null) : (t.contentType||null);
-      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration};
+      return{...t,title:formattedTitle,desc:descFinal,comments:mergedComments,assignee:assignees[0],assignees,watchers,sector,client,priority,contentType:nextContentType,referenceMonth:nextReferenceMonth,deadline,publishDate,publishTime,caption:captionFinal,cover,bioterUnit:client==="bioter"?bioterUnit:null,files:cleanedFiles,timeline:mergedTimeline,checklist,adminTag:nextAdminTag,tags:nextTags,slaHours,slaStartAt:slaStartAt||(slaHours?new Date().toISOString():null),slaPausedAt,slaPausedDuration,_isDraft:false};
     }));
     onClose();
   };
@@ -27750,7 +27831,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     placeholder="Comentar... (Enter para enviar)" rows={2}
                     style={{width:"100%",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 12px",color:"#1e293b",fontSize:12,outline:"none",resize:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
                 </div>
-                <button onClick={()=>addComment(comment,"text")} style={{background:"#0f172a",border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontWeight:700,cursor:"pointer",fontSize:14,flexShrink:0}}>↑</button>
+                <button onClick={()=>addComment(comment,"text")} title="Enviar comentário" style={{background:"#0f172a",border:"none",borderRadius:10,width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",cursor:"pointer",flexShrink:0,transition:"all .12s"}} onMouseEnter={e=>{e.currentTarget.style.background="#1e293b";}} onMouseLeave={e=>{e.currentTarget.style.background="#0f172a";}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
               </div>
             </div>;
             })()}
