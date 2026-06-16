@@ -14987,9 +14987,17 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   // isAdmin: sócios e quem tem verTodosKanban veem tudo
   const isAdmin=myPerms.verTodosKanban||activeUser.level===1;
 
+  // Normaliza ID pra comparação tolerante (espaços, case). Cobre casos
+  // onde o assignees foi salvo com "Maria" maiúsculo, ou " maria" com espaço.
+  const _normUid=(x)=>String(x==null?"":x).trim().toLowerCase();
+  const _meUid=_normUid(activeUserId);
   const isMyTask=(t)=>{
-    if(t.assignee===activeUserId)return true;
-    if(Array.isArray(t.assignees)&&t.assignees.includes(activeUserId))return true;
+    if(_normUid(t.assignee)===_meUid)return true;
+    // assignees pode vir como array OU string JSON (defesa contra serialização ruim)
+    let list=t.assignees;
+    if(typeof list==="string"){try{list=JSON.parse(list);}catch(_){list=[];}}
+    if(!Array.isArray(list))list=[];
+    if(list.some(function(x){return _normUid(x)===_meUid;}))return true;
     return false;
   };
 
@@ -33290,6 +33298,14 @@ const authHeaders = (token) => ({
 });
 
 // ── Conversores row ↔ task ────────────────────────────────────
+const _safeArr = (v) => {
+  if(Array.isArray(v)) return v;
+  if(typeof v === "string"){
+    try{ const p=JSON.parse(v); return Array.isArray(p)?p:[]; }catch(_){ return []; }
+  }
+  return [];
+};
+
 const rowToTask = (r) => ({
   id:           String(r.id),
   title:        r.title        || "Nova Demanda",
@@ -33317,13 +33333,13 @@ const rowToTask = (r) => ({
   isAlteracao:  !!r.is_alteracao,
   ajusteOrigin: r.ajuste_origin || null,
   adminTag:     r.admin_tag    || "",
-  assignees:    Array.isArray(r.assignees) ? r.assignees : [],
+  assignees:    _safeArr(r.assignees),
   watchers:     Array.isArray(r.watchers)  ? r.watchers  : [],
   tags:         Array.isArray(r.tags)      ? r.tags      : [],
   comments:     Array.isArray(r.comments)  ? (typeof fixLegacyAttachments==="function"?fixLegacyAttachments(r.comments):r.comments)  : [],
   files:        Array.isArray(r.files)     ? (typeof fixLegacyAttachments==="function"?fixLegacyAttachments(r.files):r.files)     : [],
   timeline:     Array.isArray(r.timeline)  ? (typeof fixLegacyAttachments==="function"?fixLegacyAttachments(r.timeline):r.timeline)  : [],
-  checklist:    Array.isArray(r.checklist) ? r.checklist : [],
+  checklist:    _safeArr(r.checklist),
   caption:      r.caption      || "",
   desc:         r.description  || "",
   position:     r.position     ?? null,
@@ -43826,6 +43842,103 @@ function _onbCountAllItems(){
   return n;
 }
 const ONBOARDING_TOTAL = _onbCountAllItems();
+
+/* ─── SEED do Onboarding ──────────────────────────────────────────
+   Quando um cliente é cadastrado, monta items prévios com:
+   - id estável (mesmo padrão dos blocks)
+   - due (data) calculada em dias úteis a partir de hoje
+   - resp default (sócios) que pode ser ajustado depois pela equipe
+   - done:false
+   E persiste em client_onboarding.items (JSONB)
+─────────────────────────────────────────────────────────────── */
+// Avança N dias úteis a partir de uma base (pula sáb/dom)
+function _onbAddBusinessDays(baseDate, n){
+  const d = new Date(baseDate.getTime());
+  let added = 0;
+  while(added < n){
+    d.setDate(d.getDate()+1);
+    const dow = d.getDay();
+    if(dow!==0 && dow!==6) added++;
+  }
+  return d;
+}
+function _onbIsoDate(d){
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+// Offset (em dias úteis) por bloco — espelha o "Dia N" do checklist
+const _ONB_BLOCK_OFFSETS = {
+  inicial: 0,   // "Antes do dia 1" → cair pra hoje
+  dia1:    1,
+  dia2:    2,
+  dia3:    3,
+  dia3_7:  7,
+  dia7:    7,
+  dia14:  14,
+  dia31:  31,  // 31 dias corridos no caso, mas usar úteis aproxima 6 semanas — ok pra MVP
+};
+// Responsáveis default por bloco (sócios cuidam do setup; equipe operacional entra depois)
+const _ONB_DEFAULT_RESP = {
+  inicial: ["vinicius","gustavo"],
+  dia1:    ["vinicius","gustavo"],
+  dia2:    ["gustavo","ellen"],
+  dia3:    ["vinicius","gustavo","ellen"],
+  dia3_7:  ["gustavo","ellen","erick"],
+  dia7:    ["ellen","erick"],
+  dia14:   ["erick","gustavo"],
+  dia31:   ["vinicius","gustavo"],
+};
+
+// Constrói os items default pra um cliente novo
+function _onbBuildSeedItems(){
+  const base = new Date();
+  base.setHours(0,0,0,0);
+  const out = {};
+  ONBOARDING_BLOCKS.forEach(function(b){
+    const offset = _ONB_BLOCK_OFFSETS[b.id] || 0;
+    const due = _onbIsoDate(_onbAddBusinessDays(base, offset));
+    const resp = _ONB_DEFAULT_RESP[b.id] || ["vinicius","gustavo"];
+    b.items.forEach(function(it){
+      out[it.id] = {done:false, due:due, resp:resp};
+      if(it.sub){
+        it.sub.forEach(function(sub){
+          out[sub.id] = {done:false, due:due, resp:resp};
+        });
+      }
+    });
+  });
+  return out;
+}
+
+// Persiste o seed no Supabase. Idempotente: se já tiver items, NÃO sobrescreve
+// (evita perder progresso caso o usuário cadastre o mesmo cliente 2x sem querer).
+async function seedClientOnboarding(clientId){
+  if(!clientId) return;
+  if(typeof window==="undefined" || !window._sb) return;
+  try{
+    const existing = await window._sb.from("client_onboarding")
+      .select("items").eq("client_id",clientId).maybeSingle();
+    if(existing && existing.data && existing.data.items && Object.keys(existing.data.items).length > 0){
+      // Já tem onboarding — não mexe
+      return;
+    }
+    const items = _onbBuildSeedItems();
+    const{error} = await window._sb.from("client_onboarding")
+      .upsert({client_id:clientId, items:items}, {onConflict:"client_id"});
+    if(error){
+      console.warn("[seedClientOnboarding] upsert err:", error);
+      return;
+    }
+    // Limpa cache local pra forçar re-fetch nas próximas renders
+    try{
+      const key = (typeof _onbCacheKey==="function") ? _onbCacheKey(clientId) : ("pixels-onb-"+clientId);
+      localStorage.removeItem(key);
+    }catch(_){}
+    // Dispara evento global pra UIs atualizarem
+    try{ window.dispatchEvent(new CustomEvent("pixels:onb-seeded",{detail:{clientId:clientId}})); }catch(_){}
+  }catch(e){
+    console.warn("[seedClientOnboarding] exc:", e);
+  }
+}
 
 /* ─── HOOK: useClientMeta ─────────────────────────────────────── */
 function useClientMeta(clientId){
