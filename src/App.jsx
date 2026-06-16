@@ -1456,7 +1456,7 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
         const accent=fr.color||"#7c3aed";
         const photo=(fr&&fr.profile_data&&fr.profile_data.photo)||((typeof getProfilePhoto!=="undefined")?getProfilePhoto(fr.id):null);
         const items=r.isEditor
-          ?[{l:"Vídeo",n:c.video,p:DESIGNER_PRICES.video},{l:"Corte",n:c.corte,p:DESIGNER_PRICES.corte},{l:"V. dinâmico",n:c.videoComplexo,p:DESIGNER_PRICES.videoComplexo},{l:"V. feira",n:c.videoFeira,p:DESIGNER_PRICES.videoFeira}]
+          ?[{l:"Vídeo",n:c.video,p:DESIGNER_PRICES.video},{l:"Corte",n:c.corte,p:DESIGNER_PRICES.corte},{l:"V. dinâmico",n:c.videoComplexo,p:DESIGNER_PRICES.videoComplexo},{l:"V. básico",n:c.videoFeira,p:DESIGNER_PRICES.videoFeira}]
           :[{l:"Foto de obra",n:c.fotoObra,p:DESIGNER_PRICES.fotoObra},{l:"Arte única",n:c.arte,p:DESIGNER_PRICES.arte},{l:"Carrossel",n:c.carrossel,p:DESIGNER_PRICES.carrossel},{l:"Folder",n:c.folder,p:DESIGNER_PRICES.folder}];
         // Mostra TODOS os tipos (inclusive 0) com preço unitário visível
         const hasAny=items.some(function(it){return it.n>0;});
@@ -13361,7 +13361,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                             <div style={{display:"flex",alignItems:"center",gap:4,minWidth:0,flex:1,overflow:"hidden"}}>
                               {/* Icone do tipo — ANTES da logo da empresa */}
                               {(function(){
-                                const TYPE_TITLE = {arte:"Arte única",carrossel:"Carrossel",foto:"Foto de obra",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo feira",corte:"Corte de vídeo"};
+                                const TYPE_TITLE = {arte:"Arte única",carrossel:"Carrossel",foto:"Foto de obra",video:"Vídeo",video_complexo:"Vídeo dinâmico",video_feira:"Vídeo básico",corte:"Corte de vídeo"};
                                 const ttl = TYPE_TITLE[tipo];
                                 if(!ttl) return null;
                                 let svg = null;
@@ -15463,7 +15463,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         folder:{label:"Folder",icon:"file-text"},
                         video:{label:"Vídeo",icon:"play"},
                         video_complexo:{label:"Vídeo dinâmico",icon:"film"},
-                        video_feira:{label:"Vídeo feira",icon:"flag"},
+                        video_feira:{label:"Vídeo básico",icon:"flag"},
                         foto:{label:"Foto de obra",icon:"camera"},
                         corte:{label:"Corte de vídeo",icon:"scissors"},
                       };
@@ -19935,7 +19935,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
           {/* ── Header de chips: cliente, unidade, responsáveis, tipo, prazos, prioridade ── */}
           {(()=>{
             const ct=(current.contentType||current.tipo||"").toLowerCase();
-            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+            const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
             const ctCfg=CT_MAP[ct];
             const pubD=current.publishDate||current.publish_date||"";
             const pubT=current.publishTime||current.publish_time||"";
@@ -20123,7 +20123,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             {/* Linha de metadados do card — tipo, publicação, entrega, mês, prioridade */}
             {(()=>{
               const ct=(current.contentType||current.tipo||"").toLowerCase();
-              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo feira",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
+              const CT_MAP={arte:{label:"Arte única",icon:"image"},carrossel:{label:"Carrossel",icon:"layers"},foto:{label:"Foto de obra",icon:"camera"},video:{label:"Vídeo",icon:"play"},video_complexo:{label:"Vídeo dinâmico",icon:"film"},video_feira:{label:"Vídeo básico",icon:"flag"},corte:{label:"Corte de vídeo",icon:"scissors"}};
               const ctCfg=CT_MAP[ct];
               const pubD=current.publishDate||current.publish_date||"";
               const pubT=current.publishTime||current.publish_time||"";
@@ -21789,7 +21789,7 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
           {label:"Foto de obra",     sub:"ajuste de template",  valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.fotoObra:20,       area:"Design"},
           {label:"Vídeo",            sub:"edição padrão",       valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.video:100,         area:"Edição"},
           {label:"Vídeo dinâmico",   sub:"motion / complexo",   valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.videoComplexo:150, area:"Edição"},
-          {label:"Vídeo de feira",   sub:"vídeo curto / loop",  valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.videoFeira:50,     area:"Edição"},
+          {label:"Vídeo básico",   sub:"vídeo curto / loop",  valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.videoFeira:50,     area:"Edição"},
           {label:"Corte de vídeo",   sub:"shorts / reels",      valor:(typeof DESIGNER_PRICES!=="undefined")?DESIGNER_PRICES.corte:20,          area:"Edição"},
         ].map(function(t,i){
           const isDesign = t.area==="Design";
@@ -28227,7 +28227,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 /* Linha 2: Vídeo (4) */
                 {id:"video",label:"Vídeo",icon:"play"},
                 {id:"video_complexo",label:"Vídeo dinâmico",icon:"film"},
-                {id:"video_feira",label:"Vídeo feira",icon:"flag"},
+                {id:"video_feira",label:"Vídeo básico",icon:"flag"},
                 {id:"corte",label:"Corte de vídeo",icon:"scissors"},
               ].map(opt=>{
                 const isSel=contentType===opt.id;
@@ -45724,7 +45724,7 @@ function _dcTipoLabel(t){
   if(ct==="video"||ct==="vídeo") return "Vídeo";
   if(ct==="corte") return "Corte de vídeo";
   if(ct==="video_complexo") return "Vídeo dinâmico";
-  if(ct==="video_feira") return "Vídeo feira";
+  if(ct==="video_feira") return "Vídeo básico";
   return "—";
 }
 function _dcDiasAteSomething(dateStr){
@@ -45976,7 +45976,7 @@ function DashColabV2(props){
         {label:"Vídeo",           count:calc.video||0,         price:DESIGNER_PRICES.video,         tasks:calc.tasksVideo||[]},
         {label:"Corte de vídeo",  count:calc.corte||0,         price:DESIGNER_PRICES.corte,         tasks:calc.tasksCorte||[]},
         {label:"Vídeo dinâmico",  count:calc.videoComplexo||0, price:DESIGNER_PRICES.videoComplexo, tasks:calc.tasksVideoComplexo||[]},
-        {label:"Vídeo feira",     count:calc.videoFeira||0,    price:DESIGNER_PRICES.videoFeira,    tasks:calc.tasksVideoFeira||[]},
+        {label:"Vídeo básico",     count:calc.videoFeira||0,    price:DESIGNER_PRICES.videoFeira,    tasks:calc.tasksVideoFeira||[]},
       ]
     : [
         {label:"Foto de obra",    count:calc.fotoObra||0,      price:DESIGNER_PRICES.fotoObra,      tasks:calc.tasksFotoObra||[]},
