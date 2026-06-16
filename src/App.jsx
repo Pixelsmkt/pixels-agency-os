@@ -3047,6 +3047,128 @@ const CLIENT_MINDMAP = {
   },
 };
 
+// ════════════════════════════════════════════════════════════════════
+// RITUAIS RECORRENTES — Daily/Weekly/Planejamento mensal/trimestral
+// ════════════════════════════════════════════════════════════════════
+// Geração determinística + persistência no Supabase (rituais_done)
+// Chaves estáveis:
+//   daily-YYYY-MM-DD
+//   weekly-YYYY-MM-DD
+//   planmes-YYYY-MM-28-{clientId}
+//   plantri-YYYY-MM-28-{clientId}
+
+// Helper interno: nome do mês em pt-BR
+function _ritualMonthName(year, monthIdx){
+  try{return new Date(year, monthIdx, 1).toLocaleDateString("pt-BR",{month:"long",year:"numeric"});}
+  catch(_){return (monthIdx+1)+"/"+year;}
+}
+function _ritualToIso(d){
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+}
+
+// Lista de clientes que recebem planejamento (mensal e trimestral).
+// Filtro: clientes ativos da CLIENTS list.
+function _ritualClientsList(){
+  try{
+    if(typeof CLIENTS!=="undefined"&&Array.isArray(CLIENTS)){
+      return CLIENTS.filter(function(c){return c&&c.id&&c.id!=="interno";})
+        .map(function(c){return {id:c.id, nome:c.nome||c.name||c.id};});
+    }
+  }catch(_){}
+  return [];
+}
+
+// Gera todos os rituais previstos pra um mês (year, monthIdx 0-11).
+// Returns: [{key, type, date:"YYYY-MM-DD", hour:"HH:MM" ou "", label, clientId?}]
+function getRituaisDoMes(year, monthIdx){
+  const out=[];
+  const lastDay=new Date(year, monthIdx+1, 0).getDate();
+  const clientsList=_ritualClientsList();
+  for(let d=1; d<=lastDay; d++){
+    const date=new Date(year, monthIdx, d);
+    const dow=date.getDay();
+    const iso=_ritualToIso(date);
+    // Daily 11h — todo dia útil (seg-sex)
+    if(dow>=1&&dow<=5){
+      out.push({key:"daily-"+iso, type:"daily", date:iso, hour:"11:00", label:"Daily 11h"});
+    }
+    // Weekly 11h — toda segunda
+    if(dow===1){
+      out.push({key:"weekly-"+iso, type:"weekly", date:iso, hour:"11:00", label:"Weekly 11h"});
+    }
+    // Planejamento mensal — dia 28 (preparação do mês seguinte)
+    if(d===28){
+      const nextM=monthIdx+1>11?0:monthIdx+1;
+      const nextY=monthIdx+1>11?year+1:year;
+      const nextMonthLabel=_ritualMonthName(nextY, nextM);
+      clientsList.forEach(function(c){
+        out.push({key:"planmes-"+iso+"-"+c.id, type:"planmes", date:iso, hour:"", label:"Planej. mensal · "+c.nome+" · "+nextMonthLabel, clientId:c.id});
+      });
+    }
+    // Planejamento trimestral — dia 28 de mar/jun/set/dez (preparação do Q seguinte)
+    if(d===28&&(monthIdx===2||monthIdx===5||monthIdx===8||monthIdx===11)){
+      const qLabel=monthIdx===2?"Q2":monthIdx===5?"Q3":monthIdx===8?"Q4":"Q1";
+      const yLabel=monthIdx===11?year+1:year;
+      clientsList.forEach(function(c){
+        out.push({key:"plantri-"+iso+"-"+c.id, type:"plantri", date:iso, hour:"", label:"Planej. trimestral · "+c.nome+" · "+qLabel+" "+yLabel, clientId:c.id});
+      });
+    }
+  }
+  return out;
+}
+
+// Estado global em memória — mapa ritual_key → {done_at, done_by, notes}
+if(typeof window!=="undefined"&&!window.__ritualsDone){window.__ritualsDone={};}
+
+function isRitualDone(key){
+  try{return !!(window.__ritualsDone&&window.__ritualsDone[key]);}catch(_){return false;}
+}
+
+// Carrega TODOS os rituais marcados como feitos do Supabase
+async function loadRituaisDone(){
+  if(typeof window==="undefined"||!window._sb)return;
+  try{
+    const{data,error}=await window._sb.from("rituais_done").select("*");
+    if(error){console.warn("[rituais] load",error);return;}
+    const map={};
+    (data||[]).forEach(function(r){map[r.ritual_key]={done_at:r.done_at, done_by:r.done_by, notes:r.notes||""};});
+    window.__ritualsDone=map;
+    try{window.dispatchEvent(new CustomEvent("pixels:rituais-updated"));}catch(_){}
+  }catch(e){console.warn("[rituais] load exc",e);}
+}
+
+// Marca/desmarca um ritual
+async function toggleRitualDone(key, userName, notes){
+  if(typeof window==="undefined"||!window._sb)return;
+  const wasDone=isRitualDone(key);
+  // Optimistic update
+  if(wasDone){
+    delete window.__ritualsDone[key];
+  }else{
+    window.__ritualsDone[key]={done_at:new Date().toISOString(), done_by:userName||"", notes:notes||""};
+  }
+  try{window.dispatchEvent(new CustomEvent("pixels:rituais-updated"));}catch(_){}
+  try{
+    if(wasDone){
+      const{error}=await window._sb.from("rituais_done").delete().eq("ritual_key",key);
+      if(error)console.warn("[rituais] delete",error);
+    }else{
+      const{error}=await window._sb.from("rituais_done").upsert({ritual_key:key, done_at:new Date().toISOString(), done_by:userName||"", notes:notes||""},{onConflict:"ritual_key"});
+      if(error)console.warn("[rituais] upsert",error);
+    }
+  }catch(e){console.warn("[rituais] toggle exc",e);}
+}
+
+// Realtime sync — quando outro user marca, atualiza
+function subscribeRituaisRealtime(){
+  if(typeof window==="undefined"||!window._sb)return null;
+  try{
+    return window._sb.channel("rituais-done-rt")
+      .on("postgres_changes",{event:"*",schema:"public",table:"rituais_done"},function(){loadRituaisDone();})
+      .subscribe();
+  }catch(e){return null;}
+}
+
 // ======= 01_dashboard.jsx =======
 
 // Barra de progresso simples
@@ -12257,6 +12379,15 @@ function PageCalendarioInterno({isMob}){
   const [openEvento,setOpenEvento]=useState(null); // {evento, cl}
   // ── Drag-and-drop pra remarcar a data do marco ──
   const [dragItem,setDragItem]=useState(null); // {kind:"marco"|"evento", id, clientId}
+  // Tick incrementa quando window.__ritualsDone muda — força re-render dos pills de ritual
+  const [_ritTick,_setRitTick]=useState(0);
+  useEffect(function(){
+    const h=function(){_setRitTick(function(t){return t+1;});};
+    window.addEventListener("pixels:rituais-updated",h);
+    return function(){window.removeEventListener("pixels:rituais-updated",h);};
+  },[]);
+  // Modal de check de ritual
+  const [openRitual,setOpenRitual]=useState(null); // o objeto ritual
   function _moveItemTo(item, targetDateIso){
     if(!item || !targetDateIso) return;
     if(!window._sb) return;
@@ -12650,10 +12781,63 @@ function PageCalendarioInterno({isMob}){
                 </div>;
               })}
               {evs.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textAlign:"left",paddingLeft:4,marginTop:1}}>+{evs.length-2} mais</div>}
+              {/* ── Rituais do dia (Daily/Weekly/Planejamentos) ── */}
+              {(function(){
+                if(typeof getRituaisDoMes!=="function")return null;
+                const _rits=getRituaisDoMes(date.getFullYear(),date.getMonth()).filter(function(r){return r.date===_dayIso;});
+                if(_rits.length===0)return null;
+                return <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:3}}>
+                  {_rits.map(function(r){
+                    const done=isRitualDone(r.key);
+                    const cfg=r.type==="daily"?{abbr:"D",color:"#0ea5e9",bg:"#e0f2fe"}
+                              :r.type==="weekly"?{abbr:"W",color:"#7c3aed",bg:"#ede9fe"}
+                              :r.type==="planmes"?{abbr:"PM",color:"#f59e0b",bg:"#fef3c7"}
+                              :{abbr:"PT",color:"#dc2626",bg:"#fee2e2"};
+                    return <button key={r.key} title={r.label+(done?" — feito":" — pendente")}
+                      onClick={function(e){e.stopPropagation();setOpenRitual(r);}}
+                      style={{background:done?"#dcfce7":cfg.bg,color:done?"#15803d":cfg.color,border:done?"1px solid #86efac":"1px solid "+cfg.color+"33",borderRadius:5,padding:"1px 5px",fontSize:9.5,fontWeight:700,letterSpacing:.2,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:3,lineHeight:1.3,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                      {done&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      {cfg.abbr}
+                    </button>;
+                  })}
+                </div>;
+              })()}
             </div>
           </div>;
         }}
       />
+      {/* ── Modal de check do ritual ── */}
+      {openRitual&&<div onMouseDown={function(e){if(e.target===e.currentTarget)setOpenRitual(null);}}
+        style={{position:"fixed",inset:0,zIndex:500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div style={{background:"#fff",borderRadius:16,padding:"22px 24px",maxWidth:440,width:"100%",boxShadow:"0 24px 60px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9"}}>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>
+            {openRitual.type==="daily"?"Daily":openRitual.type==="weekly"?"Weekly":openRitual.type==="planmes"?"Planejamento mensal":"Planejamento trimestral"}
+            {openRitual.hour?" · "+openRitual.hour:""}
+          </div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:15,letterSpacing:-.2,marginBottom:4,lineHeight:1.3}}>{openRitual.label}</div>
+          <div style={{color:"#64748b",fontSize:12,marginBottom:18}}>{(function(){const d=new Date(openRitual.date+"T12:00");return d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});})()}</div>
+          {(function(){
+            const done=isRitualDone(openRitual.key);
+            const info=done?window.__ritualsDone[openRitual.key]:null;
+            if(done&&info){
+              return <div style={{background:"#dcfce7",border:"1px solid #86efac",borderRadius:10,padding:"10px 14px",marginBottom:16,fontSize:12,color:"#166534",lineHeight:1.5}}>
+                <strong>Feito</strong> por {info.done_by||"alguém"} · {new Date(info.done_at).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}
+              </div>;
+            }
+            return null;
+          })()}
+          <div style={{display:"flex",gap:8,marginTop:12}}>
+            <button onClick={function(){setOpenRitual(null);}}
+              style={{flex:1,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 14px",fontWeight:600,fontSize:13,color:"#475569",cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>
+              Fechar
+            </button>
+            <button onClick={function(){const k=openRitual.key;const uName=(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||"";if(typeof toggleRitualDone==="function")toggleRitualDone(k,uName,"");setOpenRitual(null);}}
+              style={{flex:1,background:isRitualDone(openRitual.key)?"#fff":"linear-gradient(135deg,#16a34a,#15803d)",color:isRitualDone(openRitual.key)?"#dc2626":"#fff",border:isRitualDone(openRitual.key)?"1px solid #fecaca":"none",borderRadius:10,padding:"10px 14px",fontWeight:700,fontSize:13,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              {isRitualDone(openRitual.key)?"Desmarcar":<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Marcar como feito</>}
+            </button>
+          </div>
+        </div>
+      </div>}
 
       {/* Estado vazio */}
       {!loadingMarcos&&total===0&&<div style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:12,padding:"32px 20px",textAlign:"center"}}>
@@ -33073,6 +33257,12 @@ const _sb = __createSupabaseClient(
 );
 window._sb = _sb;
 
+// ─── Rituais: carrega ao boot + assina realtime ───
+try{
+  if(typeof loadRituaisDone==="function"){loadRituaisDone();}
+  if(typeof subscribeRituaisRealtime==="function"){subscribeRituaisRealtime();}
+}catch(_){}
+
 const SB_URL  = import.meta.env.VITE_SUPABASE_URL;
 const SB_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const PROFILE_KEY = "pixels-profile-cache";
@@ -41912,16 +42102,23 @@ const _mpUnit=function(cl, selUnit){
   return "";
 };
 
-// Campos do plano mensal
-const MP_CAMPOS = [
-  {k:"objetivo",          label:"Objetivo do mês",        placeholder:"Qual a meta de comunicação/vendas deste mês?",      icon:"target"},
-  {k:"produtos_foco",     label:"Produtos / serviços foco",placeholder:"O que vamos destacar nas peças deste mês?",         icon:"sparkles"},
-  {k:"feiras_eventos",    label:"Feiras / eventos",       placeholder:"Eventos que a empresa vai participar ou cobrir.",   icon:"calendar"},
-  {k:"sazonalidades",     label:"Sazonalidades",          placeholder:"Datas comemorativas, períodos de alta venda, etc.", icon:"flame"},
-  {k:"datas_importantes", label:"Datas importantes",      placeholder:"Aniversários, lançamentos, prazos internos.",       icon:"pin"},
-  {k:"campanhas",         label:"Campanhas previstas",    placeholder:"Promoções, lançamentos, parcerias planejadas.",     icon:"zap"},
-  {k:"conteudos",         label:"Conteúdos previstos",    placeholder:"Reels, posts, vídeos, fotos planejadas.",           icon:"video"},
+// Campos do plano. Lista padrão = mensal. Pra trimestral, getMpCampos(false) ajusta labels/placeholders.
+const MP_CAMPOS_BASE = [
+  {k:"objetivo",          mensalLabel:"Objetivo do mês",       trimLabel:"Objetivo do trimestre",   mensalPh:"Qual a meta de comunicação/vendas deste mês?",                trimPh:"Qual a meta de comunicação/vendas deste trimestre?",            icon:"target"},
+  {k:"produtos_foco",     mensalLabel:"Produtos / serviços foco",trimLabel:"Produtos / serviços foco",mensalPh:"O que vamos destacar nas peças deste mês?",                  trimPh:"O que vamos destacar nas peças deste trimestre?",               icon:"sparkles"},
+  {k:"feiras_eventos",    mensalLabel:"Feiras / eventos",      trimLabel:"Feiras / eventos",        mensalPh:"Eventos que a empresa vai participar ou cobrir.",            trimPh:"Eventos previstos no trimestre.",                               icon:"calendar"},
+  {k:"sazonalidades",     mensalLabel:"Sazonalidades",         trimLabel:"Sazonalidades",           mensalPh:"Datas comemorativas, períodos de alta venda, etc.",          trimPh:"Datas comemorativas e períodos de alta venda no trimestre.",    icon:"flame"},
+  {k:"datas_importantes", mensalLabel:"Datas importantes",     trimLabel:"Datas importantes",       mensalPh:"Aniversários, lançamentos, prazos internos.",                trimPh:"Aniversários, lançamentos e prazos internos do trimestre.",     icon:"pin"},
+  {k:"campanhas",         mensalLabel:"Campanhas previstas",   trimLabel:"Campanhas previstas",     mensalPh:"Promoções, lançamentos, parcerias planejadas.",              trimPh:"Promoções, lançamentos e parcerias do trimestre.",              icon:"zap"},
+  {k:"conteudos",         mensalLabel:"Conteúdos previstos",   trimLabel:"Pilares de conteúdo",     mensalPh:"Reels, posts, vídeos, fotos planejadas.",                    trimPh:"Linhas editoriais e pilares de conteúdo do trimestre.",         icon:"video"},
 ];
+function getMpCampos(isMensal){
+  return MP_CAMPOS_BASE.map(function(c){
+    return {k:c.k, label:isMensal?c.mensalLabel:c.trimLabel, placeholder:isMensal?c.mensalPh:c.trimPh, icon:c.icon};
+  });
+}
+// Backcompat: MP_CAMPOS continua existindo (versão mensal) caso algum lugar use direto.
+const MP_CAMPOS = getMpCampos(true);
 
 const STATUS_INTERNO_OPTS=[
   {id:"rascunho",                label:"Rascunho",                bg:"#f1f5f9", color:"#475569"},
@@ -42049,7 +42246,7 @@ function _PlanSection({cl, unit, year, accent, isMob, kind}){
   const [dirty,setDirty]=useState(false);
   useEffect(function(){
     const init={};
-    MP_CAMPOS.forEach(function(c){init[c.k]=(data&&data[c.k])||"";});
+    getMpCampos(isMensal).forEach(function(c){init[c.k]=(data&&data[c.k])||"";});
     init.status_interno=(data&&data.status_interno)||"rascunho";
     init.status_cliente=(data&&data.status_cliente)||"pendente";
     setForm(init);
@@ -42147,7 +42344,7 @@ function _PlanSection({cl, unit, year, accent, isMob, kind}){
 
     {loading?<div style={{padding:30,textAlign:"center",color:C.td}}>Carregando…</div>:<>
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {MP_CAMPOS.map(function(c){
+        {getMpCampos(isMensal).map(function(c){
           return <div key={c.k}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
               <Ico n={c.icon} size={13} color={accent}/>
@@ -42244,7 +42441,7 @@ function _PortalPlanSection({cl, unit, year, accent, isMob, kind}){
   const [dirty,setDirty]=useState(false);
   useEffect(function(){
     const init={};
-    MP_CAMPOS.forEach(function(c){init[c.k]=(data&&data[c.k])||"";});
+    getMpCampos(isMensal).forEach(function(c){init[c.k]=(data&&data[c.k])||"";});
     init.status_cliente=(data&&data.status_cliente)||"pendente";
     setForm(init);
     setDirty(false);
@@ -42254,7 +42451,7 @@ function _PortalPlanSection({cl, unit, year, accent, isMob, kind}){
 
   function handleSave(){
     const patch={};
-    MP_CAMPOS.forEach(function(c){patch[c.k]=form[c.k]||"";});
+    getMpCampos(isMensal).forEach(function(c){patch[c.k]=form[c.k]||"";});
     save(patch).then(function(){
       setDirty(false);
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Planejamento salvo.",3000);
@@ -42334,7 +42531,7 @@ function _PortalPlanSection({cl, unit, year, accent, isMob, kind}){
     {loading?<div style={{padding:30,textAlign:"center",color:"#94a3b8"}}>Carregando…</div>:<>
       {/* Campos editáveis (sincronizados em tempo real com a equipe Pixels) */}
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
-        {MP_CAMPOS.map(function(c){
+        {getMpCampos(isMensal).map(function(c){
           return <div key={c.k}>
             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
               <Ico n={c.icon} size={13} color={accent}/>
@@ -48222,6 +48419,13 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   // ── Filtros UI ──
   const [filtroStatus, setFiltroStatus] = useState("todas");
   const [novaMeta, setNovaMeta]         = useState(null);
+  // Tick pra re-render quando rituais sao atualizados via realtime
+  const [_dgRitTick,_dgSetRitTick]=useState(0);
+  useEffect(function(){
+    const h=function(){_dgSetRitTick(function(t){return t+1;});};
+    window.addEventListener("pixels:rituais-updated",h);
+    return function(){window.removeEventListener("pixels:rituais-updated",h);};
+  },[]);
   const [novoSprint, setNovoSprint]     = useState(null);   // {clientId?, item?}
   const [sprintWeekOffset, setSprintWeekOffset] = useState(1); // 0=atual, 1=próxima
 
@@ -48557,6 +48761,92 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                     </div>
                     <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.title}</div>
                     <div style={{color:"#64748b",fontSize:11,marginTop:2,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.subtitle}</div>
+                  </div>
+                </div>;
+              })}
+            </div>
+        }
+      </section>;
+    })()}
+
+    {/* ══════════ RITUAIS — Daily / Weekly / Planejamentos ══════════ */}
+    {(function(){
+      // Tick pra re-render quando outro user marca via realtime
+      // (useState declarado uma vez no início do componente — ver _ritTick acima)
+      if(typeof getRituaisDoMes!=="function")return null;
+      const _today0=new Date();_today0.setHours(0,0,0,0);
+      const _isoToday=_today0.getFullYear()+"-"+String(_today0.getMonth()+1).padStart(2,"0")+"-"+String(_today0.getDate()).padStart(2,"0");
+      // Junta rituais do mês corrente + próximo mês (caso vire de mês)
+      const _all=getRituaisDoMes(_today0.getFullYear(),_today0.getMonth())
+        .concat(getRituaisDoMes(_today0.getFullYear()+(_today0.getMonth()===11?1:0),(_today0.getMonth()+1)%12));
+      // Filtra: só dos próximos 7 dias (incluindo hoje)
+      const _limit=new Date(_today0.getTime()+7*86400000);
+      const _next7=_all.filter(function(r){
+        const d=new Date(r.date+"T12:00");
+        return d.getTime()>=_today0.getTime()&&d.getTime()<=_limit.getTime();
+      });
+      // Agrupa por data
+      const _byDate={};
+      _next7.forEach(function(r){(_byDate[r.date]=_byDate[r.date]||[]).push(r);});
+      const _dates=Object.keys(_byDate).sort();
+      const _fmtData=function(iso){
+        const d=new Date(iso+"T12:00");
+        const dow=["DOM","SEG","TER","QUA","QUI","SEX","SÁB"][d.getDay()];
+        return dow+" "+String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0");
+      };
+      const _pending=_next7.filter(function(r){return !isRitualDone(r.key);}).length;
+      const _doneCt=_next7.length-_pending;
+      return <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+            <div style={{width:34,height:34,borderRadius:10,background:"#0ea5e914",display:"flex",alignItems:"center",justifyContent:"center",color:"#0ea5e9",flexShrink:0}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Rituais da agência</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Daily 11h · Weekly seg 11h · Planejamento mensal/trimestral dia 28</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <span style={{background:_pending>0?"#fef3c7":"#dcfce7",color:_pending>0?"#92400e":"#15803d",border:"1px solid "+(_pending>0?"#fde68a":"#86efac"),fontSize:11,fontWeight:700,padding:"4px 9px",borderRadius:99,letterSpacing:.2}}>
+              {_pending>0?_pending+" pendente"+(_pending===1?"":"s"):"Tudo em dia"}
+            </span>
+            {_doneCt>0&&<span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>{_doneCt} feito{_doneCt===1?"":"s"}</span>}
+          </div>
+        </div>
+        {_dates.length===0
+          ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"22px 14px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontStyle:"italic"}}>Sem rituais previstos nos próximos 7 dias.</div>
+          : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {_dates.map(function(iso){
+                const _rits=_byDate[iso];
+                const _isToday=iso===_isoToday;
+                return <div key={iso} style={{background:_isToday?"#fafafa":"#fff",border:"1px solid "+(_isToday?"#e4e4e7":"#eef0f3"),borderRadius:11,padding:"10px 14px",display:"flex",alignItems:"flex-start",gap:12}}>
+                  <div style={{minWidth:64,paddingTop:2}}>
+                    <div style={{color:_isToday?"#0f172a":"#475569",fontSize:11,fontWeight:800,letterSpacing:.3}}>{_fmtData(iso)}</div>
+                    {_isToday&&<div style={{color:"#0ea5e9",fontSize:9.5,fontWeight:800,letterSpacing:.5,marginTop:2}}>HOJE</div>}
+                  </div>
+                  <div style={{flex:1,display:"flex",flexWrap:"wrap",gap:6}}>
+                    {_rits.map(function(r){
+                      const done=isRitualDone(r.key);
+                      const cfg=r.type==="daily"?{color:"#0ea5e9",bg:"#e0f2fe"}
+                                :r.type==="weekly"?{color:"#7c3aed",bg:"#ede9fe"}
+                                :r.type==="planmes"?{color:"#f59e0b",bg:"#fef3c7"}
+                                :{color:"#dc2626",bg:"#fee2e2"};
+                      return <button key={r.key} onClick={function(){
+                          const uName=(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||"";
+                          if(typeof toggleRitualDone==="function")toggleRitualDone(r.key,uName,"");
+                        }}
+                        title={r.label+(done?" — clique pra desmarcar":" — clique pra marcar como feito")}
+                        style={{background:done?"#dcfce7":cfg.bg,color:done?"#15803d":cfg.color,border:done?"1px solid #86efac":"1px solid "+cfg.color+"33",borderRadius:8,padding:"6px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:DG_INTER,letterSpacing:-.1,lineHeight:1.2,transition:"all .12s",textDecoration:done?"line-through":"none",opacity:done?.85:1}}
+                        onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";}}
+                        onMouseLeave={function(e){e.currentTarget.style.transform="";}}>
+                        {done
+                          ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          : <span style={{width:10,height:10,borderRadius:3,border:"1.5px solid "+cfg.color,display:"inline-block"}}/>
+                        }
+                        <span>{r.label}</span>
+                      </button>;
+                    })}
                   </div>
                 </div>;
               })}
