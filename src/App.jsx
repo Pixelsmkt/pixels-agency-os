@@ -14719,16 +14719,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     setPendingOpenId(newTask.id);
   };
 
-  // Sócios: abre seletor de responsável. Colaboradores: cria direto para si
+  // Cria demanda direto e abre o CardModal completo (com Briefing, tipo de conteúdo, cliente, etc).
+  // O CardModal abre automaticamente via `pendingOpenId` definido dentro de createTask.
   const addNewTask=(colId,extraProps={})=>{
     // Quando criado direto numa coluna específica (Rascunhos ou Copys), respeita;
     // caso contrário, default = "demanda" (Copys).
     const targetCol=(colId==="rascunhos"||colId==="demanda")?colId:"demanda";
-    if(activeUser.level===1){
-      setQuickCreate({colId:targetCol,extraProps});
-    }else{
-      createTask(targetCol,activeUserId,"Nova Demanda",extraProps);
-    }
+    createTask(targetCol,activeUserId,"Nova Demanda",extraProps);
   };
 
   const addCol=()=>{
