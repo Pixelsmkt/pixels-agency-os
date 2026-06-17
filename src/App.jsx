@@ -12083,6 +12083,22 @@ function CMarcos({cl,canEdit,selUnit}){
             </div>
             <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:m.description?5:0,letterSpacing:-.1,paddingRight:canEdit?72:0}}>{m.title}</div>
             {m.description&&<div style={{fontSize:13,color:"#475569",lineHeight:1.55,whiteSpace:"pre-wrap"}}>{m.description}</div>}
+            {(function(){
+              const _resp=(m.metrics&&Array.isArray(m.metrics.responsibles))?m.metrics.responsibles:[];
+              if(_resp.length===0)return null;
+              return <div style={{display:"flex",alignItems:"center",gap:7,marginTop:m.description?10:8}}>
+                <span style={{fontSize:10.5,color:"#94a3b8",fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Responsáveis</span>
+                <div style={{display:"flex",alignItems:"center"}}>
+                  {_resp.map(function(rid,i){
+                    const u=TEAM.find(function(x){return x.id===rid;});
+                    if(!u)return null;
+                    return (typeof UserAvatar!=="undefined")
+                      ? <UserAvatar key={rid} user={u} size={22} style={{marginLeft:i===0?0:-6,border:"2px solid #fff"}}/>
+                      : <span key={rid} title={u.name} style={{width:22,height:22,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:10,border:"2px solid #fff",marginLeft:i===0?0:-6}}>{u.av||(u.name||"?").charAt(0)}</span>;
+                  })}
+                </div>
+              </div>;
+            })()}
             {canEdit&&<div style={{position:"absolute",top:11,right:11,display:"flex",gap:4}}>
               <button onClick={function(){setEditingMarco(m);setShowForm(true);}} title="Editar marco"
                 style={{background:"#f1f5f9",border:"none",color:"#64748b",cursor:"pointer",width:28,height:28,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
@@ -12106,7 +12122,7 @@ function CMarcos({cl,canEdit,selUnit}){
       </div>
     )}
 
-    {showForm&&<MarcoForm cl={cl} initial={editingMarco} onClose={function(){setShowForm(false);setEditingMarco(null);}} onSaved={function(){setShowForm(false);setEditingMarco(null);reload();}}/>}
+    {showForm&&<MarcoForm cl={cl} initial={editingMarco} defaultUnit={_resolvedUnit} onClose={function(){setShowForm(false);setEditingMarco(null);}} onSaved={function(){setShowForm(false);setEditingMarco(null);reload();}}/>}
   </div>);
 }
 
@@ -12152,6 +12168,11 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
   const [date,setDate]=useState(_isEdit?(initial.date||new Date().toISOString().split("T")[0]):new Date().toISOString().split("T")[0]);
   const [title,setTitle]=useState(_isEdit?(initial.title||""):"");
   const [description,setDescription]=useState(_isEdit?(initial.description||""):"");
+  const [responsibles,setResponsibles]=useState(function(){
+    if(_isEdit&&initial&&initial.metrics&&Array.isArray(initial.metrics.responsibles))return initial.metrics.responsibles;
+    if(typeof CURRENT_USER!=="undefined"&&CURRENT_USER&&CURRENT_USER.level===1)return [CURRENT_USER.id];
+    return [];
+  });
   const [unit,setUnit]=useState(_initialUnit);
   const [saving,setSaving]=useState(false);
 
@@ -12159,7 +12180,10 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     setSaving(true);
     try{
-      const _metrics = _isBioter ? Object.assign({}, initial&&initial.metrics||{}, {unit:unit||"grupo"}) : (initial&&initial.metrics||{});
+      const _baseMetrics = _isBioter
+        ? Object.assign({}, initial&&initial.metrics||{}, {unit:unit||"grupo"})
+        : Object.assign({}, initial&&initial.metrics||{});
+      const _metrics = Object.assign(_baseMetrics, {responsibles:responsibles});
       if(_isEdit){
         const r = await sb.from("client_milestones").update({
           date, type, title:title.trim(),
@@ -12235,6 +12259,25 @@ function MarcoForm({cl,onClose,onSaved,defaultUnit,initial}){
         <div>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Descrição curta</div>
           <textarea value={description} onChange={function(e){setDescription(e.target.value);}} placeholder="Contexto rápido sobre o marco..." rows={3} style={{width:"100%",padding:"9px 11px",border:"1px solid #e2e8f0",borderRadius:8,fontSize:13,boxSizing:"border-box",resize:"vertical",fontFamily:"inherit",lineHeight:1.5,outline:"none"}}/>
+        </div>
+
+        <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+            {TEAM.filter(function(u){return u.level===1;}).map(function(u){
+              const sel=responsibles.indexOf(u.id)>=0;
+              return <button key={u.id} type="button"
+                onClick={function(){setResponsibles(function(prev){return prev.indexOf(u.id)>=0?prev.filter(function(x){return x!==u.id;}):[].concat(prev,[u.id]);});}}
+                title={u.name}
+                style={{background:sel?"#f3e8ff":"#fff",border:"1.5px solid "+(sel?"#9F43F6":"#e2e8f0"),borderRadius:99,padding:"5px 12px 5px 5px",cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8,transition:"all .15s",fontFamily:"inherit"}}>
+                {typeof UserAvatar!=="undefined"
+                  ? <UserAvatar user={u} size={28}/>
+                  : <span style={{width:28,height:28,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}}>{u.av||(u.name||"?").charAt(0)}</span>
+                }
+                <span style={{color:sel?"#7c3aed":"#475569",fontSize:12.5,fontWeight:600}}>{(u.name||u.id).split(" ")[0]}</span>
+              </button>;
+            })}
+          </div>
         </div>
       </div>
 
@@ -48541,6 +48584,8 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   },[]);
   const [novoSprint, setNovoSprint]     = useState(null);   // {clientId?, item?}
   const [sprintWeekOffset, setSprintWeekOffset] = useState(1); // 0=atual, 1=próxima
+  // Filtro da seção Marcos: "all" | "vinicius" | "gustavo"
+  const [marcosFilter, setMarcosFilter] = useState("all");
 
   // ── Calendário interno: marcos + eventos + aniversários da equipe (próximos 30 dias) ──
   const [calMarcos, setCalMarcos] = useState([]);
@@ -48963,6 +49008,115 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                   </div>
                 </div>;
               })}
+            </div>
+        }
+      </section>;
+    })()}
+
+    {/* ══════════ MARCOS — histórico cronológico sincronizado entre sócios ══════════ */}
+    {(function(){
+      // calMarcos já tem todos os marcos de todos os clientes (carregado no useEffect acima)
+      const all = (calMarcos||[]).slice();
+      // Ordena: mais recente primeiro
+      all.sort(function(a,b){return (b.date||"").localeCompare(a.date||"");});
+      // Filtra por sócio se aplicável
+      const filtered = all.filter(function(m){
+        if(marcosFilter==="all")return true;
+        const resp = (m.metrics && Array.isArray(m.metrics.responsibles)) ? m.metrics.responsibles : [];
+        return resp.indexOf(marcosFilter)>=0;
+      });
+      const shown = filtered.slice(0,12); // mostra os 12 mais recentes
+      const totalMarcos = filtered.length;
+      // Helper de tipo (espelha MARCO_TIPOS do 03_clientes2)
+      const _typeCfg = function(t){
+        const map = {
+          comercial:{label:"Comercial", color:"#0ea5e9", bg:"#e0f2fe"},
+          reuniao:  {label:"Reunião",   color:"#7c3aed", bg:"#ede9fe"},
+          captacao: {label:"Captação",  color:"#16a34a", bg:"#dcfce7"},
+          campanha: {label:"Campanha",  color:"#f59e0b", bg:"#fef3c7"},
+          resultado:{label:"Resultado", color:"#0891b2", bg:"#cffafe"},
+          entrega:  {label:"Entrega",   color:"#dc2626", bg:"#fee2e2"},
+        };
+        return map[t] || {label:t||"Marco", color:"#64748b", bg:"#f1f5f9"};
+      };
+      const _fmtData = function(iso){
+        if(!iso)return"";
+        const d=new Date(iso+"T12:00");
+        if(isNaN(d.getTime()))return iso;
+        return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")+"/"+String(d.getFullYear()).slice(2);
+      };
+      const _clienteNome = function(cid){
+        if(typeof CLIENTS!=="undefined"){
+          const cl = CLIENTS.find(function(c){return c.id===cid;});
+          if(cl) return cl.name || cl.nome || cid;
+        }
+        return cid;
+      };
+      const _clienteLogo = function(cid){
+        if(typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[cid]) return CLIENT_LOGOS[cid];
+        return null;
+      };
+      return <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+            <div style={{width:34,height:34,borderRadius:10,background:DG_PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:DG_PURPLE,flexShrink:0}}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="22" x2="4" y2="15"/><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/></svg>
+            </div>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Marcos</div>
+              <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>O que entregamos pros clientes · ordem cronológica</div>
+            </div>
+          </div>
+          {/* Filtro por sócio */}
+          <div style={{display:"flex",gap:5,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:3}}>
+            {[{id:"all",label:"Todos"},{id:"vinicius",label:"Vinicius"},{id:"gustavo",label:"Gustavo"}].map(function(opt){
+              const active = marcosFilter===opt.id;
+              return <button key={opt.id} onClick={function(){setMarcosFilter(opt.id);}}
+                style={{background:active?"#fff":"transparent",color:active?"#0f172a":"#64748b",border:active?"1px solid #e2e8f0":"1px solid transparent",borderRadius:7,padding:"5px 11px",fontSize:11.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 1px 2px rgba(15,23,42,0.05)":"none"}}>
+                {opt.label}
+              </button>;
+            })}
+          </div>
+        </div>
+        {shown.length===0
+          ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:11,padding:"22px 14px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontStyle:"italic"}}>
+              {marcosFilter==="all"?"Nenhum marco registrado ainda.":"Nenhum marco registrado pra esse sócio."}
+            </div>
+          : <div style={{display:"flex",flexDirection:"column",gap:9}}>
+              {shown.map(function(m){
+                const cfg=_typeCfg(m.type);
+                const resp=(m.metrics&&Array.isArray(m.metrics.responsibles))?m.metrics.responsibles:[];
+                const cnome=_clienteNome(m.client_id);
+                const clogo=_clienteLogo(m.client_id);
+                return <div key={m.id} style={{display:"flex",alignItems:"center",gap:12,background:"#fff",border:"1px solid #eef0f3",borderRadius:11,padding:"11px 14px",transition:"all .12s"}}
+                  onMouseEnter={function(e){e.currentTarget.style.borderColor=cfg.color+"55";e.currentTarget.style.background="#fafafa";}}
+                  onMouseLeave={function(e){e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.background="#fff";}}>
+                  {/* Data */}
+                  <div style={{minWidth:54,color:"#475569",fontSize:11.5,fontWeight:700,letterSpacing:.2,fontFamily:DG_INTER,fontFeatureSettings:"'tnum'"}}>{_fmtData(m.date)}</div>
+                  {/* Tipo */}
+                  <span style={{background:cfg.bg,color:cfg.color,fontSize:10,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.3,textTransform:"uppercase",flexShrink:0}}>{cfg.label}</span>
+                  {/* Logo cliente */}
+                  {clogo && <div style={{width:26,height:26,borderRadius:7,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:2}}>
+                    <img src={clogo} alt={cnome} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                  </div>}
+                  {/* Cliente + título */}
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.15,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{m.title}</div>
+                    <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cnome}</div>
+                  </div>
+                  {/* Responsáveis */}
+                  {resp.length>0 && <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
+                    {resp.slice(0,3).map(function(rid,i){
+                      const u = (typeof TEAM!=="undefined") ? TEAM.find(function(x){return x.id===rid;}) : null;
+                      if(!u) return null;
+                      return (typeof UserAvatar!=="undefined")
+                        ? <UserAvatar key={rid} user={u} size={22} style={{marginLeft:i===0?0:-6,border:"2px solid #fff",zIndex:resp.length-i}}/>
+                        : <span key={rid} title={u.name} style={{width:22,height:22,borderRadius:"50%",background:u.color||DG_PURPLE,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:10,border:"2px solid #fff",marginLeft:i===0?0:-6,zIndex:resp.length-i}}>{(u.av||(u.name||"?").charAt(0))}</span>;
+                    })}
+                  </div>}
+                </div>;
+              })}
+              {totalMarcos>shown.length && <div style={{textAlign:"center",color:"#94a3b8",fontSize:11.5,fontWeight:600,padding:"6px 0",letterSpacing:.2}}>+ {totalMarcos-shown.length} marcos mais antigos</div>}
             </div>
         }
       </section>;
