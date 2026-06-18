@@ -12502,9 +12502,35 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       assinatura:"comercial",
     };
     const _shouldSyncMarco=clientIds.length>0&&!!category&&_CAT_TO_MARCO[category];
-    const q = isEdit
-      ? window._sb.from("internal_events").update(payload).eq("id",initial.id).select().single()
-      : window._sb.from("internal_events").insert(payload).select().single();
+    // Helper que executa save com retry automático se coluna desconhecida (ex.: city, client_ids sem SQL)
+    function _runSaveWithRetry(){
+      const _exec = function(_payload){
+        return isEdit
+          ? window._sb.from("internal_events").update(_payload).eq("id",initial.id).select().single()
+          : window._sb.from("internal_events").insert(_payload).select().single();
+      };
+      return _exec(payload).then(function(r){
+        if(r&&r.error){
+          const _msg=(r.error.message||"").toLowerCase();
+          // Detecta colunas opcionais que ainda não foram migradas (SQL não rodado)
+          const _optionalCols=["city","client_ids"];
+          let _retryPayload=null;
+          for(let _i=0;_i<_optionalCols.length;_i++){
+            const _col=_optionalCols[_i];
+            if(_msg.indexOf("'"+_col+"' column")>=0||_msg.indexOf('"'+_col+'"')>=0||(_msg.indexOf(_col)>=0&&_msg.indexOf("schema cache")>=0)){
+              if(!_retryPayload)_retryPayload=Object.assign({},payload);
+              delete _retryPayload[_col];
+            }
+          }
+          if(_retryPayload){
+            // Retry sem as colunas faltantes
+            return _exec(_retryPayload);
+          }
+        }
+        return r;
+      });
+    }
+    const q = _runSaveWithRetry();
     q.then(function(r){
       if(r&&r.error){setSaving(false);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
       const _savedRow=r&&r.data;
@@ -12843,8 +12869,9 @@ function PageCalendarioInterno({isMob}){
       if(filterType==="captacoes"&&ev.category!=="captacao")return false;
       if(filterType==="operacional"&&ev.category!=="operacional")return false;
       if(filterType==="gestaomidia"&&ev.category!=="gestao_midia")return false;
+      if(filterType==="reunioes"&&ev.category!=="reuniao")return false;
       if(filterType==="aniversarios"&&ev.category!=="aniversario")return false;
-      if(filterType==="eventos"&&(ev.category==="assinatura"||ev.category==="feira"||ev.category==="presenca_feira"||ev.category==="captacao"||ev.category==="operacional"||ev.category==="gestao_midia"))return false;
+      if(filterType==="eventos"&&(ev.category==="assinatura"||ev.category==="feira"||ev.category==="presenca_feira"||ev.category==="captacao"||ev.category==="operacional"||ev.category==="gestao_midia"||ev.category==="reuniao"))return false;
       if(filterType==="marcos")return false;
       if(filterType==="equipe"||filterType==="clientes")return false;
       if(ev.recurrence==="weekly"){
@@ -13212,6 +13239,7 @@ function PageCalendarioInterno({isMob}){
           {[
             {id:"todos",       label:"Todos",                                          icoColor:"#64748b"},
             {id:"aniversarios",label:"Aniversários",  count:teamCount+clientCount, icoColor:"#ec4899", icoType:"cake"},
+            {id:"reunioes",    label:"Reunião",       count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="reuniao";}).length:0), icoColor:"#0ea5e9", icoType:"meeting"},
             {id:"eventos",     label:"Evento",        count:eventoCount,           icoColor:"#a855f7", icoType:"calendar"},
             {id:"feiras",      label:"Feira",         count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="feira";}).length:0),     icoColor:"#f59e0b", icoType:"flag"},
             {id:"presencas",   label:"Presença em feira", count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="presenca_feira";}).length:0), icoColor:"#d97706", icoType:"users"},
@@ -13230,6 +13258,7 @@ function PageCalendarioInterno({isMob}){
               {o.icoType==="check" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>}
               {o.icoType==="tent" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 21L12 3l8.5 18"/><path d="M12 3v18"/><path d="M12 13l-5 8"/><path d="M12 13l5 8"/></svg>}
               {o.icoType==="users" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>}
+              {o.icoType==="meeting" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>}
               {o.icoType==="target" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>}
               {o.icoType==="camera" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>}
               {o.icoType==="layers" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>}
