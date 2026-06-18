@@ -12426,7 +12426,9 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     feira:"#f59e0b",
     presenca_feira:"#d97706",
     captacao:"#0891b2",
-    assinatura:"#7c3aed",
+    assinatura:"#16a34a",
+    operacional:"#7c3aed",
+    gestao_midia:"#db2777",
   };
   const [color,setColor]=useState((initial&&initial.color)||_CAT_COLORS[(initial&&initial.category)||""]||"#0f172a");
   const [colorTouched,setColorTouched]=useState(!!(initial&&initial.color));
@@ -12436,17 +12438,15 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   // Auto-set cor ao trocar categoria (a não ser que usuário já mexeu na cor)
   function setCategoryAndColor(catId){
     setCategory(catId);
-    // Assinatura SEMPRE força roxo Pixels (ignora colorTouched)
-    if(catId==="assinatura"){setColor("#7c3aed");return;}
-    if(!colorTouched){
-      // Se tem cliente vinculado, prefere cor do cliente; senão usa cor da categoria
-      if(clientId&&typeof CLIENTS!=="undefined"){
-        const _cl=CLIENTS.find(function(c){return c.id===clientId;});
-        if(_cl&&_cl.color){setColor(_cl.color);return;}
-      }
-      const c=_CAT_COLORS[catId]||"#0f172a";
-      setColor(c);
+    if(catId==="assinatura"){setColor("#16a34a");return;}
+    if(catId==="operacional"){setColor("#7c3aed");return;}
+    if(catId==="gestao_midia"){setColor("#db2777");return;}
+    if(clientId&&typeof CLIENTS!=="undefined"){
+      const _cl=CLIENTS.find(function(c){return c.id===clientId;});
+      if(_cl&&_cl.color){setColor(_cl.color);return;}
     }
+    const c=_CAT_COLORS[catId]||"#0f172a";
+    setColor(c);
   }
   // ESC fecha o modal (padrão de UX)
   useEffect(function(){
@@ -12608,7 +12608,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Categoria</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {[{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"presenca_feira",label:"Presença em feira",color:"#d97706"},{id:"captacao",label:"Captação",color:"#0891b2"},{id:"assinatura",label:"Assinatura",color:"#16a34a"}].map(function(opt){
+          {[{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"presenca_feira",label:"Presença em feira",color:"#d97706"},{id:"captacao",label:"Captação",color:"#0891b2"},{id:"assinatura",label:"Assinatura",color:"#16a34a"},{id:"operacional",label:"Operacional",color:"#7c3aed"},{id:"gestao_midia",label:"Gestão de mídia",color:"#db2777"}].map(function(opt){
             const sel=category===opt.id;
             return <button key={opt.id||"none"} type="button" onClick={function(){setCategoryAndColor(opt.id);}}
               style={{flex:"1 1 calc(33% - 4px)",minWidth:100,background:sel?opt.color+"15":"#fff",border:"1px solid "+(sel?opt.color+"66":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?opt.color:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
@@ -12618,17 +12618,6 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         </div>
       </div>
 
-      {/* Cor */}
-      <div style={{marginBottom:14}}>
-        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Cor</div>
-        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-          {COLORS.map(function(c){
-            const sel=color===c;
-            return <button key={c} type="button" onClick={function(){setColor(c);setColorTouched(true);}}
-              style={{width:28,height:28,borderRadius:"50%",background:c,border:sel?"2.5px solid #0f172a":"2.5px solid transparent",boxShadow:sel?"0 0 0 2px #fff inset":"none",cursor:"pointer",padding:0,transition:"transform .12s"}}/>;
-          })}
-        </div>
-      </div>
       {/* Cliente vinculado (opcional) */}
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Cliente (opcional)</div>
@@ -12729,8 +12718,10 @@ function PageCalendarioInterno({isMob}){
       if(filterType==="feiras"&&ev.category!=="feira")return false;
       if(filterType==="presencas"&&ev.category!=="presenca_feira")return false;
       if(filterType==="captacoes"&&ev.category!=="captacao")return false;
+      if(filterType==="operacional"&&ev.category!=="operacional")return false;
+      if(filterType==="gestaomidia"&&ev.category!=="gestao_midia")return false;
       if(filterType==="aniversarios"&&ev.category!=="aniversario")return false;
-      if(filterType==="eventos"&&(ev.category==="assinatura"||ev.category==="feira"||ev.category==="presenca_feira"||ev.category==="captacao"))return false;
+      if(filterType==="eventos"&&(ev.category==="assinatura"||ev.category==="feira"||ev.category==="presenca_feira"||ev.category==="captacao"||ev.category==="operacional"||ev.category==="gestao_midia"))return false;
       if(filterType==="marcos")return false;
       if(filterType==="equipe"||filterType==="clientes")return false;
       if(ev.recurrence==="weekly"){
@@ -13063,6 +13054,8 @@ function PageCalendarioInterno({isMob}){
             {id:"presencas",   label:"Presença em feira", count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="presenca_feira";}).length:0), icoColor:"#d97706", icoType:"users"},
             {id:"captacoes",   label:"Captação",      count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="captacao";}).length:0),    icoColor:"#0891b2", icoType:"camera"},
             {id:"assinaturas", label:"Assinaturas",   count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="assinatura";}).length:0), icoColor:"#16a34a", icoType:"check"},
+            {id:"operacional", label:"Operacional",  count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="operacional";}).length:0), icoColor:"#7c3aed", icoType:"layers"},
+            {id:"gestaomidia", label:"Gestão de mídia", count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="gestao_midia";}).length:0), icoColor:"#db2777", icoType:"trending"},
           ].map(function(o){
             const active=filterType===o.id;
             return <button key={o.id} onClick={function(){setFilterType(o.id);}}
@@ -13076,6 +13069,8 @@ function PageCalendarioInterno({isMob}){
               {o.icoType==="users" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>}
               {o.icoType==="target" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>}
               {o.icoType==="camera" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>}
+              {o.icoType==="layers" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>}
+              {o.icoType==="trending" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>}
               {o.label}
               {typeof o.count==="number"&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 8px",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{o.count}</span>}
             </button>;
@@ -13094,8 +13089,12 @@ function PageCalendarioInterno({isMob}){
           const isToday=date.toDateString()===new Date().toDateString();
           const _dayIso=date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
           return <div
-            onClick={function(e){setOpenNewEvent({date:_dayIso});}}
-            onMouseEnter={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn){btn.style.opacity="1";btn.style.transform="scale(1)";}}}
+            onClick={function(e){
+              const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+              if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem criar eventos no calendário.");return;}
+              setOpenNewEvent({date:_dayIso});
+            }}
+            onMouseEnter={function(e){const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;if(!_u||_u.level!==1)return;const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn){btn.style.opacity="1";btn.style.transform="scale(1)";}}}
             onMouseLeave={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn){btn.style.opacity="0";btn.style.transform="scale(0.85)";}}}
             onDragOver={function(e){if(dragItem){e.preventDefault();e.currentTarget.style.background="#faf5ff";}}}
             onDragLeave={function(e){e.currentTarget.style.background="";}}
@@ -13165,9 +13164,11 @@ function PageCalendarioInterno({isMob}){
                     const _isRec=ev.recurrence==="weekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly";
                     // Cor: assinaturas SEMPRE roxo Pixels. Senão cor do cliente vinculado. Senão cor manual. Senão cor categoria. Senão preto.
                     const _cl=(ev.client_id&&typeof CLIENTS!=="undefined")?CLIENTS.find(function(c){return c.id===ev.client_id;}):null;
-                    const _catColors={aniversario:"#ec4899",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",assinatura:"#7c3aed"};
+                    const _catColors={aniversario:"#ec4899",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777"};
                     let _evColor;
-                    if(ev.category==="assinatura")_evColor="#7c3aed";
+                    if(ev.category==="assinatura")_evColor="#16a34a";
+                    else if(ev.category==="operacional")_evColor="#7c3aed";
+                    else if(ev.category==="gestao_midia")_evColor="#db2777";
                     else if(_cl&&_cl.color)_evColor=_cl.color;
                     else if(ev.color&&ev.color!=="#0f172a")_evColor=ev.color;
                     else if(ev.category&&_catColors[ev.category])_evColor=_catColors[ev.category];
@@ -13180,8 +13181,10 @@ function PageCalendarioInterno({isMob}){
                       presenca_feira:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
                       captacao:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>,
                       assinatura:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
+                      operacional:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+                      gestao_midia:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
                     }[ev.category];
-                    return <div key={ev.id+"-"+_dayIso} onClick={function(e){e.stopPropagation();setEditingEvent(ev);}}
+                    return <div key={ev.id+"-"+_dayIso} onClick={function(e){e.stopPropagation();const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem editar eventos.");return;}setEditingEvent(ev);}}
                       title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="weekly"?"semanal":ev.recurrence==="monthly"?"mensal":"anual"):"")+(_cl?" · "+(_cl.name||_cl.nome):"")}
                       style={{background:_evColor,color:"#fff",borderRadius:8,padding:"5px 9px",fontSize:12,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,overflow:"hidden",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",transition:"all .15s"}}
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
