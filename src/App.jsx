@@ -49768,7 +49768,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     })()}
 
     {/* MODAL NOVA META */}
-    {novaMeta && <_DGNovaMeta mode={novaMeta.mode||"semanal"} user={user} weekKey={weekKey} onClose={()=>setNovaMeta(null)} onSave={(payload)=>{planUpsert(_dgPersistMeta(payload));setNovaMeta(null);}}/>}
+    {novaMeta && <_DGNovaMeta mode={novaMeta.mode||"semanal"} day={novaMeta.day} user={user} weekKey={weekKey} onClose={()=>setNovaMeta(null)} onSave={(payload)=>{planUpsert(_dgPersistMeta(payload));setNovaMeta(null);}}/>}
 
     {/* MODAL NOVA/EDITAR ENTREGA DO SPRINT */}
     {novoSprint && <_DGNovoSprint user={user} clientId={novoSprint.clientId} item={novoSprint.item} weekKey={sprintWk} sextaIso={sprintSextaIso}
@@ -49921,8 +49921,10 @@ function _DGEmpty({icon, title, desc}){
 
 // ── Modal Nova Meta ──────────────────────────────────────────
 // mode: "semanal" => sempre sexta · "diaria" => sempre hoje
-function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
+function _DGNovaMeta({mode, day, user, weekKey, onClose, onSave}){
   const isDiaria = mode==="diaria";
+  // Se foi passado um dia específico (vc clicou no "+ Adicionar" da coluna), usa esse dia como prazo
+  const _specificDay = day && day.idx ? day : null;
   const [title, setTitle] = useState("");
   const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius"||t.id==="ocsana") : [];
   const [responsaveis, setResponsaveis] = useState([user.id]);
@@ -49934,10 +49936,13 @@ function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
 
   // Resolve prazo automaticamente
   const _dgHojeIdx = () => { const w=new Date().getDay(); return w===0?7:w; };
-  const _autoDayKey = isDiaria
-    ? (DG_DAYS.find(d=>d.idx===_dgHojeIdx())?.key || "sex")
-    : "sex";
-  const _autoDeadline = isDiaria ? _dgToday() : _dgWeekDate(5);
+  // Prioridade: 1) dia específico clicado | 2) hoje (modo diária) | 3) sexta (modo semanal)
+  const _autoDayKey = _specificDay
+    ? _specificDay.key
+    : (isDiaria ? (DG_DAYS.find(d=>d.idx===_dgHojeIdx())?.key || "sex") : "sex");
+  const _autoDeadline = _specificDay
+    ? _dgWeekDate(_specificDay.idx)
+    : (isDiaria ? _dgToday() : _dgWeekDate(5));
 
   const _save = ()=>{
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
@@ -49969,8 +49974,8 @@ function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
 
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(560px,92%)",padding:"24px 26px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
-      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{isDiaria?"Nova meta diária":"Nova meta semanal"}</div>
-      <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20}}>{isDiaria?"Entrega ainda hoje — algo que precisa sair do dia.":"Entrega até sexta-feira — meta pra fechar a semana."}</div>
+      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{_specificDay?("Nova meta · "+_specificDay.label):isDiaria?"Nova meta diária":"Nova meta semanal"}</div>
+      <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20}}>{_specificDay?("Entrega até "+_specificDay.label.toLowerCase()+" — algo que precisa sair desse dia."):isDiaria?"Entrega ainda hoje — algo que precisa sair do dia.":"Entrega até sexta-feira — meta pra fechar a semana."}</div>
 
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
@@ -49983,7 +49988,7 @@ function _DGNovaMeta({mode, user, weekKey, onClose, onSave}){
           <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prazo</div>
           <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#f5f3ff",border:"1px solid #ede9fe",color:DG_PURPLE,borderRadius:9,padding:"8px 14px",fontSize:12.5,fontWeight:700,fontFamily:DG_INTER}}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            {isDiaria?"Hoje":"Sexta-feira"} · {(()=>{const d=new Date(_autoDeadline+"T00:00:00");return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"long"});})()}
+            {_specificDay?_specificDay.label:isDiaria?"Hoje":"Sexta-feira"} · {(()=>{const d=new Date(_autoDeadline+"T00:00:00");return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"long"});})()}
           </div>
         </div>
         <div>
