@@ -13015,6 +13015,40 @@ function PageCalendarioInterno({isMob}){
               })}
             </div>
           </div>}
+          {/* Ações: Editar (abre evento original se foi criado via calendário) + Apagar */}
+          {(function(){
+            const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+            if(!_u||_u.level!==1)return null;
+            const _linkedEvId=(m.metrics&&m.metrics.linked_event_id)||null;
+            return <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={function(){
+                if(!window.confirm("Apagar este marco?"+(_linkedEvId?" O evento vinculado no calendário também será removido.":"")))return;
+                if(!window._sb)return;
+                function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Marco apagado.");setOpenMarco(null);if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();}
+                if(_linkedEvId){
+                  window._sb.from("internal_events").delete().eq("id",_linkedEvId).then(function(){
+                    window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);
+                  }).catch(function(){window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);});
+                }else{
+                  window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);
+                }
+              }} style={{background:"#fff",border:"1px solid #fecaca",color:"#dc2626",borderRadius:9,padding:"8px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                Apagar
+              </button>
+              {_linkedEvId&&<button onClick={function(){
+                // Busca o evento original e abre o modal de edição
+                if(!window._sb)return;
+                window._sb.from("internal_events").select("*").eq("id",_linkedEvId).single().then(function(r){
+                  if(r&&r.data){setOpenMarco(null);setEditingEvent(r.data);}
+                  else{if(typeof pixelsToast!=="undefined")pixelsToast.warning("Evento vinculado não encontrado.");}
+                });
+              }} style={{background:"#7c3aed",border:"none",color:"#fff",borderRadius:9,padding:"8px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Editar evento
+              </button>}
+            </div>;
+          })()}
         </div>
       </div>
     </div>;
@@ -13160,8 +13194,31 @@ function PageCalendarioInterno({isMob}){
                               : null;
                 const _draggableKind = ev.kind==="marco" ? "marco" : ev.kind==="evento" ? "evento" : null;
                 const _draggable = !!_draggableKind;
-                return <div key={ev.id} title={ev.title+" — "+ev.subtitle+(_draggable?" — arraste pra outro dia pra remarcar":"")}
+                // Right-click: apagar (apenas sócios)
+                const _onCtxMenu = _isClickable?function(e){
+                  e.preventDefault();e.stopPropagation();
+                  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+                  if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem apagar.");return;}
+                  if(!window.confirm("Apagar "+(isMarco?"este marco":"este evento")+"?"))return;
+                  if(!window._sb)return;
+                  function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();}
+                  if(isMarco){
+                    // Apaga marco + evento vinculado (se houver)
+                    const _linkedEvId=(ev._marco.metrics&&ev._marco.metrics.linked_event_id)||null;
+                    if(_linkedEvId){
+                      window._sb.from("internal_events").delete().eq("id",_linkedEvId).then(function(){
+                        window._sb.from("client_milestones").delete().eq("id",ev._marco.id).then(_done);
+                      }).catch(function(){window._sb.from("client_milestones").delete().eq("id",ev._marco.id).then(_done);});
+                    }else{
+                      window._sb.from("client_milestones").delete().eq("id",ev._marco.id).then(_done);
+                    }
+                  }else if(isEvento){
+                    window._sb.from("internal_events").delete().eq("id",ev._evento.id).then(_done);
+                  }
+                }:null;
+                return <div key={ev.id} title={ev.title+" — "+ev.subtitle+(_draggable?" — arraste pra outro dia pra remarcar":"")+(_isClickable?" — clique direito pra apagar":"")}
                   onClick={_click}
+                  onContextMenu={_onCtxMenu}
                   draggable={_draggable}
                   onDragStart={_draggable?function(e){
                     const _ident = ev.kind==="marco"
@@ -13218,7 +13275,22 @@ function PageCalendarioInterno({isMob}){
                       gestao_midia:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
                     }[ev.category];
                     return <div key={ev.id+"-"+_dayIso} onClick={function(e){e.stopPropagation();const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem editar eventos.");return;}setEditingEvent(ev);}}
-                      title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="weekly"?"semanal":ev.recurrence==="monthly"?"mensal":"anual"):"")+(_cl?" · "+(_cl.name||_cl.nome):"")}
+                      onContextMenu={function(e){
+                        e.preventDefault();e.stopPropagation();
+                        const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+                        if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem apagar.");return;}
+                        if(!window.confirm("Apagar este evento?"+(ev.linked_milestone_id?" O marco vinculado no cliente também será removido.":"")))return;
+                        if(!window._sb)return;
+                        function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");_reloadInternalEvents();}
+                        if(ev.linked_milestone_id){
+                          window._sb.from("client_milestones").delete().eq("id",ev.linked_milestone_id).then(function(){
+                            window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);
+                          }).catch(function(){window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);});
+                        }else{
+                          window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);
+                        }
+                      }}
+                      title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="weekly"?"semanal":ev.recurrence==="monthly"?"mensal":"anual"):"")+(_cl?" · "+(_cl.name||_cl.nome):"")+" — clique direito pra apagar"}
                       style={{background:_evColor,color:"#fff",borderRadius:8,padding:"5px 9px",fontSize:12,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,overflow:"hidden",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",transition:"all .15s"}}
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
