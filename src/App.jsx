@@ -12432,6 +12432,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const _CAT_COLORS={
     "":"#0f172a",
     aniversario:"#ec4899",
+    reuniao:"#0ea5e9",
     evento:"#a855f7",
     feira:"#f59e0b",
     presenca_feira:"#d97706",
@@ -12459,6 +12460,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     if(catId==="assinatura"){setColor("#16a34a");return;}
     if(catId==="operacional"){setColor("#7c3aed");return;}
     if(catId==="gestao_midia"){setColor("#db2777");return;}
+    if(catId==="reuniao"){setColor("#0ea5e9");return;}
     if(clientId&&typeof CLIENTS!=="undefined"){
       const _cl=CLIENTS.find(function(c){return c.id===clientId;});
       if(_cl&&_cl.color){setColor(_cl.color);return;}
@@ -12492,7 +12494,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     };
     // Mapeia categoria → tipo de marco
     const _CAT_TO_MARCO={
-      aniversario:"reuniao",
+      reuniao:"reuniao",
       evento:"campanha",
       feira:"campanha",
       presenca_feira:"campanha",
@@ -12669,8 +12671,8 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Categoria</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {(function(){
-            const _ICO={"":<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,aniversario:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>,evento:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,feira:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,presenca_feira:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,captacao:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>,assinatura:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,operacional:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,gestao_midia:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>};
-            return [{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"presenca_feira",label:"Presença em feira",color:"#d97706"},{id:"captacao",label:"Captação",color:"#0891b2"},{id:"assinatura",label:"Assinatura",color:"#16a34a"},{id:"operacional",label:"Operacional",color:"#7c3aed"},{id:"gestao_midia",label:"Gestão de mídia",color:"#db2777"}].map(function(opt){
+            const _ICO={"":<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>,aniversario:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>,reuniao:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,evento:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,feira:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,presenca_feira:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,captacao:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>,assinatura:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,operacional:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,gestao_midia:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>};
+            return [{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"reuniao",label:"Reunião",color:"#0ea5e9"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"presenca_feira",label:"Presença em feira",color:"#d97706"},{id:"captacao",label:"Captação",color:"#0891b2"},{id:"assinatura",label:"Assinatura",color:"#16a34a"},{id:"operacional",label:"Operacional",color:"#7c3aed"},{id:"gestao_midia",label:"Gestão de mídia",color:"#db2777"}].map(function(opt){
               const sel=category===opt.id;
               return <button key={opt.id||"none"} type="button" onClick={function(){setCategoryAndColor(opt.id);}}
                 style={{flex:"1 1 calc(33% - 4px)",minWidth:100,background:sel?opt.color+"15":"#fff",border:"1px solid "+(sel?opt.color+"66":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?opt.color:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}>
@@ -12694,10 +12696,37 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             </div>;
           })()}
         </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",border:"1px solid #e2e8f0",borderRadius:10,padding:8,background:"#fff",maxHeight:160,overflowY:"auto"}}>
-          {(typeof CLIENTS!=="undefined"?CLIENTS:[]).length===0
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",border:"1px solid #e2e8f0",borderRadius:10,padding:8,background:"#fff",maxHeight:200,overflowY:"auto"}}>
+          {(function(){
+            // Expande CLIENTS: pra Bioter (parent), insere todas BIOTER_GROUP_UNITS como opções separadas
+            const _base = (typeof CLIENTS!=="undefined"?CLIENTS:[]);
+            const _units = (typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]);
+            const _expanded = [];
+            _base.forEach(function(c){
+              _expanded.push(c);
+              if(c.id==="bioter" && _units.length>0){
+                _units.forEach(function(u){
+                  _expanded.push({id:u.id, name:u.name, color:c.color, _isUnit:true});
+                });
+              }
+            });
+            return _expanded;
+          })().length===0
             ? <div style={{color:"#94a3b8",fontSize:12,padding:"6px 4px"}}>Sem clientes cadastrados</div>
-            : (typeof CLIENTS!=="undefined"?CLIENTS:[]).map(function(cl){
+            : (function(){
+                const _base = (typeof CLIENTS!=="undefined"?CLIENTS:[]);
+                const _units = (typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]);
+                const _expanded = [];
+                _base.forEach(function(c){
+                  _expanded.push(c);
+                  if(c.id==="bioter" && _units.length>0){
+                    _units.forEach(function(u){
+                      _expanded.push({id:u.id, name:u.name, color:c.color, _isUnit:true});
+                    });
+                  }
+                });
+                return _expanded;
+              })().map(function(cl){
                 const _sel=clientIds.indexOf(cl.id)>=0;
                 const _cor=cl.color||"#0f172a";
                 return <button key={cl.id} type="button" onClick={function(){
@@ -12706,18 +12735,18 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
                   else{_next=clientIds.concat([cl.id]);}
                   setClientIds(_next);
                   // Cor automática do cliente: se só 1 cliente e usuário não mexeu na cor e categoria não é fixa
-                  if(!colorTouched&&_next.length===1&&category!=="assinatura"&&category!=="operacional"&&category!=="gestao_midia"){
+                  if(!colorTouched&&_next.length===1&&category!=="assinatura"&&category!=="operacional"&&category!=="gestao_midia"&&category!=="reuniao"){
                     setColor(_cor);
                   }
                 }}
-                  style={{background:_sel?_cor+"18":"#fff",border:"1px solid "+(_sel?_cor+"66":"#e2e8f0"),borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:_sel?700:600,color:_sel?_cor:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
-                  <span style={{width:8,height:8,borderRadius:"50%",background:_cor,opacity:_sel?1:.5,flexShrink:0}}/>
+                  style={{background:_sel?_cor+"18":"#fff",border:"1px solid "+(_sel?_cor+"66":"#e2e8f0"),borderRadius:8,padding:cl._isUnit?"5px 10px 5px 14px":"6px 10px",fontSize:cl._isUnit?11.5:12,fontWeight:_sel?700:600,color:_sel?_cor:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:cl._isUnit?0.92:1}}>
+                  <span style={{width:cl._isUnit?6:8,height:cl._isUnit?6:8,borderRadius:"50%",background:_cor,opacity:_sel?1:.5,flexShrink:0}}/>
                   <span>{cl.name||cl.nome||cl.id}</span>
                   {_sel&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
                 </button>;
               })}
         </div>
-        {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — marco automático não será criado (só pra eventos com 1 cliente)</div>}
+        {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — 1 marco será criado pra cada cliente.</div>}
       </div>
 
       {/* Cidade (opcional) */}
@@ -12962,6 +12991,9 @@ function PageCalendarioInterno({isMob}){
         if(!cl) return;
         (marcosByClient[cid]||[]).forEach(function(mc){
           if(!mc.date) return;
+          // CRÍTICO: Marcos criados via calendário (com linked_event_id) NÃO devem aparecer aqui,
+          // porque já aparecem como pill do internal_event no mesmo dia. Senão dá duplicação visual.
+          if(mc.metrics && mc.metrics.linked_event_id) return;
           const dParts=String(mc.date).match(/^(\d{4})-(\d{2})-(\d{2})/);
           if(!dParts) return;
           const my=parseInt(dParts[1],10), mm=parseInt(dParts[2],10), md=parseInt(dParts[3],10);
@@ -13336,11 +13368,12 @@ function PageCalendarioInterno({isMob}){
                     const _cl=(_firstCid&&typeof CLIENTS!=="undefined")?CLIENTS.find(function(c){return c.id===_firstCid;}):null;
                     const _clLogo = _cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_cl.id];
                     const _multiClients=_evCids.length>1;
-                    const _catColors={aniversario:"#ec4899",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777"};
+                    const _catColors={aniversario:"#ec4899",reuniao:"#0ea5e9",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777"};
                     let _evColor;
                     if(ev.category==="assinatura")_evColor="#16a34a";
                     else if(ev.category==="operacional")_evColor="#7c3aed";
                     else if(ev.category==="gestao_midia")_evColor="#db2777";
+                    else if(ev.category==="reuniao")_evColor="#0ea5e9";
                     else if(_cl&&_cl.color)_evColor=_cl.color;
                     else if(ev.color&&ev.color!=="#0f172a")_evColor=ev.color;
                     else if(ev.category&&_catColors[ev.category])_evColor=_catColors[ev.category];
@@ -13348,6 +13381,7 @@ function PageCalendarioInterno({isMob}){
                     // Ícone da categoria
                     const _catIcon={
                       aniversario:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>,
+                      reuniao:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
                       evento:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
                       feira:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>,
                       presenca_feira:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
@@ -13379,16 +13413,23 @@ function PageCalendarioInterno({isMob}){
                       style={{background:_evColor,color:"#fff",borderRadius:8,padding:"5px 9px",fontSize:12,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,overflow:"hidden",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",transition:"all .15s"}}
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
-                      {_clLogo
-                        ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"#fff",flexShrink:0,overflow:"visible",padding:1}}>
-                            <img src={_clLogo} alt={(_cl&&(_cl.name||_cl.nome))||""} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
-                            {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:12,height:12,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)"}}>
-                              {React.cloneElement(_catIcon,{width:7,height:7,strokeWidth:2.8})}
+                      {_multiClients
+                        ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.95)",color:_evColor,flexShrink:0,fontSize:9.5,fontWeight:800,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>
+                            {_evCids.length}
+                            {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:11,height:11,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)"}}>
+                              {React.cloneElement(_catIcon,{width:6,height:6,strokeWidth:3})}
                             </span>}
                           </span>
-                        : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.22)",flexShrink:0}}>{_catIcon}</span>
+                        : _clLogo
+                          ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"#fff",flexShrink:0,overflow:"visible",padding:1}}>
+                              <img src={_clLogo} alt={(_cl&&(_cl.name||_cl.nome))||""} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+                              {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:12,height:12,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)"}}>
+                                {React.cloneElement(_catIcon,{width:7,height:7,strokeWidth:2.8})}
+                              </span>}
+                            </span>
+                          : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.22)",flexShrink:0}}>{_catIcon}</span>
                       }
-                      {_multiClients&&<span style={{background:"rgba(255,255,255,0.28)",borderRadius:6,padding:"1px 5px",fontSize:9.5,fontWeight:700,letterSpacing:.2,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{_evCids.length}c</span>}
+
                       {_isRec&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.9}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>}
                       {ev.hour&&<span style={{display:"inline-flex",alignItems:"center",gap:3,fontWeight:600,opacity:.92,fontFeatureSettings:"'tnum'",flexShrink:0}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.9}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{ev.hour}</span>}
                       <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
@@ -29628,8 +29669,6 @@ function OrientacoesView({clientId}){
   );
 }
 
-// ======= 12_dashboard.jsx =======
-
 const DASHBOARD_WIDGETS=[
   {key:"notifs",label:"Notificações não lidas",desc:"Caixa com alertas e menções recentes",icon:"🔔"},
   {key:"clients",label:"Infográfico de clientes",desc:"Quantas demandas por cliente",icon:"📊"},
@@ -30852,6 +30891,13 @@ function PriorityDashCore({user,tasks,allTasks,supervisedTasks,supervisedUsers,s
             })}
           </div>
         )}
+      </div>
+    )}
+
+    {/* ═══ CALENDÁRIO INTERNO — Hellen + coordinators tem acesso ao calendário compartilhado ═══ */}
+    {showCoordinatorWidgets&&typeof PageCalendarioInterno!=="undefined"&&(
+      <div style={{maxWidth:1280,margin:"0 auto",width:"100%",background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+        <PageCalendarioInterno isMob={isMob} tasks={tasks} setTasks={setTasks}/>
       </div>
     )}
 
