@@ -2037,7 +2037,6 @@ const NAV=[
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
     {id:"demandas_kanban",     icon:"◈", label:"Fluxo de demandas"},
     {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de publicações"},
-    {id:"demandas_cal_interno",icon:"▦", label:"Calendário interno"},
     {id:"demandas_internas",   icon:"◫", label:"Demandas internas"},
   ]},
   {id:"aprovacoes", icon:"◇", label:"Avaliações",children:[
@@ -12420,6 +12419,12 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [recurrence,setRecurrence]=useState((initial&&initial.recurrence)||"");
   const [color,setColor]=useState((initial&&initial.color)||"#0f172a");
   const [saving,setSaving]=useState(false);
+  // ESC fecha o modal (padrão de UX)
+  useEffect(function(){
+    const onKey=function(e){if(e.key==="Escape"){onClose&&onClose();}};
+    window.addEventListener("keydown",onKey);
+    return function(){window.removeEventListener("keydown",onKey);};
+  },[onClose]);
   function save(){
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     if(!window._sb){if(typeof pixelsToast!=="undefined")pixelsToast.error("Sem conexão com Supabase");return;}
@@ -12472,24 +12477,49 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       <input value={title} onChange={function(e){setTitle(e.target.value);}}
         placeholder="Adicionar título do evento" autoFocus
         style={{width:"100%",padding:"11px 14px",border:"1px solid #e2e8f0",borderRadius:11,fontSize:14,fontWeight:600,boxSizing:"border-box",outline:"none",fontFamily:"inherit",letterSpacing:-.15,marginBottom:14}}/>
-      {/* Data + Hora */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 140px",gap:10,marginBottom:14}}>
+      {/* Data + Hora — barrinhas inteiras clicáveis (estilo moderno) */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 160px",gap:10,marginBottom:14}}>
         <div>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Data</div>
-          <input type="date" value={date} onChange={function(e){setDate(e.target.value);}}
-            style={{width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          {(typeof _MarcoDateField==="function")
+            ? <_MarcoDateField value={date} onChange={function(v){setDate(v);}} accent="#7c3aed"/>
+            : <input type="date" value={date} onChange={function(e){setDate(e.target.value);}}
+                style={{width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          }
         </div>
         <div>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Hora (opc.)</div>
-          <input type="time" value={hour} onChange={function(e){setHour(e.target.value);}}
-            style={{width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+          {/* Hora moderna: barra inteira clicável que dispara o time picker nativo */}
+          {(function(){
+            const _hRef=React.useRef(null);
+            function _openTime(){
+              try{
+                if(_hRef.current){
+                  if(typeof _hRef.current.showPicker==="function")_hRef.current.showPicker();
+                  else _hRef.current.focus();
+                }
+              }catch(_){if(_hRef.current)_hRef.current.focus();}
+            }
+            const hasH=!!hour;
+            return <div onClick={_openTime}
+              style={{display:"inline-flex",alignItems:"center",gap:8,background:hasH?"#fff":"#fafbfc",border:"1px solid "+(hasH?"#7c3aed33":"#e2e8f0"),borderRadius:10,padding:"0 13px",height:38,fontSize:13,color:hasH?"#0f172a":"#94a3b8",fontWeight:hasH?700:600,fontFamily:"'Inter',system-ui,sans-serif",cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",width:"100%",boxSizing:"border-box"}}
+              onMouseEnter={function(e){e.currentTarget.style.borderColor="#7c3aed66";e.currentTarget.style.background="#fff";}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor=hasH?"#7c3aed33":"#e2e8f0";e.currentTarget.style.background=hasH?"#fff":"#fafbfc";}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hasH?"#7c3aed":"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+              </svg>
+              <span style={{whiteSpace:"nowrap"}}>{hasH?hour:"--:--"}</span>
+              <input ref={_hRef} type="time" value={hour} onChange={function(e){setHour(e.target.value);}}
+                style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
+            </div>;
+          })()}
         </div>
       </div>
       {/* Recorrência */}
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Recorrência</div>
         <div style={{display:"flex",gap:6}}>
-          {[{id:"",label:"Não repete"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
+          {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
             const sel=recurrence===opt.id;
             return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id);}}
               style={{flex:1,background:sel?PURPLE+"15":"#fff",border:"1px solid "+(sel?PURPLE+"55":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?PURPLE:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
@@ -12581,8 +12611,13 @@ function PageCalendarioInterno({isMob}){
     const dIso=dateObj.getFullYear()+"-"+String(dateObj.getMonth()+1).padStart(2,"0")+"-"+String(dateObj.getDate()).padStart(2,"0");
     const dm=String(dateObj.getMonth()+1).padStart(2,"0")+"-"+String(dateObj.getDate()).padStart(2,"0");
     const dDay=dateObj.getDate();
+    const dDow=dateObj.getDay(); // 0=dom..6=sáb
     return internalEvents.filter(function(ev){
       if(!ev||!ev.date)return false;
+      if(ev.recurrence==="weekly"){
+        // mesmo dia da semana, a partir da data original
+        try{const start=new Date(ev.date+"T12:00");return start.getDay()===dDow && ev.date<=dIso;}catch(_){return false;}
+      }
       if(ev.recurrence==="monthly"){
         // mesmo dia do mês
         return Number(ev.date.slice(8,10))===dDay && ev.date<=dIso;
@@ -13001,10 +13036,10 @@ function PageCalendarioInterno({isMob}){
                 if(_myEvs.length===0)return null;
                 return <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:3}}>
                   {_myEvs.slice(0,2).map(function(ev){
-                    const _isRec=ev.recurrence==="monthly"||ev.recurrence==="yearly";
+                    const _isRec=ev.recurrence==="weekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly";
                     const _evColor=ev.color||"#0f172a";
                     return <div key={ev.id+"-"+_dayIso} onClick={function(e){e.stopPropagation();setEditingEvent(ev);}}
-                      title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="monthly"?"mensal":"anual"):"")}
+                      title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="weekly"?"semanal":ev.recurrence==="monthly"?"mensal":"anual"):"")}
                       style={{background:_evColor,color:"#fff",borderRadius:8,padding:"5px 9px",fontSize:12,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,overflow:"hidden",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",transition:"all .15s"}}
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
@@ -49347,6 +49382,11 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
         }
       </section>;
     })()}
+
+    {/* ══════════ CALENDÁRIO INTERNO COMPLETO — movido de Demandas ══════════ */}
+    {typeof PageCalendarioInterno!=="undefined" && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <PageCalendarioInterno isMob={isMob} tasks={tasks} setTasks={setTasks}/>
+    </div>}
 
     {/* ══════════ RITUAIS — Daily / Weekly / Planejamentos ══════════ */}
     {(function(){
