@@ -12470,24 +12470,81 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
+    // Mapeia categoria → tipo de marco
+    const _CAT_TO_MARCO={
+      aniversario:"reuniao",
+      evento:"campanha",
+      feira:"campanha",
+      presenca_feira:"campanha",
+      captacao:"captacao",
+      assinatura:"comercial",
+    };
+    const _shouldSyncMarco=!!clientId&&!!category&&_CAT_TO_MARCO[category];
     const q = isEdit
-      ? window._sb.from("internal_events").update(payload).eq("id",initial.id)
-      : window._sb.from("internal_events").insert(payload);
+      ? window._sb.from("internal_events").update(payload).eq("id",initial.id).select().single()
+      : window._sb.from("internal_events").insert(payload).select().single();
     q.then(function(r){
-      setSaving(false);
-      if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
-      if(typeof pixelsToast!=="undefined")pixelsToast.success(isEdit?"Evento atualizado!":"Evento criado!");
-      onSaved&&onSaved();
+      if(r&&r.error){setSaving(false);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
+      const _savedRow=r&&r.data;
+      // Sincronizar marco vinculado (se aplicável)
+      function _doneSave(){
+        setSaving(false);
+        if(typeof pixelsToast!=="undefined")pixelsToast.success(isEdit?"Evento atualizado!":(_shouldSyncMarco?"Evento criado! Marco registrado no cliente.":"Evento criado!"));
+        onSaved&&onSaved();
+      }
+      if(!_shouldSyncMarco){
+        // Sem cliente/categoria pra criar marco. Se tinha marco vinculado antes (edit) e agora não tem mais, apagar
+        if(isEdit&&initial.linked_milestone_id){
+          window._sb.from("client_milestones").delete().eq("id",initial.linked_milestone_id).then(function(){
+            window._sb.from("internal_events").update({linked_milestone_id:null}).eq("id",_savedRow.id).then(function(){_doneSave();});
+          });
+        }else{_doneSave();}
+        return;
+      }
+      // Tem cliente+categoria → criar/atualizar marco
+      // Bioter sempre fica em client_id="bioter" (mesmo unidade específica)
+      const _rootId=(clientId&&clientId.indexOf("bioter_")===0)?"bioter":clientId;
+      const _bioterUnit=(clientId&&clientId.indexOf("bioter_")===0)?clientId.slice("bioter_".length):null;
+      const _metrics=_bioterUnit?{unit:_bioterUnit,linked_event_id:_savedRow.id}:{linked_event_id:_savedRow.id};
+      const marcoPayload={
+        client_id:_rootId,
+        date:date,
+        type:_CAT_TO_MARCO[category],
+        title:title.trim(),
+        description:description.trim()||null,
+        metrics:_metrics,
+        created_by:payload.created_by||"",
+      };
+      const linkedId=initial&&initial.linked_milestone_id;
+      const marcoQ=linkedId
+        ? window._sb.from("client_milestones").update(marcoPayload).eq("id",linkedId).select().single()
+        : window._sb.from("client_milestones").insert(marcoPayload).select().single();
+      marcoQ.then(function(mr){
+        if(mr&&mr.error){console.warn("[marco sync]",mr.error);_doneSave();return;}
+        const newMarcoId=(mr&&mr.data&&mr.data.id)||linkedId;
+        // Salvar o linked_milestone_id no internal_event
+        window._sb.from("internal_events").update({linked_milestone_id:newMarcoId}).eq("id",_savedRow.id).then(function(){_doneSave();});
+      }).catch(function(e){console.warn("[marco sync exc]",e);_doneSave();});
     }).catch(function(e){setSaving(false);console.warn("[internal_events save]",e);});
   }
   function del(){
     if(!isEdit||!initial||!initial.id)return;
-    if(!window.confirm("Apagar este evento?"))return;
+    if(!window.confirm("Apagar este evento?"+(initial.linked_milestone_id?" O marco vinculado no cliente também será removido.":""))) return;
     if(!window._sb)return;
-    window._sb.from("internal_events").delete().eq("id",initial.id).then(function(){
+    function _doneDel(){
       if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.");
       onDeleted&&onDeleted();
-    }).catch(function(e){console.warn("[internal_events del]",e);});
+    }
+    // Apaga marco vinculado primeiro (se houver), depois o evento
+    if(initial.linked_milestone_id){
+      window._sb.from("client_milestones").delete().eq("id",initial.linked_milestone_id).then(function(){
+        window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel);
+      }).catch(function(){
+        window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel);
+      });
+    }else{
+      window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel).catch(function(e){console.warn("[internal_events del]",e);});
+    }
   }
   const PURPLE="#7c3aed";
   const COLORS=["#0f172a","#7c3aed","#0ea5e9","#16a34a","#f59e0b","#dc2626","#ec4899","#0891b2"];
@@ -13001,7 +13058,6 @@ function PageCalendarioInterno({isMob}){
           {[
             {id:"todos",       label:"Todos",                                          icoColor:"#64748b"},
             {id:"aniversarios",label:"Aniversários",  count:teamCount+clientCount, icoColor:"#ec4899", icoType:"cake"},
-            {id:"marcos",      label:"Marcos",        count:marcoCount,            icoColor:"#0ea5e9", icoType:"target"},
             {id:"eventos",     label:"Evento",        count:eventoCount,           icoColor:"#a855f7", icoType:"calendar"},
             {id:"feiras",      label:"Feira",         count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="feira";}).length:0),     icoColor:"#f59e0b", icoType:"flag"},
             {id:"presencas",   label:"Presença em feira", count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="presenca_feira";}).length:0), icoColor:"#d97706", icoType:"users"},
