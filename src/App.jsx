@@ -12344,7 +12344,7 @@ function CalendarGrid({WEEKDAYS, days, renderDay, compact}){
   // compact=true (calendário interno) — células com altura fixa baixa em vez de quadradas
   // compact=false (default, publicações) — quadradas via aspect-ratio
   const _cellStyle = compact
-    ? {minHeight:110, maxHeight:130, padding:"7px 9px"}
+    ? {minHeight:150, maxHeight:180, padding:"8px 10px"}
     : {aspectRatio:"1 / 1", padding:"8px 8px"};
   return(
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -12982,7 +12982,7 @@ function PageCalendarioInterno({isMob}){
                     try{ e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain","marco-"+ev.id); }catch(_){}
                   }:null}
                   onDragEnd={_draggable?function(){setDragItem(null);}:null}
-                  style={{background:ev.color,color:"#fff",borderRadius:8,padding:"5px 9px 5px 5px",fontSize:12.5,lineHeight:1.25,display:"flex",alignItems:"center",gap:7,overflow:"hidden",cursor:_draggable?"grab":(_isClickable?"pointer":"default"),transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"inherit"}}
+                  style={{background:ev.color,color:"#fff",borderRadius:8,padding:"5px 9px",fontSize:12,lineHeight:1.25,display:"flex",alignItems:"center",gap:6,overflow:"hidden",cursor:_draggable?"grab":(_isClickable?"pointer":"default"),transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}
                   onMouseEnter={_isClickable?function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+ev.color+"55";}:null}
                   onMouseLeave={_isClickable?function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}:null}>
                   {_clLogo
@@ -12991,7 +12991,7 @@ function PageCalendarioInterno({isMob}){
                       </span>
                     : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:.92,marginLeft:4}}>{_evIcon}</span>
                   }
-                  <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:700,letterSpacing:-.1}}>{ev.title}</span>
+                  <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600,letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif"}}>{ev.title}</span>
                 </div>;
               })}
               {evs.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textAlign:"left",paddingLeft:4,marginTop:1}}>+{evs.length-2} mais</div>}
@@ -13002,11 +13002,15 @@ function PageCalendarioInterno({isMob}){
                 return <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:3}}>
                   {_myEvs.slice(0,2).map(function(ev){
                     const _isRec=ev.recurrence==="monthly"||ev.recurrence==="yearly";
+                    const _evColor=ev.color||"#0f172a";
                     return <div key={ev.id+"-"+_dayIso} onClick={function(e){e.stopPropagation();setEditingEvent(ev);}}
                       title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="monthly"?"mensal":"anual"):"")}
-                      style={{background:ev.color||"#0f172a",color:"#fff",borderRadius:7,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif"}}>
-                      {_isRec&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>}
-                      <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ev.title}</span>
+                      style={{background:_evColor,color:"#fff",borderRadius:8,padding:"5px 9px",fontSize:12,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,overflow:"hidden",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",transition:"all .15s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
+                      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
+                      {_isRec&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.9}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>}
+                      {ev.hour&&<span style={{fontWeight:600,opacity:.92,fontFeatureSettings:"'tnum'",flexShrink:0}}>{ev.hour}</span>}
+                      <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
                     </div>;
                   })}
                   {_myEvs.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:600,paddingLeft:4}}>+{_myEvs.length-2} mais</div>}
@@ -48556,6 +48560,145 @@ function _DGKpisSection({allTasks}){
   </div>;
 }
 
+// ── Rotina Semanal — itens fixos por dia, sem prazo, persistido em Supabase ────
+const _DG_RS_DAYS=[{id:"seg",label:"Segunda"},{id:"ter",label:"Terça"},{id:"qua",label:"Quarta"},{id:"qui",label:"Quinta"},{id:"sex",label:"Sexta"}];
+function _DGRotinaSemanal({user, isSocio}){
+  const [viewUserId,setViewUserId]=useState(user.id);
+  const [items,setItems]=useState([]); // rows do supabase
+  const [loading,setLoading]=useState(true);
+  const [adding,setAdding]=useState(null); // {day:"seg"} pra mostrar input inline
+  const [draft,setDraft]=useState("");
+  const [editing,setEditing]=useState(null); // {id, title}
+
+  function reload(){
+    if(typeof window==="undefined"||!window._sb){setLoading(false);return;}
+    window._sb.from("rotina_semanal").select("*").eq("user_id",viewUserId).order("position",{ascending:true}).then(function(r){
+      if(r&&r.data)setItems(r.data);
+      setLoading(false);
+    }).catch(function(e){console.warn("[rotina_semanal]",e);setLoading(false);});
+  }
+  useEffect(function(){reload();},[viewUserId]);
+  useEffect(function(){
+    if(typeof window==="undefined"||!window._sb)return;
+    let ch=null;
+    try{
+      ch=window._sb.channel("rotina-semanal-rt-"+viewUserId)
+        .on("postgres_changes",{event:"*",schema:"public",table:"rotina_semanal"},function(){reload();})
+        .subscribe();
+    }catch(_){}
+    return function(){if(ch){try{window._sb.removeChannel(ch);}catch(_){}}}
+  },[viewUserId]);
+
+  function add(day){
+    const title=(draft||"").trim();
+    if(!title){setAdding(null);return;}
+    const payload={
+      user_id:viewUserId,
+      day_of_week:day,
+      title:title,
+      position:items.filter(function(x){return x.day_of_week===day;}).length,
+      created_by:user.name||user.id,
+    };
+    window._sb.from("rotina_semanal").insert(payload).then(function(r){
+      if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
+      setDraft("");setAdding(null);reload();
+    });
+  }
+  function del(id){
+    if(!window.confirm("Apagar este item da rotina?"))return;
+    window._sb.from("rotina_semanal").delete().eq("id",id).then(function(){reload();});
+  }
+  function saveEdit(){
+    if(!editing||!editing.id)return;
+    const t=(editing.title||"").trim();
+    if(!t){setEditing(null);return;}
+    window._sb.from("rotina_semanal").update({title:t,updated_at:new Date().toISOString()}).eq("id",editing.id).then(function(){
+      setEditing(null);reload();
+    });
+  }
+
+  const SOCIOS_AVAIL = (typeof TEAM!=="undefined") ? TEAM.filter(function(t){return t.id!=="ocsana_legacy";}) : [];
+  const PURPLE="#7c3aed";
+
+  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <div style={{width:34,height:34,borderRadius:10,background:PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:PURPLE,flexShrink:0}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Rotina semanal</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Itens fixos por dia — sem prazo, sem responsável</div>
+        </div>
+      </div>
+      {isSocio && SOCIOS_AVAIL.length>0 && <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.2}}>Vendo:</span>
+        <select value={viewUserId} onChange={function(e){setViewUserId(e.target.value);}}
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#0f172a",cursor:"pointer",fontFamily:DG_INTER,outline:"none"}}>
+          {SOCIOS_AVAIL.map(function(t){return <option key={t.id} value={t.id}>{t.name}</option>;})}
+        </select>
+      </div>}
+    </div>
+    {/* Grid de 5 dias */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:12}}>
+      {_DG_RS_DAYS.map(function(d){
+        const dayItems=items.filter(function(x){return x.day_of_week===d.id;});
+        const isAdding=adding&&adding.day===d.id;
+        return <div key={d.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:0,display:"flex",flexDirection:"column",minHeight:200,overflow:"hidden"}}>
+          {/* Header dia */}
+          <div style={{padding:"11px 13px 8px",borderBottom:"1px solid #f5f7fa"}}>
+            <div style={{color:"#0f172a",fontWeight:700,fontSize:12,letterSpacing:.4,textTransform:"uppercase"}}>{d.label}</div>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:2,letterSpacing:.2}}>{dayItems.length}{dayItems.length===1?" item":" itens"}</div>
+          </div>
+          {/* Items */}
+          <div style={{padding:"10px 11px",flex:1,display:"flex",flexDirection:"column",gap:6}}>
+            {dayItems.map(function(it){
+              const isEd=editing&&editing.id===it.id;
+              return <div key={it.id}
+                style={{background:isEd?"#f5f3ff":"#fafbfc",border:"1px solid "+(isEd?"#c4b5fd":"#eef0f3"),borderRadius:8,padding:"8px 10px",display:"flex",alignItems:"center",gap:6,transition:"all .12s"}}
+                onMouseEnter={function(e){if(!isEd){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";}}}
+                onMouseLeave={function(e){if(!isEd){e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderColor="#eef0f3";}}}>
+                {isEd
+                  ? <><input value={editing.title} onChange={function(e){setEditing(Object.assign({},editing,{title:e.target.value}));}}
+                      onKeyDown={function(e){if(e.key==="Enter"){saveEdit();}if(e.key==="Escape"){setEditing(null);}}}
+                      autoFocus
+                      style={{flex:1,background:"transparent",border:"none",fontSize:12,color:"#0f172a",outline:"none",fontFamily:DG_INTER,fontWeight:600}}/>
+                    <button onClick={saveEdit} style={{background:"none",border:"none",color:PURPLE,cursor:"pointer",fontSize:11,fontWeight:700,padding:"2px 6px"}}>OK</button></>
+                  : <><span onClick={function(){setEditing({id:it.id,title:it.title});}}
+                      style={{flex:1,color:"#0f172a",fontSize:12,fontWeight:500,letterSpacing:-.1,cursor:"text",lineHeight:1.35,wordBreak:"break-word"}}>{it.title}</span>
+                    <button onClick={function(){del(it.id);}} title="Apagar" style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:"2px",display:"flex",alignItems:"center",borderRadius:5}}
+                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.background="#fef2f2";}}
+                      onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";e.currentTarget.style.background="none";}}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                    </button></>
+                }
+              </div>;
+            })}
+            {/* Input pra adicionar */}
+            {isAdding
+              ? <div style={{background:"#fff",border:"1.5px solid "+PURPLE+"77",borderRadius:8,padding:"7px 10px",display:"flex",alignItems:"center",gap:6}}>
+                  <input value={draft} onChange={function(e){setDraft(e.target.value);}}
+                    onKeyDown={function(e){if(e.key==="Enter"){add(d.id);}if(e.key==="Escape"){setAdding(null);setDraft("");}}}
+                    autoFocus placeholder="O que precisa rolar?"
+                    style={{flex:1,background:"transparent",border:"none",fontSize:12,color:"#0f172a",outline:"none",fontFamily:DG_INTER,fontWeight:500}}/>
+                  <button onClick={function(){add(d.id);}} style={{background:PURPLE,border:"none",color:"#fff",cursor:"pointer",fontSize:10.5,fontWeight:700,padding:"4px 9px",borderRadius:5,fontFamily:DG_INTER}}>Add</button>
+                </div>
+              : <button onClick={function(){setAdding({day:d.id});setDraft("");}}
+                  style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
+                  onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color=PURPLE;}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                  Adicionar
+                </button>
+            }
+          </div>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
 // ── OKRs do DashSocio ────────────────────────────────────────
 // Storage no team_planning: type="okr_objective" (1) + type="okr_kr" (N)
 // Permissão de edição: só sócios (level===1 dash==="partner")
@@ -49482,8 +49625,8 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     {/* ══════════ KPIs DO MÊS — 4 indicadores operacionais ══════════ */}
     <_DGKpisSection allTasks={allTasks}/>
 
-    {/* ══════════ OKR · TRIMESTRE — objetivo + KRs ══════════ */}
-    <_DGOKRSection user={user} planEntries={planEntries} planUpsert={planUpsert} planRemove={planRemove}/>
+    {/* ══════════ ROTINA SEMANAL — itens fixos por dia ══════════ */}
+    <_DGRotinaSemanal user={user} isSocio={user.level===1}/>
 
     {/* ══════════ PLANEJAMENTO DA SEMANA — refinado ══════════ */}
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
