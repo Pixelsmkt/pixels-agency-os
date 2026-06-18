@@ -13029,14 +13029,29 @@ function PageCalendarioInterno({isMob}){
     }
     // Marcos dos clientes — todos os tipos
     if(filterType==="todos"||filterType==="marcos"){
+      // Pré-computa IDs de eventos existentes pra detectar marcos órfãos (linked_event_id que aponta pra evento já apagado)
+      const _existingEventIds={};
+      (typeof internalEvents!=="undefined"?internalEvents:[]).forEach(function(e){_existingEventIds[String(e.id)]=true;});
       Object.keys(marcosByClient).forEach(function(cid){
-        const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===cid;});
-        if(!cl) return;
+        // Resolve cliente: se cid for bioter_xxx, usa o root bioter. Senão busca direto.
+        // Fallback: se cliente não encontrado, usa um placeholder pra evitar marco invisível.
+        let cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===cid;});
+        if(!cl && cid && cid.indexOf("bioter_")===0){
+          cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id==="bioter";});
+        }
+        if(!cl){
+          // Cliente desconhecido → mostra com placeholder pra não silenciar
+          cl={id:cid,name:cid||"Cliente",color:"#64748b"};
+        }
         (marcosByClient[cid]||[]).forEach(function(mc){
           if(!mc.date) return;
-          // CRÍTICO: Marcos criados via calendário (com linked_event_id) NÃO devem aparecer aqui,
-          // porque já aparecem como pill do internal_event no mesmo dia. Senão dá duplicação visual.
-          if(mc.metrics && mc.metrics.linked_event_id) return;
+          // Marcos vinculados a um evento existente NÃO devem aparecer aqui (evitar duplicação visual com pill do evento)
+          // MAS: se o evento foi apagado e o marco ficou órfão, ele DEVE aparecer aqui pra não sumir.
+          if(mc.metrics && mc.metrics.linked_event_id){
+            const _eid=String(mc.metrics.linked_event_id);
+            if(_existingEventIds[_eid]) return; // evento ainda existe → pill já aparece via internal_event
+            // Senão (órfão), continua e renderiza o marco
+          }
           const dParts=String(mc.date).match(/^(\d{4})-(\d{2})-(\d{2})/);
           if(!dParts) return;
           const my=parseInt(dParts[1],10), mm=parseInt(dParts[2],10), md=parseInt(dParts[3],10);
@@ -13083,7 +13098,7 @@ function PageCalendarioInterno({isMob}){
       });
     }
     return out;
-  },[calMonth,filterType,marcosByClient,eventosByClient]);
+  },[calMonth,filterType,marcosByClient,eventosByClient,internalEvents]);
 
   const eventsByDay=function(date){
     if(!date)return [];
