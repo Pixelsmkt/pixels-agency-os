@@ -12547,22 +12547,24 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   }
   function del(){
     if(!isEdit||!initial||!initial.id)return;
-    if(!window.confirm("Apagar este evento?"+(initial.linked_milestone_id?" O marco vinculado no cliente também será removido.":""))) return;
-    if(!window._sb)return;
-    function _doneDel(){
-      if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.");
-      onDeleted&&onDeleted();
-    }
-    // Apaga marco vinculado primeiro (se houver), depois o evento
-    if(initial.linked_milestone_id){
-      window._sb.from("client_milestones").delete().eq("id",initial.linked_milestone_id).then(function(){
-        window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel);
-      }).catch(function(){
-        window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel);
-      });
-    }else{
-      window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel).catch(function(e){console.warn("[internal_events del]",e);});
-    }
+    const _msg="Apagar este evento?"+(initial.linked_milestone_id?" O marco vinculado no cliente também será removido.":"");
+    pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
+      if(!yes)return;
+      if(!window._sb)return;
+      function _doneDel(){
+        if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.");
+        onDeleted&&onDeleted();
+      }
+      if(initial.linked_milestone_id){
+        window._sb.from("client_milestones").delete().eq("id",initial.linked_milestone_id).then(function(){
+          window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel);
+        }).catch(function(){
+          window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel);
+        });
+      }else{
+        window._sb.from("internal_events").delete().eq("id",initial.id).then(_doneDel).catch(function(e){console.warn("[internal_events del]",e);});
+      }
+    });
   }
   const PURPLE="#7c3aed";
   const COLORS=["#0f172a","#7c3aed","#0ea5e9","#16a34a","#f59e0b","#dc2626","#ec4899","#0891b2"];
@@ -13033,16 +13035,19 @@ function PageCalendarioInterno({isMob}){
             const _linkedEvId=(m.metrics&&m.metrics.linked_event_id)||null;
             return <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid #f1f5f9",display:"flex",gap:8,justifyContent:"flex-end"}}>
               <button onClick={function(){
-                if(!window.confirm("Apagar este marco?"+(_linkedEvId?" O evento vinculado no calendário também será removido.":"")))return;
-                if(!window._sb)return;
-                function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Marco apagado.");setOpenMarco(null);if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();}
-                if(_linkedEvId){
-                  window._sb.from("internal_events").delete().eq("id",_linkedEvId).then(function(){
+                const _msg="Apagar este marco?"+(_linkedEvId?" O evento vinculado no calendário também será removido.":"");
+                pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
+                  if(!yes)return;
+                  if(!window._sb)return;
+                  function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Marco apagado.");setOpenMarco(null);if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();}
+                  if(_linkedEvId){
+                    window._sb.from("internal_events").delete().eq("id",_linkedEvId).then(function(){
+                      window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);
+                    }).catch(function(){window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);});
+                  }else{
                     window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);
-                  }).catch(function(){window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);});
-                }else{
-                  window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);
-                }
+                  }
+                });
               }} style={{background:"#fff",border:"1px solid #fecaca",color:"#dc2626",borderRadius:9,padding:"8px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
                 Apagar
@@ -13222,22 +13227,23 @@ function PageCalendarioInterno({isMob}){
                   e.preventDefault();e.stopPropagation();
                   const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
                   if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem apagar.");return;}
-                  if(!window.confirm("Apagar "+(isMarco?"este marco":"este evento")+"?"))return;
-                  if(!window._sb)return;
-                  function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();}
-                  if(isMarco){
-                    // Apaga marco + evento vinculado (se houver)
-                    const _linkedEvId=(ev._marco.metrics&&ev._marco.metrics.linked_event_id)||null;
-                    if(_linkedEvId){
-                      window._sb.from("internal_events").delete().eq("id",_linkedEvId).then(function(){
+                  pixelsConfirm("Apagar "+(isMarco?"este marco":"este evento")+"?",{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
+                    if(!yes)return;
+                    if(!window._sb)return;
+                    function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();}
+                    if(isMarco){
+                      const _linkedEvId=(ev._marco.metrics&&ev._marco.metrics.linked_event_id)||null;
+                      if(_linkedEvId){
+                        window._sb.from("internal_events").delete().eq("id",_linkedEvId).then(function(){
+                          window._sb.from("client_milestones").delete().eq("id",ev._marco.id).then(_done);
+                        }).catch(function(){window._sb.from("client_milestones").delete().eq("id",ev._marco.id).then(_done);});
+                      }else{
                         window._sb.from("client_milestones").delete().eq("id",ev._marco.id).then(_done);
-                      }).catch(function(){window._sb.from("client_milestones").delete().eq("id",ev._marco.id).then(_done);});
-                    }else{
-                      window._sb.from("client_milestones").delete().eq("id",ev._marco.id).then(_done);
+                      }
+                    }else if(isEvento){
+                      window._sb.from("internal_events").delete().eq("id",ev._evento.id).then(_done);
                     }
-                  }else if(isEvento){
-                    window._sb.from("internal_events").delete().eq("id",ev._evento.id).then(_done);
-                  }
+                  });
                 }:null;
                 return <div key={ev.id} title={ev.title+" — "+ev.subtitle+(_draggable?" — arraste pra outro dia pra remarcar":"")+(_isClickable?" — clique direito pra apagar":"")}
                   onClick={_click}
@@ -13276,6 +13282,7 @@ function PageCalendarioInterno({isMob}){
                     const _evCids=(function(){try{if(Array.isArray(ev.client_ids))return ev.client_ids;if(typeof ev.client_ids==="string"&&ev.client_ids){const _p=JSON.parse(ev.client_ids);if(Array.isArray(_p))return _p;}}catch(_){}return ev.client_id?[ev.client_id]:[];})();
                     const _firstCid=_evCids[0]||null;
                     const _cl=(_firstCid&&typeof CLIENTS!=="undefined")?CLIENTS.find(function(c){return c.id===_firstCid;}):null;
+                    const _clLogo = _cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_cl.id];
                     const _multiClients=_evCids.length>1;
                     const _catColors={aniversario:"#ec4899",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777"};
                     let _evColor;
@@ -13302,25 +13309,33 @@ function PageCalendarioInterno({isMob}){
                         e.preventDefault();e.stopPropagation();
                         const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
                         if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem apagar.");return;}
-                        if(!window.confirm("Apagar este evento?"+(ev.linked_milestone_id?" O marco vinculado no cliente também será removido.":"")))return;
-                        if(!window._sb)return;
-                        function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");_reloadInternalEvents();}
-                        if(ev.linked_milestone_id){
-                          window._sb.from("client_milestones").delete().eq("id",ev.linked_milestone_id).then(function(){
+                        const _msg="Apagar este evento?"+(ev.linked_milestone_id?" O marco vinculado no cliente também será removido.":"");
+                        pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
+                          if(!yes)return;
+                          if(!window._sb)return;
+                          function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");_reloadInternalEvents();}
+                          if(ev.linked_milestone_id){
+                            window._sb.from("client_milestones").delete().eq("id",ev.linked_milestone_id).then(function(){
+                              window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);
+                            }).catch(function(){window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);});
+                          }else{
                             window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);
-                          }).catch(function(){window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);});
-                        }else{
-                          window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);
-                        }
+                          }
+                        });
                       }}
                       title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="weekly"?"semanal":ev.recurrence==="monthly"?"mensal":"anual"):"")+(_cl?" · "+(_cl.name||_cl.nome):"")+" — clique direito pra apagar"}
                       style={{background:_evColor,color:"#fff",borderRadius:8,padding:"5px 9px",fontSize:12,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,overflow:"hidden",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",transition:"all .15s"}}
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
-                      {_catIcon}
+                      {_clLogo
+                        ? <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"#fff",flexShrink:0,overflow:"hidden",padding:1}}>
+                            <img src={_clLogo} alt={(_cl&&(_cl.name||_cl.nome))||""} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+                          </span>
+                        : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.22)",flexShrink:0}}>{_catIcon}</span>
+                      }
                       {_multiClients&&<span style={{background:"rgba(255,255,255,0.28)",borderRadius:6,padding:"1px 5px",fontSize:9.5,fontWeight:700,letterSpacing:.2,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{_evCids.length}c</span>}
                       {_isRec&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.9}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>}
-                      {ev.hour&&<span style={{fontWeight:600,opacity:.92,fontFeatureSettings:"'tnum'",flexShrink:0}}>{ev.hour}</span>}
+                      {ev.hour&&<span style={{display:"inline-flex",alignItems:"center",gap:3,fontWeight:600,opacity:.92,fontFeatureSettings:"'tnum'",flexShrink:0}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.9}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{ev.hour}</span>}
                       <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
                     </div>;
                   })}
@@ -13343,7 +13358,7 @@ function PageCalendarioInterno({isMob}){
                 };
                 // Pra cada tipo, computa done = TODOS os rituais do grupo feitos
                 const groups=["daily","weekly","planmes","plantri"].filter(function(t){return byType[t].length>0;});
-                return <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
+                return <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:2,order:-1}}>
                   {groups.map(function(t){
                     const arr=byType[t];
                     const cfg=TYPE_CFG[t];
@@ -13498,17 +13513,18 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   },[]);
   // Helper pra apagar evento do cliente (sócios/coordenação podem)
   const deleteClientEvent=function(ev){
-    if(!window.confirm("Apagar este evento do cliente?\n\nO cliente vai parar de ver no portal dele também."))return;
-    if(typeof window==="undefined"||!window._sb)return;
-    // Carrega array atual, remove o evento, e persiste
-    window._sb.from("clients").select("client_events").eq("client_id",ev.clientId).single().then(function(res){
-      if(!res||!res.data||!Array.isArray(res.data.client_events))return;
-      const next=res.data.client_events.filter(function(e){return e.id!==ev.id;});
-      window._sb.from("clients").update({client_events:next}).eq("client_id",ev.clientId).then(function(){
-        setAllClientEvents(function(prev){return (prev||[]).filter(function(e){return e.id!==ev.id;});});
-        if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento do cliente apagado.",3000);
-      }).catch(function(e){console.warn("[client-events] delete:",e?.message||e);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao apagar evento.");});
-    }).catch(function(e){console.warn("[client-events] load before delete:",e?.message||e);});
+    pixelsConfirm("Apagar este evento do cliente? O cliente vai parar de ver no portal dele também.",{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
+      if(!yes)return;
+      if(typeof window==="undefined"||!window._sb)return;
+      window._sb.from("clients").select("client_events").eq("client_id",ev.clientId).single().then(function(res){
+        if(!res||!res.data||!Array.isArray(res.data.client_events))return;
+        const next=res.data.client_events.filter(function(e){return e.id!==ev.id;});
+        window._sb.from("clients").update({client_events:next}).eq("client_id",ev.clientId).then(function(){
+          setAllClientEvents(function(prev){return (prev||[]).filter(function(e){return e.id!==ev.id;});});
+          if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento do cliente apagado.",3000);
+        }).catch(function(e){console.warn("[client-events] delete:",e?.message||e);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao apagar evento.");});
+      }).catch(function(e){console.warn("[client-events] load before delete:",e?.message||e);});
+    });
   };
   // Filtrar eventos pelo cliente ativo (se houver) + agrupados por data
   const _eventsByDate=useMemo(function(){
@@ -14256,10 +14272,12 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           </button>
           <button onClick={function(){
             const t=ctxMenu.task;
-            if(!window.confirm("Mover este card pra lixeira? (fica 30 dias)"))return;
-            setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{deletedAt:new Date().toISOString()}):x;});});
-            if(typeof pixelsToast!=="undefined")pixelsToast.success("Card movido pra lixeira (30 dias).");
-            setCtxMenu(null);
+            pixelsConfirm("Mover este card pra lixeira? Fica 30 dias antes de ser removido permanentemente.",{danger:true,okText:"Mover pra lixeira",cancelText:"Cancelar"}).then(function(yes){
+              if(!yes)return;
+              setTasks(function(prev){return (prev||[]).map(function(x){return x.id===t.id?Object.assign({},x,{deletedAt:new Date().toISOString()}):x;});});
+              if(typeof pixelsToast!=="undefined")pixelsToast.success("Card movido pra lixeira (30 dias).");
+              setCtxMenu(null);
+            });
           }} style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:"none",border:"none",padding:"8px 12px",borderRadius:7,fontSize:12.5,fontWeight:500,color:"#dc2626",cursor:"pointer",textAlign:"left"}}
           onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
           onMouseLeave={function(e){e.currentTarget.style.background="none";}}>
