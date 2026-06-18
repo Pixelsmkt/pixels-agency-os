@@ -10,7 +10,6 @@
 // App.jsx — Gerado por juntar.py
 import { createClient as __createSupabaseClient } from '@supabase/supabase-js';
 
-// ======= 00_clientes_data.jsx =======
 // Dados dos clientes: contratos, métricas, metas, contatos, logos
 // Depende de: 00_globals.jsx
 // Usado por: 01_dashboard, 02_clientes, 03_clientes2 e outros
@@ -1728,36 +1727,48 @@ function pixelsPrompt(message,opts={}){
 function pixelsConfirm(message,opts={}){
   return new Promise(resolve=>{
     if(typeof document==="undefined")return resolve(window.confirm(message));
+    const isDanger=!!opts.danger;
     const overlay=document.createElement("div");
-    Object.assign(overlay.style,{
-      position:"fixed",inset:"0",background:"rgba(15,23,42,0.6)",zIndex:"99998",
-      display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",
-      animation:"fadeIn .15s ease",backdropFilter:"blur(4px)",
-    });
+    Object.assign(overlay.style,{position:"fixed",inset:"0",background:"rgba(15,23,42,0.55)",zIndex:"99998",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",animation:"fadeIn .15s ease",backdropFilter:"blur(6px)"});
     const box=document.createElement("div");
-    Object.assign(box.style,{
-      background:"#fff",borderRadius:"16px",padding:"22px 24px",maxWidth:"420px",width:"100%",
-      boxShadow:"0 20px 60px rgba(0,0,0,0.3)",fontFamily:"'Outfit',system-ui,sans-serif",
-      animation:"slideInUp .2s ease",
-    });
-    const title=document.createElement("div");
-    Object.assign(title.style,{color:"#0f172a",fontSize:"15px",fontWeight:"700",marginBottom:"16px",lineHeight:"1.4"});
-    title.textContent=message;
-    box.appendChild(title);
+    Object.assign(box.style,{background:"#fff",borderRadius:"18px",padding:"26px 28px 22px",maxWidth:"440px",width:"100%",boxShadow:"0 30px 70px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9",fontFamily:"'Inter',system-ui,sans-serif",animation:"slideInUp .18s ease"});
+    const header=document.createElement("div");
+    Object.assign(header.style,{display:"flex",alignItems:"flex-start",gap:"14px",marginBottom:"18px"});
+    const icoWrap=document.createElement("div");
+    Object.assign(icoWrap.style,{width:"40px",height:"40px",borderRadius:"12px",flexShrink:"0",background:isDanger?"#fee2e2":"#dbeafe",color:isDanger?"#dc2626":"#2563eb",display:"flex",alignItems:"center",justifyContent:"center"});
+    icoWrap.innerHTML=isDanger?'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>':'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+    const titleBox=document.createElement("div");
+    Object.assign(titleBox.style,{flex:"1",minWidth:"0"});
+    const titleEl=document.createElement("div");
+    Object.assign(titleEl.style,{color:"#0f172a",fontSize:"16px",fontWeight:"700",letterSpacing:"-0.3px",lineHeight:"1.3",marginBottom:"4px"});
+    titleEl.textContent=opts.title||(isDanger?"Confirmar exclusão":"Confirmação");
+    const msgEl=document.createElement("div");
+    Object.assign(msgEl.style,{color:"#64748b",fontSize:"13px",lineHeight:"1.55",fontWeight:"500"});
+    msgEl.textContent=message;
+    titleBox.appendChild(titleEl);titleBox.appendChild(msgEl);
+    header.appendChild(icoWrap);header.appendChild(titleBox);
+    box.appendChild(header);
     const btns=document.createElement("div");
-    Object.assign(btns.style,{display:"flex",gap:"8px",justifyContent:"flex-end"});
+    Object.assign(btns.style,{display:"flex",gap:"8px",justifyContent:"flex-end",marginTop:"6px"});
     const cancel=document.createElement("button");
     cancel.textContent=opts.cancelText||"Cancelar";
-    Object.assign(cancel.style,{background:"#f1f5f9",border:"none",color:"#475569",padding:"10px 20px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit"});
-    cancel.onclick=()=>{document.body.removeChild(overlay);resolve(false);};
+    Object.assign(cancel.style,{background:"#f1f5f9",border:"none",color:"#475569",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit",transition:"background .12s"});
+    cancel.onmouseenter=()=>{cancel.style.background="#e2e8f0";};
+    cancel.onmouseleave=()=>{cancel.style.background="#f1f5f9";};
+    function _close(val){try{document.body.removeChild(overlay);}catch(_){};document.removeEventListener("keydown",onKey);resolve(val);}
+    cancel.onclick=()=>_close(false);
     const ok=document.createElement("button");
     ok.textContent=opts.okText||"Confirmar";
-    Object.assign(ok.style,{background:opts.danger?"#dc2626":"#2563eb",border:"none",color:"#fff",padding:"10px 20px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit"});
-    ok.onclick=()=>{document.body.removeChild(overlay);resolve(true);};
+    Object.assign(ok.style,{background:isDanger?"#dc2626":"#2563eb",border:"none",color:"#fff",padding:"10px 18px",borderRadius:"10px",fontSize:"13px",fontWeight:"700",cursor:"pointer",fontFamily:"inherit",boxShadow:isDanger?"0 6px 16px rgba(220,38,38,0.30)":"0 6px 16px rgba(37,99,235,0.30)",transition:"transform .12s, box-shadow .12s"});
+    ok.onmouseenter=()=>{ok.style.transform="translateY(-1px)";};
+    ok.onmouseleave=()=>{ok.style.transform="";};
+    ok.onclick=()=>_close(true);
     btns.appendChild(cancel);btns.appendChild(ok);
     box.appendChild(btns);
     overlay.appendChild(box);
-    overlay.onclick=(e)=>{if(e.target===overlay){document.body.removeChild(overlay);resolve(false);}};
+    overlay.onclick=(e)=>{if(e.target===overlay)_close(false);};
+    function onKey(e){if(e.key==="Escape")_close(false);else if(e.key==="Enter")_close(true);}
+    document.addEventListener("keydown",onKey);
     document.body.appendChild(overlay);
     setTimeout(()=>ok.focus(),50);
   });
@@ -13189,7 +13200,19 @@ function PageCalendarioInterno({isMob}){
                 const _clLogo = ev._cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[ev._cl.id];
                 const isEvento = ev.kind==="evento";
                 const _isClickable = isMarco || isEvento;
-                const _click = isMarco ? function(e){if(e)e.stopPropagation();setOpenMarco({marco:ev._marco, cl:ev._cl});}
+                const _click = isMarco ? function(e){
+                                if(e)e.stopPropagation();
+                                // Se o marco veio de um evento do calendário (linked_event_id), abre direto o modal de edição
+                                const _linkedEvId=(ev._marco.metrics&&ev._marco.metrics.linked_event_id)||null;
+                                if(_linkedEvId&&window._sb){
+                                  window._sb.from("internal_events").select("*").eq("id",_linkedEvId).single().then(function(r){
+                                    if(r&&r.data){setEditingEvent(r.data);}
+                                    else{setOpenMarco({marco:ev._marco, cl:ev._cl});}
+                                  }).catch(function(){setOpenMarco({marco:ev._marco, cl:ev._cl});});
+                                  return;
+                                }
+                                setOpenMarco({marco:ev._marco, cl:ev._cl});
+                              }
                               : isEvento ? function(e){if(e)e.stopPropagation();setOpenEvento({evento:ev._evento, cl:ev._cl});}
                               : null;
                 const _draggableKind = ev.kind==="marco" ? "marco" : ev.kind==="evento" ? "evento" : null;
