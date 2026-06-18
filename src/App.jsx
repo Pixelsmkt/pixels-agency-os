@@ -27794,14 +27794,30 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {/* Enviar p/ aprovação — só pra cards em "Alteração de copy"; volta pra Copys (demanda) e entra na fila de Avaliação. */}
               {canEdit&&task.status==="alteracao_copy"&&<button
                 onClick={()=>{
+                  // CRÍTICO: capturar edits LOCAIS dos campos antes de mudar status —
+                  // senão o Vinicius vê a copy velha (o setTasks usaria `...t` do state global stale)
                   const _now=new Date().toISOString();
+                  const _formattedTitle=(typeof smartFormatTitle==="function")?smartFormatTitle(title||""):(title||"");
+                  const _descFinal=(descRef&&descRef.current)
+                    ? ((typeof autoLinkifyHTML==="function"&&typeof sanitizeRichText==="function")
+                        ? autoLinkifyHTML(sanitizeRichText(descRef.current.innerHTML||desc))
+                        : (descRef.current.innerHTML||desc))
+                    : ((typeof autoLinkifyHTML==="function"&&typeof sanitizeRichText==="function")?autoLinkifyHTML(sanitizeRichText(desc||"")):(desc||""));
+                  const _captionFinal=(captionRef&&captionRef.current)
+                    ? ((typeof autoLinkifyHTML==="function"&&typeof sanitizeRichText==="function")
+                        ? autoLinkifyHTML(sanitizeRichText(captionRef.current.innerHTML||caption))
+                        : (captionRef.current.innerHTML||caption))
+                    : ((typeof autoLinkifyHTML==="function"&&typeof sanitizeRichText==="function")?autoLinkifyHTML(sanitizeRichText(caption||"")):(caption||""));
                   setTasks(p=>p.map(t=>t.id===task.id?{
                     ...t,
+                    title:_formattedTitle,
+                    desc:_descFinal,
+                    caption:_captionFinal,
                     status:"demanda",
                     ajustar:false,
                     isAlteracao:false,
                     colEnteredAt:_now,
-                    timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Alteração de copy",toLabel:"Copys",from:"alteracao_copy",to:"demanda",at:_now,atFmt:nowFmt(),user:user.name,note:"Reenviada pra Avaliação de copys por "+user.name}]
+                    timeline:[...(t.timeline||[]),{type:"edit",label:user.name+" ajustou a copy",at:_now,atFmt:nowFmt(),user:user.name},{type:"status",fromLabel:"Alteração de copy",toLabel:"Copys",from:"alteracao_copy",to:"demanda",at:_now,atFmt:nowFmt(),user:user.name,note:"Reenviada pra Avaliação de copys por "+user.name}]
                   }:t));
                   onClose();
                 }}
