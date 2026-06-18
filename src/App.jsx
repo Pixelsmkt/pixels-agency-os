@@ -12417,10 +12417,30 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [date,setDate]=useState((initial&&initial.date)||new Date().toISOString().slice(0,10));
   const [hour,setHour]=useState((initial&&initial.hour)||"");
   const [recurrence,setRecurrence]=useState((initial&&initial.recurrence)||"");
-  const [color,setColor]=useState((initial&&initial.color)||"#0f172a");
   const [category,setCategory]=useState((initial&&initial.category)||"");
+  // Cor padrão por categoria
+  const _CAT_COLORS={
+    "":"#0f172a",
+    aniversario:"#ec4899",
+    evento:"#a855f7",
+    feira:"#f59e0b",
+    presenca_feira:"#d97706",
+    captacao:"#0891b2",
+    assinatura:"#16a34a",
+  };
+  const [color,setColor]=useState((initial&&initial.color)||_CAT_COLORS[(initial&&initial.category)||""]||"#0f172a");
+  const [colorTouched,setColorTouched]=useState(!!(initial&&initial.color));
+  const [clientId,setClientId]=useState((initial&&initial.client_id)||"");
   const [saving,setSaving]=useState(false);
   const _hRef=useRef(null);
+  // Auto-set cor ao trocar categoria (a não ser que usuário já mexeu na cor)
+  function setCategoryAndColor(catId){
+    setCategory(catId);
+    if(!colorTouched){
+      const c=_CAT_COLORS[catId]||"#0f172a";
+      setColor(c);
+    }
+  }
   // ESC fecha o modal (padrão de UX)
   useEffect(function(){
     const onKey=function(e){if(e.key==="Escape"){onClose&&onClose();}};
@@ -12439,6 +12459,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       recurrence:recurrence||null,
       color:color||null,
       category:category||null,
+      client_id:clientId||null,
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
@@ -12523,9 +12544,9 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Categoria</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {[{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"assinatura",label:"Assinatura",color:"#16a34a"}].map(function(opt){
+          {[{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"presenca_feira",label:"Presença em feira",color:"#d97706"},{id:"captacao",label:"Captação",color:"#0891b2"},{id:"assinatura",label:"Assinatura",color:"#16a34a"}].map(function(opt){
             const sel=category===opt.id;
-            return <button key={opt.id||"none"} type="button" onClick={function(){setCategory(opt.id);}}
+            return <button key={opt.id||"none"} type="button" onClick={function(){setCategoryAndColor(opt.id);}}
               style={{flex:"1 1 calc(33% - 4px)",minWidth:100,background:sel?opt.color+"15":"#fff",border:"1px solid "+(sel?opt.color+"66":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?opt.color:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
               {opt.label}
             </button>;
@@ -12539,11 +12560,23 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
           {COLORS.map(function(c){
             const sel=color===c;
-            return <button key={c} type="button" onClick={function(){setColor(c);}}
+            return <button key={c} type="button" onClick={function(){setColor(c);setColorTouched(true);}}
               style={{width:28,height:28,borderRadius:"50%",background:c,border:sel?"2.5px solid #0f172a":"2.5px solid transparent",boxShadow:sel?"0 0 0 2px #fff inset":"none",cursor:"pointer",padding:0,transition:"transform .12s"}}/>;
           })}
         </div>
       </div>
+      {/* Cliente vinculado (opcional) */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Cliente (opcional)</div>
+        <select value={clientId} onChange={function(e){setClientId(e.target.value);}}
+          style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\u0027http://www.w3.org/2000/svg\u0027 width=\u002712\u0027 height=\u002712\u0027 viewBox=\u00270 0 24 24\u0027 fill=\u0027none\u0027 stroke=\u0027%2364748b\u0027 stroke-width=\u00272.5\u0027 stroke-linecap=\u0027round\u0027 stroke-linejoin=\u0027round\u0027%3E%3Cpolyline points=\u00276 9 12 15 18 9\u0027/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 12px center",paddingRight:36}}>
+          <option value="">Sem cliente</option>
+          {(typeof CLIENTS!=="undefined"?CLIENTS:[]).map(function(cl){
+            return <option key={cl.id} value={cl.id}>{cl.name||cl.nome||cl.id}</option>;
+          })}
+        </select>
+      </div>
+
       {/* Descrição */}
       <div style={{marginBottom:18}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Descrição (opcional)</div>
@@ -12622,8 +12655,10 @@ function PageCalendarioInterno({isMob}){
       // Aplica filtro de categoria do calendário
       if(filterType==="assinaturas"&&ev.category!=="assinatura")return false;
       if(filterType==="feiras"&&ev.category!=="feira")return false;
+      if(filterType==="presencas"&&ev.category!=="presenca_feira")return false;
+      if(filterType==="captacoes"&&ev.category!=="captacao")return false;
       if(filterType==="aniversarios"&&ev.category!=="aniversario")return false;
-      if(filterType==="eventos"&&(ev.category==="assinatura"||ev.category==="feira"))return false;
+      if(filterType==="eventos"&&(ev.category==="assinatura"||ev.category==="feira"||ev.category==="presenca_feira"||ev.category==="captacao"))return false;
       if(filterType==="marcos")return false;
       if(filterType==="equipe"||filterType==="clientes")return false;
       if(ev.recurrence==="weekly"){
@@ -12954,6 +12989,8 @@ function PageCalendarioInterno({isMob}){
             {id:"marcos",      label:"Marcos",        count:marcoCount,            icoColor:"#0ea5e9", icoType:"flag"},
             {id:"eventos",     label:"Evento",        count:eventoCount,           icoColor:"#a855f7", icoType:"calendar"},
             {id:"feiras",      label:"Feira",         count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="feira";}).length:0),     icoColor:"#f59e0b", icoType:"tent"},
+            {id:"presencas",   label:"Presença em feira", count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="presenca_feira";}).length:0), icoColor:"#d97706", icoType:"users"},
+            {id:"captacoes",   label:"Captação",      count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="captacao";}).length:0),    icoColor:"#0891b2", icoType:"target"},
             {id:"assinaturas", label:"Assinaturas",   count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="assinatura";}).length:0), icoColor:"#16a34a", icoType:"check"},
           ].map(function(o){
             const active=filterType===o.id;
@@ -12965,6 +13002,8 @@ function PageCalendarioInterno({isMob}){
               {o.icoType==="calendar" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
               {o.icoType==="check" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>}
               {o.icoType==="tent" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 21L12 3l8.5 18"/><path d="M12 3v18"/><path d="M12 13l-5 8"/><path d="M12 13l5 8"/></svg>}
+              {o.icoType==="users" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>}
+              {o.icoType==="target" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>}
               {o.label}
               {typeof o.count==="number"&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 8px",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{o.count}</span>}
             </button>;
