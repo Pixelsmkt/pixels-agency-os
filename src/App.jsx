@@ -12444,6 +12444,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [color,setColor]=useState((initial&&initial.color)||_CAT_COLORS[(initial&&initial.category)||""]||"#0f172a");
   const [colorTouched,setColorTouched]=useState(!!(initial&&initial.color));
   const [city,setCity]=useState((initial&&initial.city)||"");
+  const [endDate,setEndDate]=useState((initial&&initial.end_date)||"");
   const [clientIds,setClientIds]=useState(function(){
     try{
       if(initial&&Array.isArray(initial.client_ids)&&initial.client_ids.length)return initial.client_ids.slice();
@@ -12489,6 +12490,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       client_id:clientId||null,
       client_ids:(clientIds&&clientIds.length)?clientIds:null,
       city:city.trim()||null,
+      end_date:(endDate&&endDate>date)?endDate:null,
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
@@ -12513,7 +12515,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         if(r&&r.error){
           const _msg=(r.error.message||"").toLowerCase();
           // Detecta colunas opcionais que ainda não foram migradas (SQL não rodado)
-          const _optionalCols=["city","client_ids"];
+          const _optionalCols=["city","client_ids","end_date"];
           let _retryPayload=null;
           for(let _i=0;_i<_optionalCols.length;_i++){
             const _col=_optionalCols[_i];
@@ -12654,9 +12656,15 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         placeholder="Adicionar título do evento" autoFocus
         style={{width:"100%",padding:"11px 14px",border:"1px solid #e2e8f0",borderRadius:11,fontSize:14,fontWeight:600,boxSizing:"border-box",outline:"none",fontFamily:"inherit",letterSpacing:-.15,marginBottom:14}}/>
       {/* Data + Hora — barrinhas inteiras clicáveis (estilo moderno) */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 160px",gap:10,marginBottom:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 160px",gap:10,marginBottom:8}}>
         <div>
-          <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Data</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+            <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{endDate&&endDate>date?"De":"Data"}</div>
+            <button type="button" onClick={function(){if(endDate){setEndDate("");}else{const _d=new Date(date+"T12:00");_d.setDate(_d.getDate()+1);setEndDate(_d.toISOString().slice(0,10));}}}
+              style={{background:"transparent",border:"none",color:endDate?"#7c3aed":"#94a3b8",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",padding:"2px 6px",letterSpacing:.2,textTransform:"uppercase"}}>
+              {endDate?"× evento de 1 dia":"+ vários dias"}
+            </button>
+          </div>
           {(typeof _MarcoDateField==="function")
             ? <_MarcoDateField value={date} onChange={function(v){setDate(v);}} accent="#7c3aed"/>
             : <input type="date" value={date} onChange={function(e){setDate(e.target.value);}}
@@ -12679,8 +12687,17 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           </div>
         </div>
       </div>
-      {/* Recorrência */}
-      <div style={{marginBottom:14}}>
+      {/* Data final (multi-dia) */}
+      {endDate&&<div style={{marginBottom:14}}>
+        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Até</div>
+        <div style={{position:"relative",cursor:"pointer"}} onClick={function(e){const _i=e.currentTarget.querySelector("input[type='date']");if(_i){try{_i.showPicker&&_i.showPicker();}catch(_){_i.focus();}}}}>
+          <input type="date" value={endDate} min={date} onChange={function(e){setEndDate(e.target.value);}}
+            style={{width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",cursor:"pointer"}}/>
+        </div>
+        {endDate&&endDate>date&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>Evento aparecerá em todos os dias do intervalo ({Math.floor((new Date(endDate+"T12:00")-new Date(date+"T12:00"))/86400000)+1} dias).</div>}
+      </div>}
+      {/* Recorrência (escondida quando evento é multi-dia) */}
+      {!endDate && <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Recorrência</div>
         <div style={{display:"flex",gap:6}}>
           {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
@@ -12691,7 +12708,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             </button>;
           })}
         </div>
-      </div>
+      </div>}
       {/* Categoria */}
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Categoria</div>
@@ -12885,6 +12902,10 @@ function PageCalendarioInterno({isMob}){
       if(ev.recurrence==="yearly"){
         // mesmo MM-DD
         return ev.date.slice(5,10)===dm && ev.date<=dIso;
+      }
+      // Multi-dia: se tem end_date, evento aparece em todos os dias do intervalo [date..end_date]
+      if(ev.end_date && ev.end_date>ev.date){
+        return ev.date<=dIso && dIso<=ev.end_date;
       }
       return ev.date===dIso;
     });
@@ -13181,7 +13202,7 @@ function PageCalendarioInterno({isMob}){
                 pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
                   if(!yes)return;
                   if(!window._sb)return;
-                  function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Marco apagado.");setOpenMarco(null);if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();}
+                  function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Marco apagado.");setOpenMarco(null);setMarcosByClient(function(p){const n={};Object.keys(p||{}).forEach(function(cid){n[cid]=(p[cid]||[]).filter(function(x){return x.id!==m.id;});});return n;});if(_linkedEvId)setInternalEvents(function(p){return (p||[]).filter(function(x){return x.id!==_linkedEvId;});});if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();if(typeof _reloadMarcos==="function")_reloadMarcos();}
                   if(_linkedEvId){
                     window._sb.from("internal_events").delete().eq("id",_linkedEvId).then(function(){
                       window._sb.from("client_milestones").delete().eq("id",m.id).then(_done);
@@ -13374,7 +13395,17 @@ function PageCalendarioInterno({isMob}){
                   pixelsConfirm("Apagar "+(isMarco?"este marco":"este evento")+"?",{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
                     if(!yes)return;
                     if(!window._sb)return;
-                    function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();}
+                    function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");if(typeof _reloadInternalEvents==="function")_reloadInternalEvents();if(typeof _reloadMarcos==="function")_reloadMarcos();}
+                    if(isMarco){
+                      // Optimistic: remove já do state
+                      setMarcosByClient(function(p){const n={};Object.keys(p||{}).forEach(function(cid){n[cid]=(p[cid]||[]).filter(function(x){return x.id!==ev._marco.id;});});return n;});
+                      const _linkedEvId=(ev._marco.metrics&&ev._marco.metrics.linked_event_id)||null;
+                      if(_linkedEvId)setInternalEvents(function(p){return (p||[]).filter(function(x){return x.id!==_linkedEvId;});});
+                    }
+                    if(isEvento){
+                      // optimistic remove de evento — não temos source local pra isso direto, mas marcos sim
+                      setInternalEvents(function(p){return (p||[]).filter(function(x){return ev._evento && x.id!==ev._evento.id;});});
+                    }
                     if(isMarco){
                       const _linkedEvId=(ev._marco.metrics&&ev._marco.metrics.linked_event_id)||null;
                       if(_linkedEvId){
@@ -13459,7 +13490,7 @@ function PageCalendarioInterno({isMob}){
                         pixelsConfirm(_msg,{danger:true,okText:"Apagar",cancelText:"Cancelar"}).then(function(yes){
                           if(!yes)return;
                           if(!window._sb)return;
-                          function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");_reloadInternalEvents();}
+                          function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");setInternalEvents(function(p){return (p||[]).filter(function(x){return x.id!==ev.id;});});if(ev.linked_milestone_id)setMarcosByClient(function(p){const n={};Object.keys(p||{}).forEach(function(cid){n[cid]=(p[cid]||[]).filter(function(x){return x.id!==ev.linked_milestone_id;});});return n;});_reloadInternalEvents();if(typeof _reloadMarcos==="function")_reloadMarcos();}
                           if(ev.linked_milestone_id){
                             window._sb.from("client_milestones").delete().eq("id",ev.linked_milestone_id).then(function(){
                               window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);
@@ -13549,8 +13580,8 @@ function PageCalendarioInterno({isMob}){
           initial={initial}
           isEdit={isEdit}
           onClose={function(){setOpenNewEvent(null);setEditingEvent(null);}}
-          onSaved={function(){setOpenNewEvent(null);setEditingEvent(null);_reloadInternalEvents();}}
-          onDeleted={function(){setOpenNewEvent(null);setEditingEvent(null);_reloadInternalEvents();}}
+          onSaved={function(){setOpenNewEvent(null);setEditingEvent(null);_reloadInternalEvents();if(typeof _reloadMarcos==="function")_reloadMarcos();}}
+          onDeleted={function(){setOpenNewEvent(null);setEditingEvent(null);_reloadInternalEvents();if(typeof _reloadMarcos==="function")_reloadMarcos();}}
         />;
       })()}
       {/* ── Modal de check do ritual (single ou grupo) ── */}
@@ -26688,8 +26719,6 @@ function PageSprintConfig({isMob}){
   </div>;
 }
 
-// ======= 10_radar_entrega.jsx =======
-
 const RADAR_ORIGENS = {
   interno:             { label:"Interna",      icon:"🔵", color:"#6366f1" },
   solicitacao_cliente: { label:"Solicitação",  icon:"🟡", color:"#f59e0b" },
@@ -29148,10 +29177,14 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <div>
               <label style={LB}><Ico n="calendar" size={12} color="#94a3b8"/> Data/hora de publicação</label>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
-                <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
-                  style={{...SI,fontSize:12}}/>
-                <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
-                  style={{...SI,fontSize:12}}/>
+                <div style={{position:"relative",cursor:canEdit?"pointer":"default"}} onClick={canEdit?function(e){const _i=e.currentTarget.querySelector("input[type='date']");if(_i){try{_i.showPicker&&_i.showPicker();}catch(_){_i.focus();}}}:null}>
+                  <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
+                    style={{...SI,fontSize:12,cursor:canEdit?"pointer":"default"}}/>
+                </div>
+                <div style={{position:"relative",cursor:canEdit?"pointer":"default"}} onClick={canEdit?function(e){const _i=e.currentTarget.querySelector("input[type='time']");if(_i){try{_i.showPicker&&_i.showPicker();}catch(_){_i.focus();}}}:null}>
+                  <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
+                    style={{...SI,fontSize:12,cursor:canEdit?"pointer":"default"}}/>
+                </div>
               </div>
               {publishDate&&<div style={{color:"#94a3b8",fontSize:9,marginTop:4,fontStyle:"italic"}}>
                 Aparece no Calendário de Publicação
@@ -35516,7 +35549,6 @@ export default function AgencyOS(){
   </div>;
 }
 
-// ======= 13_novidades.jsx =======
 // ── Helpers de módulo ─────────────────────────────────────────
 const _fmtShort = d => d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short"});
 const MONTHS_ABBR = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
