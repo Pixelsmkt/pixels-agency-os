@@ -12824,23 +12824,41 @@ function PageCalendarioInterno({isMob}){
                 </div>;
               })}
               {evs.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textAlign:"left",paddingLeft:4,marginTop:1}}>+{evs.length-2} mais</div>}
-              {/* ── Rituais do dia (Daily/Weekly/Planejamentos) ── */}
+              {/* ── Rituais do dia — agrupados por tipo, pills minimalistas ── */}
               {(function(){
                 if(typeof getRituaisDoMes!=="function")return null;
                 const _rits=getRituaisDoMes(date.getFullYear(),date.getMonth()).filter(function(r){return r.date===_dayIso;});
                 if(_rits.length===0)return null;
-                return <div style={{display:"flex",flexWrap:"wrap",gap:3,marginTop:3}}>
-                  {_rits.map(function(r){
-                    const done=isRitualDone(r.key);
-                    const cfg=r.type==="daily"?{abbr:"D",color:"#0ea5e9",bg:"#e0f2fe"}
-                              :r.type==="weekly"?{abbr:"W",color:"#7c3aed",bg:"#ede9fe"}
-                              :r.type==="planmes"?{abbr:"PM",color:"#f59e0b",bg:"#fef3c7"}
-                              :{abbr:"PT",color:"#dc2626",bg:"#fee2e2"};
-                    return <button key={r.key} title={r.label+(done?" — feito":" — pendente")}
-                      onClick={function(e){e.stopPropagation();setOpenRitual(r);}}
-                      style={{background:done?"#dcfce7":cfg.bg,color:done?"#15803d":cfg.color,border:done?"1px solid #86efac":"1px solid "+cfg.color+"33",borderRadius:5,padding:"1px 5px",fontSize:9.5,fontWeight:700,letterSpacing:.2,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:3,lineHeight:1.3,fontFamily:"'Inter',system-ui,sans-serif"}}>
-                      {done&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                      {cfg.abbr}
+                // Agrupa por tipo
+                const byType={daily:[],weekly:[],planmes:[],plantri:[]};
+                _rits.forEach(function(r){if(byType[r.type])byType[r.type].push(r);});
+                const TYPE_CFG={
+                  daily:{abbr:"Daily",color:"#0ea5e9",bg:"#e0f2fe",singleAbbr:"Daily"},
+                  weekly:{abbr:"Weekly",color:"#7c3aed",bg:"#ede9fe",singleAbbr:"Weekly"},
+                  planmes:{abbr:"Planej. mês",color:"#f59e0b",bg:"#fef3c7",singleAbbr:"PM"},
+                  plantri:{abbr:"Planej. tri",color:"#dc2626",bg:"#fee2e2",singleAbbr:"PT"},
+                };
+                // Pra cada tipo, computa done = TODOS os rituais do grupo feitos
+                const groups=["daily","weekly","planmes","plantri"].filter(function(t){return byType[t].length>0;});
+                return <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:4}}>
+                  {groups.map(function(t){
+                    const arr=byType[t];
+                    const cfg=TYPE_CFG[t];
+                    const allDone=arr.every(function(r){return isRitualDone(r.key);});
+                    const someDone=arr.some(function(r){return isRitualDone(r.key);});
+                    const count=arr.length;
+                    // 1 só (daily/weekly) → mostra label completo. Vários → mostra "PM 6" agrupado.
+                    return <button key={t}
+                      title={cfg.abbr+(count>1?" — "+count+" itens":"")+(allDone?" · todos feitos":someDone?" · em andamento":" · pendente")}
+                      onClick={function(e){e.stopPropagation();
+                        if(count===1)setOpenRitual(arr[0]);
+                        else setOpenRitual({_group:true, type:t, items:arr, date:_dayIso, label:cfg.abbr+" · "+count+" pendentes"});
+                      }}
+                      style={{background:allDone?"#dcfce7":cfg.bg,color:allDone?"#166534":cfg.color,border:"none",borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700,letterSpacing:.1,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,lineHeight:1.4,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s"}}
+                      onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 2px 6px "+cfg.color+"33";}}
+                      onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="none";}}>
+                      {allDone&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      <span>{count===1?cfg.singleAbbr:cfg.singleAbbr+" "+count}</span>
                     </button>;
                   })}
                 </div>;
@@ -12849,10 +12867,52 @@ function PageCalendarioInterno({isMob}){
           </div>;
         }}
       />
-      {/* ── Modal de check do ritual ── */}
+      {/* ── Modal de check do ritual (single ou grupo) ── */}
       {openRitual&&<div onMouseDown={function(e){if(e.target===e.currentTarget)setOpenRitual(null);}}
         style={{position:"fixed",inset:0,zIndex:500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
-        <div style={{background:"#fff",borderRadius:16,padding:"22px 24px",maxWidth:440,width:"100%",boxShadow:"0 24px 60px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9"}}>
+        <div style={{background:"#fff",borderRadius:16,padding:"22px 24px",maxWidth:openRitual._group?540:440,width:"100%",boxShadow:"0 24px 60px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9",maxHeight:"85vh",overflow:"auto"}}>
+          {/* Se for GRUPO, renderiza lista de itens */}
+          {openRitual._group ? (function(){
+            const t=openRitual.type;
+            const _typeName=t==="planmes"?"Planejamento mensal":t==="plantri"?"Planejamento trimestral":t==="daily"?"Daily":"Weekly";
+            const _uName=(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||"";
+            const dateStr=(function(){const d=new Date(openRitual.date+"T12:00");return d.toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});})();
+            return <>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>{_typeName}</div>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:16,letterSpacing:-.2,marginBottom:3,lineHeight:1.3}}>{openRitual.items.length} clientes pra preencher</div>
+              <div style={{color:"#64748b",fontSize:12,marginBottom:18}}>{dateStr}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+                {openRitual.items.map(function(r){
+                  const done=isRitualDone(r.key);
+                  const info=done?window.__ritualsDone[r.key]:null;
+                  // Extrai nome do cliente do label "Planej. mensal · NomeCliente · Mês/Ano"
+                  const parts=String(r.label||"").split(" · ");
+                  const clienteName=parts[1]||r.label;
+                  const periodo=parts[2]||"";
+                  return <div key={r.key} style={{display:"flex",alignItems:"center",gap:12,background:done?"#f0fdf4":"#fff",border:"1px solid "+(done?"#bbf7d0":"#e2e8f0"),borderRadius:10,padding:"10px 14px"}}>
+                    <button onClick={function(){if(typeof toggleRitualDone==="function")toggleRitualDone(r.key,_uName,"");}}
+                      style={{width:22,height:22,borderRadius:6,background:done?"#16a34a":"#fff",border:"1.5px solid "+(done?"#16a34a":"#cbd5e1"),cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,padding:0,transition:"all .12s"}}>
+                      {done&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                    </button>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:done?"#166534":"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15,textDecoration:done?"line-through":"none"}}>{clienteName}</div>
+                      <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:2}}>
+                        {periodo}{info?" · feito por "+(info.done_by||"alguém"):""}
+                      </div>
+                    </div>
+                  </div>;
+                })}
+              </div>
+              <div style={{display:"flex",justifyContent:"flex-end",gap:8}}>
+                <button onClick={function(){setOpenRitual(null);}}
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 18px",fontWeight:600,fontSize:13,color:"#475569",cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>
+                  Fechar
+                </button>
+              </div>
+            </>;
+          })() : (function(){
+            // Single ritual (Daily/Weekly único) — comportamento antigo
+            return <>
           <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>
             {openRitual.type==="daily"?"Daily":openRitual.type==="weekly"?"Weekly":openRitual.type==="planmes"?"Planejamento mensal":"Planejamento trimestral"}
             {openRitual.hour?" · "+openRitual.hour:""}
@@ -12879,6 +12939,8 @@ function PageCalendarioInterno({isMob}){
               {isRitualDone(openRitual.key)?"Desmarcar":<><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Marcar como feito</>}
             </button>
           </div>
+            </>;
+          })()}
         </div>
       </div>}
 
@@ -47927,7 +47989,7 @@ function PlanEditModal({entry, setEntry, onSave, onClose}){
   function patch(k,v){ setEntry(function(p){return Object.assign({},p,{[k]:v});}); }
 
   return <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:PLAN_INTER}}
-    onClick={function(e){if(e.target===e.currentTarget)onClose();}}>
+    onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}>
     <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:580,maxHeight:"90vh",overflow:"auto",boxShadow:"0 30px 80px rgba(0,0,0,0.3)"}}>
       <div style={{padding:"18px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
