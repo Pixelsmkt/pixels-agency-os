@@ -12931,14 +12931,11 @@ function PageCalendarioInterno({isMob}){
   const MONTHS=["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const WEEKDAYS=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 
-  // ── Carrega marcos + eventos dos clientes ──
-  useEffect(function(){
-    if(typeof window==="undefined"||!window._sb){ setLoadingMarcos(false); return; }
-    let canceled=false;
-    // Marcos
+  // ── Carrega marcos + eventos dos clientes (com realtime sync) ──
+  function _reloadMarcos(){
+    if(typeof window==="undefined"||!window._sb)return;
     window._sb.from("client_milestones").select("*").order("date",{ascending:true}).then(function(r){
-      if(canceled) return;
-      if(!r||!r.data){ setLoadingMarcos(false); return; }
+      if(!r||!r.data) return;
       const map={};
       r.data.forEach(function(m){
         const cid=m.client_id;
@@ -12951,9 +12948,10 @@ function PageCalendarioInterno({isMob}){
       console.warn("[cal-interno marcos]",e&&e.message?e.message:e);
       setLoadingMarcos(false);
     });
-    // Eventos do cliente (registrados no Portal do Cliente)
+  }
+  function _reloadClientEvents(){
+    if(typeof window==="undefined"||!window._sb)return;
     window._sb.from("clients").select("client_id,client_events").then(function(res){
-      if(canceled) return;
       if(!res||!res.data) return;
       const map={};
       res.data.forEach(function(row){
@@ -12963,7 +12961,25 @@ function PageCalendarioInterno({isMob}){
       });
       setEventosByClient(map);
     }).catch(function(e){console.warn("[cal-interno eventos]",e&&e.message?e.message:e);});
-    return function(){canceled=true;};
+  }
+  useEffect(function(){
+    if(typeof window==="undefined"||!window._sb){ setLoadingMarcos(false); return; }
+    _reloadMarcos();
+    _reloadClientEvents();
+    // Realtime: sincroniza marcos criados/editados/apagados em outras telas (Portal, Estratégia > Marcos)
+    let chMarcos=null, chClients=null;
+    try{
+      chMarcos=window._sb.channel("cal-interno-marcos-rt")
+        .on("postgres_changes",{event:"*",schema:"public",table:"client_milestones"},function(){_reloadMarcos();})
+        .subscribe();
+      chClients=window._sb.channel("cal-interno-clients-rt")
+        .on("postgres_changes",{event:"UPDATE",schema:"public",table:"clients"},function(){_reloadClientEvents();})
+        .subscribe();
+    }catch(_){}
+    return function(){
+      if(chMarcos){try{window._sb.removeChannel(chMarcos);}catch(_){}}
+      if(chClients){try{window._sb.removeChannel(chClients);}catch(_){}}
+    };
   },[]);
 
   // ── Constrói lista de eventos do MÊS VISÍVEL ──
