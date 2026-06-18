@@ -12442,6 +12442,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   };
   const [color,setColor]=useState((initial&&initial.color)||_CAT_COLORS[(initial&&initial.category)||""]||"#0f172a");
   const [colorTouched,setColorTouched]=useState(!!(initial&&initial.color));
+  const [city,setCity]=useState((initial&&initial.city)||"");
   const [clientIds,setClientIds]=useState(function(){
     try{
       if(initial&&Array.isArray(initial.client_ids)&&initial.client_ids.length)return initial.client_ids.slice();
@@ -12485,6 +12486,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       category:category||null,
       client_id:clientId||null,
       client_ids:(clientIds&&clientIds.length)?clientIds:null,
+      city:city.trim()||null,
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
@@ -12497,7 +12499,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       captacao:"captacao",
       assinatura:"comercial",
     };
-    const _shouldSyncMarco=!!clientId&&clientIds.length===1&&!!category&&_CAT_TO_MARCO[category];
+    const _shouldSyncMarco=clientIds.length>0&&!!category&&_CAT_TO_MARCO[category];
     const q = isEdit
       ? window._sb.from("internal_events").update(payload).eq("id",initial.id).select().single()
       : window._sb.from("internal_events").insert(payload).select().single();
@@ -12519,30 +12521,68 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         }else{_doneSave();}
         return;
       }
-      // Tem cliente+categoria → criar/atualizar marco
-      // Bioter sempre fica em client_id="bioter" (mesmo unidade específica)
-      const _rootId=(clientId&&clientId.indexOf("bioter_")===0)?"bioter":clientId;
-      const _bioterUnit=(clientId&&clientId.indexOf("bioter_")===0)?clientId.slice("bioter_".length):null;
-      const _metrics=_bioterUnit?{unit:_bioterUnit,linked_event_id:_savedRow.id}:{linked_event_id:_savedRow.id};
-      const marcoPayload={
-        client_id:_rootId,
-        date:date,
-        type:_CAT_TO_MARCO[category],
-        title:title.trim(),
-        description:description.trim()||null,
-        metrics:_metrics,
-        created_by:payload.created_by||"",
-      };
-      const linkedId=initial&&initial.linked_milestone_id;
-      const marcoQ=linkedId
-        ? window._sb.from("client_milestones").update(marcoPayload).eq("id",linkedId).select().single()
-        : window._sb.from("client_milestones").insert(marcoPayload).select().single();
-      marcoQ.then(function(mr){
-        if(mr&&mr.error){console.warn("[marco sync]",mr.error);_doneSave();return;}
-        const newMarcoId=(mr&&mr.data&&mr.data.id)||linkedId;
-        // Salvar o linked_milestone_id no internal_event
-        window._sb.from("internal_events").update({linked_milestone_id:newMarcoId}).eq("id",_savedRow.id).then(function(){_doneSave();});
-      }).catch(function(e){console.warn("[marco sync exc]",e);_doneSave();});
+      // Tem cliente(s)+categoria → criar/atualizar marco PRA CADA CLIENTE
+      // Bioter sempre fica em client_id="bioter" (mesmo unidade específica), e a unit vai em metrics
+      const _descTxt=description.trim()||null;
+      function _marcoPayloadForClient(cid){
+        const _rootId=(cid&&cid.indexOf("bioter_")===0)?"bioter":cid;
+        const _bioterUnit=(cid&&cid.indexOf("bioter_")===0)?cid.slice("bioter_".length):null;
+        const _metrics=_bioterUnit?{unit:_bioterUnit,linked_event_id:_savedRow.id}:{linked_event_id:_savedRow.id};
+        return {
+          client_id:_rootId,
+          date:date,
+          type:_CAT_TO_MARCO[category],
+          title:title.trim(),
+          description:_descTxt,
+          metrics:_metrics,
+          created_by:payload.created_by||"",
+        };
+      }
+      // No modo edit, primeiro apaga marcos antigos vinculados pra evitar duplicação
+      // (porque podem ter mudado os clientes ou a categoria)
+      function _createAll(){
+        const _firstCid=clientIds[0];
+        const linkedId=initial&&initial.linked_milestone_id;
+        // Update do primeiro (se já tem linkedId) + insert dos demais
+        const _ops=[];
+        if(linkedId){
+          _ops.push(window._sb.from("client_milestones").update(_marcoPayloadForClient(_firstCid)).eq("id",linkedId).select().single());
+        }else{
+          _ops.push(window._sb.from("client_milestones").insert(_marcoPayloadForClient(_firstCid)).select().single());
+        }
+        // Insert dos clientes restantes (do segundo em diante)
+        for(let _i=1;_i<clientIds.length;_i++){
+          _ops.push(window._sb.from("client_milestones").insert(_marcoPayloadForClient(clientIds[_i])).select().single());
+        }
+        Promise.all(_ops).then(function(results){
+          const _errors=results.filter(function(r){return r&&r.error;});
+          if(_errors.length>0){
+            console.warn("[marco sync] errors:",_errors.map(function(r){return r.error;}));
+            if(typeof pixelsToast!=="undefined")pixelsToast.warning("Evento salvo, mas alguns marcos falharam: "+(_errors[0].error&&_errors[0].error.message||"erro desconhecido"));
+          }
+          const newMarcoId=(results[0]&&results[0].data&&results[0].data.id)||linkedId;
+          if(newMarcoId){
+            window._sb.from("internal_events").update({linked_milestone_id:newMarcoId}).eq("id",_savedRow.id).then(function(){_doneSave();});
+          }else{
+            _doneSave();
+          }
+        }).catch(function(e){console.warn("[marco sync exc]",e);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro no marco: "+(e.message||e));_doneSave();});
+      }
+      // No modo edit, apagar marcos órfãos primeiro (marcos com linked_event_id deste evento que não foram updateados)
+      if(isEdit){
+        window._sb.from("client_milestones").select("id").eq("metrics->>linked_event_id",String(_savedRow.id)).then(function(_old){
+          const _oldIds=(_old&&_old.data||[]).map(function(r){return r.id;});
+          const _keepId=initial&&initial.linked_milestone_id;
+          const _toDelete=_oldIds.filter(function(id){return id!==_keepId;});
+          if(_toDelete.length>0){
+            window._sb.from("client_milestones").delete().in("id",_toDelete).then(function(){_createAll();});
+          }else{
+            _createAll();
+          }
+        }).catch(function(){_createAll();});
+      }else{
+        _createAll();
+      }
     }).catch(function(e){setSaving(false);console.warn("[internal_events save]",e);});
   }
   function del(){
@@ -12678,6 +12718,18 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
               })}
         </div>
         {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — marco automático não será criado (só pra eventos com 1 cliente)</div>}
+      </div>
+
+      {/* Cidade (opcional) */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Cidade (opcional)</div>
+        <div style={{position:"relative"}}>
+          <span style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",color:"#94a3b8",pointerEvents:"none",display:"inline-flex"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          </span>
+          <input type="text" value={city} onChange={function(e){setCity(e.target.value);}} placeholder="Ex.: Curitiba, Pinhais..."
+            style={{width:"100%",padding:"10px 12px 10px 36px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}/>
+        </div>
       </div>
 
       {/* Descrição */}
@@ -13328,8 +13380,11 @@ function PageCalendarioInterno({isMob}){
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
                       {_clLogo
-                        ? <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"#fff",flexShrink:0,overflow:"hidden",padding:1}}>
+                        ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"#fff",flexShrink:0,overflow:"visible",padding:1}}>
                             <img src={_clLogo} alt={(_cl&&(_cl.name||_cl.nome))||""} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
+                            {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:12,height:12,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)"}}>
+                              {React.cloneElement(_catIcon,{width:7,height:7,strokeWidth:2.8})}
+                            </span>}
                           </span>
                         : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.22)",flexShrink:0}}>{_catIcon}</span>
                       }
