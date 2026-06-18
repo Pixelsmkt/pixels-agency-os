@@ -12418,6 +12418,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [hour,setHour]=useState((initial&&initial.hour)||"");
   const [recurrence,setRecurrence]=useState((initial&&initial.recurrence)||"");
   const [color,setColor]=useState((initial&&initial.color)||"#0f172a");
+  const [category,setCategory]=useState((initial&&initial.category)||"");
   const [saving,setSaving]=useState(false);
   // ESC fecha o modal (padrão de UX)
   useEffect(function(){
@@ -12436,6 +12437,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       hour:hour||null,
       recurrence:recurrence||null,
       color:color||null,
+      category:category||null,
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
@@ -12528,6 +12530,20 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
           })}
         </div>
       </div>
+      {/* Categoria */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Categoria</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          {[{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"assinatura",label:"Assinatura",color:"#16a34a"}].map(function(opt){
+            const sel=category===opt.id;
+            return <button key={opt.id||"none"} type="button" onClick={function(){setCategory(opt.id);}}
+              style={{flex:"1 1 calc(50% - 3px)",minWidth:0,background:sel?opt.color+"15":"#fff",border:"1px solid "+(sel?opt.color+"66":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?opt.color:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
+              {opt.label}
+            </button>;
+          })}
+        </div>
+      </div>
+
       {/* Cor */}
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Cor</div>
@@ -12614,6 +12630,12 @@ function PageCalendarioInterno({isMob}){
     const dDow=dateObj.getDay(); // 0=dom..6=sáb
     return internalEvents.filter(function(ev){
       if(!ev||!ev.date)return false;
+      // Aplica filtro de categoria do calendário
+      if(filterType==="assinaturas"&&ev.category!=="assinatura")return false;
+      if(filterType==="aniversarios"&&ev.category!=="aniversario")return false;
+      if(filterType==="eventos"&&ev.category==="assinatura")return false; // "Evento" exclui assinaturas
+      if(filterType==="marcos")return false; // só marcos, não eventos custom
+      if(filterType==="equipe"||filterType==="clientes")return false; // filtros legados
       if(ev.recurrence==="weekly"){
         // mesmo dia da semana, a partir da data original
         try{const start=new Date(ev.date+"T12:00");return start.getDay()===dDow && ev.date<=dIso;}catch(_){return false;}
@@ -12712,7 +12734,7 @@ function PageCalendarioInterno({isMob}){
     const _year=calMonth.getFullYear();
     const out=[];
     // Aniversários equipe (puxados de TEAM.birthday)
-    if(filterType==="todos"||filterType==="equipe"){
+    if(filterType==="todos"||filterType==="equipe"||filterType==="aniversarios"){
       (typeof TEAM!=="undefined"?TEAM:[]).forEach(function(u,i){
         const dm=_getTeamBdayDM(u.id,i);
         if(!dm) return;
@@ -12732,7 +12754,7 @@ function PageCalendarioInterno({isMob}){
       });
     }
     // Aniversários cliente
-    if(filterType==="todos"||filterType==="clientes"){
+    if(filterType==="todos"||filterType==="clientes"||filterType==="aniversarios"){
       (typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.status!=="interno";}).forEach(function(cl){
         const bdays=_getClientBdaysDM(cl.id);
         bdays.forEach(function(b){
@@ -12937,11 +12959,11 @@ function PageCalendarioInterno({isMob}){
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {[
-            {id:"todos",   label:"Todos",                          icoColor:"#64748b"},
-            {id:"equipe",  label:"Aniversários equipe",  count:teamCount,   icoColor:"#ec4899", icoType:"cake"},
-            {id:"clientes",label:"Aniversários clientes",count:clientCount, icoColor:"#f97316", icoType:"gift"},
-            {id:"marcos",  label:"Marcos",               count:marcoCount,  icoColor:"#0ea5e9", icoType:"flag"},
-            {id:"eventos", label:"Evento",               count:eventoCount, icoColor:"#a855f7", icoType:"calendar"},
+            {id:"todos",       label:"Todos",                                          icoColor:"#64748b"},
+            {id:"aniversarios",label:"Aniversários",  count:teamCount+clientCount, icoColor:"#ec4899", icoType:"cake"},
+            {id:"marcos",      label:"Marcos",        count:marcoCount,            icoColor:"#0ea5e9", icoType:"flag"},
+            {id:"eventos",     label:"Evento",        count:eventoCount,           icoColor:"#a855f7", icoType:"calendar"},
+            {id:"assinaturas", label:"Assinaturas",   count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="assinatura";}).length:0), icoColor:"#16a34a", icoType:"check"},
           ].map(function(o){
             const active=filterType===o.id;
             return <button key={o.id} onClick={function(){setFilterType(o.id);}}
