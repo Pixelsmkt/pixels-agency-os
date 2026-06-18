@@ -12420,6 +12420,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [color,setColor]=useState((initial&&initial.color)||"#0f172a");
   const [category,setCategory]=useState((initial&&initial.category)||"");
   const [saving,setSaving]=useState(false);
+  const _hRef=useRef(null);
   // ESC fecha o modal (padrão de UX)
   useEffect(function(){
     const onKey=function(e){if(e.key==="Escape"){onClose&&onClose();}};
@@ -12492,29 +12493,17 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         <div>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Hora (opc.)</div>
           {/* Hora moderna: barra inteira clicável que dispara o time picker nativo */}
-          {(function(){
-            const _hRef=React.useRef(null);
-            function _openTime(){
-              try{
-                if(_hRef.current){
-                  if(typeof _hRef.current.showPicker==="function")_hRef.current.showPicker();
-                  else _hRef.current.focus();
-                }
-              }catch(_){if(_hRef.current)_hRef.current.focus();}
-            }
-            const hasH=!!hour;
-            return <div onClick={_openTime}
-              style={{display:"inline-flex",alignItems:"center",gap:8,background:hasH?"#fff":"#fafbfc",border:"1px solid "+(hasH?"#7c3aed33":"#e2e8f0"),borderRadius:10,padding:"0 13px",height:38,fontSize:13,color:hasH?"#0f172a":"#94a3b8",fontWeight:hasH?700:600,fontFamily:"'Inter',system-ui,sans-serif",cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",width:"100%",boxSizing:"border-box"}}
-              onMouseEnter={function(e){e.currentTarget.style.borderColor="#7c3aed66";e.currentTarget.style.background="#fff";}}
-              onMouseLeave={function(e){e.currentTarget.style.borderColor=hasH?"#7c3aed33":"#e2e8f0";e.currentTarget.style.background=hasH?"#fff":"#fafbfc";}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hasH?"#7c3aed":"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-              </svg>
-              <span style={{whiteSpace:"nowrap"}}>{hasH?hour:"--:--"}</span>
-              <input ref={_hRef} type="time" value={hour} onChange={function(e){setHour(e.target.value);}}
-                style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
-            </div>;
-          })()}
+          <div onClick={function(){try{if(_hRef.current){if(typeof _hRef.current.showPicker==="function")_hRef.current.showPicker();else _hRef.current.focus();}}catch(_){if(_hRef.current)_hRef.current.focus();}}}
+            style={{display:"inline-flex",alignItems:"center",gap:8,background:hour?"#fff":"#fafbfc",border:"1px solid "+(hour?"#7c3aed33":"#e2e8f0"),borderRadius:10,padding:"0 13px",height:38,fontSize:13,color:hour?"#0f172a":"#94a3b8",fontWeight:hour?700:600,fontFamily:"'Inter',system-ui,sans-serif",cursor:"pointer",transition:"all .12s",userSelect:"none",position:"relative",fontFeatureSettings:"'tnum'",width:"100%",boxSizing:"border-box"}}
+            onMouseEnter={function(e){e.currentTarget.style.borderColor="#7c3aed66";e.currentTarget.style.background="#fff";}}
+            onMouseLeave={function(e){e.currentTarget.style.borderColor=hour?"#7c3aed33":"#e2e8f0";e.currentTarget.style.background=hour?"#fff":"#fafbfc";}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={hour?"#7c3aed":"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span style={{whiteSpace:"nowrap"}}>{hour||"--:--"}</span>
+            <input ref={_hRef} type="time" value={hour} onChange={function(e){setHour(e.target.value);}}
+              style={{position:"absolute",left:0,top:0,width:"100%",height:"100%",opacity:0,pointerEvents:"none"}}/>
+          </div>
         </div>
       </div>
       {/* Recorrência */}
@@ -12534,10 +12523,10 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Categoria</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {[{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"assinatura",label:"Assinatura",color:"#16a34a"}].map(function(opt){
+          {[{id:"",label:"Sem categoria",color:"#64748b"},{id:"aniversario",label:"Aniversário",color:"#ec4899"},{id:"evento",label:"Evento",color:"#a855f7"},{id:"feira",label:"Feira",color:"#f59e0b"},{id:"assinatura",label:"Assinatura",color:"#16a34a"}].map(function(opt){
             const sel=category===opt.id;
             return <button key={opt.id||"none"} type="button" onClick={function(){setCategory(opt.id);}}
-              style={{flex:"1 1 calc(50% - 3px)",minWidth:0,background:sel?opt.color+"15":"#fff",border:"1px solid "+(sel?opt.color+"66":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?opt.color:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
+              style={{flex:"1 1 calc(33% - 4px)",minWidth:100,background:sel?opt.color+"15":"#fff",border:"1px solid "+(sel?opt.color+"66":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?opt.color:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
               {opt.label}
             </button>;
           })}
@@ -12632,10 +12621,11 @@ function PageCalendarioInterno({isMob}){
       if(!ev||!ev.date)return false;
       // Aplica filtro de categoria do calendário
       if(filterType==="assinaturas"&&ev.category!=="assinatura")return false;
+      if(filterType==="feiras"&&ev.category!=="feira")return false;
       if(filterType==="aniversarios"&&ev.category!=="aniversario")return false;
-      if(filterType==="eventos"&&ev.category==="assinatura")return false; // "Evento" exclui assinaturas
-      if(filterType==="marcos")return false; // só marcos, não eventos custom
-      if(filterType==="equipe"||filterType==="clientes")return false; // filtros legados
+      if(filterType==="eventos"&&(ev.category==="assinatura"||ev.category==="feira"))return false;
+      if(filterType==="marcos")return false;
+      if(filterType==="equipe"||filterType==="clientes")return false;
       if(ev.recurrence==="weekly"){
         // mesmo dia da semana, a partir da data original
         try{const start=new Date(ev.date+"T12:00");return start.getDay()===dDow && ev.date<=dIso;}catch(_){return false;}
@@ -12963,6 +12953,7 @@ function PageCalendarioInterno({isMob}){
             {id:"aniversarios",label:"Aniversários",  count:teamCount+clientCount, icoColor:"#ec4899", icoType:"cake"},
             {id:"marcos",      label:"Marcos",        count:marcoCount,            icoColor:"#0ea5e9", icoType:"flag"},
             {id:"eventos",     label:"Evento",        count:eventoCount,           icoColor:"#a855f7", icoType:"calendar"},
+            {id:"feiras",      label:"Feira",         count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="feira";}).length:0),     icoColor:"#f59e0b", icoType:"tent"},
             {id:"assinaturas", label:"Assinaturas",   count:(typeof internalEvents!=="undefined"?internalEvents.filter(function(e){return e&&e.category==="assinatura";}).length:0), icoColor:"#16a34a", icoType:"check"},
           ].map(function(o){
             const active=filterType===o.id;
@@ -12972,6 +12963,8 @@ function PageCalendarioInterno({isMob}){
               {o.icoType==="gift" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>}
               {o.icoType==="flag" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>}
               {o.icoType==="calendar" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
+              {o.icoType==="check" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>}
+              {o.icoType==="tent" && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={active?"#fff":o.icoColor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 21L12 3l8.5 18"/><path d="M12 3v18"/><path d="M12 13l-5 8"/><path d="M12 13l5 8"/></svg>}
               {o.label}
               {typeof o.count==="number"&&<span style={{background:active?"rgba(255,255,255,0.22)":"#f1f5f9",color:active?"#fff":"#64748b",borderRadius:99,padding:"1px 8px",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{o.count}</span>}
             </button>;
@@ -12991,8 +12984,8 @@ function PageCalendarioInterno({isMob}){
           const _dayIso=date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
           return <div
             onClick={function(e){setOpenNewEvent({date:_dayIso});}}
-            onMouseEnter={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn)btn.style.opacity="1";}}
-            onMouseLeave={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn)btn.style.opacity="0";}}
+            onMouseEnter={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn){btn.style.opacity="1";btn.style.transform="scale(1)";}}}
+            onMouseLeave={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn){btn.style.opacity="0";btn.style.transform="scale(0.85)";}}}
             onDragOver={function(e){if(dragItem){e.preventDefault();e.currentTarget.style.background="#faf5ff";}}}
             onDragLeave={function(e){e.currentTarget.style.background="";}}
             onDrop={function(e){
@@ -13001,10 +12994,10 @@ function PageCalendarioInterno({isMob}){
               if(dragItem){ _moveItemTo(dragItem, _dayIso); setDragItem(null); }
             }}
             style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s",cursor:"pointer",position:"relative"}}>
-            {/* Botão "+" sutil que aparece no hover (estilo Google Agenda) */}
+            {/* Botão "+" moderno que aparece no hover (estilo Google Agenda) */}
             <div data-addbtn aria-label="Adicionar evento"
-              style={{position:"absolute",top:5,right:5,width:20,height:20,borderRadius:6,background:"#7c3aed",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transition:"opacity .12s",pointerEvents:"none",boxShadow:"0 2px 6px rgba(124,58,237,0.4)",zIndex:2}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              style={{position:"absolute",top:6,right:6,width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transform:"scale(0.85)",transition:"all .18s cubic-bezier(.4,0,.2,1)",pointerEvents:"none",boxShadow:"0 4px 12px rgba(124,58,237,0.35), 0 0 0 2px #fff",zIndex:2}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </div>
             <CalendarDayNumber day={date} isToday={isToday}/>
             <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:5,overflow:"hidden",flex:1}}>
