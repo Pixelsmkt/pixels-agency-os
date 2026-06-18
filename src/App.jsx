@@ -13416,15 +13416,15 @@ function PageCalendarioInterno({isMob}){
                       {_multiClients
                         ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.95)",color:_evColor,flexShrink:0,fontSize:9.5,fontWeight:800,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>
                             {_evCids.length}
-                            {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:11,height:11,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)"}}>
-                              {React.cloneElement(_catIcon,{width:6,height:6,strokeWidth:3})}
+                            {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:11,height:11,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)",overflow:"hidden"}}>
+                              <span style={{display:"inline-flex",transform:"scale(0.55)",transformOrigin:"center"}}>{_catIcon}</span>
                             </span>}
                           </span>
                         : _clLogo
                           ? <span style={{position:"relative",display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"#fff",flexShrink:0,overflow:"visible",padding:1}}>
                               <img src={_clLogo} alt={(_cl&&(_cl.name||_cl.nome))||""} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",display:"block"}}/>
-                              {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:12,height:12,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)"}}>
-                                {React.cloneElement(_catIcon,{width:7,height:7,strokeWidth:2.8})}
+                              {_catIcon&&<span style={{position:"absolute",bottom:-3,right:-3,width:12,height:12,borderRadius:"50%",background:_evColor,border:"1.5px solid #fff",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 1px 3px rgba(15,23,42,0.25)",overflow:"hidden"}}>
+                                <span style={{display:"inline-flex",transform:"scale(0.65)",transformOrigin:"center"}}>{_catIcon}</span>
                               </span>}
                             </span>
                           : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:5,background:"rgba(255,255,255,0.22)",flexShrink:0}}>{_catIcon}</span>
