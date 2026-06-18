@@ -12933,12 +12933,9 @@ function PageCalendarioInterno({isMob}){
           const isToday=date.toDateString()===new Date().toDateString();
           const _dayIso=date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
           return <div
-            onClick={function(e){
-              // Só abre criação se clicou na area vazia da celula (nao em pills/eventos)
-              if(e.target===e.currentTarget||e.target.tagName==="DIV"&&e.target.children.length===0){
-                setOpenNewEvent({date:_dayIso});
-              }
-            }}
+            onClick={function(e){setOpenNewEvent({date:_dayIso});}}
+            onMouseEnter={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn)btn.style.opacity="1";}}
+            onMouseLeave={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn)btn.style.opacity="0";}}
             onDragOver={function(e){if(dragItem){e.preventDefault();e.currentTarget.style.background="#faf5ff";}}}
             onDragLeave={function(e){e.currentTarget.style.background="";}}
             onDrop={function(e){
@@ -12946,12 +12943,17 @@ function PageCalendarioInterno({isMob}){
               e.currentTarget.style.background="";
               if(dragItem){ _moveItemTo(dragItem, _dayIso); setDragItem(null); }
             }}
-            style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s",cursor:"pointer"}}>
+            style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s",cursor:"pointer",position:"relative"}}>
+            {/* Botão "+" sutil que aparece no hover (estilo Google Agenda) */}
+            <div data-addbtn aria-label="Adicionar evento"
+              style={{position:"absolute",top:5,right:5,width:20,height:20,borderRadius:6,background:"#7c3aed",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transition:"opacity .12s",pointerEvents:"none",boxShadow:"0 2px 6px rgba(124,58,237,0.4)",zIndex:2}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </div>
             <CalendarDayNumber day={date} isToday={isToday}/>
             <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:5,overflow:"hidden",flex:1}}>
               {evs.slice(0,2).map(function(ev){
                 const isMarco = ev.kind==="marco";
-                const onClick = isMarco ? function(){setOpenMarco({marco:ev._marco, cl:ev._cl});} : null;
+                const onClick = isMarco ? function(e){if(e)e.stopPropagation();setOpenMarco({marco:ev._marco, cl:ev._cl});} : null;
                 // Ícone SVG por tipo de evento
                 const _evIcon = ev.kind==="equipe"
                   ? <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>
@@ -12964,8 +12966,8 @@ function PageCalendarioInterno({isMob}){
                 const _clLogo = ev._cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[ev._cl.id];
                 const isEvento = ev.kind==="evento";
                 const _isClickable = isMarco || isEvento;
-                const _click = isMarco ? function(){setOpenMarco({marco:ev._marco, cl:ev._cl});}
-                              : isEvento ? function(){setOpenEvento({evento:ev._evento, cl:ev._cl});}
+                const _click = isMarco ? function(e){if(e)e.stopPropagation();setOpenMarco({marco:ev._marco, cl:ev._cl});}
+                              : isEvento ? function(e){if(e)e.stopPropagation();setOpenEvento({evento:ev._evento, cl:ev._cl});}
                               : null;
                 const _draggableKind = ev.kind==="marco" ? "marco" : ev.kind==="evento" ? "evento" : null;
                 const _draggable = !!_draggableKind;
