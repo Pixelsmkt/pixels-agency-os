@@ -12412,6 +12412,128 @@ function _getClientBdaysDM(clientId){
   }catch(e){return [];}
 }
 
+function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
+  const [title,setTitle]=useState((initial&&initial.title)||"");
+  const [description,setDescription]=useState((initial&&initial.description)||"");
+  const [date,setDate]=useState((initial&&initial.date)||new Date().toISOString().slice(0,10));
+  const [hour,setHour]=useState((initial&&initial.hour)||"");
+  const [recurrence,setRecurrence]=useState((initial&&initial.recurrence)||"");
+  const [color,setColor]=useState((initial&&initial.color)||"#0f172a");
+  const [saving,setSaving]=useState(false);
+  function save(){
+    if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
+    if(!window._sb){if(typeof pixelsToast!=="undefined")pixelsToast.error("Sem conexão com Supabase");return;}
+    setSaving(true);
+    const payload={
+      title:title.trim(),
+      description:description.trim()||null,
+      date:date,
+      hour:hour||null,
+      recurrence:recurrence||null,
+      color:color||null,
+      created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
+      updated_at:new Date().toISOString(),
+    };
+    const q = isEdit
+      ? window._sb.from("internal_events").update(payload).eq("id",initial.id)
+      : window._sb.from("internal_events").insert(payload);
+    q.then(function(r){
+      setSaving(false);
+      if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
+      if(typeof pixelsToast!=="undefined")pixelsToast.success(isEdit?"Evento atualizado!":"Evento criado!");
+      onSaved&&onSaved();
+    }).catch(function(e){setSaving(false);console.warn("[internal_events save]",e);});
+  }
+  function del(){
+    if(!isEdit||!initial||!initial.id)return;
+    if(!window.confirm("Apagar este evento?"))return;
+    if(!window._sb)return;
+    window._sb.from("internal_events").delete().eq("id",initial.id).then(function(){
+      if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.");
+      onDeleted&&onDeleted();
+    }).catch(function(e){console.warn("[internal_events del]",e);});
+  }
+  const PURPLE="#7c3aed";
+  const COLORS=["#0f172a","#7c3aed","#0ea5e9","#16a34a","#f59e0b","#dc2626","#ec4899","#0891b2"];
+  return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}
+    style={{position:"fixed",inset:0,zIndex:600,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:16,paddingTop:80,fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div style={{background:"#fff",borderRadius:18,padding:"24px 26px 22px",maxWidth:520,width:"100%",boxShadow:"0 30px 70px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9",maxHeight:"85vh",overflow:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.5,textTransform:"uppercase"}}>Calendário interno</div>
+          <div style={{color:"#0f172a",fontWeight:700,fontSize:17,letterSpacing:-.3,marginTop:2}}>{isEdit?"Editar evento":"Novo evento"}</div>
+        </div>
+        <button onClick={onClose}
+          style={{background:"#f1f5f9",border:"none",borderRadius:9,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer"}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      {/* Título */}
+      <input value={title} onChange={function(e){setTitle(e.target.value);}}
+        placeholder="Adicionar título do evento" autoFocus
+        style={{width:"100%",padding:"11px 14px",border:"1px solid #e2e8f0",borderRadius:11,fontSize:14,fontWeight:600,boxSizing:"border-box",outline:"none",fontFamily:"inherit",letterSpacing:-.15,marginBottom:14}}/>
+      {/* Data + Hora */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 140px",gap:10,marginBottom:14}}>
+        <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Data</div>
+          <input type="date" value={date} onChange={function(e){setDate(e.target.value);}}
+            style={{width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+        </div>
+        <div>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Hora (opc.)</div>
+          <input type="time" value={hour} onChange={function(e){setHour(e.target.value);}}
+            style={{width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
+        </div>
+      </div>
+      {/* Recorrência */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Recorrência</div>
+        <div style={{display:"flex",gap:6}}>
+          {[{id:"",label:"Não repete"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
+            const sel=recurrence===opt.id;
+            return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id);}}
+              style={{flex:1,background:sel?PURPLE+"15":"#fff",border:"1px solid "+(sel?PURPLE+"55":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?PURPLE:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
+              {opt.label}
+            </button>;
+          })}
+        </div>
+      </div>
+      {/* Cor */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Cor</div>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+          {COLORS.map(function(c){
+            const sel=color===c;
+            return <button key={c} type="button" onClick={function(){setColor(c);}}
+              style={{width:28,height:28,borderRadius:"50%",background:c,border:sel?"2.5px solid #0f172a":"2.5px solid transparent",boxShadow:sel?"0 0 0 2px #fff inset":"none",cursor:"pointer",padding:0,transition:"transform .12s"}}/>;
+          })}
+        </div>
+      </div>
+      {/* Descrição */}
+      <div style={{marginBottom:18}}>
+        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Descrição (opcional)</div>
+        <textarea value={description} onChange={function(e){setDescription(e.target.value);}}
+          placeholder="Detalhes do evento..." rows={3}
+          style={{width:"100%",padding:"10px 13px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+      </div>
+      {/* Footer */}
+      <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+        {isEdit
+          ? <button onClick={del} style={{background:"#fff",border:"1px solid #fecaca",borderRadius:10,padding:"9px 16px",fontWeight:600,fontSize:13,color:"#dc2626",cursor:"pointer",fontFamily:"inherit"}}>Apagar</button>
+          : <span/>
+        }
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={onClose} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"9px 18px",fontWeight:600,fontSize:13,color:"#475569",cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+          <button onClick={save} disabled={saving}
+            style={{background:saving?"#cbd5e1":"linear-gradient(135deg,"+PURPLE+",#6d28d9)",border:"none",borderRadius:10,padding:"9px 22px",fontWeight:700,fontSize:13,color:"#fff",cursor:saving?"not-allowed":"pointer",fontFamily:"inherit",boxShadow:saving?"none":"0 4px 12px "+PURPLE+"33"}}>
+            {saving?"Salvando...":(isEdit?"Salvar":"Criar evento")}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
 function PageCalendarioInterno({isMob}){
   const [calMonth,setCalMonth]=useState(new Date());
   const [filterType,setFilterType]=useState("todos"); // "todos"|"equipe"|"clientes"|"marcos"
@@ -12430,7 +12552,48 @@ function PageCalendarioInterno({isMob}){
     return function(){window.removeEventListener("pixels:rituais-updated",h);};
   },[]);
   // Modal de check de ritual
-  const [openRitual,setOpenRitual]=useState(null); // o objeto ritual
+  const [openRitual,setOpenRitual]=useState(null);
+  // ── Eventos custom da equipe (internal_events) ──
+  const [internalEvents,setInternalEvents]=useState([]);
+  const [openNewEvent,setOpenNewEvent]=useState(null); // {date:"YYYY-MM-DD"} ou null
+  const [editingEvent,setEditingEvent]=useState(null); // evento sendo editado
+  function _reloadInternalEvents(){
+    if(typeof window==="undefined"||!window._sb)return;
+    window._sb.from("internal_events").select("*").order("date",{ascending:true}).then(function(r){
+      if(!r||!r.data)return;
+      setInternalEvents(r.data);
+    }).catch(function(e){console.warn("[internal_events]",e&&e.message?e.message:e);});
+  }
+  useEffect(function(){
+    _reloadInternalEvents();
+    // Realtime: se outro usuário criar/editar/apagar, recarrega
+    if(typeof window==="undefined"||!window._sb)return;
+    let ch=null;
+    try{
+      ch=window._sb.channel("internal-events-rt")
+        .on("postgres_changes",{event:"*",schema:"public",table:"internal_events"},function(){_reloadInternalEvents();})
+        .subscribe();
+    }catch(_){}
+    return function(){if(ch){try{window._sb.removeChannel(ch);}catch(_){}}}
+  },[]);
+  // Pra um determinado dia, retorna lista de internal_events que caem nele (considerando recorrência)
+  function _eventsOnDay(dateObj){
+    const dIso=dateObj.getFullYear()+"-"+String(dateObj.getMonth()+1).padStart(2,"0")+"-"+String(dateObj.getDate()).padStart(2,"0");
+    const dm=String(dateObj.getMonth()+1).padStart(2,"0")+"-"+String(dateObj.getDate()).padStart(2,"0");
+    const dDay=dateObj.getDate();
+    return internalEvents.filter(function(ev){
+      if(!ev||!ev.date)return false;
+      if(ev.recurrence==="monthly"){
+        // mesmo dia do mês
+        return Number(ev.date.slice(8,10))===dDay && ev.date<=dIso;
+      }
+      if(ev.recurrence==="yearly"){
+        // mesmo MM-DD
+        return ev.date.slice(5,10)===dm && ev.date<=dIso;
+      }
+      return ev.date===dIso;
+    });
+  }
   function _moveItemTo(item, targetDateIso){
     if(!item || !targetDateIso) return;
     if(!window._sb) return;
@@ -12770,6 +12933,12 @@ function PageCalendarioInterno({isMob}){
           const isToday=date.toDateString()===new Date().toDateString();
           const _dayIso=date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
           return <div
+            onClick={function(e){
+              // Só abre criação se clicou na area vazia da celula (nao em pills/eventos)
+              if(e.target===e.currentTarget||e.target.tagName==="DIV"&&e.target.children.length===0){
+                setOpenNewEvent({date:_dayIso});
+              }
+            }}
             onDragOver={function(e){if(dragItem){e.preventDefault();e.currentTarget.style.background="#faf5ff";}}}
             onDragLeave={function(e){e.currentTarget.style.background="";}}
             onDrop={function(e){
@@ -12777,7 +12946,7 @@ function PageCalendarioInterno({isMob}){
               e.currentTarget.style.background="";
               if(dragItem){ _moveItemTo(dragItem, _dayIso); setDragItem(null); }
             }}
-            style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s"}}>
+            style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s",cursor:"pointer"}}>
             <CalendarDayNumber day={date} isToday={isToday}/>
             <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:5,overflow:"hidden",flex:1}}>
               {evs.slice(0,2).map(function(ev){
@@ -12824,6 +12993,23 @@ function PageCalendarioInterno({isMob}){
                 </div>;
               })}
               {evs.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textAlign:"left",paddingLeft:4,marginTop:1}}>+{evs.length-2} mais</div>}
+              {/* ── Eventos custom da equipe (internal_events) ── */}
+              {(function(){
+                const _myEvs=_eventsOnDay(date);
+                if(_myEvs.length===0)return null;
+                return <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:3}}>
+                  {_myEvs.slice(0,2).map(function(ev){
+                    const _isRec=ev.recurrence==="monthly"||ev.recurrence==="yearly";
+                    return <div key={ev.id+"-"+_dayIso} onClick={function(e){e.stopPropagation();setEditingEvent(ev);}}
+                      title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="monthly"?"mensal":"anual"):"")}
+                      style={{background:ev.color||"#0f172a",color:"#fff",borderRadius:7,padding:"3px 8px",fontSize:11,fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                      {_isRec&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>}
+                      <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ev.title}</span>
+                    </div>;
+                  })}
+                  {_myEvs.length>2&&<div style={{color:"#94a3b8",fontSize:10,fontWeight:600,paddingLeft:4}}>+{_myEvs.length-2} mais</div>}
+                </div>;
+              })()}
               {/* ── Rituais do dia — agrupados por tipo, pills minimalistas ── */}
               {(function(){
                 if(typeof getRituaisDoMes!=="function")return null;
@@ -12854,7 +13040,7 @@ function PageCalendarioInterno({isMob}){
                         if(count===1)setOpenRitual(arr[0]);
                         else setOpenRitual({_group:true, type:t, items:arr, date:_dayIso, label:cfg.abbr+" · "+count+" pendentes"});
                       }}
-                      style={{background:allDone?"#dcfce7":cfg.bg,color:allDone?"#166534":cfg.color,border:"none",borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:700,letterSpacing:.1,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,lineHeight:1.4,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s"}}
+                      style={{background:allDone?"#dcfce7":cfg.bg,color:allDone?"#166534":cfg.color,border:"none",borderRadius:6,padding:"2px 7px",fontSize:10,fontWeight:600,letterSpacing:.1,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,lineHeight:1.4,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s"}}
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 2px 6px "+cfg.color+"33";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="none";}}>
                       {allDone&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
@@ -12867,6 +13053,18 @@ function PageCalendarioInterno({isMob}){
           </div>;
         }}
       />
+      {/* ── Modal de NOVO/EDITAR evento custom ── */}
+      {(openNewEvent||editingEvent)&&(function(){
+        const isEdit=!!editingEvent;
+        const initial=isEdit?editingEvent:openNewEvent;
+        return <_InternalEventModal
+          initial={initial}
+          isEdit={isEdit}
+          onClose={function(){setOpenNewEvent(null);setEditingEvent(null);}}
+          onSaved={function(){setOpenNewEvent(null);setEditingEvent(null);_reloadInternalEvents();}}
+          onDeleted={function(){setOpenNewEvent(null);setEditingEvent(null);_reloadInternalEvents();}}
+        />;
+      })()}
       {/* ── Modal de check do ritual (single ou grupo) ── */}
       {openRitual&&<div onMouseDown={function(e){if(e.target===e.currentTarget)setOpenRitual(null);}}
         style={{position:"fixed",inset:0,zIndex:500,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"'Inter',system-ui,sans-serif"}}>
