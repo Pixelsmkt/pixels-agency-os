@@ -12431,7 +12431,14 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   };
   const [color,setColor]=useState((initial&&initial.color)||_CAT_COLORS[(initial&&initial.category)||""]||"#0f172a");
   const [colorTouched,setColorTouched]=useState(!!(initial&&initial.color));
-  const [clientId,setClientId]=useState((initial&&initial.client_id)||"");
+  const [clientIds,setClientIds]=useState(function(){
+    try{
+      if(initial&&Array.isArray(initial.client_ids)&&initial.client_ids.length)return initial.client_ids.slice();
+      if(initial&&typeof initial.client_ids==="string"&&initial.client_ids){const _p=JSON.parse(initial.client_ids);if(Array.isArray(_p))return _p;}
+    }catch(_){}
+    return (initial&&initial.client_id)?[initial.client_id]:[];
+  });
+  const clientId = clientIds[0] || ""; // legado pra cor automática + marco quando 1 cliente
   const [saving,setSaving]=useState(false);
   const _hRef=useRef(null);
   // Auto-set cor ao trocar categoria (a não ser que usuário já mexeu na cor)
@@ -12466,6 +12473,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       color:color||null,
       category:category||null,
       client_id:clientId||null,
+      client_ids:(clientIds&&clientIds.length)?clientIds:null,
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
@@ -12478,7 +12486,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       captacao:"captacao",
       assinatura:"comercial",
     };
-    const _shouldSyncMarco=!!clientId&&!!category&&_CAT_TO_MARCO[category];
+    const _shouldSyncMarco=!!clientId&&clientIds.length===1&&!!category&&_CAT_TO_MARCO[category];
     const q = isEdit
       ? window._sb.from("internal_events").update(payload).eq("id",initial.id).select().single()
       : window._sb.from("internal_events").insert(payload).select().single();
@@ -12621,24 +12629,42 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         </div>
       </div>
 
-      {/* Cliente vinculado (opcional) */}
+      {/* Cliente(s) vinculados (opcional, multi-select) */}
       <div style={{marginBottom:14}}>
-        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Cliente (opcional)</div>
-        <select value={clientId} onChange={function(e){
-          const newId=e.target.value;
-          setClientId(newId);
-          // Cor automática do cliente, a não ser que usuário já mexeu OU categoria é assinatura
-          if(!colorTouched&&newId&&typeof CLIENTS!=="undefined"){
-            const _cl=CLIENTS.find(function(c){return c.id===newId;});
-            if(_cl&&_cl.color&&category!=="assinatura"){setColor(_cl.color);}
-          }
-        }}
-          style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:10,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff",cursor:"pointer",appearance:"none",WebkitAppearance:"none",backgroundImage:"url(\"data:image/svg+xml;charset=utf-8,%3Csvg xmlns=\u0027http://www.w3.org/2000/svg\u0027 width=\u002712\u0027 height=\u002712\u0027 viewBox=\u00270 0 24 24\u0027 fill=\u0027none\u0027 stroke=\u0027%2364748b\u0027 stroke-width=\u00272.5\u0027 stroke-linecap=\u0027round\u0027 stroke-linejoin=\u0027round\u0027%3E%3Cpolyline points=\u00276 9 12 15 18 9\u0027/%3E%3C/svg%3E\")",backgroundRepeat:"no-repeat",backgroundPosition:"right 12px center",paddingRight:36}}>
-          <option value="">Sem cliente</option>
-          {(typeof CLIENTS!=="undefined"?CLIENTS:[]).map(function(cl){
-            return <option key={cl.id} value={cl.id}>{cl.name||cl.nome||cl.id}</option>;
-          })}
-        </select>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+          <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Clientes (opcional)</div>
+          {(function(){
+            const _all=(typeof CLIENTS!=="undefined"?CLIENTS:[]);
+            const _allSel=_all.length>0&&clientIds.length===_all.length;
+            return <div style={{display:"flex",gap:6}}>
+              <button type="button" onClick={function(){setClientIds(_allSel?[]:_all.map(function(c){return c.id;}));}} style={{background:_allSel?"#7c3aed":"#f1f5f9",color:_allSel?"#fff":"#475569",border:"none",borderRadius:6,padding:"3px 10px",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",letterSpacing:.2,textTransform:"uppercase"}}>{_allSel?"Limpar":"Todos"}</button>
+            </div>;
+          })()}
+        </div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",border:"1px solid #e2e8f0",borderRadius:10,padding:8,background:"#fff",maxHeight:160,overflowY:"auto"}}>
+          {(typeof CLIENTS!=="undefined"?CLIENTS:[]).length===0
+            ? <div style={{color:"#94a3b8",fontSize:12,padding:"6px 4px"}}>Sem clientes cadastrados</div>
+            : (typeof CLIENTS!=="undefined"?CLIENTS:[]).map(function(cl){
+                const _sel=clientIds.indexOf(cl.id)>=0;
+                const _cor=cl.color||"#0f172a";
+                return <button key={cl.id} type="button" onClick={function(){
+                  let _next;
+                  if(_sel){_next=clientIds.filter(function(x){return x!==cl.id;});}
+                  else{_next=clientIds.concat([cl.id]);}
+                  setClientIds(_next);
+                  // Cor automática do cliente: se só 1 cliente e usuário não mexeu na cor e categoria não é fixa
+                  if(!colorTouched&&_next.length===1&&category!=="assinatura"&&category!=="operacional"&&category!=="gestao_midia"){
+                    setColor(_cor);
+                  }
+                }}
+                  style={{background:_sel?_cor+"18":"#fff",border:"1px solid "+(_sel?_cor+"66":"#e2e8f0"),borderRadius:8,padding:"6px 10px",fontSize:12,fontWeight:_sel?700:600,color:_sel?_cor:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:_cor,opacity:_sel?1:.5,flexShrink:0}}/>
+                  <span>{cl.name||cl.nome||cl.id}</span>
+                  {_sel&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
+                </button>;
+              })}
+        </div>
+        {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — marco automático não será criado (só pra eventos com 1 cliente)</div>}
       </div>
 
       {/* Descrição */}
@@ -13166,7 +13192,11 @@ function PageCalendarioInterno({isMob}){
                   {_myEvs.slice(0,2).map(function(ev){
                     const _isRec=ev.recurrence==="weekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly";
                     // Cor: assinaturas SEMPRE roxo Pixels. Senão cor do cliente vinculado. Senão cor manual. Senão cor categoria. Senão preto.
-                    const _cl=(ev.client_id&&typeof CLIENTS!=="undefined")?CLIENTS.find(function(c){return c.id===ev.client_id;}):null;
+                    // Lê array client_ids primeiro, fallback pro client_id legado. Renderiza cor/nome do primeiro.
+                    const _evCids=(function(){try{if(Array.isArray(ev.client_ids))return ev.client_ids;if(typeof ev.client_ids==="string"&&ev.client_ids){const _p=JSON.parse(ev.client_ids);if(Array.isArray(_p))return _p;}}catch(_){}return ev.client_id?[ev.client_id]:[];})();
+                    const _firstCid=_evCids[0]||null;
+                    const _cl=(_firstCid&&typeof CLIENTS!=="undefined")?CLIENTS.find(function(c){return c.id===_firstCid;}):null;
+                    const _multiClients=_evCids.length>1;
                     const _catColors={aniversario:"#ec4899",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777"};
                     let _evColor;
                     if(ev.category==="assinatura")_evColor="#16a34a";
@@ -13193,6 +13223,7 @@ function PageCalendarioInterno({isMob}){
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
                       {_catIcon}
+                      {_multiClients&&<span style={{background:"rgba(255,255,255,0.28)",borderRadius:6,padding:"1px 5px",fontSize:9.5,fontWeight:700,letterSpacing:.2,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{_evCids.length}c</span>}
                       {_isRec&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.9}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>}
                       {ev.hour&&<span style={{fontWeight:600,opacity:.92,fontFeatureSettings:"'tnum'",flexShrink:0}}>{ev.hour}</span>}
                       <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
