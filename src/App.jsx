@@ -13856,6 +13856,42 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
   useOpenCardSync(openCard,setOpenCard,tasks);
 
+  // Hellen + sócios podem criar card direto do calendário (estilo Google Agenda)
+  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+  const _canCreateFromCal=!!(_u&&(_u.level===1||_u.dash==="coordinator"));
+  // Helper: cria task draft (_isDraft=true) na data clicada com responsável Hellen, e abre o CardModal.
+  // Status="rascunhos" por padrão — Hellen finaliza e arrasta pra Copys depois.
+  function _createDraftAtDay(dateObj){
+    if(!_canCreateFromCal)return;
+    if(typeof mkId!=="function"||typeof smartFormatTitle!=="function"){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Setup incompleto pra criar pelo calendário.");
+      return;
+    }
+    const now=new Date();
+    const nowFmt=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    const respId=_u&&_u.id||"ellen";
+    const respName=_u&&_u.name||"Hellen";
+    const publishIso=dateObj.getFullYear()+"-"+String(dateObj.getMonth()+1).padStart(2,"0")+"-"+String(dateObj.getDate()).padStart(2,"0");
+    const refMonth=publishIso.slice(0,7);
+    const draft={
+      id:mkId(),title:smartFormatTitle("Nova publicação"),desc:"",
+      assignee:respId,assignees:[respId],watchers:[],
+      client:(filterClient!=="todos"?filterClient:""),sector:"",priority:"",status:"rascunhos",
+      startDate:now.toISOString().split("T")[0],
+      deadline:publishIso,
+      publish_date:publishIso,
+      completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
+      deletedAt:null,bioterUnit:(filterBioterUnit!=="todos"?filterBioterUnit:null),
+      referenceMonth:refMonth,
+      colEnteredAt:now.toISOString(),
+      createdAt:nowFmt,createdBy:respName,
+      timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
+      _isDraft:true
+    };
+    if(typeof setTasks==="function"){setTasks(function(p){return [].concat(p||[],[draft]);});}
+    setOpenCard(draft);
+  }
+
   // Sugere datas de publicação pra cards que JÁ EXISTEM no fluxo (sem publishDate).
   // Pega cards em status [demanda, recebida, execucao, ajustes, avaliacao, aprovado],
   // distribui em 2ª e 5ª de cada semana alternando arte/vídeo. Estrategista confirma/edita.
@@ -14365,6 +14401,14 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 onDragOver={function(e){if(day&&dragTaskId){e.preventDefault();if(dropDayId!==day.toDateString())setDropDayId(day.toDateString());}}}
                 onDragLeave={function(){if(dropDayId===(day&&day.toDateString()))setDropDayId(null);}}
                 onDrop={function(e){if(day){e.preventDefault();handleDropOnDay(day);}}}
+                onClick={function(e){
+                  if(!day||!_canCreateFromCal)return;
+                  // Só cria se o clique foi DIRETO no quadrado do dia (não em cima de card/evento dentro)
+                  if(e.target!==e.currentTarget&&!e.target.hasAttribute("data-day-empty"))return;
+                  _createDraftAtDay(day);
+                }}
+                onMouseEnter={function(e){if(!_canCreateFromCal)return;const b=e.currentTarget.querySelector("[data-addbtn-cal]");if(b){b.style.opacity="1";b.style.transform="scale(1)";}}}
+                onMouseLeave={function(e){const b=e.currentTarget.querySelector("[data-addbtn-cal]");if(b){b.style.opacity="0";b.style.transform="scale(0.85)";}}}
                 style={{
                 height:isMob?170:260,
                 borderRight:`1px solid ${C.b1}`,
@@ -14377,7 +14421,15 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 display:"flex",
                 flexDirection:"column",
                 overflow:"hidden",
+                cursor:_canCreateFromCal&&day?"pointer":"default",
+                position:"relative",
               }}>
+                {day&&_canCreateFromCal&&<div data-addbtn-cal aria-label="Nova publicação"
+                  onClick={function(e){e.stopPropagation();_createDraftAtDay(day);}}
+                  title="Nova publicação neste dia"
+                  style={{position:"absolute",top:6,right:6,width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transform:"scale(0.85)",transition:"all .18s cubic-bezier(.4,0,.2,1)",boxShadow:"0 4px 12px rgba(124,58,237,0.35), 0 0 0 2px #fff",zIndex:2,cursor:"pointer",border:"none",padding:0}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </div>}
                 {day&&(<>
                   {/* Número do dia */}
                   <div style={{
@@ -15602,6 +15654,42 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   const [openCard,setOpenCard]=useState(null);
   // Mantém openCard sincronizado quando outra sessão edita o mesmo cartão
   useOpenCardSync(openCard,setOpenCard,tasks);
+
+  // Hellen + sócios podem criar card direto do calendário (estilo Google Agenda)
+  const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+  const _canCreateFromCal=!!(_u&&(_u.level===1||_u.dash==="coordinator"));
+  // Helper: cria task draft (_isDraft=true) na data clicada com responsável Hellen, e abre o CardModal.
+  // Status="rascunhos" por padrão — Hellen finaliza e arrasta pra Copys depois.
+  function _createDraftAtDay(dateObj){
+    if(!_canCreateFromCal)return;
+    if(typeof mkId!=="function"||typeof smartFormatTitle!=="function"){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Setup incompleto pra criar pelo calendário.");
+      return;
+    }
+    const now=new Date();
+    const nowFmt=now.toLocaleDateString("pt-BR")+" às "+now.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    const respId=_u&&_u.id||"ellen";
+    const respName=_u&&_u.name||"Hellen";
+    const publishIso=dateObj.getFullYear()+"-"+String(dateObj.getMonth()+1).padStart(2,"0")+"-"+String(dateObj.getDate()).padStart(2,"0");
+    const refMonth=publishIso.slice(0,7);
+    const draft={
+      id:mkId(),title:smartFormatTitle("Nova publicação"),desc:"",
+      assignee:respId,assignees:[respId],watchers:[],
+      client:(filterClient!=="todos"?filterClient:""),sector:"",priority:"",status:"rascunhos",
+      startDate:now.toISOString().split("T")[0],
+      deadline:publishIso,
+      publish_date:publishIso,
+      completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
+      deletedAt:null,bioterUnit:(filterBioterUnit!=="todos"?filterBioterUnit:null),
+      referenceMonth:refMonth,
+      colEnteredAt:now.toISOString(),
+      createdAt:nowFmt,createdBy:respName,
+      timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
+      _isDraft:true
+    };
+    if(typeof setTasks==="function"){setTasks(function(p){return [].concat(p||[],[draft]);});}
+    setOpenCard(draft);
+  }
   // Auto-abre cartão recém-criado assim que ele aparece em `tasks` (resolve race com polling do Supabase)
   const [pendingOpenId,setPendingOpenId]=useState(null);
   useEffect(()=>{
@@ -27399,9 +27487,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [adminTag,setAdminTag]=useState(task.adminTag||"");
   // isAdmin = pode editar etiquetas/tags + mês de pagamento. Sócios sempre podem.
   const isAdmin = !!(CURRENT_USER && (CURRENT_USER.level === 1 || (cardPerms&&cardPerms.gerenciarEtiquetas===true)));
-  // canEditContentType: tipo de conteúdo. Admin + editor de vídeo (Guilherme) podem.
+  // canEditContentType: tipo de conteúdo. Admin + editor de vídeo (Guilherme) + coordenador (Hellen) podem.
   // Designers (André, Maria) NÃO podem — afeta cálculo de pagamento por demanda.
-  const canEditContentType = isAdmin || !!(CURRENT_USER && CURRENT_USER.dash === "editor");
+  const canEditContentType = isAdmin || !!(CURRENT_USER && (CURRENT_USER.dash === "editor" || CURRENT_USER.dash === "coordinator"));
   // Tags (faixas coloridas no card). Visíveis pra todos, editáveis só p/ sócios.
   const [tags,setTags]=useState(Array.isArray(task.tags)?task.tags:[]);
   const [newTagInput,setNewTagInput]=useState("");
@@ -29296,12 +29384,51 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {canEditSLAandPub&&!isAgendado&&(
             <div>
               <label style={LB}><Ico n="calendar" size={12} color="#94a3b8"/> Data/hora de publicação</label>
-              <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
-                <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
-                  style={{...SI,fontSize:12}}/>
-                <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
-                  style={{...SI,fontSize:12}}/>
-              </div>
+              {(function(){
+                const _inpId="pubdate-"+(task&&task.id||"new")+"-a";
+                function _step(delta){
+                  const base=publishDate?new Date(publishDate+"T12:00:00"):new Date();
+                  base.setDate(base.getDate()+delta);
+                  setPublishDate(base.getFullYear()+"-"+String(base.getMonth()+1).padStart(2,"0")+"-"+String(base.getDate()).padStart(2,"0"));
+                }
+                function _openPicker(){const inp=document.getElementById(_inpId);if(!inp)return;try{inp.showPicker();}catch(_){inp.focus();inp.click();}}
+                const _MN=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+                const _WD=["dom","seg","ter","qua","qui","sex","sáb"];
+                let _label="Escolher data";
+                if(publishDate){
+                  const _d=new Date(publishDate+"T12:00:00");
+                  if(!isNaN(_d.getTime())){
+                    _label=String(_d.getDate()).padStart(2,"0")+" "+_MN[_d.getMonth()]+" · "+_WD[_d.getDay()];
+                  }
+                }
+                const _btnStep={background:"transparent",border:"none",color:canEdit?"#64748b":"#cbd5e1",cursor:canEdit?"pointer":"not-allowed",padding:"0 10px",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontFamily:"inherit",transition:"all .12s"};
+                return <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6,position:"relative"}}>
+                  <div style={{display:"flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,overflow:"hidden",height:38,transition:"border-color .15s",position:"relative"}}
+                    onMouseEnter={function(e){if(canEdit)e.currentTarget.style.borderColor="#cbd5e1";}}
+                    onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";}}>
+                    <button type="button" disabled={!canEdit} onClick={function(){_step(-1);}} title="Dia anterior" aria-label="Dia anterior" style={_btnStep}
+                      onMouseEnter={function(e){if(canEdit){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#7c3aed";}}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color=canEdit?"#64748b":"#cbd5e1";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <button type="button" disabled={!canEdit} onClick={_openPicker} title="Trocar data" style={{flex:1,background:"transparent",border:"none",fontSize:12.5,fontWeight:600,color:publishDate?"#0f172a":"#94a3b8",cursor:canEdit?"pointer":"not-allowed",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,height:"100%",letterSpacing:-.1,fontFeatureSettings:"'tnum'",textTransform:"capitalize",transition:"background .12s"}}
+                      onMouseEnter={function(e){if(canEdit)e.currentTarget.style.background="#f8fafc";}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.65}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                      {_label}
+                    </button>
+                    <button type="button" disabled={!canEdit} onClick={function(){_step(1);}} title="Próximo dia" aria-label="Próximo dia" style={_btnStep}
+                      onMouseEnter={function(e){if(canEdit){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#7c3aed";}}}
+                      onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color=canEdit?"#64748b":"#cbd5e1";}}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                    <input id={_inpId} type="date" value={publishDate||""} onChange={function(e){setPublishDate(e.target.value);}} disabled={!canEdit}
+                      style={{position:"absolute",left:0,top:0,opacity:0,width:1,height:1,pointerEvents:"none",border:"none"}}/>
+                  </div>
+                  <input type="time" value={publishTime} onChange={function(e){setPublishTime(e.target.value);}} disabled={!canEdit}
+                    style={{...SI,fontSize:12.5,fontWeight:600,textAlign:"center",height:38,boxSizing:"border-box",fontFeatureSettings:"'tnum'"}}/>
+                </div>;
+              })()}
               {publishDate&&<div style={{color:"#94a3b8",fontSize:9,marginTop:4,fontStyle:"italic"}}>
                 Aparece no Calendário de Publicação
               </div>}
@@ -29324,11 +29451,50 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               </div>
             </div>
 
-            {/* Data de publicação — usa SI/LB padrão */}
+            {/* Data de publicação — stepper moderno */}
             <div>
               <label style={LB}><Ico n="calendar" size={12} color="#94a3b8"/> {isPub?"Data publicada":"Data de publicação"}</label>
-              <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit||isPub}
-                style={{...SI,borderColor:!publishDate&&!isPub?"#fca5a5":undefined,background:!publishDate&&!isPub?"#fff7f7":undefined}}/>
+              {(function(){
+                const _disabled=!canEdit||isPub;
+                const _inpId="pubdate-"+(task&&task.id||"new")+"-b";
+                function _step(delta){
+                  const base=publishDate?new Date(publishDate+"T12:00:00"):new Date();
+                  base.setDate(base.getDate()+delta);
+                  setPublishDate(base.getFullYear()+"-"+String(base.getMonth()+1).padStart(2,"0")+"-"+String(base.getDate()).padStart(2,"0"));
+                }
+                function _openPicker(){const inp=document.getElementById(_inpId);if(!inp)return;try{inp.showPicker();}catch(_){inp.focus();inp.click();}}
+                const _MN=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+                const _WD=["dom","seg","ter","qua","qui","sex","sáb"];
+                let _label="Escolher data";
+                if(publishDate){
+                  const _d=new Date(publishDate+"T12:00:00");
+                  if(!isNaN(_d.getTime())){
+                    _label=String(_d.getDate()).padStart(2,"0")+" "+_MN[_d.getMonth()]+" · "+_WD[_d.getDay()];
+                  }
+                }
+                const _btnStep={background:"transparent",border:"none",color:_disabled?"#cbd5e1":"#64748b",cursor:_disabled?"not-allowed":"pointer",padding:"0 10px",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontFamily:"inherit",transition:"all .12s"};
+                const _missingErr=!publishDate&&!isPub;
+                return <div style={{display:"flex",alignItems:"center",background:"#fff",border:"1px solid "+(_missingErr?"#fca5a5":"#e2e8f0"),borderRadius:10,overflow:"hidden",height:38,transition:"border-color .15s",position:"relative",backgroundColor:_missingErr?"#fff7f7":"#fff"}}>
+                  <button type="button" disabled={_disabled} onClick={function(){_step(-1);}} title="Dia anterior" aria-label="Dia anterior" style={_btnStep}
+                    onMouseEnter={function(e){if(!_disabled){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#7c3aed";}}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color=_disabled?"#cbd5e1":"#64748b";}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  </button>
+                  <button type="button" disabled={_disabled} onClick={_openPicker} title="Trocar data" style={{flex:1,background:"transparent",border:"none",fontSize:12.5,fontWeight:600,color:publishDate?"#0f172a":"#94a3b8",cursor:_disabled?"not-allowed":"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:7,height:"100%",letterSpacing:-.1,textTransform:"capitalize",transition:"background .12s"}}
+                    onMouseEnter={function(e){if(!_disabled)e.currentTarget.style.background="#f8fafc";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.65}}><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    {_label}
+                  </button>
+                  <button type="button" disabled={_disabled} onClick={function(){_step(1);}} title="Próximo dia" aria-label="Próximo dia" style={_btnStep}
+                    onMouseEnter={function(e){if(!_disabled){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#7c3aed";}}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color=_disabled?"#cbd5e1":"#64748b";}}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                  <input id={_inpId} type="date" value={publishDate||""} onChange={function(e){setPublishDate(e.target.value);}} disabled={_disabled}
+                    style={{position:"absolute",left:0,top:0,opacity:0,width:1,height:1,pointerEvents:"none",border:"none"}}/>
+                </div>;
+              })()}
               {publishDate&&<div style={{color:"#94a3b8",fontSize:10,marginTop:4}}>
                 {new Date(publishDate+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}
               </div>}
