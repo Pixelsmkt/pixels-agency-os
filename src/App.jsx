@@ -28997,13 +28997,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             Abrir <Ico n="external" size={9} color="#fff"/>
                           </a>
                         </div>
-                        <div style={{position:"absolute",top:4,left:4,background:"#a140ff",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>ref #{i+1}</div>
+                        <div style={{position:"absolute",top:6,left:6,background:"#a140ff",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.2,boxShadow:"0 2px 6px rgba(124,58,237,0.4)"}}>ref #{i+1}</div>
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
                           <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar referência"
-                            style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,padding:"2px 6px",display:"flex",alignItems:"center"}}
+                            style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
                             onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
-                            onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>⬇</button>
-                          {canEditRef&&<button onClick={()=>removeAttachment(a.id)} style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+                            onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </button>
+                          {canEditRef&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>}
                         </div>
                       </div>
                     ))}
@@ -29055,13 +29059,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             Abrir <Ico n="external" size={9} color="#fff"/>
                           </a>
                         </div>
-                        <div style={{position:"absolute",top:4,left:4,background:"rgba(0,0,0,0.6)",color:"#fff",borderRadius:5,padding:"1px 6px",fontSize:9,fontWeight:600}}>#{i+1}</div>
+                        <div style={{position:"absolute",top:6,left:6,background:"rgba(15,23,42,0.75)",color:"#fff",borderRadius:99,padding:"2px 9px",fontSize:9.5,fontWeight:700,letterSpacing:.2,backdropFilter:"blur(4px)"}}>#{i+1}</div>
                         <div style={{position:"absolute",top:4,right:4,display:"flex",gap:4}}>
                           <button onClick={(e)=>{e.stopPropagation();downloadFile(a.url,a.name,a.storagePath);}} title="Baixar imagem"
-                            style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:11,padding:"2px 6px",display:"flex",alignItems:"center"}}
+                            style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}}
                             onMouseEnter={e=>e.currentTarget.style.background="rgba(124,58,237,0.85)"}
-                            onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>⬇</button>
-                          {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"rgba(0,0,0,0.5)",border:"none",borderRadius:5,color:"#fff",cursor:"pointer",fontSize:13,padding:"1px 5px"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.8)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.5)"}>×</button>}
+                            onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </button>
+                          {canEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"rgba(15,23,42,0.55)",border:"none",borderRadius:7,color:"#fff",cursor:"pointer",padding:"5px",display:"inline-flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",transition:"background .12s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(220,38,38,0.85)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(15,23,42,0.55)"}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>}
                         </div>
                       </div>
                     ))}
