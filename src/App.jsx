@@ -21725,33 +21725,35 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             </>)}
 
             {(tab==="publicacao"||tab==="video")&&(<>
-              <button onClick={()=>approvePub(current)}
-                style={{width:"100%",background:C.gr,color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px "+C.gr+"33"}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px "+C.gr+"55";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px "+C.gr+"33";}}>
+              {/* Botões outlined-fill: bg branco/colored-tint + border colorida + ícone+texto colorido. Hover preenche. */}
+              <button onClick={()=>approvePub(current)} data-actbtn="approve"
+                style={{width:"100%",background:"#fff",color:"#16a34a",border:"1.5px solid #16a34a55",borderRadius:11,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,backdropFilter:"blur(8px)"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#16a34a";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#16a34a";e.currentTarget.style.boxShadow="0 6px 18px #16a34a44";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#16a34a";e.currentTarget.style.borderColor="#16a34a55";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 Aprovar publicação
               </button>
               <button onClick={async()=>{ if(await pixelsConfirm("Reprovar este material? Ele vai pra coluna Reprovadas. A produção foi feita, então ainda conta no pagamento do mês.",{okText:"Reprovar",danger:true})) rejectPub(current); }}
                 title="Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."
-                style={{width:"100%",background:"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #dc262640",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 18px #dc262666";e.currentTarget.style.background="#b91c1c";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #dc262640";e.currentTarget.style.background="#dc2626";}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                style={{width:"100%",background:"#fff",color:"#dc2626",border:"1.5px solid #dc262655",borderRadius:11,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,backdropFilter:"blur(8px)"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";e.currentTarget.style.boxShadow="0 6px 18px #dc262644";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#dc262655";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 Reprovar publicação
               </button>
               <button onClick={()=>setEditAnnot(current)}
-                style={{width:"100%",background:"#ea580c",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #ea580c40",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 18px #ea580c66";e.currentTarget.style.background="#c2410c";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #ea580c40";e.currentTarget.style.background="#ea580c";}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                style={{width:"100%",background:"#fff",color:"#ea580c",border:"1.5px solid #ea580c55",borderRadius:11,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,backdropFilter:"blur(8px)"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#ea580c";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#ea580c";e.currentTarget.style.boxShadow="0 6px 18px #ea580c44";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#ea580c";e.currentTarget.style.borderColor="#ea580c55";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                 Solicitar ajuste
               </button>
               <button onClick={()=>sendBackToCopy(current)}
                 title="Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."
-                style={{width:"100%",background:"#eab308",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #eab30844",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,textShadow:"0 1px 1px rgba(0,0,0,0.08)"}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 18px #eab30866";e.currentTarget.style.background="#ca8a04";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #eab30844";e.currentTarget.style.background="#eab308";}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+                style={{width:"100%",background:"#fff",color:"#ca8a04",border:"1.5px solid #ca8a0455",borderRadius:11,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,backdropFilter:"blur(8px)"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#eab308";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#eab308";e.currentTarget.style.boxShadow="0 6px 18px #eab30844";e.currentTarget.style.transform="translateY(-1px)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#ca8a04";e.currentTarget.style.borderColor="#ca8a0455";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
                 Enviar para ajuste de copy
               </button>
             </>)}
@@ -21877,55 +21879,56 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                   if(rounds.length===0)return null;
                   const _fmt=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
                   return(<div style={{borderTop:"1px solid "+C.b1,paddingTop:16}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,gap:8}}>
-                      <div style={{display:"flex",alignItems:"center",gap:7,color:"#ea580c"}}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                        <span style={{fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Ajustes pedidos</span>
-                      </div>
-                      <span style={{background:"#fff7ed",color:"#ea580c",border:"1px solid #fed7aa",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,letterSpacing:.3,fontFeatureSettings:"\'tnum\'"}}>{rounds.length} round{rounds.length>1?"s":""}</span>
+                    {/* Header minimal */}
+                    <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:12,gap:8}}>
+                      <span style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Ajustes pedidos</span>
+                      <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"\'tnum\'"}}>{rounds.length} round{rounds.length>1?"s":""}</span>
                     </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:14,position:"relative"}}>
+                      {/* Linha vertical sutil conectando os rounds (timeline) */}
+                      {rounds.length>1&&<div style={{position:"absolute",left:14,top:14,bottom:14,width:1,background:"linear-gradient(180deg,#e2e8f0,#f1f5f9,#e2e8f0)",zIndex:0}}/>}
                       {rounds.map((r,ri)=>{
                         const firstC=r.comments[0]||r.audio||{};
                         const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
-                        // Cliente = laranja (Bioter/cliente pediu), Revisor = roxo Pixels
                         const accent=isClient?"#ea580c":"#7c3aed";
-                        const accentSoft=isClient?"#fff7ed":"#f5f3ff";
+                        const accentSoft=isClient?"#fff7ed":"#faf5ff";
                         const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
                         const isLatest=ri===0;
                         const _roundNum=rounds.length-ri;
-                        return(<div key={r.key} style={{background:accentSoft,border:"1px solid "+accent+"33",borderRadius:12,padding:0,overflow:"hidden",boxShadow:isLatest?"0 2px 8px "+accent+"22":"none"}}>
-                          {/* Cabeçalho colorido do round */}
-                          <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:accent,color:"#fff",flexWrap:"wrap"}}>
-                            <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",fontSize:10,fontWeight:800,letterSpacing:.4,padding:"2px 8px",borderRadius:5,fontFeatureSettings:"\'tnum\'"}}>Round {_roundNum}</span>
-                            <span style={{fontSize:11,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",opacity:.92}}>{isClient?"Cliente":"Revisor"}</span>
-                            <span style={{fontSize:11.5,fontWeight:600,opacity:.95}}>·</span>
-                            <span style={{fontSize:11.5,fontWeight:600,opacity:.95}}>{userName}</span>
-                            {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:9,padding:"2px 8px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginLeft:4}}>+ recente</span>}
-                            {r.ts>0&&<span style={{fontSize:10.5,marginLeft:"auto",opacity:.88,fontFeatureSettings:"\'tnum\'"}}>{_fmt(r.ts)}</span>}
+                        const _initial=(userName||"?").trim().charAt(0).toUpperCase();
+                        // Tenta achar TEAM user pela foto/cor
+                        let _teamUser=null;
+                        try{if(typeof TEAM!=="undefined")_teamUser=TEAM.find(u=>(u.name||"").toLowerCase().indexOf(userName.toLowerCase().split(" ")[0])===0);}catch(_){}
+                        const _photo=_teamUser&&(_teamUser.profile_data&&_teamUser.profile_data.photo)||(_teamUser&&typeof getProfilePhoto!=="undefined"&&getProfilePhoto(_teamUser.id))||null;
+                        const _userColor=_teamUser&&_teamUser.color||accent;
+                        return(<div key={r.key} style={{display:"flex",gap:11,position:"relative",zIndex:1}}>
+                          {/* Avatar + numero round */}
+                          <div style={{display:"flex",flexDirection:"column",alignItems:"center",flexShrink:0,gap:5}}>
+                            {_photo
+                              ? <img src={_photo} alt={userName} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",border:"2px solid #fff",boxShadow:"0 1px 3px rgba(15,23,42,0.12)"}}/>
+                              : <span style={{width:28,height:28,borderRadius:"50%",background:_userColor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,border:"2px solid #fff",boxShadow:"0 1px 3px rgba(15,23,42,0.12)"}}>{_initial}</span>}
+                            <span style={{fontSize:9,fontWeight:800,color:accent,background:accentSoft,padding:"1px 6px",borderRadius:99,letterSpacing:.4,fontFeatureSettings:"\'tnum\'"}}>R{_roundNum}</span>
                           </div>
-                          {/* Corpo do round */}
-                          <div style={{padding:"11px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
-                            {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:30}}/>}
+                          {/* Conteúdo */}
+                          <div style={{flex:1,minWidth:0,background:"#fff",border:"1px solid "+(isLatest?accent+"33":"#e2e8f0"),borderRadius:12,padding:"10px 12px",boxShadow:isLatest?"0 2px 10px "+accent+"15":"none",transition:"all .15s"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7,flexWrap:"wrap"}}>
+                              <span style={{color:"#0f172a",fontSize:12,fontWeight:700,letterSpacing:-.1}}>{userName}</span>
+                              <span style={{color:_userColor,fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,padding:"1px 6px",background:_userColor+"15",borderRadius:4}}>{isClient?"Cliente":"Equipe"}</span>
+                              {isLatest&&rounds.length>1&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,padding:"1px 6px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Atual</span>}
+                              {r.ts>0&&<span style={{color:"#94a3b8",fontSize:10,marginLeft:"auto",fontWeight:500,fontFeatureSettings:"\'tnum\'"}}>{_fmt(r.ts)}</span>}
+                            </div>
+                            {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:30,marginBottom:r.comments.length>0||r.images.length>0?7:0,borderRadius:8}}/>}
                             {r.comments.length>0&&r.comments.map(cc=>{
                               const txt=String(cc.text||"").replace("AJUSTE NECESSARIO: ","").trim();
                               if(!txt)return null;
-                              return(<div key={cc.id} style={{position:"relative",background:"#fff",border:"1px solid "+accent+"22",borderRadius:8,padding:"10px 12px 10px 14px",borderLeft:"3px solid "+accent}}>
-                                <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",fontWeight:500}}>{txt}</div>
-                              </div>);
+                              return(<div key={cc.id} style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",fontWeight:500,marginBottom:r.images.length>0?7:0}}>{txt}</div>);
                             })}
-                            {r.images.length>0&&<div>
-                              <div style={{color:accent,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,display:"flex",alignItems:"center",gap:4}}>
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><polyline points="21 15 16 10 5 21"/></svg>
-                                {r.images.length} anotação{r.images.length>1?"es":""}
-                              </div>
-                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(64px,1fr))",gap:6}}>
-                                {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" onClick={()=>setOpenCard(current)}
-                                  title="Abrir cartão pra ver em tamanho grande"
-                                  style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:7,cursor:"pointer",border:"1px solid "+accent+"33",transition:"all .12s"}}
-                                  onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.05)";e.currentTarget.style.borderColor=accent;}}
-                                  onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.borderColor=accent+"33";}}/>))}
-                              </div>
+                            {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:r.comments.length>0?2:0}}>
+                              {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" onClick={()=>setOpenCard(current)}
+                                title="Abrir cartão pra ver em tamanho grande"
+                                style={{width:52,height:52,objectFit:"cover",borderRadius:8,cursor:"pointer",border:"1px solid #e2e8f0",transition:"all .15s"}}
+                                onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.06)";e.currentTarget.style.borderColor=accent;e.currentTarget.style.boxShadow="0 4px 12px "+accent+"33";}}
+                                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}/>))}
                             </div>}
                           </div>
                         </div>);
