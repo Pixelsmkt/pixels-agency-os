@@ -10178,6 +10178,8 @@ function CDrive({cl}){
 
 /* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
 
+/* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
+
 // Entrada da seção Clientes: PageClientes + NovoClienteModal + calcScore + Sparkline
 // Depende de: 00_globals, 00_clientes_data, 00_mindmap_data, 02_clientes (MindMap)
 
@@ -14407,12 +14409,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 onDrop={function(e){if(day){e.preventDefault();handleDropOnDay(day);}}}
                 onClick={function(e){
                   if(!day||!_canCreateFromCal)return;
-                  // Só cria se o clique foi DIRETO no quadrado do dia (não em cima de card/evento dentro)
-                  if(e.target!==e.currentTarget&&!e.target.hasAttribute("data-day-empty"))return;
+                  // Clique em qualquer área vazia do dia → cria card. Cards/eventos internos chamam e.stopPropagation()
                   _createDraftAtDay(day);
                 }}
-                onMouseEnter={function(e){if(!_canCreateFromCal)return;const b=e.currentTarget.querySelector("[data-addbtn-cal]");if(b){b.style.opacity="1";b.style.transform="scale(1)";}}}
-                onMouseLeave={function(e){const b=e.currentTarget.querySelector("[data-addbtn-cal]");if(b){b.style.opacity="0";b.style.transform="scale(0.85)";}}}
+                onMouseEnter={function(e){if(_canCreateFromCal&&day){const g=e.currentTarget.querySelector("[data-ghost-card]");if(g){g.style.opacity="1";g.style.transform="scale(1)";}}}}
+                onMouseLeave={function(e){const g=e.currentTarget.querySelector("[data-ghost-card]");if(g){g.style.opacity="0";g.style.transform="scale(0.98)";}}}
                 style={{
                 height:isMob?170:260,
                 borderRight:`1px solid ${C.b1}`,
@@ -14428,12 +14429,6 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 cursor:_canCreateFromCal&&day?"pointer":"default",
                 position:"relative",
               }}>
-                {day&&_canCreateFromCal&&<div data-addbtn-cal aria-label="Nova publicação"
-                  onClick={function(e){e.stopPropagation();_createDraftAtDay(day);}}
-                  title="Nova publicação neste dia"
-                  style={{position:"absolute",top:6,right:6,width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transform:"scale(0.85)",transition:"all .18s cubic-bezier(.4,0,.2,1)",boxShadow:"0 4px 12px rgba(124,58,237,0.35), 0 0 0 2px #fff",zIndex:2,cursor:"pointer",border:"none",padding:0}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                </div>}
                 {day&&(<>
                   {/* Número do dia */}
                   <div style={{
@@ -14472,11 +14467,20 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                     });
                   })()}
 
-                  {/* Ghost card placeholder — aparece no hover pra demonstrar que dá pra criar */}
+                  {/* Ghost card — wireframe do card futuro que aparece no hover */}
                   {_canCreateFromCal&&<div data-ghost-card aria-hidden="true"
-                    style={{position:"absolute",left:6,right:6,bottom:6,height:32,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.7)",display:"flex",alignItems:"center",justifyContent:"center",gap:5,color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,opacity:0,transition:"opacity .15s",pointerEvents:"none",zIndex:0}}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                    Nova publicação
+                    style={{position:"absolute",left:6,right:6,top:30,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.55)",padding:"6px 8px 7px",display:"flex",flexDirection:"column",gap:6,minHeight:54,opacity:0,transform:"scale(0.98)",transformOrigin:"top center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <div style={{width:18,height:18,borderRadius:5,background:"#e2e8f0",flexShrink:0}}/>
+                      <div style={{height:9,width:32,borderRadius:3,background:"#e2e8f0"}}/>
+                      <div style={{flex:1}}/>
+                      <div style={{width:11,height:11,borderRadius:"50%",background:"#e2e8f0"}}/>
+                    </div>
+                    <div style={{height:8,width:"75%",borderRadius:3,background:"#e2e8f0"}}/>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,color:"#94a3b8",fontSize:9.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,marginTop:1}}>
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      Nova publicação
+                    </div>
                   </div>}
                   {/* Cards do dia */}
                   <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden",position:"relative",zIndex:1}}>
@@ -35058,8 +35062,12 @@ export default function AgencyOS(){
         return !old||JSON.stringify({...old,files:[]})!==JSON.stringify({...t,files:[]});
       });
       if(changed.length>0){
-        changed.forEach(t=>pendingRef.current.add(String(t.id)));
-        syncTasks(changed);
+        // Filtra drafts (_isDraft:true) — eles só vão pro Supabase quando user clica Salvar
+        const changedToSync = changed.filter(t=>!t._isDraft);
+        if(changedToSync.length>0){
+          changedToSync.forEach(t=>pendingRef.current.add(String(t.id)));
+          syncTasks(changedToSync);
+        }
       }
       clearTimeout(saveTimer.current);
       saveTimer.current=setTimeout(()=>{
