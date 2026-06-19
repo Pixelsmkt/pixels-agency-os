@@ -12466,6 +12466,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const clientId = clientIds[0] || ""; // legado pra cor automática + marco quando 1 cliente
   const [saving,setSaving]=useState(false);
   const _hRef=useRef(null);
+  const _savingRef=useRef(false);
   // Auto-set cor ao trocar categoria (a não ser que usuário já mexeu na cor)
   function setCategoryAndColor(catId){
     setCategory(catId);
@@ -12487,9 +12488,10 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     return function(){window.removeEventListener("keydown",onKey);};
   },[onClose]);
   function save(){
-    if(saving)return;
+    if(_savingRef.current)return;
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     if(!window._sb){if(typeof pixelsToast!=="undefined")pixelsToast.error("Sem conexão com Supabase");return;}
+    _savingRef.current=true;
     setSaving(true);
     const payload={
       title:title.trim(),
@@ -12547,10 +12549,11 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     }
     const q = _runSaveWithRetry();
     q.then(function(r){
-      if(r&&r.error){setSaving(false);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
+      if(r&&r.error){_savingRef.current=false;setSaving(false);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
       const _savedRow=r&&r.data;
       // Sincronizar marco vinculado (se aplicável)
       function _doneSave(){
+        _savingRef.current=false;
         setSaving(false);
         if(typeof pixelsToast!=="undefined")pixelsToast.success(isEdit?"Evento atualizado!":(_shouldSyncMarco?"Evento criado! Marco registrado no cliente.":"Evento criado!"));
         onSaved&&onSaved();
@@ -12629,7 +12632,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       }else{
         _createAll();
       }
-    }).catch(function(e){setSaving(false);console.warn("[internal_events save]",e);});
+    }).catch(function(e){_savingRef.current=false;setSaving(false);console.warn("[internal_events save]",e);});
   }
   function del(){
     if(!isEdit||!initial||!initial.id)return;
@@ -12914,8 +12917,8 @@ function PageCalendarioInterno({isMob}){
     const dIso=dateObj.getFullYear()+"-"+String(dateObj.getMonth()+1).padStart(2,"0")+"-"+String(dateObj.getDate()).padStart(2,"0");
     const dm=String(dateObj.getMonth()+1).padStart(2,"0")+"-"+String(dateObj.getDate()).padStart(2,"0");
     const dDay=dateObj.getDate();
-    const dDow=dateObj.getDay(); // 0=dom..6=sáb
-    return internalEvents.filter(function(ev){
+    const dDow=dateObj.getDay();
+    const _filtered=internalEvents.filter(function(ev){
       if(!ev||!ev.date)return false;
       // Aplica filtro de categoria do calendário
       if(filterType==="assinaturas"&&ev.category!=="assinatura")return false;
@@ -12947,6 +12950,16 @@ function PageCalendarioInterno({isMob}){
       }
       return ev.date===dIso;
     });
+    const _seen={},_uniq=[];
+    _filtered.forEach(function(ev){
+      const _norm=(ev.title||"").trim().toLowerCase();
+      const _cidKey=ev.client_id||(Array.isArray(ev.client_ids)&&ev.client_ids[0])||"";
+      const _key=_norm+"|"+(ev.date||"")+"|"+_cidKey;
+      if(_seen[_key])return;
+      _seen[_key]=true;
+      _uniq.push(ev);
+    });
+    return _uniq;
   }
   function _moveItemTo(item, targetDateIso){
     if(!item || !targetDateIso) return;
@@ -13156,7 +13169,6 @@ function PageCalendarioInterno({isMob}){
         });
       });
     }
-    // DEDUP FORTE: se houver marco órfão + evento com mesmo título+data+cliente, mantém só um
     const _seen={},_deduped=[];
     out.forEach(function(it){
       const _norm=(it.title||"").trim().toLowerCase();
@@ -13570,6 +13582,21 @@ function PageCalendarioInterno({isMob}){
 
                       {_isRec&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.9}}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>}
                       {ev.hour&&<span style={{display:"inline-flex",alignItems:"center",gap:3,fontWeight:600,opacity:.92,fontFeatureSettings:"'tnum'",flexShrink:0}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,opacity:.9}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>{ev.hour}</span>}
+                      {(function(){
+                        let _resp=[];try{if(Array.isArray(ev.responsibles))_resp=ev.responsibles;else if(typeof ev.responsibles==="string"&&ev.responsibles){const _p=JSON.parse(ev.responsibles);if(Array.isArray(_p))_resp=_p;}}catch(_){}
+                        if(_resp.length===0)return null;
+                        return <span style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
+                          {_resp.slice(0,3).map(function(rid,i){
+                            const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===rid;});
+                            if(!u)return null;
+                            const _photo=(u.profile_data&&u.profile_data.photo)||((typeof getProfilePhoto!=="undefined"&&getProfilePhoto(u.id))||null);
+                            return _photo
+                              ? <img key={rid} src={_photo} alt={u.name} title={u.name} style={{width:14,height:14,borderRadius:"50%",objectFit:"cover",display:"block",border:"1.2px solid #fff",marginLeft:i===0?0:-4,flexShrink:0}}/>
+                              : <span key={rid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:14,height:14,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:7.5,border:"1.2px solid #fff",marginLeft:i===0?0:-4,flexShrink:0}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
+                          })}
+                          {_resp.length>3&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:14,height:14,borderRadius:"50%",background:"rgba(255,255,255,0.95)",color:_evColor,fontWeight:800,fontSize:7.5,border:"1.2px solid #fff",marginLeft:-4,flexShrink:0}}>+{_resp.length-3}</span>}
+                        </span>;
+                      })()}
                       <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
                     </div>;
                   })}
