@@ -13103,7 +13103,19 @@ function PageCalendarioInterno({isMob}){
     if(filterType==="todos"||filterType==="marcos"){
       // Pré-computa IDs de eventos existentes pra detectar marcos órfãos (linked_event_id que aponta pra evento já apagado)
       const _existingEventIds={};
-      (typeof internalEvents!=="undefined"?internalEvents:[]).forEach(function(e){_existingEventIds[String(e.id)]=true;});
+      // Set bidirecional: IDs de marcos referenciados por algum internal_event (linked_milestone_id)
+      // Esses NÃO devem aparecer aqui pra evitar duplicação visual com o pill do internal_event.
+      const _marcosLinkedByEvent={};
+      // Assinatura título+data dos eventos pra dedup por conteúdo (quando o link falha)
+      const _evSig={};
+      (typeof internalEvents!=="undefined"?internalEvents:[]).forEach(function(e){
+        _existingEventIds[String(e.id)]=true;
+        if(e.linked_milestone_id)_marcosLinkedByEvent[String(e.linked_milestone_id)]=true;
+        if(e.title&&e.date){
+          const _k=(e.title||"").trim().toLowerCase()+"|"+String(e.date).slice(0,10);
+          _evSig[_k]=true;
+        }
+      });
       Object.keys(marcosByClient).forEach(function(cid){
         // Resolve cliente: se cid for bioter_xxx, usa o root bioter. Senão busca direto.
         // Fallback: se cliente não encontrado, usa um placeholder pra evitar marco invisível.
@@ -13117,13 +13129,18 @@ function PageCalendarioInterno({isMob}){
         }
         (marcosByClient[cid]||[]).forEach(function(mc){
           if(!mc.date) return;
-          // Marcos vinculados a um evento existente NÃO devem aparecer aqui (evitar duplicação visual com pill do evento)
-          // MAS: se o evento foi apagado e o marco ficou órfão, ele DEVE aparecer aqui pra não sumir.
+          // DEDUP 1: Marco diretamente referenciado por algum internal_event (lado A→B do link)
+          if(_marcosLinkedByEvent[String(mc.id)]) return;
+          // DEDUP 2: Marco com metrics.linked_event_id apontando pra evento existente (lado B→A do link)
           if(mc.metrics && mc.metrics.linked_event_id){
             const _eid=String(mc.metrics.linked_event_id);
             if(_existingEventIds[_eid]) return; // evento ainda existe → pill já aparece via internal_event
             // Senão (órfão), continua e renderiza o marco
           }
+          // DEDUP 3: Por assinatura título+data — se existe um internal_event com mesmo título+data,
+          // o marco é considerado sync'd mesmo sem o link explícito (caso de marcos criados antes do sync)
+          const _mcSig=(mc.title||"").trim().toLowerCase()+"|"+String(mc.date||"").slice(0,10);
+          if(_evSig[_mcSig]) return;
           const dParts=String(mc.date).match(/^(\d{4})-(\d{2})-(\d{2})/);
           if(!dParts) return;
           const my=parseInt(dParts[1],10), mm=parseInt(dParts[2],10), md=parseInt(dParts[3],10);
