@@ -27766,7 +27766,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       .replace(/<(?!\/?(b|i|u|strong|em|br|p|div|span|ul|ol|li|a|h[1-6])\b)[^>]*>/gi,"")
       // strip <font>/<font ...> (deixa só o conteúdo)
       .replace(/<\/?font[^>]*>/gi,"")
-      // strip style/class/face/size/color attributes — sempre Arial 12 ABNT via CSS .brief-arial
+      // strip style/class/face/size/color attributes — sempre Inter 13.5 via CSS .brief-arial
       .replace(/\sstyle\s*=\s*"[^"]*"/gi,"")
       .replace(/\sstyle\s*=\s*'[^']*'/gi,"")
       .replace(/\sclass\s*=\s*"[^"]*"/gi,"")
@@ -28756,7 +28756,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
         {/* TABS */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0"}}>
-          {([["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["audio","Áudio"],["activity","Histórico"]].filter(([id])=>isAgendado?(id!=="desc"&&id!=="audio"):true)).map(([id,lbl])=>(
+          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["audio","Áudio"],["activity","Histórico"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"12px 18px",fontSize:13.5,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#64748b",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"color .12s"}}>
               {lbl}
@@ -29045,8 +29045,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             })()}
             <div>
               {canEdit&&<RichToolbar elRef={descRef}/>}
-              {/* Força Arial 12 ABNT em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
-              <style>{".brief-arial,.brief-arial *{font-family:Arial,Helvetica,sans-serif!important;font-size:12pt!important;line-height:1.5!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
+              {/* Força Inter 13.5 em TODO descendant — normaliza cards antigos com fontFamily inline diferente */}
+              <style>{".brief-arial,.brief-arial *{font-family:'Inter',system-ui,-apple-system,sans-serif!important;font-size:13.5px!important;line-height:1.6!important;color:#0f172a!important;letter-spacing:-.1px!important;}.brief-arial b,.brief-arial strong{font-weight:700!important;}.brief-arial i,.brief-arial em{font-style:italic!important;}.brief-arial u{text-decoration:underline!important;}"}</style>
               <div
                 ref={descRef}
                 className="brief-arial"
@@ -29063,7 +29063,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   const text=cd.getData("text/plain")||"";
                   let toInsert;
                   if(html){
-                    // Sanitiza HTML colado (remove style/class/font/etc — vira Arial 12 via CSS)
+                    // Sanitiza HTML colado (remove style/class/font/etc — vira Inter 13.5 via CSS)
                     toInsert=sanitizeRichText(html);
                   }else{
                     // Texto puro — preserva quebras de linha
