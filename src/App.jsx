@@ -1516,6 +1516,22 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               const cc=calcDesignerPayments(tasks||[], fr.id, refMonth);
               const items=[].concat(cc.tasksFotoObra,cc.tasksArte,cc.tasksCarrossel,cc.tasksFolder,cc.tasksVideo,cc.tasksCorte,cc.tasksVideoComplexo,cc.tasksVideoFeira);
               if(items.length===0) return null;
+              // Ordena mais recente primeiro (publish_date → completed_at → deadline → updated_at → created_at)
+              function _ts(t){
+                const cands=[t.publish_date,t.completed_at,t.deadline,t.updated_at,t.created_at];
+                for(let i=0;i<cands.length;i++){
+                  const v=cands[i];
+                  if(!v) continue;
+                  const d=new Date(v);
+                  if(!isNaN(d.getTime())) return d.getTime();
+                }
+                return 0;
+              }
+              items.sort(function(a,b){
+                const da=_ts(a), db=_ts(b);
+                if(db!==da) return db-da;
+                return String(b.id||"").localeCompare(String(a.id||""));
+              });
               return <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+accent+"22",display:"flex",flexDirection:"column",gap:10}}>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <div style={{color:accent,fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>Produção mensal</div>
