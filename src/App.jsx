@@ -20925,19 +20925,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const _extractImgs=(files,fn)=>(files||[]).filter(fn).slice().reverse().map(f=>_fixUrl(f.url)).filter(_isValidUrl);
   let _filesDesc=[];
   if(tab==="publicacao"||tab==="video"){
-    // CORREÇÃO: mostrar TODAS as imagens não-anotação (incluindo "referencia").
-    // Algumas imagens enviadas pelo designer ficavam invisíveis quando tinham tipo:"referencia"
-    // (drag-and-drop sem canEdit). Solução: filtro permissivo + isFinalImg APENAS como prioridade.
-    const _finals=_extractImgs(current?.files,isFinalImg);
-    const _allImgs=_extractImgs(current?.files,isAnyImg);
-    // Se há "final" especificamente, mostra essas + as demais (referencia) depois pra não esconder nada
-    if(_finals.length>0 && _allImgs.length>_finals.length){
-      // Junta finals primeiro + as ref que não estão em finals
-      const _set=new Set(_finals);
-      _filesDesc=[..._finals, ..._allImgs.filter(u=>!_set.has(u))];
-    }else{
-      _filesDesc=_allImgs;
-    }
+    _filesDesc=_extractImgs(current?.files,isFinalImg);
+    if(_filesDesc.length===0)_filesDesc=_extractImgs(current?.files,isAnyImg);
   }else{
     _filesDesc=_extractImgs(current?.files,isAnyImg);
   }
@@ -28019,8 +28008,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(files.length===0)return;
     // Cria evento sintético compatível com handleFileUpload
     const fakeEvent={target:{files,value:""}};
-    // Default: sobe como "final" (pra criadores que tem ambas perms, sobe como ref se quiser usa botão)
-    const tipo=canEdit?"final":"referencia";
+    // CORREÇÃO: tipo baseado no CARGO do usuário, não em canEdit.
+    // Sócios (partner) + Estrategista (coordinator) → sobem como REFERÊNCIA.
+    // Designers, editores, gestor → sobem como ARTE FINAL.
+    // Isso garante que arrastar-e-soltar do designer vire arte final visível na Aprovação.
+    const _userDash=(user&&user.dash)||"";
+    const _isReviewer=(_userDash==="partner"||_userDash==="coordinator");
+    const tipo=_isReviewer?"referencia":"final";
     handleFileUpload(fakeEvent,tipo);
   };
 
@@ -29188,14 +29182,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             <div>
               <label style={LB}><Ico n="calendar" size={12} color="#94a3b8"/> Data/hora de publicação</label>
               <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:6}}>
-                <div style={{position:"relative",cursor:canEdit?"pointer":"default"}} onClick={canEdit?function(e){const _i=e.currentTarget.querySelector("input[type='date']");if(_i){try{_i.showPicker&&_i.showPicker();}catch(_){_i.focus();}}}:null}>
-                  <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
-                    style={{...SI,fontSize:12,cursor:canEdit?"pointer":"default"}}/>
-                </div>
-                <div style={{position:"relative",cursor:canEdit?"pointer":"default"}} onClick={canEdit?function(e){const _i=e.currentTarget.querySelector("input[type='time']");if(_i){try{_i.showPicker&&_i.showPicker();}catch(_){_i.focus();}}}:null}>
-                  <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
-                    style={{...SI,fontSize:12,cursor:canEdit?"pointer":"default"}}/>
-                </div>
+                <input type="date" value={publishDate} onChange={e=>setPublishDate(e.target.value)} disabled={!canEdit}
+                  style={{...SI,fontSize:12}}/>
+                <input type="time" value={publishTime} onChange={e=>setPublishTime(e.target.value)} disabled={!canEdit}
+                  style={{...SI,fontSize:12}}/>
               </div>
               {publishDate&&<div style={{color:"#94a3b8",fontSize:9,marginTop:4,fontStyle:"italic"}}>
                 Aparece no Calendário de Publicação
