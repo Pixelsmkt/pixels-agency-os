@@ -13607,7 +13607,11 @@ function PageCalendarioInterno({isMob}){
                     // Lê array client_ids primeiro, fallback pro client_id legado. Renderiza cor/nome do primeiro.
                     const _evCids=(function(){try{if(Array.isArray(ev.client_ids))return ev.client_ids;if(typeof ev.client_ids==="string"&&ev.client_ids){const _p=JSON.parse(ev.client_ids);if(Array.isArray(_p))return _p;}}catch(_){}return ev.client_id?[ev.client_id]:[];})();
                     const _firstCid=_evCids[0]||null;
-                    const _cl=(_firstCid&&typeof CLIENTS!=="undefined")?CLIENTS.find(function(c){return c.id===_firstCid;}):null;
+                    let _cl=(_firstCid&&typeof CLIENTS!=="undefined")?CLIENTS.find(function(c){return c.id===_firstCid;}):null;
+                    // Fallback: unidades Bioter (bioter_chapeco, bioter_castro, etc) caem no root "bioter" pra puxar logo + cor
+                    if(!_cl&&_firstCid&&typeof _firstCid==="string"&&_firstCid.indexOf("bioter_")===0&&typeof CLIENTS!=="undefined"){
+                      _cl=CLIENTS.find(function(c){return c.id==="bioter";});
+                    }
                     const _clLogo = _cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_cl.id];
                     const _multiClients=_evCids.length>1;
                     const _catColors={aniversario:"#ec4899",reuniao:"#0ea5e9",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777"};
