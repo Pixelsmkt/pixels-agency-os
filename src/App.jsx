@@ -20925,8 +20925,19 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const _extractImgs=(files,fn)=>(files||[]).filter(fn).slice().reverse().map(f=>_fixUrl(f.url)).filter(_isValidUrl);
   let _filesDesc=[];
   if(tab==="publicacao"||tab==="video"){
-    _filesDesc=_extractImgs(current?.files,isFinalImg);
-    if(_filesDesc.length===0)_filesDesc=_extractImgs(current?.files,isAnyImg);
+    // CORREÇÃO: mostrar TODAS as imagens não-anotação (incluindo "referencia").
+    // Algumas imagens enviadas pelo designer ficavam invisíveis quando tinham tipo:"referencia"
+    // (drag-and-drop sem canEdit). Solução: filtro permissivo + isFinalImg APENAS como prioridade.
+    const _finals=_extractImgs(current?.files,isFinalImg);
+    const _allImgs=_extractImgs(current?.files,isAnyImg);
+    // Se há "final" especificamente, mostra essas + as demais (referencia) depois pra não esconder nada
+    if(_finals.length>0 && _allImgs.length>_finals.length){
+      // Junta finals primeiro + as ref que não estão em finals
+      const _set=new Set(_finals);
+      _filesDesc=[..._finals, ..._allImgs.filter(u=>!_set.has(u))];
+    }else{
+      _filesDesc=_allImgs;
+    }
   }else{
     _filesDesc=_extractImgs(current?.files,isAnyImg);
   }
