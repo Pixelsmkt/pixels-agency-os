@@ -14403,13 +14403,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 onDrop={function(e){if(day){e.preventDefault();handleDropOnDay(day);}}}
                 onClick={function(e){
                   if(!day||!_canCreateFromCal)return;
-                  // Só cria se o clique foi DIRETO no quadrado do dia (não em cima de card/evento dentro)
-                  if(e.target!==e.currentTarget&&!e.target.hasAttribute("data-day-empty"))return;
+                  // Clique em qualquer área vazia do dia → cria card. Cards internos chamam e.stopPropagation()
+                  // pra abrir o próprio modal sem disparar a criação.
                   _createDraftAtDay(day);
                 }}
-                onMouseEnter={function(e){if(!_canCreateFromCal)return;const b=e.currentTarget.querySelector("[data-addbtn-cal]");if(b){b.style.opacity="1";b.style.transform="scale(1)";}}}
-                onMouseLeave={function(e){const b=e.currentTarget.querySelector("[data-addbtn-cal]");if(b){b.style.opacity="0";b.style.transform="scale(0.85)";}}}
-                style={{
+style={{
                 height:isMob?170:260,
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
@@ -14424,12 +14422,6 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 cursor:_canCreateFromCal&&day?"pointer":"default",
                 position:"relative",
               }}>
-                {day&&_canCreateFromCal&&<div data-addbtn-cal aria-label="Nova publicação"
-                  onClick={function(e){e.stopPropagation();_createDraftAtDay(day);}}
-                  title="Nova publicação neste dia"
-                  style={{position:"absolute",top:6,right:6,width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transform:"scale(0.85)",transition:"all .18s cubic-bezier(.4,0,.2,1)",boxShadow:"0 4px 12px rgba(124,58,237,0.35), 0 0 0 2px #fff",zIndex:2,cursor:"pointer",border:"none",padding:0}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                </div>}
                 {day&&(<>
                   {/* Número do dia */}
                   <div style={{
@@ -14498,7 +14490,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                       const hasLogo=typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[t.client];
                       const isShortFromDrive=t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short";
                       return(
-                        <div key={t.id} onClick={()=>setOpenCard(t)}
+                        <div key={t.id} onClick={function(e){e.stopPropagation();setOpenCard(t);}}
                           draggable={true}
                           onDragStart={function(e){setDragTaskId(t.id);if(e.dataTransfer)e.dataTransfer.effectAllowed="move";}}
                           onDragEnd={function(){setDragTaskId(null);setDropDayId(null);}}
