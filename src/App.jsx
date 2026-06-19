@@ -21725,37 +21725,45 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             </>)}
 
             {(tab==="publicacao"||tab==="video")&&(<>
-              {/* Botões outlined-fill: bg branco/colored-tint + border colorida + ícone+texto colorido. Hover preenche. */}
-              <button onClick={()=>approvePub(current)} data-actbtn="approve"
-                style={{width:"100%",background:"#fff",color:"#16a34a",border:"1.5px solid #16a34a55",borderRadius:11,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,backdropFilter:"blur(8px)"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#16a34a";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#16a34a";e.currentTarget.style.boxShadow="0 6px 18px #16a34a44";e.currentTarget.style.transform="translateY(-1px)";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#16a34a";e.currentTarget.style.borderColor="#16a34a55";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Aprovar publicação
-              </button>
-              <button onClick={async()=>{ if(await pixelsConfirm("Reprovar este material? Ele vai pra coluna Reprovadas. A produção foi feita, então ainda conta no pagamento do mês.",{okText:"Reprovar",danger:true})) rejectPub(current); }}
-                title="Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."
-                style={{width:"100%",background:"#fff",color:"#dc2626",border:"1.5px solid #dc262655",borderRadius:11,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,backdropFilter:"blur(8px)"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";e.currentTarget.style.boxShadow="0 6px 18px #dc262644";e.currentTarget.style.transform="translateY(-1px)";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#dc262655";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                Reprovar publicação
-              </button>
-              <button onClick={()=>setEditAnnot(current)}
-                style={{width:"100%",background:"#fff",color:"#ea580c",border:"1.5px solid #ea580c55",borderRadius:11,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,backdropFilter:"blur(8px)"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#ea580c";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#ea580c";e.currentTarget.style.boxShadow="0 6px 18px #ea580c44";e.currentTarget.style.transform="translateY(-1px)";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#ea580c";e.currentTarget.style.borderColor="#ea580c55";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-                Solicitar ajuste
-              </button>
-              <button onClick={()=>sendBackToCopy(current)}
-                title="Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."
-                style={{width:"100%",background:"#fff",color:"#ca8a04",border:"1.5px solid #ca8a0455",borderRadius:11,padding:"12px 0",fontWeight:700,fontSize:13.5,letterSpacing:.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,backdropFilter:"blur(8px)"}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#eab308";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#eab308";e.currentTarget.style.boxShadow="0 6px 18px #eab30844";e.currentTarget.style.transform="translateY(-1px)";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#ca8a04";e.currentTarget.style.borderColor="#ca8a0455";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="";}}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
-                Enviar para ajuste de copy
-              </button>
+              {/* Botões estilo Linear/Vercel — chip colorido pro ícone, texto escuro, hover com glow */}
+              {(function(){
+                const _BTNS=[
+                  {label:"Aprovar publicação", color:"#16a34a", colorDark:"#15803d", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, onClick:()=>approvePub(current), kbd:"Enter"},
+                  {label:"Reprovar publicação", color:"#dc2626", colorDark:"#b91c1c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>, onClick:async()=>{ if(await pixelsConfirm("Reprovar este material? Ele vai pra coluna Reprovadas. A produção foi feita, então ainda conta no pagamento do mês.",{okText:"Reprovar",danger:true})) rejectPub(current); }, title:"Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."},
+                  {label:"Solicitar ajuste", color:"#ea580c", colorDark:"#c2410c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, onClick:()=>setEditAnnot(current)},
+                  {label:"Enviar para ajuste de copy", color:"#eab308", colorDark:"#ca8a04", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>, onClick:()=>sendBackToCopy(current), title:"Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."},
+                ];
+                return _BTNS.map(function(b,i){
+                  return <button key={i} onClick={b.onClick} title={b.title||b.label}
+                    style={{width:"100%",background:"linear-gradient(180deg,#ffffff,#fafbfc)",color:"#0f172a",border:"1px solid #e5e7eb",borderRadius:12,padding:"11px 14px",fontWeight:600,fontSize:13.5,letterSpacing:-.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 1px 2px rgba(15,23,42,0.04), 0 0 0 0 transparent",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}
+                    onMouseEnter={e=>{
+                      e.currentTarget.style.background="linear-gradient(180deg,#fff,"+b.color+"08)";
+                      e.currentTarget.style.borderColor=b.color+"66";
+                      e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 0 0 4px "+b.color+"15, 0 8px 20px "+b.color+"22";
+                      e.currentTarget.style.transform="translateY(-1px)";
+                      const c=e.currentTarget.querySelector("[data-chip]");
+                      if(c){c.style.background=b.color;c.style.color="#fff";c.style.transform="scale(1.06)";c.style.boxShadow="0 2px 8px "+b.color+"55";}
+                      const t=e.currentTarget.querySelector("[data-label]");
+                      if(t)t.style.color=b.colorDark;
+                    }}
+                    onMouseLeave={e=>{
+                      e.currentTarget.style.background="linear-gradient(180deg,#ffffff,#fafbfc)";
+                      e.currentTarget.style.borderColor="#e5e7eb";
+                      e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 0 0 0 transparent";
+                      e.currentTarget.style.transform="";
+                      const c=e.currentTarget.querySelector("[data-chip]");
+                      if(c){c.style.background=b.color+"15";c.style.color=b.color;c.style.transform="";c.style.boxShadow="none";}
+                      const t=e.currentTarget.querySelector("[data-label]");
+                      if(t)t.style.color="#0f172a";
+                    }}
+                    onMouseDown={e=>{e.currentTarget.style.transform="translateY(0) scale(0.985)";}}
+                    onMouseUp={e=>{e.currentTarget.style.transform="translateY(-1px)";}}>
+                    <span data-chip style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:8,background:b.color+"15",color:b.color,flexShrink:0,transition:"all .18s cubic-bezier(.4,0,.2,1)"}}>{b.icon}</span>
+                    <span data-label style={{flex:1,textAlign:"left",transition:"color .18s",letterSpacing:-.15}}>{b.label}</span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{color:"#cbd5e1",flexShrink:0,opacity:.7}}><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>;
+                });
+              })()}
             </>)}
 
             {tab==="internas"&&(<>
