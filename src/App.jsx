@@ -21733,23 +21733,25 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               </button>
               <button onClick={async()=>{ if(await pixelsConfirm("Reprovar este material? Ele vai pra coluna Reprovadas. A produção foi feita, então ainda conta no pagamento do mês.",{okText:"Reprovar",danger:true})) rejectPub(current); }}
                 title="Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."
-                style={{width:"100%",background:"#475569",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #47556933"}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px #47556955";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #47556933";}}>
+                style={{width:"100%",background:"#dc2626",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #dc262640",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 18px #dc262666";e.currentTarget.style.background="#b91c1c";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #dc262640";e.currentTarget.style.background="#dc2626";}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                 Reprovar publicação
               </button>
               <button onClick={()=>setEditAnnot(current)}
-                style={{width:"100%",background:"transparent",color:C.or,border:"1px solid "+C.or+"66",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s"}}
-                onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
-                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
+                style={{width:"100%",background:"#ea580c",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #ea580c40",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 18px #ea580c66";e.currentTarget.style.background="#c2410c";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #ea580c40";e.currentTarget.style.background="#ea580c";}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                 Solicitar ajuste
               </button>
               <button onClick={()=>sendBackToCopy(current)}
                 title="Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."
-                style={{width:"100%",background:"transparent",color:"#7c3aed",border:"1px solid "+C.b1,borderRadius:10,padding:"11px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#7c3aed66";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.b1;}}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                style={{width:"100%",background:"#eab308",color:"#fff",border:"none",borderRadius:10,padding:"13px 0",fontWeight:700,fontSize:13.5,letterSpacing:.2,cursor:"pointer",transition:"all .15s",boxShadow:"0 2px 8px #eab30844",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,textShadow:"0 1px 1px rgba(0,0,0,0.08)"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 18px #eab30866";e.currentTarget.style.background="#ca8a04";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px #eab30844";e.currentTarget.style.background="#eab308";}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
                 Enviar para ajuste de copy
               </button>
             </>)}
@@ -21874,32 +21876,58 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                   const rounds=Array.from(map.values()).filter(r=>r.comments.length>0||r.audio||r.images.length>0).sort((a,b)=>b.ts-a.ts);
                   if(rounds.length===0)return null;
                   const _fmt=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
-                  return(<div style={{borderTop:"1px solid "+C.b1,paddingTop:14}}>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                      <div style={{color:"#dc2626",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8}}>Histórico de ajustes</div>
-                      <span style={{background:"#fef2f2",color:"#dc2626",borderRadius:99,padding:"2px 8px",fontSize:10,fontWeight:700}}>{rounds.length} round{rounds.length>1?"s":""}</span>
+                  return(<div style={{borderTop:"1px solid "+C.b1,paddingTop:16}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,gap:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:7,color:"#ea580c"}}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        <span style={{fontSize:11,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>Ajustes pedidos</span>
+                      </div>
+                      <span style={{background:"#fff7ed",color:"#ea580c",border:"1px solid #fed7aa",borderRadius:99,padding:"3px 10px",fontSize:10.5,fontWeight:800,letterSpacing:.3,fontFeatureSettings:"\'tnum\'"}}>{rounds.length} round{rounds.length>1?"s":""}</span>
                     </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
                       {rounds.map((r,ri)=>{
                         const firstC=r.comments[0]||r.audio||{};
                         const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
-                        const accent=isClient?"#16a34a":"#7c3aed";
+                        // Cliente = laranja (Bioter/cliente pediu), Revisor = roxo Pixels
+                        const accent=isClient?"#ea580c":"#7c3aed";
+                        const accentSoft=isClient?"#fff7ed":"#f5f3ff";
                         const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
                         const isLatest=ri===0;
-                        return(<div key={r.key} style={{background:isLatest?"#fafaff":"#fff",border:"1px solid "+(isLatest?accent+"33":C.b1),borderRadius:10,padding:"10px 12px"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6,flexWrap:"wrap"}}>
-                            <span style={{background:accent,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
-                            <span style={{color:C.tx,fontSize:11,fontWeight:700}}>{userName}</span>
-                            {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"1px 7px",borderRadius:99,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ recente</span>}
-                            {r.ts>0&&<span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>{_fmt(r.ts)}</span>}
+                        const _roundNum=rounds.length-ri;
+                        return(<div key={r.key} style={{background:accentSoft,border:"1px solid "+accent+"33",borderRadius:12,padding:0,overflow:"hidden",boxShadow:isLatest?"0 2px 8px "+accent+"22":"none"}}>
+                          {/* Cabeçalho colorido do round */}
+                          <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:accent,color:"#fff",flexWrap:"wrap"}}>
+                            <span style={{background:"rgba(255,255,255,0.22)",color:"#fff",fontSize:10,fontWeight:800,letterSpacing:.4,padding:"2px 8px",borderRadius:5,fontFeatureSettings:"\'tnum\'"}}>Round {_roundNum}</span>
+                            <span style={{fontSize:11,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",opacity:.92}}>{isClient?"Cliente":"Revisor"}</span>
+                            <span style={{fontSize:11.5,fontWeight:600,opacity:.95}}>·</span>
+                            <span style={{fontSize:11.5,fontWeight:600,opacity:.95}}>{userName}</span>
+                            {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:9,padding:"2px 8px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginLeft:4}}>+ recente</span>}
+                            {r.ts>0&&<span style={{fontSize:10.5,marginLeft:"auto",opacity:.88,fontFeatureSettings:"\'tnum\'"}}>{_fmt(r.ts)}</span>}
                           </div>
-                          {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0||r.images.length>0?6:0}}/>}
-                          {r.comments.map(cc=>(<div key={cc.id} style={{color:C.tx,fontSize:11.5,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4}}>{String(cc.text||"").replace("AJUSTE NECESSARIO: ","")}</div>))}
-                          {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>
-                            {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" onClick={()=>setOpenCard(current)}
-                              title="Abrir cartão pra ver em tamanho grande"
-                              style={{width:54,height:54,objectFit:"cover",borderRadius:7,cursor:"pointer",border:"1px solid "+C.b1}}/>))}
-                          </div>}
+                          {/* Corpo do round */}
+                          <div style={{padding:"11px 12px 12px",display:"flex",flexDirection:"column",gap:8}}>
+                            {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:30}}/>}
+                            {r.comments.length>0&&r.comments.map(cc=>{
+                              const txt=String(cc.text||"").replace("AJUSTE NECESSARIO: ","").trim();
+                              if(!txt)return null;
+                              return(<div key={cc.id} style={{position:"relative",background:"#fff",border:"1px solid "+accent+"22",borderRadius:8,padding:"10px 12px 10px 14px",borderLeft:"3px solid "+accent}}>
+                                <div style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",fontWeight:500}}>{txt}</div>
+                              </div>);
+                            })}
+                            {r.images.length>0&&<div>
+                              <div style={{color:accent,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,display:"flex",alignItems:"center",gap:4}}>
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><polyline points="21 15 16 10 5 21"/></svg>
+                                {r.images.length} anotação{r.images.length>1?"es":""}
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(64px,1fr))",gap:6}}>
+                                {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" onClick={()=>setOpenCard(current)}
+                                  title="Abrir cartão pra ver em tamanho grande"
+                                  style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:7,cursor:"pointer",border:"1px solid "+accent+"33",transition:"all .12s"}}
+                                  onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.05)";e.currentTarget.style.borderColor=accent;}}
+                                  onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.borderColor=accent+"33";}}/>))}
+                              </div>
+                            </div>}
+                          </div>
                         </div>);
                       })}
                     </div>
