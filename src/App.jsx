@@ -13426,17 +13426,39 @@ function PageCalendarioInterno({isMob}){
         compact={true}
         renderDay={function(date,i){
           if(!date)return null;
-          const evs=eventsByDay(date);
+          // Dedup defensiva: se internal_event tem mesmo título do marco no mesmo dia, oculta o MARCO
+          // (o internal_event é a source of truth quando ambos existem)
+          const _evsRaw=eventsByDay(date);
+          const _myEvsForDedup=(typeof _eventsOnDay==="function")?_eventsOnDay(date):[];
+          const _evSigForDedup={};
+          _myEvsForDedup.forEach(function(ev){
+            if(ev&&ev.title)_evSigForDedup[(ev.title||"").trim().toLowerCase()]=true;
+          });
+          const evs=_evsRaw.filter(function(ev){
+            if(!ev||ev.kind!=="marco")return true;
+            const _sig=(ev.title||"").trim().toLowerCase();
+            return !_evSigForDedup[_sig];
+          });
           const isToday=date.toDateString()===new Date().toDateString();
           const _dayIso=date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
+          // Detecta hover só pra socio (ghost card)
+          const _uHover=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
+          const _canCreateHere=!!(_uHover&&_uHover.level===1);
           return <div
             onClick={function(e){
               const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;
               if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem criar eventos no calendário.");return;}
               setOpenNewEvent({date:_dayIso});
             }}
-            onMouseEnter={function(e){const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;if(!_u||_u.level!==1)return;const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn){btn.style.opacity="1";btn.style.transform="scale(1)";}}}
-            onMouseLeave={function(e){const btn=e.currentTarget.querySelector("[data-addbtn]");if(btn){btn.style.opacity="0";btn.style.transform="scale(0.85)";}}}
+            onMouseEnter={function(e){
+              if(!_canCreateHere)return;
+              const g=e.currentTarget.querySelector("[data-ghost-evt]");
+              if(g){g.style.opacity="1";g.style.transform="scale(1)";}
+            }}
+            onMouseLeave={function(e){
+              const g=e.currentTarget.querySelector("[data-ghost-evt]");
+              if(g){g.style.opacity="0";g.style.transform="scale(0.98)";}
+            }}
             onDragOver={function(e){if(dragItem){e.preventDefault();e.currentTarget.style.background="#faf5ff";}}}
             onDragLeave={function(e){e.currentTarget.style.background="";}}
             onDrop={function(e){
@@ -13444,14 +13466,23 @@ function PageCalendarioInterno({isMob}){
               e.currentTarget.style.background="";
               if(dragItem){ _moveItemTo(dragItem, _dayIso); setDragItem(null); }
             }}
-            style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s",cursor:"pointer",position:"relative"}}>
-            {/* Botão "+" moderno que aparece no hover (estilo Google Agenda) */}
-            <div data-addbtn aria-label="Adicionar evento"
-              style={{position:"absolute",top:6,right:6,width:24,height:24,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transform:"scale(0.85)",transition:"all .18s cubic-bezier(.4,0,.2,1)",pointerEvents:"none",boxShadow:"0 4px 12px rgba(124,58,237,0.35), 0 0 0 2px #fff",zIndex:2}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            </div>
+            style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s",cursor:_canCreateHere?"pointer":"default",position:"relative"}}>
             <CalendarDayNumber day={date} isToday={isToday}/>
-            <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:5,overflow:"hidden",flex:1}}>
+            {/* Ghost card — wireframe estilo card que aparece no hover (só pra sócios) */}
+            {_canCreateHere&&<div data-ghost-evt aria-hidden="true"
+              style={{position:"absolute",left:6,right:6,top:30,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.55)",padding:"6px 8px 7px",display:"flex",flexDirection:"column",gap:6,minHeight:50,opacity:0,transform:"scale(0.98)",transformOrigin:"top center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box"}}>
+              <div style={{display:"flex",alignItems:"center",gap:5}}>
+                <div style={{width:18,height:18,borderRadius:5,background:"#e2e8f0",flexShrink:0}}/>
+                <div style={{height:9,width:32,borderRadius:3,background:"#e2e8f0"}}/>
+                <div style={{flex:1}}/>
+              </div>
+              <div style={{height:8,width:"72%",borderRadius:3,background:"#e2e8f0"}}/>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,color:"#94a3b8",fontSize:9.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,marginTop:1}}>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Novo evento
+              </div>
+            </div>}
+            <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:5,overflow:"hidden",flex:1,position:"relative",zIndex:1}}>
               {evs.slice(0,2).map(function(ev){
                 const isMarco = ev.kind==="marco";
                 const onClick = isMarco ? function(e){if(e)e.stopPropagation();setOpenMarco({marco:ev._marco, cl:ev._cl});} : null;
