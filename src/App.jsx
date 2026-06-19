@@ -1516,13 +1516,28 @@ function FreelancerPaymentsBlock({tasks, setTasks, refMonth, onChangeMonth, isMo
               const cc=calcDesignerPayments(tasks||[], fr.id, refMonth);
               const items=[].concat(cc.tasksFotoObra,cc.tasksArte,cc.tasksCarrossel,cc.tasksFolder,cc.tasksVideo,cc.tasksCorte,cc.tasksVideoComplexo,cc.tasksVideoFeira);
               if(items.length===0) return null;
-              // Ordena mais recente primeiro (publish_date → completed_at → deadline → updated_at → created_at)
+              // Ordena ENTREGAS mais recentes primeiro.
+              // Tasks vêm em camelCase do state local; snake_case usado como fallback (Supabase raw).
+              // Prioridade: completedAt (entregou) → publishDate (publicou) → updated_at → deadline → colEnteredAt → createdAt
               function _ts(t){
-                const cands=[t.publish_date,t.completed_at,t.deadline,t.updated_at,t.created_at];
+                const cands=[
+                  t.completedAt, t.completed_at,
+                  t.publishDate, t.publish_date,
+                  t.updated_at, t.updatedAt,
+                  t.deadline,
+                  t.colEnteredAt, t.col_entered_at,
+                  t.createdAt, t.created_at
+                ];
                 for(let i=0;i<cands.length;i++){
                   const v=cands[i];
                   if(!v) continue;
-                  const d=new Date(v);
+                  let _v=v;
+                  // formato BR ex.: "19/06/2026 às 14:30" → ISO
+                  if(typeof v==="string"&&v.indexOf(" às ")>0){
+                    const _m=v.match(/^(\d{2})\/(\d{2})\/(\d{4}) às (\d{1,2}):(\d{2})/);
+                    if(_m)_v=_m[3]+"-"+_m[2]+"-"+_m[1]+"T"+_m[4].padStart(2,"0")+":"+_m[5];
+                  }
+                  const d=new Date(_v);
                   if(!isNaN(d.getTime())) return d.getTime();
                 }
                 return 0;
@@ -13155,7 +13170,9 @@ function PageCalendarioInterno({isMob}){
           if(mc.metrics && mc.metrics.linked_event_id){
             const _eid=String(mc.metrics.linked_event_id);
             if(_existingEventIds[_eid]) return; // evento ainda existe → pill já aparece via internal_event
-            // Senão (órfão), continua e renderiza o marco
+            // ÓRFÃO: evento foi apagado mas marco sobrou. Filtra do calendário interno
+            // (aparece só no Portal/Estratégia onde Marcos são source of truth)
+            return;
           }
           // DEDUP 3: Por assinatura título+data — se existe um internal_event com mesmo título+data,
           // o marco é considerado sync'd mesmo sem o link explícito (caso de marcos criados antes do sync)
@@ -13619,13 +13636,21 @@ function PageCalendarioInterno({isMob}){
                           if(!yes)return;
                           if(!window._sb)return;
                           function _done(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Apagado.");setInternalEvents(function(p){return (p||[]).filter(function(x){return x.id!==ev.id;});});if(ev.linked_milestone_id)setMarcosByClient(function(p){const n={};Object.keys(p||{}).forEach(function(cid){n[cid]=(p[cid]||[]).filter(function(x){return x.id!==ev.linked_milestone_id;});});return n;});_reloadInternalEvents();if(typeof _reloadMarcos==="function")_reloadMarcos();}
-                          if(ev.linked_milestone_id){
-                            window._sb.from("client_milestones").delete().eq("id",ev.linked_milestone_id).then(function(){
-                              window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);
-                            }).catch(function(){window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);});
-                          }else{
-                            window._sb.from("internal_events").delete().eq("id",ev.id).then(_done);
-                          }
+                          // Apaga TODOS os marcos vinculados (não só o linked_milestone_id principal)
+                          function _delEvDone(){window._sb.from("internal_events").delete().eq("id",ev.id).then(_done).catch(function(e){console.warn("[ev del]",e);_done();});}
+                          window._sb.from("client_milestones").delete().eq("metrics->>linked_event_id",String(ev.id)).then(function(){
+                            if(ev.linked_milestone_id){
+                              window._sb.from("client_milestones").delete().eq("id",ev.linked_milestone_id).then(_delEvDone).catch(_delEvDone);
+                            }else{
+                              _delEvDone();
+                            }
+                          }).catch(function(){
+                            if(ev.linked_milestone_id){
+                              window._sb.from("client_milestones").delete().eq("id",ev.linked_milestone_id).then(_delEvDone).catch(_delEvDone);
+                            }else{
+                              _delEvDone();
+                            }
+                          });
                         });
                       }}
                       title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="weekly"?"semanal":ev.recurrence==="monthly"?"mensal":"anual"):"")+(_cl?" · "+(_cl.name||_cl.nome):"")}
@@ -15884,14 +15909,35 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(isNaN(tb))return -1;
     return asc?(ta-tb):(tb-ta);
   };
-  // Compara por data de conclusão/entrega (completedAt → updated_at → colEnteredAt)
+  // Compara por data de entrega pra coluna atual.
+  // PRIORIDADE: colEnteredAt (entrou nessa fase) > completedAt (concluiu) > publishDate > updated_at (fallback)
+  // colEnteredAt é o sinal mais forte de "quando foi entregue PRA essa coluna" — muda sempre que o card é movido.
+  // updated_at muda em QUALQUER edição (comentário, briefing) e por isso vinha pra cima cards que não foram entregues recentemente.
   const compareByCompletedAt=function(a,b,asc){
     function _ts(t){
-      const cands=[t.completedAt,t.completed_at,t.updated_at,t.updatedAt,t.colEnteredAt,t.col_entered_at];
+      const cands=[
+        t.colEnteredAt, t.col_entered_at,
+        t.completedAt, t.completed_at,
+        t.publishDate, t.publish_date,
+        t.updated_at, t.updatedAt,
+        t.deadline,
+        t.createdAt, t.created_at
+      ];
       for(let i=0;i<cands.length;i++){
         const v=cands[i];
         if(!v)continue;
-        const d=new Date(v);
+        let _v=v;
+        // formato BR ex.: "19/06/2026 às 14:30" → ISO
+        if(typeof v==="string"&&v.indexOf(" às ")>0){
+          const _m=v.match(/^(\d{2})\/(\d{2})\/(\d{4}) às (\d{1,2}):(\d{2})/);
+          if(_m)_v=_m[3]+"-"+_m[2]+"-"+_m[1]+"T"+_m[4].padStart(2,"0")+":"+_m[5];
+        }
+        // formato BR só data: "19/06/2026" → ISO
+        else if(typeof v==="string"&&/^\d{2}\/\d{2}\/\d{4}$/.test(v)){
+          const _p=v.split("/");
+          _v=_p[2]+"-"+_p[1]+"-"+_p[0];
+        }
+        const d=new Date(_v);
         const _t=d.getTime();
         if(!isNaN(_t))return _t;
       }
