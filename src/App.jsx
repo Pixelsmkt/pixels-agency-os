@@ -16742,11 +16742,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 })()}
                 {colMenuOpen===col.id&&(function(){
                   const opts=[
-                    {id:null,         label:"Padrão",                     hint:"Inteligente · prazo · manual", icon:"sparkles", color:"#64748b"},
-                    {id:"pubAsc",     label:"Publicação mais próxima",    hint:"Data crescente",               icon:"calendar-asc", color:"#7c3aed"},
-                    {id:"pubDesc",    label:"Publicação mais distante",   hint:"Data decrescente",             icon:"calendar-desc", color:"#7c3aed"},
-                    {id:"entregaDesc",label:"Entregas mais recentes",     hint:"Concluído primeiro",           icon:"check-recent", color:"#16a34a"},
-                    {id:"entregaAsc", label:"Entregas mais antigas",      hint:"Concluído por último",         icon:"check-old", color:"#16a34a"},
+                    {id:"pubAsc",     label:"Publicação mais próxima",    hint:"Mais próxima no topo",          icon:"calendar-asc", color:"#7c3aed"},
+                    {id:"pubDesc",    label:"Publicação mais distante",   hint:"Mais distante no topo",         icon:"calendar-desc", color:"#7c3aed"},
+                    {id:"entregaDesc",label:"Entregas mais recentes",     hint:"Recém-entregues no topo",       icon:"check-recent", color:"#16a34a"},
+                    {id:"entregaAsc", label:"Entregas mais antigas",      hint:"Mais antigas no topo",          icon:"check-old", color:"#16a34a"},
                   ];
                   const current=colSortMode[col.id]||null;
                   function _renderIcon(name,color){
@@ -16769,9 +16768,10 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                         {opts.map(o=>{
                           const active=current===o.id;
                           return <button key={String(o.id)} onClick={()=>{
-                            setColSortMode(prev=>{const out={...prev};if(o.id===null)delete out[col.id];else out[col.id]=o.id;return out;});
+                            setColSortMode(prev=>{const out={...prev};if(active||o.id===null)delete out[col.id];else out[col.id]=o.id;return out;});
                             setColMenuOpen(null);
-                          }} style={{display:"flex",width:"100%",alignItems:"center",gap:10,background:active?o.color+"12":"transparent",border:"none",borderRadius:10,padding:"10px 11px",cursor:"pointer",textAlign:"left",transition:"all .14s",position:"relative"}}
+                          }} title={active?"Clique pra voltar pra ordenação padrão":o.label}
+                          style={{display:"flex",width:"100%",alignItems:"center",gap:10,background:active?o.color+"12":"transparent",border:"none",borderRadius:10,padding:"10px 11px",cursor:"pointer",textAlign:"left",transition:"all .14s",position:"relative"}}
                             onMouseEnter={e=>{if(!active)e.currentTarget.style.background="#f8fafc";}}
                             onMouseLeave={e=>{if(!active)e.currentTarget.style.background="transparent";}}>
                             <div style={{width:30,height:30,borderRadius:8,background:active?o.color+"22":"#f1f5f9",border:active?"1px solid "+o.color+"44":"1px solid transparent",color:active?o.color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .14s"}}>
