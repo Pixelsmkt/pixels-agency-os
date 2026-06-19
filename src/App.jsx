@@ -28774,23 +28774,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {/* DESC */}
           {activeTab==="desc"&&<div style={{display:"flex",flexDirection:"column",gap:20}}>
 
-            {/* ══ AGENDADO: corpo simplificado ══ */}
-            {isAgendado&&caption&&<div style={{background:"linear-gradient(135deg,#f0f9ff,#e0f2fe)",border:"1px solid #4db8ff44",borderRadius:14,padding:"16px 18px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
-                <span style={{color:"#0284c7",display:"flex"}}><Ico n="fileText" size={14}/></span>
-                <span style={{color:"#0284c7",fontWeight:700,fontSize:12,textTransform:"uppercase",letterSpacing:.5}}>Texto da Legenda</span>
-                <span style={{marginLeft:"auto",background:"#4db8ff18",color:"#0284c7",borderRadius:99,padding:"1px 8px",fontSize:9,fontWeight:700}}>Pronto para publicação</span>
-              </div>
-              <div style={{color:"#0f172a",fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap",wordBreak:"break-word"}}><LinkifiedText text={caption}/></div>
-            </div>}
-            {isAgendado&&!caption&&<div style={{background:"#fff7ed",border:"1px dashed #f97316",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:8}}>
-              <span style={{color:"#ea580c",display:"flex",flexShrink:0}}><Ico n="alert" size={16}/></span>
-              <div>
-                <div style={{color:"#9a3412",fontWeight:700,fontSize:12}}>Legenda não preenchida</div>
-                <div style={{color:"#c2410c",fontSize:11,marginTop:2}}>Acesse a aba 📝 Legenda para inserir o texto final da publicação</div>
-              </div>
-            </div>}
-
             {/* AJUSTES SOLICITADOS — agrupados por lote (comentario + imagens daquele round) */}
             {(task.isAlteracao||task.status==="alteracao"||task.status==="ajustes"||(task.files||[]).some(f=>f.isAnnotation))&&(()=>{
               const allAnnotations=(task.files||[]).filter(f=>f.isAnnotation);
