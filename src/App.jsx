@@ -21739,7 +21739,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 ];
                 return _BTNS.map(function(b,i){
                   return <button key={i} onClick={b.onClick} title={b.title||b.label}
-                    style={{width:"100%",background:"linear-gradient(180deg,#ffffff,#fafbfc)",color:"#0f172a",border:"1px solid #e5e7eb",borderRadius:12,padding:"11px 14px",fontWeight:600,fontSize:13.5,letterSpacing:-.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"flex",alignItems:"center",gap:10,boxShadow:"0 1px 2px rgba(15,23,42,0.04), 0 0 0 0 transparent",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}
+                    style={{width:"100%",background:"linear-gradient(180deg,#ffffff,#fafbfc)",color:"#0f172a",border:"1px solid #e5e7eb",borderRadius:12,padding:"11px 14px",fontWeight:600,fontSize:13.5,letterSpacing:-.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 1px 2px rgba(15,23,42,0.04), 0 0 0 0 transparent",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}
                     onMouseEnter={e=>{
                       e.currentTarget.style.background="linear-gradient(180deg,#fff,"+b.color+"08)";
                       e.currentTarget.style.borderColor=b.color+"66";
@@ -21763,8 +21763,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                     onMouseDown={e=>{e.currentTarget.style.transform="translateY(0) scale(0.985)";}}
                     onMouseUp={e=>{e.currentTarget.style.transform="translateY(-1px)";}}>
                     <span data-chip style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:8,background:b.color+"15",color:b.color,flexShrink:0,transition:"all .18s cubic-bezier(.4,0,.2,1)"}}>{b.icon}</span>
-                    <span data-label style={{flex:1,textAlign:"left",transition:"color .18s",letterSpacing:-.15}}>{b.label}</span>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{color:"#cbd5e1",flexShrink:0,opacity:.7}}><polyline points="9 18 15 12 9 6"/></svg>
+                    <span data-label style={{transition:"color .18s",letterSpacing:-.15}}>{b.label}</span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",color:"#cbd5e1",flexShrink:0,opacity:.45,transition:"opacity .18s, transform .18s"}}><polyline points="9 18 15 12 9 6"/></svg>
                   </button>;
                 });
               })()}
