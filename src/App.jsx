@@ -12357,7 +12357,7 @@ function CalendarGrid({WEEKDAYS, days, renderDay, compact}){
   // compact=true (calendário interno) — células com altura fixa baixa em vez de quadradas
   // compact=false (default, publicações) — quadradas via aspect-ratio
   const _cellStyle = compact
-    ? {minHeight:150, maxHeight:180, padding:"8px 10px"}
+    ? {minHeight:220, maxHeight:340, padding:"8px 10px"}
     : {aspectRatio:"1 / 1", padding:"8px 8px"};
   return(
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -12487,6 +12487,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     return function(){window.removeEventListener("keydown",onKey);};
   },[onClose]);
   function save(){
+    if(saving)return; // Guard: evita double-click criando 2 eventos
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     if(!window._sb){if(typeof pixelsToast!=="undefined")pixelsToast.error("Sem conexão com Supabase");return;}
     setSaving(true);
@@ -12892,7 +12893,11 @@ function PageCalendarioInterno({isMob}){
     if(typeof window==="undefined"||!window._sb)return;
     window._sb.from("internal_events").select("*").order("date",{ascending:true}).then(function(r){
       if(!r||!r.data)return;
-      setInternalEvents(r.data);
+      // Dedup defensivo: garante que cada evento aparece só uma vez (proteção contra rows duplicadas)
+      const _seen={};
+      const _uniq=[];
+      r.data.forEach(function(ev){if(ev&&ev.id&&!_seen[ev.id]){_seen[ev.id]=true;_uniq.push(ev);}});
+      setInternalEvents(_uniq);
     }).catch(function(e){console.warn("[internal_events]",e&&e.message?e.message:e);});
   }
   useEffect(function(){
