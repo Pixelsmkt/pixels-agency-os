@@ -15884,6 +15884,25 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
     if(isNaN(tb))return -1;
     return asc?(ta-tb):(tb-ta);
   };
+  // Compara por data de conclusão/entrega (completedAt → updated_at → colEnteredAt)
+  const compareByCompletedAt=function(a,b,asc){
+    function _ts(t){
+      const cands=[t.completedAt,t.completed_at,t.updated_at,t.updatedAt,t.colEnteredAt,t.col_entered_at];
+      for(let i=0;i<cands.length;i++){
+        const v=cands[i];
+        if(!v)continue;
+        const d=new Date(v);
+        const _t=d.getTime();
+        if(!isNaN(_t))return _t;
+      }
+      return 0;
+    }
+    const ta=_ts(a),tb=_ts(b);
+    if(ta===0&&tb===0)return 0;
+    if(ta===0)return 1; // sem data sempre depois
+    if(tb===0)return -1;
+    return asc?(ta-tb):(tb-ta);
+  };
   const [cols,setCols]=useState(()=>{
     // VERSIONAMENTO: bump quando KANBAN_COLS muda de ordem ou cor (força reset).
     // v8: paleta arco-íris (vermelho→laranja→âmbar→amarelo→lima→verde→roxo)
@@ -16598,6 +16617,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
             // Override por coluna — ordenação por data de publicação (asc/desc)
             if(_colSort==="pubAsc")return compareByPublishDate(a,b,true);
             if(_colSort==="pubDesc")return compareByPublishDate(a,b,false);
+            if(_colSort==="entregaDesc")return compareByCompletedAt(a,b,false);
+            if(_colSort==="entregaAsc")return compareByCompletedAt(a,b,true);
             // Manual: respeita position; quem não tem position vai pro final (cinza)
             if(sortMode==="manual"){
               const pa=a.position??999999,pb=b.position??999999;
@@ -16675,30 +16696,49 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 })()}
                 {colMenuOpen===col.id&&(function(){
                   const opts=[
-                    {id:null,    label:"Ordenação padrão",                  hint:"Inteligente / Prazo / Manual"},
-                    {id:"pubAsc",label:"Data de publicação (mais próxima)", hint:"Cards com data primeiro"},
-                    {id:"pubDesc",label:"Data de publicação (mais distante)",hint:"Cards mais distantes primeiro"},
+                    {id:null,         label:"Padrão",                     hint:"Inteligente · prazo · manual", icon:"sparkles", color:"#64748b"},
+                    {id:"pubAsc",     label:"Publicação mais próxima",    hint:"Data crescente",               icon:"calendar-asc", color:"#7c3aed"},
+                    {id:"pubDesc",    label:"Publicação mais distante",   hint:"Data decrescente",             icon:"calendar-desc", color:"#7c3aed"},
+                    {id:"entregaDesc",label:"Entregas mais recentes",     hint:"Concluído primeiro",           icon:"check-recent", color:"#16a34a"},
+                    {id:"entregaAsc", label:"Entregas mais antigas",      hint:"Concluído por último",         icon:"check-old", color:"#16a34a"},
                   ];
                   const current=colSortMode[col.id]||null;
+                  function _renderIcon(name,color){
+                    const _common={width:13,height:13,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2.4,strokeLinecap:"round",strokeLinejoin:"round"};
+                    if(name==="sparkles")return <svg {..._common}><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M18 17l.7 1.9L20.6 19.6 18.7 20.3 18 22.2 17.3 20.3 15.4 19.6 17.3 18.9z"/></svg>;
+                    if(name==="calendar-asc")return <svg {..._common}><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><polyline points="9 17 12 14 15 17"/></svg>;
+                    if(name==="calendar-desc")return <svg {..._common}><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/><polyline points="9 14 12 17 15 14"/></svg>;
+                    if(name==="check-recent")return <svg {..._common}><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>;
+                    if(name==="check-old")return <svg {..._common}><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/><line x1="3" y1="3" x2="21" y2="21" opacity="0.4"/></svg>;
+                    return null;
+                  }
                   return <>
-                    {/* Overlay para fechar ao clicar fora */}
                     <div onClick={()=>setColMenuOpen(null)} style={{position:"fixed",inset:0,zIndex:998}}/>
-                    <div style={{position:"absolute",top:"calc(100% + 8px)",right:0,minWidth:240,background:"#fff",borderRadius:12,boxShadow:"0 12px 32px rgba(15,23,42,0.20), 0 2px 6px rgba(15,23,42,0.08)",padding:6,zIndex:999,fontFamily:"'Inter',system-ui,sans-serif"}}>
-                      <div style={{padding:"8px 12px 6px 12px",color:"#94a3b8",fontSize:9,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Ordenar coluna</div>
-                      {opts.map(o=>(
-                        <button key={String(o.id)} onClick={()=>{
-                          setColSortMode(prev=>{const out={...prev};if(o.id===null)delete out[col.id];else out[col.id]=o.id;return out;});
-                          setColMenuOpen(null);
-                        }} style={{display:"flex",width:"100%",alignItems:"center",justifyContent:"space-between",gap:10,background:current===o.id?"#f5f3ff":"transparent",border:"none",borderRadius:8,padding:"9px 12px",color:"#0f172a",cursor:"pointer",textAlign:"left",transition:"background .12s"}}
-                          onMouseEnter={e=>{if(current!==o.id)e.currentTarget.style.background="#f8fafc";}}
-                          onMouseLeave={e=>{if(current!==o.id)e.currentTarget.style.background="transparent";}}>
-                          <div style={{display:"flex",flexDirection:"column",gap:1,minWidth:0,flex:1}}>
-                            <span style={{fontSize:13,fontWeight:current===o.id?600:500,color:current===o.id?"#7c3aed":"#0f172a"}}>{o.label}</span>
-                            <span style={{fontSize:10,color:"#94a3b8",fontWeight:500}}>{o.hint}</span>
-                          </div>
-                          {current===o.id&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
-                        </button>
-                      ))}
+                    <div style={{position:"absolute",top:"calc(100% + 10px)",right:0,minWidth:280,background:"#fff",borderRadius:14,boxShadow:"0 18px 40px rgba(15,23,42,0.16), 0 3px 10px rgba(15,23,42,0.06), 0 0 0 1px rgba(15,23,42,0.04)",padding:8,zIndex:999,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                      <div style={{padding:"4px 10px 8px 10px",color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="9" y1="18" x2="15" y2="18"/></svg>
+                        Ordenar coluna
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                        {opts.map(o=>{
+                          const active=current===o.id;
+                          return <button key={String(o.id)} onClick={()=>{
+                            setColSortMode(prev=>{const out={...prev};if(o.id===null)delete out[col.id];else out[col.id]=o.id;return out;});
+                            setColMenuOpen(null);
+                          }} style={{display:"flex",width:"100%",alignItems:"center",gap:10,background:active?o.color+"12":"transparent",border:"none",borderRadius:10,padding:"10px 11px",cursor:"pointer",textAlign:"left",transition:"all .14s",position:"relative"}}
+                            onMouseEnter={e=>{if(!active)e.currentTarget.style.background="#f8fafc";}}
+                            onMouseLeave={e=>{if(!active)e.currentTarget.style.background="transparent";}}>
+                            <div style={{width:30,height:30,borderRadius:8,background:active?o.color+"22":"#f1f5f9",border:active?"1px solid "+o.color+"44":"1px solid transparent",color:active?o.color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .14s"}}>
+                              {_renderIcon(o.icon,active?o.color:"#64748b")}
+                            </div>
+                            <div style={{display:"flex",flexDirection:"column",gap:1,minWidth:0,flex:1}}>
+                              <span style={{fontSize:13,fontWeight:active?700:600,color:active?o.color:"#0f172a",letterSpacing:-.1,lineHeight:1.2}}>{o.label}</span>
+                              <span style={{fontSize:11,color:"#94a3b8",fontWeight:500,lineHeight:1.2}}>{o.hint}</span>
+                            </div>
+                            {active&&<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={o.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
+                          </button>;
+                        })}
+                      </div>
                     </div>
                   </>;
                 })()}
