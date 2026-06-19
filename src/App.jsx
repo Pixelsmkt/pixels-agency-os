@@ -12487,7 +12487,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
     return function(){window.removeEventListener("keydown",onKey);};
   },[onClose]);
   function save(){
-    if(saving)return; // Guard: evita double-click criando 2 eventos
+    if(saving)return;
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     if(!window._sb){if(typeof pixelsToast!=="undefined")pixelsToast.error("Sem conexão com Supabase");return;}
     setSaving(true);
@@ -12808,7 +12808,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — 1 marco será criado pra cada cliente.</div>}
       </div>
 
-      {/* Responsáveis (opcional) — sincroniza com o marco vinculado */}
+      {/* Responsáveis (opcional) */}
       <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Responsáveis (opcional)</div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",border:"1px solid #e2e8f0",borderRadius:10,padding:8,background:"#fff"}}>
@@ -12820,8 +12820,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
               style={{background:_sel?_color+"18":"#fff",border:"1px solid "+(_sel?_color+"66":"#e2e8f0"),borderRadius:99,padding:"3px 12px 3px 3px",fontSize:12,fontWeight:_sel?700:600,color:_sel?_color:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7}}>
               {_photo
                 ? <img src={_photo} alt={u.name} style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",display:"block",boxShadow:"0 0 0 1.5px "+_color}}/>
-                : <span style={{width:22,height:22,borderRadius:"50%",background:_color,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:10}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>
-              }
+                : <span style={{width:22,height:22,borderRadius:"50%",background:_color,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:10}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>}
               <span>{u.name.split(" ")[0]}</span>
               {_sel&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginLeft:-2}}><polyline points="20 6 9 17 4 12"/></svg>}
             </button>;
@@ -12893,9 +12892,7 @@ function PageCalendarioInterno({isMob}){
     if(typeof window==="undefined"||!window._sb)return;
     window._sb.from("internal_events").select("*").order("date",{ascending:true}).then(function(r){
       if(!r||!r.data)return;
-      // Dedup defensivo: garante que cada evento aparece só uma vez (proteção contra rows duplicadas)
-      const _seen={};
-      const _uniq=[];
+      const _seen={},_uniq=[];
       r.data.forEach(function(ev){if(ev&&ev.id&&!_seen[ev.id]){_seen[ev.id]=true;_uniq.push(ev);}});
       setInternalEvents(_uniq);
     }).catch(function(e){console.warn("[internal_events]",e&&e.message?e.message:e);});
@@ -13159,7 +13156,16 @@ function PageCalendarioInterno({isMob}){
         });
       });
     }
-    return out;
+    // DEDUP FORTE: se houver marco órfão + evento com mesmo título+data+cliente, mantém só um
+    const _seen={},_deduped=[];
+    out.forEach(function(it){
+      const _norm=(it.title||"").trim().toLowerCase();
+      const _key=_norm+"|"+(it.day||"")+"|"+(it.month||"")+"|"+((it._cl&&it._cl.id)||"");
+      if(_seen[_key])return;
+      _seen[_key]=true;
+      _deduped.push(it);
+    });
+    return _deduped;
   },[calMonth,filterType,marcosByClient,eventosByClient,internalEvents]);
 
   const eventsByDay=function(date){
