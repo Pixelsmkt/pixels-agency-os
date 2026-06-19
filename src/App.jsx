@@ -14519,7 +14519,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                     const evs=_eventsByDate.get(dayKey)||[];
                     return evs.map(function(ev){
                       const cl=CLIENTS.find(function(x){return x.id===ev.clientId;});
-                      return <div key={ev.id} title={(cl?cl.name+" — ":"")+ev.title+(ev.description?"\n\n"+ev.description:"")+"\n\nEnviado em "+(new Date(ev.createdAt||"").toLocaleDateString("pt-BR")||"?")}
+                      return <div key={ev.id} onClick={function(e){e.stopPropagation();}} title={(cl?cl.name+" — ":"")+ev.title+(ev.description?"\n\n"+ev.description:"")+"\n\nEnviado em "+(new Date(ev.createdAt||"").toLocaleDateString("pt-BR")||"?")}
                         style={{background:"#fde68a",color:"#78350f",borderRadius:6,padding:"5px 7px",fontSize:10.5,fontWeight:700,marginBottom:3,display:"flex",alignItems:"center",gap:5,boxShadow:"0 1px 3px rgba(245,158,11,0.25)",border:"1.5px solid #f59e0b",overflow:"hidden",flexShrink:0,position:"relative"}}>
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                         <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
@@ -14572,9 +14572,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                       const hasLogo=typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[t.client];
                       const isShortFromDrive=t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short";
                       return(
-                        <div key={t.id} onClick={()=>setOpenCard(t)}
+                        <div key={t.id} onClick={function(e){e.stopPropagation();setOpenCard(t);}}
                           draggable={true}
-                          onDragStart={function(e){setDragTaskId(t.id);if(e.dataTransfer)e.dataTransfer.effectAllowed="move";}}
+                          onDragStart={function(e){e.stopPropagation();setDragTaskId(t.id);if(e.dataTransfer)e.dataTransfer.effectAllowed="move";}}
                           onDragEnd={function(){setDragTaskId(null);setDropDayId(null);}}
                           onContextMenu={function(e){e.preventDefault();e.stopPropagation();setCtxMenu({x:e.clientX,y:e.clientY,task:t});}}
                           style={{
