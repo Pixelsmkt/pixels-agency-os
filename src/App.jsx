@@ -10176,6 +10176,8 @@ function CDrive({cl}){
 
 /* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
 
+/* ─── CLIENT DASHBOARD — 30 MELHORIAS ─────── */
+
 // Entrada da seção Clientes: PageClientes + NovoClienteModal + calcScore + Sparkline
 // Depende de: 00_globals, 00_clientes_data, 00_mindmap_data, 02_clientes (MindMap)
 
@@ -13879,7 +13881,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       client:(filterClient!=="todos"?filterClient:""),sector:"",priority:"",status:"rascunhos",
       startDate:now.toISOString().split("T")[0],
       deadline:publishIso,
-      publish_date:publishIso,
+      publishDate:publishIso,       // camelCase — lido pelo state local do CardModal
+      publish_date:publishIso,      // snake — coluna do Supabase
+      publishTime:"11:00",
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
       deletedAt:null,bioterUnit:(filterBioterUnit!=="todos"?filterBioterUnit:null),
       referenceMonth:refMonth,
@@ -14403,11 +14407,13 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 onDrop={function(e){if(day){e.preventDefault();handleDropOnDay(day);}}}
                 onClick={function(e){
                   if(!day||!_canCreateFromCal)return;
-                  // Clique em qualquer área vazia do dia → cria card. Cards internos chamam e.stopPropagation()
-                  // pra abrir o próprio modal sem disparar a criação.
+                  // Só cria se o clique foi DIRETO no quadrado do dia (não em cima de card/evento dentro)
+                  if(e.target!==e.currentTarget&&!e.target.hasAttribute("data-day-empty"))return;
                   _createDraftAtDay(day);
                 }}
-style={{
+                onMouseEnter={function(e){if(!_canCreateFromCal)return;const b=e.currentTarget.querySelector("[data-addbtn-cal]");if(b){b.style.opacity="1";b.style.transform="scale(1)";}}}
+                onMouseLeave={function(e){const b=e.currentTarget.querySelector("[data-addbtn-cal]");if(b){b.style.opacity="0";b.style.transform="scale(0.85)";}}}
+                style={{
                 height:isMob?170:260,
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
@@ -14422,6 +14428,12 @@ style={{
                 cursor:_canCreateFromCal&&day?"pointer":"default",
                 position:"relative",
               }}>
+                {day&&_canCreateFromCal&&<div data-addbtn-cal aria-label="Nova publicação"
+                  onClick={function(e){e.stopPropagation();_createDraftAtDay(day);}}
+                  title="Nova publicação neste dia"
+                  style={{position:"absolute",top:6,right:6,width:22,height:22,borderRadius:"50%",background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",opacity:0,transform:"scale(0.85)",transition:"all .18s cubic-bezier(.4,0,.2,1)",boxShadow:"0 4px 12px rgba(124,58,237,0.35), 0 0 0 2px #fff",zIndex:2,cursor:"pointer",border:"none",padding:0}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </div>}
                 {day&&(<>
                   {/* Número do dia */}
                   <div style={{
@@ -14460,8 +14472,14 @@ style={{
                     });
                   })()}
 
+                  {/* Ghost card placeholder — aparece no hover pra demonstrar que dá pra criar */}
+                  {_canCreateFromCal&&<div data-ghost-card aria-hidden="true"
+                    style={{position:"absolute",left:6,right:6,bottom:6,height:32,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.7)",display:"flex",alignItems:"center",justifyContent:"center",gap:5,color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,opacity:0,transition:"opacity .15s",pointerEvents:"none",zIndex:0}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Nova publicação
+                  </div>}
                   {/* Cards do dia */}
-                  <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden"}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden",position:"relative",zIndex:1}}>
                     {dayTasks.map(function(t){
                       const cl=CLIENTS.find(c=>c.id===t.client);
                       const unit=t.bioterUnit?BIOTER_UNITS.find(u=>u.id===t.bioterUnit):null;
@@ -14490,7 +14508,7 @@ style={{
                       const hasLogo=typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[t.client];
                       const isShortFromDrive=t.fromDrive||t.contentType==="video_short"||t.tipo==="video_short";
                       return(
-                        <div key={t.id} onClick={function(e){e.stopPropagation();setOpenCard(t);}}
+                        <div key={t.id} onClick={()=>setOpenCard(t)}
                           draggable={true}
                           onDragStart={function(e){setDragTaskId(t.id);if(e.dataTransfer)e.dataTransfer.effectAllowed="move";}}
                           onDragEnd={function(){setDragTaskId(null);setDropDayId(null);}}
@@ -15670,7 +15688,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       client:(filterClient!=="todos"?filterClient:""),sector:"",priority:"",status:"rascunhos",
       startDate:now.toISOString().split("T")[0],
       deadline:publishIso,
-      publish_date:publishIso,
+      publishDate:publishIso,       // camelCase — lido pelo state local do CardModal
+      publish_date:publishIso,      // snake — coluna do Supabase
+      publishTime:"11:00",
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
       deletedAt:null,bioterUnit:(filterBioterUnit!=="todos"?filterBioterUnit:null),
       referenceMonth:refMonth,
@@ -27674,18 +27694,23 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     else{onClose();}
   },[hasChanges,onClose,uploadingCount]);
 
-  // ── Tecla ESC fecha o modal (lightbox tem prioridade se estiver aberto) ──
-  // Enter handler (salva+fecha) está mais abaixo no arquivo pra evitar TDZ
-  // com `save` e `showMovePrompt` que são declarados depois.
+  // ── Tecla ESC fecha o modal direto SEM perguntar (ESC = sem salvar é convenção) ──
+  // Botão X do header e click no backdrop ainda usam handleClose() que pergunta se há mudanças.
+  // Lightbox tem prioridade se estiver aberto.
   useEffect(()=>{
     const onEsc=(e)=>{
       if(e.key!=="Escape")return;
       if(lightbox){setLightbox(null);return;}
-      handleClose();
+      // Bloqueia só se ainda tem upload em andamento — senão perde arquivo
+      if(uploadingCount>0){
+        pixelsToast.warning(`Aguarde os ${uploadingCount} upload(s) terminarem antes de fechar.`,4500);
+        return;
+      }
+      onClose();
     };
     window.addEventListener("keydown",onEsc);
     return()=>window.removeEventListener("keydown",onEsc);
-  },[handleClose,lightbox]);
+  },[onClose,lightbox,uploadingCount]);
 
   const save=()=>{
     // ── Bloqueia save com uploads em andamento ──
