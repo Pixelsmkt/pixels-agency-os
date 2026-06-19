@@ -12155,7 +12155,20 @@ function CMarcos({cl,canEdit,selUnit}){
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
               </button>
               <button onClick={async function(){
-                if(!confirm("Excluir este marco?"))return;
+                const _linkedEvId=(m.metrics&&m.metrics.linked_event_id)||null;
+                const _msg="Excluir este marco?"+(_linkedEvId?" O evento vinculado no calendário interno também será removido.":"");
+                if(!confirm(_msg))return;
+                // Se o marco veio de um internal_event, apaga AMBOS (marco + evento + outros marcos linkados ao mesmo evento)
+                if(_linkedEvId){
+                  try{
+                    // Apaga TODOS os marcos linkados a esse evento (multi-cliente)
+                    await sb.from("client_milestones").delete().eq("metrics->>linked_event_id",String(_linkedEvId));
+                  }catch(_){}
+                  try{
+                    await sb.from("internal_events").delete().eq("id",_linkedEvId);
+                  }catch(_){}
+                }
+                // Apaga o marco em si (caso não tenha sido pego pela query acima)
                 await sb.from("client_milestones").delete().eq("id",m.id);
                 reload();
               }} title="Excluir marco"
@@ -13485,19 +13498,11 @@ function PageCalendarioInterno({isMob}){
             }}
             style={{display:"flex",flexDirection:"column",height:"100%",transition:"background .12s",cursor:_canCreateHere?"pointer":"default",position:"relative"}}>
             <CalendarDayNumber day={date} isToday={isToday}/>
-            {/* Ghost card — wireframe estilo card que aparece no hover (só pra sócios) */}
+            {/* Ghost card — wireframe estilo card que aparece no hover, posicionado APÓS os cards reais */}
             {_canCreateHere&&<div data-ghost-evt aria-hidden="true"
-              style={{position:"absolute",left:6,right:6,top:30,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.55)",padding:"6px 8px 7px",display:"flex",flexDirection:"column",gap:6,minHeight:50,opacity:0,transform:"scale(0.98)",transformOrigin:"top center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box"}}>
-              <div style={{display:"flex",alignItems:"center",gap:5}}>
-                <div style={{width:18,height:18,borderRadius:5,background:"#e2e8f0",flexShrink:0}}/>
-                <div style={{height:9,width:32,borderRadius:3,background:"#e2e8f0"}}/>
-                <div style={{flex:1}}/>
-              </div>
-              <div style={{height:8,width:"72%",borderRadius:3,background:"#e2e8f0"}}/>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,color:"#94a3b8",fontSize:9.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,marginTop:1}}>
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Novo evento
-              </div>
+              style={{position:"absolute",left:6,right:6,bottom:6,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.7)",padding:"5px 8px 6px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,opacity:0,transform:"scale(0.98)",transformOrigin:"bottom center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box",color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,minHeight:26}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Novo evento</span>
             </div>}
             <div style={{display:"flex",flexDirection:"column",gap:4,marginTop:5,overflow:"hidden",flex:1,position:"relative",zIndex:1}}>
               {evs.slice(0,2).map(function(ev){
@@ -14524,20 +14529,11 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                     });
                   })()}
 
-                  {/* Ghost card — wireframe do card futuro que aparece no hover */}
+                  {/* Ghost card — wireframe que aparece no hover, posicionado APÓS os cards reais */}
                   {_canCreateFromCal&&<div data-ghost-card aria-hidden="true"
-                    style={{position:"absolute",left:6,right:6,top:30,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.55)",padding:"6px 8px 7px",display:"flex",flexDirection:"column",gap:6,minHeight:54,opacity:0,transform:"scale(0.98)",transformOrigin:"top center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:5}}>
-                      <div style={{width:18,height:18,borderRadius:5,background:"#e2e8f0",flexShrink:0}}/>
-                      <div style={{height:9,width:32,borderRadius:3,background:"#e2e8f0"}}/>
-                      <div style={{flex:1}}/>
-                      <div style={{width:11,height:11,borderRadius:"50%",background:"#e2e8f0"}}/>
-                    </div>
-                    <div style={{height:8,width:"75%",borderRadius:3,background:"#e2e8f0"}}/>
-                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:4,color:"#94a3b8",fontSize:9.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,marginTop:1}}>
-                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      Nova publicação
-                    </div>
+                    style={{position:"absolute",left:6,right:6,bottom:6,borderRadius:8,border:"1.5px dashed #cbd5e1",background:"rgba(248,250,252,0.7)",padding:"5px 8px 6px",display:"flex",alignItems:"center",justifyContent:"center",gap:5,opacity:0,transform:"scale(0.98)",transformOrigin:"bottom center",transition:"opacity .18s ease, transform .18s ease",pointerEvents:"none",zIndex:0,boxSizing:"border-box",color:"#94a3b8",fontSize:10.5,fontWeight:600,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:.1,minHeight:26}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    <span>Nova publicação</span>
                   </div>}
                   {/* Cards do dia */}
                   <div style={{display:"flex",flexDirection:"column",gap:3,flex:1,minHeight:0,overflowY:"auto",overflowX:"hidden",position:"relative",zIndex:1}}>
