@@ -12088,6 +12088,10 @@ function CMarcos({cl,canEdit,selUnit}){
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13S3 17 3 10a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
                 {_muLabel}
               </span>}
+              {(m.metrics&&m.metrics.city)&&<span style={{background:"#eff6ff",color:"#0369a1",border:"1px solid #bae6fd",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:6,letterSpacing:.3,display:"inline-flex",alignItems:"center",gap:5}} title="Cidade do evento">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="9" y1="13" x2="9.01" y2="13"/><line x1="9" y1="17" x2="9.01" y2="17"/></svg>
+                {m.metrics.city}
+              </span>}
               <span style={{fontSize:12,color:"#94a3b8",fontWeight:500}}>{fmtDate(m.date)}</span>
             </div>
             <div style={{fontSize:14.5,fontWeight:700,color:"#0f172a",marginBottom:m.description?5:0,letterSpacing:-.1,paddingRight:canEdit?72:0}}>{m.title}</div>
@@ -12445,6 +12449,13 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [colorTouched,setColorTouched]=useState(!!(initial&&initial.color));
   const [city,setCity]=useState((initial&&initial.city)||"");
   const [endDate,setEndDate]=useState((initial&&initial.end_date)||"");
+  const [responsibleIds,setResponsibleIds]=useState(function(){
+    try{
+      if(initial&&Array.isArray(initial.responsibles)&&initial.responsibles.length)return initial.responsibles.slice();
+      if(initial&&typeof initial.responsibles==="string"&&initial.responsibles){const _p=JSON.parse(initial.responsibles);if(Array.isArray(_p))return _p;}
+    }catch(_){}
+    return [];
+  });
   const [clientIds,setClientIds]=useState(function(){
     try{
       if(initial&&Array.isArray(initial.client_ids)&&initial.client_ids.length)return initial.client_ids.slice();
@@ -12491,6 +12502,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       client_ids:(clientIds&&clientIds.length)?clientIds:null,
       city:city.trim()||null,
       end_date:(endDate&&endDate>date)?endDate:null,
+      responsibles:(responsibleIds&&responsibleIds.length)?responsibleIds:null,
       created_by:(typeof CURRENT_USER!=="undefined"?CURRENT_USER.name:"")||null,
       updated_at:new Date().toISOString(),
     };
@@ -12515,7 +12527,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         if(r&&r.error){
           const _msg=(r.error.message||"").toLowerCase();
           // Detecta colunas opcionais que ainda não foram migradas (SQL não rodado)
-          const _optionalCols=["city","client_ids","end_date"];
+          const _optionalCols=["city","client_ids","end_date","responsibles"];
           let _retryPayload=null;
           for(let _i=0;_i<_optionalCols.length;_i++){
             const _col=_optionalCols[_i];
@@ -12557,7 +12569,10 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       function _marcoPayloadForClient(cid){
         const _rootId=(cid&&cid.indexOf("bioter_")===0)?"bioter":cid;
         const _bioterUnit=(cid&&cid.indexOf("bioter_")===0)?cid.slice("bioter_".length):null;
-        const _metrics=_bioterUnit?{unit:_bioterUnit,linked_event_id:_savedRow.id}:{linked_event_id:_savedRow.id};
+        const _metrics={linked_event_id:_savedRow.id};
+        if(_bioterUnit)_metrics.unit=_bioterUnit;
+        if(city&&city.trim())_metrics.city=city.trim();
+        if(responsibleIds&&responsibleIds.length>0)_metrics.responsibles=responsibleIds;
         return {
           client_id:_rootId,
           date:date,
@@ -12790,6 +12805,27 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
               })}
         </div>
         {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — 1 marco será criado pra cada cliente.</div>}
+      </div>
+
+      {/* Responsáveis (opcional) — sincroniza com o marco vinculado */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Responsáveis (opcional)</div>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap",border:"1px solid #e2e8f0",borderRadius:10,padding:8,background:"#fff"}}>
+          {(typeof TEAM!=="undefined"?TEAM:[]).filter(function(u){return u&&(u.level===1||u.dash==="coordinator"||u.dash==="gestor");}).map(function(u){
+            const _sel=responsibleIds.indexOf(u.id)>=0;
+            const _color=u.color||"#7c3aed";
+            const _photo=(u.profile_data&&u.profile_data.photo)||((typeof getProfilePhoto!=="undefined"&&getProfilePhoto(u.id))||null);
+            return <button key={u.id} type="button" onClick={function(){setResponsibleIds(_sel?responsibleIds.filter(function(x){return x!==u.id;}):responsibleIds.concat([u.id]));}}
+              style={{background:_sel?_color+"18":"#fff",border:"1px solid "+(_sel?_color+"66":"#e2e8f0"),borderRadius:99,padding:"3px 12px 3px 3px",fontSize:12,fontWeight:_sel?700:600,color:_sel?_color:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7}}>
+              {_photo
+                ? <img src={_photo} alt={u.name} style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",display:"block",boxShadow:"0 0 0 1.5px "+_color}}/>
+                : <span style={{width:22,height:22,borderRadius:"50%",background:_color,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:10}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>
+              }
+              <span>{u.name.split(" ")[0]}</span>
+              {_sel&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginLeft:-2}}><polyline points="20 6 9 17 4 12"/></svg>}
+            </button>;
+          })}
+        </div>
       </div>
 
       {/* Cidade (opcional) */}
