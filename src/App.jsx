@@ -14653,7 +14653,15 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           task={openCard}
           tasks={tasks}
           setTasks={setTasks}
-onClose={()=>setOpenCard(null)}
+          onClose={function(){
+            // Se o card aberto é um draft criado pelo calendário e não foi salvo, descarta sem persistir
+            if(openCard&&openCard._isDraft){
+              if(typeof setTasks==="function"){
+                setTasks(function(p){return (p||[]).filter(function(t){return String(t.id)!==String(openCard.id);});});
+              }
+            }
+            setOpenCard(null);
+          }}
           currentUser={CURRENT_USER}
           cardPerms={{verBriefingCard:true}}
         />
