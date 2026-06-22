@@ -49672,11 +49672,8 @@ function _DGKpiCard({label, value, hint, color, icon}){
 
 // ══════════════════════════════════════════════════════════════════
 // DEMANDAS INTERNAS — versão enxuta no DashSocio
-// Substitui a sub-aba Demandas > Demandas internas (que foi removida).
-// Mostra: 4 mini-KPIs + lista das demandas que pedem ação do sócio
-// (atrasadas → entrada não triada → aguardando aprovação).
-// Click no item abre CardModalInterno (mesmo modal da página antiga).
-// Reusa _isDemandaInterna, INTERNO_COLS, PRIO_CFG do 04_demandas_internas.jsx.
+// Substitui a sub-aba Demandas > Demandas internas (removida).
+// Sincroniza com Portal do Cliente: tasks com origem="portal" entram aqui.
 // ══════════════════════════════════════════════════════════════════
 function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
   const [openCard, setOpenCard] = useState(null);
@@ -49684,7 +49681,6 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
   const _internas = (allTasks||[]).filter(typeof _isDemandaInterna==="function"?_isDemandaInterna:()=>false);
   const _isSocio = user && user.level===1;
 
-  // KPIs operacionais (sincronizam com Portal — demandas com origem="portal" entram aqui)
   const _monthRef = (function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");})();
   const _completedThisMonth = (t)=>{
     if(t.status!=="interno_executado") return false;
@@ -49703,7 +49699,6 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
     concluidasMes:    _internas.filter(_completedThisMonth).length,
   };
 
-  // Pendências priorizadas pro sócio: Atrasadas + Entrada + Aguard. aprovação
   const _PRIO_RANK = {urgente:0, alta:1, media:2, baixa:3};
   const _pendentes = _internas
     .filter(t => _atrasada(t) || t.status==="interno_demanda" || t.status==="interno_avaliacao")
@@ -49718,7 +49713,6 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
     })
     .slice(0, 8);
 
-  // Persistência — reproduz lógica do PageDemandasInternas
   const _saveCard = (updated) => {
     const isNew = !!updated._isNew;
     const card = {...updated}; delete card._isNew;
@@ -50532,6 +50526,9 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       <PageCalendarioInterno isMob={isMob} tasks={tasks} setTasks={setTasks}/>
     </div>}
 
+    {/* ══════════ DEMANDAS INTERNAS — bloco enxuto antes do Sprint (pra sócio triar antes de planejar) ══════════ */}
+    <_DGDemandasInternasSection allTasks={allTasks} setTasks={setTasks} user={user} isMob={isMob}/>
+
     {/* ══════════ SPRINT — navegação livre por semanas ══════════ */}
     {(function(){
       const _segIso  = _dgWeekDate(1, sprintWeekOffset);
@@ -51144,9 +51141,6 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       onClose={()=>setNovoSprint(null)}
       onSave={(payload)=>{planUpsert(payload);setNovoSprint(null);}}
       onDelete={(id)=>{if(typeof planRemove==="function")planRemove(id);setNovoSprint(null);}}/>}
-
-    {/* ══════════ DEMANDAS INTERNAS — bloco enxuto que substituiu a sub-aba removida ══════════ */}
-    <_DGDemandasInternasSection allTasks={allTasks} setTasks={setTasks} user={user} isMob={isMob}/>
 
     {/* ══════════ INDICADORES OPERACIONAIS — última seção do dash ══════════ */}
     <_DGKpisSection allTasks={allTasks}/>
