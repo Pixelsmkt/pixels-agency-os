@@ -13140,7 +13140,7 @@ function PageCalendarioInterno({isMob}){
             subtitle:u.role||"Equipe",
             icon:"🎂",
             day:day,month:month,
-            color:u.color||"#7c3aed",
+            color:"#ec4899", // categoria Aniversário (rosa) — espelha chip do filtro
             id:"bday_team_"+u.id,
           });
         }
@@ -13159,7 +13159,7 @@ function PageCalendarioInterno({isMob}){
               subtitle:cl.name,
               icon:"🎁",
               day:b.day,month:b.month,
-              color:cl.color||"#f97316",
+              color:"#ec4899", // categoria Aniversário (rosa) — espelha chip do filtro
               id:"bday_client_"+cl.id+"_"+b.name,
             });
           }
@@ -13214,6 +13214,8 @@ function PageCalendarioInterno({isMob}){
           if(!dParts) return;
           const my=parseInt(dParts[1],10), mm=parseInt(dParts[2],10), md=parseInt(dParts[3],10);
           if(my!==_year||mm!==m) return;
+          // Cor por TIPO do marco (espelha _CAT_COLORS do calendário interno) — nunca usa cor do cliente
+          const _MARCO_TYPE_COLOR={reuniao:"#0ea5e9",campanha:"#a855f7",captacao:"#0891b2",comercial:"#16a34a",entrega:"#0284c7",marco:"#7c3aed"};
           out.push({
             kind:"marco",
             type:"marco",
@@ -13221,7 +13223,7 @@ function PageCalendarioInterno({isMob}){
             subtitle:cl.name,
             icon:"⭐",
             day:md,month:mm,
-            color:cl.color||"#0ea5e9",
+            color:_MARCO_TYPE_COLOR[mc.type]||"#0f172a",
             id:"marco_"+mc.id,
             _marco:mc,
             _cl:cl,
@@ -13247,7 +13249,7 @@ function PageCalendarioInterno({isMob}){
             subtitle:cl.name,
             icon:"📅",
             day:md, month:mm,
-            color:cl.color||"#a855f7",
+            color:"#a855f7", // categoria Evento (roxo) — nunca cor do cliente
             id:"evento_"+(ev.id||(cid+"_"+ev.date+"_"+(ev.title||""))),
             _evento:ev,
             _cl:cl,
@@ -13636,13 +13638,22 @@ function PageCalendarioInterno({isMob}){
                     const _clLogo = _cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_cl.id];
                     const _multiClients=_evCids.length>1;
                     const _catColors={aniversario:"#ec4899",reuniao:"#0ea5e9",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",entrega:"#0284c7",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777"};
-                    let _evColor;
-                    // PRIORIDADE: cor por TIPO de evento (categoria) — identidade visual do calendário interno
+                    // PRIORIDADE: cor por TIPO de evento (categoria) — identidade visual do calendário interno.
                     // Cliente é identificado pela LOGO no pill, não pela cor de fundo.
-                    if(ev.category&&_catColors[ev.category])_evColor=_catColors[ev.category];
-                    else if(ev.color&&ev.color!=="#0f172a")_evColor=ev.color;
-                    else if(_cl&&_cl.color)_evColor=_cl.color;
-                    else _evColor="#0f172a";
+                    // Eventos antigos sem categoria: infere pelo título (palavras-chave).
+                    let _evCat=ev.category||"";
+                    if(!_evCat||!_catColors[_evCat]){
+                      const _t=(ev.title||"").toLowerCase();
+                      if(/reuni[aã]o|meeting|call/.test(_t))_evCat="reuniao";
+                      else if(/anivers/.test(_t))_evCat="aniversario";
+                      else if(/feira/.test(_t))_evCat="feira";
+                      else if(/captaç|capta[cç][aã]o/.test(_t))_evCat="captacao";
+                      else if(/entrega/.test(_t))_evCat="entrega";
+                      else if(/pagamento|assinatura|financeiro|nota fiscal|nf|cobran[cç]a/.test(_t))_evCat="assinatura";
+                      else if(/gest[aã]o de m[íi]dia|m[íi]dia paga|ads|tr[aá]fego/.test(_t))_evCat="gestao_midia";
+                      else if(/operacion/.test(_t))_evCat="operacional";
+                    }
+                    const _evColor=_catColors[_evCat]||"#0f172a"; // nunca usa cor do cliente
                     // Ícone da categoria
                     const _catIcon={
                       aniversario:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M20 21V11a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10"/><path d="M12 4a2 2 0 0 0-2-2c0 1 1 1.5 1 2.5S10 6 12 6s1-.5 1-1.5-1-1.5-1-2.5z"/><line x1="2" y1="21" x2="22" y2="21"/></svg>,
@@ -27674,6 +27685,20 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   // ═══ TRELLO-LIKE: menu "..." + Watch + Drag-drop upload ═══
   const [showActionsMenu,setShowActionsMenu]=useState(false);
   const [dragOverFiles,setDragOverFiles]=useState(false);
+  // Drop por seção (referência / arte final) — counter ref evita flicker quando o
+  // cursor cruza elementos filhos (sem o counter, dragleave dispara em cada child
+  // e o overlay treme rapidamente entre on/off).
+  const [dragOverSection,setDragOverSection]=useState(null); // "ref" | "fin" | null
+  const _dragCountRefRef=useRef(0);
+  const _dragCountFinRef=useRef(0);
+  const _dragCountOuterRef=useRef(0);
+  const _resetDragSection=()=>{
+    _dragCountRefRef.current=0;
+    _dragCountFinRef.current=0;
+    _dragCountOuterRef.current=0;
+    setDragOverSection(null);
+    setDragOverFiles(false);
+  };
   const isWatching=watchers.includes((currentUser||CURRENT_USER).id);
   const [showCalendar,setShowCalendar]=useState(false);
   const [calViewMonth,setCalViewMonth]=useState(()=>{
@@ -28420,21 +28445,24 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   };
 
   // ═══ DRAG-DROP UPLOAD — handler pra área Arquivos ═══
-  const handleFilesDrop=(e)=>{
+  // Aceita tipo explícito quando soltado em cima de uma dropzone específica
+  // (referencia / final). Se for solto na área neutra, decide pelo cargo do user.
+  const handleFilesDrop=(e,explicitTipo)=>{
     e.preventDefault();e.stopPropagation();
-    setDragOverFiles(false);
+    _resetDragSection();
     if(!canEdit&&!canEditRef){pixelsToast.warning("Sem permissão pra subir arquivos.");return;}
     const files=Array.from(e.dataTransfer?.files||[]);
     if(files.length===0)return;
-    // Cria evento sintético compatível com handleFileUpload
     const fakeEvent={target:{files,value:""}};
-    // CORREÇÃO: tipo baseado no CARGO do usuário, não em canEdit.
-    // Sócios (partner) + Estrategista (coordinator) → sobem como REFERÊNCIA.
-    // Designers, editores, gestor → sobem como ARTE FINAL.
-    // Isso garante que arrastar-e-soltar do designer vire arte final visível na Aprovação.
-    const _userDash=(user&&user.dash)||"";
-    const _isReviewer=(_userDash==="partner"||_userDash==="coordinator");
-    const tipo=_isReviewer?"referencia":"final";
+    let tipo=explicitTipo;
+    if(tipo==="referencia"&&!canEditRef){pixelsToast.warning("Sem permissão pra subir referências.");return;}
+    if(tipo==="final"&&!canEdit){pixelsToast.warning("Sem permissão pra subir arte final.");return;}
+    if(!tipo){
+      // Fallback: decide pelo cargo (caso a soltura aconteça na área neutra)
+      const _userDash=(user&&user.dash)||"";
+      const _isReviewer=(_userDash==="partner"||_userDash==="coordinator");
+      tipo=_isReviewer?"referencia":"final";
+    }
     handleFileUpload(fakeEvent,tipo);
   };
 
@@ -29320,14 +29348,25 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
           {activeTab==="files"&&<div>
             <div
-              onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEdit||canEditRef)setDragOverFiles(true);}}
-              onDragLeave={e=>{e.preventDefault();e.stopPropagation();setDragOverFiles(false);}}
-              onDrop={handleFilesDrop}
-              style={{position:"relative",borderRadius:10,border:dragOverFiles?"2px dashed #a140ff":"2px dashed transparent",background:dragOverFiles?"#faf5ff":"transparent",padding:dragOverFiles?12:0,transition:"all .15s",minHeight:dragOverFiles?100:0}}>
-              {dragOverFiles&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="download" size={15}/> Solte os arquivos aqui</div>
+              onDragEnter={e=>{
+                e.preventDefault();e.stopPropagation();
+                if(!canEdit&&!canEditRef)return;
+                _dragCountOuterRef.current++;
+                // Só ativa o estado externo quando NENHUMA seção está hover (deixa as seções terem prioridade visual)
+                if(!dragOverSection)setDragOverFiles(true);
+              }}
+              onDragOver={e=>{e.preventDefault();e.stopPropagation();}}
+              onDragLeave={e=>{
+                e.preventDefault();e.stopPropagation();
+                _dragCountOuterRef.current=Math.max(0,_dragCountOuterRef.current-1);
+                if(_dragCountOuterRef.current===0)setDragOverFiles(false);
+              }}
+              onDrop={e=>handleFilesDrop(e)}
+              style={{position:"relative",borderRadius:10,border:(dragOverFiles&&!dragOverSection)?"2px dashed #a140ff":"2px dashed transparent",background:(dragOverFiles&&!dragOverSection)?"#faf5ff":"transparent",padding:(dragOverFiles&&!dragOverSection)?12:0,transition:"border .12s, background .12s, padding .12s",minHeight:(dragOverFiles&&!dragOverSection)?100:0}}>
+              {dragOverFiles&&!dragOverSection&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
+                <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="download" size={15}/> Arraste até a seção desejada abaixo</div>
               </div>}
-              {attachments.length===0&&!dragOverFiles&&<div style={{textAlign:"center",padding:"36px 0 28px",marginBottom:6}}>
+              {attachments.length===0&&!dragOverFiles&&!dragOverSection&&<div style={{textAlign:"center",padding:"36px 0 28px",marginBottom:6}}>
                 <div style={{width:62,height:62,borderRadius:16,background:"linear-gradient(135deg,#faf5ff,#f3e8ff)",border:"1px solid #ede9fe",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12,color:"#a78bfa"}}><Ico n="paperclip" size={26}/></div>
                 <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,marginBottom:4,letterSpacing:-.1}}>Nenhum arquivo ainda</div>
                 {(canEdit||canEditRef)&&<div style={{fontSize:11.5,color:"#94a3b8",lineHeight:1.5}}>Arraste arquivos aqui ou clique em <span style={{color:"#7c3aed",fontWeight:600}}>+ Adicionar</span> nas seções abaixo</div>}
@@ -29375,7 +29414,25 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {/* ── SEÇÃO 1: REFERÊNCIAS — só quem cria cartão sobe ── */}
               {(imgRef.length>0||vidRef.length>0||canEditRef)&&(()=>{
                 const totalRef=imgRef.length+vidRef.length;
-                return(<div style={{marginTop:4,marginBottom:18}}>
+                const _refActive=dragOverSection==="ref";
+                return(<div
+                  onDragEnter={e=>{
+                    e.preventDefault();e.stopPropagation();
+                    if(!canEditRef)return;
+                    _dragCountRefRef.current++;
+                    if(_dragCountRefRef.current===1)setDragOverSection("ref");
+                  }}
+                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEditRef)e.dataTransfer.dropEffect="copy";}}
+                  onDragLeave={e=>{
+                    e.preventDefault();e.stopPropagation();
+                    _dragCountRefRef.current=Math.max(0,_dragCountRefRef.current-1);
+                    if(_dragCountRefRef.current===0&&dragOverSection==="ref")setDragOverSection(null);
+                  }}
+                  onDrop={e=>handleFilesDrop(e,"referencia")}
+                  style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_refActive?"2px dashed #a140ff":"2px dashed transparent",background:_refActive?"#faf5ff":"transparent",padding:_refActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
+                  {_refActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
+                    <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#7c3aed",boxShadow:"0 8px 22px rgba(124,58,237,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="pin" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Imagens de referência</span></div>
+                  </div>}
                   <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:12}}>
                     <div style={{width:32,height:32,borderRadius:10,background:"#7c3aed14",color:"#7c3aed",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="pin" size={15}/></div>
                     <div style={{flex:1,minWidth:0}}>
@@ -29437,7 +29494,25 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               {/* ── SEÇÃO 2: ARQUIVOS PRONTOS — designer/editor sobem aqui ── */}
               {(imgFin.length>0||vidFin.length>0||canEdit)&&(()=>{
                 const totalFin=imgFin.length+vidFin.length;
-                return(<div>
+                const _finActive=dragOverSection==="fin";
+                return(<div
+                  onDragEnter={e=>{
+                    e.preventDefault();e.stopPropagation();
+                    if(!canEdit)return;
+                    _dragCountFinRef.current++;
+                    if(_dragCountFinRef.current===1)setDragOverSection("fin");
+                  }}
+                  onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEdit)e.dataTransfer.dropEffect="copy";}}
+                  onDragLeave={e=>{
+                    e.preventDefault();e.stopPropagation();
+                    _dragCountFinRef.current=Math.max(0,_dragCountFinRef.current-1);
+                    if(_dragCountFinRef.current===0&&dragOverSection==="fin")setDragOverSection(null);
+                  }}
+                  onDrop={e=>handleFilesDrop(e,"final")}
+                  style={{position:"relative",borderRadius:12,border:_finActive?"2px dashed #0f172a":"2px dashed transparent",background:_finActive?"#f8fafc":"transparent",padding:_finActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
+                  {_finActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
+                    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivos prontos</span></div>
+                  </div>}
                   <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:12,marginTop:6}}>
                     <div style={{width:32,height:32,borderRadius:10,background:"#0f172a0d",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="image" size={15}/></div>
                     <div style={{flex:1,minWidth:0}}>
