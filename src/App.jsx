@@ -16839,11 +16839,18 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 const urgLevel=taskUrgencyLevel(t);
                 const hasCover=t.cover;
                 const urgColor=getUrgencyColor(urgLevel);
-                // Pega a ÚLTIMA imagem anexada (mais recente). slice() copia o array
-                // antes de reverter pra não mutar t.files. findLast seria ideal mas
-                // depende de runtime ES2023 — slice+reverse+find é universal.
-                const imgAttachment=(t.files||[]).slice().reverse().find(f=>f.type&&f.type.startsWith("image/"));
-                const thumbUrl=hasCover?hasCover:imgAttachment?imgAttachment.url:null;
+                // Pega o ÚLTIMO material visual (imagem OU vídeo com thumbnail) — o mais recente.
+                // slice() copia o array antes de reverter pra não mutar t.files.
+                // Pra vídeo, usa f.thumbnail (frame capturado no upload — data URL JPEG).
+                const lastVisual=(t.files||[]).slice().reverse().find(function(f){
+                  if(!f||f.isAnnotation)return false;
+                  const _tp=(f.type||"");
+                  if(_tp.indexOf("image/")===0&&f.url)return true;
+                  if(_tp.indexOf("video/")===0&&f.thumbnail)return true;
+                  return false;
+                });
+                const _lastIsVideo=lastVisual&&(lastVisual.type||"").indexOf("video/")===0;
+                const thumbUrl=hasCover?hasCover:(lastVisual?(_lastIsVideo?lastVisual.thumbnail:lastVisual.url):null);
                 const isAlteracao=t.status==="alteracao"||t.isAlteracao;
                 const isAjustar=t.ajustar===true&&t.status==="demanda";
                 const cardBg=isAlteracao?"#ea580c":isAjustar?"#f97316":"#fff";
@@ -16945,8 +16952,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                     const mt=hasVisibleTagStripe?5:(hasTopChips?8:0);
                     return thumbUrl.startsWith("#")
                       ?<div style={{height:200,background:`linear-gradient(135deg,${thumbUrl},${thumbUrl}88)`,marginTop:mt}}/>
-                      :<div style={{height:200,background:"#f1f5f9",marginTop:mt,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+                      :<div style={{height:200,background:"#f1f5f9",marginTop:mt,display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",position:"relative"}}>
                         <img src={thumbUrl} alt="" loading="lazy" style={{display:"block",maxWidth:"100%",maxHeight:"100%",objectFit:"contain",pointerEvents:"none"}}/>
+                        {_lastIsVideo&&!hasCover&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                          <div style={{width:42,height:42,borderRadius:"50%",background:"rgba(15,23,42,0.78)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 14px rgba(15,23,42,0.35)",backdropFilter:"blur(4px)"}}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="#fff" stroke="none" style={{marginLeft:2}}><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                          </div>
+                        </div>}
                       </div>;
                   })()}
                   <div style={thumbUrl?{padding:"14px 14px 12px",flex:1,display:"flex",flexDirection:"column",justifyContent:"space-between",gap:12}:{padding:"12px 14px 11px"}}>
@@ -28456,7 +28468,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const fakeEvent={target:{files,value:""}};
     let tipo=explicitTipo;
     if(tipo==="referencia"&&!canEditRef){pixelsToast.warning("Sem permissão pra subir referências.");return;}
-    if(tipo==="final"&&!canEdit){pixelsToast.warning("Sem permissão pra subir arte final.");return;}
+    if(tipo==="final"&&!canEdit){pixelsToast.warning("Sem permissão pra subir arquivo final.");return;}
     if(!tipo){
       // Fallback: decide pelo cargo (caso a soltura aconteça na área neutra)
       const _userDash=(user&&user.dash)||"";
@@ -29472,22 +29484,39 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>
                     ))}
                   </div>}
-                  {vidRef.length>0&&vidRef.map(a=>{
+                  {vidRef.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10}}>{vidRef.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{background:"#faf5ff",borderRadius:10,overflow:"hidden",border:"0.5px solid #e9d5ff",marginBottom:8}}>
-                      <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",maxHeight:180,display:"block",background:"#000"}}/>
-                      <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{color:"#a140ff",fontSize:9,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Vídeo de referência</div>
-                          <div style={{color:"#1e293b",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
-                          {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
+                    return(<div key={a.id} style={{background:"#fff",borderRadius:12,overflow:"hidden",border:"1px solid #ede9fe",boxShadow:"0 1px 2px rgba(15,23,42,0.04)",transition:"box-shadow .15s, border-color .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.10)";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#ede9fe";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04)";}}>
+                      <div style={{position:"relative",background:"#0f172a",aspectRatio:"16/9",overflow:"hidden"}}>
+                        <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"contain"}}/>
+                      </div>
+                      <div style={{padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                        <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:9}}>
+                          <span style={{width:28,height:28,borderRadius:8,background:"#f5f3ff",color:"#7c3aed",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="video" size={14}/></span>
+                          <div style={{minWidth:0,flex:1}}>
+                            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{a.name}</div>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:1}}>
+                              <span style={{color:"#7c3aed",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Referência</span>
+                              {sizeMB&&<><span style={{color:"#cbd5e1",fontSize:9}}>•</span><span style={{color:"#94a3b8",fontSize:10,fontWeight:500}}>{sizeMB} MB</span></>}
+                            </div>
+                          </div>
                         </div>
-                        <button onClick={()=>downloadFile(a.url,a.name,a.storagePath)} title="Baixar vídeo"
-                          style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:6,padding:"4px 10px",color:"#7c3aed",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0}}>⬇</button>
-                        {canEditRef&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
+                        <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+                          <button onClick={()=>downloadFile(a.url,a.name,a.storagePath)} title="Baixar vídeo"
+                            style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+                            onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#ddd6fe";}}
+                            onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </button>
+                          {canEditRef&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,color:"#94a3b8",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}} onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>}
+                        </div>
                       </div>
                     </div>);
-                  })}
+                  })}</div>}
                 </div>);
               })()}
 
@@ -29511,17 +29540,17 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   onDrop={e=>handleFilesDrop(e,"final")}
                   style={{position:"relative",borderRadius:12,border:_finActive?"2px dashed #0f172a":"2px dashed transparent",background:_finActive?"#f8fafc":"transparent",padding:_finActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
                   {_finActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
-                    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivos prontos</span></div>
+                    <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivo final</span></div>
                   </div>}
                   <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:12,marginTop:6}}>
                     <div style={{width:32,height:32,borderRadius:10,background:"#0f172a0d",color:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="image" size={15}/></div>
                     <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1,display:"flex",alignItems:"center",gap:7}}>Arquivos prontos {totalFin>0&&<span style={{background:"#0f172a0d",color:"#0f172a",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{totalFin}</span>}</div>
-                      <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>arte final entregue pela equipe — pronto pra avaliação</div>
+                      <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.1,display:"flex",alignItems:"center",gap:7}}>Arquivo final {totalFin>0&&<span style={{background:"#0f172a0d",color:"#0f172a",borderRadius:99,padding:"1px 8px",fontSize:10,fontWeight:700}}>{totalFin}</span>}</div>
+                      <div style={{color:"#94a3b8",fontSize:11,marginTop:1}}>entrega final da equipe (arte ou vídeo) — pronto pra avaliação</div>
                     </div>
                     {canEdit&&<button onClick={()=>fileInputRef.current?.click()} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"7px 13px",fontSize:11.5,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",letterSpacing:-.1,boxShadow:"0 2px 6px rgba(15,23,42,0.2)"}}>+ Adicionar</button>}
                   </div>
-                  {totalFin===0&&(<div style={{color:"#94a3b8",fontSize:12,padding:"2px 0 14px"}}>{canEdit?"Sem arte final ainda — clique em + Adicionar pra subir o entregável.":"Sem arquivos finais entregues."}</div>)}
+                  {totalFin===0&&(<div style={{color:"#94a3b8",fontSize:12,padding:"2px 0 14px"}}>{canEdit?"Sem entrega ainda — clique em + Adicionar pra subir o arquivo final.":"Sem arquivos finais entregues."}</div>)}
                   {imgFin.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:vidFin.length>0?12:0}}>
                     {imgFin.map((a,i)=>(
                       <div key={a.id} style={{position:"relative",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",aspectRatio:"1",background:"#f8fafc"}}>
@@ -29552,23 +29581,39 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       </div>
                     ))}
                   </div>}
-                  {vidFin.length>0&&vidFin.map(a=>{
+                  {vidFin.length>0&&<div style={{display:"flex",flexDirection:"column",gap:10}}>{vidFin.map(a=>{
                     const sizeMB=a.size?(a.size/1024/1024).toFixed(1):null;
-                    return(<div key={a.id} style={{background:"#f8fafc",borderRadius:10,overflow:"hidden",border:"0.5px solid #e2e8f0",marginBottom:8}}>
-                      <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",maxHeight:180,display:"block",background:"#000"}}/>
-                      <div style={{padding:"8px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{color:"#1e293b",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</div>
-                          {sizeMB&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>{sizeMB} MB</div>}
+                    return(<div key={a.id} style={{background:"#fff",borderRadius:12,overflow:"hidden",border:"1px solid #e2e8f0",boxShadow:"0 1px 2px rgba(15,23,42,0.04)",transition:"box-shadow .15s, border-color .15s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.08)";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04)";}}>
+                      <div style={{position:"relative",background:"#0f172a",aspectRatio:"16/9",overflow:"hidden"}}>
+                        <video src={a.url} controls poster={a.thumbnail||undefined} preload="metadata" style={{width:"100%",height:"100%",display:"block",background:"#0f172a",objectFit:"contain"}}/>
+                      </div>
+                      <div style={{padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                        <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:9}}>
+                          <span style={{width:28,height:28,borderRadius:8,background:"#0f172a0d",color:"#0f172a",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="video" size={14}/></span>
+                          <div style={{minWidth:0,flex:1}}>
+                            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{a.name}</div>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:1}}>
+                              <span style={{color:"#0f172a",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Arquivo final</span>
+                              {sizeMB&&<><span style={{color:"#cbd5e1",fontSize:9}}>•</span><span style={{color:"#94a3b8",fontSize:10,fontWeight:500}}>{sizeMB} MB</span></>}
+                            </div>
+                          </div>
                         </div>
-                        <button onClick={()=>downloadFile(a.url,a.name,a.storagePath)} title="Baixar vídeo"
-                          style={{background:"#f1f5f9",border:"none",borderRadius:6,padding:"4px 10px",color:"#64748b",fontSize:11,fontWeight:500,cursor:"pointer",flexShrink:0}}
-                          onMouseEnter={e=>{e.currentTarget.style.background="#ede9fe";e.currentTarget.style.color="#7c3aed";}}
-                          onMouseLeave={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>⬇</button>
-                        {canEdit&&<button onClick={()=>removeAttachment(a.id)} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:14,flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="#ef4444"} onMouseLeave={e=>e.currentTarget.style.color="#94a3b8"}>×</button>}
+                        <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+                          <button onClick={()=>downloadFile(a.url,a.name,a.storagePath)} title="Baixar vídeo"
+                            style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+                            onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";e.currentTarget.style.borderColor="#cbd5e1";}}
+                            onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </button>
+                          {canEdit&&<button onClick={()=>removeAttachment(a.id)} title="Remover" style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,color:"#94a3b8",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}} onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                          </button>}
+                        </div>
                       </div>
                     </div>);
-                  })}
+                  })}</div>}
                 </div>);
               })()}
 
