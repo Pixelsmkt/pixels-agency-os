@@ -1271,11 +1271,28 @@ function calcDesignerPayments(tasks, designerId, refMonth){
     const assigned=t.assignee===designerId||(Array.isArray(t.assignees)&&t.assignees.includes(designerId));
     if(!assigned)return;
     if(!PAID_STATUSES.includes(t.status))return;
-    // Fallback: se referenceMonth não foi setado, deduz do publishDate / completedAt / deadline
+    // Fallback robusto: pra cards reprovados publishDate/completedAt podem ser null.
+    // Cascata: referenceMonth → publishDate → completedAt → deadline → colEnteredAt → updated_at → createdAt
+    function _isoMonth(v){
+      if(!v)return null;
+      const s=String(v);
+      // ISO date "2026-06-19..." → "2026-06"
+      if(/^\d{4}-\d{2}/.test(s))return s.slice(0,7);
+      // BR "19/06/2026 às hh:mm" ou "19/06/2026" → "2026-06"
+      const m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if(m)return m[3]+"-"+m[2];
+      // ISO datetime full
+      const d=new Date(s);
+      if(!isNaN(d.getTime()))return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+      return null;
+    }
     const effectiveMonth = t.referenceMonth
-      || (t.publishDate ? String(t.publishDate).slice(0,7) : null)
-      || (t.completedAt ? String(t.completedAt).slice(0,7) : null)
-      || (t.deadline ? String(t.deadline).slice(0,7) : null);
+      || _isoMonth(t.publishDate||t.publish_date)
+      || _isoMonth(t.completedAt||t.completed_at)
+      || _isoMonth(t.deadline)
+      || _isoMonth(t.colEnteredAt||t.col_entered_at)
+      || _isoMonth(t.updated_at||t.updatedAt)
+      || _isoMonth(t.createdAt||t.created_at);
     if(refMonth&&effectiveMonth!==refMonth)return;
     if(t.contentType==="foto"){out.fotoObra++;out.tasksFotoObra.push(t);}
     else if(t.contentType==="carrossel"){out.carrossel++;out.tasksCarrossel.push(t);}
