@@ -20977,6 +20977,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:"recebida",ajustar:false,colEnteredAt:new Date().toISOString(),timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Demandas",from:"demanda",to:"recebida",at:new Date().toISOString(),atFmt:nowFmt(),user:actor}]}:t));
     pushNotif({type:"demanda",icon:"✅",title:"Copy aprovada!",body:'"'+task.title+'" foi aprovada e está em Demandas',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
     setCardIdx(0);setImgIdx(0);
+    // Refetch defensivo (FIX BUG 2026-06-22): reconcilia com servidor pra evitar inconsistência entre sessões.
+    try{if(typeof window!=="undefined"&&typeof window._pixelsRefetchTasks==="function"){setTimeout(()=>window._pixelsRefetchTasks(),4000);}}catch(_){}
   };
 
   const markAjustar=(task,comentario)=>{
@@ -21088,6 +21090,11 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     // FIX 8: usa apenas setTasks (wrapper sincroniza com Supabase via syncTasks).
     // O update direto no _sb era redundante e podia gerar race condition.
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl}:t));
+    // FIX BUG CRÍTICO (2026-06-22): refetch defensivo 4s depois da aprovação pra reconciliar
+    // com servidor. Garante que outros usuários (Hellen) vejam o novo status mesmo se
+    // syncTasks falhar silenciosamente — elimina inconsistência tipo "aprovado pra um, em
+    // avaliação pra outro".
+    try{if(typeof window!=="undefined"&&typeof window._pixelsRefetchTasks==="function"){setTimeout(()=>window._pixelsRefetchTasks(),4000);}}catch(_){}
     // Notify everyone + specific notification to social media assignees
     const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
 
@@ -21153,6 +21160,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     const fromLabel=task.status==="aprovacao_final"?"Aprovação final":"Avaliação";
     const newTl=[...(task.timeline||[]),{type:"status",fromLabel,toLabel:"Reprovadas",from:task.status,to:toStatus,at:new Date().toISOString(),atFmt:nowFmt(),user:actor}];
     if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{...t,status:toStatus,completedAt:new Date().toISOString().split("T")[0],timeline:newTl}:t));
+    // Refetch defensivo (mesma estratégia do approvePub)
+    try{if(typeof window!=="undefined"&&typeof window._pixelsRefetchTasks==="function"){setTimeout(()=>window._pixelsRefetchTasks(),4000);}}catch(_){}
 
     const assignees=Array.isArray(task.assignees)&&task.assignees.length>0?task.assignees:(task.assignee?[task.assignee]:[]);
 
@@ -35327,7 +35336,21 @@ export default function AgencyOS(){
     }catch{setLoaded(true);}
   };
 
+  // Expõe refetch no window pra syncTasks chamar quando der falha,
+  // e pra qualquer fluxo crítico (aprovação, rejeição) forçar reconciliação.
+  useEffect(()=>{
+    try{
+      window._pixelsRefetchTasks = ()=>fetchTasks();
+    }catch(_){}
+    return ()=>{try{delete window._pixelsRefetchTasks;}catch(_){}};
+  },[]);
+
   // ── Sync para Supabase ────────────────────────────────────
+  // FIX BUG GRAVE (2026-06-22): antes, erros de write eram engolidos silenciosamente
+  // — Vinicius aprovava um card, estado local virava "aprovado", mas se o write
+  // falhasse no DB (RLS/network/conflict), nada era reportado e Hellen continuava
+  // vendo "avaliacao". Agora logamos erros, mostramos toast e forçamos refetch
+  // imediato em caso de falha pra reconciliar estado local com servidor.
   const syncTasks = async (changedTasks, retry=0) => {
     const tok = tokenRef.current||getToken();
     if(!tok){
@@ -35349,13 +35372,47 @@ export default function AgencyOS(){
         clearTimeout(safetyTimer);
         // Aguarda propagação antes de liberar o pendingRef
         setTimeout(()=>ids.forEach(id=>pendingRef.current.delete(id)),5000);
-      } else if(retry===0){
+      } else {
         clearTimeout(safetyTimer);
-        setTimeout(()=>syncTasks(changedTasks,1),2000);
+        let _errBody="";
+        try{_errBody = await res.text();}catch(_){}
+        console.error("[syncTasks] HTTP "+res.status+" "+res.statusText+" — "+_errBody.slice(0,400));
+        if(retry===0){
+          setTimeout(()=>syncTasks(changedTasks,1),2000);
+        } else {
+          // Falha definitiva: avisa user E força refetch pra reconciliar estado
+          try{
+            if(typeof pixelsToast!=="undefined"){
+              const _titles = changedTasks.slice(0,2).map(t=>t.title||"(sem titulo)").join(", ");
+              pixelsToast.error("Falha ao salvar "+changedTasks.length+" card(s): "+_titles+(changedTasks.length>2?"...":"")+". Recarregando do servidor — verifique se a mudanca persistiu.",8000);
+            }
+          }catch(_){}
+          ids.forEach(id=>pendingRef.current.delete(id));
+          try{
+            if(typeof window!=="undefined" && typeof window._pixelsRefetchTasks==="function"){
+              setTimeout(()=>window._pixelsRefetchTasks(),500);
+            }
+          }catch(_){}
+        }
       }
-    }catch{
+    }catch(_err){
       clearTimeout(safetyTimer);
-      if(retry===0) setTimeout(()=>syncTasks(changedTasks,1),2000);
+      console.error("[syncTasks] network/exception:",_err);
+      if(retry===0){
+        setTimeout(()=>syncTasks(changedTasks,1),2000);
+      } else {
+        try{
+          if(typeof pixelsToast!=="undefined"){
+            pixelsToast.error("Sem conexao ao salvar "+changedTasks.length+" card(s). Recarregando do servidor.",8000);
+          }
+        }catch(_){}
+        ids.forEach(id=>pendingRef.current.delete(id));
+        try{
+          if(typeof window!=="undefined" && typeof window._pixelsRefetchTasks==="function"){
+            setTimeout(()=>window._pixelsRefetchTasks(),500);
+          }
+        }catch(_){}
+      }
     }
   };
 
