@@ -27941,7 +27941,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     if(JSON.stringify(checklist)!==JSON.stringify(task.checklist||[]))changed.push("checklist");
     if(changed.length>0)tl.push({type:"edit",label:`Editado: ${changed.join(", ")}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name});
     // ── Validação: deadline < publishDate+Time (se ambos preenchidos) ──
-    if(deadline&&publishDate){
+    // Sócios (level===1) bypassam essa regra — podem salvar com qualquer combinação de datas.
+    if(deadline&&publishDate&&!(user&&user.level===1)){
       const dd=new Date(deadline+"T23:59:59"); // deadline considera o dia todo
       const pd=new Date(publishDate+"T"+(publishTime||"11:00"));
       if(dd>=pd){
