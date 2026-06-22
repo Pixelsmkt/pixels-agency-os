@@ -35319,6 +35319,9 @@ export default function AgencyOS(){
     const tok = token||tokenRef.current||getToken();
     if(!tok) return;
     tokenRef.current = tok;
+    // Expõe helper no window — atualizado a cada chamada de fetchTasks (closure fresh).
+    // Permite que syncTasks e funções de aprovação forcem refetch sem prop-drilling.
+    try{ if(typeof window!=="undefined") window._pixelsRefetchTasks = ()=>fetchTasks(tokenRef.current); }catch(_){}
     try{
       const res = await fetch(`${SB_URL}/rest/v1/tasks?select=*&order=id.asc`,{
         headers:{"apikey":SB_ANON,"Authorization":"Bearer "+tok}
@@ -35336,21 +35339,11 @@ export default function AgencyOS(){
     }catch{setLoaded(true);}
   };
 
-  // Expõe refetch no window pra syncTasks chamar quando der falha,
-  // e pra qualquer fluxo crítico (aprovação, rejeição) forçar reconciliação.
-  useEffect(()=>{
-    try{
-      window._pixelsRefetchTasks = ()=>fetchTasks();
-    }catch(_){}
-    return ()=>{try{delete window._pixelsRefetchTasks;}catch(_){}};
-  },[]);
-
   // ── Sync para Supabase ────────────────────────────────────
-  // FIX BUG GRAVE (2026-06-22): antes, erros de write eram engolidos silenciosamente
-  // — Vinicius aprovava um card, estado local virava "aprovado", mas se o write
-  // falhasse no DB (RLS/network/conflict), nada era reportado e Hellen continuava
-  // vendo "avaliacao". Agora logamos erros, mostramos toast e forçamos refetch
-  // imediato em caso de falha pra reconciliar estado local com servidor.
+  // FIX BUG GRAVE (2026-06-22): erros de write eram engolidos silenciosamente
+  // — Vinicius aprovava, estado local virava "aprovado", mas se o write falhasse
+  // no DB (RLS/network/conflict), nada era reportado e Hellen continuava vendo
+  // "avaliacao". Agora logamos, mostramos toast e forçamos refetch em falha.
   const syncTasks = async (changedTasks, retry=0) => {
     const tok = tokenRef.current||getToken();
     if(!tok){
@@ -35359,7 +35352,6 @@ export default function AgencyOS(){
     }
     tokenRef.current = tok;
     const ids = changedTasks.map(t=>String(t.id));
-    // Safety: limpa pending após 10s (evita trava permanente)
     const safetyTimer = setTimeout(()=>ids.forEach(id=>pendingRef.current.delete(id)),10000);
     try{
       const rows = changedTasks.map(taskToRow);
@@ -35370,27 +35362,24 @@ export default function AgencyOS(){
       });
       if(res.ok){
         clearTimeout(safetyTimer);
-        // Aguarda propagação antes de liberar o pendingRef
         setTimeout(()=>ids.forEach(id=>pendingRef.current.delete(id)),5000);
       } else {
         clearTimeout(safetyTimer);
-        let _errBody="";
-        try{_errBody = await res.text();}catch(_){}
-        console.error("[syncTasks] HTTP "+res.status+" "+res.statusText+" — "+_errBody.slice(0,400));
+        let _eb=""; try{_eb = await res.text();}catch(_){}
+        console.error("[syncTasks] HTTP "+res.status+" "+res.statusText+" — "+_eb.slice(0,400));
         if(retry===0){
           setTimeout(()=>syncTasks(changedTasks,1),2000);
         } else {
-          // Falha definitiva: avisa user E força refetch pra reconciliar estado
           try{
             if(typeof pixelsToast!=="undefined"){
-              const _titles = changedTasks.slice(0,2).map(t=>t.title||"(sem titulo)").join(", ");
-              pixelsToast.error("Falha ao salvar "+changedTasks.length+" card(s): "+_titles+(changedTasks.length>2?"...":"")+". Recarregando do servidor — verifique se a mudanca persistiu.",8000);
+              const _t = changedTasks.slice(0,2).map(t=>t.title||"(sem titulo)").join(", ");
+              pixelsToast.error("Falha ao salvar "+changedTasks.length+" card(s): "+_t+". Recarregando do servidor.",8000);
             }
           }catch(_){}
           ids.forEach(id=>pendingRef.current.delete(id));
           try{
             if(typeof window!=="undefined" && typeof window._pixelsRefetchTasks==="function"){
-              setTimeout(()=>window._pixelsRefetchTasks(),500);
+              setTimeout(()=>{ try{window._pixelsRefetchTasks();}catch(_){} },500);
             }
           }catch(_){}
         }
@@ -35401,15 +35390,11 @@ export default function AgencyOS(){
       if(retry===0){
         setTimeout(()=>syncTasks(changedTasks,1),2000);
       } else {
-        try{
-          if(typeof pixelsToast!=="undefined"){
-            pixelsToast.error("Sem conexao ao salvar "+changedTasks.length+" card(s). Recarregando do servidor.",8000);
-          }
-        }catch(_){}
+        try{ if(typeof pixelsToast!=="undefined") pixelsToast.error("Sem conexao ao salvar. Recarregando do servidor.",8000); }catch(_){}
         ids.forEach(id=>pendingRef.current.delete(id));
         try{
           if(typeof window!=="undefined" && typeof window._pixelsRefetchTasks==="function"){
-            setTimeout(()=>window._pixelsRefetchTasks(),500);
+            setTimeout(()=>{ try{window._pixelsRefetchTasks();}catch(_){} },500);
           }
         }catch(_){}
       }
