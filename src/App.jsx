@@ -4201,7 +4201,8 @@ function DashColaborador({user,isViewing,tasks:propTasks,setTasks:propSetTasks,n
     setTasks={setTasks} isViewing={isViewing} icon={DASH_ICONS[user.dash]||"📋"} currentUser={CURRENT_USER} notifs={notifs} isMob={isMob}/>;
 }
 // Aliases para compatibilidade com RenderDash
-const DashCoordinator=DashColaborador;
+// DashCoordinator NAO e mais alias — agora e funcao propria em 26_dash_gustavo.jsx
+// (dashboard moderno da Hellen, estilo DashSocio com permissoes de coordenadora).
 const DashGestor=DashColaborador;
 const DashDesigner=DashColaborador;
 const DashEditor=DashColaborador;
@@ -51144,6 +51145,195 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 
     {/* ══════════ INDICADORES OPERACIONAIS — última seção do dash ══════════ */}
     <_DGKpisSection allTasks={allTasks}/>
+
+  </div>;
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// DASH COORDINATOR — Hellen (estrategista/social media)
+// Visual moderno estilo DashSocio, mas adaptado às permissões dela.
+// Inclui Agenda 3 dias + Demandas internas + Calendário + Rituais com notas.
+// ══════════════════════════════════════════════════════════════════
+function DashCoordinator({user, isViewing, tasks: propTasks, setTasks, notifs, isMob}){
+  const tasks = propTasks || [];
+  const allTasks = tasks.filter(t=>!t.deletedAt);
+  const _todayIso = _dgToday();
+  const weekKey = _dgWeekKey();
+
+  // ── Agenda 3 dias: hoje + próximos 3 dias ──
+  // Pega marcos do user, rituais (daily/weekly), eventos internos com responsibles
+  const _agenda = (function(){
+    const items = [];
+    const _now = new Date(); _now.setHours(0,0,0,0);
+    const _maxDate = new Date(_now); _maxDate.setDate(_maxDate.getDate()+3);
+    const _isoOf = d => d.toISOString().slice(0,10);
+    const _datesRange = [];
+    for(let d=new Date(_now); d<=_maxDate; d.setDate(d.getDate()+1)) _datesRange.push(_isoOf(d));
+
+    // Daily/Weekly do user (rotina) — busca por _opRotinaDiasFor
+    try{
+      const _rotinaDias = (typeof _opRotinaDiasFor==="function" ? _opRotinaDiasFor(user.id) : []) || [];
+      _datesRange.forEach(iso=>{
+        const _d = new Date(iso+"T12:00");
+        const _dow = _d.getDay(); // 0=Dom, 1=Seg...
+        _rotinaDias.forEach(r=>{
+          if(r.dow===_dow){
+            items.push({
+              iso, type:"rotina", title:r.label||r.titulo||"Rotina",
+              time:r.hora||"", cor:"#7c3aed",
+              icon:<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            });
+          }
+        });
+      });
+    }catch(_){}
+
+    return items.sort((a,b)=>{
+      if(a.iso!==b.iso) return a.iso<b.iso?-1:1;
+      return (a.time||"99:99")<(b.time||"99:99")?-1:1;
+    });
+  })();
+
+  // Mapa hellen-specific: notas dos weeklies do user (lê do Supabase)
+  const [_weeklyNotes, _setWeeklyNotes] = useState({});
+  useEffect(function(){
+    if(!window._sb) return;
+    let alive=true;
+    window._sb.from("weekly_notes").select("*").eq("week_key",weekKey).eq("user_id",user.id)
+      .then(r=>{
+        if(!alive||!r||!r.data) return;
+        const _m={};
+        (r.data||[]).forEach(n=>{_m[n.ritual_key]=n.content||"";});
+        _setWeeklyNotes(_m);
+      }).catch(()=>{});
+    return ()=>{alive=false;};
+  },[weekKey,user.id]);
+
+  const _saveNote = (ritualKey, content)=>{
+    _setWeeklyNotes(p=>({...p,[ritualKey]:content}));
+    if(!window._sb) return;
+    const id = user.id+"_"+weekKey+"_"+ritualKey;
+    window._sb.from("weekly_notes").upsert({
+      id, week_key:weekKey, ritual_key:ritualKey, user_id:user.id, content:content||""
+    },{onConflict:"id"}).then(()=>{}).catch(e=>console.warn("[weekly_notes save]",e));
+  };
+
+  // Permissões: Hellen pode mexer em demandas internas, mas filtramos Avaliações
+  const _isHellen = user.id==="ellen";
+  const _firstName = (user.name||"").split(" ")[0];
+  const _saudacao = (function(){const h=new Date().getHours();return h<12?"Bom dia":h<18?"Boa tarde":"Boa noite";})();
+
+  return <div style={{maxWidth:1600,margin:"0 auto",padding:isMob?"16px 12px 32px":"24px 28px 48px",display:"flex",flexDirection:"column",gap:isMob?14:18,fontFamily:DG_INTER}}>
+
+    {/* ══════════ HEADER MODERNO ══════════ */}
+    <div style={{background:"linear-gradient(135deg,#ec4899 0%,#7c3aed 100%)",borderRadius:18,padding:isMob?"22px 22px":"26px 30px",color:"#fff",boxShadow:"0 12px 32px rgba(124,58,237,0.25)",position:"relative",overflow:"hidden"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:18,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:18,minWidth:0}}>
+          <div style={{width:62,height:62,borderRadius:"50%",overflow:"hidden",border:"3px solid rgba(255,255,255,0.5)",flexShrink:0,background:"rgba(255,255,255,0.15)"}}>
+            {(user.profile_data&&user.profile_data.photo)
+              ? <img src={user.profile_data.photo} alt={user.name} style={{width:"100%",height:"100%",objectFit:"cover"}}/>
+              : <div style={{display:"flex",alignItems:"center",justifyContent:"center",width:"100%",height:"100%",fontSize:24,fontWeight:800}}>{(user.av||user.name.charAt(0)).toUpperCase()}</div>
+            }
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:10.5,fontWeight:800,letterSpacing:1,opacity:.85,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:7,marginBottom:6}}>
+              {_saudacao} · {new Date().toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long"})}
+            </div>
+            <div style={{fontSize:isMob?22:28,fontWeight:900,letterSpacing:-.8,lineHeight:1.1}}>{user.name}</div>
+            <div style={{fontSize:13,fontWeight:500,opacity:.9,marginTop:3}}>{user.role||"Social Media"}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* ══════════ AGENDA HOJE + PRÓXIMOS 3 DIAS ══════════ */}
+    <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:18,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:13,marginBottom:16}}>
+        <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,#ec4899,#a855f7)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(168,85,247,0.30)"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4}}>Agenda</div>
+          <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2}}>Hoje + próximos 3 dias · Daily, Weekly, reuniões e marcos</div>
+        </div>
+      </div>
+      {_agenda.length===0
+        ? <div style={{background:"#fafbfc",border:"1.5px dashed #e2e8f0",borderRadius:13,padding:"24px 16px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontWeight:500}}>Sem compromissos cadastrados nos próximos 3 dias.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {_agenda.map(function(it,i){
+              const _d = new Date(it.iso+"T12:00");
+              const _isToday = it.iso===_todayIso;
+              const _dow = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][_d.getDay()];
+              const _diaNum = String(_d.getDate()).padStart(2,"0");
+              return <div key={i} style={{background:"#fff",border:"1px solid "+(_isToday?"#fbcfe8":"#eef0f3"),borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:12}}>
+                <div style={{width:48,height:48,borderRadius:10,background:_isToday?"linear-gradient(135deg,#ec4899,#a855f7)":"#fafbfc",border:_isToday?"none":"1px solid #eef0f3",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,color:_isToday?"#fff":"#475569"}}>
+                  <span style={{fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",opacity:_isToday?.9:.65}}>{_dow}</span>
+                  <span style={{fontSize:17,fontWeight:800,lineHeight:1}}>{_diaNum}</span>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{color:it.cor||"#7c3aed",display:"inline-flex",alignItems:"center"}}>{it.icon}</span>
+                    <span style={{color:"#0f172a",fontSize:13.5,fontWeight:600,letterSpacing:-.1}}>{it.title}</span>
+                    {_isToday&&<span style={{background:"#ec4899",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.5}}>HOJE</span>}
+                  </div>
+                  {it.time&&<div style={{color:"#64748b",fontSize:11,marginTop:2}}>às {it.time}</div>}
+                </div>
+              </div>;
+            })}
+          </div>
+      }
+    </section>
+
+    {/* ══════════ DEMANDAS INTERNAS — mesma seção dos sócios ══════════ */}
+    <_DGDemandasInternasSection allTasks={allTasks} setTasks={setTasks} user={user} isMob={isMob}/>
+
+    {/* ══════════ CALENDÁRIO INTERNO COMPLETO ══════════ */}
+    {typeof PageCalendarioInterno!=="undefined" && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <PageCalendarioInterno isMob={isMob} tasks={tasks} setTasks={setTasks}/>
+    </div>}
+
+    {/* ══════════ RITUAIS SEMANAIS COM NOTAS — Daily/Weekly/Planejamento ══════════ */}
+    <section style={{background:"linear-gradient(180deg,#fafbfc,#fff)",border:"1px solid #eef0f3",borderRadius:18,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:13,marginBottom:16}}>
+        <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,#7c3aed,#a855f7)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(124,58,237,0.30)"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4}}>Rituais da semana</div>
+          <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2}}>Daily, Weekly e Planejamento · anote insights de cada reunião</div>
+        </div>
+      </div>
+      {(function(){
+        // Pega rituais da semana (getRituaisDoMes ou similar)
+        const _rituais = (typeof getRituaisDoMes==="function" ? getRituaisDoMes(new Date()) : []) || [];
+        // Filtra só weekly/daily/planejamento
+        const _weeklies = _rituais.filter(r=>r.type==="weekly"||r.type==="weekly_planejamento"||r.type==="planmes"||r.type==="plantri");
+        if(_weeklies.length===0) return <div style={{background:"#fafbfc",border:"1.5px dashed #e2e8f0",borderRadius:13,padding:"24px 16px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontWeight:500}}>Sem rituais semanais configurados.</div>;
+        return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {_weeklies.map(function(r){
+            const _note = _weeklyNotes[r.key]||"";
+            const _cfg = {weekly:{color:"#7c3aed",label:"Weekly"},weekly_planejamento:{color:"#7c3aed",label:"Weekly"},planmes:{color:"#f59e0b",label:"Plan. mensal"},plantri:{color:"#ef4444",label:"Plan. trimestral"}}[r.type]||{color:"#64748b",label:r.type};
+            return <div key={r.key} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:9}}>
+                <span style={{background:_cfg.color+"15",color:_cfg.color,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{_cfg.label}</span>
+                <span style={{color:"#0f172a",fontSize:14,fontWeight:700,letterSpacing:-.1}}>{r.label||r.titulo||"Ritual"}</span>
+              </div>
+              <textarea
+                value={_note}
+                onChange={e=>_saveNote(r.key,e.target.value)}
+                placeholder="Anote decisões, pendentes, follow-ups da reunião..."
+                rows={3}
+                style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,fontFamily:DG_INTER,color:"#0f172a",outline:"none",resize:"vertical",minHeight:60,boxSizing:"border-box",transition:"border-color .15s"}}
+                onFocus={e=>e.currentTarget.style.borderColor="#a855f7"}
+                onBlur={e=>e.currentTarget.style.borderColor="#e2e8f0"}
+              />
+              {_note && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,textAlign:"right",fontFeatureSettings:"'tnum'"}}>{_note.length} caracteres · salvo automaticamente</div>}
+            </div>;
+          })}
+        </div>;
+      })()}
+    </section>
 
   </div>;
 }
