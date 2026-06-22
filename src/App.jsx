@@ -2096,7 +2096,8 @@ const NAV=[
   {id:"demandas",   icon:"◈", label:"Demandas",children:[
     {id:"demandas_kanban",     icon:"◈", label:"Fluxo de demandas"},
     {id:"demandas_cal_pub",    icon:"▦", label:"Calendário de publicações"},
-    {id:"demandas_internas",   icon:"◫", label:"Demandas internas"},
+    // "demandas_internas" REMOVIDO — agora mora no Meu Dashboard (DashSocio).
+    // A rota ainda existe em 17_gestao_midia.jsx pra compatibilidade.
   ]},
   {id:"aprovacoes", icon:"◇", label:"Avaliações",children:[
     {id:"aprovacoes_copys",      icon:"✦", label:"Avaliação de copys"},
@@ -49669,6 +49670,195 @@ function _DGKpiCard({label, value, hint, color, icon}){
   </div>;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// DEMANDAS INTERNAS — versão enxuta no DashSocio
+// Substitui a sub-aba Demandas > Demandas internas (que foi removida).
+// Mostra: 4 mini-KPIs + lista das demandas que pedem ação do sócio
+// (atrasadas → entrada não triada → aguardando aprovação).
+// Click no item abre CardModalInterno (mesmo modal da página antiga).
+// Reusa _isDemandaInterna, INTERNO_COLS, PRIO_CFG do 04_demandas_internas.jsx.
+// ══════════════════════════════════════════════════════════════════
+function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
+  const [openCard, setOpenCard] = React.useState(null);
+
+  const _internas = (allTasks||[]).filter(typeof _isDemandaInterna==="function"?_isDemandaInterna:()=>false);
+  const _isSocio = user && user.level===1;
+
+  // KPIs operacionais (sincronizam com Portal — demandas com origem="portal" entram aqui)
+  const _monthRef = (function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");})();
+  const _completedThisMonth = (t)=>{
+    if(t.status!=="interno_executado") return false;
+    const c = t.completedAt || t.completed_at || ((t.timeline||[]).slice().reverse().find(e=>e.to==="interno_executado")||{}).at;
+    if(!c) return false;
+    return String(c).startsWith(_monthRef);
+  };
+  const _dl = (d)=>{ if(!d) return null; return Math.ceil((new Date(d+"T00:00:00") - new Date()) / 86400000); };
+  const _atrasada = (t)=>{const d=_dl(t.deadline);return d!==null&&d<0&&t.status!=="interno_executado";};
+
+  const kpis = {
+    entrada:          _internas.filter(t=>t.status==="interno_demanda"||t.status==="interno_triagem").length,
+    execucao:         _internas.filter(t=>t.status==="interno_execucao").length,
+    aguardandoAprov:  _internas.filter(t=>t.status==="interno_avaliacao").length,
+    atrasadas:        _internas.filter(_atrasada).length,
+    concluidasMes:    _internas.filter(_completedThisMonth).length,
+  };
+
+  // Pendências priorizadas pro sócio: Atrasadas + Entrada + Aguard. aprovação
+  const _PRIO_RANK = {urgente:0, alta:1, media:2, baixa:3};
+  const _pendentes = _internas
+    .filter(t => _atrasada(t) || t.status==="interno_demanda" || t.status==="interno_avaliacao")
+    .sort(function(a,b){
+      const _aA=_atrasada(a)?1:0, _bA=_atrasada(b)?1:0;
+      if(_aA!==_bA) return _bA - _aA;
+      const _aPr=_PRIO_RANK[a.priority]??2, _bPr=_PRIO_RANK[b.priority]??2;
+      if(_aPr!==_bPr) return _aPr - _bPr;
+      const _aDl=a.deadline||"9999-12-31", _bDl=b.deadline||"9999-12-31";
+      if(_aDl!==_bDl) return _aDl < _bDl ? -1 : 1;
+      return 0;
+    })
+    .slice(0, 8);
+
+  // Persistência — reproduz lógica do PageDemandasInternas
+  const _saveCard = (updated) => {
+    const isNew = !!updated._isNew;
+    const card = {...updated}; delete card._isNew;
+    if(setTasks){
+      if(isNew) setTasks(p=>[...p, card]);
+      else setTasks(p=>p.map(t=>t.id===card.id?card:t));
+    }
+    if(window._sb){
+      window._sb.from("tasks").upsert({
+        id:card.id, title:card.title, status:card.status,
+        assignee:(card.assignees||[])[0]||"", assignees:card.assignees||[],
+        priority:card.priority, deadline:card.deadline||null, deadline_time:card.deadlineTime||null,
+        description:card.desc||"", checklist:card.checklist||[],
+        timeline:card.timeline||[], client:card.client||"interno", origem:card.origem||"interno", sector:"",
+        created_by:card.createdBy||user.id,
+        col_entered_at:card.colEnteredAt||null,
+        tags:[], comments:[], files:[], watchers:[], cover:null,
+        ajustar:false, is_alteracao:false, score:null,
+        publish_date:null, publish_time:"09:00", bioter_unit:card.bioterUnit||"",
+        interno_tipo:card.internoTipo||"outro",
+        sprint_bucket:card.sprintBucket||"proxima",
+      },{onConflict:"id"}).then(()=>{}).catch(err=>console.error("[interna saveCard]",err));
+    }
+    setOpenCard(null);
+  };
+  const _deleteCard = async (id) => {
+    if(typeof pixelsConfirm==="function"){
+      if(!await pixelsConfirm("Excluir esta demanda interna?",{okText:"Excluir",danger:true})) return;
+    }else{ if(!window.confirm("Excluir esta demanda interna?")) return; }
+    const now = new Date().toISOString();
+    if(setTasks) setTasks(p=>p.map(t=>t.id===id?{...t,deletedAt:now}:t));
+    if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(()=>{}).catch(err=>console.error("[interna deleteCard]",err));
+    setOpenCard(null);
+  };
+  const _novoCard = () => {
+    const id = "int_"+Date.now()+"_"+Math.random().toString(36).slice(2,7);
+    setOpenCard({
+      id, title:"", desc:"", status:"interno_demanda",
+      assignees:[], priority:"media", deadline:"", deadlineTime:"",
+      checklist:[], timeline:[], client:"interno", createdBy:user.id,
+      colEnteredAt:new Date().toISOString(),
+      tags:[], comments:[], files:[], watchers:[], deletedAt:null, cover:null,
+      ajustar:false, isAlteracao:false, score:null,
+      publishDate:"", publishTime:"09:00", bioterUnit:"",
+      origem:"interno", internoTipo:"outro", sprintBucket:"proxima",
+      _isNew:true,
+    });
+  };
+
+  const _Mini = ({label, value, color, ico}) => <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"13px 15px",display:"flex",alignItems:"center",gap:11,fontFamily:DG_INTER,boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}>
+    <div style={{width:36,height:36,borderRadius:10,background:color+"14",color:color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+      <Ico n={ico} size={16} color={color}/>
+    </div>
+    <div style={{minWidth:0}}>
+      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+      <div style={{color:"#0f172a",fontSize:22,fontWeight:900,letterSpacing:-.6,lineHeight:1.1,fontFeatureSettings:"'tnum'",marginTop:2}}>{value}</div>
+    </div>
+  </div>;
+
+  return <>
+    <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:18,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:16,fontFamily:DG_INTER}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:14,flexWrap:"wrap"}}>
+        <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0}}>
+          <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,"+DG_PURPLE+","+DG_PURPLE+"cc)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px "+DG_PURPLE+"35"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+          </div>
+          <div style={{minWidth:0}}>
+            <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4,lineHeight:1.2}}>Demandas internas</div>
+            <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2,lineHeight:1.4}}>Pedidos do Portal do Cliente + demandas internas da gestão</div>
+          </div>
+        </div>
+        <button onClick={_novoCard}
+          style={{background:DG_PURPLE,color:"#fff",border:"none",borderRadius:11,padding:"10px 16px",fontWeight:700,fontSize:12.5,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 16px "+DG_PURPLE+"35",transition:"all .15s",letterSpacing:.1,whiteSpace:"nowrap"}}
+          onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 10px 22px "+DG_PURPLE+"4d";}}
+          onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 6px 16px "+DG_PURPLE+"35";}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nova demanda
+        </button>
+      </div>
+
+      <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(5,1fr)",gap:10}}>
+        <_Mini label="Entrada"           value={kpis.entrada}         color="#9F43F6" ico="inbox"/>
+        <_Mini label="Em execução"       value={kpis.execucao}        color="#f97316" ico="zap"/>
+        <_Mini label="Aguard. aprovação" value={kpis.aguardandoAprov} color="#eab308" ico="check"/>
+        <_Mini label="Atrasadas"         value={kpis.atrasadas}       color="#dc2626" ico="alertTriangle"/>
+        <_Mini label="Concluídas no mês" value={kpis.concluidasMes}   color="#16a34a" ico="trendingUp"/>
+      </div>
+
+      {_pendentes.length===0
+        ? <div style={{background:"#fafbfc",border:"1.5px dashed #e2e8f0",borderRadius:13,padding:"24px 16px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontWeight:500}}>Sem demandas pendentes de decisão.{kpis.execucao>0?" A equipe está executando "+kpis.execucao+" em paralelo.":""}</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+              <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Precisam de decisão sua <span style={{color:"#94a3b8",fontWeight:600}}>· {_pendentes.length}</span></div>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>atrasadas → entrada → aguardando aprovação</div>
+            </div>
+            {_pendentes.map(function(t){
+              const _col = (typeof INTERNO_COLS!=="undefined"?INTERNO_COLS:[]).find(c=>c.id===t.status) || {label:t.status,color:"#94a3b8"};
+              const _pc = (typeof PRIO_CFG!=="undefined"?PRIO_CFG:{})[t.priority] || {label:"Média",color:"#64748b",bg:"#64748b15"};
+              const _isAtr = _atrasada(t);
+              const _diasAtr = _isAtr ? Math.abs(_dl(t.deadline)) : 0;
+              const _cl = t.client && t.client!=="interno" && typeof CLIENTS!=="undefined" ? CLIENTS.find(c=>c.id===t.client) : null;
+              const _isPortal = t.origem==="portal" || t.origem==="solicitacao_cliente";
+              const _resps = (Array.isArray(t.assignees)&&t.assignees.length>0) ? t.assignees : (t.assignee?[t.assignee]:[]);
+              return <div key={t.id} onClick={()=>setOpenCard(t)}
+                style={{background:"#fff",border:"1px solid "+(_isAtr?"#fecaca":"#eef0f3"),borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:12,cursor:"pointer",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.02)"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.borderColor=_isAtr?"#dc2626":DG_PURPLE+"55";e.currentTarget.style.boxShadow="0 6px 14px rgba(15,23,42,0.06)";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#eef0f3";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.02)";}}>
+                <div style={{background:_col.color+"18",color:_col.color,borderRadius:8,padding:"4px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,whiteSpace:"nowrap",flexShrink:0}}>{_col.label}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3,flexWrap:"wrap"}}>
+                    <span style={{color:"#0f172a",fontSize:13.5,fontWeight:600,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:380}}>{t.title||"(sem título)"}</span>
+                    {_isPortal && <span style={{background:"#0ea5e918",color:"#0ea5e9",borderRadius:6,padding:"2px 7px",fontSize:9,fontWeight:800,letterSpacing:.4,display:"inline-flex",alignItems:"center",gap:3}}><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Portal</span>}
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:9,color:"#64748b",fontSize:11,fontWeight:500,flexWrap:"wrap"}}>
+                    {_cl && <span style={{display:"inline-flex",alignItems:"center",gap:4}}><span style={{width:8,height:8,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>{_cl.name}</span>}
+                    <span style={{display:"inline-flex",alignItems:"center",gap:4,color:_pc.color,fontWeight:700}}><span style={{width:6,height:6,borderRadius:"50%",background:_pc.color}}/>{_pc.label}</span>
+                    {t.deadline && <span style={{color:_isAtr?"#dc2626":"#64748b",fontWeight:_isAtr?700:500}}>{_isAtr?_diasAtr+"d atraso":"Vence em "+(_dl(t.deadline)||0)+"d"}</span>}
+                  </div>
+                </div>
+                {_resps.length>0 && <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
+                  {_resps.slice(0,3).map(function(uid,i){
+                    const u = (typeof TEAM!=="undefined"?TEAM:[]).find(x=>x.id===uid);
+                    if(!u) return null;
+                    const ph = (u.profile_data&&u.profile_data.photo) || (typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id)) || null;
+                    return ph
+                      ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:24,height:24,borderRadius:"50%",objectFit:"cover",border:"2px solid #fff",marginLeft:i===0?0:-7}}/>
+                      : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:9.5,border:"2px solid #fff",marginLeft:i===0?0:-7}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
+                  })}
+                  {_resps.length>3 && <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:24,height:24,borderRadius:"50%",background:"#f1f5f9",color:"#64748b",fontWeight:800,fontSize:9.5,border:"2px solid #fff",marginLeft:-7}}>+{_resps.length-3}</span>}
+                </div>}
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="9 18 15 12 9 6"/></svg>
+              </div>;
+            })}
+          </div>
+      }
+    </section>
+    {openCard && typeof CardModalInterno!=="undefined" && <CardModalInterno card={openCard} onClose={()=>setOpenCard(null)} onSave={_saveCard} onDelete={_deleteCard} isSocio={_isSocio}/>}
+  </>;
+}
+
 function _DGKpisSection({allTasks}){
   const k = _useDGKpis(allTasks);
   const fmtBRL = n => n==null||n===0?"R$ 0":("R$ "+(n>=1000?(Math.round(n/100)/10).toString().replace(".",",")+"k":Math.round(n).toLocaleString("pt-BR")));
@@ -50954,6 +51144,9 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       onClose={()=>setNovoSprint(null)}
       onSave={(payload)=>{planUpsert(payload);setNovoSprint(null);}}
       onDelete={(id)=>{if(typeof planRemove==="function")planRemove(id);setNovoSprint(null);}}/>}
+
+    {/* ══════════ DEMANDAS INTERNAS — bloco enxuto que substituiu a sub-aba removida ══════════ */}
+    <_DGDemandasInternasSection allTasks={allTasks} setTasks={setTasks} user={user} isMob={isMob}/>
 
     {/* ══════════ INDICADORES OPERACIONAIS — última seção do dash ══════════ */}
     <_DGKpisSection allTasks={allTasks}/>
