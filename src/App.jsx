@@ -51295,12 +51295,14 @@ function DashCoordinator({user, isViewing, tasks: propTasks, setTasks, notifs, i
     });
   })();
 
-  // Mapa hellen-specific: notas dos weeklies do user (lê do Supabase)
+  // Mapa hellen-specific: notas dos weeklies do user (todas as semanas, lê do Supabase)
+  // Chave do mapa = ritual_key gravado no DB (ex: "weekly_2026-W26"), sempre único por Monday.
   const [_weeklyNotes, _setWeeklyNotes] = useState({});
   useEffect(function(){
     if(!window._sb) return;
     let alive=true;
-    window._sb.from("weekly_notes").select("*").eq("week_key",weekKey).eq("user_id",user.id)
+    // Carrega TODAS as notas weekly do user — não filtra por semana (precisamos das próximas 4 segundas).
+    window._sb.from("weekly_notes").select("*").eq("user_id",user.id)
       .then(r=>{
         if(!alive||!r||!r.data) return;
         const _m={};
@@ -51308,14 +51310,17 @@ function DashCoordinator({user, isViewing, tasks: propTasks, setTasks, notifs, i
         _setWeeklyNotes(_m);
       }).catch(()=>{});
     return ()=>{alive=false;};
-  },[weekKey,user.id]);
+  },[user.id]);
 
   const _saveNote = (ritualKey, content)=>{
     _setWeeklyNotes(p=>({...p,[ritualKey]:content}));
     if(!window._sb) return;
-    const id = user.id+"_"+weekKey+"_"+ritualKey;
+    // Extrai week_key da ritual_key (formato "weekly_YYYY-Www") pra alinhar com o schema.
+    const _wkMatch = /(\d{4}-W\d{2})/.exec(ritualKey);
+    const _wk = _wkMatch ? _wkMatch[1] : (typeof weekKey!=="undefined"?weekKey:"");
+    const id = user.id+"_"+ritualKey;
     window._sb.from("weekly_notes").upsert({
-      id, week_key:weekKey, ritual_key:ritualKey, user_id:user.id, content:content||""
+      id, week_key:_wk, ritual_key:ritualKey, user_id:user.id, content:content||""
     },{onConflict:"id"}).then(()=>{}).catch(e=>console.warn("[weekly_notes save]",e));
   };
 
@@ -51385,43 +51390,67 @@ function DashCoordinator({user, isViewing, tasks: propTasks, setTasks, notifs, i
       }
     </section>
 
-    {/* ══════════ DEMANDAS INTERNAS — mesma seção dos sócios ══════════ */}
-    <_DGDemandasInternasSection allTasks={allTasks} setTasks={setTasks} user={user} isMob={isMob}/>
-
     {/* ══════════ CALENDÁRIO INTERNO COMPLETO ══════════ */}
     {typeof PageCalendarioInterno!=="undefined" && <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
       <PageCalendarioInterno isMob={isMob} tasks={tasks} setTasks={setTasks}/>
     </div>}
 
-    {/* ══════════ RITUAIS SEMANAIS COM NOTAS — Daily/Weekly/Planejamento ══════════ */}
+    {/* ══════════ PRÓXIMAS WEEKLIES — toda Segunda 11h, com notas ══════════ */}
     <section style={{background:"linear-gradient(180deg,#fafbfc,#fff)",border:"1px solid #eef0f3",borderRadius:18,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
       <div style={{display:"flex",alignItems:"center",gap:13,marginBottom:16}}>
         <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,#7c3aed,#a855f7)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(124,58,237,0.30)"}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4}}>Rituais da semana</div>
-          <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2}}>Daily, Weekly e Planejamento · anote insights de cada reunião</div>
+          <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4}}>Próximas weeklies</div>
+          <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2}}>Toda segunda-feira, 11h · anote decisões e follow-ups que ficam salvos</div>
         </div>
       </div>
       {(function(){
-        // Pega rituais da semana (getRituaisDoMes ou similar)
-        const _rituais = (typeof getRituaisDoMes==="function" ? getRituaisDoMes(new Date()) : []) || [];
-        // Filtra só weekly/daily/planejamento
-        const _weeklies = _rituais.filter(r=>r.type==="weekly"||r.type==="weekly_planejamento"||r.type==="planmes"||r.type==="plantri");
-        if(_weeklies.length===0) return <div style={{background:"#fafbfc",border:"1.5px dashed #e2e8f0",borderRadius:13,padding:"24px 16px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontWeight:500}}>Sem rituais semanais configurados.</div>;
+        // Calcula próximas 4 segundas-feiras a partir de hoje
+        const _today=new Date();_today.setHours(0,0,0,0);
+        const _dow=_today.getDay(); // 0=dom,1=seg,...
+        const _daysToMon=_dow===1?0:((8-_dow)%7); // próxima segunda (inclui hoje se for segunda)
+        const _firstMon=new Date(_today);_firstMon.setDate(_today.getDate()+_daysToMon);
+        const _mondays=[];
+        for(let i=0;i<4;i++){
+          const _d=new Date(_firstMon);_d.setDate(_firstMon.getDate()+i*7);
+          _mondays.push(_d);
+        }
+        // Helper: ISO week
+        const _isoWeek=function(d){
+          const _t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+          const _dn=_t.getUTCDay()||7;_t.setUTCDate(_t.getUTCDate()+4-_dn);
+          const _ys=new Date(Date.UTC(_t.getUTCFullYear(),0,1));
+          const _w=Math.ceil((((_t-_ys)/86400000)+1)/7);
+          return _t.getUTCFullYear()+"-W"+String(_w).padStart(2,"0");
+        };
+        const _fmtData=function(d){
+          const _meses=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+          return d.getDate()+" de "+_meses[d.getMonth()]+" · "+d.getFullYear();
+        };
+        const _isHoje=function(d){const t=new Date();return d.getDate()===t.getDate()&&d.getMonth()===t.getMonth()&&d.getFullYear()===t.getFullYear();};
         return <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {_weeklies.map(function(r){
-            const _note = _weeklyNotes[r.key]||"";
-            const _cfg = {weekly:{color:"#7c3aed",label:"Weekly"},weekly_planejamento:{color:"#7c3aed",label:"Weekly"},planmes:{color:"#f59e0b",label:"Plan. mensal"},plantri:{color:"#ef4444",label:"Plan. trimestral"}}[r.type]||{color:"#64748b",label:r.type};
-            return <div key={r.key} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{display:"flex",alignItems:"center",gap:9}}>
-                <span style={{background:_cfg.color+"15",color:_cfg.color,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{_cfg.label}</span>
-                <span style={{color:"#0f172a",fontSize:14,fontWeight:700,letterSpacing:-.1}}>{r.label||r.titulo||"Ritual"}</span>
+          {_mondays.map(function(d,idx){
+            const _wk=_isoWeek(d);
+            const _ritualKey="weekly";
+            const _noteKey=_ritualKey+"_"+_wk;
+            const _note=_weeklyNotes[_noteKey]||"";
+            const _hoje=_isHoje(d);
+            return <div key={_wk} style={{background:"#fff",border:"1px solid "+(_hoje?"#a855f7":"#eef0f3"),borderRadius:13,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,boxShadow:_hoje?"0 4px 14px rgba(124,58,237,0.12)":"0 1px 2px rgba(15,23,42,0.025)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                <span style={{background:"#7c3aed15",color:"#7c3aed",fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Weekly</span>
+                <span style={{color:"#0f172a",fontSize:14,fontWeight:700,letterSpacing:-.1}}>Segunda · {_fmtData(d)}</span>
+                <span style={{color:"#7c3aed",fontSize:12,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  11:00
+                </span>
+                {_hoje&&<span style={{background:"#7c3aed",color:"#fff",fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Hoje</span>}
+                {idx===0&&!_hoje&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Próxima</span>}
               </div>
               <textarea
                 value={_note}
-                onChange={e=>_saveNote(r.key,e.target.value)}
+                onChange={e=>_saveNote(_noteKey,e.target.value)}
                 placeholder="Anote decisões, pendentes, follow-ups da reunião..."
                 rows={3}
                 style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 11px",fontSize:13,fontFamily:DG_INTER,color:"#0f172a",outline:"none",resize:"vertical",minHeight:60,boxSizing:"border-box",transition:"border-color .15s"}}
