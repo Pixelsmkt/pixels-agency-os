@@ -1198,6 +1198,18 @@ function stripClientNames(s){
   out=out.replace(/\s*-\s*-\s*/g," - ");
   return out.trim();
 }
+// Siglas dos estados brasileiros — usadas pra detectar padrões "cidade-uf"
+// (ex: "Itaipulândia-pr" → "Itaipulândia-PR") em smartFormatTitle.
+const _BR_STATES=new Set(["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"]);
+function _normalizeBrStateInWord(s){
+  if(!s||s.indexOf("-")<0)return s;
+  return s.split("-").map(function(seg){
+    if(seg.length===2&&_BR_STATES.has(seg.toLocaleUpperCase("pt-BR"))){
+      return seg.toLocaleUpperCase("pt-BR");
+    }
+    return seg;
+  }).join("-");
+}
 function smartFormatTitle(input){
   if(!input||typeof input!=="string")return input||"";
   let s=stripEmojis(input);
@@ -1217,8 +1229,10 @@ function smartFormatTitle(input){
     if(prefix.length+suffix.length>=word.length)return word;
     const core=word.slice(prefix.length,word.length-suffix.length);
     let processed;
+    const _lowerCore=core.toLocaleLowerCase("pt-BR");
+    const _isStopword=idx>0&&TITLE_STOPWORDS_PTBR.has(_lowerCore);
     if(_isCamelCaseValid(core)){processed=core;}
-    else if(/^[A-ZÀ-Ý]{2,4}$/.test(core)){processed=core;} // siglas 2-4 letras (BR, ETA, CNPJ)
+    else if(!_isStopword&&/^[A-ZÀ-Ý]{2,4}$/.test(core)){processed=core;} // siglas 2-4 letras (BR, ETA, CNPJ) — exceto stopwords ("DE", "DO")
     else {
       const lower=core.toLocaleLowerCase("pt-BR");
       if(idx>0&&TITLE_STOPWORDS_PTBR.has(lower)){processed=lower;}
@@ -1227,8 +1241,23 @@ function smartFormatTitle(input){
         else {processed=_capitalizeFirst(core);}
       }
       else if(isTitleSegment){
-        if(_isWellFormed(core)){processed=core;}
-        else {processed=lower;}
+        // Sentence case em pt-BR: segunda+ palavras do segmento principal vão lowercase
+        // (Ex: "Planta de Biogás" → "Planta de biogás" — biogás é substantivo comum).
+        // EXCEÇÃO: dentro de parênteses/colchetes preservamos case porque ali costuma vir
+        // nome próprio (cidade, data, especificação). Processamos por segmento separado
+        // por hífen pra suportar padrão "Cidade-UF".
+        // Ex: "Planta de Biogás (Itaipulândia-pr)" → "Planta de biogás (Itaipulândia-PR)"
+        const isParenthetical=prefix.indexOf("(")>=0||prefix.indexOf("[")>=0||prefix.indexOf("{")>=0||suffix.indexOf(")")>=0||suffix.indexOf("]")>=0||suffix.indexOf("}")>=0;
+        if(isParenthetical){
+          processed=core.split("-").map(function(seg){
+            const segUp=seg.toLocaleUpperCase("pt-BR");
+            if(seg.length===2&&_BR_STATES.has(segUp))return segUp;
+            if(_isWellFormed(seg))return seg;
+            return _capitalizeFirst(seg.toLocaleLowerCase("pt-BR"));
+          }).join("-");
+        } else {
+          processed=lower;
+        }
       }
       else {
         // Sentence segment (depois de " - "): força lowercase EXCETO em palavras
@@ -1238,6 +1267,9 @@ function smartFormatTitle(input){
         else {processed=lower;}
       }
     }
+    // Pós-processamento: detecta "cidade-uf" e força UF maiúsculo
+    // (Ex: "Itaipulândia-pr" → "Itaipulândia-PR")
+    processed=_normalizeBrStateInWord(processed);
     return prefix+processed+suffix;
   }
   const hasSeparator=parts.length>1;
