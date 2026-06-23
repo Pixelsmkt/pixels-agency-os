@@ -32786,6 +32786,18 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const [fChip,setFChip]=useState("todos");
   const [topTab,setTopTab]=useState("visao"); // visao | demandas | clientes | relatorios
   const [demFilter,setDemFilter]=useState("todas"); // chips da aba demandas
+  const [editingDem,setEditingDem]=useState(null);  // {clientId, task} pra modo editar
+
+  // Excluir demanda interna (clientId, demandaId)
+  const deleteDem=function(clientId,demandaId){
+    update(function(prev){
+      const all=prev.tasks||{};
+      const cur=all[clientId]||[];
+      return {...prev,tasks:{...all,[clientId]:cur.filter(function(x){return x.id!==demandaId;})}};
+    });
+    addHistory(clientId,{type:"task",label:"Demanda excluída"});
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda removida.",2000);
+  };
 
   const isSocio=currentUser?.level===1;
   const canManageClients=isSocio;
@@ -32896,11 +32908,13 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
     const cid=kv[0],list=kv[1];
     (list||[]).forEach(function(d){
       allMediaDemands.push({
-        id:d.id,source:"interna",
+        id:d.id,source:"interno",
         client_id:cid,title:d.titulo||d.title,
         tipo:d.tipo,priority:d.priority||"media",status:d.status,
-        deadline:d.prazo||d.deadline,responsavel:d.responsavel,
+        deadline:d.prazo||d.deadline,prazo:d.prazo,responsavel:d.responsavel,
+        unidade:d.unidade||"",
         created_at:d.created_at,descricao:d.descricao,
+        _raw:d,
       });
     });
   });
@@ -32969,23 +32983,31 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
   const DemandaCard=({d})=>{
     const cl=d.client_id?CLIENTS.find(c=>c.id===(d.client_id.startsWith("bioter_")?"bioter":d.client_id)):null;
     const isPortal=d.source==="portal";
+    // Unidade Bioter — vem do form (campo unidade) ou inferida do client_id "bioter_xxx"
+    const unitId=d.unidade||(d.client_id&&d.client_id.startsWith("bioter_")?d.client_id.slice(7):"");
+    const unitObj=unitId&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.find(u=>u.id===unitId):null;
+    const clientLabel=cl?(unitObj?(cl.name+" "+(unitObj.pickerLabel||unitObj.label)):cl.name):"Sem cliente";
     const PRIO={baixa:{l:"Baixa",c:"#64748b",bg:"#f1f5f9"},media:{l:"Média",c:"#f97316",bg:"#fff7ed"},alta:{l:"Alta",c:"#ef4444",bg:"#fef2f2"},urgente:{l:"Urgente",c:"#dc2626",bg:"#fee2e2"}}[d.priority]||{l:"—",c:"#94a3b8",bg:"#f1f5f9"};
     const STAT_MAP={
       planejamento:{l:"Planejamento",c:"#64748b"},configuracao:{l:"Configuração",c:"#0284c7"},otimizacao:{l:"Em otimização",c:"#7c3aed"},aguard_cliente:{l:"Aguardando cliente",c:"#ea580c"},aguard_aprovacao:{l:"Aguardando aprovação",c:"#eab308"},relatorio:{l:"Relatório",c:"#4db8ff"},concluido:{l:"Concluído",c:"#16a34a"},
       interno_demanda:{l:"Entrada",c:"#9F43F6"},interno_triagem:{l:"Em triagem",c:"#6366f1"},interno_execucao:{l:"Em execução",c:"#f97316"},interno_aguardando:{l:"Aguardando cliente",c:"#0ea5e9"},interno_avaliacao:{l:"Avaliação",c:"#eab308"},interno_aprovado:{l:"Aprovada",c:"#22c55e"},interno_executado:{l:"Executada",c:"#8b5cf6"},
     };
     const ST=STAT_MAP[d.status]||{l:d.status||"—",c:"#64748b"};
-    const dl=d.deadline?Math.ceil((new Date(d.deadline+"T00:00:00")-new Date())/86400000):null;
+    // Prazo: usa d.deadline (portal) ou d.prazo (interno do form)
+    const deadlineStr=d.deadline||d.prazo||"";
+    const dl=deadlineStr?Math.ceil((new Date(deadlineStr+"T00:00:00")-new Date())/86400000):null;
     const dlC=dl===null?"#94a3b8":dl<0?"#ef4444":dl<=2?"#f97316":"#64748b";
     const resp=d.responsavel?TEAM.find(u=>u.id===d.responsavel):null;
+    // Botões editar/excluir só fazem sentido pra demandas internas (não portal)
+    const canManageThis=!isPortal&&d.source==="interno";
     return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"13px 15px",transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}
       onMouseEnter={e=>{e.currentTarget.style.borderColor="#9F43F6";e.currentTarget.style.boxShadow="0 6px 18px rgba(159,67,246,0.08)";}}
       onMouseLeave={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
-      {/* Logo + cliente */}
+      {/* Logo + cliente (com unidade Bioter) */}
       <div style={{display:"flex",alignItems:"center",gap:9,minWidth:200,flex:"0 0 200px"}}>
         {cl?<ClientLogo clientId={cl.id} size="sm"/>:<div style={{width:28,height:28,borderRadius:8,background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:11,fontWeight:700}}>?</div>}
         <div style={{minWidth:0}}>
-          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.name:"Sem cliente"}</div>
+          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{clientLabel}</div>
           {isPortal&&<div style={{color:"#9F43F6",fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:3,marginTop:1}}><Ico n="zap" size={9} color="#9F43F6"/>Via Portal</div>}
         </div>
       </div>
@@ -33002,11 +33024,26 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
       {/* Responsável + prazo */}
       <div style={{display:"flex",alignItems:"center",gap:10,minWidth:140}}>
         {resp?<div style={{display:"flex",alignItems:"center",gap:6}}><UserAvatar user={resp} size={20}/><span style={{color:"#475569",fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>{resp.name.split(" ")[0]}</span></div>:<span style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>—</span>}
-        {d.deadline&&<span style={{color:dlC,fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
+        {deadlineStr&&<span style={{color:dlC,fontSize:11,fontWeight:700,display:"inline-flex",alignItems:"center",gap:3,whiteSpace:"nowrap"}}>
           <Ico n="calendar" size={11}/>
-          {dl!==null&&dl<0?(Math.abs(dl)+"d atraso"):dl===0?"Hoje":dl===1?"Amanhã":new Date(d.deadline+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}
+          {dl!==null&&dl<0?(Math.abs(dl)+"d atraso"):dl===0?"Hoje":dl===1?"Amanhã":new Date(deadlineStr+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"})}
         </span>}
       </div>
+      {/* Botões editar + excluir (apenas demandas internas) */}
+      {canManageThis&&<div style={{display:"flex",alignItems:"center",gap:4,marginLeft:"auto"}}>
+        <button title="Editar" onClick={function(e){e.stopPropagation();setEditingDem&&setEditingDem({clientId:d.client_id,task:d._raw||d});}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}
+          style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#64748b",cursor:"pointer",transition:"all .12s"}}>
+          <Ico n="edit" size={14}/>
+        </button>
+        <button title="Excluir" onClick={function(e){e.stopPropagation();if(typeof pixelsConfirm==="function"){pixelsConfirm({title:"Excluir demanda?",message:'"'+(d.title||"Demanda")+'" será removida.',confirmLabel:"Excluir",danger:true,onConfirm:function(){deleteDem&&deleteDem(d.client_id,d.id);}});}else if(confirm("Excluir demanda?")){deleteDem&&deleteDem(d.client_id,d.id);}}}
+          onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";e.currentTarget.style.color="#dc2626";}}
+          onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}
+          style={{background:"transparent",border:"none",borderRadius:8,width:30,height:30,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",cursor:"pointer",transition:"all .12s"}}>
+          <Ico n="trash" size={14}/>
+        </button>
+      </div>}
     </div>;
   };
 
@@ -33224,6 +33261,10 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
       store={store} update={update} addHistory={addHistory}
       preselectClient={typeof showNovaDemanda==="string"?showNovaDemanda:null}
       onClose={()=>setShowNovaDemanda(false)}/>}
+    {editingDem&&<MediaNovaDemandaModal
+      store={store} update={update} addHistory={addHistory}
+      initialTask={editingDem}
+      onClose={()=>setEditingDem(null)}/>}
     {showRelatorio&&<MediaRelatorioGeral
       store={store} onClose={()=>setShowRelatorio(false)}/>}
   </div>;
@@ -34668,8 +34709,16 @@ function MediaNovoClienteModal({store,update,addHistory,onClose}){
 /* ═══════════════════════════════════════════════════════════════
    MODAL — Nova demanda de mídia (cross-cliente)
    ═══════════════════════════════════════════════════════════════ */
-function MediaNovaDemandaModal({store,update,addHistory,onClose}){
-  const [f,setF]=useState({client_id:"",titulo:"",tipo:"criar_campanha",status:"planejamento",responsavel:"erick",prazo:"",descricao:""});
+function MediaNovaDemandaModal({store,update,addHistory,onClose,initialTask,preselectClient}){
+  // Modo editar: initialTask traz {clientId, task}. Modo criar: form vazio.
+  const isEdit=!!(initialTask&&initialTask.task);
+  const [f,setF]=useState(()=>{
+    if(isEdit){
+      const t=initialTask.task;
+      return {client_id:initialTask.clientId||"",titulo:t.titulo||"",tipo:t.tipo||"criar_campanha",status:t.status||"planejamento",responsavel:t.responsavel||"erick",prazo:t.prazo||"",descricao:t.descricao||"",unidade:t.unidade||""};
+    }
+    return {client_id:preselectClient||"",titulo:"",tipo:"criar_campanha",status:"planejamento",responsavel:"erick",prazo:"",descricao:"",unidade:""};
+  });
   const TIPOS=[
     {id:"criar_campanha",label:"Criar campanha"},
     {id:"ajustar_orcamento",label:"Ajustar orçamento"},
@@ -34681,27 +34730,46 @@ function MediaNovaDemandaModal({store,update,addHistory,onClose}){
     {id:"analisar_queda",label:"Analisar queda de resultado"},
     {id:"outro",label:"Outro"},
   ];
+  // Bioter tem unidades — mostrar picker quando cliente=bioter
+  const isBioter=f.client_id==="bioter";
   const save=()=>{
     if(!f.client_id)return pixelsToast.error("Cliente é obrigatório.",2500);
     if(!f.titulo.trim())return pixelsToast.error("Título é obrigatório.",2500);
-    update(prev=>{
-      const all=prev.tasks||{};
-      const cur=all[f.client_id]||[];
-      return {...prev,tasks:{...all,[f.client_id]:[{...f,id:"task-"+Date.now(),created_at:new Date().toISOString()},...cur]}};
-    });
-    addHistory(f.client_id,{type:"task",label:`Demanda criada: ${f.titulo}`});
-    pixelsToast.success("Demanda criada.",2500);
+    if(isEdit){
+      update(prev=>{
+        const all=prev.tasks||{};
+        const cur=all[f.client_id]||[];
+        return {...prev,tasks:{...all,[f.client_id]:cur.map(t=>t.id===initialTask.task.id?{...t,...f,updated_at:new Date().toISOString()}:t)}};
+      });
+      addHistory(f.client_id,{type:"task",label:`Demanda editada: ${f.titulo}`});
+      pixelsToast.success("Demanda atualizada.",2500);
+    } else {
+      update(prev=>{
+        const all=prev.tasks||{};
+        const cur=all[f.client_id]||[];
+        return {...prev,tasks:{...all,[f.client_id]:[{...f,id:"task-"+Date.now(),created_at:new Date().toISOString()},...cur]}};
+      });
+      addHistory(f.client_id,{type:"task",label:`Demanda criada: ${f.titulo}`});
+      pixelsToast.success("Demanda criada.",2500);
+    }
     onClose();
   };
-  return <ModalShell onClose={onClose} title="Nova demanda de mídia">
+  return <ModalShell onClose={onClose} title={isEdit?"Editar demanda de mídia":"Nova demanda de mídia"}>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
       <div style={{gridColumn:"span 2"}}>
         <label style={MLB}>Cliente</label>
-        <select value={f.client_id} onChange={e=>setF({...f,client_id:e.target.value})} style={MSI}>
+        <select value={f.client_id} onChange={e=>setF({...f,client_id:e.target.value,unidade:""})} style={MSI} disabled={isEdit}>
           <option value="">Selecione...</option>
           {store.clients.map(c=><option key={c.client_id} value={c.client_id}>{c.name}</option>)}
         </select>
       </div>
+      {isBioter&&<div style={{gridColumn:"span 2"}}>
+        <label style={MLB}>Unidade Bioter</label>
+        <select value={f.unidade} onChange={e=>setF({...f,unidade:e.target.value})} style={MSI}>
+          <option value="">Geral (sem unidade)</option>
+          {(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).map(u=><option key={u.id} value={u.id}>{u.pickerLabel||u.label}</option>)}
+        </select>
+      </div>}
       <div>
         <label style={MLB}>Tipo</label>
         <select value={f.tipo} onChange={e=>setF({...f,tipo:e.target.value})} style={MSI}>
@@ -34723,7 +34791,7 @@ function MediaNovaDemandaModal({store,update,addHistory,onClose}){
     </div>
     <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:14}}>
       <button onClick={onClose} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-      <button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Criar demanda</button>
+      <button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:10,padding:"8px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{isEdit?"Salvar alterações":"Criar demanda"}</button>
     </div>
   </ModalShell>;
 }
