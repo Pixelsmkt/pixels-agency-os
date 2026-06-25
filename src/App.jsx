@@ -2142,6 +2142,7 @@ function NavIcon({id,size=18,color}){
   if(id==="portal_chat")        return <svg {...p}><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>;
   // ── Submenus Gestão ──
   if(id==="gestao_financeiro")  return <svg {...p}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>;
+  if(id==="gestao_time")        return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
   if(id==="gestao_portfolio")   return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
   if(id==="gestao_enps")        return <svg {...p}><path d="M3 12a9 9 0 1118 0"/><line x1="12" y1="12" x2="16" y2="8"/><circle cx="12" cy="12" r="1.5"/></svg>;
@@ -2199,6 +2200,7 @@ const NAV=[
   {id:"gestao",     icon:"◎", label:"Gestão",children:[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
+    {id:"gestao_time",          icon:"◉", label:"Time"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
@@ -23453,7 +23455,10 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
   const _pct=function(n){return Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+"%";};
 
   // ── Cálculos ──
-  const flatContratos=GF_CONTRATOS.flatMap(function(c){
+  // Usa o state reativo `contratos` (não o default const) pra refletir edições do usuário.
+  // Fallback defensivo pra GF_CONTRATOS_DEFAULT caso o state ainda não tenha carregado.
+  const _contratosSrc=Array.isArray(contratos)&&contratos.length>0?contratos:(typeof GF_CONTRATOS_DEFAULT!=="undefined"?GF_CONTRATOS_DEFAULT:[]);
+  const flatContratos=_contratosSrc.flatMap(function(c){
     if(c.unidades)return c.unidades.map(function(u){return {grupo:c.grupo,valor:u.valor};});
     return [{grupo:c.grupo,valor:c.valor}];
   });
@@ -23461,7 +23466,7 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
   const mrr=ativos.reduce(function(s,x){return s+x.valor;},0);
   const projecao12m=mrr*12;
   const unidadesFaturadas=ativos.length;
-  const clientesAtivos=GF_CONTRATOS.length;
+  const clientesAtivos=_contratosSrc.length;
   const ticketCliente=clientesAtivos>0?mrr/clientesAtivos:0;
   const ticketUnidade=unidadesFaturadas>0?mrr/unidadesFaturadas:0;
 
@@ -36133,6 +36138,7 @@ export default function AgencyOS(){
       case "gestao_financeiro":    return p.verFinanceiro||isSocio;
       case "gestao_operacional":   return isSocio;
       case "gestao_portfolio":     return isSocio;
+      case "gestao_time":          return isSocio;  // Time: só sócios podem ver
       case "gestao_enps":          return true;  // todos veem (filtragem dentro)
       case "acessos":              return p.verAcessos||isSocio;
       case "interno":
@@ -36215,6 +36221,7 @@ export default function AgencyOS(){
       case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
+      case "gestao_time":           return isSocio?<PageGestaoTime {...p} currentUser={CURRENT_USER}/>:<NoPerm/>;
       case "gestao_enps":           return <PageGestaoENPS {...p}/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
@@ -36576,6 +36583,162 @@ export default function AgencyOS(){
           <span style={{fontSize:10,fontWeight:500,lineHeight:1,letterSpacing:-.1}}>Mais</span>
         </button>
       </nav>}
+    </div>
+  </div>;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   PageGestaoTime — Gestão > Time
+   Cards grandes editáveis com foto, dados, cor, função, contato.
+   Só sócios podem editar. Storage: localStorage pixels-team-data + Supabase optional.
+   ═══════════════════════════════════════════════════════════════ */
+function PageGestaoTime({isMob, currentUser}){
+  const isSocio = currentUser && currentUser.level === 1;
+  const _baseTeam = (typeof TEAM!=="undefined"?TEAM:[]).slice();
+  // Estado dos dados estendidos por colaborador (telefone, endereço, etc).
+  // Mantém TEAM como source dos básicos (nome/foto/cor), e este state cobre os campos extras.
+  const [extras, setExtras] = useState(function(){
+    try{
+      const raw = localStorage.getItem("pixels-team-data");
+      return raw ? JSON.parse(raw) : {};
+    }catch(_){ return {}; }
+  });
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState({});
+
+  const _save = function(uid, patch){
+    setExtras(function(prev){
+      const next = Object.assign({}, prev||{}, {[uid]: Object.assign({}, (prev||{})[uid]||{}, patch)});
+      try{ localStorage.setItem("pixels-team-data", JSON.stringify(next)); }catch(_){}
+      // Sync opcional pro Supabase (silencioso)
+      try{
+        if(typeof window!=="undefined" && window._sb){
+          window._sb.from("team_data").upsert({id:"info_"+uid,tipo:"info_pessoal",user_id:uid,payload:next[uid],updated_at:new Date().toISOString()},{onConflict:"id"}).then(()=>{}).catch(()=>{});
+        }
+      }catch(_){}
+      return next;
+    });
+  };
+
+  const startEdit = function(u){
+    const cur = (extras||{})[u.id] || {};
+    setDraft({telefone:cur.telefone||"",email:cur.email||u.email||"",endereco:cur.endereco||"",cidade:cur.cidade||"",data_nascimento:cur.data_nascimento||"",cpf:cur.cpf||"",pix:cur.pix||"",cargo:cur.cargo||u.role||"",bio:cur.bio||""});
+    setEditingId(u.id);
+  };
+  const commitEdit = function(){
+    if(!editingId)return;
+    _save(editingId, draft);
+    setEditingId(null);
+    setDraft({});
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Dados atualizados.",2000);
+  };
+  const cancelEdit = function(){
+    setEditingId(null);
+    setDraft({});
+  };
+
+  if(!isSocio){
+    return <div style={{padding:40,textAlign:"center",color:"#94a3b8",fontFamily:"'Inter',system-ui,sans-serif"}}>
+      <div style={{fontSize:14,fontWeight:600,marginBottom:6}}>Acesso restrito</div>
+      <div style={{fontSize:12}}>Esta área é só para sócios.</div>
+    </div>;
+  }
+
+  const FIELDS = [
+    {key:"cargo",          label:"Cargo",            ph:"Designer Sênior",       icon:"sparkles"},
+    {key:"telefone",       label:"Telefone",         ph:"(00) 0 0000-0000",      icon:"phone"},
+    {key:"email",          label:"E-mail",           ph:"colab@pixels.com",      icon:"mail"},
+    {key:"endereco",       label:"Endereço",         ph:"Rua, número, bairro",   icon:"map-pin", full:true},
+    {key:"cidade",         label:"Cidade/UF",        ph:"Chapecó/SC",            icon:"map-pin"},
+    {key:"data_nascimento",label:"Aniversário",      ph:"DD/MM",                 icon:"calendar"},
+    {key:"cpf",            label:"CPF",              ph:"000.000.000-00",        icon:"file-text"},
+    {key:"pix",            label:"Chave PIX",        ph:"e-mail, CPF, celular",  icon:"dollar"},
+    {key:"bio",            label:"Bio / observação", ph:"Especialidades, notas", icon:"file-text", full:true, multiline:true},
+  ];
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14,fontFamily:"'Inter',system-ui,sans-serif",maxWidth:1400,margin:"0 auto",padding:isMob?"14px":"18px"}}>
+    {/* Header */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 24px",display:"flex",alignItems:"center",gap:14,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#a855f7,#7c3aed)"}}/>
+      <div style={{width:46,height:46,borderRadius:13,background:"linear-gradient(135deg,#a855f7,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 6px 16px rgba(124,58,237,.25)"}}>
+        <Ico n="users" size={22} color="#fff"/>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5}}>Time</div>
+        <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Dados pessoais e contato dos colaboradores · só sócios editam</div>
+      </div>
+      <div style={{color:"#64748b",fontSize:11.5,fontWeight:600}}>{_baseTeam.length} colaboradores</div>
+    </div>
+
+    {/* Grid de cards */}
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(360px,1fr))",gap:14}}>
+      {_baseTeam.map(function(u){
+        const ext = (extras||{})[u.id] || {};
+        const isEditing = editingId===u.id;
+        const color = u.color || "#7c3aed";
+        const photo = (u.profile_data && u.profile_data.photo) || u.photo || "";
+        return <div key={u.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:0,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.025)",transition:"transform .15s, box-shadow .15s",fontFamily:"'Inter',system-ui,sans-serif"}}
+          onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(15,23,42,.08)";}}
+          onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.025)";}}>
+          {/* Header com cor + foto grande */}
+          <div style={{background:"linear-gradient(135deg,"+color+"15,"+color+"05)",borderBottom:"1px solid "+color+"22",padding:"18px 20px",display:"flex",alignItems:"center",gap:14,position:"relative"}}>
+            <div style={{position:"absolute",top:0,left:0,bottom:0,width:5,background:color}}/>
+            {photo
+              ? <img src={photo} alt={u.name} style={{width:72,height:72,borderRadius:18,objectFit:"cover",border:"3px solid #fff",boxShadow:"0 4px 14px "+color+"55",flexShrink:0}}/>
+              : <div style={{width:72,height:72,borderRadius:18,background:color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:26,letterSpacing:-.5,border:"3px solid #fff",boxShadow:"0 4px 14px "+color+"55",flexShrink:0}}>{(u.name||"").charAt(0).toUpperCase()}</div>
+            }
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4}}>{u.name}</div>
+              <div style={{color:color,fontSize:11.5,fontWeight:700,marginTop:2,textTransform:"uppercase",letterSpacing:.4}}>{ext.cargo||u.role||"—"}</div>
+              {u.dash && <span style={{display:"inline-block",background:"#fff",border:"1px solid "+color+"33",color:color,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3,marginTop:6,textTransform:"uppercase"}}>{u.dash}</span>}
+            </div>
+            {!isEditing && <button type="button" onClick={function(){startEdit(u);}}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 12px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <Ico n="edit" size={11}/>Editar
+            </button>}
+          </div>
+
+          {/* Corpo: campos */}
+          <div style={{padding:"16px 20px"}}>
+            {isEditing
+              ? <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
+                  {FIELDS.map(function(f){return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
+                    <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
+                    {f.multiline
+                      ? <textarea value={draft[f.key]||""} placeholder={f.ph}
+                          onChange={function(e){const v=e.target.value;setDraft(function(p){return Object.assign({},p||{},{[f.key]:v});});}}
+                          rows={3}
+                          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 11px",fontSize:12.5,color:"#0f172a",fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box",resize:"vertical",minHeight:64}}/>
+                      : <input type="text" value={draft[f.key]||""} placeholder={f.ph}
+                          onChange={function(e){const v=e.target.value;setDraft(function(p){return Object.assign({},p||{},{[f.key]:v});});}}
+                          style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 11px",fontSize:12.5,color:"#0f172a",fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                    }
+                  </div>;})}
+                  <div style={{gridColumn:isMob?"auto":"span 2",display:"flex",justifyContent:"flex-end",gap:7,marginTop:8}}>
+                    <button type="button" onClick={cancelEdit} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                    <button type="button" onClick={commitEdit} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+                  </div>
+                </div>
+              : (function(){
+                  const items = FIELDS.filter(function(f){return ext[f.key];});
+                  if(items.length===0)return <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",textAlign:"center",padding:"18px 0"}}>Nenhum dado cadastrado.</div>;
+                  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
+                    {items.map(function(f){return <div key={f.key} style={Object.assign({display:"flex",alignItems:"flex-start",gap:7,padding:"6px 0",borderBottom:"1px solid #f1f5f9"},f.full?{gridColumn:isMob?"auto":"span 2"}:{})}>
+                      <div style={{width:24,height:24,borderRadius:6,background:color+"15",color:color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                        <Ico n={f.icon} size={11} color={color}/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{f.label}</div>
+                        <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:1,wordBreak:"break-word"}}>{ext[f.key]}</div>
+                      </div>
+                    </div>;})}
+                  </div>;
+                })()
+            }
+          </div>
+        </div>;
+      })}
     </div>
   </div>;
 }
