@@ -23,7 +23,7 @@ const CLIENTS = [
     social:{followers:6240,growth:5.8,reach:28400,eng:4.2,posts:28,stories:56,reels:8,saved:612,likes:1840},
     history:[{m:"Jan",mr:3.8,gr:4.0,leads:89},{m:"Fev",mr:4.0,gr:4.2,leads:102},{m:"Mar",mr:4.1,gr:4.4,leads:124}],
     since:"Jan 2024", manager:"vinicius", connected:true, metaId:"act_1112223334", googleId:"111-222-3334", upsell:["Google Display","Remarketing"], driveUrl:"" },
-  { id:"bioter", name:"Bioter", abbr:"GB", color:"#4a8c1c", sector:"Biotecnologia / Agro", contract:9400, health:72, nps:68, status:"ativo",
+  { id:"bioter", name:"Bioter", abbr:"GB", color:"#4a8c1c", sector:"Biotecnologia/Agro", contract:9400, health:72, nps:68, status:"ativo",
     payment:{status:"pendente",date:"01/03/2026"}, lastMeeting:"18/03/2026", nextMeeting:"04/04/2026", contractType:"mensal", contacts:[{name:"Ricardo Bioter",role:"Diretor",phone:"(49) 99902-1111",email:"ricardo@grupobioter.com.br"},{name:"Marcia Bioter",role:"Marketing",phone:"(49) 99902-2222",email:"marketing@grupobioter.com.br"}], goals:[{title:"Leads Meta",target:220,current:198,unit:"leads"},{title:"ROAS Meta",target:4.0,current:3.3,unit:"x"}], meetingNotes:[],
     meta:{spend:7600,budget:8500,roas:3.3,leads:198,cpc:2.1,ctr:2.4,cpm:24.8,impressions:306452,clicks:7355,reach:241000,frequency:1.27,conversions:198,costPerConv:38.4,videoViews:61000,vtr:19.9,campaigns:6,adsets:18,ads:41,topAd:"Solução Bioter Pro · ROAS 4.1x"},
     google:{spend:4800,budget:5000,roas:3.6,leads:115,cpc:1.7,ctr:2.9,cpm:16.4,impressions:292683,clicks:8488,conversions:115,costPerConv:41.7,searchImpr:92000,displayImpr:200683,qualityScore:6.8,campaigns:4,adgroups:14,topKw:"bioterminador solo"},
@@ -215,7 +215,7 @@ const BIOTER_GROUP_UNITS = [
 const BIOTER_GROUP = {
   id:"bioter",
   name:"Grupo Bioter",
-  segmento:"Biotecnologia / Agro / Ambiental",
+  segmento:"Biotecnologia/Agro/Ambiental",
   responsavel_interno:"gustavo",
   status:"ativo",
   // mrr_total é derivado em runtime — soma das unidades
@@ -9197,10 +9197,18 @@ function COrientacoes({cl}){
   const onSelectLogoFile=async(e)=>{
     const file=e.target.files?.[0];
     e.target.value="";
-    if(!file||!pendingLogo)return;
+    if(!file)return;
+    // Pede o nome DEPOIS de o arquivo ser escolhido — agora o picker já abriu sem fricção.
+    let nome=(pendingLogo&&pendingLogo.nome)||"";
+    if(!nome){
+      try{
+        nome=await pixelsPrompt("Nome do logo (ex: Principal, Branca, Ícone):");
+      }catch(_){nome=null;}
+      if(!nome)nome=file.name.replace(/\.[^.]+$/,"");
+    }
     const up=await uploadFile(file,"logo");
     if(!up)return;
-    const novo={nome:pendingLogo.nome||file.name,url:up.url,formato:up.formato,path:up.path};
+    const novo={nome:nome.trim(),url:up.url,formato:up.formato,path:up.path};
     persist({...data,logos:[...(data.logos||[]),novo]});
     setPendingLogo(null);
   };
@@ -9208,10 +9216,21 @@ function COrientacoes({cl}){
   const onSelectFonteFile=async(e)=>{
     const file=e.target.files?.[0];
     e.target.value="";
-    if(!file||!pendingFonte)return;
+    if(!file)return;
+    let nome=(pendingFonte&&pendingFonte.nome)||"";
+    let uso=(pendingFonte&&pendingFonte.uso)||"";
+    if(!nome){
+      try{
+        nome=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");
+      }catch(_){nome=null;}
+      if(!nome)nome=file.name.replace(/\.[^.]+$/,"");
+      try{
+        uso=await pixelsPrompt("Uso (ex: Títulos, Corpo) — opcional:")||"";
+      }catch(_){uso="";}
+    }
     const up=await uploadFile(file,"fonte");
     if(!up)return;
-    const novo={nome:pendingFonte.nome||file.name,uso:pendingFonte.uso||"",url:up.url,formato:up.formato,path:up.path};
+    const novo={nome:nome.trim(),uso:(uso||"").trim(),url:up.url,formato:up.formato,path:up.path};
     persist({...data,fontes:[...(data.fontes||[]),novo]});
     setPendingFonte(null);
   };
@@ -9284,7 +9303,7 @@ function COrientacoes({cl}){
         ))}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome do logo (ex: Principal, Branca, Ícone):");if(n){setPendingLogo({nome:n.trim()});fileInputLogo.current?.click();}}} disabled={uploading==="logo"} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>{uploading==="logo"?"Enviando...":"+ Upload de logo"}</button>
+        <button type="button" onClick={()=>{setPendingLogo({nome:""});fileInputLogo.current?.click();}} disabled={uploading==="logo"} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>{uploading==="logo"?"Enviando...":"+ Upload de logo"}</button>
         <button type="button" onClick={addLogoLink} style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .12s"}}>+ Adicionar via link</button>
       </div>
     </_PlaybookSection>
@@ -9322,7 +9341,7 @@ function COrientacoes({cl}){
         ))}
       </div>}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");if(!n)return;const u=await pixelsPrompt("Uso (ex: Títulos, Corpo) — opcional:");setPendingFonte({nome:n.trim(),uso:(u||"").trim()});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
+        <button type="button" onClick={()=>{setPendingFonte({nome:"",uso:""});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
         <button type="button" onClick={addFonteLink} style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .12s"}}>+ Adicionar via link</button>
       </div>
     </_PlaybookSection>
@@ -9354,7 +9373,7 @@ function COrientacoes({cl}){
       <textarea value={data.naoFazer||""} onChange={e=>setData(p=>({...p,naoFazer:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Nunca usar a palavra barato. Não comparar diretamente com concorrentes. Evitar emojis em posts institucionais."' rows={3} style={{...inp,minHeight:60,resize:"vertical",lineHeight:1.5}}/>
     </_PlaybookSection>
 
-    <_PlaybookSection icon="globe" accent="#0d9488" title="Site & redes oficiais" subtitle="Pra usar em arte, em links de bio, em posts">
+    <_PlaybookSection icon="globe" accent="#0d9488" title="Site e redes oficiais" subtitle="Pra usar em arte, em links de bio, em posts">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         {[
           {key:"site",label:"Site oficial",placeholder:"https://exemplo.com.br",root:"data"},
@@ -52795,31 +52814,29 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   return <div style={{background:PB_BG,margin:isMob?-12:-16,padding:isMob?12:20,minHeight:"100%",fontFamily:PB_INTER}}>
     <div style={{display:"flex",flexDirection:"column",gap:14,maxWidth:1280,margin:"0 auto"}}>
 
-      {/* ══════════ HEADER PREMIUM ══════════ */}
-      <div style={{background:"linear-gradient(135deg, "+PB_DARK+" 0%, #1e293b 55%, #1e1b4b 100%)",borderRadius:20,padding:isMob?"18px 18px 20px":"24px 28px 26px",position:"relative",overflow:"hidden",boxShadow:"0 14px 40px rgba(15,23,42,.18)"}}>
-        <div style={{position:"absolute",top:-70,right:-70,width:280,height:280,borderRadius:"50%",background:"radial-gradient(circle, "+PB_PURPLE+"45 0%, transparent 65%)"}}/>
-        <div style={{position:"absolute",bottom:-80,left:"35%",width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle, "+PB_PURPLE_DK+"28 0%, transparent 70%)"}}/>
-        <div style={{position:"absolute",top:30,right:"30%",width:140,height:140,borderRadius:"50%",background:"radial-gradient(circle, #6366f120 0%, transparent 75%)"}}/>
+      {/* ══════════ HEADER PREMIUM — clean, sem neon ══════════ */}
+      <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:18,padding:isMob?"18px 18px 20px":"24px 28px 26px",position:"relative",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.04)"}}>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg, "+PB_PURPLE+", "+PB_PURPLE_DK+")"}}/>
 
         <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"flex-start",gap:isMob?12:16,flexWrap:"wrap",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"flex-start",gap:isMob?12:16,minWidth:0,flex:1}}>
             <button onClick={onBack} title="Voltar"
-              style={{background:"rgba(255,255,255,.10)",border:"1px solid rgba(255,255,255,.18)",borderRadius:12,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",cursor:"pointer",flexShrink:0,backdropFilter:"blur(8px)"}}>
-              <Ico n="chevron-left" size={18} color="#fff"/>
+              style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:12,width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",color:"#475569",cursor:"pointer",flexShrink:0}}>
+              <Ico n="chevron-left" size={18} color="#475569"/>
             </button>
-            <div style={{width:isMob?56:64,height:isMob?56:64,borderRadius:16,background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 8px 22px rgba(0,0,0,.22)",overflow:"hidden"}}>
+            <div style={{width:isMob?56:64,height:isMob?56:64,borderRadius:16,background:"#fafbfc",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
               <ClientLogo clientId={cl.id} size="lg"/>
             </div>
             <div style={{minWidth:0,paddingTop:2}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
-                <span style={{background:"rgba(159,67,246,.22)",color:"#e9d5ff",border:"1px solid rgba(159,67,246,.45)",borderRadius:8,padding:"3px 10px",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
-                  <Ico n={areaCfg.icon} size={11} color="#e9d5ff"/>{areaCfg.label}
+                <span style={{background:areaCfg.color+"14",color:areaCfg.color,border:"1px solid "+areaCfg.color+"33",borderRadius:8,padding:"3px 10px",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
+                  <Ico n={areaCfg.icon} size={11} color={areaCfg.color}/>{areaCfg.label}
                 </span>
-                {cl.sector && <span style={{background:"rgba(255,255,255,.10)",color:"rgba(255,255,255,.78)",border:"1px solid rgba(255,255,255,.16)",borderRadius:8,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{cl.sector}</span>}
-                <span style={{color:"rgba(255,255,255,.55)",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>Playbook</span>
+                {cl.sector && <span style={{background:"#f1f5f9",color:"#475569",border:"1px solid #e2e8f0",borderRadius:8,padding:"3px 10px",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{cl.sector}</span>}
+                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>Playbook</span>
               </div>
-              <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:30,letterSpacing:-.7,lineHeight:1.1}}>{cl.name}</div>
-              {(data.descricaoCurta||data.sobre) && <div style={{color:"rgba(255,255,255,.72)",fontSize:13,marginTop:8,lineHeight:1.55,maxWidth:640,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?22:30,letterSpacing:-.7,lineHeight:1.1}}>{cl.name}</div>
+              {(data.descricaoCurta||data.sobre) && <div style={{color:"#64748b",fontSize:13,marginTop:8,lineHeight:1.55,maxWidth:640,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
                 {data.descricaoCurta||data.sobre}
               </div>}
             </div>
@@ -52827,7 +52844,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {isAdmin && <div style={{display:"flex",gap:8,flexShrink:0,paddingTop:2}}>
             {editMode
               ? <>
-                  <button onClick={()=>setEditMode(false)} style={{background:"rgba(255,255,255,.10)",border:"1px solid rgba(255,255,255,.18)",borderRadius:11,padding:"9px 16px",color:"#fff",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",backdropFilter:"blur(8px)"}}>Cancelar</button>
+                  <button onClick={()=>setEditMode(false)} style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:11,padding:"9px 16px",color:"#475569",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
                   <button onClick={handleSave} style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",border:"none",borderRadius:11,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 20px rgba(159,67,246,.5)",display:"inline-flex",alignItems:"center",gap:6}}>
                     <Ico n="check" size={14} color="#fff"/> Salvar
                   </button>
@@ -52947,7 +52964,16 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
           {/* Produtos — lista do que trabalhamos pro cliente.
               Bioter: cada produto pode ter unidades específicas (varia por região). */}
-          <PlaybookBlock id="pb-produtos" title="Produtos" subtitle={_isBioter?"Produtos da carteira — varia por unidade":"Produtos trabalhados pelo cliente"} icon="package" color="#f59e0b">
+          <PlaybookBlock id="pb-produtos" title="Produtos" subtitle={_isBioter?"Produtos por unidade — filtra pra ver os produtos daquela unidade":"Produtos trabalhados pelo cliente"} icon="package" color="#f59e0b">
+            {_isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,paddingBottom:14,borderBottom:"1px solid "+PB_BORDER2}}>
+              {BIOTER_UNITS.map(function(u){
+                const active=_unitTab===u.id;
+                return <button key={u.id} type="button" onClick={function(){setUnitTab(u.id);}}
+                  style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 4px 12px "+u.color+"33":"none"}}>
+                  {u.pickerLabel||u.label}
+                </button>;
+              })}
+            </div>}
             {editMode
               ? <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   {(editProdutos||[]).map(function(prod,pi){return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
@@ -52982,9 +53008,18 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     <Ico n="plus" size={13}/> Adicionar produto
                   </button>
                 </div>
-              : (Array.isArray(data.produtos)&&data.produtos.length>0
-                  ? <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                      {data.produtos.map(function(prod,pi){
+              : (function(){
+                  // Filtro por unidade Bioter no modo leitura: mostra só produtos da unidade ativa OU sem unidade (= todas)
+                  const _allProds = Array.isArray(data.produtos)?data.produtos:[];
+                  const _filtered = (_isBioter && _unitTab)
+                    ? _allProds.filter(function(p){
+                        const u = Array.isArray(p.unidades)?p.unidades:[];
+                        return u.length===0 || u.indexOf(_unitTab)>=0;
+                      })
+                    : _allProds;
+                  return _filtered.length>0
+                    ? <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {_filtered.map(function(prod,pi){
                         const unitsList=Array.isArray(prod.unidades)?prod.unidades:[];
                         const unitObjs=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.filter(function(u){return unitsList.indexOf(u.id)>=0;}):[];
                         return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px"}}>
@@ -53000,7 +53035,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         </div>;
                       })}
                     </div>
-                  : <_PbEmpty icon="package" text="Nenhum produto cadastrado." sub={isAdmin?"Clique em \"Editar playbook\" pra adicionar.":""}/>)
+                    : <_PbEmpty icon="package" text={_isBioter?"Nenhum produto cadastrado pra esta unidade.":"Nenhum produto cadastrado."} sub={isAdmin?"Clique em \"Editar playbook\" pra adicionar.":""}/>;
+                })()
             }
           </PlaybookBlock>
 
@@ -53087,9 +53123,51 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </div>
 
             {editMode
-              ? <textarea value={editChk} onChange={e=>setEditChk(e.target.value)} rows={8}
-                  placeholder={"Um item por linha. Ex:\nConferi o padrão visual?\nConferi o texto?"}
-                  style={_pbInpStyle()}/>
+              ? (function(){
+                  const _items = (editChk||"").split("\n").map(s=>s).filter(()=>true);
+                  // Garantir pelo menos uma linha vazia
+                  const _list = _items.length===0 ? [""] : _items;
+                  return <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                    {_list.map(function(item, idx){
+                      return <div key={idx} style={{display:"flex",alignItems:"center",gap:7}}>
+                        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,minWidth:18,textAlign:"center"}}>{idx+1}</div>
+                        <input type="text" value={item}
+                          placeholder="Conferi o..."
+                          onChange={function(e){
+                            const _v = e.target.value;
+                            const _arr = _list.slice();
+                            _arr[idx] = _v;
+                            setEditChk(_arr.join("\n"));
+                          }}
+                          onKeyDown={function(e){
+                            if(e.key==="Enter"){
+                              e.preventDefault();
+                              const _arr = _list.slice();
+                              _arr.splice(idx+1, 0, "");
+                              setEditChk(_arr.join("\n"));
+                            }
+                          }}
+                          style={{flex:1,background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",color:PB_INK,fontSize:13,outline:"none",fontFamily:PB_INTER,boxSizing:"border-box"}}/>
+                        <button type="button" onClick={function(){
+                          const _arr = _list.slice();
+                          _arr.splice(idx,1);
+                          setEditChk(_arr.join("\n"));
+                        }} title="Remover" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,borderRadius:7,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}
+                          onMouseEnter={e=>{e.currentTarget.style.color="#dc2626";e.currentTarget.style.background="#fef2f2";}}
+                          onMouseLeave={e=>{e.currentTarget.style.color="#94a3b8";e.currentTarget.style.background="transparent";}}>
+                          <Ico n="trash" size={13}/>
+                        </button>
+                      </div>;
+                    })}
+                    <button type="button" onClick={function(){
+                      const _arr = _list.slice();
+                      _arr.push("");
+                      setEditChk(_arr.join("\n"));
+                    }} style={{marginTop:3,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:9,padding:"8px 12px",color:PB_PURPLE_DK,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
+                      <Ico n="plus" size={12}/> Adicionar item
+                    </button>
+                  </div>;
+                })()
               : totalCheck === 0
                 ? <_PbEmpty icon="checkCircle" text="Sem checklist cadastrado."/>
                 : <>
