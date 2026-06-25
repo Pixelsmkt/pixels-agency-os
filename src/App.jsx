@@ -3107,7 +3107,7 @@ const BIOTER_UNITS = [
   { id:"castro",    label:"Castro/PR",             color:"#166534", abbr:"CA", pickerLabel:"Castro" },           // verde escuro (principal)
   { id:"uberlandia",label:"Uberlândia/MG",         color:"#16a34a", abbr:"UB", pickerLabel:"Uberlândia" },       // verde médio (filial)
   { id:"gloria",    label:"Glória de Dourados/MS", color:"#16a34a", abbr:"GD", pickerLabel:"Glória de Dourados" }, // verde médio (filial)
-  { id:"paraguay",  label:"Bioter Paraguay",       color:"#16a34a", abbr:"PY", pickerLabel:"Paraguay" },         // verde médio (filial)
+  { id:"paraguay",  label:"Bioter Paraguay",       color:"#16a34a", abbr:"PY", pickerLabel:"Paraguay",   cidade:"Obligado" },         // verde médio (filial)
 ];
 
 /* ─── MIND MAP COMPONENT (MindMeister-style) ── */
@@ -11373,7 +11373,7 @@ function _projectDuration(s){
       const _isBioter = cl.id === "bioter";
       // Entries pra renderizar: pra Bioter um por unidade, senão um único pro cliente
       const _entries = _isBioter && typeof BIOTER_UNITS!=="undefined"
-        ? BIOTER_UNITS.map(function(u){return {storageKey:"pixels-cadastro-bioter-"+u.id,label:u.label||u.pickerLabel,sub:"Unidade "+(u.pickerLabel||u.label),color:u.color||_ac,unitId:u.id};})
+        ? BIOTER_UNITS.map(function(u){return {storageKey:"pixels-cadastro-bioter-"+u.id,label:"Bioter "+(u.pickerLabel||u.label),sub:"Unidade de "+(u.cidade||u.label||u.pickerLabel),color:u.color||_ac,unitId:u.id};})
         : [{storageKey:"pixels-cadastro-"+cl.id,label:"Dados da empresa",sub:"CNPJ, razão social e endereço",color:_ac,unitId:null}];
       const FIELDS = [
         {key:"razao_social", label:"Razão social",         ph:"Empresa Ltda.",            full:true},
@@ -33415,17 +33415,132 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
 
     {/* ───── ABA 1: VISÃO GERAL ───── */}
     {topTab==="visao"&&<>
-      {/* KPIs principais */}
-      <div style={{display:"grid",gridTemplateColumns:`repeat(auto-fit,minmax(${isMob?"150px":"180px"},1fr))`,gap:10}}>
-        <KpiCard label="Orçamento gerido/mês"  value={_mFmtBRL(totalInvest)} sub={`${allClients.length} cliente${allClients.length!==1?"s":""}`} icon="dollar" color="#9F43F6" bg="#9F43F614"/>
-        <KpiCard label="Retorno do mês"        value={totalRetorno>0?_mFmtBRL(totalRetorno):"—"} sub={totalRetorno===0?"Aguardando Funil Digital":""} icon="trending-up" color={totalRetorno>0?"#16a34a":"#94a3b8"} bg={totalRetorno>0?"#dcfce7":"#f8fafc"} muted={totalRetorno===0}/>
-        <KpiCard label="ROI geral do mês"      value={roiGeral!==null?(roiGeral>=0?"+":"")+roiGeral.toFixed(1)+"%":"—"} sub={roiGeral===null?"Aguardando dados":(roiGeral>=0?"Retorno positivo":"Retorno negativo")} icon="chart" color={roiGeral===null?"#94a3b8":roiGeral>=0?"#16a34a":"#ef4444"} bg={roiGeral===null?"#f8fafc":roiGeral>=0?"#dcfce7":"#fef2f2"} muted={roiGeral===null}/>
-        <KpiCard label="Clientes ativos"       value={ativosCount+estruturacaoCount} sub={`${ativosCount} ativos · ${estruturacaoCount} em estruturação`} icon="users" color="#0ea5e9" bg="#0ea5e914"/>
-        <KpiCard label="Sem Funil Digital"     value={semFunilCount} sub={semFunilCount>0?"Aguardando preenchimento":"Todos preenchidos"} icon="alert" color={semFunilCount>0?"#f97316":"#94a3b8"} bg={semFunilCount>0?"#fff7ed":"#f8fafc"}/>
-        <KpiCard label="Contas em atenção"     value={alertaCount} icon="alert" color={alertaCount>0?"#ef4444":"#94a3b8"} bg={alertaCount>0?"#fef2f2":"#f8fafc"}/>
+      {/* ═══════ HERO KPIs — 4 grandes destaques ═══════ */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:12}}>
+        {/* Investimento total */}
+        <div style={{background:"linear-gradient(135deg,#9F43F6 0%,#7c3aed 100%)",borderRadius:16,padding:"18px 20px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 8px 24px rgba(159,67,246,.22)"}}>
+          <div style={{position:"absolute",top:-30,right:-30,width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,.12)"}}/>
+          <div style={{position:"relative",zIndex:1}}>
+            <div style={{display:"flex",alignItems:"center",gap:7,opacity:.85,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>
+              <Ico n="dollar" size={13} color="#fff"/>Investimento gerido
+            </div>
+            <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,lineHeight:1.05,fontFeatureSettings:"'tnum'"}}>{_mFmtBRL(totalInvest)}</div>
+            <div style={{fontSize:11,opacity:.82,marginTop:6,fontWeight:500}}>por mês · {allClients.length} cliente{allClients.length!==1?"s":""}</div>
+          </div>
+        </div>
+        {/* ROI geral */}
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 20px",position:"relative",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.025)"}}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:roiGeral===null?"#cbd5e1":roiGeral>=0?"linear-gradient(90deg,#22c55e,#16a34a)":"linear-gradient(90deg,#f87171,#ef4444)"}}/>
+          <div style={{display:"flex",alignItems:"center",gap:7,color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8,marginTop:4}}>
+            <Ico n="trending-up" size={13} color={roiGeral===null?"#94a3b8":roiGeral>=0?"#16a34a":"#ef4444"}/>ROI geral
+          </div>
+          <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,lineHeight:1.05,fontFeatureSettings:"'tnum'",color:roiGeral===null?"#94a3b8":roiGeral>=0?"#15803d":"#b91c1c"}}>
+            {roiGeral!==null?(roiGeral>=0?"+":"")+roiGeral.toFixed(1)+"%":"—"}
+          </div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:6,fontWeight:500}}>
+            {roiGeral===null?"Sem dados de retorno":totalRetorno>0?"Retorno: "+_mFmtBRL(totalRetorno):"Sem retorno calculado"}
+          </div>
+        </div>
+        {/* Clientes ativos */}
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 20px",boxShadow:"0 1px 2px rgba(15,23,42,.025)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:7,color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>
+            <Ico n="users" size={13} color="#0ea5e9"/>Carteira
+          </div>
+          <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,lineHeight:1.05,fontFeatureSettings:"'tnum'",color:"#0f172a"}}>{ativosCount+estruturacaoCount}</div>
+          <div style={{display:"flex",gap:9,marginTop:6,fontSize:11,fontWeight:600}}>
+            <span style={{color:"#16a34a"}}><span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:"#16a34a",marginRight:5,verticalAlign:"middle"}}/>{ativosCount} ativos</span>
+            <span style={{color:"#64748b"}}><span style={{display:"inline-block",width:6,height:6,borderRadius:"50%",background:"#94a3b8",marginRight:5,verticalAlign:"middle"}}/>{estruturacaoCount} estrutur.</span>
+          </div>
+        </div>
+        {/* Alertas */}
+        <div style={{background:"#fff",border:"1px solid "+(alertaCount>0||semFunilCount>0?"#fecaca":"#eef0f3"),borderRadius:16,padding:"18px 20px",boxShadow:"0 1px 2px rgba(15,23,42,.025)",position:"relative",overflow:"hidden"}}>
+          {(alertaCount>0||semFunilCount>0)&&<div style={{position:"absolute",top:0,left:0,right:0,height:4,background:"linear-gradient(90deg,#f97316,#ef4444)"}}/>}
+          <div style={{display:"flex",alignItems:"center",gap:7,color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8,marginTop:4}}>
+            <Ico n="alert" size={13} color={alertaCount>0||semFunilCount>0?"#dc2626":"#94a3b8"}/>Atenção
+          </div>
+          <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,lineHeight:1.05,fontFeatureSettings:"'tnum'",color:alertaCount>0||semFunilCount>0?"#dc2626":"#0f172a"}}>{alertaCount+semFunilCount}</div>
+          <div style={{color:"#64748b",fontSize:11,marginTop:6,fontWeight:500}}>
+            {alertaCount>0?alertaCount+" em alerta · ":""}{semFunilCount>0?semFunilCount+" sem Funil":"Tudo em ordem"}
+          </div>
+        </div>
       </div>
 
-      {/* Demandas de tráfego do portal (resumo) */}
+      {/* ═══════ DISTRIBUIÇÃO + TOP 3 INVESTIMENTOS ═══════ */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:12}}>
+        {/* Distribuição por plataforma */}
+        {(function(){
+          let invMeta=0, invGoogle=0;
+          allClients.forEach(c=>{
+            invMeta+=Number(c.investimento_meta)||0;
+            invGoogle+=Number(c.investimento_google)||0;
+          });
+          const total=invMeta+invGoogle||1;
+          const pctMeta=Math.round((invMeta/total)*100);
+          const pctGoogle=100-pctMeta;
+          return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 20px"}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,marginBottom:14}}>Distribuição por plataforma</div>
+            <div style={{display:"flex",height:14,borderRadius:8,overflow:"hidden",marginBottom:14,background:"#f1f5f9"}}>
+              {invMeta>0&&<div title={"Meta: "+_mFmtBRL(invMeta)} style={{width:pctMeta+"%",background:"linear-gradient(90deg,#1877F2,#42A5F5)"}}/>}
+              {invGoogle>0&&<div title={"Google: "+_mFmtBRL(invGoogle)} style={{width:pctGoogle+"%",background:"linear-gradient(90deg,#4285F4,#EA4335 30%,#FBBC05 60%,#34A853)"}}/>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:10,height:10,borderRadius:3,background:"#1877F2"}}/>
+                  <span style={{color:"#0f172a",fontSize:13,fontWeight:600}}>Meta Ads</span>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{color:"#0f172a",fontSize:14,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_mFmtBRL(invMeta)}</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{pctMeta}% do total</div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:10,height:10,borderRadius:3,background:"linear-gradient(135deg,#4285F4,#EA4335)"}}/>
+                  <span style={{color:"#0f172a",fontSize:13,fontWeight:600}}>Google Ads</span>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{color:"#0f172a",fontSize:14,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_mFmtBRL(invGoogle)}</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{pctGoogle}% do total</div>
+                </div>
+              </div>
+            </div>
+          </div>;
+        })()}
+
+        {/* Top 3 maiores investimentos — lista enxuta, sem cards cheios */}
+        <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"18px 20px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Top investimentos</div>
+            <button type="button" onClick={()=>setTopTab("clientes")} style={{background:"transparent",border:"none",color:"#7c3aed",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:3,padding:0}}>
+              Ver todos <Ico n="chevron-right" size={11} color="#7c3aed"/>
+            </button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {[...allClients].sort((a,b)=>(Number(b.investimento_mensal)||0)-(Number(a.investimento_mensal)||0)).slice(0,3).map(function(c,i){
+              const dataC=clientFunilData[c.client_id]||{};
+              const roi=dataC.roi;
+              return <div key={c.client_id} onClick={()=>setOpenClient(c.client_id)}
+                style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:9,cursor:"pointer",border:"1px solid #f1f5f9",transition:"all .12s"}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderColor="#e2e8f0";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#f1f5f9";}}>
+                <div style={{width:24,height:24,borderRadius:7,background:i===0?"#fef3c7":i===1?"#e2e8f0":"#fef3c7",color:i===0?"#a16207":i===1?"#64748b":"#a16207",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,opacity:i===2?.7:1}}>{i+1}</div>
+                <ClientLogo clientId={c.parent_client||c.client_id} size="xs"/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+                  <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>{c.plataforma==="meta_google"?"Meta + Google":c.plataforma==="meta"?"Meta":c.plataforma==="google"?"Google":"—"}</div>
+                </div>
+                <div style={{textAlign:"right"}}>
+                  <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{_mFmtBRL(c.investimento_mensal)}</div>
+                  {roi!=null && <div style={{color:roi>=0?"#16a34a":"#ef4444",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>ROI {roi>=0?"+":""}{Number(roi).toFixed(1)}%</div>}
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════ DEMANDAS DE TRÁFEGO PENDENTES (mais compacto) ═══════ */}
       {(()=>{
         const trafegoDemands=(tasks||[]).filter(function(t){
           if(t.deletedAt)return false;
@@ -33435,10 +33550,20 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
           return true;
         });
         if(trafegoDemands.length===0)return null;
-        return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
-          <SectionTitle title="Demandas de tráfego pendentes" sub={trafegoDemands.length+" "+(trafegoDemands.length===1?"demanda chegou":"demandas chegaram")+" via Portal do Cliente"}
-            right={<button onClick={()=>setTopTab("demandas")} style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>Ver na aba Demandas <Ico n="chevron-right" size={11}/></button>}/>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:16,padding:"16px 18px"}}>
+          <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:12,gap:10,flexWrap:"wrap"}}>
+            <div>
+              <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2,display:"inline-flex",alignItems:"center",gap:7}}>
+                <Ico n="zap" size={14} color="#9F43F6"/>Demandas via Portal
+                <span style={{background:"#9F43F614",color:"#9F43F6",fontSize:10.5,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.3}}>{trafegoDemands.length}</span>
+              </div>
+              <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2,fontWeight:500}}>Chegou via Portal do Cliente — aguardando ação</div>
+            </div>
+            <button type="button" onClick={()=>setTopTab("demandas")} style={{background:"transparent",border:"none",color:"#7c3aed",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:3,padding:0}}>
+              Ver na aba Demandas <Ico n="chevron-right" size={11} color="#7c3aed"/>
+            </button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:7}}>
             {trafegoDemands.slice(0,3).map(t=>{
               const fakeDem={id:t.id,source:"portal",client_id:t.client,title:t.title,tipo:"trafego",priority:t.priority,status:t.status,deadline:t.deadline,responsavel:(t.assignees||[])[0]||t.assignee,created_at:t.createdAt};
               return <DemandaCard key={t.id} d={fakeDem}/>;
@@ -33447,20 +33572,36 @@ function PageGestaoMidia({isMob, currentUser, tasks, setTasks, onNavTo}){
         </div>;
       })()}
 
-      {/* Lista resumida (top 5 clientes) */}
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
-        <SectionTitle title="Clientes em destaque" sub={`Veja os ${Math.min(5,allClients.length)} principais por investimento`}
-          right={<button onClick={()=>setTopTab("clientes")} style={{background:"#fff",color:"#0f172a",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>Ver todos <Ico n="chevron-right" size={11}/></button>}/>
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {[...allClients].sort((a,b)=>(Number(b.investimento_mensal)||0)-(Number(a.investimento_mensal)||0)).slice(0,5).map(c=>(
-            <MediaClientCard key={c.client_id} client={c}
-              funilData={clientFunilData[c.client_id]}
-              onOpen={()=>setOpenClient(c.client_id)}
-              onNovaDemanda={()=>setShowNovaDemanda(c.client_id)}
-              isMob={isMob}/>
-          ))}
+      {/* ═══════ CLIENTES EM ALERTA (lista compacta) ═══════ */}
+      {(alertaCount>0||semFunilCount>0)&&<div style={{background:"#fff",border:"1px solid #fecaca",borderRadius:16,padding:"16px 18px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:12}}>
+          <div style={{width:32,height:32,borderRadius:9,background:"#fef2f2",color:"#dc2626",display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="alert" size={15} color="#dc2626"/>
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>Precisam de atenção</div>
+            <div style={{color:"#94a3b8",fontSize:11.5,marginTop:1,fontWeight:500}}>Clientes em alerta ou sem Funil Digital preenchido</div>
+          </div>
         </div>
-      </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
+          {allClients.filter(c=>c.status==="atencao"||c.status==="critico"||(clientFunilData[c.client_id]?.funilStatus==="pendente")).slice(0,6).map(function(c){
+            const dataC=clientFunilData[c.client_id]||{};
+            const motivo = c.status==="critico"?"Crítico":c.status==="atencao"?"Em atenção":dataC.funilStatus==="pendente"?"Sem Funil":"";
+            const cor = c.status==="critico"?"#dc2626":c.status==="atencao"?"#ea580c":"#f97316";
+            return <div key={c.client_id} onClick={()=>setOpenClient(c.client_id)}
+              style={{display:"flex",alignItems:"center",gap:9,padding:"9px 11px",borderRadius:9,cursor:"pointer",background:"#fef9f6",border:"1px solid #fde6d3",transition:"all .12s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=cor+"55";e.currentTarget.style.background="#fef2f2";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#fde6d3";e.currentTarget.style.background="#fef9f6";}}>
+              <ClientLogo clientId={c.parent_client||c.client_id} size="xs"/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+                <div style={{color:cor,fontSize:10.5,fontWeight:700}}>{motivo}</div>
+              </div>
+              <Ico n="chevron-right" size={12} color="#94a3b8"/>
+            </div>;
+          })}
+        </div>
+      </div>}
     </>}
 
     {/* ───── ABA 2: DEMANDAS ───── */}
@@ -36221,7 +36362,7 @@ export default function AgencyOS(){
       case "gestao_financeiro":     return (effectivePerms.verFinanceiro||isSocio)?<PageGestaoFinanceiro {...p} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
-      case "gestao_time":           return isSocio?<PageGestaoTime {...p} currentUser={CURRENT_USER}/>:<NoPerm/>;
+      case "gestao_time":           return isSocio?<PageGestaoTime {...p} currentUser={CURRENT_USER} onNavTo={nav}/>:<NoPerm/>;
       case "gestao_enps":           return <PageGestaoENPS {...p}/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
@@ -36593,9 +36734,40 @@ export default function AgencyOS(){
    Cards grandes editáveis com foto, dados, cor, função, contato.
    Só sócios podem editar. Storage: localStorage pixels-team-data + Supabase optional.
    ═══════════════════════════════════════════════════════════════ */
-function PageGestaoTime({isMob, currentUser}){
+function PageGestaoTime({isMob, currentUser, onNavTo}){
   const isSocio = currentUser && currentUser.level === 1;
-  const _baseTeam = (typeof TEAM!=="undefined"?TEAM:[]).slice();
+  const _rawTeam = (typeof TEAM!=="undefined"?TEAM:[]).slice();
+  // Dedup por NOME case-insensitive (mantém o primeiro)
+  // Isso resolve duplicatas tipo "Ocsana" + "Ocsana Hellen Franzen" vindas do sync Supabase
+  const _seen = new Set();
+  const _baseTeam = _rawTeam.filter(function(u){
+    const k = (u.name||"").trim().toLowerCase().split(" ")[0];
+    if(_seen.has(k))return false;
+    _seen.add(k);
+    return true;
+  });
+  // Tick pra forçar re-render quando profile_data muda (event pixels:photo-updated)
+  const [photoTick, setPhotoTick] = useState(0);
+  useEffect(function(){
+    function onUpd(){ setPhotoTick(function(t){return t+1;}); }
+    window.addEventListener("pixels:photo-updated", onUpd);
+    window.addEventListener("pixels:team-updated", onUpd);
+    return function(){
+      window.removeEventListener("pixels:photo-updated", onUpd);
+      window.removeEventListener("pixels:team-updated", onUpd);
+    };
+  },[]);
+  // Resolver foto: primeiro tenta cache localStorage, depois profile_data, depois u.photo
+  const _resolvePhoto = function(u){
+    try{
+      const raw = localStorage.getItem("pixels-selfprofile-"+u.id);
+      if(raw){
+        const pd = JSON.parse(raw);
+        if(pd && pd.photo) return pd.photo;
+      }
+    }catch(_){}
+    return (u.profile_data && u.profile_data.photo) || u.photo || "";
+  };
   // Estado dos dados estendidos por colaborador (telefone, endereço, etc).
   // Mantém TEAM como source dos básicos (nome/foto/cor), e este state cobre os campos extras.
   const [extras, setExtras] = useState(function(){
@@ -36666,9 +36838,15 @@ function PageGestaoTime({isMob, currentUser}){
       </div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:21,letterSpacing:-.5}}>Time</div>
-        <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Dados pessoais e contato dos colaboradores · só sócios editam</div>
+        <div style={{color:"#64748b",fontSize:13,marginTop:3}}>Central de comando: dados, permissões e gestão de colaboradores</div>
       </div>
-      <div style={{color:"#64748b",fontSize:11.5,fontWeight:600}}>{_baseTeam.length} colaboradores</div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{color:"#64748b",fontSize:11.5,fontWeight:600}}>{_baseTeam.length} colaboradores</div>
+        <button type="button" onClick={function(){if(typeof onNavTo==="function")onNavTo("acessos");}}
+          style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 14px rgba(124,58,237,.32)",display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
+          <Ico n="plus" size={13} color="#fff"/> Novo colaborador
+        </button>
+      </div>
     </div>
 
     {/* Grid de cards */}
@@ -36677,7 +36855,8 @@ function PageGestaoTime({isMob, currentUser}){
         const ext = (extras||{})[u.id] || {};
         const isEditing = editingId===u.id;
         const color = u.color || "#7c3aed";
-        const photo = (u.profile_data && u.profile_data.photo) || u.photo || "";
+        const photo = _resolvePhoto(u);
+        const isHardcoded = !u._fromSupabase; // TEAM hardcoded vs criado via Supabase
         return <div key={u.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:0,overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,.025)",transition:"transform .15s, box-shadow .15s",fontFamily:"'Inter',system-ui,sans-serif"}}
           onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 24px rgba(15,23,42,.08)";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.025)";}}>
@@ -36693,10 +36872,43 @@ function PageGestaoTime({isMob, currentUser}){
               <div style={{color:color,fontSize:11.5,fontWeight:700,marginTop:2,textTransform:"uppercase",letterSpacing:.4}}>{ext.cargo||u.role||"—"}</div>
               {u.dash && <span style={{display:"inline-block",background:"#fff",border:"1px solid "+color+"33",color:color,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3,marginTop:6,textTransform:"uppercase"}}>{u.dash}</span>}
             </div>
-            {!isEditing && <button type="button" onClick={function(){startEdit(u);}}
-              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 12px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
-              <Ico n="edit" size={11}/>Editar
-            </button>}
+            {!isEditing && <div style={{display:"flex",gap:5,alignItems:"center"}}>
+              <button type="button" onClick={function(){startEdit(u);}}
+                style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 12px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+                <Ico n="edit" size={11}/>Editar
+              </button>
+              {/* Botão remover — só pra entradas Supabase (não hardcoded) */}
+              {!isHardcoded && <button type="button" title="Remover colaborador"
+                onClick={function(){
+                  const _doDelete = function(){
+                    try{
+                      if(window._sb){
+                        window._sb.from("profiles").delete().eq("team_id", u.id).then(function(){
+                          if(typeof pixelsToast!=="undefined") pixelsToast.success("Removido. Recarregue a página pra atualizar.",3000);
+                          // Remove imediatamente do TEAM em memória
+                          try{
+                            if(typeof TEAM!=="undefined"){
+                              const i = TEAM.findIndex(function(t){return t.id===u.id;});
+                              if(i>=0) TEAM.splice(i,1);
+                              window.dispatchEvent(new CustomEvent("pixels:team-updated"));
+                            }
+                          }catch(_){}
+                        }).catch(function(err){
+                          if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao remover: "+(err&&err.message||"desconhecido"));
+                        });
+                      }
+                    }catch(_){}
+                  };
+                  if(typeof pixelsConfirm==="function"){
+                    pixelsConfirm({title:"Remover colaborador?",message:'"'+u.name+'" será removido. Esta ação não pode ser desfeita.',confirmLabel:"Remover",danger:true,onConfirm:_doDelete});
+                  } else if(confirm("Remover "+u.name+"?")){
+                    _doDelete();
+                  }
+                }}
+                style={{background:"#fff",border:"1px solid #fecaca",borderRadius:10,width:32,height:30,color:"#dc2626",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                <Ico n="trash" size={12}/>
+              </button>}
+            </div>}
           </div>
 
           {/* Corpo: campos */}
