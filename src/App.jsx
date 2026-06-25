@@ -3050,6 +3050,10 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="sparkles")  return <svg {...p}><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>;
   if(n==="edit")      return <svg {...p}><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
   if(n==="pin")       return <svg {...p}><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 00-1.11-1.79l-1.78-.9A2 2 0 0115 10.76V6h1a2 2 0 002-2V3H6v1a2 2 0 002 2h1v4.76a2 2 0 01-1.11 1.79l-1.78.9A2 2 0 005 15.24V17z"/></svg>;
+  if(n==="phone")     return <svg {...p}><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>;
+  if(n==="mail")      return <svg {...p}><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>;
+  if(n==="package")   return <svg {...p}><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>;
+  if(n==="map-pin")   return <svg {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>;
   if(n==="checkCircle")return <svg {...p}><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
   if(n==="xCircle")   return <svg {...p}><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
   if(n==="dot")       return <svg {...p}><circle cx="12" cy="12" r="5" fill={cl} stroke="none"/></svg>;
@@ -11163,7 +11167,76 @@ function CAnalises({cl,isMob,tasks}){
     const mi=map[mm[1]]; if(mi==null) return null;
     return new Date(parseInt(mm[2]),mi,1);
   }
-  function _projectDuration(s){
+  
+/* ─── Helper: Card editável de Dados Cadastrais (usado em Visão Geral do Cliente) ─── */
+function _CCadastroCard({ent, fields, isMob, canEdit}){
+  const [data, setData] = useState(function(){
+    try{const r=localStorage.getItem(ent.storageKey);return r?JSON.parse(r):{};}catch(_){return {};}
+  });
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(data);
+  useEffect(function(){
+    try{const r=localStorage.getItem(ent.storageKey);const obj=r?JSON.parse(r):{};setData(obj);if(!editing)setDraft(obj);}catch(_){}
+  },[ent.storageKey]);
+  const save = function(){
+    try{
+      localStorage.setItem(ent.storageKey, JSON.stringify(draft||{}));
+      setData(draft||{});
+      setEditing(false);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Dados cadastrais salvos.",2000);
+      // Sync opcional pro Supabase
+      try{
+        if(typeof window!=="undefined"&&window._sb){
+          window._sb.from("dados_cadastrais").upsert({id:ent.storageKey,client_id:(ent.storageKey||"").replace(/^pixels-cadastro-/,""),payload:draft||{},updated_at:new Date().toISOString()},{onConflict:"id"}).then(function(){}).catch(function(_){});
+        }
+      }catch(_){}
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar.",2500);
+    }
+  };
+  const cancel = function(){setDraft(data);setEditing(false);};
+  const empty = Object.keys(data||{}).length===0;
+  return <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{width:8,height:32,borderRadius:4,background:ent.color,flexShrink:0}}/>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.1}}>{ent.label}</div>
+        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>{ent.sub||""}</div>
+      </div>
+      {canEdit && !editing && <button onClick={function(){setDraft(data);setEditing(true);}}
+        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 11px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:5}}>
+        <Ico n="edit" size={11}/> Editar
+      </button>}
+      {canEdit && editing && <div style={{display:"flex",gap:5}}>
+        <button onClick={cancel} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>Cancelar</button>
+        <button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>Salvar</button>
+      </div>}
+    </div>
+    {editing
+      ? <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
+          {fields.map(function(f){return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
+            <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
+            <input type="text" placeholder={f.ph} value={(draft||{})[f.key]||""}
+              onChange={function(e){const v=e.target.value;setDraft(function(p){return Object.assign({},p||{},{[f.key]:v});});}}
+              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,color:"#0f172a",fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box"}}/>
+          </div>;})}
+        </div>
+      : (empty
+          ? <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>{canEdit?"Nenhum dado preenchido — clique em Editar pra cadastrar.":"Dados cadastrais não preenchidos."}</div>
+          : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
+              {fields.filter(function(f){return (data||{})[f.key];}).map(function(f){return <div key={f.key} style={Object.assign({display:"flex",alignItems:"baseline",gap:8,padding:"5px 0",borderBottom:"1px solid #f1f5f9"},f.full?{gridColumn:isMob?"auto":"span 2"}:{})}>
+                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",minWidth:120}}>{f.label}</span>
+                <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,wordBreak:"break-word"}}>{(data||{})[f.key]}</span>
+                <button onClick={function(){try{navigator.clipboard.writeText((data||{})[f.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1200);}catch(_){}}} title="Copiar" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:2,display:"inline-flex",alignItems:"center"}}>
+                  <Ico n="copy" size={11}/>
+                </button>
+              </div>;})}
+            </div>)
+    }
+  </div>;
+}
+
+function _projectDuration(s){
     const d=_parseSince(s); if(!d) return "";
     const n=new Date();
     let months=(n.getFullYear()-d.getFullYear())*12+(n.getMonth()-d.getMonth());
@@ -11263,7 +11336,43 @@ function CAnalises({cl,isMob,tasks}){
       </div>
     </div>
 
-    {/* ── SOBRE A EMPRESA — espelhado do Playbook (mesma fonte) ──────── */}
+    {/* ── DADOS CADASTRAIS — por cliente (e por unidade no caso do Bioter) ── */}
+    {(function(){
+      const _ac = cl.color || "#7c3aed";
+      const _isBioter = cl.id === "bioter";
+      // Entries pra renderizar: pra Bioter um por unidade, senão um único pro cliente
+      const _entries = _isBioter && typeof BIOTER_UNITS!=="undefined"
+        ? BIOTER_UNITS.map(function(u){return {storageKey:"pixels-cadastro-bioter-"+u.id,label:u.label||u.pickerLabel,sub:"Unidade "+(u.pickerLabel||u.label),color:u.color||_ac,unitId:u.id};})
+        : [{storageKey:"pixels-cadastro-"+cl.id,label:"Dados da empresa",sub:"CNPJ, razão social e endereço",color:_ac,unitId:null}];
+      const FIELDS = [
+        {key:"razao_social", label:"Razão social",         ph:"Empresa Ltda.",            full:true},
+        {key:"nome_fantasia",label:"Nome fantasia",        ph:"Nome comercial"},
+        {key:"cnpj",         label:"CNPJ",                 ph:"00.000.000/0000-00"},
+        {key:"ie",           label:"Inscrição estadual",   ph:"Isento ou número"},
+        {key:"endereco",     label:"Endereço",             ph:"Rua, número, bairro",      full:true},
+        {key:"cidade_uf",    label:"Cidade / UF",          ph:"Chapecó-SC"},
+        {key:"cep",          label:"CEP",                  ph:"00000-000"},
+        {key:"telefone",     label:"Telefone",             ph:"(00) 0000-0000"},
+        {key:"contato",      label:"Contato (responsável)",ph:"Nome do contato direto"},
+        {key:"email",        label:"E-mail comercial",     ph:"contato@empresa.com.br"},
+      ];
+      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:11}}>
+          <div style={{width:36,height:36,borderRadius:10,background:_ac+"15",border:"1px solid "+_ac+"33",color:_ac,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="file-text" size={17} color={_ac}/>
+          </div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>Dados cadastrais</div>
+            <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:600}}>{_isBioter?"CNPJ, razão social e endereço de cada unidade Bioter":"Informações da empresa pra contratos, notas fiscais e cadastros"}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          {_entries.map(function(ent){return <_CCadastroCard key={ent.storageKey} ent={ent} fields={FIELDS} isMob={isMob} canEdit={CURRENT_USER&&CURRENT_USER.level===1}/>;})}
+        </div>
+      </div>;
+    })()}
+
+        {/* ── SOBRE A EMPRESA — espelhado do Playbook (mesma fonte) ──────── */}
     {(function(){
       const _ac = cl.color || "#7c3aed";
       const hasText = !!(pbSobre && pbSobre.trim());
@@ -52519,22 +52628,33 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // Edição inline
   const [editSobre,setEditSobre] = useState(data.sobre||"");
   const [editComm,setEditComm]   = useState(data.comunicacao||"");
-  const [editOri,setEditOri]     = useState(areaData.orientacoes||"");
   const [editChk,setEditChk]     = useState((areaData.checklist||[]).join("\n"));
+  // Contatos: campos pra colocar nas artes e vídeos (telefone, WhatsApp, etc)
+  const [editContatos,setEditContatos] = useState(data.contatos||{telefone:"",whatsapp:"",endereco:"",site:"",instagram:"",email:""});
+  // Produtos: lista editável. Pra Bioter, cada produto tem array de unidades onde se aplica.
+  const [editProdutos,setEditProdutos] = useState(Array.isArray(data.produtos)?data.produtos:[]);
 
   useEffect(()=>{
     setEditSobre(data.sobre||"");
     setEditComm(data.comunicacao||"");
-    setEditOri(areaData.orientacoes||"");
     setEditChk((areaData.checklist||[]).join("\n"));
+    setEditContatos(data.contatos||{telefone:"",whatsapp:"",endereco:"",site:"",instagram:"",email:""});
+    setEditProdutos(Array.isArray(data.produtos)?data.produtos:[]);
   },[cl.id,area,editMode]);
 
   const handleSave = ()=>{
-    onUpdate({sobre:editSobre, comunicacao:editComm});
-    onUpdateArea({orientacoes:editOri, checklist:editChk.split("\n").map(s=>s.trim()).filter(Boolean)});
+    onUpdate({sobre:editSobre, comunicacao:editComm, contatos:editContatos, produtos:editProdutos});
+    onUpdateArea({checklist:editChk.split("\n").map(s=>s.trim()).filter(Boolean)});
     setEditMode(false);
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Playbook salvo!");
   };
+
+  // Helper produtos: adicionar/remover/atualizar
+  const _produtoAdd=function(){setEditProdutos(function(p){return p.concat([{nome:"",descricao:"",unidades:[]}]);});};
+  const _produtoUpd=function(idx,patch){setEditProdutos(function(p){return p.map(function(it,i){return i===idx?Object.assign({},it,patch):it;});});};
+  const _produtoDel=function(idx){setEditProdutos(function(p){return p.filter(function(_,i){return i!==idx;});});};
+  const _produtoToggleUnit=function(idx,unitId){setEditProdutos(function(p){return p.map(function(it,i){if(i!==idx)return it;const cur=Array.isArray(it.unidades)?it.unidades:[];const has=cur.indexOf(unitId)>=0;return Object.assign({},it,{unidades:has?cur.filter(function(u){return u!==unitId;}):cur.concat([unitId])});});});};
+  const _isBioter=cl.id==="bioter";
 
   // Estado local dos checkboxes (lembra entre navegações)
   const checklistArr = areaData.checklist || [];
@@ -52566,10 +52686,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const SECTIONS = [
     {id:"pb-sobre",        label:"Sobre",        icon:"building"},
     {id:"pb-comunicacao",  label:"Comunicação",  icon:"sparkles"},
-    {id:"pb-orientacoes",  label:"Orientações",  icon:areaCfg.icon},
+    {id:"pb-contatos",     label:"Contatos",     icon:"phone"},
+    {id:"pb-produtos",     label:"Produtos",     icon:"package"},
   ];
+  if(area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações", icon:areaCfg.icon});
   if(hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
-  if(area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações para a equipe", icon:"sparkles"});
   SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
 
   // ─────────── Layout ───────────
@@ -52671,15 +52792,110 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </div>}
           </PlaybookBlock>
 
-          {/* Orientações da área */}
-          <PlaybookBlock id="pb-orientacoes" title={"Orientações de "+areaCfg.label} subtitle="Padrões, regras e referências da área" icon={areaCfg.icon} color={areaCfg.color}>
+          {/* Contatos — telefone, WhatsApp, endereço, site, redes sociais.
+              Tudo que vai colado nas artes e vídeos. */}
+          <PlaybookBlock id="pb-contatos" title="Contatos" subtitle="Dados pra colocar nas artes e vídeos" icon="phone" color="#0d9488">
             {editMode
-              ? <textarea value={editOri} onChange={e=>setEditOri(e.target.value)} rows={7}
-                  placeholder="Padrões, regras, o que manter, o que evitar..."
-                  style={_pbInpStyle()}/>
-              : (areaData.orientacoes
-                  ? <PbProse text={areaData.orientacoes}/>
-                  : <_PbEmpty icon={areaCfg.icon} text={"Orientações de "+areaCfg.label+" em construção."}/>)
+              ? <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
+                  {[
+                    {key:"telefone",  label:"Telefone",   ph:"(00) 0000-0000"},
+                    {key:"whatsapp",  label:"WhatsApp",   ph:"(00) 0 0000-0000"},
+                    {key:"email",     label:"E-mail",     ph:"contato@cliente.com.br"},
+                    {key:"site",      label:"Site",       ph:"cliente.com.br"},
+                    {key:"instagram", label:"Instagram",  ph:"@cliente"},
+                    {key:"endereco",  label:"Endereço",   ph:"Rua, número — Cidade/UF",full:true},
+                  ].map(function(f){return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
+                    <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{f.label}</div>
+                    <input type="text" placeholder={f.ph}
+                      value={(editContatos||{})[f.key]||""}
+                      onChange={function(e){const v=e.target.value;setEditContatos(function(p){return Object.assign({},p||{},{[f.key]:v});});}}
+                      style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
+                  </div>;})}
+                </div>
+              : (function(){
+                  const c=data.contatos||{};
+                  const items=[
+                    {key:"telefone",  label:"Telefone",   icon:"phone"},
+                    {key:"whatsapp",  label:"WhatsApp",   icon:"phone"},
+                    {key:"email",     label:"E-mail",     icon:"mail"},
+                    {key:"site",      label:"Site",       icon:"globe"},
+                    {key:"instagram", label:"Instagram",  icon:"sparkles"},
+                    {key:"endereco",  label:"Endereço",   icon:"map-pin"},
+                  ].filter(function(it){return c[it.key];});
+                  if(items.length===0)return <_PbEmpty icon="phone" text="Nenhum contato cadastrado." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>;
+                  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
+                    {items.map(function(it){return <div key={it.key} style={{display:"flex",alignItems:"center",gap:9,background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"9px 12px"}}>
+                      <div style={{width:30,height:30,borderRadius:8,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={13} color="#fff"/></div>
+                      <div style={{minWidth:0,flex:1}}>
+                        <div style={{color:"#134e4a",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
+                        <div style={{color:"#0f172a",fontSize:13,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c[it.key]}</div>
+                      </div>
+                      <button onClick={function(){try{navigator.clipboard.writeText(c[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}} title="Copiar"
+                        style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:4,borderRadius:6,display:"inline-flex",alignItems:"center"}}>
+                        <Ico n="copy" size={13}/>
+                      </button>
+                    </div>;})}
+                  </div>;
+                })()
+            }
+          </PlaybookBlock>
+
+          {/* Produtos — lista do que trabalhamos pro cliente.
+              Bioter: cada produto pode ter unidades específicas (varia por região). */}
+          <PlaybookBlock id="pb-produtos" title="Produtos" subtitle={_isBioter?"Produtos da carteira — varia por unidade":"Produtos trabalhados pelo cliente"} icon="package" color="#f59e0b">
+            {editMode
+              ? <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  {(editProdutos||[]).map(function(prod,pi){return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
+                    <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                      <input type="text" placeholder="Nome do produto" value={prod.nome||""}
+                        onChange={function(e){_produtoUpd(pi,{nome:e.target.value});}}
+                        style={{flex:1,border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none"}}/>
+                      <button onClick={function(){_produtoDel(pi);}} title="Remover produto"
+                        style={{background:"#fee2e2",border:"1px solid #fecaca",borderRadius:8,width:32,height:32,color:"#dc2626",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <Ico n="trash" size={13}/>
+                      </button>
+                    </div>
+                    <textarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
+                      onChange={function(e){_produtoUpd(pi,{descricao:e.target.value});}}
+                      rows={2}
+                      style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",resize:"vertical",minHeight:54,boxSizing:"border-box"}}/>
+                    {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
+                      <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Unidades onde se aplica</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                        {BIOTER_UNITS.map(function(u){
+                          const active=Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0;
+                          return <button key={u.id} onClick={function(){_produtoToggleUnit(pi,u.id);}}
+                            style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER}}>
+                            {u.pickerLabel||u.label}
+                          </button>;
+                        })}
+                      </div>
+                    </div>}
+                  </div>;})}
+                  <button onClick={_produtoAdd}
+                    style={{background:"#fff",border:"1.5px dashed #fde68a",borderRadius:10,padding:"10px 14px",color:"#a16207",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                    <Ico n="plus" size={13}/> Adicionar produto
+                  </button>
+                </div>
+              : (Array.isArray(data.produtos)&&data.produtos.length>0
+                  ? <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {data.produtos.map(function(prod,pi){
+                        const unitsList=Array.isArray(prod.unidades)?prod.unidades:[];
+                        const unitObjs=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.filter(function(u){return unitsList.indexOf(u.id)>=0;}):[];
+                        return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:prod.descricao?6:0,flexWrap:"wrap"}}>
+                            <div style={{width:32,height:32,borderRadius:9,background:"#f59e0b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="package" size={15} color="#fff"/></div>
+                            <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{prod.nome||"(sem nome)"}</div>
+                            {_isBioter&&unitObjs.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                              {unitObjs.map(function(u){return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"55",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.2}}>{u.pickerLabel||u.label}</span>;})}
+                            </div>}
+                            {_isBioter&&unitsList.length===0&&<span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,textTransform:"uppercase"}}>Todas as unidades</span>}
+                          </div>
+                          {prod.descricao&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.5,paddingLeft:42}}>{prod.descricao}</div>}
+                        </div>;
+                      })}
+                    </div>
+                  : <_PbEmpty icon="package" text="Nenhum produto cadastrado." sub={isAdmin?"Clique em \"Editar playbook\" pra adicionar.":""}/>)
             }
           </PlaybookBlock>
 
@@ -52721,7 +52937,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               não-fazer e redes sociais. Mesma fonte (Supabase clients.orientacoes)
               que o card de cada cliente lê — alterações refletem em todo lugar. */}
           {area==="design" && typeof COrientacoes==="function" &&
-            <PlaybookBlock id="pb-equipe" title="Orientações para a equipe" subtitle="Logos, paleta, fontes, tom de voz — copiável pela equipe nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
+            <PlaybookBlock id="pb-equipe" title="Orientações" subtitle="Logos, paleta, fontes, tom de voz — referência única usada nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
               <COrientacoes cl={cl}/>
             </PlaybookBlock>
           }
