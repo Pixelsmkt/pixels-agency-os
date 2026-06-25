@@ -9121,6 +9121,20 @@ function CTimeline({cl}){
 }
 
 /* ─── COrientacoes — orientações para a equipe (logos, paleta, fontes, voz) ─── */
+/* ─── Section: wrapper das seções do COrientacoes/Playbook.
+   CRÍTICO: tem que estar no escopo do módulo, NÃO dentro de COrientacoes.
+   Se for redefinido a cada render, React desmonta os children e os inputs
+   perdem foco a cada tecla (causou bug "só dá pra escrever uma letra por vez"). */
+function _PlaybookSection({title, subtitle, children}){
+  return <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e2e8f0",padding:"16px 18px",marginBottom:12}}>
+    <div style={{marginBottom:12}}>
+      <div style={{color:"#0f172a",fontWeight:500,fontSize:13}}>{title}</div>
+      {subtitle&&<div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{subtitle}</div>}
+    </div>
+    {children}
+  </div>;
+}
+
 function COrientacoes({cl}){
   const sb=window._sb;
   const [data,setData]=useState({logos:[],paleta:[],fontes:[],tomDeVoz:"",hashtags:[],ctaPadrao:"",naoFazer:"",site:"",redes:{instagram:"",facebook:"",youtube:"",linkedin:"",tiktok:""},driveUrl:""});
@@ -9240,15 +9254,6 @@ function COrientacoes({cl}){
   const removeHashtag=(t)=>persist({...data,hashtags:(data.hashtags||[]).filter(x=>x!==t)});
 
   const inp={background:C.s1,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
-  const Section=({title,subtitle,children})=>(
-    <div style={{background:C.card,borderRadius:12,border:"0.5px solid "+C.b1,padding:"16px 18px",marginBottom:12}}>
-      <div style={{marginBottom:12}}>
-        <div style={{color:C.tx,fontWeight:500,fontSize:13}}>{title}</div>
-        {subtitle&&<div style={{color:C.td,fontSize:11,marginTop:2}}>{subtitle}</div>}
-      </div>
-      {children}
-    </div>
-  );
 
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
     <input ref={fileInputLogo} type="file" accept="image/*,.svg,.pdf" style={{display:"none"}} onChange={onSelectLogoFile}/>
@@ -9256,7 +9261,7 @@ function COrientacoes({cl}){
 
     {savedOk&&<div style={{background:"#dcfce7",border:"0.5px solid #86efac",color:"#166534",padding:"6px 12px",borderRadius:8,fontSize:11,marginBottom:12,textAlign:"center"}}>Salvo automaticamente</div>}
 
-    <Section title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
+    <_PlaybookSection title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8,marginBottom:10}}>
         {(data.logos||[]).map((l,i)=>(
           <div key={i} style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:10,overflow:"hidden",position:"relative"}}>
@@ -9277,9 +9282,9 @@ function COrientacoes({cl}){
         <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome do logo (ex: Principal, Branca, Ícone):");if(n){setPendingLogo({nome:n.trim()});fileInputLogo.current?.click();}}} disabled={uploading==="logo"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="logo"?"Enviando...":"+ Upload de logo"}</button>
         <button type="button" onClick={addLogoLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
       </div>
-    </Section>
+    </_PlaybookSection>
 
-    <Section title="Paleta de cores" subtitle="Cores da marca — equipe copia o hex direto da aba Orientações no cartão">
+    <_PlaybookSection title="Paleta de cores" subtitle="Cores da marca — equipe copia o hex direto da aba Orientações no cartão">
       {(data.paleta||[]).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8,marginBottom:10}}>
         {data.paleta.map((c,i)=>(
           <div key={i} style={{background:c.hex,borderRadius:10,padding:10,border:"0.5px solid "+C.b1,minHeight:64,display:"flex",flexDirection:"column",justifyContent:"space-between",position:"relative"}}>
@@ -9295,9 +9300,9 @@ function COrientacoes({cl}){
         <input type="text" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{...inp,width:100,fontFamily:"monospace"}} placeholder="#000000"/>
         <button type="button" onClick={addColor} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
       </div>
-    </Section>
+    </_PlaybookSection>
 
-    <Section title="Fontes" subtitle="Tipografias oficiais — equipe baixa o arquivo TTF/OTF/WOFF pra instalar">
+    <_PlaybookSection title="Fontes" subtitle="Tipografias oficiais — equipe baixa o arquivo TTF/OTF/WOFF pra instalar">
       {(data.fontes||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
         {data.fontes.map((f,i)=>(
           <div key={i} style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
@@ -9315,13 +9320,13 @@ function COrientacoes({cl}){
         <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");if(!n)return;const u=await pixelsPrompt("Uso (ex: Títulos, Corpo) — opcional:");setPendingFonte({nome:n.trim(),uso:(u||"").trim()});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
         <button type="button" onClick={addFonteLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
       </div>
-    </Section>
+    </_PlaybookSection>
 
-    <Section title="Tom de voz" subtitle="Como a marca fala — exemplos práticos ajudam">
+    <_PlaybookSection title="Tom de voz" subtitle="Como a marca fala — exemplos práticos ajudam">
       <textarea value={data.tomDeVoz||""} onChange={e=>setData(p=>({...p,tomDeVoz:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Técnico mas acessível. Linguagem direta, evita gírias. Foca em resultado prático na fazenda. Usa produtor em vez de cliente."' rows={4} style={{...inp,minHeight:80,resize:"vertical",lineHeight:1.5}}/>
-    </Section>
+    </_PlaybookSection>
 
-    <Section title="Hashtags padrão" subtitle="Tags que sempre entram nos posts desse cliente">
+    <_PlaybookSection title="Hashtags padrão" subtitle="Tags que sempre entram nos posts desse cliente">
       {(data.hashtags||[]).length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
         {data.hashtags.map((t)=>(
           <span key={t} style={{background:"#a140ff15",color:"#a140ff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:500,display:"flex",alignItems:"center",gap:6}}>
@@ -9334,17 +9339,17 @@ function COrientacoes({cl}){
         <input value={newHashtag} onChange={e=>setNewHashtag(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addHashtag();}}} placeholder="#bioter" style={{...inp,flex:1}}/>
         <button type="button" onClick={e=>{e.preventDefault();addHashtag();}} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
       </div>
-    </Section>
+    </_PlaybookSection>
 
-    <Section title="CTA padrão" subtitle="Chamada pra ação que costuma fechar os posts">
+    <_PlaybookSection title="CTA padrão" subtitle="Chamada pra ação que costuma fechar os posts">
       <input value={data.ctaPadrao||""} onChange={e=>setData(p=>({...p,ctaPadrao:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Acesse o link na bio →"' style={inp}/>
-    </Section>
+    </_PlaybookSection>
 
-    <Section title="O que NÃO fazer" subtitle="Palavras proibidas, temas sensíveis, posturas a evitar">
+    <_PlaybookSection title="O que NÃO fazer" subtitle="Palavras proibidas, temas sensíveis, posturas a evitar">
       <textarea value={data.naoFazer||""} onChange={e=>setData(p=>({...p,naoFazer:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Nunca usar a palavra barato. Não comparar diretamente com concorrentes. Evitar emojis em posts institucionais."' rows={3} style={{...inp,minHeight:60,resize:"vertical",lineHeight:1.5}}/>
-    </Section>
+    </_PlaybookSection>
 
-    <Section title="Site & redes oficiais" subtitle="Pra usar em arte, em links de bio, em posts">
+    <_PlaybookSection title="Site & redes oficiais" subtitle="Pra usar em arte, em links de bio, em posts">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         {[
           {key:"site",label:"Site oficial",placeholder:"https://exemplo.com.br",root:"data"},
@@ -9369,7 +9374,7 @@ function COrientacoes({cl}){
           </div>
         ))}
       </div>
-    </Section>
+    </_PlaybookSection>
   </div>);
 }
 
