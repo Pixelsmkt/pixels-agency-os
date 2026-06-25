@@ -9121,15 +9121,20 @@ function CTimeline({cl}){
 }
 
 /* ─── COrientacoes — orientações para a equipe (logos, paleta, fontes, voz) ─── */
-/* ─── Section: wrapper das seções do COrientacoes/Playbook.
-   CRÍTICO: tem que estar no escopo do módulo, NÃO dentro de COrientacoes.
-   Se for redefinido a cada render, React desmonta os children e os inputs
-   perdem foco a cada tecla (causou bug "só dá pra escrever uma letra por vez"). */
-function _PlaybookSection({title, subtitle, children}){
-  return <div style={{background:"#fff",borderRadius:12,border:"0.5px solid #e2e8f0",padding:"16px 18px",marginBottom:12}}>
-    <div style={{marginBottom:12}}>
-      <div style={{color:"#0f172a",fontWeight:500,fontSize:13}}>{title}</div>
-      {subtitle&&<div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{subtitle}</div>}
+/* ─── _PlaybookSection: wrapper das seções do COrientacoes.
+   CRÍTICO: top-level do módulo, NÃO redefinir dentro de componentes
+   (causou bug "uma letra por vez" no input). */
+function _PlaybookSection({title, subtitle, icon, accent, children}){
+  const _accent = accent || "#7c3aed";
+  return <div style={{background:"#fff",borderRadius:14,border:"1px solid #eef0f3",padding:"18px 22px",marginBottom:14,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+    <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:14,paddingBottom:14,borderBottom:"1px solid #f1f5f9"}}>
+      {icon && <div style={{width:34,height:34,borderRadius:10,background:_accent+"15",border:"1px solid "+_accent+"33",color:_accent,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        {typeof Ico!=="undefined" && <Ico n={icon} size={16} color={_accent}/>}
+      </div>}
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:700,fontSize:14.5,letterSpacing:-.2}}>{title}</div>
+        {subtitle&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:3,fontWeight:500,lineHeight:1.4}}>{subtitle}</div>}
+      </div>
     </div>
     {children}
   </div>;
@@ -9253,7 +9258,7 @@ function COrientacoes({cl}){
   };
   const removeHashtag=(t)=>persist({...data,hashtags:(data.hashtags||[]).filter(x=>x!==t)});
 
-  const inp={background:C.s1,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:12,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+  const inp={background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 13px",color:"#0f172a",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .12s, background .12s"};
 
   return(<div style={{display:"flex",flexDirection:"column",gap:0}}>
     <input ref={fileInputLogo} type="file" accept="image/*,.svg,.pdf" style={{display:"none"}} onChange={onSelectLogoFile}/>
@@ -9261,7 +9266,7 @@ function COrientacoes({cl}){
 
     {savedOk&&<div style={{background:"#dcfce7",border:"0.5px solid #86efac",color:"#166534",padding:"6px 12px",borderRadius:8,fontSize:11,marginBottom:12,textAlign:"center"}}>Salvo automaticamente</div>}
 
-    <_PlaybookSection title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
+    <_PlaybookSection icon="image" accent="#7c3aed" title="Logos" subtitle="Variações da logo do cliente — designer baixa direto do app">
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8,marginBottom:10}}>
         {(data.logos||[]).map((l,i)=>(
           <div key={i} style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:10,overflow:"hidden",position:"relative"}}>
@@ -9279,12 +9284,12 @@ function COrientacoes({cl}){
         ))}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome do logo (ex: Principal, Branca, Ícone):");if(n){setPendingLogo({nome:n.trim()});fileInputLogo.current?.click();}}} disabled={uploading==="logo"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="logo"?"Enviando...":"+ Upload de logo"}</button>
-        <button type="button" onClick={addLogoLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
+        <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome do logo (ex: Principal, Branca, Ícone):");if(n){setPendingLogo({nome:n.trim()});fileInputLogo.current?.click();}}} disabled={uploading==="logo"} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>{uploading==="logo"?"Enviando...":"+ Upload de logo"}</button>
+        <button type="button" onClick={addLogoLink} style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .12s"}}>+ Adicionar via link</button>
       </div>
     </_PlaybookSection>
 
-    <_PlaybookSection title="Paleta de cores" subtitle="Cores da marca — equipe copia o hex direto da aba Orientações no cartão">
+    <_PlaybookSection icon="sparkles" accent="#ec4899" title="Paleta de cores" subtitle="Cores da marca — equipe copia o hex direto da aba Orientações no cartão">
       {(data.paleta||[]).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8,marginBottom:10}}>
         {data.paleta.map((c,i)=>(
           <div key={i} style={{background:c.hex,borderRadius:10,padding:10,border:"0.5px solid "+C.b1,minHeight:64,display:"flex",flexDirection:"column",justifyContent:"space-between",position:"relative"}}>
@@ -9298,11 +9303,11 @@ function COrientacoes({cl}){
         <input type="text" value={newColor.nome} onChange={e=>setNewColor(p=>({...p,nome:e.target.value}))} placeholder="Nome da cor" style={{...inp,width:160}}/>
         <input type="color" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{width:48,height:36,border:"0.5px solid "+C.b1,borderRadius:8,cursor:"pointer",padding:2,background:C.s1}}/>
         <input type="text" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{...inp,width:100,fontFamily:"monospace"}} placeholder="#000000"/>
-        <button type="button" onClick={addColor} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
+        <button type="button" onClick={addColor} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>+ Adicionar</button>
       </div>
     </_PlaybookSection>
 
-    <_PlaybookSection title="Fontes" subtitle="Tipografias oficiais — equipe baixa o arquivo TTF/OTF/WOFF pra instalar">
+    <_PlaybookSection icon="file-text" accent="#0ea5e9" title="Fontes" subtitle="Tipografias oficiais — equipe baixa o arquivo TTF/OTF/WOFF pra instalar">
       {(data.fontes||[]).length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
         {data.fontes.map((f,i)=>(
           <div key={i} style={{background:C.s1,border:"0.5px solid "+C.b1,borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
@@ -9317,16 +9322,16 @@ function COrientacoes({cl}){
         ))}
       </div>}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");if(!n)return;const u=await pixelsPrompt("Uso (ex: Títulos, Corpo) — opcional:");setPendingFonte({nome:n.trim(),uso:(u||"").trim()});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
-        <button type="button" onClick={addFonteLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
+        <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");if(!n)return;const u=await pixelsPrompt("Uso (ex: Títulos, Corpo) — opcional:");setPendingFonte({nome:n.trim(),uso:(u||"").trim()});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
+        <button type="button" onClick={addFonteLink} style={{background:"#fff",color:"#475569",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",transition:"border-color .12s"}}>+ Adicionar via link</button>
       </div>
     </_PlaybookSection>
 
-    <_PlaybookSection title="Tom de voz" subtitle="Como a marca fala — exemplos práticos ajudam">
+    <_PlaybookSection icon="message" accent="#16a34a" title="Tom de voz" subtitle="Como a marca fala — exemplos práticos ajudam">
       <textarea value={data.tomDeVoz||""} onChange={e=>setData(p=>({...p,tomDeVoz:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Técnico mas acessível. Linguagem direta, evita gírias. Foca em resultado prático na fazenda. Usa produtor em vez de cliente."' rows={4} style={{...inp,minHeight:80,resize:"vertical",lineHeight:1.5}}/>
     </_PlaybookSection>
 
-    <_PlaybookSection title="Hashtags padrão" subtitle="Tags que sempre entram nos posts desse cliente">
+    <_PlaybookSection icon="tag" accent="#7c3aed" title="Hashtags padrão" subtitle="Tags que sempre entram nos posts desse cliente">
       {(data.hashtags||[]).length>0&&<div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
         {data.hashtags.map((t)=>(
           <span key={t} style={{background:"#a140ff15",color:"#a140ff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:500,display:"flex",alignItems:"center",gap:6}}>
@@ -9337,19 +9342,19 @@ function COrientacoes({cl}){
       </div>}
       <div style={{display:"flex",gap:6}}>
         <input value={newHashtag} onChange={e=>setNewHashtag(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addHashtag();}}} placeholder="#bioter" style={{...inp,flex:1}}/>
-        <button type="button" onClick={e=>{e.preventDefault();addHashtag();}} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
+        <button type="button" onClick={e=>{e.preventDefault();addHashtag();}} style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 4px 12px rgba(124,58,237,.25)",transition:"transform .12s, box-shadow .12s",letterSpacing:-.1}}>+ Adicionar</button>
       </div>
     </_PlaybookSection>
 
-    <_PlaybookSection title="CTA padrão" subtitle="Chamada pra ação que costuma fechar os posts">
+    <_PlaybookSection icon="send" accent="#f59e0b" title="CTA padrão" subtitle="Chamada pra ação que costuma fechar os posts">
       <input value={data.ctaPadrao||""} onChange={e=>setData(p=>({...p,ctaPadrao:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Acesse o link na bio →"' style={inp}/>
     </_PlaybookSection>
 
-    <_PlaybookSection title="O que NÃO fazer" subtitle="Palavras proibidas, temas sensíveis, posturas a evitar">
+    <_PlaybookSection icon="alert" accent="#dc2626" title="O que NÃO fazer" subtitle="Palavras proibidas, temas sensíveis, posturas a evitar">
       <textarea value={data.naoFazer||""} onChange={e=>setData(p=>({...p,naoFazer:e.target.value}))} onBlur={()=>persist(data)} placeholder='Ex: "Nunca usar a palavra barato. Não comparar diretamente com concorrentes. Evitar emojis em posts institucionais."' rows={3} style={{...inp,minHeight:60,resize:"vertical",lineHeight:1.5}}/>
     </_PlaybookSection>
 
-    <_PlaybookSection title="Site & redes oficiais" subtitle="Pra usar em arte, em links de bio, em posts">
+    <_PlaybookSection icon="globe" accent="#0d9488" title="Site & redes oficiais" subtitle="Pra usar em arte, em links de bio, em posts">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         {[
           {key:"site",label:"Site oficial",placeholder:"https://exemplo.com.br",root:"data"},
@@ -9361,7 +9366,7 @@ function COrientacoes({cl}){
           {key:"tiktok",label:"TikTok",placeholder:"@bioter",root:"redes"},
         ].map(f=>(
           <div key={f.key}>
-            <div style={{color:C.td,fontSize:10,marginBottom:3,fontWeight:500}}>{f.label}</div>
+            <div style={{color:"#64748b",fontSize:11,marginBottom:5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{f.label}</div>
             <input
               value={f.root==="redes"?(data.redes?.[f.key]||""):(data[f.key]||"")}
               onChange={e=>{
@@ -29935,8 +29940,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
             </div>}
           </div>}
 
-          {/* ORIENTAÇÕES — read-only, só quando o cartão tem cliente vinculado */}
-          {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client}/>}
+          {/* ORIENTAÇÕES — read-only, só quando o cartão tem cliente vinculado.
+              Passa bioterUnit pra puxar contatos automaticamente da unidade certa do Playbook. */}
+          {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client} bioterUnit={bioterUnit||""}/>}
 
           {/* HISTÓRICO */}
           {activeTab==="activity"&&<div>
@@ -30473,9 +30479,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 /* ─── OrientacoesView — read-only no card modal ───
    Mostra logos, paleta, fontes, voz, hashtags e contatos do cliente vinculado.
    Designer/social só consultam (edição vai pela página do cliente). */
-function OrientacoesView({clientId}){
+function OrientacoesView({clientId, bioterUnit}){
   const sb=window._sb;
   const [data,setData]=useState(null);
+  const [playbookData,setPlaybookData]=useState(null); // do cache do Playbook (contatos por unidade)
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState(null);
   const [copiedHex,setCopiedHex]=useState(null);
@@ -30494,6 +30501,44 @@ function OrientacoesView({clientId}){
       .catch(e=>{setError(e?.message||"Erro");setLoading(false);});
   },[clientId]);
 
+  // ── Lê contatos/produtos do cache do Playbook (mesma fonte que 27_playbooks.jsx) ──
+  // O Playbook salva contatos_by_unit aqui — quando o card tem bioterUnit, puxa daquela unidade.
+  useEffect(()=>{
+    function _readPlaybook(){
+      try{
+        const raw = localStorage.getItem("pixels-playbooks-v1");
+        if(!raw) return null;
+        const obj = JSON.parse(raw);
+        return (obj && obj[clientId]) || null;
+      }catch(_){ return null; }
+    }
+    setPlaybookData(_readPlaybook());
+    function _onStorage(e){if(!e||e.key==="pixels-playbooks-v1")setPlaybookData(_readPlaybook());}
+    function _onCustom(){setPlaybookData(_readPlaybook());}
+    window.addEventListener("storage", _onStorage);
+    window.addEventListener("pixels:playbook-updated", _onCustom);
+    const _tid = setInterval(_onCustom, 4000);
+    return function(){
+      window.removeEventListener("storage", _onStorage);
+      window.removeEventListener("pixels:playbook-updated", _onCustom);
+      clearInterval(_tid);
+    };
+  },[clientId]);
+
+  // Contatos resolvidos: se card tem bioterUnit → contatos daquela unidade; senão → contatos default
+  const _resolvedContatos = (function(){
+    if(!playbookData) return null;
+    if(bioterUnit && playbookData.contatos_by_unit && playbookData.contatos_by_unit[bioterUnit]){
+      return playbookData.contatos_by_unit[bioterUnit];
+    }
+    return playbookData.contatos || null;
+  })();
+  const _resolvedUnitName = (function(){
+    if(!bioterUnit || typeof BIOTER_UNITS==="undefined") return "";
+    const u = BIOTER_UNITS.find(x=>x.id===bioterUnit);
+    return u ? (u.pickerLabel||u.label||"") : "";
+  })();
+
   const copyHex=async(hex)=>{
     try{await navigator.clipboard.writeText(hex);setCopiedHex(hex);setTimeout(()=>setCopiedHex(null),1500);}catch(e){}
   };
@@ -30501,7 +30546,8 @@ function OrientacoesView({clientId}){
   if(loading)return<div style={{padding:24,textAlign:"center",color:"#94a3b8",fontSize:12}}>Carregando orientações...</div>;
   if(error)return<div style={{padding:16,background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:10,color:"#991b1b",fontSize:12}}>Erro ao carregar: {error}</div>;
 
-  const hasContent=data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site);
+  const _hasContatos = _resolvedContatos && Object.keys(_resolvedContatos).filter(k=>_resolvedContatos[k]).length>0;
+  const hasContent=_hasContatos||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
@@ -30524,8 +30570,36 @@ function OrientacoesView({clientId}){
       {cl&&<div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
         <div style={{width:44,height:44,borderRadius:10,background:cl.color+"22",border:`0.5px solid ${cl.color}44`,display:"flex",alignItems:"center",justifyContent:"center",color:cl.color,fontWeight:600,fontSize:14}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{color:"#0f172a",fontWeight:500,fontSize:14}}>{cl.name}</div>
+          <div style={{color:"#0f172a",fontWeight:500,fontSize:14}}>{cl.name}{_resolvedUnitName?(" · "+_resolvedUnitName):""}</div>
           <div style={{color:"#64748b",fontSize:11,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}</div>
+        </div>
+      </div>}
+
+      {/* Contatos — vem do Playbook. Se o card tem bioterUnit, mostra contatos DAQUELA unidade. */}
+      {_resolvedContatos && (Object.keys(_resolvedContatos).filter(k=>_resolvedContatos[k]).length>0) && <div>
+        <SectionTitle label={"Contatos"+(_resolvedUnitName?(" · "+_resolvedUnitName):"")} sub="dados pra colocar nas artes/vídeos"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          {[
+            {key:"telefone",  label:"Telefone",   icon:"phone"},
+            {key:"whatsapp",  label:"WhatsApp",   icon:"phone"},
+            {key:"email",     label:"E-mail",     icon:"mail"},
+            {key:"site",      label:"Site",       icon:"globe"},
+            {key:"instagram", label:"Instagram",  icon:"sparkles"},
+            {key:"endereco",  label:"Endereço",   icon:"map-pin"},
+          ].filter(it=>_resolvedContatos[it.key]).map(it=>(
+            <div key={it.key} style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"9px 12px",display:"flex",alignItems:"center",gap:9}}>
+              <div style={{width:28,height:28,borderRadius:7,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={12} color="#fff"/></div>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:"#134e4a",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_resolvedContatos[it.key]}</div>
+              </div>
+              <button type="button" onClick={async()=>{try{await navigator.clipboard.writeText(_resolvedContatos[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}}
+                title="Copiar"
+                style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:3,borderRadius:5,display:"inline-flex",alignItems:"center"}}>
+                <Ico n="copy" size={12}/>
+              </button>
+            </div>
+          ))}
         </div>
       </div>}
 
@@ -52638,6 +52712,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const [editContatos,setEditContatos] = useState(data.contatos||{telefone:"",whatsapp:"",endereco:"",site:"",instagram:"",email:""});
   // Produtos: lista editável. Pra Bioter, cada produto tem array de unidades onde se aplica.
   const [editProdutos,setEditProdutos] = useState(Array.isArray(data.produtos)?data.produtos:[]);
+  // Bioter: contatos POR UNIDADE — cada unidade tem dados próprios.
+  // Estrutura: {chapeco:{telefone,whatsapp,...}, toledo:{...}, ...}
+  const [editContatosByUnit,setEditContatosByUnit] = useState(data.contatos_by_unit||{});
+  // Tab de unidade ativa (Bioter only) — controla qual unidade está sendo visualizada/editada
+  const _firstUnitId = (typeof BIOTER_UNITS!=="undefined"&&BIOTER_UNITS[0])?BIOTER_UNITS[0].id:"";
+  const [_unitTab,setUnitTab] = useState(_firstUnitId);
 
   useEffect(()=>{
     setEditSobre(data.sobre||"");
@@ -52645,15 +52725,28 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     setEditChk((areaData.checklist||[]).join("\n"));
     setEditContatos(data.contatos||{telefone:"",whatsapp:"",endereco:"",site:"",instagram:"",email:""});
     setEditProdutos(Array.isArray(data.produtos)?data.produtos:[]);
+    setEditContatosByUnit(data.contatos_by_unit||{});
   },[cl.id,area,editMode]);
 
   const handleSave = ()=>{
-    onUpdate({sobre:editSobre, comunicacao:editComm, contatos:editContatos, produtos:editProdutos});
+    onUpdate({sobre:editSobre, comunicacao:editComm, contatos:editContatos, contatos_by_unit:editContatosByUnit, produtos:editProdutos});
     onUpdateArea({checklist:editChk.split("\n").map(s=>s.trim()).filter(Boolean)});
     setEditMode(false);
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Playbook salvo!");
   };
 
+  // Helper Bioter contatos por unidade: ler/escrever
+  const _contatosForUnit=function(unitId){
+    if(!unitId)return editContatos||{};
+    return (editContatosByUnit||{})[unitId] || {};
+  };
+  const _setContatosForUnit=function(unitId, patch){
+    if(!unitId){setEditContatos(function(p){return Object.assign({},p||{},patch);});return;}
+    setEditContatosByUnit(function(p){
+      const cur=(p||{})[unitId] || {};
+      return Object.assign({},p||{},{[unitId]:Object.assign({},cur,patch)});
+    });
+  };
   // Helper produtos: adicionar/remover/atualizar
   const _produtoAdd=function(){setEditProdutos(function(p){return p.concat([{nome:"",descricao:"",unidades:[]}]);});};
   const _produtoUpd=function(idx,patch){setEditProdutos(function(p){return p.map(function(it,i){return i===idx?Object.assign({},it,patch):it;});});};
@@ -52798,51 +52891,58 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           </PlaybookBlock>
 
           {/* Contatos — telefone, WhatsApp, endereço, site, redes sociais.
-              Tudo que vai colado nas artes e vídeos. */}
-          <PlaybookBlock id="pb-contatos" title="Contatos" subtitle="Dados pra colocar nas artes e vídeos" icon="phone" color="#0d9488">
-            {editMode
-              ? <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
-                  {[
-                    {key:"telefone",  label:"Telefone",   ph:"(00) 0000-0000"},
-                    {key:"whatsapp",  label:"WhatsApp",   ph:"(00) 0 0000-0000"},
-                    {key:"email",     label:"E-mail",     ph:"contato@cliente.com.br"},
-                    {key:"site",      label:"Site",       ph:"cliente.com.br"},
-                    {key:"instagram", label:"Instagram",  ph:"@cliente"},
-                    {key:"endereco",  label:"Endereço",   ph:"Rua, número — Cidade/UF",full:true},
-                  ].map(function(f){return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
+              Pra Bioter: cada unidade tem seus próprios contatos (Chapecó, Toledo, Castro...). */}
+          <PlaybookBlock id="pb-contatos" title="Contatos" subtitle={_isBioter?"Dados de cada unidade — pra colocar nas artes e vídeos do post daquela unidade":"Dados pra colocar nas artes e vídeos"} icon="phone" color="#0d9488">
+            {_isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,paddingBottom:14,borderBottom:"1px solid "+PB_BORDER2}}>
+              {BIOTER_UNITS.map(function(u){
+                const active=_unitTab===u.id;
+                return <button key={u.id} type="button" onClick={function(){setUnitTab(u.id);}}
+                  style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 4px 12px "+u.color+"33":"none"}}>
+                  {u.pickerLabel||u.label}
+                </button>;
+              })}
+            </div>}
+            {(function(){
+              const _currentUnit = _isBioter ? _unitTab : null;
+              // No modo leitura, lê de data.contatos_by_unit[unit] (Bioter) ou data.contatos (resto)
+              const cRead = _isBioter
+                ? ((data.contatos_by_unit||{})[_currentUnit] || {})
+                : (data.contatos||{});
+              const FIELDS = [
+                {key:"telefone",  label:"Telefone",   ph:"(00) 0000-0000",          icon:"phone"},
+                {key:"whatsapp",  label:"WhatsApp",   ph:"(00) 0 0000-0000",        icon:"phone"},
+                {key:"email",     label:"E-mail",     ph:"contato@cliente.com.br",  icon:"mail"},
+                {key:"site",      label:"Site",       ph:"cliente.com.br",          icon:"globe"},
+                {key:"instagram", label:"Instagram",  ph:"@cliente",                icon:"sparkles"},
+                {key:"endereco",  label:"Endereço",   ph:"Rua, número — Cidade/UF", icon:"map-pin", full:true},
+              ];
+              if(editMode){
+                return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
+                  {FIELDS.map(function(f){return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
                     <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{f.label}</div>
                     <input type="text" placeholder={f.ph}
-                      value={(editContatos||{})[f.key]||""}
-                      onChange={function(e){const v=e.target.value;setEditContatos(function(p){return Object.assign({},p||{},{[f.key]:v});});}}
+                      value={_contatosForUnit(_currentUnit)[f.key]||""}
+                      onChange={function(e){_setContatosForUnit(_currentUnit,{[f.key]:e.target.value});}}
                       style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
                   </div>;})}
-                </div>
-              : (function(){
-                  const c=data.contatos||{};
-                  const items=[
-                    {key:"telefone",  label:"Telefone",   icon:"phone"},
-                    {key:"whatsapp",  label:"WhatsApp",   icon:"phone"},
-                    {key:"email",     label:"E-mail",     icon:"mail"},
-                    {key:"site",      label:"Site",       icon:"globe"},
-                    {key:"instagram", label:"Instagram",  icon:"sparkles"},
-                    {key:"endereco",  label:"Endereço",   icon:"map-pin"},
-                  ].filter(function(it){return c[it.key];});
-                  if(items.length===0)return <_PbEmpty icon="phone" text="Nenhum contato cadastrado." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>;
-                  return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
-                    {items.map(function(it){return <div key={it.key} style={{display:"flex",alignItems:"center",gap:9,background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"9px 12px"}}>
-                      <div style={{width:30,height:30,borderRadius:8,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={13} color="#fff"/></div>
-                      <div style={{minWidth:0,flex:1}}>
-                        <div style={{color:"#134e4a",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
-                        <div style={{color:"#0f172a",fontSize:13,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c[it.key]}</div>
-                      </div>
-                      <button onClick={function(){try{navigator.clipboard.writeText(c[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}} title="Copiar"
-                        style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:4,borderRadius:6,display:"inline-flex",alignItems:"center"}}>
-                        <Ico n="copy" size={13}/>
-                      </button>
-                    </div>;})}
-                  </div>;
-                })()
-            }
+                </div>;
+              }
+              const items = FIELDS.filter(function(it){return cRead[it.key];});
+              if(items.length===0)return <_PbEmpty icon="phone" text={_isBioter?"Nenhum contato cadastrado pra esta unidade.":"Nenhum contato cadastrado."} sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>;
+              return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
+                {items.map(function(it){return <div key={it.key} style={{display:"flex",alignItems:"center",gap:9,background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"9px 12px"}}>
+                  <div style={{width:30,height:30,borderRadius:8,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={13} color="#fff"/></div>
+                  <div style={{minWidth:0,flex:1}}>
+                    <div style={{color:"#134e4a",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
+                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cRead[it.key]}</div>
+                  </div>
+                  <button type="button" onClick={function(){try{navigator.clipboard.writeText(cRead[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}} title="Copiar"
+                    style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:4,borderRadius:6,display:"inline-flex",alignItems:"center"}}>
+                    <Ico n="copy" size={13}/>
+                  </button>
+                </div>;})}
+              </div>;
+            })()}
           </PlaybookBlock>
 
           {/* Produtos — lista do que trabalhamos pro cliente.
@@ -53224,16 +53324,7 @@ function PlaybookTemplateBlock({tpl, isAdmin, editMode, onUpdate, onRemove, onSa
           <Ico n="image" size={11} color={PB_PURPLE_DK}/> Imagem de referência
         </div>
         {tpl.imgUrl
-          ? <div style={{position:"relative",borderRadius:14,overflow:"hidden",border:"1px solid "+PB_PURPLE_BD,background:"#fafafa"}}>
-              <img src={tpl.imgUrl} alt="" referrerPolicy="no-referrer"
-                onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
-                style={{maxWidth:"100%",maxHeight:560,objectFit:"contain",display:"block",margin:"0 auto"}}/>
-              <div style={{display:"none",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:40,color:PB_SOFT,textAlign:"center"}}>
-                <Ico n="image" size={28} color="#cbd5e1"/>
-                <div style={{fontSize:12,fontWeight:600}}>Imagem indisponível</div>
-                <a href={tpl.imgUrl} target="_blank" rel="noopener noreferrer" style={{color:PB_PURPLE,fontSize:11,fontWeight:700,textDecoration:"none"}}>Abrir URL</a>
-              </div>
-            </div>
+          ? <_TemplateImageWithAnnotations tpl={tpl} editMode={editMode} isAdmin={isAdmin} onSaveAnnotations={a=>_update({annotations:a})}/>
           : <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
               <Ico n="image" size={28} color="#cbd5e1"/>
               <div style={{color:PB_MUTE,fontSize:11.5,marginTop:8,fontWeight:600}}>Nenhuma imagem cadastrada</div>
@@ -53303,6 +53394,162 @@ function PlaybookTemplateBlock({tpl, isAdmin, editMode, onUpdate, onRemove, onSa
         </div>
       </div>}
     </div>
+  </div>;
+}
+
+
+
+/* ─── _TemplateImageWithAnnotations — imagem do Template com canvas SVG de setas/formas/texto ───
+   Coordenadas em PERCENTUAL (0-100) pra ficar responsivo em qualquer tamanho.
+   Salva em tpl.annotations: [{type:"arrow"|"rect"|"circle"|"text", x1,y1,x2,y2, color, text?}] */
+function _TemplateImageWithAnnotations({tpl, editMode, isAdmin, onSaveAnnotations}){
+  const _wrapRef = useRef(null);
+  const _imgRef = useRef(null);
+  const [_tool, _setTool] = useState(null); // null | "arrow" | "rect" | "circle" | "text"
+  const [_color, _setColor] = useState("#ef4444");
+  const [_drag, _setDrag] = useState(null); // {x1,y1,x2,y2}
+  const [_anns, _setAnns] = useState(Array.isArray(tpl.annotations) ? tpl.annotations : []);
+  useEffect(()=>{ _setAnns(Array.isArray(tpl.annotations) ? tpl.annotations : []); },[tpl.id, tpl.annotations]);
+
+  const _commit = function(arr){
+    _setAnns(arr);
+    if(typeof onSaveAnnotations==="function") onSaveAnnotations(arr);
+  };
+  const _pointPct = function(e){
+    const r = _wrapRef.current ? _wrapRef.current.getBoundingClientRect() : null;
+    if(!r) return {x:0,y:0};
+    return { x: ((e.clientX-r.left)/r.width)*100, y: ((e.clientY-r.top)/r.height)*100 };
+  };
+  const _onMouseDown = function(e){
+    if(!editMode || !isAdmin || !_tool) return;
+    e.preventDefault();
+    const p = _pointPct(e);
+    if(_tool==="text"){
+      const txt = prompt("Texto da anotação:");
+      if(!txt) return;
+      _commit(_anns.concat([{type:"text",x1:p.x,y1:p.y,x2:p.x,y2:p.y,color:_color,text:txt}]));
+      return;
+    }
+    _setDrag({x1:p.x,y1:p.y,x2:p.x,y2:p.y});
+  };
+  const _onMouseMove = function(e){
+    if(!_drag) return;
+    const p = _pointPct(e);
+    _setDrag(Object.assign({},_drag,{x2:p.x,y2:p.y}));
+  };
+  const _onMouseUp = function(){
+    if(!_drag || !_tool) return;
+    _commit(_anns.concat([Object.assign({},_drag,{type:_tool,color:_color})]));
+    _setDrag(null);
+  };
+  const _removeAnn = function(idx){
+    _commit(_anns.filter(function(_,i){return i!==idx;}));
+  };
+  const _clearAll = function(){
+    if(_anns.length===0) return;
+    _commit([]);
+  };
+
+  const _renderShape = function(a, idx){
+    const stroke = a.color || "#ef4444";
+    if(a.type==="arrow"){
+      // linha + cabeça da seta
+      const dx = a.x2 - a.x1, dy = a.y2 - a.y1;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const ux = dx/len, uy = dy/len;
+      const head = 2.5; // % comprimento da cabeça
+      const px = -uy, py = ux;
+      const hx1 = a.x2 - ux*head + px*head*.6;
+      const hy1 = a.y2 - uy*head + py*head*.6;
+      const hx2 = a.x2 - ux*head - px*head*.6;
+      const hy2 = a.y2 - uy*head - py*head*.6;
+      return <g key={idx}>
+        <line x1={a.x1+"%"} y1={a.y1+"%"} x2={a.x2+"%"} y2={a.y2+"%"} stroke={stroke} strokeWidth="3" strokeLinecap="round"/>
+        <polygon points={a.x2+"%,"+a.y2+"% "+hx1+"%,"+hy1+"% "+hx2+"%,"+hy2+"%"} fill={stroke}/>
+      </g>;
+    }
+    if(a.type==="rect"){
+      const x = Math.min(a.x1,a.x2), y = Math.min(a.y1,a.y2);
+      const w = Math.abs(a.x2-a.x1), h = Math.abs(a.y2-a.y1);
+      return <rect key={idx} x={x+"%"} y={y+"%"} width={w+"%"} height={h+"%"} fill="none" stroke={stroke} strokeWidth="3" rx="6"/>;
+    }
+    if(a.type==="circle"){
+      const cx = (a.x1+a.x2)/2, cy = (a.y1+a.y2)/2;
+      const rx = Math.abs(a.x2-a.x1)/2, ry = Math.abs(a.y2-a.y1)/2;
+      return <ellipse key={idx} cx={cx+"%"} cy={cy+"%"} rx={rx+"%"} ry={ry+"%"} fill="none" stroke={stroke} strokeWidth="3"/>;
+    }
+    if(a.type==="text"){
+      return <text key={idx} x={a.x1+"%"} y={a.y1+"%"} fill={stroke} fontSize="20" fontWeight="700" fontFamily="Inter,system-ui,sans-serif" style={{paintOrder:"stroke",stroke:"#fff",strokeWidth:"4px"}}>{a.text||""}</text>;
+    }
+    return null;
+  };
+
+  const _toolBtn = function(toolId, label, iconN){
+    const active = _tool===toolId;
+    return <button type="button" key={toolId} onClick={()=>_setTool(active?null:toolId)}
+      style={{background:active?PB_PURPLE:"#fff",color:active?"#fff":"#475569",border:"1px solid "+(active?PB_PURPLE:"#e2e8f0"),borderRadius:8,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}>
+      <Ico n={iconN} size={12} color="currentColor"/>{label}
+    </button>;
+  };
+
+  const COLORS = ["#ef4444","#0ea5e9","#16a34a","#f59e0b","#7c3aed","#0f172a"];
+
+  return <div>
+    {/* Toolbar (só em editMode + admin) */}
+    {editMode && isAdmin && <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10,padding:"8px 10px",background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:9,alignItems:"center"}}>
+      {_toolBtn("arrow","Seta","send")}
+      {_toolBtn("rect","Retângulo","layers")}
+      {_toolBtn("circle","Círculo","dot")}
+      {_toolBtn("text","Texto","file-text")}
+      <div style={{height:24,width:1,background:"#e2e8f0",margin:"0 4px"}}/>
+      {COLORS.map(c=>(
+        <button type="button" key={c} onClick={()=>_setColor(c)} title={c}
+          style={{width:22,height:22,borderRadius:"50%",background:c,border:_color===c?"2px solid #0f172a":"2px solid #fff",boxShadow:"0 0 0 1px #e2e8f0",cursor:"pointer"}}/>
+      ))}
+      <div style={{flex:1}}/>
+      {_anns.length>0 && <button type="button" onClick={_clearAll}
+        style={{background:"#fee2e2",border:"1px solid #fecaca",color:"#dc2626",borderRadius:8,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:5}}>
+        <Ico n="trash" size={12}/> Limpar tudo ({_anns.length})
+      </button>}
+    </div>}
+
+    {/* Container imagem + SVG overlay */}
+    <div ref={_wrapRef} onMouseDown={_onMouseDown} onMouseMove={_onMouseMove} onMouseUp={_onMouseUp} onMouseLeave={_onMouseUp}
+      style={{position:"relative",borderRadius:14,overflow:"hidden",border:"1px solid "+PB_PURPLE_BD,background:"#fafafa",cursor:editMode&&isAdmin&&_tool?"crosshair":"default",userSelect:"none"}}>
+      <img ref={_imgRef} src={tpl.imgUrl} alt="" referrerPolicy="no-referrer"
+        onError={e=>{e.currentTarget.style.display="none";const ph=e.currentTarget.nextElementSibling;if(ph)ph.style.display="flex";}}
+        style={{maxWidth:"100%",maxHeight:560,objectFit:"contain",display:"block",margin:"0 auto",pointerEvents:"none"}}/>
+      <div style={{display:"none",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,padding:40,color:PB_SOFT,textAlign:"center"}}>
+        <Ico n="image" size={28} color="#cbd5e1"/>
+        <div style={{fontSize:12,fontWeight:600}}>Imagem indisponível</div>
+        <a href={tpl.imgUrl} target="_blank" rel="noopener noreferrer" style={{color:PB_PURPLE,fontSize:11,fontWeight:700,textDecoration:"none"}}>Abrir URL</a>
+      </div>
+
+      {/* SVG overlay com as anotações */}
+      <svg style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none"}} preserveAspectRatio="none">
+        {_anns.map(_renderShape)}
+        {_drag && _renderShape(Object.assign({},_drag,{type:_tool,color:_color}), "drag")}
+      </svg>
+
+      {/* Hint quando nenhuma ferramenta ativa em editMode */}
+      {editMode && isAdmin && !_tool && _anns.length===0 && <div style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,.85)",color:"#fff",fontSize:10.5,fontWeight:600,padding:"4px 10px",borderRadius:99,pointerEvents:"none"}}>
+        Escolha uma ferramenta acima
+      </div>}
+    </div>
+
+    {/* Lista de anotações pra remover individualmente (só em editMode) */}
+    {editMode && isAdmin && _anns.length>0 && <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:5}}>
+      {_anns.map((a,i)=>(
+        <span key={i} style={{display:"inline-flex",alignItems:"center",gap:5,background:"#fff",border:"1px solid #e2e8f0",borderRadius:99,padding:"3px 4px 3px 10px",fontSize:11,fontWeight:600,color:"#475569"}}>
+          <span style={{width:10,height:10,borderRadius:"50%",background:a.color||"#ef4444"}}/>
+          {a.type==="text"?'"'+(a.text||"").slice(0,20)+'"':a.type}
+          <button type="button" onClick={()=>_removeAnn(i)} title="Remover"
+            style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:2,borderRadius:99,width:18,height:18,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+            <Ico n="x" size={10} color="currentColor"/>
+          </button>
+        </span>
+      ))}
+    </div>}
   </div>;
 }
 
