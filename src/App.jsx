@@ -36893,37 +36893,12 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
               <div style={{color:color,fontSize:11.5,fontWeight:700,marginTop:2,textTransform:"uppercase",letterSpacing:.4}}>{ext.cargo||u.role||"—"}</div>
 
             </div>
-            {!isEditing && <div style={{display:"flex",gap:5,alignItems:"center"}}>
-              <button type="button" onClick={function(){startEdit(u);}}
-                style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 12px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
-                <Ico n="edit" size={11}/>Editar
-              </button>
-              {/* Botão remover — em TODOS os cards exceto o próprio user (evita lockout) */}
-              {currentUser && u.id !== currentUser.id && <button type="button" title="Remover colaborador"
-                onClick={function(){
-                  const _doDelete = function(){
-                    // Sempre marca como deletado localmente (esconde do app pra todos)
-                    _markDeleted(u.id);
-                    // Se for Supabase também apaga do banco (pra liberar email/login)
-                    if(!isHardcoded){
-                      try{
-                        if(window._sb){
-                          window._sb.from("profiles").delete().eq("team_id", u.id).then(function(){}).catch(function(_){});
-                        }
-                      }catch(_){}
-                    }
-                    if(typeof pixelsToast!=="undefined") pixelsToast.success("Colaborador removido.",2500);
-                  };
-                  if(typeof pixelsConfirm==="function"){
-                    pixelsConfirm({title:"Remover colaborador?",message:'"'+u.name+'" será removido. Esta ação não pode ser desfeita.',confirmLabel:"Remover",danger:true,onConfirm:_doDelete});
-                  } else if(confirm("Remover "+u.name+"?")){
-                    _doDelete();
-                  }
-                }}
-                style={{background:"#fff",border:"1px solid #fecaca",borderRadius:10,width:32,height:30,color:"#dc2626",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
-                <Ico n="trash" size={12}/>
-              </button>}
-            </div>}
+            {!isEditing && <button type="button" title="Editar" onClick={function(){startEdit(u);}}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,width:34,height:32,color:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center"}}
+              onMouseEnter={function(e){e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#0f172a";e.currentTarget.style.borderColor="#cbd5e1";}}
+              onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";e.currentTarget.style.borderColor="#e2e8f0";}}>
+              <Ico n="edit" size={13}/>
+            </button>}
           </div>
 
           {/* Corpo: campos */}
@@ -36942,9 +36917,39 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
                           style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 11px",fontSize:12.5,color:"#0f172a",fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box"}}/>
                     }
                   </div>;})}
-                  <div style={{gridColumn:isMob?"auto":"span 2",display:"flex",justifyContent:"flex-end",gap:7,marginTop:8}}>
-                    <button type="button" onClick={cancelEdit} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-                    <button type="button" onClick={commitEdit} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+                  <div style={{gridColumn:isMob?"auto":"span 2",display:"flex",alignItems:"center",justifyContent:"space-between",gap:7,marginTop:8,flexWrap:"wrap"}}>
+                    {/* Excluir colaborador — só dentro do modo edição, bloqueia delete do próprio user */}
+                    {currentUser && u.id !== currentUser.id
+                      ? <button type="button"
+                          onClick={function(){
+                            const _doDelete = function(){
+                              _markDeleted(u.id);
+                              if(!isHardcoded){
+                                try{
+                                  if(window._sb){
+                                    window._sb.from("profiles").delete().eq("team_id", u.id).then(function(){}).catch(function(_){});
+                                  }
+                                }catch(_){}
+                              }
+                              setEditingId(null);
+                              setDraft({});
+                              if(typeof pixelsToast!=="undefined") pixelsToast.success("Colaborador removido.",2500);
+                            };
+                            if(typeof pixelsConfirm==="function"){
+                              pixelsConfirm({title:"Excluir colaborador?",message:'"'+u.name+'" será removido. Esta ação não pode ser desfeita.',confirmLabel:"Excluir",danger:true,onConfirm:_doDelete});
+                            } else if(confirm("Excluir "+u.name+"?")){
+                              _doDelete();
+                            }
+                          }}
+                          style={{background:"#fff",border:"1px solid #fecaca",color:"#dc2626",borderRadius:9,padding:"8px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+                          <Ico n="trash" size={12}/>Excluir colaborador
+                        </button>
+                      : <div/>
+                    }
+                    <div style={{display:"flex",gap:7}}>
+                      <button type="button" onClick={cancelEdit} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                      <button type="button" onClick={commitEdit} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:9,padding:"8px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+                    </div>
                   </div>
                 </div>
               : (function(){
