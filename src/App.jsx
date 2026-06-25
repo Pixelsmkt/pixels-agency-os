@@ -52756,6 +52756,43 @@ function _pbScrollTo(id){
   try{ const el=document.getElementById(id); if(el) el.scrollIntoView({behavior:"smooth", block:"start"}); }catch(_){}
 }
 
+
+/* ─── _pbProdutoUploadImg — upload de imagem de produto direto pro Supabase Storage.
+   Click sincrono (no handler do botão) → file picker → upload → atualiza prod.imgUrl. */
+function _pbProdutoUploadImg(pi, updFn){
+  try{
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = "image/*";
+    inp.style.display = "none";
+    inp.onchange = async function(e){
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      try{
+        if(!window._sb) throw new Error("Supabase indisponível");
+        const ext = (file.name.split(".").pop()||"png").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
+        const rnd = Math.random().toString(36).slice(2,11);
+        const path = "playbook-produtos/"+Date.now()+"-"+rnd+"."+ext;
+        const {error} = await window._sb.storage.from("agency-files").upload(path, file, {cacheControl:"3600", upsert:false});
+        if(error) throw error;
+        const {data:pub} = window._sb.storage.from("agency-files").getPublicUrl(path);
+        if(pub && pub.publicUrl){
+          updFn(pi, {imgUrl: pub.publicUrl});
+          if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida.",1500);
+        }
+      }catch(err){
+        console.warn("[upload produto]", err);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(err && err.message||"desconhecido"));
+      }
+    };
+    document.body.appendChild(inp);
+    inp.click();
+    setTimeout(()=>{try{document.body.removeChild(inp);}catch(_){}}, 60000);
+  }catch(err){
+    console.warn(err);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 //  PagePlaybooks — Estratégia > Playbooks
 // ═══════════════════════════════════════════════════════════════
@@ -53139,26 +53176,39 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </div>}
             {editMode
               ? <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  {(editProdutos||[]).map(function(prod,pi){return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:8}}>
-                    <div style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-                      <input type="text" placeholder="Nome do produto" value={prod.nome||""}
-                        onChange={function(e){_produtoUpd(pi,{nome:e.target.value});}}
-                        style={{flex:1,border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none"}}/>
-                      <button onClick={function(){_produtoDel(pi);}} title="Remover produto"
+                  {(editProdutos||[]).map(function(prod,pi){return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px",display:"flex",flexDirection:"column",gap:10}}>
+                    <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                      {/* Thumbnail clicável pra trocar imagem */}
+                      <button type="button" onClick={function(){_pbProdutoUploadImg(pi,_produtoUpd);}} title="Trocar imagem"
+                        style={{width:74,height:74,borderRadius:10,background:prod.imgUrl?"#fff":"#fef3c7",border:"1.5px dashed #fbbf24",cursor:"pointer",padding:0,overflow:"hidden",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        {prod.imgUrl
+                          ? <img src={prod.imgUrl} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} referrerPolicy="no-referrer"/>
+                          : <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,color:"#a16207"}}>
+                              <Ico n="image" size={20} color="#a16207"/>
+                              <span style={{fontSize:9,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>+ Foto</span>
+                            </div>
+                        }
+                      </button>
+                      <div style={{flex:1,display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+                        <input type="text" placeholder="Nome do produto (obrigatório)" value={prod.nome||""}
+                          onChange={function(e){_produtoUpd(pi,{nome:e.target.value});}}
+                          style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,fontWeight:700,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
+                        <textarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
+                          onChange={function(e){_produtoUpd(pi,{descricao:e.target.value});}}
+                          rows={2}
+                          style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",resize:"vertical",minHeight:54,boxSizing:"border-box"}}/>
+                      </div>
+                      <button type="button" onClick={function(){_produtoDel(pi);}} title="Remover produto"
                         style={{background:"#fee2e2",border:"1px solid #fecaca",borderRadius:8,width:32,height:32,color:"#dc2626",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                         <Ico n="trash" size={13}/>
                       </button>
                     </div>
-                    <textarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
-                      onChange={function(e){_produtoUpd(pi,{descricao:e.target.value});}}
-                      rows={2}
-                      style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",resize:"vertical",minHeight:54,boxSizing:"border-box"}}/>
                     {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
                       <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Unidades onde se aplica</div>
                       <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                         {BIOTER_UNITS.map(function(u){
                           const active=Array.isArray(prod.unidades)&&prod.unidades.indexOf(u.id)>=0;
-                          return <button key={u.id} onClick={function(){_produtoToggleUnit(pi,u.id);}}
+                          return <button type="button" key={u.id} onClick={function(){_produtoToggleUnit(pi,u.id);}}
                             style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER}}>
                             {u.pickerLabel||u.label}
                           </button>;
@@ -53185,16 +53235,24 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       {_filtered.map(function(prod,pi){
                         const unitsList=Array.isArray(prod.unidades)?prod.unidades:[];
                         const unitObjs=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.filter(function(u){return unitsList.indexOf(u.id)>=0;}):[];
-                        return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px"}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:prod.descricao?6:0,flexWrap:"wrap"}}>
-                            <div style={{width:32,height:32,borderRadius:9,background:"#f59e0b",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="package" size={15} color="#fff"/></div>
-                            <div style={{color:"#0f172a",fontWeight:800,fontSize:14,letterSpacing:-.2}}>{prod.nome||"(sem nome)"}</div>
-                            {_isBioter&&unitObjs.length>0&&<div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                              {unitObjs.map(function(u){return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"55",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.2}}>{u.pickerLabel||u.label}</span>;})}
-                            </div>}
-                            {_isBioter&&unitsList.length===0&&<span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,textTransform:"uppercase"}}>Todas as unidades</span>}
+                        const _hasFilter = _isBioter && _unitTab;
+                        return <div key={pi} style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:11,padding:"12px 14px",display:"flex",gap:12,alignItems:"flex-start"}}>
+                          {/* Imagem ou ícone */}
+                          {prod.imgUrl
+                            ? <img src={prod.imgUrl} alt={prod.nome||""} referrerPolicy="no-referrer" style={{width:74,height:74,borderRadius:10,objectFit:"cover",border:"1px solid "+PB_BORDER,flexShrink:0,background:"#fff"}}/>
+                            : <div style={{width:74,height:74,borderRadius:10,background:"#fef3c7",border:"1px solid #fde68a",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="package" size={26} color="#f59e0b"/></div>
+                          }
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:prod.descricao?6:0,flexWrap:"wrap"}}>
+                              <div style={{color:prod.nome?"#0f172a":"#94a3b8",fontWeight:800,fontSize:14,letterSpacing:-.2,fontStyle:prod.nome?"normal":"italic"}}>{prod.nome||"(sem nome)"}</div>
+                              {/* Chips só aparecem se NÃO houver filtro ativo (evita duplicação) */}
+                              {!_hasFilter && _isBioter && unitObjs.length>0 && <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                                {unitObjs.map(function(u){return <span key={u.id} style={{background:u.color+"18",color:u.color,border:"1px solid "+u.color+"55",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:800,letterSpacing:.2}}>{u.pickerLabel||u.label}</span>;})}
+                              </div>}
+                              {!_hasFilter && _isBioter && unitsList.length===0 && <span style={{background:"#f1f5f9",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:99,padding:"2px 9px",fontSize:10,fontWeight:700,letterSpacing:.2,textTransform:"uppercase"}}>Todas as unidades</span>}
+                            </div>
+                            {prod.descricao&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.5}}>{prod.descricao}</div>}
                           </div>
-                          {prod.descricao&&<div style={{color:"#475569",fontSize:12.5,lineHeight:1.5,paddingLeft:42}}>{prod.descricao}</div>}
                         </div>;
                       })}
                     </div>
