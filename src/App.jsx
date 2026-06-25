@@ -11201,21 +11201,45 @@ function CAnalises({cl,isMob,tasks}){
   
 /* ─── Helper: Card editável de Dados Cadastrais (usado em Visão Geral do Cliente) ─── */
 function _CCadastroCard({ent, fields, isMob, canEdit}){
+  // Carrega data do localStorage (silenciosamente)
   const [data, setData] = useState(function(){
     try{const r=localStorage.getItem(ent.storageKey);return r?JSON.parse(r):{};}catch(_){return {};}
   });
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(data);
+  // Editing + draft persistidos em localStorage por entry — sobrevive re-mount
+  // do componente pai (era a causa do bug 'fecha a aba sozinho').
+  const _editKey = ent.storageKey+"__edit";
+  const _draftKey = ent.storageKey+"__draft";
+  const [editing, setEditing] = useState(function(){
+    try{return localStorage.getItem(_editKey)==="1";}catch(_){return false;}
+  });
+  const [draft, setDraft] = useState(function(){
+    try{const r=localStorage.getItem(_draftKey);if(r)return JSON.parse(r);}catch(_){}
+    try{const r=localStorage.getItem(ent.storageKey);return r?JSON.parse(r):{};}catch(_){return {};}
+  });
   useEffect(function(){
-    try{const r=localStorage.getItem(ent.storageKey);const obj=r?JSON.parse(r):{};setData(obj);if(!editing)setDraft(obj);}catch(_){}
+    try{const r=localStorage.getItem(ent.storageKey);const obj=r?JSON.parse(r):{};setData(obj);}catch(_){}
   },[ent.storageKey]);
+  // Sempre que editing/draft mudarem, persiste pra sobreviver re-mount
+  useEffect(function(){
+    try{
+      if(editing) localStorage.setItem(_editKey,"1");
+      else localStorage.removeItem(_editKey);
+    }catch(_){}
+  },[editing,_editKey]);
+  useEffect(function(){
+    try{
+      if(editing) localStorage.setItem(_draftKey, JSON.stringify(draft||{}));
+      else localStorage.removeItem(_draftKey);
+    }catch(_){}
+  },[draft,editing,_draftKey]);
+
   const save = function(){
     try{
       localStorage.setItem(ent.storageKey, JSON.stringify(draft||{}));
       setData(draft||{});
       setEditing(false);
+      try{localStorage.removeItem(_editKey);localStorage.removeItem(_draftKey);}catch(_){}
       if(typeof pixelsToast!=="undefined")pixelsToast.success("Dados cadastrais salvos.",2000);
-      // Sync opcional pro Supabase
       try{
         if(typeof window!=="undefined"&&window._sb){
           window._sb.from("dados_cadastrais").upsert({id:ent.storageKey,client_id:(ent.storageKey||"").replace(/^pixels-cadastro-/,""),payload:draft||{},updated_at:new Date().toISOString()},{onConflict:"id"}).then(function(){}).catch(function(_){});
@@ -11225,43 +11249,68 @@ function _CCadastroCard({ent, fields, isMob, canEdit}){
       if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar.",2500);
     }
   };
-  const cancel = function(){setDraft(data);setEditing(false);};
+  const cancel = function(){
+    setDraft(data);
+    setEditing(false);
+    try{localStorage.removeItem(_editKey);localStorage.removeItem(_draftKey);}catch(_){}
+  };
+  // Helper de copy (compartilhado por leitura e edição)
+  const _copy = function(val){
+    try{
+      navigator.clipboard.writeText(String(val||""));
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1200);
+    }catch(_){}
+  };
   const empty = Object.keys(data||{}).length===0;
   return <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
     <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
       <div style={{width:8,height:32,borderRadius:4,background:ent.color,flexShrink:0}}/>
       <div style={{minWidth:0,flex:1}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.1}}>{ent.label}</div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:1}}>{ent.sub||""}</div>
       </div>
-      {canEdit && !editing && <button onClick={function(){setDraft(data);setEditing(true);}}
+      {canEdit && !editing && <button type="button" onClick={function(){setDraft(data);setEditing(true);}}
         style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 11px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",display:"inline-flex",alignItems:"center",gap:5}}>
         <Ico n="edit" size={11}/> Editar
       </button>}
       {canEdit && editing && <div style={{display:"flex",gap:5}}>
-        <button onClick={cancel} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>Cancelar</button>
-        <button onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>Salvar</button>
+        <button type="button" onClick={cancel} style={{background:"#f1f5f9",color:"#475569",border:"none",borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>Cancelar</button>
+        <button type="button" onClick={save} style={{background:"#0f172a",color:"#fff",border:"none",borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif"}}>Salvar</button>
       </div>}
     </div>
     {editing
       ? <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
-          {fields.map(function(f){return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
-            <input type="text" placeholder={f.ph} value={(draft||{})[f.key]||""}
-              onChange={function(e){const v=e.target.value;setDraft(function(p){return Object.assign({},p||{},{[f.key]:v});});}}
-              style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",fontSize:12.5,color:"#0f172a",fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box"}}/>
-          </div>;})}
+          {fields.map(function(f){
+            const _v = (draft||{})[f.key]||"";
+            return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
+              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>{f.label}</div>
+              <div style={{position:"relative"}}>
+                <input type="text" placeholder={f.ph} value={_v}
+                  onChange={function(e){const v=e.target.value;setDraft(function(p){return Object.assign({},p||{},{[f.key]:v});});}}
+                  style={{width:"100%",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 32px 7px 10px",fontSize:12.5,color:"#0f172a",fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box"}}/>
+                {_v && <button type="button" onClick={function(){_copy(_v);}} title="Copiar"
+                  style={{position:"absolute",right:4,top:"50%",transform:"translateY(-50%)",background:"transparent",border:"none",color:"#7c3aed",cursor:"pointer",padding:5,borderRadius:5,display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                  <Ico n="copy" size={12}/>
+                </button>}
+              </div>
+            </div>;
+          })}
         </div>
       : (empty
           ? <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>{canEdit?"Nenhum dado preenchido — clique em Editar pra cadastrar.":"Dados cadastrais não preenchidos."}</div>
           : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
-              {fields.filter(function(f){return (data||{})[f.key];}).map(function(f){return <div key={f.key} style={Object.assign({display:"flex",alignItems:"baseline",gap:8,padding:"5px 0",borderBottom:"1px solid #f1f5f9"},f.full?{gridColumn:isMob?"auto":"span 2"}:{})}>
-                <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",minWidth:120}}>{f.label}</span>
-                <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,wordBreak:"break-word"}}>{(data||{})[f.key]}</span>
-                <button onClick={function(){try{navigator.clipboard.writeText((data||{})[f.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1200);}catch(_){}}} title="Copiar" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:2,display:"inline-flex",alignItems:"center"}}>
-                  <Ico n="copy" size={11}/>
-                </button>
-              </div>;})}
+              {fields.filter(function(f){return (data||{})[f.key];}).map(function(f){
+                const _v = (data||{})[f.key];
+                return <div key={f.key} style={Object.assign({display:"flex",alignItems:"baseline",gap:8,padding:"5px 0",borderBottom:"1px solid #f1f5f9"},f.full?{gridColumn:isMob?"auto":"span 2"}:{})}>
+                  <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase",minWidth:120}}>{f.label}</span>
+                  <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,wordBreak:"break-word"}}>{_v}</span>
+                  <button type="button" onClick={function(){_copy(_v);}} title="Copiar"
+                    style={{background:"transparent",border:"none",color:"#7c3aed",cursor:"pointer",padding:4,borderRadius:6,display:"inline-flex",alignItems:"center"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                    <Ico n="copy" size={12}/>
+                  </button>
+                </div>;
+              })}
             </div>)
     }
   </div>;
