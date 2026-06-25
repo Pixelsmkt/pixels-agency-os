@@ -1220,7 +1220,7 @@ function smartFormatTitle(input){
   if(!s)return "";
   s=s.replace(/\s*[–—]\s*/g," - ").replace(/\s+-\s+/g," - ");
   const parts=s.split(" - ");
-  function processWord(word,idx,isTitleSegment,hasSeparator){
+  function processWord(word,idx,isTitleSegment,hasSeparator,wordsArr){
     if(!word)return word;
     const leadingMatch=word.match(/^[^A-Za-zÀ-ÿ0-9]+/);
     const trailingMatch=word.match(/[^A-Za-zÀ-ÿ0-9]+$/);
@@ -1243,10 +1243,14 @@ function smartFormatTitle(input){
       else if(isTitleSegment){
         // Sentence case em pt-BR: segunda+ palavras do segmento principal vão lowercase
         // (Ex: "Planta de Biogás" → "Planta de biogás" — biogás é substantivo comum).
-        // EXCEÇÃO: dentro de parênteses/colchetes preservamos case porque ali costuma vir
+        // EXCEÇÃO 1: dentro de parênteses/colchetes preservamos case porque ali costuma vir
         // nome próprio (cidade, data, especificação). Processamos por segmento separado
         // por hífen pra suportar padrão "Cidade-UF".
         // Ex: "Planta de Biogás (Itaipulândia-pr)" → "Planta de biogás (Itaipulândia-PR)"
+        // EXCEÇÃO 2: sequência de nome próprio — se palavra IMEDIATAMENTE anterior é
+        // proper case bem-formada e não é stopword, current word provavelmente é sobrenome.
+        // Ex: "Beto Gusso" → "Beto Gusso" (palavra anterior "Beto" é proper case)
+        //     "Planta de Biogás" → "Planta de biogás" (anterior "de" é stopword)
         const isParenthetical=prefix.indexOf("(")>=0||prefix.indexOf("[")>=0||prefix.indexOf("{")>=0||suffix.indexOf(")")>=0||suffix.indexOf("]")>=0||suffix.indexOf("}")>=0;
         if(isParenthetical){
           processed=core.split("-").map(function(seg){
@@ -1256,7 +1260,45 @@ function smartFormatTitle(input){
             return _capitalizeFirst(seg.toLocaleLowerCase("pt-BR"));
           }).join("-");
         } else {
-          processed=lower;
+          // Detecta sequência de nome próprio. Em pt-BR, certas preposições tipicamente
+          // INTRODUZEM nome próprio ("com João", "para Maria", "por Pedro") enquanto
+          // "de/do/da/dos/das" mais comumente formam composto com substantivo comum
+          // ("planta de biogás", "casa do leitor"). A heurística olha 3 sinais:
+          //  (1) palavra ANTERIOR é proper case bem-formada não-stopword → sequência nome
+          //  (2) palavra PRÓXIMA é proper case bem-formada não-stopword → começa nome
+          //  (3) palavra ANTERIOR é preposição "introdutora de nome" (com/para/por/sem...) → preserva
+          const _NAME_INTRO_PREP=new Set(["com","para","pra","por","sem","contra","entre","sobre"]);
+          const _coreOf=function(w){
+            if(!w)return "";
+            const _lm=w.match(/^[^A-Za-zÀ-ÿ0-9]+/);
+            const _tm=w.match(/[^A-Za-zÀ-ÿ0-9]+$/);
+            const _p=_lm?_lm[0]:"",_s=_tm?_tm[0]:"";
+            if(_p.length+_s.length>=w.length)return "";
+            return w.slice(_p.length,w.length-_s.length);
+          };
+          let isProperNounSequence=false;
+          if(_isWellFormed(core)&&wordsArr&&idx>0){
+            const _prevCore=_coreOf(wordsArr[idx-1]||"");
+            const _prevLower=_prevCore.toLocaleLowerCase("pt-BR");
+            // (1) Sinal anterior proper case
+            if(_isWellFormed(_prevCore)&&!TITLE_STOPWORDS_PTBR.has(_prevLower)){
+              isProperNounSequence=true;
+            }
+            // (3) Sinal preposição introdutora de nome
+            if(!isProperNounSequence&&_NAME_INTRO_PREP.has(_prevLower)){
+              isProperNounSequence=true;
+            }
+            // (2) Sinal próximo proper case
+            if(!isProperNounSequence&&idx+1<wordsArr.length){
+              const _nextCore=_coreOf(wordsArr[idx+1]||"");
+              const _nextLower=_nextCore.toLocaleLowerCase("pt-BR");
+              if(_isWellFormed(_nextCore)&&!TITLE_STOPWORDS_PTBR.has(_nextLower)){
+                isProperNounSequence=true;
+              }
+            }
+          }
+          if(isProperNounSequence){processed=core;}
+          else {processed=lower;}
         }
       }
       else {
@@ -1275,7 +1317,8 @@ function smartFormatTitle(input){
   const hasSeparator=parts.length>1;
   const formatted=parts.map(function(part,partIdx){
     const isTitleSegment=!hasSeparator||partIdx===0;
-    return part.split(" ").map(function(w,i){return processWord(w,i,isTitleSegment,hasSeparator);}).join(" ");
+    const _words=part.split(" ");
+    return _words.map(function(w,i){return processWord(w,i,isTitleSegment,hasSeparator,_words);}).join(" ");
   });
   let result=formatted.join(" - ");
   const firstAlphaMatch=result.match(/[a-zA-ZÀ-ÿ]/);
@@ -23145,22 +23188,61 @@ function FinCobrancaModal({c,onClose,onSave}){
 ═══════════════════════════════════════════════════════════════════ */
 
 // Contratos por grupo econômico
-const GF_CONTRATOS = [
+// Estado padrão dos contratos — usado como seed se não houver dados salvos.
+// IMPORTANTE: campos `pagDia` (dia do mês) e `respFin` (responsável financeiro nome) por contrato/unidade.
+const GF_CONTRATOS_DEFAULT = [
   {
-    grupo:"Bioter", grupoEcon:true, cor:"#166534",
+    grupo:"Bioter", grupoEcon:true, cor:"#166534", clientId:"bioter",
     unidades:[
-      {nome:"Chapecó",            valor:3000},
-      {nome:"Toledo",             valor:2000},
-      {nome:"Castro",             valor:2500},
-      {nome:"Glória de Dourados", valor:500},
-      {nome:"Uberlândia",         valor:500},
-      {nome:"Paraguay",           valor:0},
+      {nome:"Chapecó",            valor:3000, unitId:"chapeco",    pagDia:5,  respFin:""},
+      {nome:"Toledo",             valor:2000, unitId:"toledo",     pagDia:5,  respFin:""},
+      {nome:"Castro",             valor:2500, unitId:"castro",     pagDia:5,  respFin:""},
+      {nome:"Glória de Dourados", valor:500,  unitId:"gloria",     pagDia:5,  respFin:""},
+      {nome:"Uberlândia",         valor:500,  unitId:"uberlandia", pagDia:5,  respFin:""},
+      {nome:"Paraguay",           valor:0,    unitId:"paraguay",   pagDia:5,  respFin:""},
     ],
   },
-  {grupo:"Construschorr",        cor:"#dc2626", valor:4000},
-  {grupo:"Arabutã Pré-Moldados", cor:"#d97706", valor:4500},
-  {grupo:"Climaves",             cor:"#0284c7", valor:2500},
+  {grupo:"Construschorr",        cor:"#dc2626", valor:4000, clientId:"construschorr", pagDia:10, respFin:""},
+  {grupo:"Arabutã Pré-Moldados", cor:"#d97706", valor:4500, clientId:"arabuta",       pagDia:10, respFin:""},
+  {grupo:"Climaves",             cor:"#0284c7", valor:2500, clientId:"climaves",      pagDia:10, respFin:""},
 ];
+
+// Carrega contratos do localStorage com merge dos campos novos (pagDia, respFin) sobre o seed.
+function _gfLoadContratos(){
+  try{
+    const raw=typeof localStorage!=="undefined"?localStorage.getItem("pixels-contratos-ativos"):null;
+    if(!raw)return GF_CONTRATOS_DEFAULT;
+    const parsed=JSON.parse(raw);
+    if(!Array.isArray(parsed)||parsed.length===0)return GF_CONTRATOS_DEFAULT;
+    return parsed;
+  }catch(_){return GF_CONTRATOS_DEFAULT;}
+}
+function _gfSaveContratos(arr){
+  try{
+    if(typeof localStorage!=="undefined")localStorage.setItem("pixels-contratos-ativos",JSON.stringify(arr||[]));
+    // Espelha por client_id pra o Portal Cliente ROI ler como default de pixels_service
+    const flat={};
+    (arr||[]).forEach(function(c){
+      if(c.grupoEcon&&Array.isArray(c.unidades)){
+        c.unidades.forEach(function(u){
+          if(c.clientId&&u.unitId)flat[c.clientId+"_"+u.unitId]={valor:u.valor||0,pagDia:u.pagDia||c.pagDia||5,respFin:u.respFin||c.respFin||""};
+        });
+      } else if(c.clientId){
+        flat[c.clientId]={valor:c.valor||0,pagDia:c.pagDia||5,respFin:c.respFin||""};
+      }
+    });
+    if(typeof localStorage!=="undefined")localStorage.setItem("pixels-contratos-ativos-flat",JSON.stringify(flat));
+    // Sync opcional pro Supabase (silencioso — não bloqueia se falhar)
+    try{
+      if(typeof window!=="undefined"&&window._sb){
+        window._sb.from("contratos_ativos").upsert(
+          (arr||[]).map(function(c){return {id:c.clientId||c.grupo,grupo:c.grupo,cor:c.cor,client_id:c.clientId||null,grupo_econ:!!c.grupoEcon,valor:c.valor||0,pag_dia:c.pagDia||5,resp_fin:c.respFin||"",unidades:Array.isArray(c.unidades)?c.unidades:null,updated_at:new Date().toISOString()};}),
+          {onConflict:"id"}
+        ).then(function(){}).catch(function(_){});
+      }
+    }catch(_){}
+  }catch(_){}
+}
 
 // Custo Fixo — agrupado por categoria
 const GF_CUSTO_FIXO = {
@@ -23219,6 +23301,15 @@ const GF_META_MARGEM_PCT = 0.50;
 function PageGestaoFinanceiro({isMob,tasks,setTasks}){
   const [payMonth,setPayMonth]=useState(function(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");});
   const [contratosExpand,setContratosExpand]=useState({Bioter:true});
+  const [contratos,setContratos]=useState(function(){return _gfLoadContratos();});
+  const [editContrato,setEditContrato]=useState(null); // {grupo, unitIdx?, draft}
+  const _updateContratos=function(updater){
+    setContratos(function(prev){
+      const next=typeof updater==="function"?updater(prev):updater;
+      _gfSaveContratos(next);
+      return next;
+    });
+  };
   const _brl=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});};
   const _brlF=function(n){return "R$ "+Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});};
   const _pct=function(n){return Number(n||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})+"%";};
@@ -23654,8 +23745,8 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
     {/* ════ 9. CONTRATOS ATIVOS — cards grandes coloridos com logo ════ */}
     <Block>
       <BlockHeader ico="fileText" color="#475569" title="Contratos ativos" subtitle={clientesAtivos+" clientes · MRR consolidado "+_brl(mrr)}/>
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-        {GF_CONTRATOS.map(function(c,idx){
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(300px,1fr))",gap:12}}>
+        {contratos.map(function(c,idx){
           // Resolve cliente real pra pegar logo
           const clKey=(c.grupo||"").toLowerCase().split(" ")[0];
           const realCl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(function(x){return x.id===clKey||(x.name||"").toLowerCase().startsWith(clKey);});
@@ -23689,10 +23780,14 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
               </div>
               {expanded&&<div style={{padding:"4px 16px 12px",background:"rgba(255,255,255,0.6)"}}>
                 {c.unidades.map(function(u,j){
-                  return <div key={j} style={{padding:"7px 0",borderBottom:j<c.unidades.length-1?"1px dashed "+c.cor+"22":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+                  return <div key={j} onClick={function(e){e.stopPropagation();setEditContrato({grupo:c.grupo,unitIdx:j,draft:Object.assign({},u)});}} style={{padding:"7px 0",borderBottom:j<c.unidades.length-1?"1px dashed "+c.cor+"22":"none",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,cursor:"pointer",borderRadius:6,paddingLeft:6,paddingRight:6,marginLeft:-6,marginRight:-6,transition:"background .12s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background=c.cor+"0d";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
                       <div style={{width:6,height:6,borderRadius:"50%",background:u.valor>0?c.cor:"#cbd5e1",flexShrink:0}}/>
                       <span style={{color:"#0f172a",fontSize:12,fontWeight:600}}>{u.nome}</span>
+                      {u.pagDia&&u.valor>0&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:600}}>· dia {u.pagDia}</span>}
+                      {u.respFin&&<span style={{color:"#94a3b8",fontSize:10,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:90}}>· {u.respFin}</span>}
                       {u.valor===0&&<span style={{background:"#f1f5f9",color:"#94a3b8",fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase"}}>—</span>}
                     </div>
                     <div style={{color:u.valor>0?"#0f172a":"#94a3b8",fontWeight:700,fontSize:12,fontFeatureSettings:"'tnum'"}}>{u.valor>0?_brl(u.valor):"—"}</div>
@@ -23701,8 +23796,8 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
               </div>}
             </div>;
           }
-          // Cliente individual (sem unidades)
-          return <div key={idx} style={{background:"linear-gradient(135deg,"+c.cor+"06,"+c.cor+"12)",border:"1px solid "+c.cor+"33",borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,transition:"transform .15s, box-shadow .15s"}}
+          // Cliente individual (sem unidades) — clicável pra editar
+          return <div key={idx} onClick={function(){setEditContrato({grupo:c.grupo,unitIdx:null,draft:Object.assign({},c)});}} style={{background:"linear-gradient(135deg,"+c.cor+"06,"+c.cor+"12)",border:"1px solid "+c.cor+"33",borderRadius:14,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10,transition:"transform .15s, box-shadow .15s",cursor:"pointer"}}
             onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px "+c.cor+"22";}}
             onMouseLeave={function(e){e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="none";}}>
             <div style={{display:"flex",alignItems:"center",gap:11}}>
@@ -23713,11 +23808,16 @@ function PageGestaoFinanceiro({isMob,tasks,setTasks}){
                 <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.grupo}</div>
                 <div style={{color:c.cor,fontSize:10.5,fontWeight:700,marginTop:1,textTransform:"uppercase",letterSpacing:.4}}>Cliente único</div>
               </div>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c.cor} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{opacity:.5}}><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 113 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </div>
             <div style={{display:"flex",alignItems:"baseline",gap:6,paddingTop:6,borderTop:"1px solid "+c.cor+"1c"}}>
               <span style={{color:c.cor,fontWeight:900,fontSize:22,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_brl(c.valor)}</span>
               <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>/mês</span>
             </div>
+            {(c.pagDia||c.respFin)&&<div style={{display:"flex",gap:12,fontSize:10.5,color:"#64748b",fontWeight:600,paddingTop:4}}>
+              {c.pagDia&&<span>Pagto. dia <strong style={{color:"#0f172a"}}>{c.pagDia}</strong></span>}
+              {c.respFin&&<span>Resp. <strong style={{color:"#0f172a"}}>{c.respFin}</strong></span>}
+            </div>}
           </div>;
         })}
       </div>
