@@ -36737,10 +36737,31 @@ export default function AgencyOS(){
 function PageGestaoTime({isMob, currentUser, onNavTo}){
   const isSocio = currentUser && currentUser.level === 1;
   const _rawTeam = (typeof TEAM!=="undefined"?TEAM:[]).slice();
-  // Dedup por NOME case-insensitive (mantém o primeiro)
-  // Isso resolve duplicatas tipo "Ocsana" + "Ocsana Hellen Franzen" vindas do sync Supabase
+  // Set de usuários deletados (sócio pode "esconder" qualquer um, inclusive hardcoded)
+  // Armazenado em localStorage pra persistir entre sessões
+  const [deletedSet, setDeletedSet] = useState(function(){
+    try{ const raw=localStorage.getItem("pixels-team-deleted"); return new Set(raw?JSON.parse(raw):[]); }
+    catch(_){ return new Set(); }
+  });
+  const _markDeleted = function(uid){
+    setDeletedSet(function(prev){
+      const next = new Set(prev); next.add(uid);
+      try{ localStorage.setItem("pixels-team-deleted", JSON.stringify(Array.from(next))); }catch(_){}
+      return next;
+    });
+    // Remove imediatamente do TEAM em memória
+    try{
+      if(typeof TEAM!=="undefined"){
+        const i = TEAM.findIndex(function(t){return t.id===uid;});
+        if(i>=0) TEAM.splice(i,1);
+      }
+      window.dispatchEvent(new CustomEvent("pixels:team-updated"));
+    }catch(_){}
+  };
+  // Dedup por NOME case-insensitive (mantém o primeiro) + tira os deletados
   const _seen = new Set();
   const _baseTeam = _rawTeam.filter(function(u){
+    if(deletedSet.has(u.id)) return false;
     const k = (u.name||"").trim().toLowerCase().split(" ")[0];
     if(_seen.has(k))return false;
     _seen.add(k);
@@ -36870,34 +36891,28 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
             <div style={{flex:1,minWidth:0}}>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4}}>{u.name}</div>
               <div style={{color:color,fontSize:11.5,fontWeight:700,marginTop:2,textTransform:"uppercase",letterSpacing:.4}}>{ext.cargo||u.role||"—"}</div>
-              {u.dash && <span style={{display:"inline-block",background:"#fff",border:"1px solid "+color+"33",color:color,fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:99,letterSpacing:.3,marginTop:6,textTransform:"uppercase"}}>{u.dash}</span>}
+
             </div>
             {!isEditing && <div style={{display:"flex",gap:5,alignItems:"center"}}>
               <button type="button" onClick={function(){startEdit(u);}}
                 style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"6px 12px",color:"#475569",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
                 <Ico n="edit" size={11}/>Editar
               </button>
-              {/* Botão remover — só pra entradas Supabase (não hardcoded) */}
-              {!isHardcoded && <button type="button" title="Remover colaborador"
+              {/* Botão remover — em TODOS os cards exceto o próprio user (evita lockout) */}
+              {currentUser && u.id !== currentUser.id && <button type="button" title="Remover colaborador"
                 onClick={function(){
                   const _doDelete = function(){
-                    try{
-                      if(window._sb){
-                        window._sb.from("profiles").delete().eq("team_id", u.id).then(function(){
-                          if(typeof pixelsToast!=="undefined") pixelsToast.success("Removido. Recarregue a página pra atualizar.",3000);
-                          // Remove imediatamente do TEAM em memória
-                          try{
-                            if(typeof TEAM!=="undefined"){
-                              const i = TEAM.findIndex(function(t){return t.id===u.id;});
-                              if(i>=0) TEAM.splice(i,1);
-                              window.dispatchEvent(new CustomEvent("pixels:team-updated"));
-                            }
-                          }catch(_){}
-                        }).catch(function(err){
-                          if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao remover: "+(err&&err.message||"desconhecido"));
-                        });
-                      }
-                    }catch(_){}
+                    // Sempre marca como deletado localmente (esconde do app pra todos)
+                    _markDeleted(u.id);
+                    // Se for Supabase também apaga do banco (pra liberar email/login)
+                    if(!isHardcoded){
+                      try{
+                        if(window._sb){
+                          window._sb.from("profiles").delete().eq("team_id", u.id).then(function(){}).catch(function(_){});
+                        }
+                      }catch(_){}
+                    }
+                    if(typeof pixelsToast!=="undefined") pixelsToast.success("Colaborador removido.",2500);
                   };
                   if(typeof pixelsConfirm==="function"){
                     pixelsConfirm({title:"Remover colaborador?",message:'"'+u.name+'" será removido. Esta ação não pode ser desfeita.',confirmLabel:"Remover",danger:true,onConfirm:_doDelete});
