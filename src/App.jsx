@@ -15846,15 +15846,23 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       setPendingOpenId(null);
     }
   },[tasks,pendingOpenId]);
-  // Wrapper de setOpenCard que descarta drafts não-salvos ao fechar
+  // Wrapper de setOpenCard que descarta drafts não-salvos ao fechar.
+  // CRÍTICO: usa functional setter pra ler o estado MAIS RECENTE — se lermos `tasks` da
+  // closure direto, pega o snapshot ANTIGO (com _isDraft:true) e deleta cards que
+  // acabaram de ser salvos (saveAll faz setTasks com _isDraft:false antes de onClose,
+  // mas o React batchea — closure ainda enxerga draft).
   const closeCardCheckingDraft=()=>{
     const closing=openCard;
     if(closing){
-      const current=(tasks||[]).find(t=>String(t.id)===String(closing.id));
-      if(current&&current._isDraft){
-        // User fechou sem salvar — remove a task draft do state
-        setTasks(p=>p.filter(t=>String(t.id)!==String(closing.id)));
-      }
+      setTasks(function(p){
+        const current=(p||[]).find(function(t){return String(t.id)===String(closing.id);});
+        if(current&&current._isDraft){
+          // Continua sendo draft → user fechou sem salvar → remove
+          return p.filter(function(t){return String(t.id)!==String(closing.id);});
+        }
+        // Já foi salvo (_isDraft:false ou inexistente) → mantém como está
+        return p;
+      });
     }
     setOpenCard(null);
   };
