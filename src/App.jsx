@@ -9267,15 +9267,15 @@ function COrientacoes({cl}){
               <div style={{color:C.tx,fontSize:11,fontWeight:500,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.nome}</div>
               <div style={{display:"flex",gap:4,alignItems:"center",justifyContent:"space-between"}}>
                 <a href={l.url} target="_blank" rel="noopener noreferrer" download={l.externo?undefined:l.nome} style={{color:"#a140ff",fontSize:10,textDecoration:"none",fontWeight:500}}>{l.externo?"Abrir ↗":"Baixar ↓"}</a>
-                <button onClick={()=>removeItem("logos",i)} style={{background:"transparent",border:"none",color:C.td,cursor:"pointer",fontSize:14,padding:0}}>×</button>
+                <button type="button" onClick={()=>removeItem("logos",i)} style={{background:"transparent",border:"none",color:C.td,cursor:"pointer",fontSize:14,padding:0}}>×</button>
               </div>
             </div>
           </div>
         ))}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={async()=>{const n=await pixelsPrompt("Nome do logo (ex: Principal, Branca, Ícone):");if(n){setPendingLogo({nome:n.trim()});fileInputLogo.current?.click();}}} disabled={uploading==="logo"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="logo"?"Enviando...":"+ Upload de logo"}</button>
-        <button onClick={addLogoLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
+        <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome do logo (ex: Principal, Branca, Ícone):");if(n){setPendingLogo({nome:n.trim()});fileInputLogo.current?.click();}}} disabled={uploading==="logo"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="logo"?"Enviando...":"+ Upload de logo"}</button>
+        <button type="button" onClick={addLogoLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
       </div>
     </Section>
 
@@ -9283,7 +9283,7 @@ function COrientacoes({cl}){
       {(data.paleta||[]).length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8,marginBottom:10}}>
         {data.paleta.map((c,i)=>(
           <div key={i} style={{background:c.hex,borderRadius:10,padding:10,border:"0.5px solid "+C.b1,minHeight:64,display:"flex",flexDirection:"column",justifyContent:"space-between",position:"relative"}}>
-            <button onClick={()=>removeColor(i)} style={{position:"absolute",top:4,right:6,background:"rgba(255,255,255,0.7)",border:"none",borderRadius:4,color:"#000",cursor:"pointer",fontSize:11,padding:"0 6px",fontWeight:500}}>×</button>
+            <button type="button" onClick={()=>removeColor(i)} style={{position:"absolute",top:4,right:6,background:"rgba(255,255,255,0.7)",border:"none",borderRadius:4,color:"#000",cursor:"pointer",fontSize:11,padding:"0 6px",fontWeight:500}}>×</button>
             <div style={{color:"#fff",fontSize:11,fontWeight:500,textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{c.nome}</div>
             <div style={{color:"#fff",fontSize:11,fontFamily:"monospace",textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{c.hex.toUpperCase()}</div>
           </div>
@@ -9293,7 +9293,7 @@ function COrientacoes({cl}){
         <input type="text" value={newColor.nome} onChange={e=>setNewColor(p=>({...p,nome:e.target.value}))} placeholder="Nome da cor" style={{...inp,width:160}}/>
         <input type="color" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{width:48,height:36,border:"0.5px solid "+C.b1,borderRadius:8,cursor:"pointer",padding:2,background:C.s1}}/>
         <input type="text" value={newColor.hex} onChange={e=>setNewColor(p=>({...p,hex:e.target.value}))} style={{...inp,width:100,fontFamily:"monospace"}} placeholder="#000000"/>
-        <button onClick={addColor} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
+        <button type="button" onClick={addColor} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
       </div>
     </Section>
 
@@ -9307,13 +9307,13 @@ function COrientacoes({cl}){
               <div style={{color:C.td,fontSize:10,marginTop:2}}>{f.uso?f.uso+" · ":""}{f.formato}{f.externo?" · link externo":""}</div>
             </div>
             <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.externo?undefined:f.nome} style={{color:"#a140ff",fontSize:11,textDecoration:"none",fontWeight:500,flexShrink:0}}>{f.externo?"Abrir ↗":"Baixar ↓"}</a>
-            <button onClick={()=>removeItem("fontes",i)} style={{background:"transparent",border:"none",color:C.td,cursor:"pointer",fontSize:16,padding:0}}>×</button>
+            <button type="button" onClick={()=>removeItem("fontes",i)} style={{background:"transparent",border:"none",color:C.td,cursor:"pointer",fontSize:16,padding:0}}>×</button>
           </div>
         ))}
       </div>}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={async()=>{const n=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");if(!n)return;const u=await pixelsPrompt("Uso (ex: Títulos, Corpo) — opcional:");setPendingFonte({nome:n.trim(),uso:(u||"").trim()});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
-        <button onClick={addFonteLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
+        <button type="button" onClick={async()=>{const n=await pixelsPrompt("Nome da fonte (ex: Poppins SemiBold):");if(!n)return;const u=await pixelsPrompt("Uso (ex: Títulos, Corpo) — opcional:");setPendingFonte({nome:n.trim(),uso:(u||"").trim()});fileInputFonte.current?.click();}} disabled={uploading==="fonte"} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>{uploading==="fonte"?"Enviando...":"+ Upload de fonte"}</button>
+        <button type="button" onClick={addFonteLink} style={{background:"transparent",color:C.ts,border:"0.5px solid "+C.b1,borderRadius:8,padding:"8px 14px",fontSize:12,cursor:"pointer"}}>+ Adicionar via link</button>
       </div>
     </Section>
 
@@ -9326,13 +9326,13 @@ function COrientacoes({cl}){
         {data.hashtags.map((t)=>(
           <span key={t} style={{background:"#a140ff15",color:"#a140ff",borderRadius:99,padding:"4px 10px",fontSize:11,fontWeight:500,display:"flex",alignItems:"center",gap:6}}>
             {t}
-            <button onClick={()=>removeHashtag(t)} style={{background:"transparent",border:"none",color:"#a140ff",cursor:"pointer",fontSize:13,padding:0,lineHeight:1}}>×</button>
+            <button type="button" onClick={()=>removeHashtag(t)} style={{background:"transparent",border:"none",color:"#a140ff",cursor:"pointer",fontSize:13,padding:0,lineHeight:1}}>×</button>
           </span>
         ))}
       </div>}
       <div style={{display:"flex",gap:6}}>
-        <input value={newHashtag} onChange={e=>setNewHashtag(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")addHashtag();}} placeholder="#bioter" style={{...inp,flex:1}}/>
-        <button onClick={addHashtag} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
+        <input value={newHashtag} onChange={e=>setNewHashtag(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();addHashtag();}}} placeholder="#bioter" style={{...inp,flex:1}}/>
+        <button type="button" onClick={e=>{e.preventDefault();addHashtag();}} style={{background:"#a140ff",color:"#fff",border:"none",borderRadius:8,padding:"8px 14px",fontSize:12,fontWeight:500,cursor:"pointer"}}>+ Adicionar</button>
       </div>
     </Section>
 
@@ -52680,7 +52680,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
   // Tem template?
   const templates = (areaData.templates||[]);
-  const hasTemplate = area==="design" && templates.length>0;
+  const hasTemplate = area==="design" && (templates.length>0 || editMode);
 
   // Anchors visíveis nesta área
   const SECTIONS = [
@@ -52924,12 +52924,23 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               </div>}
             </PlaybookBlock>}
 
-          {/* Templates específicos (só design) */}
+          {/* Templates específicos (só design) — vários templates por playbook (ex: Foto de obra, Carrossel, Story...) */}
           {hasTemplate && <div id="pb-templates" style={{display:"flex",flexDirection:"column",gap:14}}>
             {templates.map(tpl=>(
               <PlaybookTemplateBlock key={tpl.id} tpl={tpl} isAdmin={isAdmin} editMode={editMode}
-                onSaveImg={(url)=>onUpdateArea({templates:(areaData.templates||[]).map(t=>t.id===tpl.id?Object.assign({},t,{imgUrl:url}):t)})}/>
+                onUpdate={(patch)=>onUpdateArea({templates:(areaData.templates||[]).map(t=>t.id===tpl.id?Object.assign({},t,patch):t)})}
+                onRemove={()=>{if(typeof pixelsConfirm==="function"){pixelsConfirm({title:"Excluir este template?",message:'"'+(tpl.title||"Template")+'" será removido.',confirmLabel:"Excluir",danger:true,onConfirm:function(){onUpdateArea({templates:(areaData.templates||[]).filter(t=>t.id!==tpl.id)});}});}else if(confirm("Excluir este template?")){onUpdateArea({templates:(areaData.templates||[]).filter(t=>t.id!==tpl.id)});}}}/>
             ))}
+            {editMode && isAdmin && <button type="button" onClick={()=>{
+              const _id="tpl-"+Date.now();
+              const _newTpl={id:_id,title:"Novo template",subtitle:"Descreva pra que serve",imgUrl:"",descricao:"",rules:[],summary:""};
+              onUpdateArea({templates:[...(areaData.templates||[]),_newTpl]});
+            }} style={{background:"#fff",border:"1.5px dashed "+PB_PURPLE_BD,borderRadius:14,padding:"16px 20px",color:PB_PURPLE_DK,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background=PB_PURPLE_BG;e.currentTarget.style.borderColor=PB_PURPLE;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=PB_PURPLE_BD;}}>
+              <Ico n="plus" size={15} color={PB_PURPLE_DK}/> Adicionar novo template
+            </button>}
+            {templates.length===0 && !editMode && <_PbEmpty icon="image" text="Nenhum template cadastrado." sub={isAdmin?"Edite o playbook pra adicionar templates (Foto de obra, Carrossel, Story etc).":""}/>}
           </div>}
 
           {/* Orientações para a equipe — só na área Design.
@@ -53155,9 +53166,18 @@ function PbMini({icon, label, value}){
 }
 
 // ─── Bloco específico de template ──────────────────────────
-function PlaybookTemplateBlock({tpl, isAdmin, editMode, onSaveImg}){
+function PlaybookTemplateBlock({tpl, isAdmin, editMode, onUpdate, onRemove, onSaveImg}){
   const [tmpUrl,setTmpUrl] = useState(tpl.imgUrl||"");
-  useEffect(()=>{setTmpUrl(tpl.imgUrl||"");},[tpl.imgUrl, editMode]);
+  const [tmpTitle,setTmpTitle] = useState(tpl.title||"");
+  const [tmpSubtitle,setTmpSubtitle] = useState(tpl.subtitle||"");
+  const [tmpDesc,setTmpDesc] = useState(tpl.descricao||"");
+  const _update = onUpdate || (function(patch){if(patch.imgUrl!==undefined&&typeof onSaveImg==="function")onSaveImg(patch.imgUrl);});
+  useEffect(()=>{
+    setTmpUrl(tpl.imgUrl||"");
+    setTmpTitle(tpl.title||"");
+    setTmpSubtitle(tpl.subtitle||"");
+    setTmpDesc(tpl.descricao||"");
+  },[tpl.imgUrl, tpl.title, tpl.subtitle, tpl.descricao, editMode]);
 
   return <div style={{background:"#fff",border:"1px solid "+PB_PURPLE_BD,borderRadius:18,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 6px 24px rgba(159,67,246,.10)",scrollMarginTop:80}}>
     {/* Header hero gradient */}
@@ -53170,11 +53190,25 @@ function PlaybookTemplateBlock({tpl, isAdmin, editMode, onSaveImg}){
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
-            <span style={{background:"rgba(255,255,255,.22)",color:"#fff",border:"1px solid rgba(255,255,255,.3)",borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Template oficial</span>
+            <span style={{background:"rgba(255,255,255,.22)",color:"#fff",border:"1px solid rgba(255,255,255,.3)",borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Template</span>
           </div>
-          <div style={{color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3}}>{tpl.title}</div>
-          {tpl.subtitle && <div style={{color:"rgba(255,255,255,.82)",fontSize:12,marginTop:3,fontWeight:500,lineHeight:1.45}}>{tpl.subtitle}</div>}
+          {editMode && isAdmin
+            ? <input type="text" value={tmpTitle} onChange={e=>setTmpTitle(e.target.value)} onBlur={()=>{if(tmpTitle!==tpl.title)_update({title:tmpTitle});}}
+                placeholder="Nome do template (ex: Foto de obra)"
+                style={{width:"100%",background:"rgba(255,255,255,.20)",border:"1px solid rgba(255,255,255,.3)",borderRadius:8,padding:"6px 10px",color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
+            : <div style={{color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3}}>{tpl.title||"(sem nome)"}</div>
+          }
+          {editMode && isAdmin
+            ? <input type="text" value={tmpSubtitle} onChange={e=>setTmpSubtitle(e.target.value)} onBlur={()=>{if(tmpSubtitle!==tpl.subtitle)_update({subtitle:tmpSubtitle});}}
+                placeholder="Pra que serve este template (curto)"
+                style={{width:"100%",background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.22)",borderRadius:7,padding:"4px 9px",color:"#fff",fontWeight:500,fontSize:12,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",marginTop:6}}/>
+            : (tpl.subtitle && <div style={{color:"rgba(255,255,255,.82)",fontSize:12,marginTop:3,fontWeight:500,lineHeight:1.45}}>{tpl.subtitle}</div>)
+          }
         </div>
+        {editMode && isAdmin && typeof onRemove==="function" && <button type="button" onClick={onRemove} title="Excluir template"
+          style={{background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",borderRadius:10,width:36,height:36,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,backdropFilter:"blur(8px)"}}>
+          <Ico n="trash" size={15} color="#fff"/>
+        </button>}
       </div>
     </div>
 
@@ -53206,11 +53240,25 @@ function PlaybookTemplateBlock({tpl, isAdmin, editMode, onSaveImg}){
           <div style={{display:"flex",gap:8}}>
             <input value={tmpUrl} onChange={e=>setTmpUrl(e.target.value)} placeholder="https://..."
               style={Object.assign({},_pbInpStyle(),{flex:1})}/>
-            <button onClick={()=>onSaveImg(tmpUrl.trim())}
+            <button type="button" onClick={()=>_update({imgUrl:tmpUrl.trim()})}
               style={{background:PB_PURPLE,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Aplicar URL</button>
           </div>
           <div style={{color:PB_SOFT,fontSize:10,marginTop:5,lineHeight:1.4}}>Aceita URL pública (Supabase Storage com Public Bucket, Drive público com link direto, qualquer CDN).</div>
         </div>}
+      </div>}
+
+      {/* Descrição / explicação do template — admin escreve o que cada parte significa */}
+      {(tpl.descricao || editMode) && <div style={{marginBottom:18}}>
+        <div style={{color:PB_PURPLE_DK,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:5}}>
+          <Ico n="file-text" size={11} color={PB_PURPLE_DK}/> Explicação do template
+        </div>
+        {editMode && isAdmin
+          ? <textarea value={tmpDesc} onChange={e=>setTmpDesc(e.target.value)} onBlur={()=>{if(tmpDesc!==tpl.descricao)_update({descricao:tmpDesc});}}
+              rows={5}
+              placeholder="Explique cada parte do template. Use → pra setas. Ex: 'Mapa do Brasil → canto superior direito, sempre verde Bioter. Texto → 1ª linha leve, 2ª em negrito.'"
+              style={Object.assign({},_pbInpStyle(),{minHeight:100,resize:"vertical"})}/>
+          : (tpl.descricao && <div style={{background:"#fafafa",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",color:PB_TEXT,fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{tpl.descricao}</div>)
+        }
       </div>}
 
       {/* Regras em grid de cards */}
