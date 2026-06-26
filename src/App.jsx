@@ -53040,6 +53040,43 @@ function _pbScrollTo(id){
 
 /* ─── _pbProdutoUploadImg — upload de imagem de produto direto pro Supabase Storage.
    Click sincrono (no handler do botão) → file picker → upload → atualiza prod.imgUrl. */
+/* ─── _pbTemplateUploadImg — upload de imagem de Template direto pro Supabase Storage.
+   Mesmo padrão do produto: click sincrono (gesture context) → file picker → upload → seta imgUrl. */
+function _pbTemplateUploadImg(updFn){
+  try{
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = "image/*";
+    inp.style.display = "none";
+    inp.onchange = async function(e){
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      try{
+        if(!window._sb) throw new Error("Supabase indisponível");
+        const ext = (file.name.split(".").pop()||"png").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
+        const rnd = Math.random().toString(36).slice(2,11);
+        const path = "playbook-templates/"+Date.now()+"-"+rnd+"."+ext;
+        if(typeof pixelsToast!=="undefined") pixelsToast.info("Enviando imagem...",1500);
+        const {error} = await window._sb.storage.from("agency-files").upload(path, file, {cacheControl:"3600", upsert:false});
+        if(error) throw error;
+        const {data:pub} = window._sb.storage.from("agency-files").getPublicUrl(path);
+        if(pub && pub.publicUrl){
+          updFn({imgUrl: pub.publicUrl});
+          if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida!",2000);
+        }
+      }catch(err){
+        console.warn("[upload template]", err);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(err && err.message||"desconhecido"));
+      }
+    };
+    document.body.appendChild(inp);
+    inp.click();
+    setTimeout(()=>{try{document.body.removeChild(inp);}catch(_){}}, 60000);
+  }catch(err){
+    console.warn(err);
+  }
+}
+
 function _pbProdutoUploadImg(pi, updFn){
   try{
     const inp = document.createElement("input");
@@ -53908,18 +53945,33 @@ function PlaybookTemplateBlock({tpl, isAdmin, editMode, onUpdate, onRemove, onSa
           : <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
               <Ico n="image" size={28} color="#cbd5e1"/>
               <div style={{color:PB_MUTE,fontSize:11.5,marginTop:8,fontWeight:600}}>Nenhuma imagem cadastrada</div>
-              {isAdmin && <div style={{color:PB_SOFT,fontSize:10.5,marginTop:4}}>Edite o playbook e cole uma URL aqui.</div>}
+              {isAdmin && editMode && <div style={{color:PB_SOFT,fontSize:10.5,marginTop:4}}>Use o botão abaixo pra subir do PC ou cole uma URL.</div>}
+              {isAdmin && !editMode && <div style={{color:PB_SOFT,fontSize:10.5,marginTop:4}}>Clique em "Editar playbook" pra cadastrar.</div>}
             </div>
         }
-        {editMode && isAdmin && <div style={{marginTop:10}}>
-          <div style={{color:PB_MUTE,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>URL da imagem (Supabase Storage / CDN)</div>
-          <div style={{display:"flex",gap:8}}>
-            <input value={tmpUrl} onChange={e=>setTmpUrl(e.target.value)} placeholder="https://..."
-              style={Object.assign({},_pbInpStyle(),{flex:1})}/>
-            <button type="button" onClick={()=>_update({imgUrl:tmpUrl.trim()})}
-              style={{background:PB_PURPLE,border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Aplicar URL</button>
+        {editMode && isAdmin && <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:8}}>
+          {/* Botão principal: subir do PC direto pra Supabase Storage */}
+          <button type="button" onClick={function(){_pbTemplateUploadImg(_update);}}
+            style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",border:"none",borderRadius:10,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 6px 18px rgba(124,58,237,.28)",letterSpacing:-.1}}>
+            <Ico n="upload" size={14} color="#fff"/> {tpl.imgUrl?"Trocar imagem (subir do PC)":"Subir imagem do PC"}
+          </button>
+          {/* Separador "ou" */}
+          <div style={{display:"flex",alignItems:"center",gap:10,margin:"2px 0"}}>
+            <div style={{flex:1,height:1,background:PB_BORDER}}/>
+            <span style={{color:PB_SOFT,fontSize:10.5,fontWeight:700,letterSpacing:.6,textTransform:"uppercase"}}>ou</span>
+            <div style={{flex:1,height:1,background:PB_BORDER}}/>
           </div>
-          <div style={{color:PB_SOFT,fontSize:10,marginTop:5,lineHeight:1.4}}>Aceita URL pública (Supabase Storage com Public Bucket, Drive público com link direto, qualquer CDN).</div>
+          {/* Input URL pra colar link externo */}
+          <div>
+            <div style={{color:PB_MUTE,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Colar URL externa (Drive, CDN, etc)</div>
+            <div style={{display:"flex",gap:8}}>
+              <input value={tmpUrl} onChange={e=>setTmpUrl(e.target.value)} placeholder="https://..."
+                style={Object.assign({},_pbInpStyle(),{flex:1})}/>
+              <button type="button" onClick={()=>_update({imgUrl:tmpUrl.trim()})}
+                style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"9px 16px",color:"#475569",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Aplicar URL</button>
+            </div>
+            <div style={{color:PB_SOFT,fontSize:10,marginTop:5,lineHeight:1.4}}>Use isto se a imagem já está hospedada em outro lugar.</div>
+          </div>
         </div>}
       </div>}
 
