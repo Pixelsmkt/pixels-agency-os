@@ -12689,7 +12689,7 @@ function CalendarGrid({WEEKDAYS, days, renderDay, compact}){
   // compact=false (default, publicações) — quadradas via aspect-ratio
   const _cellStyle = compact
     ? {minHeight:220, maxHeight:340, padding:"8px 10px"}
-    : {aspectRatio:"1 / 1", padding:"8px 8px"};
+    : {minHeight:320, padding:"8px 8px"};  // Publicações: alto fixo, cresce com conteúdo
   return(
     <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
       {/* Header dos dias da semana */}
