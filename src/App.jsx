@@ -20393,18 +20393,39 @@ function PageChat({isMob, perms, tasks, setTasks, presenceMap}){
 }
 
 // ======= 06_aprovacoes.jsx =======
-// ── _ApprovImg: <img> com retry automático ─────────────────────
+// ── _isVideoUrl: detecta vídeo pela extensão da URL (alguns uploads perderam o mime) ──
+const _VIDEO_URL_RE=/\.(mp4|m4v|mov|webm|mkv|ogv|avi|wmv|3gp)(\?|#|$|\/)/i;
+const _isVideoUrl=(u)=>typeof u==="string"&&_VIDEO_URL_RE.test(u);
+
+// ── _ApprovImg: <img> ou <video> com retry automático ──────────
 // Bug observado: a thumb da imagem carrega OK mas a img principal falha (race condition
 // do onError disparando antes da imagem terminar de baixar). Esse componente:
 //   1) tenta carregar normal
 //   2) se onError, espera 400ms e tenta de novo (bust de cache via querystring)
 //   3) se falhar 2x, mostra fallback (controlado pelo pai via display:none nextElement)
 //   4) onLoad reseta display caso a img tenha aparecido depois de um retry tardio
+//   5) Se a URL for de vídeo, renderiza <video controls> em vez de <img>
 function _ApprovImg({src,idx,onFail}){
   const [tryNum,setTryNum]=useState(0); // 0 = original, 1 = retry1, 2 = falhou
   const [hidden,setHidden]=useState(false);
   const realSrc=tryNum===0?src:(src+(src.includes("?")?"&":"?")+"_r="+tryNum);
   useEffect(()=>{setTryNum(0);setHidden(false);},[src,idx]);
+  // Vídeo: player nativo com controls. Sem retry porque <video> trata buffer sozinho.
+  if(_isVideoUrl(src)){
+    return <video src={realSrc} controls playsInline preload="metadata"
+      onLoadedMetadata={e=>{
+        const ph=e.currentTarget.nextElementSibling;
+        if(ph&&ph.style)ph.style.display="none";
+      }}
+      onError={(e)=>{
+        console.warn("[aprov] vídeo falhou:",src);
+        e.currentTarget.style.display="none";
+        const ph=e.currentTarget.nextElementSibling;
+        if(ph)ph.style.display="flex";
+        if(typeof onFail==="function")onFail(src);
+      }}
+      style={{maxWidth:"100%",maxHeight:"100%",width:"auto",height:"auto",display:hidden?"none":"block",background:"#000",borderRadius:8}}/>;
+  }
   return <img src={realSrc} alt="" referrerPolicy="no-referrer"
     onLoad={e=>{
       const ph=e.currentTarget.nextElementSibling;
@@ -21631,10 +21652,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   //   3) Se ainda vazio mas tem cover válido → mostra o cover
   // Isso resolveu cards "Foto de obra" e similares que apareciam no kanban
   // mas davam "Nenhuma imagem anexada" na avaliação.
-  const isFinalImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
-  const isAnyImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/");
-  const isFinalVideo=(f)=>!f.isAnnotation&&f.type?.startsWith("video/")&&(!f.tipo||f.tipo==="final");
-  const isAnyVideo=(f)=>!f.isAnnotation&&f.type?.startsWith("video/");
+  // Defesa: se URL tem extensão de vídeo, NÃO conta como imagem (mesmo se mime caiu pra image)
+  const isFinalImg=(f)=>!f.isAnnotation&&!_isVideoUrl(f.url)&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
+  const isAnyImg=(f)=>!f.isAnnotation&&!_isVideoUrl(f.url)&&f.type?.startsWith("image/");
+  // Vídeo: detecta por mime (video/*) OU pela URL (alguns uploads antigos perderam o type)
+  const _isVidFile=(f)=>!f.isAnnotation&&(f.type?.startsWith("video/")||_isVideoUrl(f.url));
+  const isFinalVideo=(f)=>_isVidFile(f)&&(!f.tipo||f.tipo==="final");
+  const isAnyVideo=(f)=>_isVidFile(f);
   const _isValidUrl=(u)=>typeof u==="string"&&u.length>0&&(u.startsWith("http")||u.startsWith("data:")||u.startsWith("blob:"));
   // Reescreve URLs antigas pixels-files → agency-files em runtime (defesa em profundidade).
   const _fixUrl=(u)=>(typeof window!=="undefined"&&typeof window.fixLegacyUrl==="function")?window.fixLegacyUrl(u):u;
