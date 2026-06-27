@@ -21633,12 +21633,21 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   // mas davam "Nenhuma imagem anexada" na avaliação.
   const isFinalImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/")&&(!f.tipo||f.tipo==="final");
   const isAnyImg=(f)=>!f.isAnnotation&&f.type?.startsWith("image/");
+  const isFinalVideo=(f)=>!f.isAnnotation&&f.type?.startsWith("video/")&&(!f.tipo||f.tipo==="final");
+  const isAnyVideo=(f)=>!f.isAnnotation&&f.type?.startsWith("video/");
   const _isValidUrl=(u)=>typeof u==="string"&&u.length>0&&(u.startsWith("http")||u.startsWith("data:")||u.startsWith("blob:"));
   // Reescreve URLs antigas pixels-files → agency-files em runtime (defesa em profundidade).
   const _fixUrl=(u)=>(typeof window!=="undefined"&&typeof window.fixLegacyUrl==="function")?window.fixLegacyUrl(u):u;
   const _extractImgs=(files,fn)=>(files||[]).filter(fn).slice().reverse().map(f=>_fixUrl(f.url)).filter(_isValidUrl);
   let _filesDesc=[];
-  if(tab==="publicacao"||tab==="video"){
+  if(tab==="video"){
+    // Avaliação de vídeo: prioriza vídeos finais. Inclui imagens como complemento.
+    let _vids=_extractImgs(current?.files,isFinalVideo);
+    if(_vids.length===0)_vids=_extractImgs(current?.files,isAnyVideo);
+    let _imgs=_extractImgs(current?.files,isFinalImg);
+    if(_imgs.length===0)_imgs=_extractImgs(current?.files,isAnyImg);
+    _filesDesc=[..._vids,..._imgs];
+  }else if(tab==="publicacao"){
     _filesDesc=_extractImgs(current?.files,isFinalImg);
     if(_filesDesc.length===0)_filesDesc=_extractImgs(current?.files,isAnyImg);
   }else{
@@ -21888,14 +21897,22 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               const sel=i===imgIdx;
               return(<div key={src+"_"+i} onClick={()=>setImgIdx(i)}
                 style={{position:"relative",width:84,height:84,borderRadius:11,cursor:"pointer",border:sel?"3px solid "+C.a:"2px solid #e2e8f0",transition:"all .15s",boxShadow:sel?"0 4px 12px rgba(159,67,246,0.28)":"none",flexShrink:0,overflow:"hidden",background:"#f8fafc"}}>
-                <img src={src} alt="" referrerPolicy="no-referrer"
-                  onError={e=>{
-                    // Marca essa URL como quebrada — react re-renderiza e a thumb some
-                    markBroken(src);
-                    // No frame atual, esconde direto pra evitar flash do placeholder
-                    e.currentTarget.style.display="none";
-                  }}
-                  style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s"}}/>
+                {_isVideoUrl(src)
+                  ? <><video src={src} preload="metadata" muted playsInline
+                      style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s",background:"#0f172a"}}/>
+                    <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+                      <span style={{width:28,height:28,borderRadius:"50%",background:"rgba(15,23,42,0.72)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 6px rgba(0,0,0,0.3)"}}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff"><polygon points="6 4 20 12 6 20"/></svg>
+                      </span>
+                    </div></>
+                  : <img src={src} alt="" referrerPolicy="no-referrer"
+                      onError={e=>{
+                        // Marca essa URL como quebrada — react re-renderiza e a thumb some
+                        markBroken(src);
+                        // No frame atual, esconde direto pra evitar flash do placeholder
+                        e.currentTarget.style.display="none";
+                      }}
+                      style={{width:"100%",height:"100%",objectFit:"cover",display:"block",opacity:sel?1:.7,transition:"opacity .15s"}}/>}
               </div>);
             })}
           </div>)}
@@ -21924,7 +21941,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 </div></>)
               :(<div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:12,padding:60}}>
                   <Ico n="image" size={40}/>
-                  <div style={{color:C.ts,fontSize:13}}>Nenhuma imagem anexada</div>
+                  <div style={{color:C.ts,fontSize:13}}>Nenhum arquivo anexado</div>
                 </div>)
             }
           </div>
