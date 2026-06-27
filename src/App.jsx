@@ -28485,7 +28485,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
   // Whitelist de MIME types permitidos — reduz risco de upload de executáveis
   const ALLOWED_MIME_PREFIXES=["image/","video/","audio/","application/pdf","application/msword","application/vnd.openxmlformats","text/plain","application/zip","application/x-zip-compressed"];
-  const MAX_UPLOAD_SIZE=500*1024*1024; // 500 MB (era 100 MB)
+  const MAX_UPLOAD_SIZE=2*1024*1024*1024; // 2 GB (vídeos longos)
   const MAX_IMAGES_PER_CARD=20;
   const MAX_PARALLEL_UPLOADS=3; // máximo 3 uploads simultâneos
 
@@ -28627,6 +28627,89 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }catch(e){reject(e);}
   });
 
+  // TUS resumable — necessário pra arquivos > ~50MB (Supabase proxy corta POST simples).
+  // Faz POST pra criar upload, depois PATCH em chunks de 6MB. Suporta progress + retry de chunk.
+  const uploadResumable=async(file,path,onProgress)=>{
+    const sb=window._sb;
+    const{data:{session}}=await sb.auth.getSession();
+    const token=session?.access_token;
+    if(!token)throw new Error("Sessão expirada. Faça login novamente.");
+    const sbUrl=sb.supabaseUrl||sb.rest?.url?.replace("/rest/v1","")||"";
+    if(!sbUrl)throw new Error("URL Supabase não configurada");
+    const CHUNK=6*1024*1024;
+    const b64=function(s){try{return btoa(unescape(encodeURIComponent(s)));}catch(_){return btoa(s);}};
+    const meta=[
+      `bucketName ${b64("agency-files")}`,
+      `objectName ${b64(path)}`,
+      `contentType ${b64(file.type||"application/octet-stream")}`,
+      `cacheControl ${b64("3600")}`
+    ].join(",");
+    // 1) Cria upload
+    const createRes=await fetch(`${sbUrl}/storage/v1/upload/resumable`,{
+      method:"POST",
+      headers:{
+        "Authorization":`Bearer ${token}`,
+        "Tus-Resumable":"1.0.0",
+        "Upload-Length":String(file.size),
+        "Upload-Metadata":meta,
+        "x-upsert":"false"
+      }
+    });
+    if(!createRes.ok){
+      const t=await createRes.text().catch(()=>"");
+      throw new Error(`HTTP ${createRes.status} ao iniciar upload: ${t.slice(0,200)}`);
+    }
+    const uploadUrl=createRes.headers.get("Location")||createRes.headers.get("location");
+    if(!uploadUrl)throw new Error("Servidor não retornou Location pra upload resumable");
+    // 2) Envia chunks via PATCH
+    let offset=0;
+    while(offset<file.size){
+      const end=Math.min(offset+CHUNK,file.size);
+      const slice=file.slice(offset,end);
+      let lastErr=null;
+      let success=false;
+      for(let attempt=1;attempt<=3 && !success;attempt++){
+        try{
+          const patchRes=await fetch(uploadUrl,{
+            method:"PATCH",
+            headers:{
+              "Authorization":`Bearer ${token}`,
+              "Tus-Resumable":"1.0.0",
+              "Upload-Offset":String(offset),
+              "Content-Type":"application/offset+octet-stream"
+            },
+            body:slice
+          });
+          if(!patchRes.ok){
+            const t=await patchRes.text().catch(()=>"");
+            throw new Error(`HTTP ${patchRes.status} em offset ${offset}: ${t.slice(0,200)}`);
+          }
+          const newOffset=Number(patchRes.headers.get("Upload-Offset")||patchRes.headers.get("upload-offset")||end);
+          offset=newOffset;
+          success=true;
+        }catch(e){
+          lastErr=e;
+          if(attempt<3){
+            const delay=2000*Math.pow(2,attempt-1);
+            console.warn(`Chunk falhou (offset ${offset}), retry ${attempt+1}/3 em ${delay}ms`);
+            await new Promise(r=>setTimeout(r,delay));
+          }
+        }
+      }
+      if(!success)throw lastErr||new Error("Falha no chunk após 3 tentativas");
+      if(onProgress)onProgress(Math.round((offset/file.size)*100));
+    }
+  };
+
+  // Roteador: arquivos grandes (> 40MB) usam TUS resumable; pequenos usam POST simples (XHR com progress).
+  const SMART_THRESHOLD=40*1024*1024;
+  const uploadSmart=(file,path,onProgress)=>{
+    if(file.size>SMART_THRESHOLD){
+      return uploadResumable(file,path,onProgress);
+    }
+    return uploadWithProgress(file,path,onProgress);
+  };
+
   // Fila com concorrência limitada
   const runWithConcurrency=async(items,concurrency,worker)=>{
     const queue=[...items];
@@ -28695,7 +28778,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       try{
         const sb=window._sb;
         // Upload com progress callback
-        await uploadWithProgress(file,path,(pct)=>{
+        await uploadSmart(file,path,(pct)=>{
           setAttachments(p=>p.map(a=>a.id===tempId?{...a,progress:pct}:a));
         });
         const{data}=sb.storage.from("agency-files").getPublicUrl(path);
