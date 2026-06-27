@@ -13051,7 +13051,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       {!endDate && <div style={{marginBottom:14}}>
         <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4,marginBottom:6}}>Recorrência</div>
         <div style={{display:"flex",gap:6}}>
-          {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
+          {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
             const sel=recurrence===opt.id;
             return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id);}}
               style={{flex:1,background:sel?PURPLE+"15":"#fff",border:"1px solid "+(sel?PURPLE+"55":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?PURPLE:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
@@ -13268,6 +13268,16 @@ function PageCalendarioInterno({isMob}){
       if(ev.recurrence==="weekly"){
         // mesmo dia da semana, a partir da data original
         try{const start=new Date(ev.date+"T12:00");return start.getDay()===dDow && ev.date<=dIso;}catch(_){return false;}
+      }
+      if(ev.recurrence==="biweekly"){
+        // mesmo dia da semana, e diff em dias múltiplo de 14
+        try{
+          const start=new Date(ev.date+"T12:00");
+          const cur=new Date(dIso+"T12:00");
+          if(start.getDay()!==dDow || ev.date>dIso) return false;
+          const diff=Math.round((cur-start)/86400000);
+          return diff>=0 && diff%14===0;
+        }catch(_){return false;}
       }
       if(ev.recurrence==="monthly"){
         // mesmo dia do mês
@@ -13891,7 +13901,7 @@ function PageCalendarioInterno({isMob}){
                 if(_myEvs.length===0)return null;
                 return <div style={{display:"flex",flexDirection:"column",gap:3,marginTop:3}}>
                   {_myEvs.slice(0,2).map(function(ev){
-                    const _isRec=ev.recurrence==="weekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly";
+                    const _isRec=ev.recurrence==="weekly"||ev.recurrence==="biweekly"||ev.recurrence==="monthly"||ev.recurrence==="yearly";
                     // Cor: assinaturas SEMPRE roxo Pixels. Senão cor do cliente vinculado. Senão cor manual. Senão cor categoria. Senão preto.
                     // Lê array client_ids primeiro, fallback pro client_id legado. Renderiza cor/nome do primeiro.
                     const _evCids=(function(){try{if(Array.isArray(ev.client_ids))return ev.client_ids;if(typeof ev.client_ids==="string"&&ev.client_ids){const _p=JSON.parse(ev.client_ids);if(Array.isArray(_p))return _p;}}catch(_){}return ev.client_id?[ev.client_id]:[];})();
@@ -13959,7 +13969,7 @@ function PageCalendarioInterno({isMob}){
                           });
                         });
                       }}
-                      title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="weekly"?"semanal":ev.recurrence==="monthly"?"mensal":"anual"):"")+(_cl?" · "+(_cl.name||_cl.nome):"")}
+                      title={ev.title+(ev.hour?" · "+ev.hour:"")+(_isRec?" · "+(ev.recurrence==="weekly"?"semanal":ev.recurrence==="biweekly"?"quinzenal":ev.recurrence==="monthly"?"mensal":"anual"):"")+(_cl?" · "+(_cl.name||_cl.nome):"")}
                       style={{background:_evColor,color:"#fff",borderRadius:8,padding:"5px 9px",fontSize:12,fontWeight:500,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,overflow:"hidden",whiteSpace:"nowrap",letterSpacing:-.1,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 1px 2px rgba(15,23,42,0.10)",transition:"all .15s"}}
                       onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 12px "+_evColor+"55";}}
                       onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.10)";}}>
@@ -14731,6 +14741,50 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
         </div>
       )}
 
+      {/* ── Contadores do cliente filtrado (Total + por status) ── */}
+      {filterClient!=="todos"&&(function(){
+        // Escopo: mês visualizado + filtros já aplicados em `agendados`
+        const _mesY=calMonth.getFullYear(), _mesM=calMonth.getMonth();
+        const _doMes=agendados.filter(function(t){
+          if(!t.publishDate) return false;
+          const _d=new Date(t.publishDate+"T00:00:00");
+          return _d.getFullYear()===_mesY && _d.getMonth()===_mesM;
+        });
+        const _cl=(CLIENTS||[]).find(function(c){return c.id===filterClient;});
+        const _clName=_cl?_cl.name:"Cliente";
+        const _clColor=_cl?_cl.color:"#0f172a";
+        let _total=_doMes.length, _producao=0, _agendar=0, _publicado=0;
+        _doMes.forEach(function(t){
+          if(t.status==="publicado") _publicado++;
+          else if(t.status==="aprovado"||t.status==="agendado") _agendar++;
+          else _producao++;
+        });
+        const _mesLabel=calMonth.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+        const _kpi=function(label,value,color,iconSvg){
+          return <div style={{flex:"1 1 140px",minWidth:140,background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:10}}>
+            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:34,height:34,borderRadius:9,background:color,color:"#fff",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}>{iconSvg}</span>
+            <div style={{display:"flex",flexDirection:"column",lineHeight:1.1,minWidth:0}}>
+              <span style={{fontSize:11,color:"#94a3b8",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>{label}</span>
+              <span style={{fontSize:22,fontWeight:800,color:"#0f172a",marginTop:2}}>{value}</span>
+            </div>
+          </div>;
+        };
+        return <div style={{display:"flex",flexDirection:"column",gap:10,fontFamily:"'Inter',system-ui,sans-serif"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:8,height:8,borderRadius:"50%",background:_clColor}}></span>
+            <span style={{color:"#475569",fontSize:12.5,fontWeight:700}}>{_clName}</span>
+            <span style={{color:"#cbd5e1"}}>·</span>
+            <span style={{color:"#94a3b8",fontSize:12,fontWeight:500,textTransform:"capitalize"}}>{_mesLabel}</span>
+          </div>
+          <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+            {_kpi("Total",_total,"#0f172a",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>)}
+            {_kpi("Em produção",_producao,"#ea580c",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>)}
+            {_kpi("Agendar",_agendar,"#ec4899",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>)}
+            {_kpi("Publicado",_publicado,"#7c3aed",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>)}
+          </div>
+        </div>;
+      })()}
+
 
       {/* Ações (mês controlado pelo ProgressoDoMes acima) */}
       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
@@ -14778,10 +14832,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                 onMouseEnter={function(e){if(_canCreateFromCal&&day){const g=e.currentTarget.querySelector("[data-ghost-card]");if(g){g.style.opacity="1";g.style.transform="scale(1)";}}}}
                 onMouseLeave={function(e){const g=e.currentTarget.querySelector("[data-ghost-card]");if(g){g.style.opacity="0";g.style.transform="scale(0.98)";}}}
                 style={{
-                height:isMob?170:260,
+                minHeight:isMob?220:380,
                 borderRight:`1px solid ${C.b1}`,
                 borderBottom:`1px solid ${C.b1}`,
-                padding:"8px 6px 6px",
+                padding:"10px 8px 8px",
                 background:isDropTarget?"#f5f3ff":(isToday?C.ag:hasTasks?C.bl+"06":"transparent"),
                 outline:isDropTarget?"2px dashed #7c3aed":"none",
                 outlineOffset:-2,
