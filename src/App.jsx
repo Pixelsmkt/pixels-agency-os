@@ -14742,7 +14742,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       )}
 
       {/* ── Contadores do cliente filtrado (Total + por status) ── */}
-      {filterClient!=="todos"&&(function(){
+      {(function(){
         // Escopo: mês visualizado + filtros já aplicados em `agendados`
         const _mesY=calMonth.getFullYear(), _mesM=calMonth.getMonth();
         const _doMes=agendados.filter(function(t){
@@ -14750,9 +14750,10 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           const _d=new Date(t.publishDate+"T00:00:00");
           return _d.getFullYear()===_mesY && _d.getMonth()===_mesM;
         });
-        const _cl=(CLIENTS||[]).find(function(c){return c.id===filterClient;});
-        const _clName=_cl?_cl.name:"Cliente";
-        const _clColor=_cl?_cl.color:"#0f172a";
+        const _isAll=filterClient==="todos";
+        const _cl=_isAll?null:(CLIENTS||[]).find(function(c){return c.id===filterClient;});
+        const _clName=_isAll?"Todos os clientes":(_cl?_cl.name:"Cliente");
+        const _clColor=_isAll?"#94a3b8":(_cl?_cl.color:"#0f172a");
         let _total=_doMes.length, _producao=0, _agendar=0, _publicado=0;
         _doMes.forEach(function(t){
           if(t.status==="publicado") _publicado++;
