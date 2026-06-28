@@ -49642,7 +49642,9 @@ function _PlIco({name, size=14, color="currentColor"}){
 // ═══════════════════════════════════════════════════════════════
 function PagePlanejamento({isMob}){
   const {entries, loading, upsert, remove} = usePlanejamentoEntries();
-  const [tab, setTab] = useState("dailies"); // dailies | weeklies | metas
+  // Default tab: Hellen vai pra weeklies (não participa de dailies), sócios começam em dailies
+  const _initialTab = (CURRENT_USER && CURRENT_USER.id === "ellen") ? "weeklies" : "dailies";
+  const [tab, setTab] = useState(_initialTab); // dailies | weeklies | metas
   const [editing, setEditing] = useState(null); // entry sendo editado/criado
 
   const isSocio = CURRENT_USER && CURRENT_USER.level === 1;
@@ -49705,8 +49707,10 @@ function PagePlanejamento({isMob}){
   const _nextDaily   = _plNextBusinessDay();
   const _nextMonthly = _plNextMonthly();
 
+  // Hellen não participa de dailies — só vê weeklies + monthlies
+  const _hideDailies = CURRENT_USER && CURRENT_USER.id === "ellen";
   const TABS = [
-    {id:"dailies",   label:"Dailies",   ico:"sunrise", count:dailies.length},
+    ...(_hideDailies ? [] : [{id:"dailies",   label:"Dailies",   ico:"sunrise", count:dailies.length}]),
     {id:"weeklies",  label:"Weeklies",  ico:"weekly",  count:weeklies.length},
     {id:"monthlies", label:"Monthlies", ico:"target",  count:monthlies.length},
   ];
@@ -49727,9 +49731,13 @@ function PagePlanejamento({isMob}){
         </div>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button onClick={function(){openNew(tab==="monthlies"?"monthly":tab==="weeklies"?"weekly":"daily");}}
+        <button onClick={function(){
+          // Se for Hellen e tab for dailies (não devia mas defesa), força weekly
+          var _t = tab==="monthlies"?"monthly":tab==="weeklies"?"weekly":(_hideDailies?"weekly":"daily");
+          openNew(_t);
+        }}
           style={{background:PLAN_PURPLE,border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(159,67,246,0.38)"}}>
-          <_PlIco name="plus" size={13} color="#fff"/> Novo {tab==="monthlies"?"monthly":tab==="weeklies"?"weekly":"daily"}
+          <_PlIco name="plus" size={13} color="#fff"/> Novo {tab==="monthlies"?"monthly":tab==="weeklies"?"weekly":(_hideDailies?"weekly":"daily")}
         </button>
       </div>
     </div>
@@ -49737,10 +49745,10 @@ function PagePlanejamento({isMob}){
     {/* ═══ KPIs ═══ */}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
       {[
-        {label:"Dailies na semana", value:dailiesNaSemana+"/5", hint:"seg a sex · CEOs", color:"#9F43F6",bg:"#9F43F614",ico:"sunrise"},
+        ...(_hideDailies ? [] : [{label:"Dailies na semana", value:dailiesNaSemana+"/5", hint:"seg a sex · CEOs", color:"#9F43F6",bg:"#9F43F614",ico:"sunrise"}]),
         {label:"Weeklies no mês",   value:weekliesNoMes,        hint:"CEOs + Hellen", color:"#0ea5e9",bg:"#0ea5e914",ico:"weekly"},
         {label:"Monthlies no ano",  value:monthliesNoAno,       hint:"todo o time", color:"#7c3aed",bg:"#ede9fe",ico:"target"},
-        {label:"Próxima daily",     value:_plFmtShortBR(_nextDaily), hint:"dia útil seguinte", color:"#f97316",bg:"#fff7ed",ico:"calendar"},
+        ...(_hideDailies ? [] : [{label:"Próxima daily",     value:_plFmtShortBR(_nextDaily), hint:"dia útil seguinte", color:"#f97316",bg:"#fff7ed",ico:"calendar"}]),
         {label:"Próxima weekly",    value:_plFmtShortBR(_nextWeekly),hint:"segunda · 11h", color:"#16a34a",bg:"#dcfce7",ico:"weekly"},
         {label:"Próxima monthly",   value:_plFmtShortBR(_nextMonthly),hint:"1ª seg do mês · 11h", color:"#dc2626",bg:"#fee2e2",ico:"target"},
       ].map(function(k,i){return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px",position:"relative",overflow:"hidden"}}>
@@ -49767,7 +49775,7 @@ function PagePlanejamento({isMob}){
     </div>
 
     {/* ═══ Conteúdo por aba ═══ */}
-    {tab==="dailies"   && <DailiesList   entries={dailies}   onEdit={setEditing} onDelete={handleDelete}/>}
+    {tab==="dailies"   && !_hideDailies && <DailiesList   entries={dailies}   onEdit={setEditing} onDelete={handleDelete}/>}
     {tab==="weeklies"  && <WeekliesList  entries={weeklies}  onEdit={setEditing} onDelete={handleDelete}/>}
     {tab==="monthlies" && <MonthliesList entries={monthlies} onEdit={setEditing} onDelete={handleDelete}/>}
 
@@ -49852,7 +49860,43 @@ function MetasFixedPanel({entries, onEdit, onDelete, onUpsert, onNew}){
                 </button>
                 <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={function(){onEdit(e);}}>
                   <div style={{color:done?"#15803d":"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.35,textDecoration:done?"line-through":"none"}}>{e.title||e.content||"(sem título)"}</div>
-                  {e.content&&e.title&&<div style={{color:"#64748b",fontSize:11,marginTop:2,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{e.content}</div>}
+                  {(function(){
+                    // Se o content for JSON serializado (gambiarra antiga), formata em pílulas; senão mostra texto puro
+                    var _c = e.content;
+                    if(!_c || !e.title) return null;
+                    var _isJson = typeof _c==="string" && _c.trim().startsWith("{");
+                    if(!_isJson){
+                      return <div style={{color:"#64748b",fontSize:11,marginTop:2,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{_c}</div>;
+                    }
+                    var _meta = null;
+                    try{ _meta = JSON.parse(_c); }catch(_){ return null; }
+                    if(!_meta || typeof _meta!=="object") return null;
+                    var _chips = [];
+                    // Prazo formatado dd/mm
+                    if(_meta.deadline){
+                      var _m = String(_meta.deadline).match(/^(\d{4})-(\d{2})-(\d{2})/);
+                      if(_m) _chips.push({label:"Prazo", val:_m[3]+"/"+_m[2], color:"#0ea5e9"});
+                    }
+                    // Cliente
+                    if(_meta.client_id){
+                      var _clName = (typeof CLIENTS!=="undefined") ? (CLIENTS.find(function(c){return c.id===_meta.client_id;})||{}).name : null;
+                      _chips.push({label:"Cliente", val:_clName||_meta.client_id, color:"#7c3aed"});
+                    }
+                    // Responsáveis
+                    if(_meta.assignees && Array.isArray(_meta.assignees) && _meta.assignees.length){
+                      var _nms = _meta.assignees.map(function(id){
+                        var u = (typeof TEAM!=="undefined") ? TEAM.find(function(x){return x.id===id;}) : null;
+                        return u ? u.name.split(" ")[0] : id;
+                      }).join(", ");
+                      _chips.push({label:"Resp", val:_nms, color:"#16a34a"});
+                    }
+                    if(_chips.length===0) return null;
+                    return <div style={{display:"flex",gap:5,marginTop:5,flexWrap:"wrap"}}>
+                      {_chips.map(function(ch,i){
+                        return <span key={i} style={{background:ch.color+"12",color:ch.color,fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:99,whiteSpace:"nowrap"}}>{ch.label}: {ch.val}</span>;
+                      })}
+                    </div>;
+                  })()}
                 </div>
                 <button onClick={function(){onDelete(e.id);}} title="Excluir"
                   style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:2,flexShrink:0}}>
@@ -53415,6 +53459,189 @@ function PagePlaybooks({isMob, perms, viewingAs}){
 }
 
 // ═══════════════════════════════════════════════════════════════
+//  _PbVideoProcesses — Processos técnicos GLOBAIS de Edição de Vídeo
+//  Sincronizado entre clientes via Supabase team_data tipo='video_processes'
+//  Mirror em localStorage pra carregar offline + persistir entre sessões
+// ═══════════════════════════════════════════════════════════════
+const _PB_VP_KEY = "pixels-video-processes";
+
+// Seed: primeiro processo já cadastrado (Compressor de Banda Simples).
+const _PB_VP_SEED = [
+  {
+    id: "compressor-audio",
+    title: "Compressão de áudio (Single-band Compressor)",
+    descricao: "Aplicar em TODO vídeo final. Sem isso, o áudio do reels fica baixo no feed do Instagram e perde pra concorrência. O objetivo é deixar o som no limite máximo possível sem distorcer.",
+    passos: [
+      "Abrir o painel Audio Track Mixer (Mixer da Faixa de Áudio) — atalho Shift+9 no Premiere",
+      "Na track de áudio principal (geralmente A1), clicar no triângulo pra abrir os slots de efeito",
+      "Adicionar o efeito Single-band Compressor (Compressor de Banda Simples)",
+      "Escolher o preset Vocal Attacker (no Premiere PT-BR continua em inglês — pode aparecer como 'Vocal Attacker' ou similar; o som de voz fica mais 'à frente')",
+      "Aumentar o Output Gain (Ganho de Saída) gradualmente até o medidor chegar bem perto do vermelho — quase batendo, mas SEM bater no vermelho",
+      "Conferir tocando o vídeo inteiro: se em algum momento o pico estourar (vermelho), reduzir 1-2 dB e testar de novo",
+      "Exportar normalmente — o som vai sair alto e limpo no Instagram"
+    ]
+  }
+];
+
+function _PbVideoProcesses({isAdmin}){
+  const [processes, setProcesses] = useState(function(){
+    try{ const r=localStorage.getItem(_PB_VP_KEY); if(r) return JSON.parse(r); }catch(_){}
+    return _PB_VP_SEED;
+  });
+  const [editing, setEditing] = useState(null); // null | {idx, draft}
+  const [expanded, setExpanded] = useState({}); // {idx: true/false}
+
+  // Pull do Supabase no mount (sobrescreve seed local)
+  useEffect(function(){
+    if(!window._sb) return;
+    window._sb.from("team_data").select("dados").eq("tipo","video_processes").single().then(function(r){
+      if(r.data && Array.isArray(r.data.dados) && r.data.dados.length>0){
+        setProcesses(r.data.dados);
+        try{ localStorage.setItem(_PB_VP_KEY, JSON.stringify(r.data.dados)); }catch(_){}
+      }
+    }).catch(function(){});
+  },[]);
+
+  function _persist(next){
+    setProcesses(next);
+    try{ localStorage.setItem(_PB_VP_KEY, JSON.stringify(next)); }catch(_){}
+    if(window._sb){
+      window._sb.from("team_data").upsert({tipo:"video_processes",dados:next,updated_by:CURRENT_USER.name},{onConflict:"tipo"}).then(function(){}).catch(function(){});
+    }
+  }
+
+  function _toggle(idx){ setExpanded(function(p){return Object.assign({},p,{[idx]:!p[idx]});}); }
+
+  function _new(){
+    setEditing({idx:-1, draft:{id:"p-"+Date.now(), title:"", descricao:"", passos:[""]}});
+  }
+  function _edit(idx){
+    setEditing({idx, draft:JSON.parse(JSON.stringify(processes[idx]))});
+  }
+  function _del(idx){
+    if(typeof pixelsConfirm==="function"){
+      pixelsConfirm({title:"Excluir processo", message:"Tem certeza? Essa ação não pode ser desfeita.", danger:true}).then(function(ok){
+        if(ok){ _persist(processes.filter(function(_,i){return i!==idx;})); }
+      });
+    }else{
+      if(window.confirm("Excluir esse processo?")){
+        _persist(processes.filter(function(_,i){return i!==idx;}));
+      }
+    }
+  }
+  function _save(){
+    if(!editing) return;
+    var d = editing.draft;
+    if(!d.title.trim()){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Coloca um título no processo"); return; }
+    var cleanPassos = (d.passos||[]).map(function(s){return String(s||"").trim();}).filter(Boolean);
+    var clean = Object.assign({},d,{passos:cleanPassos});
+    var next;
+    if(editing.idx===-1){ next = processes.concat([clean]); }
+    else { next = processes.map(function(p,i){return i===editing.idx?clean:p;}); }
+    _persist(next);
+    setEditing(null);
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Processo salvo!");
+  }
+  function _setDraft(patch){ setEditing(function(p){return Object.assign({},p,{draft:Object.assign({},p.draft,patch)});}); }
+  function _setStep(i,val){ _setDraft({passos:editing.draft.passos.map(function(s,idx){return idx===i?val:s;})}); }
+  function _addStep(){ _setDraft({passos:(editing.draft.passos||[]).concat([""])});}
+  function _delStep(i){ _setDraft({passos:editing.draft.passos.filter(function(_,idx){return idx!==i;})});}
+
+  // Renderiza modal de edição
+  if(editing){
+    return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,paddingBottom:12,borderBottom:"1px solid "+PB_BORDER2}}>
+        <div style={{color:PB_INK,fontWeight:800,fontSize:14}}>{editing.idx===-1?"Novo processo":"Editar processo"}</div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={function(){setEditing(null);}} style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",color:"#475569",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+          <button onClick={_save} style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",border:"none",borderRadius:9,padding:"7px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 12px rgba(159,67,246,.4)"}}>Salvar</button>
+        </div>
+      </div>
+      <div>
+        <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:6}}>Título</div>
+        <input value={editing.draft.title} onChange={function(e){_setDraft({title:e.target.value});}}
+          placeholder="Ex: Compressão de áudio (Single-band Compressor)"
+          style={_pbInpStyle()}/>
+      </div>
+      <div>
+        <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:6}}>Descrição / contexto</div>
+        <textarea value={editing.draft.descricao} onChange={function(e){_setDraft({descricao:e.target.value});}} rows={3}
+          placeholder="Por que esse processo existe, quando aplicar, qual o objetivo..."
+          style={_pbInpStyle()}/>
+      </div>
+      <div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+          <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Passos numerados</div>
+          <button onClick={_addStep} style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 10px",color:"#475569",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+            <Ico n="plus" size={11} color="currentColor"/> Adicionar passo
+          </button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {(editing.draft.passos||[]).map(function(step,i){
+            return <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+              <div style={{flexShrink:0,width:26,height:26,borderRadius:"50%",background:"#0ea5e914",color:"#0284c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,marginTop:5}}>{i+1}</div>
+              <textarea value={step} onChange={function(e){_setStep(i,e.target.value);}} rows={2}
+                placeholder={"Passo "+(i+1)+"..."}
+                style={Object.assign({},_pbInpStyle(),{minHeight:48})}/>
+              <button onClick={function(){_delStep(i);}} title="Remover passo"
+                style={{flexShrink:0,background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,marginTop:3}}>
+                <Ico n="x" size={13} color="currentColor"/>
+              </button>
+            </div>;
+          })}
+        </div>
+      </div>
+    </div>;
+  }
+
+  // Renderiza lista de processos (modo visualização)
+  return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+    {processes.length===0 && <_PbEmpty icon="play" text="Nenhum processo cadastrado ainda." sub={isAdmin?"Adicione o primeiro com o botão abaixo.":""}/>}
+    {processes.map(function(proc,idx){
+      var open = !!expanded[idx];
+      return <div key={proc.id||idx} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:12,overflow:"hidden"}}>
+        <div onClick={function(){_toggle(idx);}} style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none"}}>
+          <div style={{width:28,height:28,borderRadius:8,background:"#0ea5e914",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{color:"#0284c7",fontWeight:800,fontSize:12}}>{idx+1}</span>
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:PB_INK,fontWeight:700,fontSize:13.5,letterSpacing:-.2}}>{proc.title}</div>
+            {proc.descricao && !open && <div style={{color:PB_MUTE,fontSize:11.5,marginTop:2,lineHeight:1.4,display:"-webkit-box",WebkitLineClamp:1,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{proc.descricao}</div>}
+          </div>
+          <div style={{flexShrink:0,display:"flex",alignItems:"center",gap:6}}>
+            {Array.isArray(proc.passos) && proc.passos.length>0 && <span style={{background:"#fff",border:"1px solid "+PB_BORDER2,borderRadius:99,padding:"2px 9px",fontSize:10.5,fontWeight:700,color:"#475569"}}>{proc.passos.length} passo{proc.passos.length>1?"s":""}</span>}
+            <Ico n={open?"chevron-up":"chevron-down"} size={15} color="#94a3b8"/>
+          </div>
+        </div>
+        {open && <div style={{padding:"4px 14px 16px",borderTop:"1px solid "+PB_BORDER2,background:"#fff"}}>
+          {proc.descricao && <div style={{color:PB_TEXT,fontSize:13,lineHeight:1.6,marginTop:12,marginBottom:14,whiteSpace:"pre-wrap"}}>{proc.descricao}</div>}
+          {Array.isArray(proc.passos) && proc.passos.length>0 && <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {proc.passos.map(function(step,si){
+              return <div key={si} style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                <div style={{flexShrink:0,width:24,height:24,borderRadius:"50%",background:"#0ea5e914",color:"#0284c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,marginTop:1}}>{si+1}</div>
+                <div style={{color:PB_TEXT,fontSize:13,lineHeight:1.55,flex:1}}>{step}</div>
+              </div>;
+            })}
+          </div>}
+          {isAdmin && <div style={{display:"flex",gap:8,marginTop:16,paddingTop:12,borderTop:"1px solid "+PB_BORDER2}}>
+            <button onClick={function(){_edit(idx);}} style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 13px",color:"#475569",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <Ico n="edit" size={11} color="currentColor"/> Editar
+            </button>
+            <button onClick={function(){_del(idx);}} style={{background:"transparent",border:"1px solid #fecaca",borderRadius:9,padding:"6px 13px",color:"#dc2626",fontSize:11.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <Ico n="trash" size={11} color="currentColor"/> Excluir
+            </button>
+          </div>}
+        </div>}
+      </div>;
+    })}
+    {isAdmin && <button onClick={_new}
+      style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",border:"none",borderRadius:11,padding:"10px 16px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 16px rgba(159,67,246,.4)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,alignSelf:"flex-start"}}>
+      <Ico n="plus" size={13} color="#fff"/> Novo processo
+    </button>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════
 //  PlaybookDetalhe — página de um cliente/área específica
 // ═══════════════════════════════════════════════════════════════
 function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMode, onBack, onUpdate, onUpdateArea, isMob}){
@@ -53504,6 +53731,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     {id:"pb-produtos",     label:"Produtos",     icon:"package"},
   ];
   if(area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações", icon:areaCfg.icon});
+  if(area==="video") SECTIONS.push({id:"pb-processos", label:"Processos técnicos", icon:"play"});
   if(hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
   SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
 
@@ -53811,6 +54039,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               <COrientacoes cl={cl}/>
             </PlaybookBlock>
           }
+
+          {/* Processos técnicos — GLOBAIS pra todos os vídeos (sincronizado entre clientes via team_data) */}
+          {area==="video" && <PlaybookBlock id="pb-processos" title="Processos técnicos" subtitle="Etapas obrigatórias pra todo vídeo da agência (aplica em todos os clientes)" icon="play" color="#0ea5e9">
+            <_PbVideoProcesses isAdmin={isAdmin}/>
+          </PlaybookBlock>}
 
         </div>
 
