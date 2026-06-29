@@ -40408,18 +40408,25 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
       foto:        {label:"Foto de obra",color:"#ea580c"},
       banner:      {label:"Banner",      color:"#0891b2"},
       material:    {label:"Material",    color:"#475569"},
+      trafego:     {label:"Tráfego",     color:"#f59e0b"},
+      operacional: {label:"Operacional", color:"#10b981"},
       campanha:    {label:"Campanha",    color:"#db2777"},
       outro:       {label:"Outro",       color:"#64748b"},
     };
-    const k=t.contentType||t.tipo_solicitacao||"outro";
+    // Fallback robusto pra pegar tipo de várias fontes (portal × demanda interna)
+    let k=t.contentType||t.tipo_solicitacao||t.internoTipo||t.interno_tipo||"outro";
+    // Normaliza legacy (folder/feira/comercial → material)
+    if(typeof _normalizarTipoDemanda==="function") k=_normalizarTipoDemanda(k);
     return map[k]||map.outro;
   };
 
   // ── Status pro cliente (label + cor) ──
+  // Trata tanto status do kanban principal quanto status interno_* das demandas internas.
   const statusInfo=function(t){
     if(t.urgente&&!t.data_prevista_entrega)return {label:"Urgência em análise",color:"#9333ea",bg:"#f3e8ff"};
     if(t.aguardando_info)return {label:"Aguardando informações",color:"#d97706",bg:"#fef3c7"};
     if(t.completedAt||t.completed_at)return {label:"Entregue",color:"#0284c7",bg:"#dbeafe"};
+    // Status do kanban principal
     if(t.status==="aprovado")return {label:"Aguardando sua aprovação",color:"#059669",bg:"#d1fae5"};
     if(t.status==="aprovacao_final")return {label:"Aprovada por você",color:"#0d9488",bg:"#ccfbf1"};
     if(t.status==="agendado")return {label:"Agendada",color:"#7c3aed",bg:"#ede9fe"};
@@ -40428,6 +40435,12 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
     if(t.status==="execucao")return {label:"Em produção",color:"#d97706",bg:"#fef3c7"};
     if(t.status==="avaliacao")return {label:"Em avaliação interna",color:"#0891b2",bg:"#cffafe"};
     if(t.status==="recebida"||t.status==="demanda")return {label:"Recebida pela equipe",color:"#0284c7",bg:"#dbeafe"};
+    // Status das demandas INTERNAS (kanban da equipe — sync com portal cliente)
+    if(t.status==="interno_demanda"||t.status==="interno_triagem")return {label:"Recebida pela equipe",color:"#0284c7",bg:"#dbeafe"};
+    if(t.status==="interno_execucao")return {label:"Em produção",color:"#d97706",bg:"#fef3c7"};
+    if(t.status==="interno_avaliacao")return {label:"Em avaliação interna",color:"#0891b2",bg:"#cffafe"};
+    if(t.status==="interno_aguardando")return {label:"Aguardando sua aprovação",color:"#059669",bg:"#d1fae5"};
+    if(t.status==="interno_aprovado"||t.status==="interno_executado")return {label:"Concluída",color:"#16a34a",bg:"#dcfce7"};
     return {label:"Recebida",color:"#64748b",bg:"#f1f5f9"};
   };
 
@@ -40489,22 +40502,62 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
     if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda vinculada à sprint "+sprintData.id,3500);
   };
 
+  // Sprint atual (carregado primeiro pra usar no agrupamento)
+  const sprintAtualAgora=cfg?sprintAtual(cfg):null;
+
+  // ── Helper: ISO week → próximo sprint_id ──
+  // Converte sprintBucket (atual/proxima/futuro) das demandas internas
+  // pra um sprint_id concreto, espelhando o esquema "AAAA-WSS".
+  const _nextIsoWeek=function(sprintId, offset){
+    if(!sprintId) return null;
+    const m=String(sprintId).match(/^(\d{4})-W(\d{2})$/);
+    if(!m) return null;
+    let y=parseInt(m[1],10), w=parseInt(m[2],10)+offset;
+    // Aproximação: assume 52 semanas. Bom o bastante pra UI; SQL real usa ISO.
+    while(w>52){ w-=52; y+=1; }
+    while(w<1) { w+=52; y-=1; }
+    return y+"-W"+String(w).padStart(2,"0");
+  };
+  const _effectiveSprintId=function(t){
+    if(t.sprint_id) return t.sprint_id;
+    const bucket=t.sprintBucket||t.sprint_bucket;
+    if(!bucket||!sprintAtualAgora) return null;
+    if(bucket==="atual")  return sprintAtualAgora.id;
+    if(bucket==="proxima")return _nextIsoWeek(sprintAtualAgora.id,1);
+    if(bucket==="futuro") return _nextIsoWeek(sprintAtualAgora.id,2);
+    return null;
+  };
+
   // ── Agrupamento por sprint ──
-  // SO mostra demandas que vieram do PORTAL (cliente solicitou).
-  // Producao mensal regular (origem interna da Pixels) NAO aparece aqui.
-  const validas=clTasks.filter(function(t){return !t.deletedAt&&t.origem==="portal";});
+  // Mostra (1) demandas do PORTAL (cliente solicitou) E (2) demandas INTERNAS
+  // criadas pela equipe com cliente vinculado (status interno_*). Sincroniza
+  // o fluxo equipe↔cliente: tudo que tem cliente vinculado aparece pra ele.
+  // Producao mensal regular do kanban principal NAO aparece aqui.
+  const _isInternaDemanda=function(t){
+    if(!t.status) return false;
+    if(typeof INTERNO_COLS!=="undefined" && Array.isArray(INTERNO_COLS)){
+      return !!INTERNO_COLS.find(function(c){return c.id===t.status;});
+    }
+    // Fallback se INTERNO_COLS não estiver disponível
+    return String(t.status).indexOf("interno_")===0;
+  };
+  const validas=clTasks.filter(function(t){
+    if(t.deletedAt) return false;
+    if(t.origem==="portal") return true;
+    // Demanda interna criada pela equipe + vinculada a esse cliente
+    if(t.client===cl.id && _isInternaDemanda(t)) return true;
+    return false;
+  });
   const grupos={};
   validas.forEach(function(t){
+    const effSprintId=_effectiveSprintId(t);
     let k;
-    if(t.urgente&&!t.sprint_id)k="_urgente";
-    else if(!t.sprint_id)k="_sem_sprint";
-    else k=t.sprint_id;
-    if(!grupos[k])grupos[k]={key:k,items:[],sprint_id:t.sprint_id||null,urgente:t.urgente};
+    if(t.urgente&&!effSprintId)k="_urgente";
+    else if(!effSprintId)k="_sem_sprint";
+    else k=effSprintId;
+    if(!grupos[k])grupos[k]={key:k,items:[],sprint_id:effSprintId||null,urgente:t.urgente};
     grupos[k].items.push(t);
   });
-
-  // Sprint atual (pra detectar e nomear)
-  const sprintAtualAgora=cfg?sprintAtual(cfg):null;
 
   // Ordena grupos: urgência > sprint atual > próximas (cronológico) > sem sprint
   const grupos_ordenados=Object.values(grupos).sort(function(a,b){
@@ -51111,7 +51164,7 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                 onDragOver={function(e){e.preventDefault(); _setDragOverCol(col.id);}}
                 onDragLeave={function(e){if(!e.currentTarget.contains(e.relatedTarget)) _setDragOverCol(null);}}
                 onDrop={function(e){e.preventDefault(); _setDragOverCol(null); if(_dragId)_moveCard(_dragId,col.id); _setDragId(null);}}
-                style={{background:_isTarget?col.color+"08":"#f6f7f9",border:"1px solid "+(_isTarget?col.color+"66":"#e5e7eb"),borderRadius:10,padding:8,display:"flex",flexDirection:"column",gap:6,minHeight:120,transition:"all .12s"}}>
+                style={{background:_isTarget?col.color+"10":"#eef0f3",border:"1px solid "+(_isTarget?col.color+"66":"#d8dce2"),borderRadius:10,padding:8,display:"flex",flexDirection:"column",gap:6,minHeight:120,transition:"all .12s"}}>
                 {/* Header da coluna */}
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:6,borderBottom:"1px solid "+col.color+"22"}}>
                   <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
