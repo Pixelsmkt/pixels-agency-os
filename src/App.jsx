@@ -50900,6 +50900,24 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
     if(window._sb) window._sb.from("tasks").update({deleted_at:now}).eq("id",id).then(()=>{}).catch(err=>console.error("[interna deleteCard]",err));
     setOpenCard(null);
   };
+  // Mover card entre colunas do mini-kanban (drag-and-drop)
+  const _moveCard = (taskId, newStatus) => {
+    const task = (allTasks||[]).find(t=>t.id===taskId);
+    if(!task || task.status===newStatus) return;
+    const now = new Date().toISOString();
+    const tl = [...(task.timeline||[]),{type:"status",from:task.status,to:newStatus,at:now,user:user.name}];
+    const updated = {...task,status:newStatus,colEnteredAt:now,timeline:tl};
+    if(newStatus==="interno_executado") updated.completedAt = now;
+    if(setTasks) setTasks(p=>p.map(t=>t.id===taskId?updated:t));
+    if(window._sb){
+      const payload = {status:newStatus,col_entered_at:now,timeline:tl};
+      if(newStatus==="interno_executado") payload.completed_at = now;
+      window._sb.from("tasks").update(payload).eq("id",taskId).then(()=>{}).catch(err=>console.error("[interna moveCard]",err));
+    }
+  };
+  const [_dragId, _setDragId] = useState(null);
+  const [_dragOverCol, _setDragOverCol] = useState(null);
+
   const _novoCard = () => {
     const id = "int_"+Date.now()+"_"+Math.random().toString(36).slice(2,7);
     setOpenCard({
@@ -50954,9 +50972,113 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
         <_Mini label="Concluídas no mês" value={kpis.concluidasMes}   color="#16a34a" ico="trendingUp"/>
       </div>
 
-      {_pendentes.length===0
-        ? <div style={{background:"#fafbfc",border:"1.5px dashed #e2e8f0",borderRadius:13,padding:"24px 16px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontWeight:500}}>Sem demandas pendentes de decisão.{kpis.execucao>0?" A equipe está executando "+kpis.execucao+" em paralelo.":""}</div>
-        : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {/* Mini-kanban: 4 colunas com drag-and-drop pra mover entre status */}
+      {(function(){
+        const _MK_COLS = [
+          {id:"interno_demanda",   label:"Entrada",          color:"#9F43F6", hint:"Decidir"},
+          {id:"interno_execucao",  label:"Em execução",      color:"#f97316", hint:"Equipe trabalhando"},
+          {id:"interno_avaliacao", label:"Aguard. aprovação",color:"#eab308", hint:"Revisar e aprovar"},
+          {id:"interno_executado", label:"Concluídas",       color:"#22c55e", hint:"Entregues"},
+        ];
+        const _byCol = {};
+        _MK_COLS.forEach(c=>{ _byCol[c.id] = _internas.filter(t=>t.status===c.id); });
+        // Triagem cai na coluna Entrada também
+        _byCol.interno_demanda = _byCol.interno_demanda.concat(_internas.filter(t=>t.status==="interno_triagem"));
+        // Ordena por urgência+prazo, atrasadas no topo
+        _MK_COLS.forEach(c=>{
+          _byCol[c.id] = _byCol[c.id].sort(function(a,b){
+            const _aA=_atrasada(a)?1:0, _bA=_atrasada(b)?1:0;
+            if(_aA!==_bA) return _bA - _aA;
+            const _aPr=_PRIO_RANK[a.priority]??2, _bPr=_PRIO_RANK[b.priority]??2;
+            if(_aPr!==_bPr) return _aPr - _bPr;
+            return 0;
+          });
+        });
+        const _MK_LIMIT = 5;
+        return <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,flexWrap:"wrap"}}>
+            <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Fluxo das demandas</div>
+            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+              arraste pra mover de coluna
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,1fr)",gap:10}}>
+            {_MK_COLS.map(function(col){
+              const _tasks = _byCol[col.id] || [];
+              const _isTarget = _dragOverCol===col.id;
+              return <div key={col.id}
+                onDragOver={function(e){e.preventDefault(); _setDragOverCol(col.id);}}
+                onDragLeave={function(e){if(!e.currentTarget.contains(e.relatedTarget)) _setDragOverCol(null);}}
+                onDrop={function(e){e.preventDefault(); _setDragOverCol(null); if(_dragId)_moveCard(_dragId,col.id); _setDragId(null);}}
+                style={{background:_isTarget?col.color+"08":"#fafbfc",border:"1px solid "+(_isTarget?col.color+"66":"#eef0f3"),borderRadius:12,padding:10,display:"flex",flexDirection:"column",gap:8,minHeight:140,transition:"all .15s"}}>
+                {/* Header da coluna */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:8,borderBottom:"1px solid "+col.color+"22"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:col.color,boxShadow:"0 0 0 2px "+col.color+"22",flexShrink:0}}/>
+                    <div style={{minWidth:0,overflow:"hidden"}}>
+                      <div style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
+                      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
+                    </div>
+                  </div>
+                  <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800,flexShrink:0}}>{_tasks.length}</span>
+                </div>
+                {/* Cards compactos */}
+                <div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}>
+                  {_tasks.length===0
+                    ? <div style={{color:"#cbd5e1",fontSize:10.5,fontWeight:500,fontStyle:"italic",textAlign:"center",padding:"14px 4px"}}>Vazio</div>
+                    : _tasks.slice(0,_MK_LIMIT).map(function(t){
+                        const _pc = (typeof PRIO_CFG!=="undefined"?PRIO_CFG:{})[t.priority] || {label:"Média",color:"#64748b",bg:"#64748b15"};
+                        const _isAtr = _atrasada(t);
+                        const _diasAtr = _isAtr ? Math.abs(_dl(t.deadline)) : 0;
+                        const _cl = t.client && t.client!=="interno" && typeof CLIENTS!=="undefined" ? CLIENTS.find(c=>c.id===t.client) : null;
+                        const _resps = (Array.isArray(t.assignees)&&t.assignees.length>0) ? t.assignees : (t.assignee?[t.assignee]:[]);
+                        return <div key={t.id}
+                          draggable
+                          onDragStart={function(e){_setDragId(t.id); e.dataTransfer.effectAllowed="move";}}
+                          onDragEnd={function(){_setDragId(null); _setDragOverCol(null);}}
+                          onClick={function(){setOpenCard(t);}}
+                          style={{background:"#fff",border:"1px solid "+(_isAtr?"#fecaca":"#eef0f3"),borderRadius:9,padding:"8px 9px",cursor:"grab",transition:"all .12s",boxShadow:"0 1px 2px rgba(15,23,42,0.02)",opacity:_dragId===t.id?.4:1}}
+                          onMouseEnter={function(e){e.currentTarget.style.borderColor=_isAtr?"#dc2626":col.color+"55"; e.currentTarget.style.boxShadow="0 3px 8px rgba(15,23,42,0.06)";}}
+                          onMouseLeave={function(e){e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#eef0f3"; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.02)";}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4,flexWrap:"wrap"}}>
+                            <span style={{display:"inline-flex",alignItems:"center",gap:3,color:_pc.color,fontSize:9,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>
+                              <span style={{width:5,height:5,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
+                            </span>
+                            {_isAtr && <span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"1px 5px",fontSize:8.5,fontWeight:800,letterSpacing:.3}}>{_diasAtr}D ATR</span>}
+                          </div>
+                          <div style={{color:"#0f172a",fontSize:12,fontWeight:600,letterSpacing:-.1,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",marginBottom:5}}>{t.title||"(sem título)"}</div>
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+                            {_cl
+                              ? <span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#64748b",fontSize:10,fontWeight:600,minWidth:0,overflow:"hidden"}}>
+                                  <span style={{width:6,height:6,borderRadius:"50%",background:_cl.color||"#7c3aed",flexShrink:0}}/>
+                                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_cl.name}</span>
+                                </span>
+                              : <span style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontStyle:"italic"}}>Interna</span>}
+                            {_resps.length>0 && <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
+                              {_resps.slice(0,2).map(function(uid,i){
+                                const u = (typeof TEAM!=="undefined"?TEAM:[]).find(x=>x.id===uid);
+                                if(!u) return null;
+                                const ph = (typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id)) || (u.profile_data&&u.profile_data.photo) || null;
+                                return ph
+                                  ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:18,height:18,borderRadius:"50%",objectFit:"cover",border:"1.5px solid #fff",marginLeft:i===0?0:-5}}/>
+                                  : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:8,border:"1.5px solid #fff",marginLeft:i===0?0:-5}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
+                              })}
+                              {_resps.length>2 && <span style={{color:"#94a3b8",fontSize:9,fontWeight:700,marginLeft:3}}>+{_resps.length-2}</span>}
+                            </div>}
+                          </div>
+                        </div>;
+                      })}
+                  {_tasks.length>_MK_LIMIT && <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textAlign:"center",padding:"4px 0"}}>+{_tasks.length-_MK_LIMIT} demanda{_tasks.length-_MK_LIMIT>1?"s":""}</div>}
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>;
+      })()}
+      {false && _pendentes.length===0
+        ? null
+        : <div style={{display:"none"}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
               <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Precisam de decisão sua <span style={{color:"#94a3b8",fontWeight:600}}>· {_pendentes.length}</span></div>
               <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600}}>atrasadas → entrada → aguardando aprovação</div>
