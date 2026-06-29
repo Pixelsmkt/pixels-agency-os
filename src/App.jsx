@@ -37174,6 +37174,8 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
   };
   // Estado dos dados estendidos por colaborador (telefone, endereço, etc).
   // Mantém TEAM como source dos básicos (nome/foto/cor), e este state cobre os campos extras.
+  // SEED inicial: localStorage. EFFECT abaixo busca do Supabase e MERGEIA — garante
+  // que dados cadastrados em outro PC/navegador apareçam aqui também.
   const [extras, setExtras] = useState(function(){
     try{
       const raw = localStorage.getItem("pixels-team-data");
@@ -37182,6 +37184,41 @@ function PageGestaoTime({isMob, currentUser, onNavTo}){
   });
   const [editingId, setEditingId] = useState(null);
   const [draft, setDraft] = useState({});
+
+  // ── FIX perda de dados: hidrata do Supabase no mount ──
+  // Antes, esta tela lia SÓ do localStorage. Se o sócio mudasse de PC ou limpasse cache,
+  // os emails/dados sumiam visualmente (estavam salvos no Supabase, mas não eram lidos).
+  // Agora puxa de team_data tipo='info_pessoal' e mergeia com o cache local.
+  useEffect(function(){
+    let cancelled = false;
+    (async function(){
+      try{
+        if(!window._sb) return;
+        const {data, error} = await window._sb
+          .from("team_data")
+          .select("user_id,payload,updated_at")
+          .eq("tipo","info_pessoal");
+        if(error){ console.warn("[Time] load team_data:", error.message); return; }
+        if(cancelled) return;
+        const fromSb = {};
+        (data||[]).forEach(function(row){
+          if(row && row.user_id && row.payload && typeof row.payload==="object"){
+            fromSb[row.user_id] = row.payload;
+          }
+        });
+        setExtras(function(prev){
+          const merged = {};
+          const allUids = new Set([].concat(Object.keys(fromSb), Object.keys(prev||{})));
+          allUids.forEach(function(uid){
+            merged[uid] = Object.assign({}, fromSb[uid]||{}, (prev||{})[uid]||{});
+          });
+          try{ localStorage.setItem("pixels-team-data", JSON.stringify(merged)); }catch(_){}
+          return merged;
+        });
+      }catch(e){ console.warn("[Time] hidratacao:", e?.message||e); }
+    })();
+    return function(){ cancelled = true; };
+  },[]);
 
   const _save = function(uid, patch){
     setExtras(function(prev){
@@ -40737,14 +40774,8 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
                     <Ico n="rotate" size={11}/> Ajuste
                   </button>
                 </>}
-                {/* Vincular sprint (só admin, só se ainda não tiver sprint) */}
-                {isAdminUser&&!t.sprint_id&&<button onClick={function(){setSprintPickerTask({task:t});}}
-                  title="Vincular a uma sprint"
-                  style={{background:"#fff",color:"#0f172a",border:"1px solid #cbd5e1",borderRadius:7,padding:"5px 10px",fontSize:10.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,fontFamily:"inherit"}}
-                  onMouseEnter={function(e){e.currentTarget.style.borderColor=cl.color;e.currentTarget.style.color=cl.color;}}
-                  onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#0f172a";}}>
-                  <Ico n="calendar" size={11}/> Vincular sprint
-                </button>}
+                {/* "Vincular sprint" removido — agora o sprint é derivado automaticamente
+                    da prioridade da demanda (urgente/alta → atual, média → próxima, baixa → futuro). */}
                 {/* Excluir demanda */}
                 <button onClick={function(){setExcluirTask({task:t});}}
                   title="Excluir demanda"
