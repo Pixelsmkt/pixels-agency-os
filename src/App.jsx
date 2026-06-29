@@ -17499,21 +17499,49 @@ const PRIO_CFG = {
   urgente: { label:"Urgente", color:"#dc2626", bg:"#dc262620" },
 };
 
-// Tipos de demanda interna — substituem o conceito de "tipo_solicitacao" do portal
+// Tipos de demanda interna — mesma lista do Portal do Cliente + calendário interno
 const INTERNO_TIPOS = [
   { id:"trafego",       label:"Tráfego pago",        icon:"trending" },
   { id:"folder",        label:"Folder",              icon:"folder" },
   { id:"feira",         label:"Material para feira", icon:"flag" },
-  { id:"comercial",     label:"Material comercial",  icon:"briefcase" },
   { id:"operacional",   label:"Operacional",         icon:"settings" },
   { id:"banner",        label:"Banner",              icon:"image" },
   { id:"apresentacao",  label:"Apresentação",        icon:"presentation" },
   { id:"landing",       label:"Landing page",        icon:"layout" },
   { id:"site_ajuste",   label:"Ajuste em site",      icon:"code" },
   { id:"documento",     label:"Documento",           icon:"file-text" },
-  { id:"institucional", label:"Peça institucional",  icon:"building" },
   { id:"outro",         label:"Outro",               icon:"box" },
 ];
+
+// Auto-prazo por prioridade — mesmo padrão do Portal do Cliente (dias corridos a partir de hoje)
+// Urgente=1, Alta=5, Média=14, Baixa=30 (Task #179)
+const _intPrazoByPrio = function(prio){
+  var hoje = new Date(); hoje.setHours(0,0,0,0);
+  var dias = prio==="urgente"?1 : prio==="alta"?5 : prio==="baixa"?30 : 14;
+  hoje.setDate(hoje.getDate()+dias);
+  return hoje.getFullYear()+"-"+String(hoje.getMonth()+1).padStart(2,"0")+"-"+String(hoje.getDate()).padStart(2,"0");
+};
+
+// Stepper de data: anda 1 dia pra frente ou pra trás
+const _intDateShift = function(iso, delta){
+  if(!iso){
+    var d=new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+delta);
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  }
+  var d2=new Date(iso+"T00:00:00"); d2.setDate(d2.getDate()+delta);
+  return d2.getFullYear()+"-"+String(d2.getMonth()+1).padStart(2,"0")+"-"+String(d2.getDate()).padStart(2,"0");
+};
+const _intFmtDateBR = function(iso){
+  if(!iso) return "—";
+  try{ var d=new Date(iso+"T00:00:00"); return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit",year:"numeric"}); }catch(_){return iso;}
+};
+
+// Sprint visual config
+const SPRINT_CFG = {
+  atual:   { label:"Sprint atual",   short:"ATUAL",   color:"#7c3aed", bg:"#ede9fe" },
+  proxima: { label:"Próxima sprint", short:"PRÓX.",   color:"#0ea5e9", bg:"#e0f2fe" },
+  futuro:  { label:"Sprint futura",  short:"FUTURO",  color:"#64748b", bg:"#f1f5f9" },
+};
 
 const PIXELS_PURPLE = "#9F43F6";
 const INTERNO_INTER = "'Inter', system-ui, -apple-system, sans-serif";
@@ -17581,7 +17609,9 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
   const [title,        setTitle]        = useState(card.title     || "");
   const [desc,         setDesc]         = useState(card.desc      || card.description || "");
   const [priority,     setPriority]     = useState(card.priority  || "media");
-  const [deadline,     setDeadline]     = useState(card.deadline     || "");
+  // Auto-prazo: ao criar uma nova demanda, prazo já vem calculado por prioridade
+  const _initDeadline = card.deadline || (card._isNew ? _intPrazoByPrio(card.priority||"media") : "");
+  const [deadline,     setDeadline]     = useState(_initDeadline);
   const [deadlineTime, setDeadlineTime] = useState(card.deadlineTime || "");
   const [clientId,     setClientId]     = useState(card.client && card.client!=="interno" ? card.client : "");
   const [bioterUnit,   setBioterUnit]   = useState(card.bioterUnit || "");
@@ -17647,7 +17677,7 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
               <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Prioridade</div>
               <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                 {Object.entries(PRIO_CFG).map(([k,conf])=>(
-                  <button key={k} onClick={()=>{setPriority(k); if(k==="urgente")setSprint("atual");}}
+                  <button key={k} onClick={()=>{setPriority(k); if(k==="urgente")setSprint("atual"); setDeadline(_intPrazoByPrio(k));}}
                     style={{background:priority===k?conf.bg:"transparent",border:`1px solid ${priority===k?conf.color:C.b1}`,borderRadius:8,padding:"5px 10px",color:priority===k?conf.color:C.td,fontSize:11,fontWeight:priority===k?700:500,cursor:"pointer",fontFamily:"inherit"}}>
                     {conf.label}
                   </button>
@@ -17667,12 +17697,26 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
             </div>
           </div>
 
-          {/* Prazo + Horário */}
+          {/* Prazo + Horário com stepper de setas pros lados */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
             <div>
-              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Prazo</div>
-              <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
-                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"}}/>
+              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6,display:"flex",alignItems:"center",gap:7}}>
+                <span>Prazo</span>
+                <span style={{background:PIXELS_PURPLE+"15",color:PIXELS_PURPLE,padding:"1px 7px",borderRadius:99,fontSize:9,fontWeight:800,letterSpacing:.4}}>auto · {priority}</span>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:0,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:3}}>
+                <button onClick={()=>setDeadline(_intDateShift(deadline,-1))} title="Dia anterior"
+                  style={{background:"#fff",border:`1px solid ${C.b1}`,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:PIXELS_PURPLE,cursor:"pointer",flexShrink:0}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+                <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
+                  style={{flex:1,background:"transparent",border:"none",padding:"0 10px",color:C.tx,fontSize:13,fontWeight:700,outline:"none",fontFamily:"inherit",textAlign:"center",minWidth:0}}/>
+                <button onClick={()=>setDeadline(_intDateShift(deadline,1))} title="Próximo dia"
+                  style={{background:"#fff",border:`1px solid ${C.b1}`,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:PIXELS_PURPLE,cursor:"pointer",flexShrink:0}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
+              <div style={{color:C.td,fontSize:10,marginTop:4,fontWeight:500,fontStyle:"italic"}}>{_intFmtDateBR(deadline)}</div>
             </div>
             <div>
               <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Horário</div>
@@ -17733,7 +17777,7 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
                 return(
                   <button key={u.id} onClick={()=>toggleA(u.id)}
                     style={{background:sel?u.color+"20":"transparent",border:`1px solid ${sel?u.color:C.b1}`,borderRadius:99,padding:"4px 11px 4px 4px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontFamily:"inherit"}}>
-                    <div style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff"}}>{u.av}</div>
+                    <UserAvatar user={u} size={22} border={false}/>
                     <span style={{color:sel?u.color:C.ts,fontSize:11.5,fontWeight:sel?700:500}}>{u.name}</span>
                   </button>
                 );
@@ -17988,11 +18032,22 @@ function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
         {task.priority==="urgente"&&<span title="Urgente" style={{background:"#dc262615",color:"#dc2626",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:3}}><IconI name="zap" size={9} color="#dc2626"/>URG</span>}
       </div>
 
-      {/* Linha 2: Tipo da demanda (chip pequena roxa) */}
-      {tipo&&<div style={{display:"inline-flex",alignItems:"center",gap:4,background:PIXELS_PURPLE+"10",border:`1px solid ${PIXELS_PURPLE}26`,borderRadius:6,padding:"2px 7px",color:PIXELS_PURPLE,marginBottom:7}}>
-        <IconI name={tipo.icon} size={10} color={PIXELS_PURPLE}/>
-        <span style={{fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>{tipo.label}</span>
-      </div>}
+      {/* Linha 2: Sprint chip + Tipo da demanda */}
+      <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:7}}>
+        {(function(){
+          var sb = task.sprintBucket || task.sprint_bucket;
+          if(!sb) return null;
+          var sc = SPRINT_CFG[sb] || SPRINT_CFG.proxima;
+          return <span style={{display:"inline-flex",alignItems:"center",gap:4,background:sc.bg,border:"1px solid "+sc.color+"40",borderRadius:6,padding:"2px 7px",color:sc.color,fontSize:9.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            {sc.short}
+          </span>;
+        })()}
+        {tipo&&<span style={{display:"inline-flex",alignItems:"center",gap:4,background:PIXELS_PURPLE+"10",border:`1px solid ${PIXELS_PURPLE}26`,borderRadius:6,padding:"2px 7px",color:PIXELS_PURPLE,fontSize:9.5,fontWeight:700,letterSpacing:.3,textTransform:"uppercase"}}>
+          <IconI name={tipo.icon} size={10} color={PIXELS_PURPLE}/>
+          {tipo.label}
+        </span>}
+      </div>
 
       {/* Título */}
       <div style={{color:C.tx,fontSize:13,fontWeight:600,lineHeight:1.4,marginBottom:8,letterSpacing:-.1,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>{task.title}</div>
@@ -18020,9 +18075,8 @@ function CardKanbanInterno({ task, onOpen, onDragStart, onDragEnd }) {
           {aus.length>0
             ? <div style={{display:"flex"}}>
                 {aus.slice(0,3).map((u,i)=>(
-                  <div key={u.id} title={u.name}
-                    style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:i===0?0:-6,zIndex:3-i}}>
-                    {u.av}
+                  <div key={u.id} title={u.name} style={{marginLeft:i===0?0:-6,zIndex:3-i,border:`2px solid ${C.card}`,borderRadius:"50%",overflow:"hidden",lineHeight:0}}>
+                    <UserAvatar user={u} size={22} border={false}/>
                   </div>
                 ))}
                 {aus.length>3&&<div style={{width:22,height:22,borderRadius:"50%",background:C.s1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:C.td,border:`2px solid ${C.card}`,marginLeft:-6}}>+{aus.length-3}</div>}
@@ -18121,7 +18175,9 @@ function ListaInterno({ tasks, onOpen }) {
             <div style={{color:C.ts,fontSize:11.5,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>{tipo&&<IconI name={tipo.icon} size={11} color={PIXELS_PURPLE}/>}{tipo?.label||"—"}</div>
             <div style={{display:"flex"}}>
               {aus.slice(0,2).map((u,i)=>(
-                <div key={u.id} title={u.name} style={{width:20,height:20,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8.5,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:i===0?0:-5}}>{u.av}</div>
+                <div key={u.id} title={u.name} style={{marginLeft:i===0?0:-5,border:`2px solid ${C.card}`,borderRadius:"50%",overflow:"hidden",lineHeight:0}}>
+                  <UserAvatar user={u} size={20} border={false}/>
+                </div>
               ))}
               {aus.length>2&&<div style={{width:20,height:20,borderRadius:"50%",background:C.s1,display:"flex",alignItems:"center",justifyContent:"center",fontSize:8.5,fontWeight:700,color:C.td,border:`2px solid ${C.card}`,marginLeft:-5}}>+{aus.length-2}</div>}
               {aus.length===0&&<span style={{color:C.td,fontSize:11,fontStyle:"italic"}}>—</span>}
@@ -18165,7 +18221,7 @@ function ScannerInterno({ tasks }) {
             <span style={{background:pc.bg,color:pc.color,borderRadius:6,padding:"1px 8px",fontSize:10,fontWeight:700}}>{pc.label}</span>
           </div>
         </div>
-        {aus.length>0&&<div style={{display:"flex"}}>{aus.slice(0,3).map((u,i)=><div key={u.id} title={u.name} style={{width:22,height:22,borderRadius:"50%",background:u.color,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,color:"#fff",border:`2px solid ${C.card}`,marginLeft:i===0?0:-6}}>{u.av}</div>)}</div>}
+        {aus.length>0&&<div style={{display:"flex"}}>{aus.slice(0,3).map((u,i)=><div key={u.id} title={u.name} style={{marginLeft:i===0?0:-6,border:`2px solid ${C.card}`,borderRadius:"50%",overflow:"hidden",lineHeight:0}}><UserAvatar user={u} size={22} border={false}/></div>)}</div>}
         {dl!==null&&<span style={{color:dl<0?"#ef4444":dl<=2?"#f97316":C.td,fontSize:11,fontWeight:700,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:4}}><IconI name="calendar" size={11}/>{dl<0?`${Math.abs(dl)}d atraso`:dl===0?"Hoje":`${dl}d`}</span>}
       </div>
     );
