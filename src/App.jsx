@@ -17499,17 +17499,14 @@ const PRIO_CFG = {
   urgente: { label:"Urgente", color:"#dc2626", bg:"#dc262620" },
 };
 
-// Tipos de demanda interna — mesma lista do Portal do Cliente + calendário interno
+// Tipos de demanda interna — EXATAMENTE os mesmos do Portal do Cliente
+// (TIPOS_DEMANDA_CLIENTE em 13_novidades.jsx, excluindo arte/video que viram fluxo principal)
+// Mudou aqui? Atualizar lá também pra ficar sincronizado.
 const INTERNO_TIPOS = [
   { id:"trafego",       label:"Tráfego pago",        icon:"trending" },
   { id:"folder",        label:"Folder",              icon:"folder" },
   { id:"feira",         label:"Material para feira", icon:"flag" },
   { id:"operacional",   label:"Operacional",         icon:"settings" },
-  { id:"banner",        label:"Banner",              icon:"image" },
-  { id:"apresentacao",  label:"Apresentação",        icon:"presentation" },
-  { id:"landing",       label:"Landing page",        icon:"layout" },
-  { id:"site_ajuste",   label:"Ajuste em site",      icon:"code" },
-  { id:"documento",     label:"Documento",           icon:"file-text" },
   { id:"outro",         label:"Outro",               icon:"box" },
 ];
 
@@ -17634,15 +17631,35 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
     <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16,fontFamily:INTERNO_INTER}}
       onClick={e=>e.target===e.currentTarget&&onClose()}>
       <div style={{background:C.card,borderRadius:20,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"auto",boxShadow:"0 32px 80px rgba(0,0,0,0.4)"}}>
-        <div style={{padding:"22px 26px 0",display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            <div style={{background:col.color+"20",borderRadius:8,padding:"4px 11px"}}><span style={{color:col.color,fontSize:11,fontWeight:700,letterSpacing:.2}}>{col.label}</span></div>
-            <div style={{background:pc.bg,borderRadius:8,padding:"4px 11px"}}><span style={{color:pc.color,fontSize:11,fontWeight:700,letterSpacing:.2}}>{pc.label}</span></div>
-            {card.origem==="portal"&&<div style={{background:"#0ea5e918",borderRadius:8,padding:"4px 11px",display:"flex",alignItems:"center",gap:5}}><IconI name="external" size={11} color="#0ea5e9"/><span style={{color:"#0ea5e9",fontSize:11,fontWeight:700,letterSpacing:.2}}>Portal</span></div>}
+        <div style={{padding:"22px 26px 0",display:"flex",alignItems:"center",gap:10,justifyContent:"space-between"}}>
+          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+            <div style={{background:col.color+"18",border:"1px solid "+col.color+"33",borderRadius:9,padding:"5px 12px",display:"inline-flex",alignItems:"center",gap:6}}>
+              <span style={{width:7,height:7,borderRadius:"50%",background:col.color,boxShadow:"0 0 0 2px "+col.color+"22"}}/>
+              <span style={{color:col.color,fontSize:11.5,fontWeight:800,letterSpacing:.2}}>{col.label}</span>
+            </div>
+            <div style={{background:pc.bg,border:"1px solid "+pc.color+"33",borderRadius:9,padding:"5px 12px",display:"inline-flex",alignItems:"center",gap:6}}>
+              <IconI name="alert" size={11} color={pc.color}/>
+              <span style={{color:pc.color,fontSize:11.5,fontWeight:800,letterSpacing:.2}}>{pc.label}</span>
+            </div>
+            {card.origem==="portal"&&<div style={{background:"#0ea5e918",border:"1px solid #0ea5e933",borderRadius:9,padding:"5px 12px",display:"inline-flex",alignItems:"center",gap:6}}>
+              <IconI name="external" size={11} color="#0ea5e9"/>
+              <span style={{color:"#0ea5e9",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>Portal</span>
+            </div>}
           </div>
-          <div style={{display:"flex",gap:6}}>
-            {isSocio&&card.id&&!card._isNew&&<button onClick={()=>onDelete(card.id)} style={{background:"#ef444415",border:"none",borderRadius:8,padding:"6px 12px",color:"#ef4444",fontSize:11,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}><IconI name="trash" size={12}/>Excluir</button>}
-            <button onClick={onClose} style={{background:C.s1,border:"none",borderRadius:8,padding:"6px 10px",color:C.td,cursor:"pointer",display:"flex",alignItems:"center"}}><IconI name="x" size={14}/></button>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            {isSocio&&card.id&&!card._isNew&&<button onClick={()=>onDelete(card.id)}
+              style={{background:"#fff",border:"1px solid #fecaca",borderRadius:10,padding:"8px 14px",color:"#dc2626",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",fontFamily:"inherit"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+              Excluir
+            </button>}
+            <button onClick={onClose}
+              style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,width:34,height:34,color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#64748b";}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
           </div>
         </div>
         <div style={{padding:"16px 26px 26px",display:"flex",flexDirection:"column",gap:16}}>
@@ -17651,7 +17668,8 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
 
           <div>
             <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Descrição</div>
-            <textarea value={desc} onChange={e=>setDesc(e.target.value)} placeholder="Descreva a demanda..."
+            <textarea value={desc} onChange={e=>setDesc(e.target.value)}
+              placeholder={"O que precisa? Detalhe medidas, formato, prazo, referências, links..."}
               style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"11px 13px",color:C.ts,fontSize:13,resize:"vertical",width:"100%",fontFamily:"inherit",minHeight:80,outline:"none",boxSizing:"border-box",lineHeight:1.5}}/>
           </div>
 
@@ -51014,62 +51032,109 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                 style={{background:_isTarget?col.color+"08":"#fafbfc",border:"1px solid "+(_isTarget?col.color+"66":"#eef0f3"),borderRadius:12,padding:10,display:"flex",flexDirection:"column",gap:8,minHeight:140,transition:"all .15s"}}>
                 {/* Header da coluna */}
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:8,borderBottom:"1px solid "+col.color+"22"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
-                    <span style={{width:8,height:8,borderRadius:"50%",background:col.color,boxShadow:"0 0 0 2px "+col.color+"22",flexShrink:0}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
+                    <span style={{width:10,height:10,borderRadius:"50%",background:col.color,boxShadow:"0 0 0 3px "+col.color+"22",flexShrink:0}}/>
                     <div style={{minWidth:0,overflow:"hidden"}}>
-                      <div style={{color:"#0f172a",fontSize:11.5,fontWeight:800,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
-                      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
+                      <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
+                      <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
                     </div>
                   </div>
-                  <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"1px 7px",fontSize:10,fontWeight:800,flexShrink:0}}>{_tasks.length}</span>
+                  <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"3px 10px",fontSize:12,fontWeight:800,flexShrink:0}}>{_tasks.length}</span>
                 </div>
                 {/* Cards compactos */}
                 <div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}>
                   {_tasks.length===0
-                    ? <div style={{color:"#cbd5e1",fontSize:10.5,fontWeight:500,fontStyle:"italic",textAlign:"center",padding:"14px 4px"}}>Vazio</div>
+                    ? <div style={{color:"#cbd5e1",fontSize:12,fontWeight:500,fontStyle:"italic",textAlign:"center",padding:"20px 8px"}}>Vazio</div>
                     : _tasks.slice(0,_MK_LIMIT).map(function(t){
                         const _pc = (typeof PRIO_CFG!=="undefined"?PRIO_CFG:{})[t.priority] || {label:"Média",color:"#64748b",bg:"#64748b15"};
                         const _isAtr = _atrasada(t);
                         const _diasAtr = _isAtr ? Math.abs(_dl(t.deadline)) : 0;
                         const _cl = t.client && t.client!=="interno" && typeof CLIENTS!=="undefined" ? CLIENTS.find(c=>c.id===t.client) : null;
                         const _resps = (Array.isArray(t.assignees)&&t.assignees.length>0) ? t.assignees : (t.assignee?[t.assignee]:[]);
+                        const _isConcluida = col.id==="interno_executado";
                         return <div key={t.id}
                           draggable
                           onDragStart={function(e){_setDragId(t.id); e.dataTransfer.effectAllowed="move";}}
                           onDragEnd={function(){_setDragId(null); _setDragOverCol(null);}}
                           onClick={function(){setOpenCard(t);}}
-                          style={{background:"#fff",border:"1px solid "+(_isAtr?"#fecaca":"#eef0f3"),borderRadius:9,padding:"8px 9px",cursor:"grab",transition:"all .12s",boxShadow:"0 1px 2px rgba(15,23,42,0.02)",opacity:_dragId===t.id?.4:1}}
-                          onMouseEnter={function(e){e.currentTarget.style.borderColor=_isAtr?"#dc2626":col.color+"55"; e.currentTarget.style.boxShadow="0 3px 8px rgba(15,23,42,0.06)";}}
-                          onMouseLeave={function(e){e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#eef0f3"; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.02)";}}>
-                          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4,flexWrap:"wrap"}}>
-                            <span style={{display:"inline-flex",alignItems:"center",gap:3,color:_pc.color,fontSize:9,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>
-                              <span style={{width:5,height:5,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
-                            </span>
-                            {_isAtr && <span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"1px 5px",fontSize:8.5,fontWeight:800,letterSpacing:.3}}>{_diasAtr}D ATR</span>}
+                          style={{background:"#fff",border:"1.5px solid "+(_isAtr?"#fecaca":"#eef0f3"),borderRadius:12,padding:"12px 13px",cursor:"grab",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",opacity:_dragId===t.id?.4:1,position:"relative"}}
+                          onMouseEnter={function(e){e.currentTarget.style.borderColor=_isAtr?"#dc2626":col.color+"66"; e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.08)"; e.currentTarget.style.transform="translateY(-1px)";
+                            const _qa=e.currentTarget.querySelector("[data-quick-actions]"); if(_qa) _qa.style.opacity="1";
+                          }}
+                          onMouseLeave={function(e){e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#eef0f3"; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.025)"; e.currentTarget.style.transform="";
+                            const _qa=e.currentTarget.querySelector("[data-quick-actions]"); if(_qa) _qa.style.opacity="0";
+                          }}>
+                          {/* Quick actions na capa (aparecem no hover) */}
+                          <div data-quick-actions style={{position:"absolute",top:7,right:7,display:"flex",gap:4,opacity:0,transition:"opacity .15s",zIndex:2}}>
+                            {!_isConcluida && <button title="Marcar como concluída"
+                              onClick={function(e){e.stopPropagation(); _moveCard(t.id,"interno_executado");}}
+                              style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:7,width:26,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#16a34a",cursor:"pointer",boxShadow:"0 2px 5px rgba(15,23,42,0.08)"}}
+                              onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#16a34a";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#16a34a";}}
+                              onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#16a34a";e.currentTarget.style.borderColor="#bbf7d0";}}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            </button>}
+                            <button title="Editar"
+                              onClick={function(e){e.stopPropagation(); setOpenCard(t);}}
+                              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,width:26,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",cursor:"pointer",boxShadow:"0 2px 5px rgba(15,23,42,0.08)"}}
+                              onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#7c3aed";}}
+                              onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                            <button title="Excluir"
+                              onClick={function(e){e.stopPropagation(); _deleteCard(t.id);}}
+                              style={{background:"#fff",border:"1px solid #fecaca",borderRadius:7,width:26,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#dc2626",cursor:"pointer",boxShadow:"0 2px 5px rgba(15,23,42,0.08)"}}
+                              onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";}}
+                              onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
                           </div>
-                          <div style={{color:"#0f172a",fontSize:12,fontWeight:600,letterSpacing:-.1,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",marginBottom:5}}>{t.title||"(sem título)"}</div>
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+
+                          {/* Linha de tags: Prioridade + Atraso (com ícone de relógio) */}
+                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,flexWrap:"wrap",paddingRight:74}}>
+                            <span style={{display:"inline-flex",alignItems:"center",gap:4,color:_pc.color,background:_pc.color+"12",border:"1px solid "+_pc.color+"33",borderRadius:6,padding:"2px 8px",fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
+                              <span style={{width:6,height:6,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
+                            </span>
+                            {_isAtr && <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.4}}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                              {_diasAtr}d atraso
+                            </span>}
+                          </div>
+
+                          {/* Título */}
+                          <div style={{color:"#0f172a",fontSize:14,fontWeight:700,letterSpacing:-.2,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",marginBottom:9}}>{t.title||"(sem título)"}</div>
+
+                          {/* Footer: logo cliente (grande) + responsáveis (maiores) */}
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
                             {_cl
-                              ? <span style={{display:"inline-flex",alignItems:"center",gap:4,color:"#64748b",fontSize:10,fontWeight:600,minWidth:0,overflow:"hidden"}}>
-                                  <span style={{width:6,height:6,borderRadius:"50%",background:_cl.color||"#7c3aed",flexShrink:0}}/>
-                                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_cl.name}</span>
-                                </span>
-                              : <span style={{color:"#94a3b8",fontSize:10,fontWeight:500,fontStyle:"italic"}}>Interna</span>}
+                              ? <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                                  <div style={{width:24,height:24,borderRadius:6,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:2}}>
+                                    {typeof ClientLogo!=="undefined"
+                                      ? <ClientLogo clientId={_cl.id} size="sm"/>
+                                      : <span style={{width:10,height:10,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>}
+                                  </div>
+                                  <span style={{color:"#475569",fontSize:11.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{_cl.name}</span>
+                                </div>
+                              : <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                                  <div style={{width:24,height:24,borderRadius:6,background:"#ede9fe",border:"1px solid #ddd6fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#7c3aed"}}>
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/></svg>
+                                  </div>
+                                  <span style={{color:"#7c3aed",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>Interna</span>
+                                </div>}
                             {_resps.length>0 && <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
-                              {_resps.slice(0,2).map(function(uid,i){
+                              {_resps.slice(0,3).map(function(uid,i){
                                 const u = (typeof TEAM!=="undefined"?TEAM:[]).find(x=>x.id===uid);
                                 if(!u) return null;
                                 const ph = (typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id)) || (u.profile_data&&u.profile_data.photo) || null;
                                 return ph
-                                  ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:18,height:18,borderRadius:"50%",objectFit:"cover",border:"1.5px solid #fff",marginLeft:i===0?0:-5}}/>
-                                  : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:8,border:"1.5px solid #fff",marginLeft:i===0?0:-5}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
+                                  ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid #fff",marginLeft:i===0?0:-8,boxShadow:"0 1px 3px rgba(15,23,42,0.12)",zIndex:3-i}}/>
+                                  : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:10.5,border:"2px solid #fff",marginLeft:i===0?0:-8,boxShadow:"0 1px 3px rgba(15,23,42,0.12)",zIndex:3-i}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
                               })}
-                              {_resps.length>2 && <span style={{color:"#94a3b8",fontSize:9,fontWeight:700,marginLeft:3}}>+{_resps.length-2}</span>}
+                              {_resps.length>3 && <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:"50%",background:"#f1f5f9",color:"#64748b",fontWeight:800,fontSize:10,border:"2px solid #fff",marginLeft:-8,boxShadow:"0 1px 3px rgba(15,23,42,0.12)"}}>+{_resps.length-3}</span>}
                             </div>}
                           </div>
                         </div>;
                       })}
-                  {_tasks.length>_MK_LIMIT && <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textAlign:"center",padding:"4px 0"}}>+{_tasks.length-_MK_LIMIT} demanda{_tasks.length-_MK_LIMIT>1?"s":""}</div>}
+                  {_tasks.length>_MK_LIMIT && <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,textAlign:"center",padding:"6px 0"}}>+{_tasks.length-_MK_LIMIT} demanda{_tasks.length-_MK_LIMIT>1?"s":""}</div>}
                 </div>
               </div>;
             })}
@@ -51679,7 +51744,56 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
   const _sprintWeekKey = (offset) => _dgWeekKey(new Date(_dgWeekDate(5, offset)+"T00:00:00"));
   const sprintWk        = _sprintWeekKey(sprintWeekOffset);
   const sprintSextaIso  = _dgWeekDate(5, sprintWeekOffset);
-  const sprintItems = planEntries.filter(e=>e.type==="sprint_item"&&e.week_key===sprintWk&&_isMine(e));
+  const _sprintItemsPlanned = planEntries.filter(e=>e.type==="sprint_item"&&e.week_key===sprintWk&&_isMine(e));
+
+  // SINCRONIZAÇÃO: demandas internas com sprint_bucket viram entregas automaticamente
+  //   offset 0 (semana atual)  → sprint_bucket="atual"
+  //   offset 1 (próxima)       → sprint_bucket="proxima"
+  //   offset >=2 (futuras)     → sprint_bucket="futuro"
+  //   offset <0 (passadas)     → não mostra (não faz sentido sincronizar pro passado)
+  const _bucketForOffset = sprintWeekOffset===0?"atual" : sprintWeekOffset===1?"proxima" : sprintWeekOffset>=2?"futuro" : null;
+  const _sprintItemsFromInternas = !_bucketForOffset ? [] : (allTasks||[])
+    .filter(function(t){
+      if(!t || t.deletedAt) return false;
+      // Status precisa ser de demanda interna ativa (não concluída antes do sprint)
+      if(typeof INTERNO_COLS==="undefined") return false;
+      var _isInterna = INTERNO_COLS.find(c=>c.id===t.status);
+      if(!_isInterna) return false;
+      var _bucket = t.sprintBucket || t.sprint_bucket;
+      return _bucket === _bucketForOffset;
+    })
+    .map(function(t){
+      // Mapeia status do kanban interno pra status de sprint:
+      //   interno_executado → concluido
+      //   interno_execucao  → producao
+      //   interno_avaliacao → apv_int
+      //   resto             → planejado
+      var _st = "planejado";
+      if(t.status==="interno_executado") _st = "concluido";
+      else if(t.status==="interno_execucao") _st = "producao";
+      else if(t.status==="interno_avaliacao") _st = "apv_int";
+      return {
+        id: "_int_"+t.id,
+        type: "sprint_item",
+        week_key: sprintWk,
+        title: t.title || "(sem título)",
+        client_id: t.client || "interno",
+        deadline: t.deadline || null,
+        status: _st,
+        // Marcadores pra UI saber que é sincronizado de demanda interna
+        _fromInterna: true,
+        _internaTaskId: t.id,
+        _internaPriority: t.priority,
+      };
+    });
+  // Junta: manuais primeiro (entregas dedicadas), depois as sincronizadas. Dedup por título+cliente.
+  const _seenKeys = {};
+  const sprintItems = _sprintItemsPlanned.concat(_sprintItemsFromInternas).filter(function(it){
+    var k = (it.title||"")+"|"+(it.client_id||"");
+    if(_seenKeys[k]) return false;
+    _seenKeys[k] = true;
+    return true;
+  });
 
   const sprintTotal     = sprintItems.length;
   const sprintConcluido = sprintItems.filter(it=>it.status==="concluido").length;
