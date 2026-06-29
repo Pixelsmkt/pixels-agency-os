@@ -28899,6 +28899,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
         const{data}=sb.storage.from("agency-files").getPublicUrl(path);
         const thumb=await thumbPromise;
         setAttachments(p=>p.map(a=>a.id===tempId?{...a,url:data.publicUrl,uploading:false,progress:100,storagePath:path,thumbnail:thumb}:a));
+        // ── Histórico: registra upload de arquivo na timeline do card ──
+        // (mostra "Subiu vídeo.mp4" + quem + quando no histórico do card)
+        try{
+          const kind=mime.startsWith("video/")?"vídeo":mime.startsWith("image/")?"imagem":mime.startsWith("audio/")?"áudio":"arquivo";
+          const entry={type:"file_upload",label:`Subiu ${kind}: ${file.name}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+          setTasks&&setTasks(prev=>prev.map(t=>t.id===task.id?{...t,timeline:[...(t.timeline||[]),entry]}:t));
+        }catch(e){console.warn("[uploadOne] timeline log:",e?.message||e);}
       }catch(err){
         console.warn("Upload erro:",err?.message||err);
         setAttachments(p=>p.filter(a=>a.id!==tempId));
@@ -28918,6 +28925,16 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     const att=attachments.find(a=>a.id===id);
     // Remove do estado IMEDIATAMENTE (UI responsiva)
     setAttachments(p=>p.filter(a=>a.id!==id));
+    // ── Histórico: registra exclusão de arquivo na timeline do card ──
+    // (só registra se o arquivo já tinha terminado de subir — placeholders cancelados não viram histórico)
+    if(att&&!att.uploading&&att.name){
+      try{
+        const mime=att.type||"";
+        const kind=mime.startsWith("video/")?"vídeo":mime.startsWith("image/")?"imagem":mime.startsWith("audio/")?"áudio":"arquivo";
+        const entry={type:"file_delete",label:`Removeu ${kind}: ${att.name}`,at:new Date().toISOString(),atFmt:nowFmt(),user:user.name};
+        setTasks&&setTasks(prev=>prev.map(t=>t.id===task.id?{...t,timeline:[...(t.timeline||[]),entry]}:t));
+      }catch(e){console.warn("[removeAttachment] timeline log:",e?.message||e);}
+    }
     // Storage delete em background — loga falhas pra debug (rotina de varrer órfãos no /acessos cobre)
     if(att?.storagePath){
       try{
@@ -30181,9 +30198,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           <span style={{width:28,height:28,borderRadius:8,background:"#0f172a0d",color:"#0f172a",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n="video" size={14}/></span>
                           <div style={{minWidth:0,flex:1}}>
                             <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{a.name}</div>
-                            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:1}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6,marginTop:1,flexWrap:"wrap"}}>
                               <span style={{color:"#0f172a",fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Arquivo final</span>
                               {sizeMB&&<><span style={{color:"#cbd5e1",fontSize:9}}>•</span><span style={{color:"#94a3b8",fontSize:10,fontWeight:500}}>{sizeMB} MB</span></>}
+                              {(a.addedBy||a.addedAt)&&<><span style={{color:"#cbd5e1",fontSize:9}}>•</span><span style={{color:"#94a3b8",fontSize:10,fontWeight:500,display:"inline-flex",alignItems:"center",gap:3}}><Ico n="upload" size={10}/>{a.addedBy?`Subido por ${a.addedBy}`:"Subido"}{a.addedAt?` em ${a.addedAt}`:""}</span></>}
                             </div>
                           </div>
                         </div>
@@ -35677,6 +35695,11 @@ const rowToTask = (r) => ({
   data_prevista_manual: !!r.data_prevista_manual,
   urgente:              !!r.urgente,
   aguardando_info:      !!r.aguardando_info,
+  // ── Demanda interna (mini-kanban DashSocio + sprint sync) ──
+  // (Sem isso o sprintBucket vira undefined ao recarregar do Supabase e
+  //  o card marcado como "atual" some da seção "Sprint da semana atual")
+  sprintBucket: r.sprint_bucket || "",
+  internoTipo:  r.interno_tipo  || "",
 });
 
 const taskToRow = (t) => ({
@@ -50993,10 +51016,10 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
       {/* Mini-kanban: 4 colunas com drag-and-drop pra mover entre status */}
       {(function(){
         const _MK_COLS = [
-          {id:"interno_demanda",   label:"Entrada",          color:"#9F43F6", hint:"Decidir"},
-          {id:"interno_execucao",  label:"Em execução",      color:"#f97316", hint:"Equipe trabalhando"},
-          {id:"interno_avaliacao", label:"Aguard. aprovação",color:"#eab308", hint:"Revisar e aprovar"},
-          {id:"interno_executado", label:"Concluídas",       color:"#22c55e", hint:"Entregues"},
+          {id:"interno_demanda",   label:"Entrada",          color:"#9F43F6", hint:"Decidir",            ico:"inbox"},
+          {id:"interno_execucao",  label:"Em execução",      color:"#f97316", hint:"Equipe trabalhando", ico:"zap"},
+          {id:"interno_avaliacao", label:"Aguard. aprovação",color:"#eab308", hint:"Revisar e aprovar",  ico:"clock"},
+          {id:"interno_executado", label:"Concluídas",       color:"#22c55e", hint:"Entregues",          ico:"check"},
         ];
         const _byCol = {};
         _MK_COLS.forEach(c=>{ _byCol[c.id] = _internas.filter(t=>t.status===c.id); });
@@ -51032,8 +51055,11 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                 style={{background:_isTarget?col.color+"08":"#fafbfc",border:"1px solid "+(_isTarget?col.color+"66":"#eef0f3"),borderRadius:12,padding:10,display:"flex",flexDirection:"column",gap:8,minHeight:140,transition:"all .15s"}}>
                 {/* Header da coluna */}
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:8,borderBottom:"1px solid "+col.color+"22"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
-                    <span style={{width:10,height:10,borderRadius:"50%",background:col.color,boxShadow:"0 0 0 3px "+col.color+"22",flexShrink:0}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0,flex:1}}>
+                    {/* Ícone moderno por coluna em vez da bolinha */}
+                    <span style={{width:26,height:26,borderRadius:8,background:col.color+"15",color:col.color,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 0 0 1px "+col.color+"22 inset"}}>
+                      <Ico n={col.ico} size={14} color={col.color}/>
+                    </span>
                     <div style={{minWidth:0,overflow:"hidden"}}>
                       <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
                       <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
@@ -51106,14 +51132,24 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                           {/* Footer: logo cliente (grande) + responsáveis (maiores) */}
                           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
                             {_cl
-                              ? <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
-                                  <div style={{width:24,height:24,borderRadius:6,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:2}}>
-                                    {typeof ClientLogo!=="undefined"
-                                      ? <ClientLogo clientId={_cl.id} size="sm"/>
-                                      : <span style={{width:10,height:10,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>}
-                                  </div>
-                                  <span style={{color:"#475569",fontSize:11.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{_cl.name}</span>
-                                </div>
+                              ? (function(){
+                                  // Nome com unidade Bioter quando aplicável (ex: "Bioter Chapecó")
+                                  var _bu = (t.bioterUnit||"").trim();
+                                  var _bUnit = null;
+                                  if(_cl.id==="bioter" && _bu && typeof BIOTER_UNITS!=="undefined"){
+                                    _bUnit = BIOTER_UNITS.find(function(u){return u.id===_bu;});
+                                  }
+                                  var _displayName = _bUnit ? (_cl.name+" "+_bUnit.pickerLabel) : _cl.name;
+                                  return <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
+                                    {/* Logo maior + sem padding pra aparecer inteira */}
+                                    <div style={{width:30,height:30,borderRadius:7,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+                                      {typeof ClientLogo!=="undefined"
+                                        ? <ClientLogo clientId={_cl.id} size="sm"/>
+                                        : <span style={{width:10,height:10,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>}
+                                    </div>
+                                    <span style={{color:"#475569",fontSize:11.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{_displayName}</span>
+                                  </div>;
+                                })()
                               : <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
                                   <div style={{width:24,height:24,borderRadius:6,background:"#ede9fe",border:"1px solid #ddd6fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#7c3aed"}}>
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/></svg>
