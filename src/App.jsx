@@ -17603,10 +17603,19 @@ function IconI({ name, size=14, color="currentColor", style }) {
 
 /* ── Card Modal (edição completa — mantido para nova/editar) ─────── */
 function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
+  // ═══════════════════════════════════════════════════════════════════
+  // VISUAL UNIFICADO com _DGNovoSprint (modal de Editar Entrega):
+  //   • Header com logo cliente + faixa colorida vertical
+  //   • Grid 3×2 de tipos com ícones grandes coloridos
+  //   • Prioridade em 4 cards (mostra dias úteis embaixo)
+  //   • Status em pills verticais (igual sprint)
+  //   • Sprint NÃO aparece — é derivado automaticamente da prioridade:
+  //       urgente/alta → atual · média → próxima · baixa → futuro
+  //   • Footer: Excluir (esquerda) · Cancelar + Salvar (direita)
+  // ═══════════════════════════════════════════════════════════════════
   const [title,        setTitle]        = useState(card.title     || "");
   const [desc,         setDesc]         = useState(card.desc      || card.description || "");
   const [priority,     setPriority]     = useState(card.priority  || "media");
-  // Auto-prazo: ao criar uma nova demanda, prazo já vem calculado por prioridade
   const _initDeadline = card.deadline || (card._isNew ? _intPrazoByPrio(card.priority||"media") : "");
   const [deadline,     setDeadline]     = useState(_initDeadline);
   const [deadlineTime, setDeadlineTime] = useState(card.deadlineTime || "");
@@ -17617,138 +17626,178 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
   const [assignees,    setAssignees]    = useState(card.assignees || []);
   const [checklist,    setChecklist]    = useState(card.checklist || []);
   const [newCheck,     setNewCheck]     = useState("");
-  const [sprint,       setSprint]       = useState(card.sprintBucket || (priority==="urgente"?"atual":"proxima"));
+
+  // ── Sprint AUTOMÁTICO baseado na prioridade ──
+  // urgente/alta → atual · media → proxima · baixa → futuro
+  const _autoSprint = (p) => p==="urgente"||p==="alta" ? "atual" : p==="baixa" ? "futuro" : "proxima";
 
   const eligible = TEAM.filter(u => u.level === 1 || ACCESS_STORE?.[u.id]?.verDemandasInternas);
   const toggleA  = (uid) => setAssignees(p => p.includes(uid) ? p.filter(x=>x!==uid) : [...p, uid]);
   const addCheck = () => { if (!newCheck.trim()) return; setChecklist(p=>[...p,{id:Date.now()+"-"+Math.random().toString(36).slice(2,5),text:newCheck.trim(),done:false}]); setNewCheck(""); };
-  const save = () => onSave({ ...card, title, desc, priority, deadline, deadlineTime, client: clientId||"interno", bioterUnit: clientId==="bioter" ? bioterUnit : "", origem, internoTipo, sprintBucket: sprint, assignees, checklist });
+  const save = () => onSave({ ...card, title, desc, priority, deadline, deadlineTime, client: clientId||"interno", bioterUnit: clientId==="bioter" ? bioterUnit : "", origem, internoTipo, sprintBucket: _autoSprint(priority), assignees, checklist });
   const col  = INTERNO_COLS.find(c => c.id === card.status) || INTERNO_COLS[0];
-  const pc   = PRIO_CFG[priority] || PRIO_CFG.media;
   const done = checklist.filter(c=>c.done).length;
 
+  // ── Cliente atual pra colorir header ──
+  const cl = clientId ? CLIENTS.find(c=>c.id===clientId) : null;
+  const clColor = cl?.color || PIXELS_PURPLE;
+  const isEdit = !card._isNew;
+
+  // ── Configs visuais (espelha _DGNovoSprint do dashboard) ──
+  // Mapeia INTERNO_TIPOS pra estilo do sprint (com cor)
+  const _TIPO_COLORS = {
+    trafego:"#f59e0b", folder:"#ec4899", feira:"#8b5cf6", operacional:"#0ea5e9", outro:"#64748b",
+    // suporte a tipos antigos
+    arte:"#7c3aed", video:"#ec4899", copy:"#0ea5e9", reuniao:"#64748b", relatorio:"#10b981",
+  };
+  const _tipoColor = (id) => _TIPO_COLORS[id] || PIXELS_PURPLE;
+
+  // ── Label helper (igual sprint) ──
+  const _lab = (txt, sub) => <div style={{fontSize:11.5,color:"#94a3b8",fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:9}}>
+    {txt}{sub&&<span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0,marginLeft:5}}>{sub}</span>}
+  </div>;
+
+  // ── Mapa de prazo por prioridade (mostrar dias) ──
+  const _PRIO_DIAS = {urgente:1, alta:5, media:14, baixa:30};
+
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.55)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999,padding:16,fontFamily:INTERNO_INTER}}
-      onClick={e=>e.target===e.currentTarget&&onClose()}>
-      <div style={{background:C.card,borderRadius:20,width:"100%",maxWidth:620,maxHeight:"92vh",overflow:"auto",boxShadow:"0 32px 80px rgba(0,0,0,0.4)"}}>
-        <div style={{padding:"22px 26px 0",display:"flex",alignItems:"center",gap:10,justifyContent:"space-between"}}>
-          <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-            <div style={{background:col.color+"18",border:"1px solid "+col.color+"33",borderRadius:9,padding:"5px 12px",display:"inline-flex",alignItems:"center",gap:6}}>
-              <span style={{width:7,height:7,borderRadius:"50%",background:col.color,boxShadow:"0 0 0 2px "+col.color+"22"}}/>
-              <span style={{color:col.color,fontSize:11.5,fontWeight:800,letterSpacing:.2}}>{col.label}</span>
+    <div onClick={e=>e.target===e.currentTarget&&onClose()}
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",zIndex:9999,paddingTop:48,fontFamily:INTERNO_INTER}}>
+      <div onClick={e=>e.stopPropagation()}
+        style={{background:"#fff",borderRadius:18,width:"min(680px,94%)",boxShadow:"0 24px 80px rgba(0,0,0,0.28)",maxHeight:"calc(100vh - 80px)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+        {/* ─── HEADER com gradiente sutil da cor do cliente ─── */}
+        <div style={{position:"relative",padding:"22px 26px 18px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,"+clColor+"0a,#fff)"}}>
+          <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:clColor}}/>
+          <div style={{display:"flex",alignItems:"center",gap:14}}>
+            {cl
+              ? <ClientLogo clientId={cl.id} size="sm"/>
+              : <div style={{width:30,height:30,borderRadius:7,background:PIXELS_PURPLE+"15",display:"flex",alignItems:"center",justifyContent:"center",color:PIXELS_PURPLE}}>
+                  <IconI name="folder" size={15}/>
+                </div>}
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11.5,color:clColor,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>{isEdit?"Editar demanda interna":"Nova demanda interna"}</div>
+              <div style={{fontSize:19,fontWeight:800,color:"#0f172a",letterSpacing:-.4,marginTop:3,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl?cl.name:"Sem cliente (interno)"}</div>
             </div>
-            <div style={{background:pc.bg,border:"1px solid "+pc.color+"33",borderRadius:9,padding:"5px 12px",display:"inline-flex",alignItems:"center",gap:6}}>
-              <IconI name="alert" size={11} color={pc.color}/>
-              <span style={{color:pc.color,fontSize:11.5,fontWeight:800,letterSpacing:.2}}>{pc.label}</span>
-            </div>
-            {card.origem==="portal"&&<div style={{background:"#0ea5e918",border:"1px solid #0ea5e933",borderRadius:9,padding:"5px 12px",display:"inline-flex",alignItems:"center",gap:6}}>
-              <IconI name="external" size={11} color="#0ea5e9"/>
-              <span style={{color:"#0ea5e9",fontSize:11.5,fontWeight:800,letterSpacing:.2}}>Portal</span>
-            </div>}
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            {isSocio&&card.id&&!card._isNew&&<button onClick={()=>onDelete(card.id)}
-              style={{background:"#fff",border:"1px solid #fecaca",borderRadius:10,padding:"8px 14px",color:"#dc2626",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",fontFamily:"inherit"}}
-              onMouseEnter={e=>{e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-              Excluir
-            </button>}
-            <button onClick={onClose}
-              style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,width:34,height:34,color:"#64748b",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .15s"}}
+            <button onClick={onClose} title="Fechar"
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,width:34,height:34,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .15s",padding:0,flexShrink:0}}
               onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#64748b";}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
         </div>
-        <div style={{padding:"16px 26px 26px",display:"flex",flexDirection:"column",gap:16}}>
-          <textarea value={title} onChange={e=>setTitle(e.target.value)} placeholder="Título da demanda interna..."
-            style={{background:"transparent",border:"none",outline:"none",color:C.tx,fontSize:18,fontWeight:700,resize:"none",width:"100%",fontFamily:"inherit",lineHeight:1.35}} rows={2}/>
 
+        {/* ─── CORPO ─── */}
+        <div style={{padding:"22px 26px 24px",overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:22}}>
+
+          {/* Título */}
           <div>
-            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Descrição</div>
-            <textarea value={desc} onChange={e=>setDesc(e.target.value)}
-              placeholder={"O que precisa? Detalhe medidas, formato, prazo, referências, links..."}
-              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:12,padding:"11px 13px",color:C.ts,fontSize:13,resize:"vertical",width:"100%",fontFamily:"inherit",minHeight:80,outline:"none",boxSizing:"border-box",lineHeight:1.5}}/>
+            {_lab("O que precisa ser feito")}
+            <input value={title} onChange={e=>setTitle(e.target.value)}
+              placeholder="Ex: Criar arte para campanha lançamento"
+              onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();save();}}}
+              style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:11,fontSize:14,boxSizing:"border-box",outline:"none",fontFamily:"inherit",transition:"border-color .15s, background .15s",background:"#fafbfc"}}
+              onFocus={e=>{e.currentTarget.style.borderColor=clColor;e.currentTarget.style.background="#fff";}}
+              onBlur={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}
+              autoFocus/>
           </div>
 
-          {/* Tipo de demanda */}
+          {/* Descrição */}
           <div>
-            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Tipo</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {_lab("Detalhes", "(opcional)")}
+            <textarea value={desc} onChange={e=>setDesc(e.target.value)}
+              placeholder="Detalhe medidas, formato, referências, links..."
+              style={{width:"100%",padding:"11px 14px",border:"1.5px solid #e2e8f0",borderRadius:11,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",resize:"vertical",minHeight:70,background:"#fafbfc",lineHeight:1.5}}
+              onFocus={e=>{e.currentTarget.style.borderColor=clColor;e.currentTarget.style.background="#fff";}}
+              onBlur={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}/>
+          </div>
+
+          {/* Tipo de demanda — grid 3×N com ícones coloridos */}
+          <div>
+            {_lab("Tipo de demanda")}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
               {INTERNO_TIPOS.map(t=>{
-                const sel=internoTipo===t.id;
-                return(
-                  <button key={t.id} onClick={()=>setInternoTipo(t.id)}
-                    style={{background:sel?PIXELS_PURPLE+"18":"transparent",border:`1px solid ${sel?PIXELS_PURPLE:C.b1}`,borderRadius:10,padding:"6px 11px",color:sel?PIXELS_PURPLE:C.ts,fontSize:11.5,fontWeight:sel?700:500,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:"inherit"}}>
-                    <IconI name={t.icon} size={13}/>{t.label}
-                  </button>
-                );
+                const a = internoTipo===t.id;
+                const tc = _tipoColor(t.id);
+                return <button key={t.id} type="button" onClick={()=>setInternoTipo(t.id)}
+                  style={{background:a?tc:"#fafbfc",color:a?"#fff":"#475569",border:"1.5px solid "+(a?tc:"#eef0f3"),padding:"11px 10px",borderRadius:11,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,letterSpacing:-.1,fontSize:12.5,fontWeight:a?700:600,transition:"all .15s"}}>
+                  <IconI name={t.icon} size={13} color={a?"#fff":tc}/>
+                  {t.label}
+                </button>;
               })}
             </div>
           </div>
 
-          {/* Prioridade + Sprint */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-            <div>
-              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Prioridade</div>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-                {Object.entries(PRIO_CFG).map(([k,conf])=>(
-                  <button key={k} onClick={()=>{setPriority(k); if(k==="urgente")setSprint("atual"); setDeadline(_intPrazoByPrio(k));}}
-                    style={{background:priority===k?conf.bg:"transparent",border:`1px solid ${priority===k?conf.color:C.b1}`,borderRadius:8,padding:"5px 10px",color:priority===k?conf.color:C.td,fontSize:11,fontWeight:priority===k?700:500,cursor:"pointer",fontFamily:"inherit"}}>
-                    {conf.label}
-                  </button>
-                ))}
-              </div>
+          {/* Prioridade — 4 cards (define prazo + sprint automático) */}
+          <div>
+            {_lab("Prioridade", "(define o prazo e o sprint automaticamente)")}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+              {Object.entries(PRIO_CFG).map(([k,conf])=>{
+                const a = priority===k;
+                const dias = _PRIO_DIAS[k] || 14;
+                return <button key={k} type="button"
+                  onClick={()=>{ setPriority(k); setDeadline(_intPrazoByPrio(k)); }}
+                  style={{background:a?conf.color:conf.bg,color:a?"#fff":conf.color,border:"1.5px solid "+(a?conf.color:conf.color+"33"),padding:"12px 12px",borderRadius:11,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",textAlign:"left"}}>
+                  <div style={{fontSize:12.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,marginBottom:4}}>{conf.label}</div>
+                  <div style={{fontSize:11,fontWeight:600,opacity:a?.95:.85,display:"inline-flex",alignItems:"center",gap:4}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    {dias} {dias===1?"dia":"dias"}
+                  </div>
+                </button>;
+              })}
             </div>
-            <div>
-              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Sprint</div>
-              <div style={{display:"flex",gap:5}}>
-                {[["atual","Atual"],["proxima","Próxima"],["futuro","Futuro"]].map(([k,l])=>(
-                  <button key={k} onClick={()=>setSprint(k)}
-                    style={{flex:1,background:sprint===k?PIXELS_PURPLE+"18":"transparent",border:`1px solid ${sprint===k?PIXELS_PURPLE:C.b1}`,borderRadius:8,padding:"5px 8px",color:sprint===k?PIXELS_PURPLE:C.td,fontSize:11,fontWeight:sprint===k?700:500,cursor:"pointer",fontFamily:"inherit"}}>
-                    {l}
-                  </button>
-                ))}
-              </div>
+            {/* Sprint derivado — só mostra qual sprint vai cair, sem deixar editar */}
+            <div style={{marginTop:9,display:"flex",alignItems:"center",gap:7,color:"#94a3b8",fontSize:11.5,fontWeight:600}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="15" x2="20" y2="15"/><line x1="4" y1="20" x2="14" y2="20"/><polygon points="4 15 20 15 20 4 4 4 4 15" fill="currentColor" opacity=".08"/></svg>
+              Entra no <span style={{color:PIXELS_PURPLE,fontWeight:800,marginLeft:3}}>
+                Sprint {_autoSprint(priority)==="atual"?"da semana atual":_autoSprint(priority)==="proxima"?"da próxima semana":"futuro"}
+              </span>
             </div>
           </div>
 
-          {/* Prazo + Horário com stepper de setas pros lados */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          {/* Status + Prazo lado a lado */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
             <div>
-              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6,display:"flex",alignItems:"center",gap:7}}>
-                <span>Prazo</span>
-                <span style={{background:PIXELS_PURPLE+"15",color:PIXELS_PURPLE,padding:"1px 7px",borderRadius:99,fontSize:9,fontWeight:800,letterSpacing:.4}}>auto · {priority}</span>
+              {_lab("Status")}
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {INTERNO_COLS.map(st=>{
+                  const a = card.status===st.id;
+                  return <div key={st.id}
+                    style={{background:a?st.color:st.color+"15",color:a?"#fff":st.color,border:"1.5px solid "+(a?st.color:st.color+"22"),padding:"9px 12px",borderRadius:9,fontFamily:"inherit",fontSize:11.5,fontWeight:a?800:700,textTransform:"uppercase",letterSpacing:.4,textAlign:"left",display:"flex",alignItems:"center",gap:8,opacity:a?1:.7}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:a?"#fff":st.color,flexShrink:0}}/>
+                    {st.label}
+                  </div>;
+                })}
               </div>
-              <div style={{display:"flex",alignItems:"center",gap:0,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:3}}>
+              <div style={{color:"#cbd5e1",fontSize:10,marginTop:6,fontStyle:"italic"}}>arraste o card no kanban pra mudar status</div>
+            </div>
+            <div>
+              {_lab("Prazo")}
+              <div style={{display:"flex",alignItems:"center",gap:0,background:"#fafbfc",border:"1.5px solid #e2e8f0",borderRadius:11,padding:3,marginBottom:10}}>
                 <button onClick={()=>setDeadline(_intDateShift(deadline,-1))} title="Dia anterior"
-                  style={{background:"#fff",border:`1px solid ${C.b1}`,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:PIXELS_PURPLE,cursor:"pointer",flexShrink:0}}>
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:PIXELS_PURPLE,cursor:"pointer",flexShrink:0}}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
                 <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
-                  style={{flex:1,background:"transparent",border:"none",padding:"0 10px",color:C.tx,fontSize:13,fontWeight:700,outline:"none",fontFamily:"inherit",textAlign:"center",minWidth:0}}/>
+                  style={{flex:1,background:"transparent",border:"none",padding:"0 10px",color:"#0f172a",fontSize:13,fontWeight:700,outline:"none",fontFamily:"inherit",textAlign:"center",minWidth:0}}/>
                 <button onClick={()=>setDeadline(_intDateShift(deadline,1))} title="Próximo dia"
-                  style={{background:"#fff",border:`1px solid ${C.b1}`,borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:PIXELS_PURPLE,cursor:"pointer",flexShrink:0}}>
+                  style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,width:30,height:30,display:"flex",alignItems:"center",justifyContent:"center",color:PIXELS_PURPLE,cursor:"pointer",flexShrink:0}}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
               </div>
-              <div style={{color:C.td,fontSize:10,marginTop:4,fontWeight:500,fontStyle:"italic"}}>{_intFmtDateBR(deadline)}</div>
-            </div>
-            <div>
-              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Horário</div>
+              {_lab("Horário")}
               <input type="time" value={deadlineTime} onChange={e=>setDeadlineTime(e.target.value)}
-                style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:C.ts,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"}}/>
+                style={{width:"100%",padding:"10px 12px",border:"1.5px solid #e2e8f0",borderRadius:11,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fafbfc"}}/>
             </div>
           </div>
 
           {/* Cliente */}
           <div>
-            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Cliente</div>
+            {_lab("Cliente", "(opcional)")}
             <select value={clientId} onChange={e=>{setClientId(e.target.value);setBioterUnit("");}}
-              style={{background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"9px 12px",color:clientId?C.tx:C.td,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",cursor:"pointer",fontFamily:"inherit"}}>
-              <option value="">— Sem cliente (interno) —</option>
+              style={{background:"#fafbfc",border:"1.5px solid #e2e8f0",borderRadius:11,padding:"11px 13px",color:clientId?"#0f172a":"#94a3b8",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",cursor:"pointer",fontFamily:"inherit"}}>
+              <option value="">— Sem cliente (demanda interna) —</option>
               {CLIENTS.map(c=>(
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -17757,46 +17806,31 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
 
           {clientId==="bioter"&&(
             <div>
-              <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Unidade Bioter</div>
+              {_lab("Unidade Bioter")}
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                {BIOTER_UNITS.map(u=>(
-                  <button key={u.id} onClick={()=>setBioterUnit(u.id)}
-                    style={{background:bioterUnit===u.id?u.color+"22":"transparent",border:`1px solid ${bioterUnit===u.id?u.color:C.b1}`,borderRadius:8,padding:"5px 12px",color:bioterUnit===u.id?u.color:C.td,fontSize:11,fontWeight:bioterUnit===u.id?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                {BIOTER_UNITS.map(u=>{
+                  const a = bioterUnit===u.id;
+                  return <button key={u.id} onClick={()=>setBioterUnit(u.id)}
+                    style={{background:a?u.color:u.color+"15",color:a?"#fff":u.color,border:"1.5px solid "+(a?u.color:u.color+"33"),borderRadius:9,padding:"6px 12px",fontSize:11.5,fontWeight:a?800:600,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
                     {u.label}
-                  </button>
-                ))}
+                  </button>;
+                })}
               </div>
             </div>
           )}
 
-          {/* Origem */}
-          <div>
-            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>Origem</div>
-            <div style={{display:"flex",gap:6}}>
-              {[
-                {id:"interno",            label:"Interna"},
-                {id:"solicitacao_cliente",label:"Solicitação"},
-                {id:"portal",             label:"Portal"},
-              ].map(o=>(
-                <button key={o.id} onClick={()=>setOrigem(o.id)}
-                  style={{flex:1,background:origem===o.id?PIXELS_PURPLE+"18":"transparent",border:`1px solid ${origem===o.id?PIXELS_PURPLE:C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",textAlign:"center",fontFamily:"inherit"}}>
-                  <div style={{fontSize:12,fontWeight:origem===o.id?700:500,color:origem===o.id?PIXELS_PURPLE:C.ts}}>{o.label}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Responsáveis */}
           <div>
-            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Responsáveis</div>
+            {_lab("Responsáveis")}
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {eligible.map(u=>{
                 const sel=assignees.includes(u.id);
                 return(
                   <button key={u.id} onClick={()=>toggleA(u.id)}
-                    style={{background:sel?u.color+"20":"transparent",border:`1px solid ${sel?u.color:C.b1}`,borderRadius:99,padding:"4px 11px 4px 4px",display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontFamily:"inherit"}}>
+                    style={{background:sel?PIXELS_PURPLE:"#fafbfc",color:sel?"#fff":"#475569",border:"1.5px solid "+(sel?PIXELS_PURPLE:"#eef0f3"),padding:"5px 12px 5px 4px",borderRadius:99,fontSize:12,fontWeight:sel?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s"}}>
                     <UserAvatar user={u} size={22} border={false}/>
-                    <span style={{color:sel?u.color:C.ts,fontSize:11.5,fontWeight:sel?700:500}}>{u.name}</span>
+                    {u.name.split(" ")[0]}
+                    {sel&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:1}}><polyline points="20 6 9 17 4 12"/></svg>}
                   </button>
                 );
               })}
@@ -17805,37 +17839,58 @@ function CardModalInterno({ card, onClose, onSave, onDelete, isSocio }) {
 
           {/* Checklist */}
           <div>
-            <div style={{color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>
-              Checklist {checklist.length>0&&`(${done}/${checklist.length})`}
-            </div>
+            {_lab("Checklist", checklist.length>0?`(${done}/${checklist.length})`:"(opcional)")}
             {checklist.length>0&&(
               <div style={{marginBottom:8}}>
-                <div style={{height:5,background:C.b1,borderRadius:99,overflow:"hidden",marginBottom:8}}>
+                <div style={{height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden",marginBottom:8}}>
                   <div style={{height:"100%",width:`${checklist.length?Math.round(done/checklist.length*100):0}%`,background:PIXELS_PURPLE,borderRadius:99,transition:"width .2s"}}/>
                 </div>
                 {checklist.map(item=>(
                   <div key={item.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
                     <button onClick={()=>setChecklist(p=>p.map(c=>c.id===item.id?{...c,done:!c.done}:c))}
-                      style={{width:18,height:18,borderRadius:5,border:`2px solid ${item.done?PIXELS_PURPLE:C.b1}`,background:item.done?PIXELS_PURPLE:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#fff"}}>
+                      style={{width:18,height:18,borderRadius:5,border:`2px solid ${item.done?PIXELS_PURPLE:"#e2e8f0"}`,background:item.done?PIXELS_PURPLE:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:"#fff"}}>
                       {item.done&&<IconI name="check" size={11} color="#fff"/>}
                     </button>
-                    <span style={{color:item.done?C.td:C.ts,fontSize:12.5,textDecoration:item.done?"line-through":"none",flex:1}}>{item.text}</span>
+                    <span style={{color:item.done?"#94a3b8":"#475569",fontSize:12.5,textDecoration:item.done?"line-through":"none",flex:1}}>{item.text}</span>
                     <button onClick={()=>setChecklist(p=>p.filter(c=>c.id!==item.id))}
-                      style={{background:"none",border:"none",color:C.td,cursor:"pointer",display:"flex"}}><IconI name="x" size={11}/></button>
+                      style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",display:"flex"}}><IconI name="x" size={11}/></button>
                   </div>
                 ))}
               </div>
             )}
             <div style={{display:"flex",gap:8}}>
               <input value={newCheck} onChange={e=>setNewCheck(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addCheck()}
-                placeholder="Adicionar item..." style={{flex:1,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 11px",color:C.ts,fontSize:12,outline:"none",fontFamily:"inherit"}}/>
-              <button onClick={addCheck} style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center"}}><IconI name="plus" size={13} color="#fff"/></button>
+                placeholder="Adicionar item..."
+                style={{flex:1,background:"#fafbfc",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"8px 11px",color:"#475569",fontSize:12,outline:"none",fontFamily:"inherit"}}/>
+              <button onClick={addCheck}
+                style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"8px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center"}}><IconI name="plus" size={13} color="#fff"/></button>
             </div>
           </div>
+        </div>
 
-          <div style={{display:"flex",gap:8,justifyContent:"flex-end",paddingTop:10,borderTop:`1px solid ${C.b1}`}}>
-            <button onClick={onClose} style={{background:"transparent",border:`1px solid ${C.b1}`,borderRadius:10,padding:"10px 22px",color:C.ts,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-            <button onClick={save}    style={{background:PIXELS_PURPLE,border:"none",borderRadius:10,padding:"10px 26px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px rgba(159,67,246,.32)"}}>Salvar</button>
+        {/* ─── FOOTER — Excluir esquerda · Cancelar+Salvar direita ─── */}
+        <div style={{padding:"16px 26px",borderTop:"1px solid #f1f5f9",background:"#fafbfc",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexShrink:0}}>
+          {isSocio&&isEdit&&card.id
+            ? <button onClick={()=>onDelete(card.id)}
+                style={{background:"#fff",color:"#dc2626",border:"1.5px solid #fecaca",borderRadius:10,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+                Excluir
+              </button>
+            : <span/>}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={onClose}
+              style={{background:"#fff",color:"#64748b",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"11px 18px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";}}
+              onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+              Cancelar
+            </button>
+            <button onClick={save}
+              style={{background:"linear-gradient(135deg,"+clColor+","+clColor+"dd)",color:"#fff",border:"none",borderRadius:10,padding:"11px 22px",fontSize:13,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 18px "+clColor+"55",display:"inline-flex",alignItems:"center",gap:6,letterSpacing:-.1,transition:"all .15s"}}>
+              {isEdit?"Salvar alterações":"Criar demanda"}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
           </div>
         </div>
       </div>
@@ -52922,14 +52977,9 @@ function _DGSprintCard({item, onEdit, onUpdate, onDelete}){
         {tipo.label}
       </span>
       {prio&&<span style={{background:prio.color+"15",color:prio.color,border:"1px solid "+prio.color+"33",borderRadius:5,padding:"1px 7px",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.3}}>{prio.label}</span>}
-      <div style={{marginLeft:"auto",display:"flex",gap:3}}>
-        {onDelete&&<button onClick={(e)=>{e.stopPropagation();onDelete();}} title="Excluir"
-          style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,display:"flex",alignItems:"center"}}
-          onMouseEnter={e=>{e.currentTarget.style.color="#ef4444";}}
-          onMouseLeave={e=>{e.currentTarget.style.color="#cbd5e1";}}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>}
-      </div>
+      {/* X removido: pra excluir entrega, abre o modal (clique no card) e usa botão "Excluir" lá dentro.
+          Antes esse X bugava em cards _fromInterna (sincronizados de demanda interna) — onDelete chamava
+          planRemove() que não achava o id no planEntries e não fazia nada. */}
     </div>
     {/* Linha 2: título */}
     <div style={{color:isOk?"#166534":"#0f172a",fontSize:12.5,fontWeight:700,lineHeight:1.4,textDecoration:isOk?"line-through":"none",letterSpacing:-.1,wordBreak:"break-word"}}>{item.title||"(sem título)"}</div>
