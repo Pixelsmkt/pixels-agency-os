@@ -51016,7 +51016,7 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
       {/* Mini-kanban: 4 colunas com drag-and-drop pra mover entre status */}
       {(function(){
         const _MK_COLS = [
-          {id:"interno_demanda",   label:"Entrada",          color:"#9F43F6", hint:"Decidir",            ico:"inbox"},
+          {id:"interno_demanda",   label:"Entrada",          color:"#9F43F6", hint:"Decidir",            ico:"package"},
           {id:"interno_execucao",  label:"Em execução",      color:"#f97316", hint:"Equipe trabalhando", ico:"zap"},
           {id:"interno_avaliacao", label:"Aguard. aprovação",color:"#eab308", hint:"Revisar e aprovar",  ico:"clock"},
           {id:"interno_executado", label:"Concluídas",       color:"#22c55e", hint:"Entregues",          ico:"check"},
@@ -51052,25 +51052,25 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                 onDragOver={function(e){e.preventDefault(); _setDragOverCol(col.id);}}
                 onDragLeave={function(e){if(!e.currentTarget.contains(e.relatedTarget)) _setDragOverCol(null);}}
                 onDrop={function(e){e.preventDefault(); _setDragOverCol(null); if(_dragId)_moveCard(_dragId,col.id); _setDragId(null);}}
-                style={{background:_isTarget?col.color+"08":"#fafbfc",border:"1px solid "+(_isTarget?col.color+"66":"#eef0f3"),borderRadius:12,padding:10,display:"flex",flexDirection:"column",gap:8,minHeight:140,transition:"all .15s"}}>
+                style={{background:_isTarget?col.color+"08":"#f6f7f9",border:"1px solid "+(_isTarget?col.color+"66":"#e5e7eb"),borderRadius:10,padding:8,display:"flex",flexDirection:"column",gap:6,minHeight:120,transition:"all .12s"}}>
                 {/* Header da coluna */}
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:8,borderBottom:"1px solid "+col.color+"22"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:9,minWidth:0,flex:1}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:6,borderBottom:"1px solid "+col.color+"22"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
                     {/* Ícone moderno por coluna em vez da bolinha */}
-                    <span style={{width:26,height:26,borderRadius:8,background:col.color+"15",color:col.color,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 0 0 1px "+col.color+"22 inset"}}>
-                      <Ico n={col.ico} size={14} color={col.color}/>
+                    <span style={{width:22,height:22,borderRadius:7,background:col.color+"18",color:col.color,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                      <Ico n={col.ico} size={12} color={col.color}/>
                     </span>
                     <div style={{minWidth:0,overflow:"hidden"}}>
-                      <div style={{color:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
-                      <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
+                      <div style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.label}</div>
+                      <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{col.hint}</div>
                     </div>
                   </div>
-                  <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"3px 10px",fontSize:12,fontWeight:800,flexShrink:0}}>{_tasks.length}</span>
+                  <span style={{background:col.color+"15",color:col.color,borderRadius:99,padding:"2px 8px",fontSize:11,fontWeight:800,flexShrink:0}}>{_tasks.length}</span>
                 </div>
                 {/* Cards compactos */}
-                <div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}>
+                <div style={{display:"flex",flexDirection:"column",gap:5,flex:1}}>
                   {_tasks.length===0
-                    ? <div style={{color:"#cbd5e1",fontSize:12,fontWeight:500,fontStyle:"italic",textAlign:"center",padding:"20px 8px"}}>Vazio</div>
+                    ? <div style={{color:"#cbd5e1",fontSize:11,fontWeight:500,fontStyle:"italic",textAlign:"center",padding:"14px 8px"}}>Vazio</div>
                     : _tasks.slice(0,_MK_LIMIT).map(function(t){
                         const _pc = (typeof PRIO_CFG!=="undefined"?PRIO_CFG:{})[t.priority] || {label:"Média",color:"#64748b",bg:"#64748b15"};
                         const _isAtr = _atrasada(t);
@@ -51083,32 +51083,32 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                           onDragStart={function(e){_setDragId(t.id); e.dataTransfer.effectAllowed="move";}}
                           onDragEnd={function(){_setDragId(null); _setDragOverCol(null);}}
                           onClick={function(){setOpenCard(t);}}
-                          style={{background:"#fff",border:"1.5px solid "+(_isAtr?"#fecaca":"#eef0f3"),borderRadius:12,padding:"12px 13px",cursor:"grab",transition:"all .15s",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",opacity:_dragId===t.id?.4:1,position:"relative"}}
-                          onMouseEnter={function(e){e.currentTarget.style.borderColor=_isAtr?"#dc2626":col.color+"66"; e.currentTarget.style.boxShadow="0 6px 16px rgba(15,23,42,0.08)"; e.currentTarget.style.transform="translateY(-1px)";
+                          style={{background:"#fff",border:"1px solid "+(_isAtr?"#fecaca":"#e5e7eb"),borderRadius:10,padding:"9px 11px",cursor:"grab",transition:"all .12s",boxShadow:"0 1px 1.5px rgba(15,23,42,0.04)",opacity:_dragId===t.id?.4:1,position:"relative"}}
+                          onMouseEnter={function(e){e.currentTarget.style.borderColor=_isAtr?"#dc2626":col.color+"55"; e.currentTarget.style.boxShadow="0 3px 8px rgba(15,23,42,0.06)";
                             const _qa=e.currentTarget.querySelector("[data-quick-actions]"); if(_qa) _qa.style.opacity="1";
                           }}
-                          onMouseLeave={function(e){e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#eef0f3"; e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.025)"; e.currentTarget.style.transform="";
+                          onMouseLeave={function(e){e.currentTarget.style.borderColor=_isAtr?"#fecaca":"#e5e7eb"; e.currentTarget.style.boxShadow="0 1px 1.5px rgba(15,23,42,0.04)";
                             const _qa=e.currentTarget.querySelector("[data-quick-actions]"); if(_qa) _qa.style.opacity="0";
                           }}>
                           {/* Quick actions na capa (aparecem no hover) */}
-                          <div data-quick-actions style={{position:"absolute",top:7,right:7,display:"flex",gap:4,opacity:0,transition:"opacity .15s",zIndex:2}}>
+                          <div data-quick-actions style={{position:"absolute",top:5,right:5,display:"flex",gap:3,opacity:0,transition:"opacity .15s",zIndex:2}}>
                             {!_isConcluida && <button title="Marcar como concluída"
                               onClick={function(e){e.stopPropagation(); _moveCard(t.id,"interno_executado");}}
-                              style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:7,width:26,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#16a34a",cursor:"pointer",boxShadow:"0 2px 5px rgba(15,23,42,0.08)"}}
+                              style={{background:"#fff",border:"1px solid #bbf7d0",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#16a34a",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}
                               onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#16a34a";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#16a34a";}}
                               onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#16a34a";e.currentTarget.style.borderColor="#bbf7d0";}}>
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                             </button>}
                             <button title="Editar"
                               onClick={function(e){e.stopPropagation(); setOpenCard(t);}}
-                              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:7,width:26,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",cursor:"pointer",boxShadow:"0 2px 5px rgba(15,23,42,0.08)"}}
+                              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#7c3aed",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}
                               onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#7c3aed";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#7c3aed";}}
                               onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#e2e8f0";}}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                             </button>
                             <button title="Excluir"
                               onClick={function(e){e.stopPropagation(); _deleteCard(t.id);}}
-                              style={{background:"#fff",border:"1px solid #fecaca",borderRadius:7,width:26,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#dc2626",cursor:"pointer",boxShadow:"0 2px 5px rgba(15,23,42,0.08)"}}
+                              style={{background:"#fff",border:"1px solid #fecaca",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#dc2626",cursor:"pointer",boxShadow:"0 1px 3px rgba(15,23,42,0.08)"}}
                               onMouseEnter={function(e){e.stopPropagation();e.currentTarget.style.background="#dc2626";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#dc2626";}}
                               onMouseLeave={function(e){e.stopPropagation();e.currentTarget.style.background="#fff";e.currentTarget.style.color="#dc2626";e.currentTarget.style.borderColor="#fecaca";}}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -51116,21 +51116,21 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                           </div>
 
                           {/* Linha de tags: Prioridade + Atraso (com ícone de relógio) */}
-                          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8,flexWrap:"wrap",paddingRight:74}}>
-                            <span style={{display:"inline-flex",alignItems:"center",gap:4,color:_pc.color,background:_pc.color+"12",border:"1px solid "+_pc.color+"33",borderRadius:6,padding:"2px 8px",fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
-                              <span style={{width:6,height:6,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
+                          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6,flexWrap:"wrap",paddingRight:62}}>
+                            <span style={{display:"inline-flex",alignItems:"center",gap:3,color:_pc.color,background:_pc.color+"12",border:"1px solid "+_pc.color+"33",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>
+                              <span style={{width:5,height:5,borderRadius:"50%",background:_pc.color}}/>{_pc.label}
                             </span>
-                            {_isAtr && <span style={{display:"inline-flex",alignItems:"center",gap:4,background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:800,letterSpacing:.4}}>
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
-                              {_diasAtr}d atraso
+                            {_isAtr && <span style={{display:"inline-flex",alignItems:"center",gap:3,background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.3}}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                              {_diasAtr}d
                             </span>}
                           </div>
 
                           {/* Título */}
-                          <div style={{color:"#0f172a",fontSize:14,fontWeight:700,letterSpacing:-.2,lineHeight:1.35,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",marginBottom:9}}>{t.title||"(sem título)"}</div>
+                          <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15,lineHeight:1.3,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",marginBottom:7}}>{t.title||"(sem título)"}</div>
 
-                          {/* Footer: logo cliente (grande) + responsáveis (maiores) */}
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,paddingTop:8,borderTop:"1px solid #f1f5f9"}}>
+                          {/* Footer: logo cliente + responsáveis (compactos) */}
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:7,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
                             {_cl
                               ? (function(){
                                   // Nome com unidade Bioter quando aplicável (ex: "Bioter Chapecó")
@@ -51140,21 +51140,20 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                                     _bUnit = BIOTER_UNITS.find(function(u){return u.id===_bu;});
                                   }
                                   var _displayName = _bUnit ? (_cl.name+" "+_bUnit.pickerLabel) : _cl.name;
-                                  return <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0,flex:1}}>
-                                    {/* Logo maior + sem padding pra aparecer inteira */}
-                                    <div style={{width:30,height:30,borderRadius:7,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+                                  return <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
+                                    <div style={{width:22,height:22,borderRadius:5,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
                                       {typeof ClientLogo!=="undefined"
-                                        ? <ClientLogo clientId={_cl.id} size="sm"/>
-                                        : <span style={{width:10,height:10,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>}
+                                        ? <ClientLogo clientId={_cl.id} size="xs"/>
+                                        : <span style={{width:8,height:8,borderRadius:"50%",background:_cl.color||"#7c3aed"}}/>}
                                     </div>
-                                    <span style={{color:"#475569",fontSize:11.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{_displayName}</span>
+                                    <span style={{color:"#475569",fontSize:10.5,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.05}}>{_displayName}</span>
                                   </div>;
                                 })()
-                              : <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
-                                  <div style={{width:24,height:24,borderRadius:6,background:"#ede9fe",border:"1px solid #ddd6fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#7c3aed"}}>
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/></svg>
+                              : <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
+                                  <div style={{width:22,height:22,borderRadius:5,background:"#ede9fe",border:"1px solid #ddd6fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#7c3aed"}}>
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/></svg>
                                   </div>
-                                  <span style={{color:"#7c3aed",fontSize:11.5,fontWeight:700,letterSpacing:-.1}}>Interna</span>
+                                  <span style={{color:"#7c3aed",fontSize:10.5,fontWeight:700,letterSpacing:-.05}}>Interna</span>
                                 </div>}
                             {_resps.length>0 && <div style={{display:"flex",alignItems:"center",flexShrink:0}}>
                               {_resps.slice(0,3).map(function(uid,i){
@@ -51162,10 +51161,10 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
                                 if(!u) return null;
                                 const ph = (typeof getProfilePhoto!=="undefined" && getProfilePhoto(u.id)) || (u.profile_data&&u.profile_data.photo) || null;
                                 return ph
-                                  ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:26,height:26,borderRadius:"50%",objectFit:"cover",border:"2px solid #fff",marginLeft:i===0?0:-8,boxShadow:"0 1px 3px rgba(15,23,42,0.12)",zIndex:3-i}}/>
-                                  : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:10.5,border:"2px solid #fff",marginLeft:i===0?0:-8,boxShadow:"0 1px 3px rgba(15,23,42,0.12)",zIndex:3-i}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
+                                  ? <img key={uid} src={ph} alt={u.name} title={u.name} style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",border:"1.5px solid #fff",marginLeft:i===0?0:-6,boxShadow:"0 1px 2px rgba(15,23,42,0.1)",zIndex:3-i}}/>
+                                  : <span key={uid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:9.5,border:"1.5px solid #fff",marginLeft:i===0?0:-6,boxShadow:"0 1px 2px rgba(15,23,42,0.1)",zIndex:3-i}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
                               })}
-                              {_resps.length>3 && <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:"50%",background:"#f1f5f9",color:"#64748b",fontWeight:800,fontSize:10,border:"2px solid #fff",marginLeft:-8,boxShadow:"0 1px 3px rgba(15,23,42,0.12)"}}>+{_resps.length-3}</span>}
+                              {_resps.length>3 && <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:"50%",background:"#f1f5f9",color:"#64748b",fontWeight:800,fontSize:9,border:"1.5px solid #fff",marginLeft:-6,boxShadow:"0 1px 2px rgba(15,23,42,0.1)"}}>+{_resps.length-3}</span>}
                             </div>}
                           </div>
                         </div>;
