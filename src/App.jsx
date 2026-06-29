@@ -36811,23 +36811,30 @@ export default function AgencyOS(){
           {isMob&&<button onClick={()=>setSideOpen(false)} style={{marginLeft:"auto",background:"none",border:"none",color:C.td,cursor:"pointer",fontSize:18,padding:4}}>✕</button>}
         </div>
       </div>
-      {/* ── Perfil no topo da sidebar ── */}
+      {/* ── Perfil no topo da sidebar (modernizado SaaS premium) ── */}
       {(()=>{
         const displayName=(selfProfileData&&selfProfileData.nome&&selfProfileData.nome.trim())||CURRENT_USER.name;
         const displayRole=(selfProfileData&&selfProfileData.funcao&&selfProfileData.funcao.trim())||CURRENT_USER.role;
-        return <div style={{padding:"10px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
+        return <div style={{padding:"12px 10px",borderBottom:`1px solid ${C.b1}`,flexShrink:0}}>
           <button onClick={()=>window._openMyProfile&&window._openMyProfile()}
-            title={sideCollapsed&&!isMob?displayName+" · "+displayRole:undefined}
-            style={{width:"100%",display:"flex",alignItems:"center",gap:8,background:C.s1,border:`1px solid ${C.b1}`,borderRadius:10,padding:"8px 10px",cursor:"pointer",transition:"all .15s",textAlign:"left",justifyContent:sideCollapsed&&!isMob?"center":"flex-start"}}
-            onMouseEnter={e=>{e.currentTarget.style.background=C.a+"18";e.currentTarget.style.borderColor=C.a+"55";}}
-            onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.borderColor=C.b1;}}>
-            <Av l={CURRENT_USER.av} color={CURRENT_USER.color} size={30} status="online" uid={CURRENT_USER.id}/>
-            {(!sideCollapsed||isMob)&&<>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{color:C.tx,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayName}</div>
-                <div style={{color:C.td,fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayRole}</div>
+            title={sideCollapsed&&!isMob?displayName+" · "+displayRole:"Editar perfil"}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:11,background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"10px 11px",cursor:"pointer",transition:"all .18s ease",textAlign:"left",justifyContent:sideCollapsed&&!isMob?"center":"flex-start",fontFamily:"'Inter',system-ui,sans-serif",position:"relative",overflow:"hidden",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}
+            onMouseEnter={e=>{e.currentTarget.style.background="linear-gradient(135deg,#faf5ff,#f0f9ff)";e.currentTarget.style.borderColor="#d8b4fe";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 14px rgba(124,58,237,0.12)";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.025)";}}>
+            <div style={{position:"relative",flexShrink:0}}>
+              <div style={{width:38,height:38,borderRadius:"50%",overflow:"hidden",border:"2px solid #fff",boxShadow:"0 2px 6px rgba(15,23,42,0.12), 0 0 0 1.5px rgba(124,58,237,0.18)"}}>
+                <UserAvatar user={CURRENT_USER} size={38} border={false}/>
               </div>
-              <span style={{color:C.td,display:"flex",alignItems:"center",flexShrink:0}}><Ico n="edit" size={12}/></span>
+              <span style={{position:"absolute",bottom:0,right:0,width:11,height:11,borderRadius:"50%",background:"#16a34a",border:"2px solid #fff",boxShadow:"0 1px 2px rgba(0,0,0,0.15)"}}/>
+            </div>
+            {(!sideCollapsed||isMob)&&<>
+              <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:1}}>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.2}}>{displayName}</div>
+                <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3,letterSpacing:.1}}>{displayRole}</div>
+              </div>
+              <span style={{color:"#94a3b8",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,width:24,height:24,borderRadius:7,background:"#f8fafc"}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              </span>
             </>}
           </button>
         </div>;
