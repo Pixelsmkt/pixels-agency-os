@@ -50431,15 +50431,25 @@ function PlanEditModal({entry, setEntry, onSave, onClose}){
   return <div style={{position:"fixed",inset:0,background:"rgba(15,15,25,0.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:PLAN_INTER}}
     onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}>
     <div style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:580,maxHeight:"90vh",overflow:"auto",boxShadow:"0 30px 80px rgba(0,0,0,0.3)"}}>
-      <div style={{padding:"18px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,"+PLAN_PURPLE+",#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <_PlIco name={isMeta?"target":isMonthly?"target":isWeekly?"weekly":"sunrise"} size={15} color="#fff"/>
+      {(function(){
+        // Cores por tipo (combinando com os cards no MetasFixedPanel)
+        var _hCfg = {bg1:PLAN_PURPLE,bg2:"#7c3aed",icon:"target"};
+        if(entry.type==="meta_semana") _hCfg = {bg1:"#0ea5e9",bg2:"#0284c7",icon:"weekly"};
+        else if(entry.type==="meta_mes" && isAnual) _hCfg = {bg1:"#16a34a",bg2:"#15803d",icon:"check"};
+        else if(entry.type==="meta_mes") _hCfg = {bg1:"#f97316",bg2:"#ea580c",icon:"target"};
+        else if(isWeekly) _hCfg = {bg1:"#7c3aed",bg2:"#6d28d9",icon:"weekly"};
+        else if(isDaily) _hCfg = {bg1:"#9F43F6",bg2:"#7c3aed",icon:"sunrise"};
+        else if(isMonthly) _hCfg = {bg1:"#dc2626",bg2:"#b91c1c",icon:"target"};
+        return <div style={{padding:"18px 22px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:11}}>
+            <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,"+_hCfg.bg1+","+_hCfg.bg2+")",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 18px "+_hCfg.bg1+"45"}}>
+              <_PlIco name={_hCfg.icon} size={16} color="#fff"/>
+            </div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.3}}>{headerTitle}</div>
           </div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.2}}>{headerTitle}</div>
-        </div>
-        <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,padding:"6px 10px",color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center"}}><_PlIco name="x" size={14}/></button>
-      </div>
+          <button onClick={onClose} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,width:32,height:32,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><_PlIco name="x" size={14}/></button>
+        </div>;
+      })()}
 
       {/* Participantes da reuniao — seletor visual */}
       {(isDaily||isWeekly||isMonthly)&&<div style={{padding:"14px 22px",borderBottom:"1px solid #f1f5f9",background:"#fafbfc"}}>
@@ -50450,13 +50460,10 @@ function PlanEditModal({entry, setEntry, onSave, onClose}){
       </div>}
 
       <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
-        {/* Tipo de meta — só pra Semanal/Mensal (anual nao escolhe) */}
-        {isMeta&&!isAnual&&<div style={{display:"flex",gap:6}}>
-          {[["meta_semana","Semanal"],["meta_mes","Mensal"]].map(function(opt){
-            const sel=entry.type===opt[0];
-            return <button key={opt[0]} onClick={function(){patch("type",opt[0]); patch("meta_scope",opt[0]==="meta_semana"?"semana":"mes");}}
-              style={{flex:1,background:sel?PLAN_PURPLE+"18":"transparent",border:"1px solid "+(sel?PLAN_PURPLE:"#e2e8f0"),borderRadius:10,padding:"8px 12px",color:sel?PLAN_PURPLE:"#475569",fontSize:12,fontWeight:sel?700:500,cursor:"pointer",fontFamily:"inherit"}}>{opt[1]}</button>;
-          })}
+        {/* Chip indicativo do tipo (em vez do seletor — o usuário já escolheu clicando no + certo) */}
+        {isMeta&&!isAnual&&<div style={{display:"inline-flex",alignItems:"center",gap:7,background:(entry.type==="meta_semana"?"#e0f2fe":"#fed7aa")+"60",border:"1px solid "+(entry.type==="meta_semana"?"#bae6fd":"#fed7aa"),borderRadius:10,padding:"7px 13px",alignSelf:"flex-start"}}>
+          <_PlIco name={entry.type==="meta_semana"?"weekly":"target"} size={13} color={entry.type==="meta_semana"?"#0284c7":"#ea580c"}/>
+          <span style={{color:entry.type==="meta_semana"?"#075985":"#9a3412",fontSize:12,fontWeight:800,letterSpacing:.2}}>{entry.type==="meta_semana"?"Meta semanal":"Meta mensal"}</span>
         </div>}
         {/* Chip fixo pra meta anual 2026 */}
         {isAnual&&<div style={{display:"inline-flex",alignItems:"center",gap:7,background:"linear-gradient(135deg, #f0fdf4, #dcfce7)",border:"1px solid #86efac",borderRadius:10,padding:"8px 14px",alignSelf:"flex-start"}}>
@@ -52111,9 +52118,11 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       // Junta rituais do mês corrente + próximo mês (caso vire de mês)
       const _all=getRituaisDoMes(_today0.getFullYear(),_today0.getMonth())
         .concat(getRituaisDoMes(_today0.getFullYear()+(_today0.getMonth()===11?1:0),(_today0.getMonth()+1)%12));
-      // Filtra: só dos próximos 7 dias (incluindo hoje)
+      // Filtra: só dos próximos 7 dias (incluindo hoje). Hellen não participa de dailies — esconde.
       const _limit=new Date(_today0.getTime()+7*86400000);
+      const _isHellenView = user && user.id === "ellen";
       const _next7=_all.filter(function(r){
+        if(_isHellenView && r.type==="daily") return false;
         const d=new Date(r.date+"T12:00");
         return d.getTime()>=_today0.getTime()&&d.getTime()<=_limit.getTime();
       });
@@ -52277,33 +52286,66 @@ function DashCoordinator({user, isViewing, tasks: propTasks, setTasks, notifs, i
     });
   })();
 
-  // Mapa hellen-specific: notas dos weeklies do user (todas as semanas, lê do Supabase)
-  // Chave do mapa = ritual_key gravado no DB (ex: "weekly_2026-W26"), sempre único por Monday.
+  // Mapa hellen-specific: notas dos weeklies (sincronizado com Estratégia > Planejamento via team_planning)
+  // Chave do mapa = ritual_key local ("weekly_YYYY-Www"), mas a fonte real é team_planning type=weekly.
+  // ID estável no DB: "pl-weekly-shared-{week_key}" — TODOS os sócios+Hellen veem a mesma nota daquela semana.
   const [_weeklyNotes, _setWeeklyNotes] = useState({});
   useEffect(function(){
     if(!window._sb) return;
     let alive=true;
-    // Carrega TODAS as notas weekly do user — não filtra por semana (precisamos das próximas 4 segundas).
-    window._sb.from("weekly_notes").select("*").eq("user_id",user.id)
+    // Carrega TODAS as weeklies da agência (não filtra por user — é uma reunião compartilhada).
+    window._sb.from("team_planning").select("id,week_key,content,type").eq("type","weekly")
       .then(r=>{
         if(!alive||!r||!r.data) return;
         const _m={};
-        (r.data||[]).forEach(n=>{_m[n.ritual_key]=n.content||"";});
+        (r.data||[]).forEach(n=>{
+          if(n.week_key) _m["weekly_"+n.week_key]=n.content||"";
+        });
         _setWeeklyNotes(_m);
       }).catch(()=>{});
-    return ()=>{alive=false;};
+    // Realtime sync — se alguém anotar no Planejamento, atualiza aqui sozinho
+    const ch = window._sb.channel("dash_weeklies")
+      .on("postgres_changes",{event:"*",schema:"public",table:"team_planning",filter:"type=eq.weekly"}, function(payload){
+        if(!alive) return;
+        const n = payload.new || payload.old;
+        if(!n || !n.week_key) return;
+        if(payload.eventType==="DELETE"){
+          _setWeeklyNotes(p=>{const cp=Object.assign({},p); delete cp["weekly_"+n.week_key]; return cp;});
+        }else{
+          _setWeeklyNotes(p=>Object.assign({},p,{["weekly_"+n.week_key]:n.content||""}));
+        }
+      }).subscribe();
+    return ()=>{alive=false; try{window._sb.removeChannel(ch);}catch(_){};};
   },[user.id]);
 
   const _saveNote = (ritualKey, content)=>{
     _setWeeklyNotes(p=>({...p,[ritualKey]:content}));
     if(!window._sb) return;
-    // Extrai week_key da ritual_key (formato "weekly_YYYY-Www") pra alinhar com o schema.
+    // Extrai week_key da ritual_key (formato "weekly_YYYY-Www")
     const _wkMatch = /(\d{4}-W\d{2})/.exec(ritualKey);
-    const _wk = _wkMatch ? _wkMatch[1] : (typeof weekKey!=="undefined"?weekKey:"");
-    const id = user.id+"_"+ritualKey;
-    window._sb.from("weekly_notes").upsert({
-      id, week_key:_wk, ritual_key:ritualKey, user_id:user.id, content:content||""
-    },{onConflict:"id"}).then(()=>{}).catch(e=>console.warn("[weekly_notes save]",e));
+    const _wk = _wkMatch ? _wkMatch[1] : "";
+    if(!_wk) return;
+    // ID compartilhado entre toda a equipe (não inclui user.id — é uma reunião coletiva)
+    const id = "pl-weekly-shared-"+_wk;
+    // Calcula entry_date = segunda-feira da semana (necessário pro schema team_planning)
+    var _entryDate = "";
+    try{
+      var _ymm = _wk.match(/^(\d{4})-W(\d{2})$/);
+      if(_ymm){
+        var _y = parseInt(_ymm[1],10), _wn = parseInt(_ymm[2],10);
+        var _d4 = new Date(Date.UTC(_y,0,4));
+        var _mon = new Date(_d4);
+        _mon.setUTCDate(_d4.getUTCDate()-((_d4.getUTCDay()+6)%7)+(_wn-1)*7);
+        _entryDate = _mon.toISOString().slice(0,10);
+      }
+    }catch(_){}
+    var _monthKey = _entryDate ? _entryDate.slice(0,7) : "";
+    window._sb.from("team_planning").upsert({
+      id, type:"weekly", week_key:_wk, month_key:_monthKey, entry_date:_entryDate,
+      title:"Weekly da semana", content:content||"",
+      author_id:CURRENT_USER.id, author_name:CURRENT_USER.name,
+      updated_at:new Date().toISOString()
+    },{onConflict:"id"}).then(()=>{}).catch(e=>console.warn("[team_planning save]",e));
   };
 
   // Permissões: Hellen pode mexer em demandas internas, mas filtramos Avaliações
@@ -52342,7 +52384,7 @@ function DashCoordinator({user, isViewing, tasks: propTasks, setTasks, notifs, i
         </div>
         <div>
           <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4}}>Agenda</div>
-          <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2}}>Hoje + próximos 3 dias · Daily, Weekly, reuniões e marcos</div>
+          <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2}}>Hoje + próximos 3 dias · {user && user.id==="ellen" ? "Weekly, reuniões e marcos" : "Daily, Weekly, reuniões e marcos"}</div>
         </div>
       </div>
       {_agenda.length===0
