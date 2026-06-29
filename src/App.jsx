@@ -17502,13 +17502,19 @@ const PRIO_CFG = {
 // Tipos de demanda interna — EXATAMENTE os mesmos do Portal do Cliente
 // (TIPOS_DEMANDA_CLIENTE em 13_novidades.jsx, excluindo arte/video que viram fluxo principal)
 // Mudou aqui? Atualizar lá também pra ficar sincronizado.
+// Tipos UNIFICADOS — espelha TIPOS_DEMANDA_CLIENTE do portal (13_novidades).
+// "material" resume os antigos folder/feira/comercial (legacy).
 const INTERNO_TIPOS = [
-  { id:"trafego",       label:"Tráfego pago",        icon:"trending" },
-  { id:"folder",        label:"Folder",              icon:"folder" },
-  { id:"feira",         label:"Material para feira", icon:"flag" },
-  { id:"operacional",   label:"Operacional",         icon:"settings" },
-  { id:"outro",         label:"Outro",               icon:"box" },
+  { id:"arte",        label:"Arte para redes sociais",   icon:"image"        },
+  { id:"video",       label:"Vídeo para redes sociais",  icon:"play"         },
+  { id:"trafego",     label:"Tráfego pago",              icon:"trending-up"  },
+  { id:"material",    label:"Material",                  icon:"folder"       },
+  { id:"operacional", label:"Operacional",               icon:"settings"     },
+  { id:"outro",       label:"Outro",                     icon:"box"          },
 ];
+// Legacy mapping pra cards antigos com folder/feira/comercial
+const _INT_LEGACY_TIPO = {folder:"material", feira:"material", comercial:"material"};
+function _intNormalizarTipo(id){ return _INT_LEGACY_TIPO[id]||id||"outro"; }
 
 // Auto-prazo por prioridade — mesmo padrão do Portal do Cliente (dias corridos a partir de hoje)
 // Urgente=1, Alta=5, Média=14, Baixa=30 (Task #179)
@@ -36639,7 +36645,9 @@ export default function AgencyOS(){
       case "gestaomidia":          return p.verGestaoMidia||isSocio;
       case "comercial":            return p.verComercial||isSocio;
       case "chat":                 return p.verChat;
-      case "clientes":             return p.verClientes;
+      // Hellen sempre vê Clientes em Estratégia (ajuda no Planejamento mensal/trimestral
+      // e tem acesso de Estrategista). Mesmo padrão de "playbooks" e "planejamento".
+      case "clientes":             return p.verClientes||effectiveUser.id==="ellen"||isSocio;
       case "analises":
       case "ia":
       case "ia_diagnostico":
@@ -40260,16 +40268,20 @@ function PortalTimeline({cl, clTasks, isMob}){
    Quando cria Arte/Vídeo: vai pro Rascunhos da Hellen no fluxo interno.
    Outros tipos (Banner, Material, Campanha, Outro): ficam só no portal.
 ─────────────────────────────────────────────────────────────────────── */
+// Tipos UNIFICADOS — usados em Portal cliente, Sprint do DashSocio e Demanda Interna.
+// "material" resume os antigos folder/feira/comercial (que agora viram aliases de display).
 const TIPOS_DEMANDA_CLIENTE = [
   {id:"arte",        label:"Arte para redes sociais",   routesFluxo:true,  contentType:"arte"},
   {id:"video",       label:"Vídeo para redes sociais",  routesFluxo:true,  contentType:"video"},
   {id:"trafego",     label:"Tráfego pago",              routesFluxo:false, contentType:"trafego"},
-  {id:"folder",      label:"Folder",                    routesFluxo:false, contentType:"folder"},
-  {id:"feira",       label:"Material para feira",       routesFluxo:false, contentType:"feira"},
-  {id:"comercial",   label:"Material comercial",        routesFluxo:false, contentType:"comercial"},
+  {id:"material",    label:"Material",                  routesFluxo:false, contentType:"material"},
   {id:"operacional", label:"Operacional",               routesFluxo:false, contentType:"operacional"},
   {id:"outro",       label:"Outro",                     routesFluxo:false},
 ];
+// Legacy: cards antigos com tipo "folder", "feira" ou "comercial" continuam funcionando
+// mas são exibidos como "Material" no UI. Use _normalizarTipoDemanda() pra display.
+const _LEGACY_TIPO_DEMANDA_MAP = {folder:"material", feira:"material", comercial:"material"};
+function _normalizarTipoDemanda(id){ return _LEGACY_TIPO_DEMANDA_MAP[id]||id||"outro"; }
 
 function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
   const [ajusteModal,setAjusteModal]=useState(null);
@@ -50717,14 +50729,18 @@ const DG_CATEGORIAS = [
   {id:"estrategia",  label:"Estratégia",  color:"#f59e0b"},
   {id:"operacao",    label:"Operação",    color:"#64748b"},
 ];
+// Tipos UNIFICADOS — espelha TIPOS_DEMANDA_CLIENTE do portal (13_novidades).
 const DG_SPRINT_TIPOS = [
-  {id:"arte",      label:"Arte",      color:"#7c3aed", icon:"image"},
-  {id:"video",     label:"Vídeo",     color:"#ec4899", icon:"play"},
-  {id:"copy",      label:"Copy",      color:"#0ea5e9", icon:"fileText"},
-  {id:"trafego",   label:"Tráfego",   color:"#f59e0b", icon:"trending-up"},
-  {id:"relatorio", label:"Relatório", color:"#10b981", icon:"chart"},
-  {id:"reuniao",   label:"Reunião",   color:"#64748b", icon:"users"},
+  {id:"arte",        label:"Arte para redes sociais",   color:"#7c3aed", icon:"image"},
+  {id:"video",       label:"Vídeo para redes sociais",  color:"#ec4899", icon:"play"},
+  {id:"trafego",     label:"Tráfego pago",              color:"#f59e0b", icon:"trending-up"},
+  {id:"material",    label:"Material",                  color:"#0ea5e9", icon:"folder"},
+  {id:"operacional", label:"Operacional",               color:"#10b981", icon:"settings"},
+  {id:"outro",       label:"Outro",                     color:"#64748b", icon:"box"},
 ];
+// Legacy mapping pra cards antigos
+const _DG_LEGACY_TIPO = {folder:"material", feira:"material", comercial:"material", copy:"arte", relatorio:"outro", reuniao:"outro"};
+function _dgNormalizarTipo(id){ return _DG_LEGACY_TIPO[id]||id||"outro"; }
 const DG_SPRINT_STATUS = [
   {id:"planejado", label:"Planejado",       color:"#64748b", bg:"#f1f5f9"},
   {id:"producao",  label:"Em produção",     color:"#0ea5e9", bg:"#e0f2fe"},
@@ -52192,13 +52208,13 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                   </div>}
                   {itensCl.map(it=><_DGSprintCard key={it.id} item={it} onEdit={()=>setNovoSprint({clientId:cl.id, item:it})} onUpdate={(patch)=>planUpsert(Object.assign({},it,patch,{updated_at:new Date().toISOString()}))} onDelete={()=>{planRemove(it.id);}}/>)}
 
-                  <button onClick={()=>setNovoSprint({clientId:cl.id, item:null})}
-                    style={{marginTop:"auto",background:"#f8fafc",color:"#64748b",border:"1px dashed #cbd5e1",borderRadius:10,padding:"10px 12px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .18s",letterSpacing:-.1}}
-                    onMouseEnter={e=>{e.currentTarget.style.background=clColor+"15";e.currentTarget.style.borderColor=clColor;e.currentTarget.style.color=clColor;}}
-                    onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";}}>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
-                    Nova entrega
-                  </button>
+                  {/* Botão "Nova entrega" removido — pra entrar no sprint o sócio cria
+                      uma demanda interna em "+ Nova demanda" (mini-kanban abaixo) com
+                      prioridade Urgente/Alta — cai automaticamente no sprint da semana atual. */}
+                  <div style={{marginTop:"auto",background:"#fafbfc",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:10,padding:"8px 11px",fontSize:10.5,fontWeight:600,fontFamily:DG_INTER,display:"flex",alignItems:"center",justifyContent:"center",gap:5,letterSpacing:-.05,fontStyle:"italic",lineHeight:1.35,textAlign:"center"}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    pra adicionar, crie em "+ Nova demanda" (Urgente/Alta cai aqui)
+                  </div>
                 </div>
               </div>;
             })}
