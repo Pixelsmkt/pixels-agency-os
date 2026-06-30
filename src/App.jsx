@@ -53513,7 +53513,269 @@ function DashCoordinator({user, isViewing, tasks: propTasks, setTasks, notifs, i
       })()}
     </section>
 
+    {/* ══════════ DOCUMENTOS ══════════ */}
+    <_DGDocumentos user={user} isMob={isMob}/>
+
   </div>;
+}
+
+// ── Componente Documentos da Agência ─────────────────────────
+function _DGDocumentos({user, isMob}){
+  const [docs,setDocs]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [modalOpen,setModalOpen]=useState(false);
+  const [editing,setEditing]=useState(null);
+  const [draft,setDraft]=useState({title:"",description:"",doc_date:"",category:"reuniao"});
+  const [draftFile,setDraftFile]=useState(null);
+  const [busy,setBusy]=useState(false);
+
+  const _CATS = [
+    {id:"reuniao",  label:"Reunião",   color:"#7c3aed", icon:"users"},
+    {id:"contrato", label:"Contrato",  color:"#16a34a", icon:"file"},
+    {id:"proposta", label:"Proposta",  color:"#0ea5e9", icon:"send"},
+    {id:"material", label:"Material",  color:"#ea580c", icon:"folder"},
+    {id:"geral",    label:"Geral",     color:"#64748b", icon:"file"},
+  ];
+  const _catOf = (id)=>_CATS.find(c=>c.id===id)||_CATS[4];
+
+  const _loadDocs = async ()=>{
+    try{
+      setLoading(true);
+      const sb=window._sb;
+      const{data,error}=await sb.from("team_docs").select("*").order("doc_date",{ascending:false,nullsFirst:false}).limit(100);
+      if(!error&&data) setDocs(data);
+    }catch(e){console.warn("[docs] load:",e);}
+    finally{setLoading(false);}
+  };
+  useEffect(()=>{_loadDocs();},[]);
+
+  const _docExt = (name)=>{const m=String(name||"").match(/\.([a-z0-9]{1,5})$/i); return m?m[1].toLowerCase():"";};
+  const _fmtSize=(b)=>{if(!b)return"";const k=1024;if(b<k)return b+" B";if(b<k*k)return (b/k).toFixed(1)+" KB";return (b/k/k).toFixed(1)+" MB";};
+  const _extColor=(ext)=>{
+    const m={pdf:"#dc2626",doc:"#2563eb",docx:"#2563eb",xls:"#16a34a",xlsx:"#16a34a",ppt:"#ea580c",pptx:"#ea580c",png:"#7c3aed",jpg:"#7c3aed",jpeg:"#7c3aed",zip:"#475569"};
+    return m[ext]||"#64748b";
+  };
+
+  const _openNew = ()=>{
+    const _today = new Date().toISOString().split("T")[0];
+    setEditing(null);
+    setDraft({title:"",description:"",doc_date:_today,category:"reuniao"});
+    setDraftFile(null);
+    setModalOpen(true);
+  };
+  const _openEdit = (d)=>{
+    setEditing(d);
+    setDraft({title:d.title||"",description:d.description||"",doc_date:d.doc_date||"",category:d.category||"geral"});
+    setDraftFile(null);
+    setModalOpen(true);
+  };
+  const _close = ()=>{setModalOpen(false);setEditing(null);setDraftFile(null);};
+
+  const _save = async ()=>{
+    if(!draft.title.trim()){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Coloca um título no documento.");
+      return;
+    }
+    setBusy(true);
+    try{
+      const sb=window._sb;
+      let fileFields = {};
+      // Upload do arquivo (se mudou)
+      if(draftFile){
+        const ext=_docExt(draftFile.name);
+        const key="team_docs/"+(new Date().getFullYear())+"/"+Date.now()+"-"+draftFile.name.replace(/[^a-z0-9._-]/gi,"_");
+        const{error:upErr}=await sb.storage.from("agency-files").upload(key,draftFile,{contentType:draftFile.type||"application/octet-stream",upsert:false});
+        if(upErr){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro no upload: "+upErr.message);setBusy(false);return;}
+        const{data:pub}=sb.storage.from("agency-files").getPublicUrl(key);
+        fileFields={
+          file_url:pub?.publicUrl||"",
+          file_name:draftFile.name,
+          file_size:draftFile.size||0,
+          file_ext:ext,
+          file_type:draftFile.type||"",
+          storage_path:key,
+        };
+      }
+      const payload = {
+        title:draft.title.trim(),
+        description:draft.description||"",
+        doc_date:draft.doc_date||null,
+        category:draft.category||"geral",
+        author_id:user.id,
+        author_name:user.name,
+        updated_at:new Date().toISOString(),
+        ...fileFields,
+      };
+      if(editing&&editing.id){
+        const{error}=await sb.from("team_docs").update(payload).eq("id",editing.id);
+        if(error){if(typeof pixelsToast!=="undefined")pixelsToast.error(error.message);setBusy(false);return;}
+      }else{
+        const{error}=await sb.from("team_docs").insert(payload);
+        if(error){if(typeof pixelsToast!=="undefined")pixelsToast.error(error.message);setBusy(false);return;}
+      }
+      if(typeof pixelsToast!=="undefined")pixelsToast.success(editing?"Documento atualizado.":"Documento adicionado.");
+      _close();
+      _loadDocs();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+String(e?.message||e));
+    }
+    finally{setBusy(false);}
+  };
+
+  const _delete = async (d)=>{
+    if(typeof pixelsConfirm==="function"){
+      if(!await pixelsConfirm("Excluir o documento '"+d.title+"'?",{okText:"Excluir",danger:true})) return;
+    }else if(!confirm("Excluir?")) return;
+    try{
+      const sb=window._sb;
+      if(d.storage_path){
+        await sb.storage.from("agency-files").remove([d.storage_path]).catch(()=>{});
+      }
+      await sb.from("team_docs").delete().eq("id",d.id);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento removido.");
+      _loadDocs();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+String(e?.message||e));
+    }
+  };
+
+  return <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:18,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",display:"flex",flexDirection:"column",gap:14}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:13}}>
+        <div style={{width:42,height:42,borderRadius:12,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 6px 16px rgba(14,165,233,0.30)"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontSize:18,fontWeight:800,letterSpacing:-.4}}>Documentos</div>
+          <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2}}>Atas de reunião, contratos, propostas e materiais</div>
+        </div>
+      </div>
+      <button onClick={_openNew}
+        style={{background:"linear-gradient(135deg,#0ea5e9,#0284c7)",border:"none",borderRadius:10,padding:"9px 16px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px rgba(14,165,233,0.40)",fontFamily:DG_INTER}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo documento
+      </button>
+    </div>
+
+    {/* Lista */}
+    {loading
+      ? <div style={{textAlign:"center",color:"#94a3b8",fontSize:12,padding:"20px"}}>Carregando…</div>
+      : docs.length===0
+        ? <div style={{background:"#fafbfc",border:"1.5px dashed #e2e8f0",borderRadius:13,padding:"28px 16px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontWeight:500}}>
+            Nenhum documento ainda. Use o botão "Novo documento" pra registrar a primeira reunião ou anexar um arquivo.
+          </div>
+        : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(320px,1fr))",gap:10}}>
+            {docs.map(d=>{
+              const cat=_catOf(d.category);
+              const extCor=_extColor(d.file_ext);
+              return <div key={d.id}
+                style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:13,padding:"13px 14px",display:"flex",flexDirection:"column",gap:9,fontFamily:DG_INTER,transition:"all .15s",position:"relative"}}
+                onMouseEnter={e=>{e.currentTarget.style.borderColor=cat.color+"55";e.currentTarget.style.boxShadow="0 6px 18px rgba(15,23,42,0.08)";}}
+                onMouseLeave={e=>{e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.boxShadow="none";}}>
+                {/* Header do card */}
+                <div style={{display:"flex",alignItems:"center",gap:9}}>
+                  <span style={{background:cat.color+"15",color:cat.color,borderRadius:6,padding:"3px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{cat.label}</span>
+                  {d.doc_date && <span style={{color:"#64748b",fontSize:11,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{new Date(d.doc_date+"T12:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"})}</span>}
+                </div>
+                {/* Título */}
+                <div style={{color:"#0f172a",fontSize:14,fontWeight:800,letterSpacing:-.2,lineHeight:1.3}}>{d.title}</div>
+                {/* Descrição (notas) */}
+                {d.description && <div style={{color:"#475569",fontSize:11.5,lineHeight:1.5,maxHeight:60,overflow:"hidden",whiteSpace:"pre-wrap"}}>{d.description}</div>}
+                {/* Anexo (se tiver) */}
+                {d.file_url && <div style={{display:"flex",alignItems:"center",gap:7,paddingTop:7,borderTop:"1px solid #f1f5f9"}}>
+                  <div style={{width:22,height:22,borderRadius:5,background:extCor+"18",color:extCor,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:8.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",flexShrink:0}}>{d.file_ext||"DOC"}</div>
+                  <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                    <div style={{color:"#0f172a",fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.file_name}</div>
+                    {d.file_size>0 && <div style={{color:"#94a3b8",fontSize:9.5}}>{_fmtSize(d.file_size)}</div>}
+                  </div>
+                  <a href={d.file_url} target="_blank" rel="noopener noreferrer" title="Abrir/baixar"
+                    style={{background:extCor+"15",border:"1px solid "+extCor+"33",borderRadius:6,padding:"5px 9px",color:extCor,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:4,fontSize:11,fontWeight:700,fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Baixar
+                  </a>
+                </div>}
+                {/* Ações */}
+                <div style={{display:"flex",alignItems:"center",gap:6,paddingTop:5}}>
+                  <button onClick={()=>_openEdit(d)} title="Editar"
+                    style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 9px",color:"#475569",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4}}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    Editar
+                  </button>
+                  <button onClick={()=>_delete(d)} title="Excluir"
+                    style={{background:"transparent",border:"1px solid #fecaca",borderRadius:6,padding:"5px 9px",color:"#dc2626",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:4}}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+                    Excluir
+                  </button>
+                  {d.author_name && <span style={{color:"#94a3b8",fontSize:10,marginLeft:"auto"}}>por {String(d.author_name).split(" ")[0]}</span>}
+                </div>
+              </div>;
+            })}
+          </div>
+    }
+
+    {/* Modal Novo/Editar */}
+    {modalOpen && <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.65)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={_close}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,boxShadow:"0 20px 60px rgba(0,0,0,.2)",overflow:"hidden",fontFamily:DG_INTER}}>
+        <div style={{background:"linear-gradient(135deg,#0ea5e9,#0284c7)",padding:"18px 22px",color:"#fff"}}>
+          <div style={{fontSize:16,fontWeight:800,letterSpacing:-.3}}>{editing?"Editar documento":"Novo documento"}</div>
+          <div style={{fontSize:11.5,opacity:.85,marginTop:2}}>Ata de reunião, contrato, proposta ou material</div>
+        </div>
+        <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:13}}>
+          {/* Categoria */}
+          <div>
+            <div style={{color:"#64748b",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6}}>Categoria</div>
+            <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+              {_CATS.map(c=>{
+                const _on=draft.category===c.id;
+                return <button key={c.id} type="button" onClick={()=>setDraft(p=>({...p,category:c.id}))}
+                  style={{background:_on?c.color:"#fff",color:_on?"#fff":c.color,border:"1px solid "+(_on?c.color:c.color+"55"),borderRadius:8,padding:"6px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{c.label}</button>;
+              })}
+            </div>
+          </div>
+          {/* Título + Data */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 140px",gap:10}}>
+            <div>
+              <div style={{color:"#64748b",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Título *</div>
+              <input value={draft.title} onChange={e=>setDraft(p=>({...p,title:e.target.value}))} placeholder="Ex: Reunião com Meta"
+                style={{width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",fontSize:13,color:"#0f172a",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+            <div>
+              <div style={{color:"#64748b",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Data</div>
+              <input type="date" value={draft.doc_date} onChange={e=>setDraft(p=>({...p,doc_date:e.target.value}))}
+                style={{width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",fontSize:13,color:"#0f172a",fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+            </div>
+          </div>
+          {/* Descrição/Notas */}
+          <div>
+            <div style={{color:"#64748b",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Notas / decisões</div>
+            <textarea value={draft.description} onChange={e=>setDraft(p=>({...p,description:e.target.value}))} placeholder="Pontos discutidos, decisões, próximos passos..."
+              rows={5} style={{width:"100%",background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 11px",fontSize:12.5,color:"#0f172a",fontFamily:"inherit",outline:"none",boxSizing:"border-box",resize:"vertical",lineHeight:1.5}}/>
+          </div>
+          {/* Arquivo */}
+          <div>
+            <div style={{color:"#64748b",fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>
+              Anexo {editing&&editing.file_url?"(opcional — deixe vazio pra manter o atual)":"(opcional)"}
+            </div>
+            <label style={{cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8,background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 12px",color:"#475569",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              {draftFile?draftFile.name:(editing&&editing.file_name?editing.file_name+" (atual)":"Escolher arquivo")}
+              <input type="file" onChange={e=>setDraftFile(e.target.files?.[0]||null)} style={{display:"none"}}/>
+            </label>
+          </div>
+          {/* Botões */}
+          <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6}}>
+            <button onClick={_close} disabled={busy}
+              style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:9,padding:"8px 16px",color:"#475569",fontSize:12.5,fontWeight:700,cursor:busy?"not-allowed":"pointer",fontFamily:DG_INTER}}>Cancelar</button>
+            <button onClick={_save} disabled={busy}
+              style={{background:busy?"#cbd5e1":"linear-gradient(135deg,#0ea5e9,#0284c7)",border:"none",borderRadius:9,padding:"8px 18px",color:"#fff",fontSize:12.5,fontWeight:800,cursor:busy?"not-allowed":"pointer",fontFamily:DG_INTER,boxShadow:busy?"none":"0 4px 14px rgba(14,165,233,0.40)"}}>
+              {busy?"Salvando…":(editing?"Salvar":"Adicionar")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>}
+  </section>;
 }
 
 // ── Item meta linha simples ──────────────────────────────────
@@ -54795,8 +55057,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   const doneCheck  = checklistArr.reduce((acc,_,i)=>acc + (checks[i]?1:0), 0);
   const allDone    = totalCheck>0 && doneCheck === totalCheck;
 
-  // Refs (links)
+  // Refs (links) + Documentos (uploads)
   const refs = areaData.refs || [];
+  const docs = areaData.docs || [];
 
   // Tem template?
   const templates = (areaData.templates||[]);
@@ -55242,58 +55505,166 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             }
           </div>
 
-          {/* Referências */}
+          {/* Materiais (Links + Documentos) */}
           <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:"14px 16px",fontFamily:PB_INTER}}>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
               <div style={{width:36,height:36,borderRadius:11,background:"linear-gradient(135deg, #6366f1 0%, #4338ca 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(99,102,241,.32)"}}>
-                <Ico n="link" size={16} color="#fff"/>
+                <Ico n="folder" size={16} color="#fff"/>
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Referências</div>
-                <div style={{color:PB_MUTE,fontSize:11,marginTop:1}}>links e materiais úteis</div>
+                <div style={{color:PB_INK,fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Materiais</div>
+                <div style={{color:PB_MUTE,fontSize:11,marginTop:1}}>links e documentos do cliente</div>
               </div>
             </div>
-            {refs.length === 0
-              ? <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:11,padding:"18px 14px",textAlign:"center"}}>
-                  <Ico n="folder" size={22} color="#cbd5e1"/>
-                  <div style={{color:PB_MUTE,fontSize:11.5,marginTop:7,fontWeight:600}}>Nenhuma referência ainda</div>
-                  <div style={{color:PB_SOFT,fontSize:10.5,marginTop:3,lineHeight:1.4}}>Adicione links de inspiração, drives ou guidelines.</div>
-                  {isAdmin && <button onClick={()=>{
-                      const url = prompt("URL da referência:");
-                      if(!url) return;
-                      const title = prompt("Título (opcional):") || url;
-                      onUpdateArea({refs:[...refs, {url:url.trim(), title:title.trim()}]});
-                    }} style={{marginTop:12,background:PB_PURPLE,border:"none",borderRadius:9,padding:"7px 14px",color:"#fff",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
-                    <Ico n="plus" size={12} color="#fff"/> Adicionar referência
-                  </button>}
-                </div>
-              : <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {refs.map((r,i)=>(
-                    <a key={i} href={r.url} target="_blank" rel="noopener noreferrer"
-                      style={{background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"8px 11px",textDecoration:"none",display:"flex",alignItems:"center",gap:9,transition:"all .15s"}}
-                      onMouseEnter={e=>{e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background=PB_PURPLE_BG;}}
-                      onMouseLeave={e=>{e.currentTarget.style.borderColor=PB_BORDER;e.currentTarget.style.background="#fafafa";}}>
-                      <Ico n="link" size={13} color={PB_PURPLE}/>
-                      <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
-                        <div style={{color:PB_INK,fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title||r.url}</div>
-                        {r.title && <div style={{color:PB_SOFT,fontSize:10,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.url}</div>}
+
+            {/* ── Sub-seção LINKS ── */}
+            <div style={{marginBottom:14}}>
+              <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                <Ico n="link" size={11} color={PB_MUTE}/>Links
+              </div>
+              {refs.length === 0
+                ? <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:10,padding:"12px",textAlign:"center"}}>
+                    <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:600}}>Nenhum link ainda</div>
+                    {isAdmin && <button onClick={()=>{
+                        const url = prompt("URL do link:");
+                        if(!url) return;
+                        const title = prompt("Título (opcional):") || url;
+                        onUpdateArea({refs:[...refs, {url:url.trim(), title:title.trim()}]});
+                      }} style={{marginTop:8,background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"5px 11px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
+                      <Ico n="plus" size={10} color={PB_PURPLE}/> Adicionar link
+                    </button>}
+                  </div>
+                : <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                    {refs.map((r,i)=>(
+                      <a key={i} href={r.url} target="_blank" rel="noopener noreferrer"
+                        style={{background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 10px",textDecoration:"none",display:"flex",alignItems:"center",gap:8,transition:"all .15s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background=PB_PURPLE_BG;}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor=PB_BORDER;e.currentTarget.style.background="#fafafa";}}>
+                        <Ico n="link" size={12} color={PB_PURPLE}/>
+                        <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                          <div style={{color:PB_INK,fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.title||r.url}</div>
+                          {r.title && <div style={{color:PB_SOFT,fontSize:9.5,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.url}</div>}
+                        </div>
+                        {isAdmin && <button onClick={(e)=>{e.preventDefault();e.stopPropagation(); if(confirm("Remover este link?")) onUpdateArea({refs:refs.filter((_,j)=>j!==i)});}} title="Remover"
+                          style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:PB_SOFT}}>
+                          <Ico n="x" size={11} color="currentColor"/>
+                        </button>}
+                      </a>
+                    ))}
+                    {isAdmin && <button onClick={()=>{
+                        const url = prompt("URL do link:");
+                        if(!url) return;
+                        const title = prompt("Título (opcional):") || url;
+                        onUpdateArea({refs:[...refs, {url:url.trim(), title:title.trim()}]});
+                      }} style={{marginTop:2,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:8,padding:"5px 10px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                      <Ico n="plus" size={10} color={PB_PURPLE}/> Adicionar link
+                    </button>}
+                  </div>
+              }
+            </div>
+
+            {/* ── Sub-seção DOCUMENTOS (uploads pra Supabase) ── */}
+            <div>
+              <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                <Ico n="file" size={11} color={PB_MUTE}/>Documentos
+              </div>
+              {(()=>{
+                // Helpers do bloco docs
+                const _docExt = (name)=>{const m=String(name||"").match(/\.([a-z0-9]{1,5})$/i); return m?m[1].toLowerCase():"";};
+                const _docColor = (ext)=>{
+                  const m={pdf:"#dc2626",doc:"#2563eb",docx:"#2563eb",xls:"#16a34a",xlsx:"#16a34a",ppt:"#ea580c",pptx:"#ea580c",png:"#7c3aed",jpg:"#7c3aed",jpeg:"#7c3aed",zip:"#475569"};
+                  return m[ext]||"#64748b";
+                };
+                const _fmtSize=(b)=>{if(!b)return"";const k=1024;if(b<k)return b+" B";if(b<k*k)return (b/k).toFixed(1)+" KB";return (b/k/k).toFixed(1)+" MB";};
+                const _uploadDoc = async (file, title)=>{
+                  if(!file) return;
+                  try{
+                    const sb=window._sb;
+                    const ext=_docExt(file.name);
+                    const key="playbooks/"+(cl.id||"_")+"/"+area+"/"+Date.now()+"-"+file.name.replace(/[^a-z0-9._-]/gi,"_");
+                    const {error:upErr} = await sb.storage.from("agency-files").upload(key, file, {contentType:file.type||"application/octet-stream", upsert:false});
+                    if(upErr){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro no upload: "+upErr.message); return;}
+                    const {data:pub} = sb.storage.from("agency-files").getPublicUrl(key);
+                    const newDoc={
+                      id:"doc-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+                      title:(title||file.name).trim(),
+                      fileName:file.name,
+                      url:pub?.publicUrl||"",
+                      storagePath:key,
+                      size:file.size||0,
+                      ext:ext,
+                      type:file.type||"",
+                      at:new Date().toISOString(),
+                    };
+                    onUpdateArea({docs:[newDoc,...docs]});
+                    if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento adicionado.");
+                  }catch(e){
+                    if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+String(e?.message||e));
+                  }
+                };
+                const _onPickFile = (e)=>{
+                  const file = e.target.files?.[0];
+                  if(!file) return;
+                  const title = prompt("Título do documento (opcional):", file.name) || file.name;
+                  _uploadDoc(file, title);
+                  e.target.value="";
+                };
+                const _removeDoc = async (d)=>{
+                  if(!confirm("Remover \""+(d.title||d.fileName)+"\"?")) return;
+                  try{
+                    if(d.storagePath){
+                      const sb=window._sb;
+                      await sb.storage.from("agency-files").remove([d.storagePath]).catch(()=>{});
+                    }
+                  }catch(e){}
+                  onUpdateArea({docs:docs.filter(x=>x.id!==d.id)});
+                  if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento removido.");
+                };
+                return <>
+                  {docs.length===0
+                    ? <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:10,padding:"12px",textAlign:"center"}}>
+                        <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:600}}>Nenhum documento ainda</div>
+                        {isAdmin && <label style={{marginTop:8,background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"5px 11px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
+                          <Ico n="plus" size={10} color={PB_PURPLE}/> Adicionar documento
+                          <input type="file" onChange={_onPickFile} style={{display:"none"}}/>
+                        </label>}
                       </div>
-                      {isAdmin && <button onClick={(e)=>{e.preventDefault();e.stopPropagation(); if(confirm("Remover esta referência?")) onUpdateArea({refs:refs.filter((_,j)=>j!==i)});}} title="Remover"
-                        style={{background:"transparent",border:"none",cursor:"pointer",padding:4,borderRadius:6,color:PB_SOFT}}>
-                        <Ico n="x" size={12} color="currentColor"/>
-                      </button>}
-                    </a>
-                  ))}
-                  {isAdmin && <button onClick={()=>{
-                      const url = prompt("URL da referência:");
-                      if(!url) return;
-                      const title = prompt("Título (opcional):") || url;
-                      onUpdateArea({refs:[...refs, {url:url.trim(), title:title.trim()}]});
-                    }} style={{marginTop:4,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:9,padding:"7px 11px",color:PB_PURPLE,fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5}}>
-                    <Ico n="plus" size={12} color={PB_PURPLE}/> Adicionar
-                  </button>}
-                </div>
-            }
+                    : <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {docs.map(d=>{
+                          const cor=_docColor(d.ext);
+                          return <div key={d.id}
+                            style={{background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 10px",display:"flex",alignItems:"center",gap:8,transition:"all .15s"}}
+                            onMouseEnter={e=>{e.currentTarget.style.borderColor=cor;e.currentTarget.style.background=cor+"08";}}
+                            onMouseLeave={e=>{e.currentTarget.style.borderColor=PB_BORDER;e.currentTarget.style.background="#fafafa";}}>
+                            <div style={{width:24,height:24,borderRadius:6,background:cor+"18",color:cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:9,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>
+                              {d.ext||"DOC"}
+                            </div>
+                            <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                              <div style={{color:PB_INK,fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.title||d.fileName}</div>
+                              <div style={{color:PB_SOFT,fontSize:9.5,marginTop:1,display:"flex",alignItems:"center",gap:6}}>
+                                {d.size>0 && <span>{_fmtSize(d.size)}</span>}
+                                {d.at && <span>{new Date(d.at).toLocaleDateString("pt-BR")}</span>}
+                              </div>
+                            </div>
+                            <a href={d.url} target="_blank" rel="noopener noreferrer" title="Abrir/baixar"
+                              style={{background:"transparent",border:"none",cursor:"pointer",padding:4,borderRadius:5,color:PB_PURPLE,textDecoration:"none",display:"inline-flex"}}>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            </a>
+                            {isAdmin && <button onClick={()=>_removeDoc(d)} title="Remover"
+                              style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:PB_SOFT}}>
+                              <Ico n="x" size={11} color="currentColor"/>
+                            </button>}
+                          </div>;
+                        })}
+                        {isAdmin && <label style={{marginTop:2,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:8,padding:"5px 10px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                          <Ico n="plus" size={10} color={PB_PURPLE}/> Adicionar documento
+                          <input type="file" onChange={_onPickFile} style={{display:"none"}}/>
+                        </label>}
+                      </div>
+                  }
+                </>;
+              })()}
+            </div>
           </div>
 
         </div>
