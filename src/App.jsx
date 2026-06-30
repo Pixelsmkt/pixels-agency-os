@@ -30049,7 +30049,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
         {/* TABS */}
         <div style={{display:"flex",gap:0,borderBottom:"1px solid #e2e8f0"}}>
-          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"]]:[]),["audio","Áudio"],["activity","Histórico"]].map(([id,lbl])=>(
+          {[["desc","Briefing"],["legenda","Legenda"],["files",`Arquivos${filesCount>0?" ("+filesCount+")":""}`],...(client?[["orientacoes","Orientações"],["contatos","Contatos"]]:[]),["audio","Áudio"],["activity","Histórico"]].map(([id,lbl])=>(
             <button key={id} onClick={()=>setActiveTab(id)}
               style={{background:"none",border:"none",borderBottom:activeTab===id?"2px solid #0f172a":"2px solid transparent",padding:"12px 18px",fontSize:13.5,fontWeight:activeTab===id?700:500,color:activeTab===id?"#0f172a":"#64748b",cursor:"pointer",whiteSpace:"nowrap",marginBottom:-1,fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"color .12s"}}>
               {lbl}
@@ -30904,6 +30904,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               Passa bioterUnit pra puxar contatos automaticamente da unidade certa do Playbook. */}
           {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client} bioterUnit={bioterUnit||""}/>}
 
+          {/* CONTATOS — só os contatos do Playbook, da unidade Bioter do card. */}
+          {activeTab==="contatos"&&client&&<ContatosView clientId={client} bioterUnit={bioterUnit||""}/>}
+
           {/* HISTÓRICO */}
           {activeTab==="activity"&&<div>
             <div style={{color:"#64748b",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:16}}>Histórico de Atividade</div>
@@ -31439,6 +31442,87 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 /* ─── OrientacoesView — read-only no card modal ───
    Mostra logos, paleta, fontes, voz, hashtags e contatos do cliente vinculado.
    Designer/social só consultam (edição vai pela página do cliente). */
+function ContatosView({clientId, bioterUnit}){
+  // Aba dedicada a Contatos no CardModal — puxa só os contatos do Playbook (do cliente + unidade).
+  // Sincronizada com Estratégia > Playbooks > [área] > Contatos (que pode ser por unidade Bioter).
+  const [playbookData,setPlaybookData]=useState(null);
+  const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(c=>c.id===clientId);
+  useEffect(()=>{
+    if(!clientId)return;
+    const sb=window._sb;
+    if(!sb||!sb.from)return;
+    sb.from("clients").select("orientacoes").eq("client_id",clientId).single()
+      .then(({data:row})=>{
+        const o=row?.orientacoes;
+        if(o&&typeof o==="object")setPlaybookData(o);
+        else setPlaybookData({});
+      }).catch(()=>setPlaybookData({}));
+  },[clientId]);
+
+  // Resolve a unidade Bioter (label legível)
+  const _resolvedUnitName = useMemo(()=>{
+    if(!bioterUnit)return"";
+    const units=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
+    const u=units.find(x=>x.id===bioterUnit);
+    return u?(u.pickerLabel||u.label.split("/")[0]):bioterUnit;
+  },[bioterUnit]);
+
+  // Contatos resolvidos: por unidade > default
+  const _resolvedContatos = useMemo(()=>{
+    if(!playbookData)return null;
+    if(bioterUnit && playbookData.contatos_by_unit && playbookData.contatos_by_unit[bioterUnit]){
+      return playbookData.contatos_by_unit[bioterUnit];
+    }
+    return playbookData.contatos || null;
+  },[playbookData,bioterUnit]);
+
+  if(!playbookData){
+    return <div style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8",fontSize:12}}>Carregando contatos…</div>;
+  }
+  const _hasAny = _resolvedContatos && Object.keys(_resolvedContatos).filter(k=>_resolvedContatos[k]).length>0;
+  if(!_hasAny){
+    return <div style={{textAlign:"center",padding:"40px 20px"}}>
+      <div style={{width:48,height:48,borderRadius:12,background:"#f0fdfa",color:"#0d9488",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+        <Ico n="phone" size={22} color="#0d9488"/>
+      </div>
+      <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:6}}>Sem contatos cadastrados{_resolvedUnitName?(" para "+_resolvedUnitName):""}</div>
+      <div style={{color:"#64748b",fontSize:11,lineHeight:1.6,maxWidth:380,margin:"0 auto"}}>Vá em <strong>Estratégia → Playbooks → [área] → Contatos</strong> pra cadastrar telefone, e-mail, WhatsApp, site, Instagram e endereço da unidade.</div>
+    </div>;
+  }
+  return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+    {cl && <div style={{background:"linear-gradient(135deg,#f0fdfa,#fff)",border:"0.5px solid #99f6e4",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11}}>
+      <div style={{width:38,height:38,borderRadius:9,background:cl.color+"22",border:"0.5px solid "+cl.color+"44",display:"flex",alignItems:"center",justifyContent:"center",color:cl.color,fontWeight:700,fontSize:13}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:600,fontSize:13.5,letterSpacing:-.1}}>{cl.name}{_resolvedUnitName?(" · "+_resolvedUnitName):""}</div>
+        <div style={{color:"#0d9488",fontSize:11,marginTop:2,fontWeight:600}}>Dados pra colocar nas artes e vídeos</div>
+      </div>
+    </div>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+      {[
+        {key:"telefone",  label:"Telefone",   icon:"phone"},
+        {key:"whatsapp",  label:"WhatsApp",   icon:"phone"},
+        {key:"email",     label:"E-mail",     icon:"mail"},
+        {key:"site",      label:"Site",       icon:"globe"},
+        {key:"instagram", label:"Instagram",  icon:"sparkles"},
+        {key:"endereco",  label:"Endereço",   icon:"map-pin"},
+      ].filter(it=>_resolvedContatos[it.key]).map(it=>(
+        <div key={it.key} style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:9}}>
+          <div style={{width:30,height:30,borderRadius:7,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={13} color="#fff"/></div>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{color:"#134e4a",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
+            <div style={{color:"#0f172a",fontSize:13,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_resolvedContatos[it.key]}</div>
+          </div>
+          <button type="button" onClick={async()=>{try{await navigator.clipboard.writeText(_resolvedContatos[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}}
+            title="Copiar"
+            style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:4,borderRadius:5,display:"inline-flex",alignItems:"center"}}>
+            <Ico n="copy" size={13}/>
+          </button>
+        </div>
+      ))}
+    </div>
+  </div>;
+}
+
 function OrientacoesView({clientId, bioterUnit}){
   const sb=window._sb;
   const [data,setData]=useState(null);
