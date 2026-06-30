@@ -52413,6 +52413,90 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       </div>
     </div>
 
+
+    {/* ══════════ PLANEJAMENTO DA SEMANA — refinado ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <_DGSec icon="calendar" title="Planejamento da semana" sub="Sua rotina personalizada + metas adicionadas"
+        right={<div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
+          {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
+            const a = filtroStatus===f.id;
+            return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
+              style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
+              {f.l}
+            </button>;
+          })}
+        </div>}/>
+
+      {/* Grade Seg-Sex */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12}}>
+        {DG_DAYS.map(d=>{
+          const metasDia = _filtrar(metasPorDia[d.key]||[]);
+          const totalMetas = (metasPorDia[d.key]||[]).length;
+          const concMetas = (metasPorDia[d.key]||[]).filter(m=>m.status==="concluida").length;
+          const isHoje = _dgWeekDate(d.idx)===hoje;
+          const dayDate = _dgWeekDate(d.idx);
+          const dayNum = dayDate ? parseInt(dayDate.split("-")[2],10) : "";
+          const rotinaDia = _rotinaDias.find(r=>r.id===d.key);
+          const rotinaItens = rotinaDia?.itens||[];
+          const rotinaFiltered = filtroStatus==="todas"?rotinaItens:
+            (filtroStatus==="concluidas"?rotinaItens.filter(it=>rotinaChecks[it.id]):rotinaItens.filter(it=>!rotinaChecks[it.id]));
+          const rotinaConc = rotinaItens.filter(it=>rotinaChecks[it.id]).length;
+          const dayConc = concMetas + rotinaConc;
+          const dayTotal = totalMetas + rotinaItens.length;
+          const pct = dayTotal>0 ? Math.round((dayConc/dayTotal)*100) : 0;
+          return <div key={d.key} style={{background:"#fff",border:"1px solid "+(isHoje?"#c4b5fd":"#eef0f3"),borderRadius:13,padding:0,display:"flex",flexDirection:"column",minHeight:230,overflow:"hidden",boxShadow:isHoje?"0 8px 24px rgba(124,58,237,0.10)":"none",transition:"all .15s"}}>
+            {/* Header */}
+            <div style={{padding:"12px 13px 10px",borderBottom:"1px solid "+(isHoje?"#ede9fe":"#f5f7fa"),background:isHoje?"#faf5ff":"#fff"}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{display:"flex",alignItems:"baseline",gap:7}}>
+                    <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:.2,textTransform:"uppercase"}}>{d.label}</div>
+                    {dayNum&&<div style={{color:"#cbd5e1",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{String(dayNum).padStart(2,"0")}</div>}
+                  </div>
+                  {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
+                </div>
+                {isHoje&&<span style={{fontSize:11,fontWeight:800,color:"#fff",background:DG_PURPLE,padding:"3px 8px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
+              </div>
+              {/* Progress bar SEM porcentagem (discreta) */}
+              {dayTotal>0&&<div style={{marginTop:9}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.3}}>{dayConc}/{dayTotal} feitos</span>
+                </div>
+                <div style={{height:3,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:pct+"%",height:"100%",background:pct===100?"#16a34a":DG_PURPLE,borderRadius:99,transition:"width .3s"}}/>
+                </div>
+              </div>}
+            </div>
+
+            {/* Corpo */}
+            <div style={{padding:"11px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
+              {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)}/>)}
+              </div>}
+
+              {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#f5f7fa",margin:"4px 0"}}/>}
+
+              {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
+              </div>}
+
+              {rotinaFiltered.length===0&&metasDia.length===0&&<div style={{color:"#cbd5e1",fontSize:11,textAlign:"center",padding:"16px 4px",lineHeight:1.4,fontWeight:500}}>
+                {filtroStatus==="todas"?"Dia livre":"Sem "+filtroStatus.toLowerCase()}
+              </div>}
+
+              <button onClick={()=>setNovaMeta({day:d})}
+                style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color=DG_PURPLE;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                Adicionar
+              </button>
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+
     {/* ══════════ MARCOS — histórico cronológico sincronizado entre sócios ══════════ */}
     {(function(){
       // calMarcos já tem todos os marcos de todos os clientes (carregado no useEffect acima)
@@ -52524,90 +52608,6 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
 
     {/* ══════════ ROTINA SEMANAL — itens fixos por dia ══════════ */}
     <_DGRotinaSemanal user={user} isSocio={user.level===1}/>
-
-    {/* ══════════ PLANEJAMENTO DA SEMANA — refinado ══════════ */}
-    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-      <_DGSec icon="calendar" title="Planejamento da semana" sub="Sua rotina personalizada + metas adicionadas"
-        right={<div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
-          {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
-            const a = filtroStatus===f.id;
-            return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
-              style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
-              {f.l}
-            </button>;
-          })}
-        </div>}/>
-
-      {/* Grade Seg-Sex */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12}}>
-        {DG_DAYS.map(d=>{
-          const metasDia = _filtrar(metasPorDia[d.key]||[]);
-          const totalMetas = (metasPorDia[d.key]||[]).length;
-          const concMetas = (metasPorDia[d.key]||[]).filter(m=>m.status==="concluida").length;
-          const isHoje = _dgWeekDate(d.idx)===hoje;
-          const dayDate = _dgWeekDate(d.idx);
-          const dayNum = dayDate ? parseInt(dayDate.split("-")[2],10) : "";
-          const rotinaDia = _rotinaDias.find(r=>r.id===d.key);
-          const rotinaItens = rotinaDia?.itens||[];
-          const rotinaFiltered = filtroStatus==="todas"?rotinaItens:
-            (filtroStatus==="concluidas"?rotinaItens.filter(it=>rotinaChecks[it.id]):rotinaItens.filter(it=>!rotinaChecks[it.id]));
-          const rotinaConc = rotinaItens.filter(it=>rotinaChecks[it.id]).length;
-          const dayConc = concMetas + rotinaConc;
-          const dayTotal = totalMetas + rotinaItens.length;
-          const pct = dayTotal>0 ? Math.round((dayConc/dayTotal)*100) : 0;
-          return <div key={d.key} style={{background:"#fff",border:"1px solid "+(isHoje?"#c4b5fd":"#eef0f3"),borderRadius:13,padding:0,display:"flex",flexDirection:"column",minHeight:230,overflow:"hidden",boxShadow:isHoje?"0 8px 24px rgba(124,58,237,0.10)":"none",transition:"all .15s"}}>
-            {/* Header */}
-            <div style={{padding:"12px 13px 10px",borderBottom:"1px solid "+(isHoje?"#ede9fe":"#f5f7fa"),background:isHoje?"#faf5ff":"#fff"}}>
-              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6}}>
-                <div style={{minWidth:0,flex:1}}>
-                  <div style={{display:"flex",alignItems:"baseline",gap:7}}>
-                    <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:.2,textTransform:"uppercase"}}>{d.label}</div>
-                    {dayNum&&<div style={{color:"#cbd5e1",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{String(dayNum).padStart(2,"0")}</div>}
-                  </div>
-                  {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
-                </div>
-                {isHoje&&<span style={{fontSize:11,fontWeight:800,color:"#fff",background:DG_PURPLE,padding:"3px 8px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
-              </div>
-              {/* Progress bar SEM porcentagem (discreta) */}
-              {dayTotal>0&&<div style={{marginTop:9}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.3}}>{dayConc}/{dayTotal} feitos</span>
-                </div>
-                <div style={{height:3,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
-                  <div style={{width:pct+"%",height:"100%",background:pct===100?"#16a34a":DG_PURPLE,borderRadius:99,transition:"width .3s"}}/>
-                </div>
-              </div>}
-            </div>
-
-            {/* Corpo */}
-            <div style={{padding:"11px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
-              {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)}/>)}
-              </div>}
-
-              {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#f5f7fa",margin:"4px 0"}}/>}
-
-              {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
-              </div>}
-
-              {rotinaFiltered.length===0&&metasDia.length===0&&<div style={{color:"#cbd5e1",fontSize:11,textAlign:"center",padding:"16px 4px",lineHeight:1.4,fontWeight:500}}>
-                {filtroStatus==="todas"?"Dia livre":"Sem "+filtroStatus.toLowerCase()}
-              </div>}
-
-              <button onClick={()=>setNovaMeta({day:d})}
-                style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
-                onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color=DG_PURPLE;}}
-                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
-                Adicionar
-              </button>
-            </div>
-          </div>;
-        })}
-      </div>
-    </div>
-
     {/* ══════════ RITUAIS — Daily / Weekly / Planejamentos ══════════ */}
     {(function(){
       // Tick pra re-render quando outro user marca via realtime
