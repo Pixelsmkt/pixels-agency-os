@@ -52135,22 +52135,25 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             </button>}
           </div>}/>
 
-        {/* Resumo do sprint — stats compactos com gradiente sutil */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:16}}>
-          {[
-            {l:"Total",       v:sprintTotal,     c:"#7c3aed", svg:"<rect x='3' y='3' width='7' height='7'/><rect x='14' y='3' width='7' height='7'/><rect x='3' y='14' width='7' height='7'/><rect x='14' y='14' width='7' height='7'/>"},
-            {l:"Em andamento",v:sprintEmAnd,     c:"#0ea5e9", svg:"<circle cx='12' cy='12' r='9'/><polyline points='12 7 12 12 15 14'/>"},
-            {l:"Atrasadas",   v:sprintAtrasado,  c:sprintAtrasado>0?"#ef4444":"#94a3b8", svg:"<path d='M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/>"},
-            {l:"Concluídas",  v:sprintConcluido, c:"#16a34a", svg:"<polyline points='20 6 9 17 4 12'/>"},
-          ].map((s,i)=><div key={i} style={{background:"linear-gradient(135deg,"+s.c+"08,#fff)",border:"1px solid "+s.c+"22",borderRadius:11,padding:"11px 13px",display:"flex",alignItems:"center",gap:10,transition:"all .15s",position:"relative",overflow:"hidden"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=s.c+"55";e.currentTarget.style.transform="translateY(-1px)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=s.c+"22";e.currentTarget.style.transform="";}}>
-            <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:s.c}}/>
-            <div style={{width:30,height:30,borderRadius:8,background:s.c+"15",color:s.c,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginLeft:3}} dangerouslySetInnerHTML={{__html:"<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'>"+s.svg+"</svg>"}}/>
-            <div style={{minWidth:0,flex:1}}>
-              <div style={{color:"#64748b",fontSize:10,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",lineHeight:1,marginBottom:3}}>{s.l}</div>
-              <div style={{color:s.c,fontSize:20,fontWeight:800,letterSpacing:-.5,lineHeight:1,fontFeatureSettings:"'tnum'"}}>{s.v}</div>
-            </div>
-          </div>)}
-        </div>
+        {/* Mini-resumo inline: total + atrasadas + concluídas em UMA linha (KPIs grandes eram redundantes) */}
+        {sprintTotal>0 && <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap",fontFamily:DG_INTER}}>
+          <span style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:700,color:"#475569",letterSpacing:-.1}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{color:"#7c3aed"}}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{sprintTotal}</span> entregas
+          </span>
+          {sprintEmAnd>0 && <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"5px 10px",fontSize:11.5,fontWeight:700,color:"#0284c7",letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+            {sprintEmAnd} em andamento
+          </span>}
+          {sprintAtrasado>0 && <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"5px 10px",fontSize:11.5,fontWeight:700,color:"#dc2626",letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+            {sprintAtrasado} atrasada{sprintAtrasado>1?"s":""}
+          </span>}
+          {sprintConcluido>0 && <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"5px 10px",fontSize:11.5,fontWeight:700,color:"#16a34a",letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            {sprintConcluido} concluída{sprintConcluido>1?"s":""}
+          </span>}
+        </div>}
 
         {/* Grid por cliente */}
         {(function(){
@@ -52211,8 +52214,23 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             }
           });
 
+          // Esconde clientes que não têm entregas nem pedidos pendentes — evita ruído visual
+          const clientesComConteudo = clientesShown.filter(function(cl){
+            const _has = sprintItems.some(it=>it.client_id===cl.id);
+            const _pend = (portalAbertasPorCli[cl.id]||[]).some(t=>!puxadasIds.has(t.id));
+            return _has || _pend;
+          });
+          if(clientesComConteudo.length===0){
+            return <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:12,padding:"24px 18px",textAlign:"center",fontFamily:DG_INTER}}>
+              <div style={{width:42,height:42,borderRadius:11,background:"#f1f5f9",color:"#cbd5e1",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              </div>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:13,letterSpacing:-.2,marginBottom:3}}>Nenhuma entrega planejada</div>
+              <div style={{color:"#94a3b8",fontSize:11.5}}>Crie demandas internas com prioridade Urgente/Alta pra cair no sprint.</div>
+            </div>;
+          }
           return <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {clientesShown.map(cl=>{
+            {clientesComConteudo.map(cl=>{
               const itensCl = sprintItems.filter(it=>it.client_id===cl.id);
               const okCl = itensCl.filter(it=>it.status==="concluido").length;
               const lateCl = itensCl.filter(it=>it.status!=="concluido"&&it.deadline&&_dgDays(it.deadline)<0).length;
@@ -52253,13 +52271,30 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                     const _scfg = DG_SPRINT_STATUS.find(x=>x.id===it.status) || DG_SPRINT_STATUS[0];
                     const _isOk = it.status==="concluido";
                     const _isLate = !_isOk && it.deadline && _dgDays(it.deadline)<0;
-                    // Pill SEM clique — edição só via mini-kanban "Demandas internas" abaixo.
+                    // Pill SEM clique de edição. Hover mostra X pra excluir entregas órfãs/zumbis.
+                    // Edição normal é via mini-kanban "Demandas internas" abaixo.
+                    // Entregas sincronizadas de demanda interna (_fromInterna) NÃO mostram X — só zumbis manuais.
+                    const _canDelete = !it._fromInterna;
                     return <span key={it.id}
                       title={it.title+" · "+_scfg.label}
-                      style={{background:_isOk?"#dcfce7":_isLate?"#fee2e2":"#f8fafc",border:"1px solid "+(_isOk?"#86efac":_isLate?"#fecaca":"#e2e8f0"),borderRadius:8,padding:"4px 9px",display:"inline-flex",alignItems:"center",gap:5,maxWidth:170,minWidth:0,fontFamily:"inherit"}}>
+                      style={{background:_isOk?"#dcfce7":_isLate?"#fee2e2":"#f8fafc",border:"1px solid "+(_isOk?"#86efac":_isLate?"#fecaca":"#e2e8f0"),borderRadius:8,padding:"4px 9px",display:"inline-flex",alignItems:"center",gap:5,maxWidth:170,minWidth:0,fontFamily:"inherit",position:"relative"}}
+                      onMouseEnter={_canDelete?function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="1";}:null}
+                      onMouseLeave={_canDelete?function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="0";}:null}>
                       <Ico n={_tcfg.icon} size={10} color={_tcfg.color}/>
                       <span style={{color:_isOk?"#166534":"#0f172a",fontSize:11,fontWeight:700,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:_isOk?"line-through":"none"}}>{it.title}</span>
                       {_isLate && <span style={{color:"#dc2626",fontSize:10,fontWeight:800}}>!</span>}
+                      {_canDelete && <button data-pill-x
+                        onClick={async function(e){
+                          e.stopPropagation();
+                          if(typeof pixelsConfirm==="function"){
+                            if(!await pixelsConfirm("Excluir esta entrega do sprint?",{okText:"Excluir",danger:true})) return;
+                          }
+                          planRemove(it.id);
+                        }}
+                        title="Excluir entrega"
+                        style={{opacity:0,transition:"opacity .12s",background:"#fff",border:"1px solid #fecaca",borderRadius:5,width:16,height:16,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#dc2626",padding:0,marginLeft:1}}>
+                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>}
                     </span>;
                   })}
                   {itensCl.length>4 && <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700}}>+{itensCl.length-4}</span>}
