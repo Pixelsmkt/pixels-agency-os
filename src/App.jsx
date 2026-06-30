@@ -13995,16 +13995,16 @@ function PageCalendarioInterno({isMob}){
                       {(function(){
                         let _resp=[];try{if(Array.isArray(ev.responsibles))_resp=ev.responsibles;else if(typeof ev.responsibles==="string"&&ev.responsibles){const _p=JSON.parse(ev.responsibles);if(Array.isArray(_p))_resp=_p;}}catch(_){}
                         if(_resp.length===0)return null;
-                        return <span style={{display:"inline-flex",alignItems:"center",flexShrink:0}}>
+                        return <span style={{display:"inline-flex",alignItems:"center",gap:2,flexShrink:0}}>
                           {_resp.slice(0,3).map(function(rid,i){
                             const u=(typeof TEAM!=="undefined"?TEAM:[]).find(function(x){return x.id===rid;});
                             if(!u)return null;
                             const _photo=(u.profile_data&&u.profile_data.photo)||((typeof getProfilePhoto!=="undefined"&&getProfilePhoto(u.id))||null);
                             return _photo
-                              ? <img key={rid} src={_photo} alt={u.name} title={u.name} style={{width:18,height:18,borderRadius:"50%",objectFit:"cover",display:"block",marginLeft:i===0?0:-5,flexShrink:0}}/>
-                              : <span key={rid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:9,marginLeft:i===0?0:-5,flexShrink:0}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
+                              ? <img key={rid} src={_photo} alt={u.name} title={u.name} style={{width:18,height:18,borderRadius:5,objectFit:"cover",display:"block",flexShrink:0}}/>
+                              : <span key={rid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:9,flexShrink:0}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
                           })}
-                          {_resp.length>3&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",background:"rgba(255,255,255,0.95)",color:_evColor,fontWeight:800,fontSize:9,marginLeft:-5,flexShrink:0}}>+{_resp.length-3}</span>}
+                          {_resp.length>3&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"rgba(255,255,255,0.95)",color:_evColor,fontWeight:800,fontSize:9,flexShrink:0}}>+{_resp.length-3}</span>}
                         </span>;
                       })()}
                       <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
