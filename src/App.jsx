@@ -55060,6 +55060,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // Refs (links) + Documentos (uploads)
   const refs = areaData.refs || [];
   const docs = areaData.docs || [];
+  // State do modal de documento de texto — DEVE estar no topo (regras de hooks)
+  const [_txtOpen,_setTxtOpen] = useState(null);
 
   // Tem template?
   const templates = (areaData.templates||[]);
@@ -55614,7 +55616,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 };
 
                 // === Criar/Editar documento de texto inline ===
-                const [_txtOpen,_setTxtOpen] = (typeof React!=="undefined"?React:window.React).useState(null);
+                // _txtOpen/_setTxtOpen vêm do escopo do componente (hooks no topo)
                 // null=fechado, {} = novo, {id,...} = editando
 
                 const _newText = ()=>{
