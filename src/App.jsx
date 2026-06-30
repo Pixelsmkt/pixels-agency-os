@@ -51910,11 +51910,40 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     (typeof usePlanejamentoEntries==="function") ? usePlanejamentoEntries() : {entries:[], upsert:()=>{}, remove:()=>{}, loading:false};
 
   // ── Rotina hardcoded por usuário (OP_ROTINAS_POR_USER) ──
-  const _rotinaDias = (typeof _opRotinaDiasFor==="function") ? _opRotinaDiasFor(user.id) : (typeof OP_ROTINAS_POR_USER!=="undefined"?OP_ROTINAS_POR_USER[user.id]:null) || [];
+  const _rotinaDiasRaw = (typeof _opRotinaDiasFor==="function") ? _opRotinaDiasFor(user.id) : (typeof OP_ROTINAS_POR_USER!=="undefined"?OP_ROTINAS_POR_USER[user.id]:null) || [];
   const weekKey  = _dgWeekKey();
   const monthKey = _dgMonthKey();
   const hoje     = _dgToday();
   const {checks: rotinaChecks, toggle: rotinaToggle} = (typeof useOpRotinaChecks==="function") ? useOpRotinaChecks(weekKey, user.id) : {checks:{}, toggle:()=>{}};
+
+  // ── Itens da rotina REMOVIDOS pelo usuário (persiste em localStorage) ──
+  // A rotina vem hardcoded em OP_ROTINAS_POR_USER, mas o sócio pode esconder
+  // itens que não acha úteis. "Restaurar" no header limpa o Set.
+  const [rotinaRemoved, setRotinaRemoved] = useState(function(){
+    try{ const raw = localStorage.getItem("pixels-rotina-removed-"+user.id); return new Set(raw?JSON.parse(raw):[]); }
+    catch(_){ return new Set(); }
+  });
+  const _saveRotinaRemoved = function(nextSet){
+    try{ localStorage.setItem("pixels-rotina-removed-"+user.id, JSON.stringify(Array.from(nextSet))); }catch(_){}
+  };
+  const removeRotinaItem = function(itemId){
+    setRotinaRemoved(function(prev){
+      const next = new Set(prev); next.add(itemId);
+      _saveRotinaRemoved(next);
+      return next;
+    });
+  };
+  const restoreRotinaItems = function(){
+    setRotinaRemoved(function(){
+      const empty = new Set();
+      _saveRotinaRemoved(empty);
+      return empty;
+    });
+  };
+  // Filtra itens removidos da rotina raw
+  const _rotinaDias = _rotinaDiasRaw.map(function(d){
+    return Object.assign({}, d, {itens:(d.itens||[]).filter(function(it){return !rotinaRemoved.has(it.id);})});
+  });
 
   // ── Hidrata meta com campos extras serializados em content (JSON) ──
   // A tabela team_planning só tem colunas fixas (entry_date/content/status/etc.),
@@ -52609,14 +52638,29 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     {/* ══════════ PLANEJAMENTO DA SEMANA — refinado ══════════ */}
     <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
       <_DGSec icon="calendar" title="Planejamento da semana" sub="Sua rotina personalizada + metas adicionadas"
-        right={<div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
-          {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
-            const a = filtroStatus===f.id;
-            return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
-              style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
-              {f.l}
-            </button>;
-          })}
+        right={<div style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          {rotinaRemoved.size>0 && <button onClick={async function(){
+              if(typeof pixelsConfirm==="function"){
+                if(!await pixelsConfirm("Restaurar "+rotinaRemoved.size+" tarefa"+(rotinaRemoved.size>1?"s":"")+" escondida"+(rotinaRemoved.size>1?"s":"")+"?",{okText:"Restaurar"})) return;
+              }
+              restoreRotinaItems();
+            }}
+            title="Restaurar tarefas escondidas"
+            style={{background:"#fff",color:DG_PURPLE,border:"1px solid "+DG_PURPLE+"33",borderRadius:8,padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background=DG_PURPLE+"10";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+            Restaurar {rotinaRemoved.size}
+          </button>}
+          <div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
+            {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
+              const a = filtroStatus===f.id;
+              return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
+                style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
+                {f.l}
+              </button>;
+            })}
+          </div>
         </div>}/>
 
       {/* Grade Seg-Sex */}
@@ -52663,7 +52707,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             {/* Corpo */}
             <div style={{padding:"11px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
               {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)}/>)}
+                {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)} onDelete={()=>removeRotinaItem(it.id)}/>)}
               </div>}
 
               {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#f5f7fa",margin:"4px 0"}}/>}
@@ -53264,12 +53308,29 @@ function _DGMetaMini({meta, onToggle, onDelete}){
 }
 
 // ── Item rotina hardcoded ────────────────────────────────────
-function _DGRotinaItem({item, checked, onToggle}){
-  return <div onClick={onToggle} style={{cursor:"pointer",background:checked?"#f0fdf4":"#fafbfc",border:"1px solid "+(checked?"#bbf7d0":"#f1f5f9"),borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:8,fontFamily:DG_INTER,transition:"all .15s"}}>
+function _DGRotinaItem({item, checked, onToggle, onDelete}){
+  // X aparece no hover quando onDelete está disponível — pra esconder itens da rotina
+  // hardcoded que o sócio não usa. Cliques no X param a propagação (não togglam o check).
+  return <div onClick={onToggle}
+    style={{cursor:"pointer",background:checked?"#f0fdf4":"#fafbfc",border:"1px solid "+(checked?"#bbf7d0":"#f1f5f9"),borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:8,fontFamily:DG_INTER,transition:"all .15s",position:"relative"}}
+    onMouseEnter={onDelete?function(e){const _x=e.currentTarget.querySelector("[data-rot-x]");if(_x)_x.style.opacity="1";}:null}
+    onMouseLeave={onDelete?function(e){const _x=e.currentTarget.querySelector("[data-rot-x]");if(_x)_x.style.opacity="0";}:null}>
     <div style={{width:15,height:15,borderRadius:5,border:"1.5px solid "+(checked?"#16a34a":"#cbd5e1"),background:checked?"#16a34a":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
       {checked&&<svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
     </div>
     <span style={{color:checked?"#166534":"#475569",fontSize:11.5,fontWeight:600,lineHeight:1.35,textDecoration:checked?"line-through":"none",flex:1,minWidth:0,letterSpacing:-.1}}>{item.label}</span>
+    {onDelete && <button data-rot-x
+      onClick={async function(e){
+        e.stopPropagation();
+        if(typeof pixelsConfirm==="function"){
+          if(!await pixelsConfirm("Esconder esta tarefa da rotina?",{okText:"Esconder",danger:false})) return;
+        }
+        onDelete();
+      }}
+      title="Esconder esta tarefa"
+      style={{opacity:0,transition:"opacity .12s",background:"#fff",border:"1px solid #fecaca",borderRadius:5,width:18,height:18,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#dc2626",padding:0,flexShrink:0}}>
+      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>}
   </div>;
 }
 
