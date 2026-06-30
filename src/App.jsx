@@ -14001,10 +14001,10 @@ function PageCalendarioInterno({isMob}){
                             if(!u)return null;
                             const _photo=(u.profile_data&&u.profile_data.photo)||((typeof getProfilePhoto!=="undefined"&&getProfilePhoto(u.id))||null);
                             return _photo
-                              ? <img key={rid} src={_photo} alt={u.name} title={u.name} style={{width:14,height:14,borderRadius:"50%",objectFit:"cover",display:"block",border:"1.2px solid #fff",marginLeft:i===0?0:-4,flexShrink:0}}/>
-                              : <span key={rid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:14,height:14,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:7.5,border:"1.2px solid #fff",marginLeft:i===0?0:-4,flexShrink:0}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
+                              ? <img key={rid} src={_photo} alt={u.name} title={u.name} style={{width:18,height:18,borderRadius:"50%",objectFit:"cover",display:"block",marginLeft:i===0?0:-5,flexShrink:0}}/>
+                              : <span key={rid} title={u.name} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",background:u.color||"#7c3aed",color:"#fff",fontWeight:800,fontSize:9,marginLeft:i===0?0:-5,flexShrink:0}}>{(u.av||u.name.charAt(0)).toUpperCase()}</span>;
                           })}
-                          {_resp.length>3&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:14,height:14,borderRadius:"50%",background:"rgba(255,255,255,0.95)",color:_evColor,fontWeight:800,fontSize:7.5,border:"1.2px solid #fff",marginLeft:-4,flexShrink:0}}>+{_resp.length-3}</span>}
+                          {_resp.length>3&&<span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:"50%",background:"rgba(255,255,255,0.95)",color:_evColor,fontWeight:800,fontSize:9,marginLeft:-5,flexShrink:0}}>+{_resp.length-3}</span>}
                         </span>;
                       })()}
                       <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:600}}>{ev.title}</span>
