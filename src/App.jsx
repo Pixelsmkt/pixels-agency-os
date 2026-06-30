@@ -25952,7 +25952,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
       )}
 
       {/* Tab Storage — só admins */}
-      {mainTab==="senhas"&&isPartner&&<PasswordVault user={user}/>}
+      {mainTab==="senhas"&&isMePartner&&<PasswordVault user={CURRENT_USER}/>}
       {mainTab==="storage"&&isPartner&&<StorageManager tasks={tasks}/>}
 
     </div>
