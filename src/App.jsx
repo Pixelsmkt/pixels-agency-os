@@ -52594,7 +52594,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
       else if(sprintWeekOffset<0)   wkLabel = "Sprint anterior";
       else                          wkLabel = "Sprint da semana de "+segLbl+" a "+sextaLbl;
       const _hoje = sprintWeekOffset===0;
-      return <div style={{background:"linear-gradient(180deg,#ffffff 0%,#fafbfc 100%)",border:"1px solid #eef0f3",borderRadius:20,padding:"26px 28px",boxShadow:"0 8px 24px rgba(15,23,42,0.05),0 1px 2px rgba(15,23,42,0.04)"}}>
+      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:14,padding:"18px 18px 16px",boxShadow:"0 1px 2px rgba(15,23,42,0.04)"}}>
         <_DGSec icon="flag" title={wkLabel} sub={"Entregas de "+segLbl+" a "+sextaLbl+" — por cliente"} accent="#0ea5e9"
           right={<div style={{display:"inline-flex",alignItems:"center",gap:6}}>
             <button onClick={()=>setSprintWeekOffset(sprintWeekOffset-1)} title="Semana anterior"
@@ -52621,25 +52621,7 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             </button>}
           </div>}/>
 
-        {/* Mini-resumo inline: total + atrasadas + concluídas em UMA linha (KPIs grandes eram redundantes) */}
-        {sprintTotal>0 && <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,flexWrap:"wrap",fontFamily:DG_INTER}}>
-          <span style={{display:"inline-flex",alignItems:"center",gap:6,background:"#f8fafc",border:"1px solid #eef0f3",borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:700,color:"#475569",letterSpacing:-.1}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{color:"#7c3aed"}}><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            <span style={{color:"#0f172a",fontWeight:800,fontFeatureSettings:"'tnum'"}}>{sprintTotal}</span> entregas
-          </span>
-          {sprintEmAnd>0 && <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:8,padding:"5px 10px",fontSize:11.5,fontWeight:700,color:"#0284c7",letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
-            {sprintEmAnd} em andamento
-          </span>}
-          {sprintAtrasado>0 && <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,padding:"5px 10px",fontSize:11.5,fontWeight:700,color:"#dc2626",letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
-            {sprintAtrasado} atrasada{sprintAtrasado>1?"s":""}
-          </span>}
-          {sprintConcluido>0 && <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"5px 10px",fontSize:11.5,fontWeight:700,color:"#16a34a",letterSpacing:-.1,fontFeatureSettings:"'tnum'"}}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            {sprintConcluido} concluída{sprintConcluido>1?"s":""}
-          </span>}
-        </div>}
+        {/* mini-resumo removido — informação já consta no mini-kanban Demandas internas acima */}
 
         {/* Grid por cliente */}
         {(function(){
@@ -52715,75 +52697,53 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
               <div style={{color:"#94a3b8",fontSize:11.5}}>Crie demandas internas com prioridade Urgente/Alta pra cair no sprint.</div>
             </div>;
           }
-          // Cards GRANDES estilo dashboard moderno — grid 2 ou 3 colunas com cliente em destaque
-          return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
+          // Cards COMPACTOS estilo coluna do mini-kanban Demandas internas
+          return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(250px,1fr))",gap:10}}>
             {clientesComConteudo.map(cl=>{
               const itensCl = sprintItems.filter(it=>it.client_id===cl.id);
               const okCl = itensCl.filter(it=>it.status==="concluido").length;
               const lateCl = itensCl.filter(it=>it.status!=="concluido"&&it.deadline&&_dgDays(it.deadline)<0).length;
               const portalAbertas = (portalAbertasPorCli[cl.id]||[]).filter(t=>!puxadasIds.has(t.id));
-              const pctCl = itensCl.length>0 ? Math.round((okCl/itensCl.length)*100) : 0;
               const clColor = cl.color || "#64748b";
               return <div key={cl.id}
-                style={{background:"#fff",border:"1.5px solid "+clColor+"22",borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",fontFamily:DG_INTER,boxShadow:"0 2px 8px rgba(15,23,42,0.04)",transition:"all .2s"}}
-                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=clColor+"66";}}
-                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor=clColor+"22";}}>
-                {/* Header com gradiente da cor do cliente */}
-                <div style={{background:"linear-gradient(135deg,"+clColor+"14,"+clColor+"05 70%,#fff)",padding:"16px 18px 14px",borderBottom:"1px solid "+clColor+"15",position:"relative"}}>
-                  <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:clColor}}/>
-                  <div style={{display:"flex",alignItems:"center",gap:12,marginLeft:6}}>
-                    <div style={{width:48,height:48,borderRadius:11,background:"#fff",border:"1px solid "+clColor+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:4,boxShadow:"0 2px 6px "+clColor+"22"}}>
-                      <ClientLogo clientId={cl.id} size="md"/>
+                style={{background:"#eef0f3",border:"1px solid #d8dce2",borderRadius:10,padding:8,display:"flex",flexDirection:"column",gap:6,minHeight:120,fontFamily:DG_INTER,transition:"all .12s"}}>
+                {/* Header compacto: logo pequena + nome + contador (igual coluna do mini-kanban) */}
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,paddingBottom:6,borderBottom:"1px solid #d8dce2"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:7,minWidth:0,flex:1}}>
+                    <div style={{width:24,height:24,borderRadius:6,background:"#fff",border:"1px solid #d8dce2",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:2}}>
+                      <ClientLogo clientId={cl.id} size="sm"/>
                     </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{color:"#0f172a",fontSize:16,fontWeight:800,letterSpacing:-.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.2}}>{cl.name}</div>
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6,flexWrap:"wrap"}}>
-                        {itensCl.length>0 && <span style={{display:"inline-flex",alignItems:"center",gap:4,color:clColor,fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'",background:clColor+"15",borderRadius:6,padding:"2px 8px"}}>
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                          {okCl}/{itensCl.length} entrega{itensCl.length>1?"s":""}
-                        </span>}
-                        {lateCl>0 && <span style={{background:"#fee2e2",color:"#dc2626",borderRadius:6,padding:"2px 8px",fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{lateCl} atrasada{lateCl>1?"s":""}</span>}
-                        {portalAbertas.length>0 && <span style={{background:"#fef3c7",color:"#a16207",borderRadius:6,padding:"2px 8px",fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:3}}>
-                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                          {portalAbertas.length} pedido{portalAbertas.length>1?"s":""}
-                        </span>}
-                      </div>
+                    <div style={{minWidth:0,overflow:"hidden"}}>
+                      <div style={{color:"#0f172a",fontSize:12,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
+                      {itensCl.length>0 && <div style={{color:"#94a3b8",fontSize:9.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{okCl}/{itensCl.length} entrega{itensCl.length>1?"s":""}{lateCl>0?" · "+lateCl+" atrasada"+(lateCl>1?"s":""):""}</div>}
+                      {itensCl.length===0 && portalAbertas.length>0 && <div style={{color:"#a16207",fontSize:9.5,fontWeight:600}}>{portalAbertas.length} pedido{portalAbertas.length>1?"s":""} do portal</div>}
                     </div>
                   </div>
-                  {/* Progress bar quando tem item */}
-                  {itensCl.length>0 && <div style={{marginTop:12,height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
-                    <div style={{height:"100%",width:pctCl+"%",background:pctCl===100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+clColor+","+clColor+"dd)",borderRadius:99,transition:"width .4s"}}/>
-                  </div>}
+                  <span style={{background:"#fff",color:"#475569",border:"1px solid #d8dce2",borderRadius:99,padding:"2px 7px",fontSize:10.5,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{itensCl.length+portalAbertas.length}</span>
                 </div>
 
-                {/* Body: lista vertical de entregas como mini-cards */}
-                <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
-                  {itensCl.length===0 && portalAbertas.length===0 && <div style={{color:"#cbd5e1",fontSize:12,fontStyle:"italic",fontWeight:500,textAlign:"center",padding:"14px 4px"}}>nada planejado pra essa semana</div>}
+                {/* Body: lista vertical de entregas (cards compactos brancos como no mini-kanban) */}
+                <div style={{display:"flex",flexDirection:"column",gap:5,flex:1}}>
+                  {itensCl.length===0 && portalAbertas.length===0 && <div style={{color:"#cbd5e1",fontSize:11,fontWeight:500,fontStyle:"italic",textAlign:"center",padding:"14px 8px"}}>Vazio</div>}
                   {itensCl.map(it=>{
                     const _tcfg = DG_SPRINT_TIPOS.find(x=>x.id===(_dgNormalizarTipo?_dgNormalizarTipo(it.tipo):it.tipo)) || DG_SPRINT_TIPOS[0];
-                    const _scfg = DG_SPRINT_STATUS.find(x=>x.id===it.status) || DG_SPRINT_STATUS[0];
                     const _isOk = it.status==="concluido";
                     const _isLate = !_isOk && it.deadline && _dgDays(it.deadline)<0;
                     const _canDelete = !it._fromInterna;
                     return <div key={it.id}
-                      style={{background:_isOk?"#f0fdf4":_isLate?"#fef2f2":"#fafbfc",border:"1px solid "+(_isOk?"#bbf7d0":_isLate?"#fecaca":"#eef0f3"),borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:9,transition:"all .12s",position:"relative"}}
-                      onMouseEnter={_canDelete?function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="1";e.currentTarget.style.borderColor=_tcfg.color+"66";}:function(e){e.currentTarget.style.borderColor=_tcfg.color+"66";}}
-                      onMouseLeave={_canDelete?function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="0";e.currentTarget.style.borderColor=_isOk?"#bbf7d0":_isLate?"#fecaca":"#eef0f3";}:function(e){e.currentTarget.style.borderColor=_isOk?"#bbf7d0":_isLate?"#fecaca":"#eef0f3";}}>
-                      {/* Ícone do tipo */}
-                      <div style={{width:28,height:28,borderRadius:7,background:_tcfg.color+"18",color:_tcfg.color,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <Ico n={_tcfg.icon} size={13} color={_tcfg.color}/>
+                      style={{background:"#fff",border:"1px solid "+(_isLate?"#fecaca":"#e5e7eb"),borderRadius:8,padding:"7px 9px",display:"flex",alignItems:"center",gap:7,transition:"all .12s",position:"relative",boxShadow:"0 1px 1.5px rgba(15,23,42,0.04)"}}
+                      onMouseEnter={function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x&&_canDelete)_x.style.opacity="1";e.currentTarget.style.borderColor=_isLate?"#dc2626":"#cbd5e1";e.currentTarget.style.boxShadow="0 3px 8px rgba(15,23,42,0.06)";}}
+                      onMouseLeave={function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="0";e.currentTarget.style.borderColor=_isLate?"#fecaca":"#e5e7eb";e.currentTarget.style.boxShadow="0 1px 1.5px rgba(15,23,42,0.04)";}}>
+                      {/* Ícone do tipo — pequeno e neutro */}
+                      <div style={{width:22,height:22,borderRadius:6,background:"#f1f5f9",color:"#64748b",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <Ico n={_tcfg.icon} size={11} color="#64748b"/>
                       </div>
-                      {/* Título + tipo */}
+                      {/* Título + meta (atraso + concluído com discreto sublinhado) */}
                       <div style={{flex:1,minWidth:0}}>
-                        <div style={{color:_isOk?"#166534":"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:_isOk?"line-through":"none",lineHeight:1.3}}>{it.title}</div>
-                        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
-                          <span style={{color:_tcfg.color,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{_tcfg.label}</span>
-                          <span style={{color:"#cbd5e1",fontSize:9}}>·</span>
-                          <span style={{color:_scfg.color,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{_scfg.label}</span>
-                          {_isLate && <><span style={{color:"#cbd5e1",fontSize:9}}>·</span><span style={{color:"#dc2626",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>atrasada</span></>}
-                        </div>
+                        <div style={{color:_isOk?"#94a3b8":"#0f172a",fontSize:11.5,fontWeight:700,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:_isOk?"line-through":"none",lineHeight:1.3}}>{it.title}</div>
+                        {(_isLate||_isOk) && <div style={{fontSize:9,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",marginTop:2,color:_isLate?"#dc2626":"#16a34a"}}>{_isLate?"atrasada":"concluída"}</div>}
                       </div>
-                      {/* Botão excluir (zumbi órfão) */}
+                      {/* Botão excluir (só pra zumbi órfão) */}
                       {_canDelete && <button data-pill-x
                         onClick={async function(e){
                           e.stopPropagation();
@@ -52793,8 +52753,8 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                           planRemove(it.id);
                         }}
                         title="Excluir entrega"
-                        style={{opacity:0,transition:"opacity .12s",background:"#fff",border:"1px solid #fecaca",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#dc2626",padding:0,flexShrink:0}}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        style={{opacity:0,transition:"opacity .12s",background:"#fff",border:"1px solid #fecaca",borderRadius:6,width:20,height:20,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#dc2626",padding:0,flexShrink:0}}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>}
                     </div>;
                   })}
