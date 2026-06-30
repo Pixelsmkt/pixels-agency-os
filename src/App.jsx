@@ -2204,7 +2204,6 @@ const NAV=[
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   {id:"interno",    icon:"◭", label:"Interno",children:[
-    {id:"interno_calendario", icon:"▦", label:"Calendário"},
     {id:"interno_radar",      icon:"◎", label:"Radar de Entrega"},
     {id:"interno_pontuacao",  icon:"◈", label:"Pontuação"},
     {id:"interno_contagem",   icon:"▤", label:"Contagem da equipe"},
