@@ -25058,7 +25058,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
   const [novoClienteOpen,setNovoClienteOpen]=useState(false);
   const [novoClienteBusy,setNovoClienteBusy]=useState(false);
   const [novoCliente,setNovoCliente]=useState({
-    client_id:"", email:"", password:"", name:"",
+    client_id:"", client_unit:"", email:"", password:"", name:"",
     photo_base64:"", photo_mime:""
   });
 
@@ -25471,6 +25471,10 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
           if(typeof pixelsToast!=="undefined")pixelsToast.warning("Senha precisa de no mínimo 6 caracteres.");
           return;
         }
+        if(novoCliente.client_id==="bioter" && !novoCliente.client_unit){
+          if(typeof pixelsToast!=="undefined")pixelsToast.warning("Escolha a unidade Bioter (ou Grupo Bioter pra ver tudo).");
+          return;
+        }
         setNovoClienteBusy(true);
         try{
           const sb=window._sb;
@@ -25481,6 +25485,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
             email:novoCliente.email.trim().toLowerCase(),
             password:novoCliente.password,
             client_id:novoCliente.client_id,
+            client_unit:novoCliente.client_unit||"",
             name:(novoCliente.name||"").trim()||(_clSel?_clSel.name:novoCliente.client_id),
             photo_base64:novoCliente.photo_base64,
             photo_mime:novoCliente.photo_mime,
@@ -25529,10 +25534,27 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
             {/* Cliente vinculado */}
             <div>
               <div style={lbl}>Cliente vinculado *</div>
-              <select value={novoCliente.client_id} onChange={e=>setNovoCliente(p=>({...p,client_id:e.target.value}))} style={{...inp,cursor:"pointer"}}>
+              <select value={novoCliente.client_id} onChange={e=>setNovoCliente(p=>({...p,client_id:e.target.value,client_unit:""}))} style={{...inp,cursor:"pointer"}}>
                 {_clientesPortal.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+
+            {/* Unidade Bioter (só aparece quando cliente=bioter) */}
+            {novoCliente.client_id==="bioter" && (
+              <div>
+                <div style={lbl}>Unidade Bioter *</div>
+                <select value={novoCliente.client_unit} onChange={e=>setNovoCliente(p=>({...p,client_unit:e.target.value}))} style={{...inp,cursor:"pointer"}}>
+                  <option value="">— escolha a unidade —</option>
+                  {(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).map(u=>(
+                    <option key={u.id} value={u.id}>{u.label}</option>
+                  ))}
+                  <option value="grupo">Grupo Bioter (vê todas as unidades)</option>
+                </select>
+                <div style={{color:C.td,fontSize:10.5,marginTop:4,fontStyle:"italic"}}>
+                  Cada unidade vê apenas seus próprios dados no portal. "Grupo Bioter" vê tudo.
+                </div>
+              </div>
+            )}
 
             {/* Email + Senha em grid */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -36942,6 +36964,7 @@ export default function AgencyOS(){
     setTasks={setTasks}
     initTab="dashboard"
     lockedClientId={clientPortalData.primary_client||clientPortalData.client_id||clientPortalData.id}
+    lockedUnit={clientPortalData.primary_unit||""}
   />;
   if(!loaded) return <LoadingScreen msg="Carregando dados..."/>;
 
@@ -42016,7 +42039,12 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
   </div>;
 }
 
-function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
+function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, lockedUnit}){
+  // lockedUnit: passado pelo Painel quando cliente Bioter loga.
+  //   "chapeco" / "toledo" / etc → cliente só vê dados daquela unidade.
+  //   "grupo" → vê tudo do Bioter.
+  //   "" ou null → cliente não-Bioter (sem filtro de unidade).
+  const _unitLocked = (lockedUnit && lockedUnit!=="grupo") ? lockedUnit : "";
   const TASKS=tasks||[];
   // Se lockedClientId foi passado (cliente logado no portal), trava a seleção.
   // Só sócio pode navegar entre clientes livremente.
@@ -42030,7 +42058,12 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
   const [tab,setTab]=useState(initTab||"dashboard");
   const [analisesSub,setAnalisesSub]=useState("trafego");
   // Portal Análises — iframe do Reportei
-  const [portalBioterUnit,setPortalBioterUnit]=useState("chapeco");
+  // Inicializa com a unidade do cliente (se travado), senão chapeco como default
+  const [portalBioterUnit,setPortalBioterUnit]=useState(_unitLocked||"chapeco");
+  // Força portalBioterUnit a permanecer na unidade travada
+  useEffect(()=>{
+    if(_unitLocked && portalBioterUnit!==_unitLocked) setPortalBioterUnit(_unitLocked);
+  },[_unitLocked]);
   const [portalIframeLoaded,setPortalIframeLoaded]=useState(false);
   const [portalIframeFailed,setPortalIframeFailed]=useState(false);
   const PORTAL_REPORTEI_URLS={
@@ -42056,9 +42089,14 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId}){
   // Default "grupo" = visao consolidada de todas as unidades.
   // No futuro essa lista podera ser restrita por usuario (Edgar so ve paraguay, etc).
   const isBioter=selCl==="bioter";
-  const [selUnit,setSelUnit]=useState("grupo");
-  // Lista de unidades disponiveis (futuramente filtrada por permissao do user logado)
-  const availableUnits=isBioter?(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]):[];
+  // Se cliente Bioter logado e tem unidade travada, inicia com ela; senão "grupo".
+  const [selUnit,setSelUnit]=useState(_unitLocked||"grupo");
+  // Força selUnit a permanecer na unidade travada (cliente Bioter logado)
+  useEffect(function(){
+    if(_unitLocked&&selUnit!==_unitLocked)setSelUnit(_unitLocked);
+  },[_unitLocked]);
+  // Lista de unidades disponiveis — se travado, só mostra a do user
+  const availableUnits=isBioter?(typeof BIOTER_UNITS!=="undefined"?(_unitLocked?BIOTER_UNITS.filter(function(u){return u.id===_unitLocked;}):BIOTER_UNITS):[]):[];
   // Filtra tasks pela unidade selecionada (se for Bioter e nao for "grupo")
   const clTasks=(function(){
     if(!isBioter||selUnit==="grupo")return clTasksAll;
