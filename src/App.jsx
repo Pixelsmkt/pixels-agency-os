@@ -21403,7 +21403,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
 
   // Sort estável por ID asc (FIFO — mais antigos primeiro). Evita reordenar
   // a fila quando o cartão é editado e o polling retorna em ordem nova.
+  // Ordena PRIMEIRO por prioridade (alta → média → baixa), depois por ID
+  // Cards "Alta" que a Hellen marca aparecem no topo pra Vinicius avaliar
+  const _PRIO_RANK = {alta:0, urgente:0, media:1, "média":1, baixa:2};
   const sortStable=(arr)=>[...arr].sort((a,b)=>{
+    const pa = _PRIO_RANK[String(a.priority||"").toLowerCase()] ?? 1;
+    const pb = _PRIO_RANK[String(b.priority||"").toLowerCase()] ?? 1;
+    if(pa !== pb) return pa - pb;
     const ia=Number(a.id)||0,ib=Number(b.id)||0;
     if(ia!==ib)return ia-ib;
     return String(a.id).localeCompare(String(b.id));
@@ -25029,12 +25035,14 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
     const loadProfiles=async()=>{
       try{
         const sb=window._sb;
-        const{data:rows}=await sb.from("profiles").select("team_id,profile_data").not("profile_data","is",null);
+        const{data:rows}=await sb.from("profiles").select("id,team_id,profile_data").not("profile_data","is",null);
         if(!rows)return;
         const updates={};
         rows.forEach(row=>{
-          if(row.team_id&&row.profile_data){
-            updates[row.team_id]=row.profile_data;
+          if(!row.profile_data)return;
+          const _key = row.team_id || row.id;
+          if(_key){
+            updates[_key]=row.profile_data;
             try{localStorage.setItem("pixels-selfprofile-"+row.team_id,JSON.stringify(row.profile_data));}catch(e){}
           }
         });
@@ -25102,6 +25110,40 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
     finally{setClientAuthLoading(false);}
   };
   useEffect(()=>{reloadClientAuthUsers();},[]);
+
+  // === Excluir colaborador (Edge Function delete-collaborator) ===
+  const revogarColabAcesso = async (teamId, nome) => {
+    if(teamId==="vinicius"||teamId==="gustavo"){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Sócios não podem ser excluídos.");
+      return;
+    }
+    if(typeof pixelsConfirm==="function"){
+      const ok=await pixelsConfirm("Excluir o colaborador '"+nome+"'?\nO acesso dele ao sistema será removido permanentemente.",{okText:"Excluir colaborador",danger:true});
+      if(!ok)return;
+    }else if(!confirm("Excluir '"+nome+"'?"))return;
+    try{
+      const sb=window._sb;
+      await sb.auth.refreshSession().catch(()=>{});
+      const{data:sess}=await sb.auth.getSession();
+      const tok=sess?.session?.access_token;
+      if(!tok){if(typeof pixelsToast!=="undefined")pixelsToast.error("Sessão expirou. Faça logout/login.");return;}
+      const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
+      const res=await fetch(url+"/functions/v1/delete-collaborator",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},
+        body:JSON.stringify({team_id:teamId}),
+      });
+      const data=await res.json();
+      if(!res.ok){
+        if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao excluir.");
+        return;
+      }
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Colaborador removido.");
+      setTimeout(()=>window.location.reload(),1500);
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+String(e?.message||e));
+    }
+  };
 
   const revogarClienteAcesso=async(authUserId,clientName)=>{
     if(!(await pixelsConfirm(
@@ -25293,7 +25335,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
           }catch(e){console.warn(e);}
           // Recarrega perfis pra pegar profile_data persistido
           try{
-            const{data:rows}=await sb.from("profiles").select("team_id,profile_data").not("profile_data","is",null);
+            const{data:rows}=await sb.from("profiles").select("id,team_id,profile_data").not("profile_data","is",null);
             const updates={};
             (rows||[]).forEach(row=>{if(row.team_id&&row.profile_data){updates[row.team_id]=row.profile_data;try{localStorage.setItem("pixels-selfprofile-"+row.team_id,JSON.stringify(row.profile_data));}catch(e){}}});
             if(Object.keys(updates).length>0)setCollabProfiles(p=>({...p,...updates}));
@@ -25705,19 +25747,28 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
 
       {/* ══ EQUIPE ══ */}
       {mainTab==="equipe"&&<>
-        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-          <div style={{position:"relative"}}>
-            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:13,pointerEvents:"none"}}>🔍</span>
+        <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",fontFamily:"'Inter',system-ui,sans-serif"}}>
+          {/* Busca com SVG moderno */}
+          <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.td} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+              style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}>
+              <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
             <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar colaborador..."
-              style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"8px 12px 8px 32px",color:C.tx,fontSize:12,outline:"none",width:200,fontFamily:"inherit"}}/>
+              style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:10,padding:"9px 14px 9px 34px",color:C.tx,fontSize:12.5,outline:"none",width:240,fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500,letterSpacing:-.1,transition:"all .15s"}}
+              onFocus={e=>{e.currentTarget.style.borderColor=C.a;e.currentTarget.style.boxShadow="0 0 0 3px "+C.a+"22";}}
+              onBlur={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.boxShadow="none";}}/>
           </div>
-          <div style={{display:"flex",gap:4,background:C.s1,borderRadius:10,padding:3}}>
-            {LEVEL_FILTER_BUTTONS.map(item=>(
-              <button key={item.v} onClick={()=>setFilterLevel(item.v)}
-                style={{background:filterLevel===item.v?(LEVEL_COLORS[item.v]||C.a):"transparent",border:"none",borderRadius:7,padding:"5px 10px",color:filterLevel===item.v?"#fff":C.ts,fontWeight:filterLevel===item.v?700:400,fontSize:11,cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s"}}>
+          {/* Filtros por nível */}
+          <div style={{display:"inline-flex",gap:3,background:"#fff",border:"1px solid "+C.b1,borderRadius:10,padding:3}}>
+            {LEVEL_FILTER_BUTTONS.map(item=>{
+              const _on=filterLevel===item.v;
+              const _color=LEVEL_COLORS[item.v]||C.a;
+              return <button key={item.v} onClick={()=>setFilterLevel(item.v)}
+                style={{background:_on?_color:"transparent",border:"none",borderRadius:7,padding:"7px 14px",color:_on?"#fff":C.ts,fontWeight:_on?700:500,fontSize:11.5,letterSpacing:-.1,cursor:"pointer",whiteSpace:"nowrap",transition:"all .15s",fontFamily:"'Inter',system-ui,sans-serif"}}>
                 {item.l}
-              </button>
-            ))}
+              </button>;
+            })}
           </div>
         </div>
 
@@ -25778,6 +25829,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
                   onMouseEnter={e=>{e.currentTarget.style.background=C.a+"15";e.currentTarget.style.color=C.a;e.currentTarget.style.borderColor=C.a+"55";}}
                   onMouseLeave={e=>{e.currentTarget.style.background=C.s1;e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                </button>)}
+                {isMePartner&&u.level!==1&&(<button onClick={()=>revogarColabAcesso(u.id,displayName)}
+                  title="Excluir colaborador"
+                  style={{flex:1,background:"#fff",border:"1px solid #fecaca",borderRadius:9,padding:"8px",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#dc2626",transition:"all .12s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fca5a5";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#fecaca";}}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
                 </button>)}
               </div>
             </div>
