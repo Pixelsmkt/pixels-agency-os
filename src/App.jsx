@@ -55569,13 +55569,15 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 <Ico n="file" size={11} color={PB_MUTE}/>Documentos
               </div>
               {(()=>{
-                // Helpers do bloco docs
+                // Helpers
                 const _docExt = (name)=>{const m=String(name||"").match(/\.([a-z0-9]{1,5})$/i); return m?m[1].toLowerCase():"";};
                 const _docColor = (ext)=>{
-                  const m={pdf:"#dc2626",doc:"#2563eb",docx:"#2563eb",xls:"#16a34a",xlsx:"#16a34a",ppt:"#ea580c",pptx:"#ea580c",png:"#7c3aed",jpg:"#7c3aed",jpeg:"#7c3aed",zip:"#475569"};
+                  const m={pdf:"#dc2626",doc:"#2563eb",docx:"#2563eb",xls:"#16a34a",xlsx:"#16a34a",ppt:"#ea580c",pptx:"#ea580c",png:"#7c3aed",jpg:"#7c3aed",jpeg:"#7c3aed",zip:"#475569",txt:"#7c3aed"};
                   return m[ext]||"#64748b";
                 };
                 const _fmtSize=(b)=>{if(!b)return"";const k=1024;if(b<k)return b+" B";if(b<k*k)return (b/k).toFixed(1)+" KB";return (b/k/k).toFixed(1)+" MB";};
+
+                // === Upload de arquivo ===
                 const _uploadDoc = async (file, title)=>{
                   if(!file) return;
                   try{
@@ -55587,6 +55589,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     const {data:pub} = sb.storage.from("agency-files").getPublicUrl(key);
                     const newDoc={
                       id:"doc-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+                      kind:"file",
                       title:(title||file.name).trim(),
                       fileName:file.name,
                       url:pub?.publicUrl||"",
@@ -55609,8 +55612,47 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   _uploadDoc(file, title);
                   e.target.value="";
                 };
+
+                // === Criar/Editar documento de texto inline ===
+                const [_txtOpen,_setTxtOpen] = (typeof React!=="undefined"?React:window.React).useState(null);
+                // null=fechado, {} = novo, {id,...} = editando
+
+                const _newText = ()=>{
+                  _setTxtOpen({id:"", title:"", body:""});
+                };
+                const _editText = (d)=>{
+                  _setTxtOpen({id:d.id, title:d.title||"", body:d.body||""});
+                };
+                const _saveText = ()=>{
+                  const t = (_txtOpen.title||"").trim();
+                  const b = (_txtOpen.body||"").trim();
+                  if(!t){
+                    if(typeof pixelsToast!=="undefined")pixelsToast.warning("Coloca um título.");
+                    return;
+                  }
+                  if(_txtOpen.id){
+                    // editar existente
+                    const next = docs.map(x=>x.id===_txtOpen.id?{...x,title:t,body:b,updatedAt:new Date().toISOString()}:x);
+                    onUpdateArea({docs:next});
+                    if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento atualizado.");
+                  }else{
+                    // criar novo
+                    const newDoc = {
+                      id:"doc-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),
+                      kind:"text",
+                      title:t,
+                      body:b,
+                      at:new Date().toISOString(),
+                    };
+                    onUpdateArea({docs:[newDoc,...docs]});
+                    if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento criado.");
+                  }
+                  _setTxtOpen(null);
+                };
+
+                // === Remover ===
                 const _removeDoc = async (d)=>{
-                  if(!confirm("Remover \""+(d.title||d.fileName)+"\"?")) return;
+                  if(!confirm("Remover '"+(d.title||d.fileName)+"'?")) return;
                   try{
                     if(d.storagePath){
                       const sb=window._sb;
@@ -55620,48 +55662,101 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                   onUpdateArea({docs:docs.filter(x=>x.id!==d.id)});
                   if(typeof pixelsToast!=="undefined")pixelsToast.success("Documento removido.");
                 };
+
                 return <>
                   {docs.length===0
                     ? <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:10,padding:"12px",textAlign:"center"}}>
-                        <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:600}}>Nenhum documento ainda</div>
-                        {isAdmin && <label style={{marginTop:8,background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"5px 11px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
-                          <Ico n="plus" size={10} color={PB_PURPLE}/> Adicionar documento
-                          <input type="file" onChange={_onPickFile} style={{display:"none"}}/>
-                        </label>}
+                        <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:600,marginBottom:8}}>Nenhum documento ainda</div>
+                        {isAdmin && <div style={{display:"flex",gap:5,justifyContent:"center",flexWrap:"wrap"}}>
+                          <button onClick={_newText} style={{background:PB_PURPLE,border:"none",borderRadius:7,padding:"5px 11px",color:"#fff",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
+                            <Ico n="plus" size={10} color="#fff"/> Documento de texto
+                          </button>
+                          <label style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:7,padding:"5px 11px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:4}}>
+                            <Ico n="plus" size={10} color={PB_PURPLE}/> Anexar arquivo
+                            <input type="file" onChange={_onPickFile} style={{display:"none"}}/>
+                          </label>
+                        </div>}
                       </div>
                     : <div style={{display:"flex",flexDirection:"column",gap:5}}>
                         {docs.map(d=>{
-                          const cor=_docColor(d.ext);
+                          const isText = d.kind==="text";
+                          const cor = isText ? PB_PURPLE : _docColor(d.ext);
+                          const tag = isText ? "TXT" : (d.ext||"DOC");
                           return <div key={d.id}
                             style={{background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 10px",display:"flex",alignItems:"center",gap:8,transition:"all .15s"}}
                             onMouseEnter={e=>{e.currentTarget.style.borderColor=cor;e.currentTarget.style.background=cor+"08";}}
                             onMouseLeave={e=>{e.currentTarget.style.borderColor=PB_BORDER;e.currentTarget.style.background="#fafafa";}}>
                             <div style={{width:24,height:24,borderRadius:6,background:cor+"18",color:cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,fontSize:9,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>
-                              {d.ext||"DOC"}
+                              {tag}
                             </div>
-                            <div style={{flex:1,minWidth:0,overflow:"hidden"}}>
+                            <div style={{flex:1,minWidth:0,overflow:"hidden",cursor:isText?"pointer":"default"}}
+                              onClick={isText?()=>_editText(d):null}>
                               <div style={{color:PB_INK,fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.title||d.fileName}</div>
                               <div style={{color:PB_SOFT,fontSize:9.5,marginTop:1,display:"flex",alignItems:"center",gap:6}}>
-                                {d.size>0 && <span>{_fmtSize(d.size)}</span>}
+                                {!isText && d.size>0 && <span>{_fmtSize(d.size)}</span>}
+                                {isText && d.body && <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(d.body).slice(0,40)}{d.body.length>40?"…":""}</span>}
                                 {d.at && <span>{new Date(d.at).toLocaleDateString("pt-BR")}</span>}
                               </div>
                             </div>
-                            <a href={d.url} target="_blank" rel="noopener noreferrer" title="Abrir/baixar"
+                            {!isText && <a href={d.url} target="_blank" rel="noopener noreferrer" title="Abrir/baixar"
                               style={{background:"transparent",border:"none",cursor:"pointer",padding:4,borderRadius:5,color:PB_PURPLE,textDecoration:"none",display:"inline-flex"}}>
                               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            </a>
+                            </a>}
+                            {isText && isAdmin && <button onClick={()=>_editText(d)} title="Editar texto"
+                              style={{background:"transparent",border:"none",cursor:"pointer",padding:4,borderRadius:5,color:PB_PURPLE,display:"inline-flex"}}>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>}
                             {isAdmin && <button onClick={()=>_removeDoc(d)} title="Remover"
                               style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:5,color:PB_SOFT}}>
                               <Ico n="x" size={11} color="currentColor"/>
                             </button>}
                           </div>;
                         })}
-                        {isAdmin && <label style={{marginTop:2,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:8,padding:"5px 10px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>
-                          <Ico n="plus" size={10} color={PB_PURPLE}/> Adicionar documento
-                          <input type="file" onChange={_onPickFile} style={{display:"none"}}/>
-                        </label>}
+                        {isAdmin && <div style={{display:"flex",gap:5,marginTop:2}}>
+                          <button onClick={_newText} style={{flex:1,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:8,padding:"5px 10px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                            <Ico n="plus" size={10} color={PB_PURPLE}/> Documento de texto
+                          </button>
+                          <label style={{flex:1,background:"transparent",border:"1px dashed "+PB_BORDER,borderRadius:8,padding:"5px 10px",color:PB_PURPLE,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:4}}>
+                            <Ico n="plus" size={10} color={PB_PURPLE}/> Anexar arquivo
+                            <input type="file" onChange={_onPickFile} style={{display:"none"}}/>
+                          </label>
+                        </div>}
                       </div>
                   }
+
+                  {/* === Modal Documento de Texto === */}
+                  {_txtOpen && <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.65)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
+                    onClick={()=>_setTxtOpen(null)}>
+                    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,width:"100%",maxWidth:640,boxShadow:"0 20px 60px rgba(0,0,0,.2)",overflow:"hidden",fontFamily:PB_INTER,display:"flex",flexDirection:"column",maxHeight:"85vh"}}>
+                      <div style={{background:"linear-gradient(135deg, #6366f1 0%, #4338ca 100%)",padding:"16px 20px",color:"#fff"}}>
+                        <div style={{fontSize:14,fontWeight:800,letterSpacing:-.2}}>{_txtOpen.id?"Editar documento":"Novo documento de texto"}</div>
+                        <div style={{fontSize:11,opacity:.85,marginTop:1}}>Notas, decisões, ideias — escreva tudo aqui sem precisar subir arquivo</div>
+                      </div>
+                      <div style={{padding:"16px 20px",display:"flex",flexDirection:"column",gap:11,overflow:"auto",flex:1}}>
+                        <div>
+                          <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Título *</div>
+                          <input value={_txtOpen.title} onChange={e=>_setTxtOpen(p=>({...p,title:e.target.value}))}
+                            placeholder="Ex: Ata reunião Meta 30/06" autoFocus
+                            style={{width:"100%",background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"8px 11px",fontSize:13,color:PB_INK,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                        </div>
+                        <div style={{flex:1,display:"flex",flexDirection:"column"}}>
+                          <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Conteúdo</div>
+                          <textarea value={_txtOpen.body} onChange={e=>_setTxtOpen(p=>({...p,body:e.target.value}))}
+                            placeholder="Escreva aqui as decisões da reunião, pontos discutidos, próximos passos, ideias..."
+                            rows={12}
+                            style={{width:"100%",background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"10px 12px",fontSize:13,color:PB_INK,fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box",resize:"vertical",lineHeight:1.6,minHeight:220}}/>
+                        </div>
+                      </div>
+                      <div style={{padding:"12px 20px",borderTop:"1px solid "+PB_BORDER,display:"flex",justifyContent:"flex-end",gap:8}}>
+                        <button onClick={()=>_setTxtOpen(null)}
+                          style={{background:"transparent",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 14px",color:PB_MUTE,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                        <button onClick={_saveText}
+                          style={{background:PB_PURPLE,border:"none",borderRadius:8,padding:"7px 18px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}}>
+                          Salvar
+                        </button>
+                      </div>
+                    </div>
+                  </div>}
                 </>;
               })()}
             </div>
