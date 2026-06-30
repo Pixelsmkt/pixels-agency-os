@@ -25465,8 +25465,15 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
         setNovoClienteBusy(true);
         try{
           const sb=window._sb;
+          // Refresh do token antes de chamar — evita "Token inválido" se sessão tá velha
+          await sb.auth.refreshSession().catch(()=>{});
           const{data:sess}=await sb.auth.getSession();
           const tok=sess?.session?.access_token;
+          if(!tok){
+            if(typeof pixelsToast!=="undefined")pixelsToast.error("Sua sessão expirou. Faça logout e login de novo.");
+            setNovoClienteBusy(false);
+            return;
+          }
           const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
 
           // === Upload da foto CLIENT-SIDE (evita timeout na Edge Function) ===
