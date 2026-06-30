@@ -25052,6 +25052,16 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
     photo_base64:"", photo_mime:""
   });
 
+  // ── NOVO ACESSO CLIENTE (chama Edge Function create-client-user) ──
+  // Cria usuário Supabase Auth com user_type='client' e primary_client=<cliente>.
+  // Pra cliente logar no portal usando email+senha próprios.
+  const [novoClienteOpen,setNovoClienteOpen]=useState(false);
+  const [novoClienteBusy,setNovoClienteBusy]=useState(false);
+  const [novoCliente,setNovoCliente]=useState({
+    client_id:"", email:"", password:"", name:"",
+    photo_base64:"", photo_mime:""
+  });
+
   const [clientAccess,setClientAccess]=useState(()=>{
     const acc={};
     CLIENTS.filter(c=>c.status!=="interno").forEach(cl=>{
@@ -25437,6 +25447,152 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
       );
     })()}
 
+    {/* ── NOVO ACESSO CLIENTE MODAL ── */}
+    {novoClienteOpen&&(()=>{
+      const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"9px 12px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+      const lbl={color:C.td,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:5};
+      const _clientesPortal=CLIENTS.filter(c=>c.status!=="interno");
+      const _clSel=_clientesPortal.find(c=>c.id===novoCliente.client_id)||_clientesPortal[0];
+      const onPickFoto=(file)=>{
+        if(!file)return;
+        const r=new FileReader();
+        r.onload=()=>{
+          const b64=String(r.result||"");
+          setNovoCliente(p=>({...p,photo_base64:b64,photo_mime:file.type||"image/png"}));
+        };
+        r.readAsDataURL(file);
+      };
+      const submit=async()=>{
+        if(!novoCliente.client_id||!novoCliente.email.trim()||!novoCliente.password.trim()){
+          if(typeof pixelsToast!=="undefined")pixelsToast.warning("Preencha cliente, email e senha.");
+          return;
+        }
+        if(novoCliente.password.length<6){
+          if(typeof pixelsToast!=="undefined")pixelsToast.warning("Senha precisa de no mínimo 6 caracteres.");
+          return;
+        }
+        setNovoClienteBusy(true);
+        try{
+          const sb=window._sb;
+          const{data:sess}=await sb.auth.getSession();
+          const tok=sess?.session?.access_token;
+          const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
+          const payload={
+            email:novoCliente.email.trim().toLowerCase(),
+            password:novoCliente.password,
+            client_id:novoCliente.client_id,
+            name:(novoCliente.name||"").trim()||(_clSel?_clSel.name:novoCliente.client_id),
+            photo_base64:novoCliente.photo_base64,
+            photo_mime:novoCliente.photo_mime,
+          };
+          const res=await fetch(url+"/functions/v1/create-client-user",{
+            method:"POST",
+            headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},
+            body:JSON.stringify(payload),
+          });
+          const data=await res.json();
+          if(!res.ok){
+            if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao criar acesso cliente.");
+            setNovoClienteBusy(false);
+            return;
+          }
+          if(typeof pixelsToast!=="undefined")pixelsToast.success("Acesso criado! "+payload.email+" pode logar agora.",5000);
+          // Liga acesso no painel também (mesmo se foi configurado antes)
+          const cur=clientAccess[novoCliente.client_id]||defaultClientAccess(_clSel||{id:novoCliente.client_id,name:""});
+          saveClientAccess(novoCliente.client_id,{...cur,enabled:true,login:payload.email});
+          setNovoClienteOpen(false);
+          setNovoClienteBusy(false);
+        }catch(e){
+          if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e.message||e));
+          setNovoClienteBusy(false);
+        }
+      };
+      return <div onClick={()=>!novoClienteBusy&&setNovoClienteOpen(false)}
+        style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",backdropFilter:"blur(6px)",zIndex:9999,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:48,fontFamily:"inherit"}}>
+        <div onClick={e=>e.stopPropagation()}
+          style={{background:C.card,borderRadius:16,width:"min(540px,94%)",maxHeight:"calc(100vh - 80px)",overflow:"auto",boxShadow:"0 24px 64px rgba(0,0,0,.3)",border:"1px solid "+C.b1}}>
+          {/* Header */}
+          <div style={{padding:"20px 24px 16px",borderBottom:"1px solid "+C.b1,background:"linear-gradient(135deg,#16a34a14,transparent 60%)",position:"relative"}}>
+            <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:"#16a34a"}}/>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginLeft:6}}>
+              <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#16a34a,#15803d)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 4px 12px rgba(22,163,74,.35)"}}>
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:C.tx,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Novo acesso cliente</div>
+                <div style={{color:C.td,fontSize:11.5,marginTop:3}}>Cria login Supabase Auth pro cliente acessar o portal</div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{padding:"18px 24px 22px",display:"flex",flexDirection:"column",gap:12}}>
+            {/* Cliente vinculado */}
+            <div>
+              <div style={lbl}>Cliente vinculado *</div>
+              <select value={novoCliente.client_id} onChange={e=>setNovoCliente(p=>({...p,client_id:e.target.value}))} style={{...inp,cursor:"pointer"}}>
+                {_clientesPortal.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+
+            {/* Email + Senha em grid */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div>
+                <div style={lbl}>Email do cliente *</div>
+                <input type="email" value={novoCliente.email} onChange={e=>setNovoCliente(p=>({...p,email:e.target.value}))}
+                  placeholder="marketing@cliente.com" style={inp}/>
+              </div>
+              <div>
+                <div style={lbl}>Senha *</div>
+                <input type="text" value={novoCliente.password} onChange={e=>setNovoCliente(p=>({...p,password:e.target.value}))}
+                  placeholder="mín. 6 caracteres" style={inp}/>
+              </div>
+            </div>
+
+            {/* Nome do contato (opcional) */}
+            <div>
+              <div style={lbl}>Nome do contato <span style={{color:C.td,fontWeight:500,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
+              <input type="text" value={novoCliente.name} onChange={e=>setNovoCliente(p=>({...p,name:e.target.value}))}
+                placeholder={_clSel?_clSel.name:"Ex: Marketing Construschorr"} style={inp}/>
+              <div style={{color:C.td,fontSize:10.5,marginTop:4,fontStyle:"italic"}}>Se vazio, usa o nome do cliente vinculado.</div>
+            </div>
+
+            {/* Foto (opcional) */}
+            <div>
+              <div style={lbl}>Foto do contato <span style={{color:C.td,fontWeight:500,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <label style={{cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 12px",color:C.ts,fontSize:12,fontWeight:600,transition:"all .12s"}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Escolher arquivo
+                  <input type="file" accept="image/*" onChange={e=>onPickFoto(e.target.files?.[0])} style={{display:"none"}}/>
+                </label>
+                {novoCliente.photo_base64 && <img src={novoCliente.photo_base64} alt="preview" style={{width:40,height:40,borderRadius:8,objectFit:"cover",border:"1px solid "+C.b1}}/>}
+              </div>
+            </div>
+
+            {/* Resumo informativo */}
+            <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:9,padding:"10px 12px",display:"flex",gap:9,alignItems:"flex-start"}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{marginTop:2,flexShrink:0}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <div style={{color:"#166534",fontSize:11.5,lineHeight:1.5,fontWeight:500}}>
+                O cliente vai logar em <span style={{fontWeight:700}}>pixels-agency-os.vercel.app</span> com email + senha. O sistema identifica que é cliente automaticamente e mostra só o portal travado em <span style={{fontWeight:700}}>{_clSel?_clSel.name:"—"}</span>.
+              </div>
+            </div>
+
+            {/* Botões */}
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:6}}>
+              <button onClick={()=>!novoClienteBusy&&setNovoClienteOpen(false)}
+                style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"9px 18px",color:C.ts,fontSize:12,fontWeight:700,cursor:novoClienteBusy?"not-allowed":"pointer",opacity:novoClienteBusy?.6:1,fontFamily:"inherit"}}>
+                Cancelar
+              </button>
+              <button onClick={submit} disabled={novoClienteBusy}
+                style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:9,padding:"9px 22px",color:"#fff",fontSize:12,fontWeight:800,cursor:novoClienteBusy?"not-allowed":"pointer",opacity:novoClienteBusy?.7:1,boxShadow:"0 4px 14px rgba(22,163,74,.45)",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6}}>
+                {novoClienteBusy?"Criando...":"Criar acesso"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>;
+    })()}
+
     <div style={{display:"flex",flexDirection:"column",gap:20}}>
 
       {/* ── MAIN TAB SWITCHER ── */}
@@ -25456,7 +25612,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
             <span style={{fontSize:14,lineHeight:1}}>+</span>Novo colaborador
           </button>}
         </div>}
-        {mainTab==="clientes"&&<div style={{color:C.ts,fontSize:12}}>{CLIENTS.filter(c=>c.status!=="interno").filter(c=>clientAccess[c.id]?.enabled).length} portais ativos</div>}
+        {mainTab==="clientes"&&<div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{color:C.ts,fontSize:12}}>{CLIENTS.filter(c=>c.status!=="interno").filter(c=>clientAccess[c.id]?.enabled).length} portais ativos</div>
+          {isMePartner&&<button onClick={()=>{setNovoCliente({client_id:(CLIENTS.find(c=>c.status!=="interno")||{}).id||"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});setNovoClienteOpen(true);}}
+            style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px rgba(22,163,74,.45)",fontFamily:"inherit"}}>
+            <span style={{fontSize:14,lineHeight:1}}>+</span>Novo acesso cliente
+          </button>}
+        </div>}
       </div>
 
       {/* ══ EQUIPE ══ */}
