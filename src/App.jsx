@@ -22211,10 +22211,14 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                   const firstC=r.comments[0]||r.audio||{};
                   const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
                   const accent=isClient?"#16a34a":"#7c3aed";
-                  const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
+                  // Foto + nome real do contato (quando disponível — passado pelo portal)
+                  const _clientPhoto=firstC.userPhoto||r.userPhoto||"";
+                  const _clientPersonName=firstC.userName||r.userName||"";
+                  const userName=_clientPersonName||String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
                   const isLatest=ri===0;
                   return(<div key={r.key} style={{background:isLatest?"#fafaff":"#fff",border:"1px solid "+(isLatest?accent+"33":C.b1),borderRadius:11,padding:"12px 14px"}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+                      {isClient&&_clientPhoto&&<img src={_clientPhoto} alt={userName} referrerPolicy="no-referrer" style={{width:22,height:22,borderRadius:"50%",objectFit:"cover",border:"1.5px solid "+accent+"44",flexShrink:0}}/>}
                       <span style={{background:accent,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
                       <span style={{color:C.tx,fontSize:11.5,fontWeight:700}}>{userName}</span>
                       {isLatest&&rounds2.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"1px 7px",borderRadius:99,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ recente</span>}
@@ -22442,6 +22446,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                         const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
                         const accent=isClient?"#ea580c":"#7c3aed";
                         const accentSoft=isClient?"#fff7ed":"#faf5ff";
+                        const _clientPhoto=firstC.userPhoto||r.userPhoto||"";
+                        const _clientPersonName=firstC.userName||r.userName||"";
                         const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
                         const isLatest=ri===0;
                         const _roundNum=rounds.length-ri;
@@ -22463,6 +22469,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                           <div style={{flex:1,minWidth:0,background:"#fff",border:"1px solid "+(isLatest?accent+"33":"#e2e8f0"),borderRadius:12,padding:"10px 12px",boxShadow:isLatest?"0 2px 10px "+accent+"15":"none",transition:"all .15s"}}>
                             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7,flexWrap:"wrap"}}>
                               <span style={{color:"#0f172a",fontSize:12,fontWeight:700,letterSpacing:-.1}}>{userName}</span>
+                              {isClient&&_clientPhoto&&<img src={_clientPhoto} alt={_clientPersonName||""} referrerPolicy="no-referrer" style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",border:"1.5px solid "+_userColor+"44",flexShrink:0,marginRight:2}}/>}
                               <span style={{color:_userColor,fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,padding:"1px 6px",background:_userColor+"15",borderRadius:4}}>{isClient?"Cliente":"Equipe"}</span>
                               {isLatest&&rounds.length>1&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,padding:"1px 6px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Atual</span>}
                               {r.ts>0&&<span style={{color:"#94a3b8",fontSize:10,marginLeft:"auto",fontWeight:500,fontFeatureSettings:"\'tnum\'"}}>{_fmt(r.ts)}</span>}
@@ -22533,10 +22540,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                         const firstC=r.comments[0]||r.audio||{};
                         const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
                         const accent=isClient?"#16a34a":"#7c3aed";
+                        const _clientPhoto=firstC.userPhoto||r.userPhoto||"";
+                        const _clientPersonName=firstC.userName||r.userName||"";
                         const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
                         const isLatest=ri===0;
                         return(<div key={r.key} style={{background:isLatest?"#fafaff":"#fff",border:"1px solid "+(isLatest?accent+"33":C.b1),borderRadius:10,padding:"10px 12px"}}>
                           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6,flexWrap:"wrap"}}>
+                            {isClient&&_clientPhoto&&<img src={_clientPhoto} alt={_clientPersonName||""} referrerPolicy="no-referrer" style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",border:"1.5px solid "+accent+"44",flexShrink:0}}/>}
                             <span style={{background:accent,color:"#fff",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2px 7px",borderRadius:4}}>{isClient?"Cliente":"Revisor"}</span>
                             <span style={{color:C.tx,fontSize:11,fontWeight:700}}>{userName}</span>
                             {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"1px 7px",borderRadius:99,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ recente</span>}
@@ -29907,6 +29917,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
                       const accent=isClient?"#16a34a":"#7c3aed";
                       const tintBg=isClient?"#f0fdf4":"#faf5ff";
+                      const _clientPhoto=firstC.userPhoto||r.userPhoto||"";
+                      const _clientPersonName=firstC.userName||r.userName||"";
                       const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
                       // Format helper: data+hora, mas omite "00:00" quando so tem data
                       const _fmtDateTime=function(ts,hasPreciseTime){
@@ -29944,6 +29956,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                           <summary style={{padding:"14px 16px",cursor:"pointer",listStyle:"none",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,transition:"transform .2s",transform:isLatest?"rotate(90deg)":"rotate(0deg)"}} className="pixels-round-chev"><polyline points="9 18 15 12 9 6"/></svg>
                             <span style={{background:"#f1f5f9",color:"#475569",fontSize:10,fontWeight:700,padding:"3px 9px",borderRadius:6,letterSpacing:.3,flexShrink:0}}>Round {_roundNum}</span>
+                            {isClient&&_clientPhoto&&<img src={_clientPhoto} alt={_clientPersonName||""} referrerPolicy="no-referrer" style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",border:"1.5px solid "+accent+"44",flexShrink:0,marginRight:2}}/>}
                             <span style={{background:accent,color:"#fff",fontSize:8.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",padding:"2.5px 8px",borderRadius:4,flexShrink:0}}>{isClient?"Cliente":"Revisor"}</span>
                             <span style={{color:"#0f172a",fontSize:12,fontWeight:700,flexShrink:0}}>{userName}</span>
                             {isLatest&&rounds.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"2px 7px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",flexShrink:0}}>+ recente</span>}
@@ -37030,6 +37043,7 @@ export default function AgencyOS(){
     initTab="dashboard"
     lockedClientId={clientPortalData.primary_client||clientPortalData.client_id||clientPortalData.id}
     lockedUnit={clientPortalData.primary_unit||""}
+    currentClientUser={clientPortalData}
   />;
   if(!loaded) return <LoadingScreen msg="Carregando dados..."/>;
 
@@ -40162,6 +40176,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
           at:_nowIso(),
           atFmt:_nowFmt(),
           user:"Cliente: "+cl.name,
+          ..._clientUserMeta(),
         }]),
       });
     });});
@@ -40191,6 +40206,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
           clientId:cl.id,
           at:_nowIso(),
           atFmt:_nowFmt(),
+          ..._clientUserMeta(),
         }]),
         timeline:[].concat(x.timeline||[],[{
           type:"client_rejected",
@@ -40204,6 +40220,7 @@ function PortalAprovacoes({cl, clTasks, setTasks, isMob}){
           at:_nowIso(),
           atFmt:_nowFmt(),
           user:"Cliente: "+cl.name,
+          ..._clientUserMeta(),
         }]),
       });
     });});
@@ -40737,7 +40754,7 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
       if(t.id!==task.id)return t;
       return Object.assign({},t,{
         status:"aprovacao_final",colEnteredAt:_nowIso(),
-        timeline:[].concat(t.timeline||[],[{type:"client_approved",fromLabel:"Aprovação interna",toLabel:"Aprovação final",from:"aprovado",to:"aprovacao_final",clientId:cl.id,clientName:cl.name,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name}]),
+        timeline:[].concat(t.timeline||[],[Object.assign({type:"client_approved",fromLabel:"Aprovação interna",toLabel:"Aprovação final",from:"aprovado",to:"aprovacao_final",clientId:cl.id,clientName:cl.name,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name},_clientUserMeta())]),
       });
     });});
     if(typeof pixelsToast!=="undefined")pixelsToast.success("Demanda aprovada!",3000);
@@ -40750,8 +40767,8 @@ function PortalDemandasCliente({cl, clTasks, setTasks, isMob}){
       if(x.id!==t.id)return x;
       return Object.assign({},x,{
         status:"ajustes",ajustar:true,isAlteracao:true,colEnteredAt:_nowIso(),
-        comments:[].concat(x.comments||[],[{id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),type:"client_request",text:text,user:"Cliente: "+cl.name,clientId:cl.id,at:_nowIso(),atFmt:_nowFmt()}]),
-        timeline:[].concat(x.timeline||[],[{type:"client_rejected",fromLabel:"Aprovação interna",toLabel:"Ajustes",from:"aprovado",to:"ajustes",clientId:cl.id,clientName:cl.name,text:text,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name}]),
+        comments:[].concat(x.comments||[],[Object.assign({id:"cm-"+Date.now()+"-"+Math.random().toString(36).slice(2,7),type:"client_request",text:text,user:"Cliente: "+cl.name,clientId:cl.id,at:_nowIso(),atFmt:_nowFmt()},_clientUserMeta())]),
+        timeline:[].concat(x.timeline||[],[Object.assign({type:"client_rejected",fromLabel:"Aprovação interna",toLabel:"Ajustes",from:"aprovado",to:"ajustes",clientId:cl.id,clientName:cl.name,text:text,at:_nowIso(),atFmt:_nowFmt(),user:"Cliente: "+cl.name},_clientUserMeta())]),
       });
     });});
     setAjusteModal(null);
@@ -42104,7 +42121,18 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
   </div>;
 }
 
-function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, lockedUnit}){
+function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, lockedUnit, currentClientUser}){
+  // Helper: extrai dados do cliente logado pra anexar nas ações (comentários/timeline)
+  const _clientUserMeta=function(){
+    const cu=currentClientUser||{};
+    const pd=cu.profile_data||{};
+    return {
+      userId:cu.id||cu.user_id||"",
+      userName:cu.name||pd.name||"",
+      userPhoto:pd.photo||cu.photo||"",
+      userEmail:pd.email||cu.email||"",
+    };
+  };
   // lockedUnit: passado pelo Painel quando cliente Bioter loga.
   //   "chapeco" / "toledo" / etc → cliente só vê dados daquela unidade
   //   "toledo,paraguay,uberlandia" → cliente vê só essas unidades (regional, Marcelo)
