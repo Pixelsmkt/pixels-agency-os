@@ -25539,22 +25539,52 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
               </select>
             </div>
 
-            {/* Unidade Bioter (só aparece quando cliente=bioter) */}
-            {novoCliente.client_id==="bioter" && (
-              <div>
-                <div style={lbl}>Unidade Bioter *</div>
-                <select value={novoCliente.client_unit} onChange={e=>setNovoCliente(p=>({...p,client_unit:e.target.value}))} style={{...inp,cursor:"pointer"}}>
-                  <option value="">— escolha a unidade —</option>
-                  {(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).map(u=>(
-                    <option key={u.id} value={u.id}>{u.label}</option>
-                  ))}
-                  <option value="grupo">Grupo Bioter (vê todas as unidades)</option>
-                </select>
-                <div style={{color:C.td,fontSize:10.5,marginTop:4,fontStyle:"italic"}}>
-                  Cada unidade vê apenas seus próprios dados no portal. "Grupo Bioter" vê tudo.
+            {/* Unidades Bioter — multi-select (só aparece quando cliente=bioter) */}
+            {novoCliente.client_id==="bioter" && (()=>{
+              const _selUnits=(novoCliente.client_unit==="grupo"?["grupo"]:String(novoCliente.client_unit||"").split(",").map(s=>s.trim()).filter(Boolean));
+              const _isGrupo=_selUnits.indexOf("grupo")!==-1;
+              const _toggleGrupo=()=>{
+                setNovoCliente(p=>({...p,client_unit:_isGrupo?"":"grupo"}));
+              };
+              const _toggleUnit=(uid)=>{
+                if(_isGrupo)return; // grupo trava as outras
+                const cur=_selUnits.filter(x=>x!=="grupo");
+                const next=cur.indexOf(uid)!==-1?cur.filter(x=>x!==uid):[...cur,uid];
+                setNovoCliente(p=>({...p,client_unit:next.join(",")}));
+              };
+              const _allUnits=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
+              const _rowStyle=(active,disabled)=>({
+                display:"flex",alignItems:"center",gap:9,padding:"8px 11px",
+                background:active?"#dcfce7":"#fff",
+                border:"1px solid "+(active?"#86efac":C.b1),
+                borderRadius:8,cursor:disabled?"not-allowed":"pointer",
+                opacity:disabled?.5:1,transition:"all .12s",fontSize:12.5,fontWeight:600,color:C.tx,
+              });
+              return <div>
+                <div style={lbl}>Unidades Bioter *</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  {/* Grupo Bioter — atalho pra ver tudo */}
+                  <label style={_rowStyle(_isGrupo,false)}>
+                    <input type="checkbox" checked={_isGrupo} onChange={_toggleGrupo}/>
+                    <span style={{fontWeight:700}}>Grupo Bioter</span>
+                    <span style={{color:C.td,fontWeight:500,fontSize:11.5}}>— vê todas as unidades</span>
+                  </label>
+                  {/* Divisor */}
+                  <div style={{height:1,background:C.b1,margin:"3px 0"}}/>
+                  {/* Cada unidade individualmente */}
+                  {_allUnits.map(u=>{
+                    const active=!_isGrupo&&_selUnits.indexOf(u.id)!==-1;
+                    return <label key={u.id} style={_rowStyle(active,_isGrupo)}>
+                      <input type="checkbox" checked={active} disabled={_isGrupo} onChange={()=>_toggleUnit(u.id)}/>
+                      <span>{u.label}</span>
+                    </label>;
+                  })}
                 </div>
-              </div>
-            )}
+                <div style={{color:C.td,fontSize:10.5,marginTop:6,fontStyle:"italic"}}>
+                  Cliente vê apenas dados das unidades marcadas. Marque várias se quiser dar acesso multi-unidade (ex: regional).
+                </div>
+              </div>;
+            })()}
 
             {/* Email + Senha em grid */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -42041,10 +42071,16 @@ function PortalFaturamentoROI({cl, selUnit, isMob}){
 
 function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, lockedUnit}){
   // lockedUnit: passado pelo Painel quando cliente Bioter loga.
-  //   "chapeco" / "toledo" / etc → cliente só vê dados daquela unidade.
-  //   "grupo" → vê tudo do Bioter.
-  //   "" ou null → cliente não-Bioter (sem filtro de unidade).
-  const _unitLocked = (lockedUnit && lockedUnit!=="grupo") ? lockedUnit : "";
+  //   "chapeco" / "toledo" / etc → cliente só vê dados daquela unidade
+  //   "toledo,paraguay,uberlandia" → cliente vê só essas unidades (regional, Marcelo)
+  //   "grupo" → vê tudo do Bioter (todas unidades)
+  //   "" ou null → cliente não-Bioter (sem filtro de unidade)
+  const _lockedUnits = (lockedUnit && lockedUnit!=="grupo")
+    ? String(lockedUnit).split(",").map(function(s){return s.trim();}).filter(Boolean)
+    : [];
+  const _hasLockedUnits = _lockedUnits.length > 0;
+  // Compat: _unitLocked usado em vários efeitos — pra multi-unidade pega a primeira
+  const _unitLocked = _hasLockedUnits ? _lockedUnits[0] : "";
   const TASKS=tasks||[];
   // Se lockedClientId foi passado (cliente logado no portal), trava a seleção.
   // Só sócio pode navegar entre clientes livremente.
@@ -42089,17 +42125,35 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   // Default "grupo" = visao consolidada de todas as unidades.
   // No futuro essa lista podera ser restrita por usuario (Edgar so ve paraguay, etc).
   const isBioter=selCl==="bioter";
-  // Se cliente Bioter logado e tem unidade travada, inicia com ela; senão "grupo".
-  const [selUnit,setSelUnit]=useState(_unitLocked||"grupo");
-  // Força selUnit a permanecer na unidade travada (cliente Bioter logado)
+  // Default do selUnit:
+  //   1+ unidade travada → "_minhas_" (vê union de todas) se multi, ou a única se single
+  //   sem trava → "grupo" (vê tudo)
+  const _initSelUnit = _hasLockedUnits ? (_lockedUnits.length===1 ? _lockedUnits[0] : "_minhas_") : "grupo";
+  const [selUnit,setSelUnit]=useState(_initSelUnit);
+  // Força selUnit a valor válido pra unidades travadas
   useEffect(function(){
-    if(_unitLocked&&selUnit!==_unitLocked)setSelUnit(_unitLocked);
-  },[_unitLocked]);
-  // Lista de unidades disponiveis — se travado, só mostra a do user
-  const availableUnits=isBioter?(typeof BIOTER_UNITS!=="undefined"?(_unitLocked?BIOTER_UNITS.filter(function(u){return u.id===_unitLocked;}):BIOTER_UNITS):[]):[];
-  // Filtra tasks pela unidade selecionada (se for Bioter e nao for "grupo")
+    if(_hasLockedUnits){
+      const _valid = (_lockedUnits.length===1)
+        ? selUnit===_lockedUnits[0]
+        : (selUnit==="_minhas_" || _lockedUnits.indexOf(selUnit)!==-1);
+      if(!_valid) setSelUnit(_lockedUnits.length===1 ? _lockedUnits[0] : "_minhas_");
+    }
+  },[lockedUnit]);
+  // Lista de unidades disponiveis — se travado, só mostra as do user
+  const availableUnits=isBioter?(typeof BIOTER_UNITS!=="undefined"?(_hasLockedUnits?BIOTER_UNITS.filter(function(u){return _lockedUnits.indexOf(u.id)!==-1;}):BIOTER_UNITS):[]):[];
+  // Filtra tasks pela unidade selecionada
+  //   "grupo"     → todas
+  //   "_minhas_"  → união das unidades travadas (cliente regional multi-unidade)
+  //   "chapeco" / etc → só essa unidade
   const clTasks=(function(){
     if(!isBioter||selUnit==="grupo")return clTasksAll;
+    if(selUnit==="_minhas_" && _hasLockedUnits){
+      return clTasksAll.filter(function(t){
+        const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+        if(units.indexOf("grupo")!==-1)return true;
+        return units.some(function(u){return _lockedUnits.indexOf(u)!==-1;});
+      });
+    }
     return clTasksAll.filter(function(t){
       const units=String(t.bioterUnit||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
       return units.indexOf(selUnit)!==-1||units.indexOf("grupo")!==-1;
