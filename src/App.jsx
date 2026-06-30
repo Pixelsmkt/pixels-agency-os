@@ -24984,7 +24984,7 @@ const MAIN_TABS=[["equipe","Time"],["clientes","Clientes"],["storage","Storage"]
 
 const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status","Ações"];
 
-const CLIENT_TABLE_HEADERS=["Cliente","Login","Portal","Módulos ativos","Ações"];
+const CLIENT_TABLE_HEADERS=["Cliente","Email do portal","Unidade(s)","Status","Ações"];
 
 const LEVEL_STRUCTURE=[
   {l:1,name:"Gestão",      c:C.a,  desc:"Acesso total ao sistema. Gerenciam tudo, todos os módulos e permissões."},
@@ -25061,6 +25061,65 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
     client_id:"", client_unit:"", email:"", password:"", name:"",
     photo_base64:"", photo_mime:""
   });
+
+  // Lista de auth users do tipo "client" carregada do Supabase
+  // Map { client_id: [ {id,email,primary_unit,name,photo}, ... ] }
+  const [clientAuthUsers,setClientAuthUsers]=useState({});
+  const [clientAuthLoading,setClientAuthLoading]=useState(false);
+  const reloadClientAuthUsers=async()=>{
+    try{
+      setClientAuthLoading(true);
+      const sb=window._sb;
+      const{data,error}=await sb.from("profiles")
+        .select("id,name,primary_client,primary_unit,profile_data")
+        .eq("user_type","client");
+      if(error||!data){setClientAuthLoading(false);return;}
+      const byClient={};
+      data.forEach(p=>{
+        const cid=p.primary_client||"";
+        if(!cid)return;
+        const pd=p.profile_data||{};
+        if(!byClient[cid])byClient[cid]=[];
+        byClient[cid].push({
+          id:p.id,
+          name:p.name||"",
+          email:pd.email||"",
+          photo:pd.photo||"",
+          primary_unit:p.primary_unit||"",
+        });
+      });
+      setClientAuthUsers(byClient);
+    }catch(e){console.warn("[acessos] reloadClientAuthUsers:",e);}
+    finally{setClientAuthLoading(false);}
+  };
+  useEffect(()=>{reloadClientAuthUsers();},[]);
+
+  const revogarClienteAcesso=async(authUserId,clientName)=>{
+    if(!(await pixelsConfirm(
+      "Revogar acesso de "+clientName+"?\nIsso vai apagar o login do cliente. Ele não vai mais conseguir acessar o portal.",
+      {okText:"Revogar acesso",danger:true}
+    )))return;
+    try{
+      const sb=window._sb;
+      const{data:sess}=await sb.auth.getSession();
+      const tok=sess?.session?.access_token;
+      const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
+      const res=await fetch(url+"/functions/v1/delete-client-user",{
+        method:"POST",
+        headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},
+        body:JSON.stringify({user_id:authUserId}),
+      });
+      const data=await res.json();
+      if(!res.ok){
+        if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao revogar acesso.");
+        return;
+      }
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Acesso revogado.");
+      reloadClientAuthUsers();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+String(e?.message||e));
+    }
+  };
 
   const [clientAccess,setClientAccess]=useState(()=>{
     const acc={};
@@ -25363,89 +25422,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
       </div>);
     })()}
 
-    {/* ── CLIENT ACCESS EDIT MODAL ── */}
-    {editClientId&&editClientDraft&&(()=>{
-      const cl=CLIENTS.find(c=>c.id===editClientId);
-      if(!cl)return null;
-      const inp={background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
-      return(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setEditClientId(null)}>
-          <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:20,width:"100%",maxWidth:560,border:"2px solid "+cl.color,boxShadow:"0 0 60px "+cl.color+"30",overflow:"hidden"}}>
-            {/* Header */}
-            <div style={{background:"linear-gradient(135deg,"+cl.color+","+cl.color+"88)",padding:"18px 22px",display:"flex",alignItems:"center",gap:14}}>
-              <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:900,fontSize:18}}>{cl.name.slice(0,2).toUpperCase()}</div>
-              <div style={{flex:1}}>
-                <div style={{color:"#fff",fontWeight:900,fontSize:16}}>{cl.name}</div>
-                <div style={{color:"rgba(255,255,255,0.75)",fontSize:11,marginTop:2}}>Gerenciar acesso ao portal</div>
-              </div>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <div style={{display:"flex",alignItems:"center",gap:6,background:"rgba(255,255,255,0.15)",borderRadius:20,padding:"5px 12px"}}>
-                  <span style={{color:"#fff",fontSize:11,fontWeight:600}}>Portal</span>
-                  <div onClick={()=>setEditClientDraft(d=>({...d,enabled:!d.enabled}))}
-                    style={{width:36,height:20,borderRadius:99,background:editClientDraft.enabled?"#22c55e":"rgba(255,255,255,0.3)",cursor:"pointer",position:"relative",transition:"background .2s"}}>
-                    <div style={{position:"absolute",top:2,left:editClientDraft.enabled?18:2,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
-                  </div>
-                  <span style={{color:editClientDraft.enabled?"#86efac":"rgba(255,255,255,0.6)",fontSize:10,fontWeight:700}}>{editClientDraft.enabled?"Ativo":"Inativo"}</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:16,maxHeight:"68vh",overflowY:"auto"}}>
-              {/* Login credentials */}
-              <div>
-                <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:8}}>Credenciais de Acesso</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div>
-                    <div style={{color:C.td,fontSize:10,marginBottom:4}}>Login</div>
-                    <input value={editClientDraft.login||""} onChange={e=>setEditClientDraft(d=>({...d,login:e.target.value}))} style={inp} placeholder="login.do.cliente"/>
-                  </div>
-                  <div>
-                    <div style={{color:C.td,fontSize:10,marginBottom:4}}>Senha</div>
-                    <input value={editClientDraft.senha||""} onChange={e=>setEditClientDraft(d=>({...d,senha:e.target.value}))} style={inp} placeholder="Senha de acesso"/>
-                  </div>
-                </div>
-                <div style={{background:C.s1,borderRadius:8,padding:"8px 12px",marginTop:6,fontSize:10,color:C.td,lineHeight:1.6}}>
-                  As credenciais são exibidas aqui para controle interno. Compartilhe com o cliente de forma segura.
-                </div>
-              </div>
-
-              {/* Module permissions */}
-              <div>
-                <div style={{color:C.ts,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,marginBottom:10}}>Módulos do Portal</div>
-                <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {PORTAL_MODULES.map(mod=>{
-                    const on=editClientDraft.modulos?.[mod.id]||false;
-                    return(
-                      <div key={mod.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",background:on?cl.color+"10":C.s1,borderRadius:10,border:"1px solid "+(on?cl.color+"44":C.b1),transition:"all .15s"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:16}}>{mod.icon}</span>
-                          <div>
-                            <div style={{color:on?C.tx:C.ts,fontSize:12,fontWeight:on?700:500}}>{mod.label}</div>
-                            <div style={{color:C.td,fontSize:10}}>{mod.desc}</div>
-                          </div>
-                        </div>
-                        <div onClick={()=>setEditClientDraft(d=>({...d,modulos:{...d.modulos,[mod.id]:!on}}))}
-                          style={{width:38,height:22,borderRadius:99,background:on?cl.color:C.b2,cursor:"pointer",position:"relative",transition:"background .2s",flexShrink:0}}>
-                          <div style={{position:"absolute",top:3,left:on?18:3,width:16,height:16,borderRadius:"50%",background:"#fff",transition:"left .2s"}}/>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div style={{display:"flex",gap:8,paddingTop:4,borderTop:"1px solid "+C.b1}}>
-                <button onClick={()=>setEditClientId(null)} style={{flex:1,background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"10px",color:C.ts,fontWeight:700,cursor:"pointer",fontSize:13}}>Cancelar</button>
-                <button onClick={saveEditClient} style={{flex:2,background:"linear-gradient(135deg,"+cl.color+","+cl.color+"cc)",color:"#fff",border:"none",borderRadius:10,padding:"10px",fontWeight:900,cursor:"pointer",fontSize:13}}>
-                  💾 Salvar Configurações
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    })()}
+    {/* CLIENT ACCESS EDIT MODAL antigo removido — agora usamos Supabase Auth real via Edge Function */}
 
     {/* ── NOVO ACESSO CLIENTE MODAL ── */}
     {novoClienteOpen&&(()=>{
@@ -25505,6 +25482,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
           // Liga acesso no painel também (mesmo se foi configurado antes)
           const cur=clientAccess[novoCliente.client_id]||defaultClientAccess(_clSel||{id:novoCliente.client_id,name:""});
           saveClientAccess(novoCliente.client_id,{...cur,enabled:true,login:payload.email});
+          reloadClientAuthUsers();
           setNovoClienteOpen(false);
           setNovoClienteBusy(false);
         }catch(e){
@@ -25665,7 +25643,7 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
           </button>}
         </div>}
         {mainTab==="clientes"&&<div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{color:C.ts,fontSize:12}}>{CLIENTS.filter(c=>c.status!=="interno").filter(c=>clientAccess[c.id]?.enabled).length} portais ativos</div>
+          <div style={{color:C.ts,fontSize:12}}>{Object.values(clientAuthUsers).reduce((acc,arr)=>acc+arr.length,0)} acesso(s) ativo(s)</div>
           {isMePartner&&<button onClick={()=>{setNovoCliente({client_id:(CLIENTS.find(c=>c.status!=="interno")||{}).id||"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});setNovoClienteOpen(true);}}
             style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px rgba(22,163,74,.45)",fontFamily:"inherit"}}>
             <span style={{fontSize:14,lineHeight:1}}>+</span>Novo acesso cliente
@@ -25796,77 +25774,131 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
       {mainTab==="clientes"&&(
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
 
-          {/* Client list */}
-          <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
-            <div style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 2fr 100px",padding:"10px 20px",background:C.s1,borderBottom:"1px solid "+C.b1}}>
-              {CLIENT_TABLE_HEADERS.map((h,i)=>(
-                <div key={h} style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.8,textAlign:i>=2?"center":"left"}}>{h}</div>
-              ))}
-            </div>
-
-            {CLIENTS.filter(c=>c.status!=="interno").map((cl,idx,arr)=>{
-              const acc=clientAccess[cl.id]||defaultClientAccess(cl);
-              const activeMods=PORTAL_MODULES.filter(m=>acc.modulos?.[m.id]);
-              return(
-                <div key={cl.id}
-                  style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1fr 2fr 100px",padding:"14px 20px",borderBottom:idx<arr.length-1?"1px solid "+C.b1+"44":"none",alignItems:"center",transition:"background .12s"}}
-                  onMouseEnter={e=>e.currentTarget.style.background=C.s1}
-                  onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-
-                  {/* Cliente: logo + nome */}
-                  <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <div style={{width:44,height:44,borderRadius:11,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:4}}>
-                      <ClientLogo clientId={cl.id} size="md"/>
+          {/* ── ACESSOS ATIVOS (auth users reais do Supabase) ── */}
+          {(()=>{
+            const _clientesPortal=CLIENTS.filter(c=>c.status!=="interno");
+            const _comAcesso=[];
+            const _semAcesso=[];
+            _clientesPortal.forEach(cl=>{
+              const users=clientAuthUsers[cl.id]||[];
+              if(users.length>0)users.forEach(u=>_comAcesso.push({cl,user:u}));
+              else _semAcesso.push(cl);
+            });
+            const _unitLabel=(uid)=>{
+              if(!uid)return"";
+              if(uid==="grupo")return"Grupo Bioter";
+              const ids=String(uid).split(",").map(s=>s.trim()).filter(Boolean);
+              if(!ids.length)return"";
+              const units=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
+              const labels=ids.map(id=>{
+                const u=units.find(x=>x.id===id);
+                return u?u.pickerLabel||u.label:id;
+              });
+              return labels.join(" + ");
+            };
+            return <>
+              {/* Bloco 1 — Acessos ATIVOS */}
+              <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
+                <div style={{padding:"14px 20px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:10,background:"#f0fdf4"}}>
+                  <div style={{width:30,height:30,borderRadius:8,background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{color:"#15803d",fontWeight:800,fontSize:13,letterSpacing:-.1}}>Acessos ativos</div>
+                    <div style={{color:"#166534",fontSize:11,marginTop:1}}>Clientes que conseguem logar no portal agora</div>
+                  </div>
+                  <div style={{color:"#15803d",fontSize:12,fontWeight:700}}>{_comAcesso.length}</div>
+                </div>
+                {_comAcesso.length===0?(
+                  <div style={{padding:"40px 20px",textAlign:"center",color:C.td,fontSize:13,fontStyle:"italic"}}>
+                    Nenhum acesso de cliente criado ainda. Use o botão "+ Novo acesso cliente" pra começar.
+                  </div>
+                ):(
+                  _comAcesso.map(({cl,user},i)=>(
+                    <div key={user.id}
+                      style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.5fr 100px",padding:"14px 20px",borderBottom:i<_comAcesso.length-1?"1px solid "+C.b1+"44":"none",alignItems:"center",gap:12}}>
+                      {/* Cliente: logo + nome do cliente + nome do contato */}
+                      <div style={{display:"flex",alignItems:"center",gap:12}}>
+                        <div style={{width:44,height:44,borderRadius:11,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:4}}>
+                          <ClientLogo clientId={cl.id} size="md"/>
+                        </div>
+                        <div style={{minWidth:0}}>
+                          <div style={{color:C.tx,fontWeight:700,fontSize:14,letterSpacing:-.2}}>{cl.name}</div>
+                          {user.name&&user.name!==cl.name&&<div style={{color:C.td,fontSize:11,marginTop:1}}>{user.name}</div>}
+                        </div>
+                      </div>
+                      {/* Email do login */}
+                      <div style={{minWidth:0}}>
+                        <div style={{color:C.ts,fontSize:12,fontFamily:"monospace",wordBreak:"break-all"}}>{user.email||"—"}</div>
+                      </div>
+                      {/* Unidade(s) Bioter (se cliente Bioter) */}
+                      <div>
+                        {cl.id==="bioter"?(
+                          <span style={{background:"#16a34a15",color:"#15803d",border:"1px solid #16a34a40",borderRadius:7,padding:"4px 10px",fontSize:11,fontWeight:700,display:"inline-block"}}>
+                            {_unitLabel(user.primary_unit)||"—"}
+                          </span>
+                        ):(
+                          <span style={{color:C.td,fontSize:11.5,fontStyle:"italic"}}>Acesso total</span>
+                        )}
+                      </div>
+                      {/* Ações: Revogar */}
+                      <div style={{display:"flex",justifyContent:"flex-end"}}>
+                        {isPartner&&(
+                          <button onClick={()=>revogarClienteAcesso(user.id,cl.name)}
+                            title="Revogar acesso"
+                            style={{background:"#fff",border:"1px solid #fecaca",borderRadius:9,padding:"7px 12px",color:"#dc2626",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+                            onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#fca5a5";}}
+                            onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#fecaca";}}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                            Revogar
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div style={{minWidth:0}}>
-                      <div style={{color:C.tx,fontWeight:700,fontSize:14,letterSpacing:-.2}}>{cl.name}</div>
-                      <div style={{color:C.td,fontSize:11,marginTop:1}}>{cl.sector}</div>
+                  ))
+                )}
+              </div>
+
+              {/* Bloco 2 — Clientes SEM acesso (com botão de criar acesso rápido) */}
+              {_semAcesso.length>0&&(
+                <div style={{background:C.card,borderRadius:16,border:"1px solid "+C.b1,overflow:"hidden"}}>
+                  <div style={{padding:"14px 20px",borderBottom:"1px solid "+C.b1,display:"flex",alignItems:"center",gap:10,background:C.s1}}>
+                    <div style={{width:30,height:30,borderRadius:8,background:C.b2,display:"flex",alignItems:"center",justifyContent:"center",color:C.td}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                     </div>
-                  </div>
-
-                  {/* Login */}
-                  <div>
-                    <div style={{color:C.ts,fontSize:12,fontFamily:"monospace"}}>{acc.login||"—"}</div>
-                    {acc.updatedAt&&<div style={{color:C.td,fontSize:10,marginTop:2}}>Atualizado {new Date(acc.updatedAt).toLocaleDateString("pt-BR")}</div>}
-                  </div>
-
-                  {/* Status (clean, dot + label discretos) */}
-                  <div style={{display:"flex",justifyContent:"center"}}>
-                    <div onClick={()=>isPartner&&toggleClientEnabled(cl.id)} title={isPartner?"Clique pra "+(acc.enabled?"desativar":"ativar"):""}
-                      style={{display:"inline-flex",alignItems:"center",gap:7,background:acc.enabled?"#dcfce7":"#f1f5f9",border:"1px solid "+(acc.enabled?"#86efac":C.b1),borderRadius:99,padding:"5px 12px",cursor:isPartner?"pointer":"default",transition:"all .12s"}}>
-                      <div style={{width:7,height:7,borderRadius:"50%",background:acc.enabled?"#16a34a":"#94a3b8"}}/>
-                      <span style={{color:acc.enabled?"#15803d":"#64748b",fontSize:11,fontWeight:700,letterSpacing:.2}}>{acc.enabled?"Ativo":"Inativo"}</span>
+                    <div style={{flex:1}}>
+                      <div style={{color:C.tx,fontWeight:800,fontSize:13,letterSpacing:-.1}}>Clientes sem acesso criado</div>
+                      <div style={{color:C.td,fontSize:11,marginTop:1}}>Ainda não tem login pro portal</div>
                     </div>
+                    <div style={{color:C.ts,fontSize:12,fontWeight:700}}>{_semAcesso.length}</div>
                   </div>
-
-                  {/* Modulos ativos — chips com Ico, cor neutra + cor do cliente nos detalhes */}
-                  <div style={{display:"flex",gap:5,flexWrap:"wrap",justifyContent:"center",alignItems:"center"}}>
-                    {activeMods.length===0
-                      ?<span style={{color:C.td,fontSize:11,fontStyle:"italic"}}>Nenhum módulo</span>
-                      :activeMods.map(m=>(
-                        <span key={m.id} title={m.desc}
-                          style={{background:cl.color+"10",color:cl.color,border:"1px solid "+cl.color+"30",borderRadius:7,padding:"4px 9px",fontSize:10.5,fontWeight:700,display:"inline-flex",alignItems:"center",gap:4,letterSpacing:.1}}>
-                          <Ico n={m.icon} size={10} color={cl.color}/>{m.label}
-                        </span>
-                      ))
-                    }
-                  </div>
-
-                  {/* Ações — engrenagem SVG (sem emoji) */}
-                  <div style={{display:"flex",gap:5,justifyContent:"flex-end"}}>
-                    {isPartner&&(
-                      <button onClick={()=>openEditClient(cl.id)} title="Configurar acesso"
-                        style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:9,width:34,height:34,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.ts,transition:"all .12s"}}
-                        onMouseEnter={e=>{e.currentTarget.style.background=cl.color+"15";e.currentTarget.style.color=cl.color;e.currentTarget.style.borderColor=cl.color+"55";}}
-                        onMouseLeave={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color=C.ts;e.currentTarget.style.borderColor=C.b1;}}>
-                        <Ico n="settings" size={14}/>
-                      </button>
-                    )}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:10,padding:16}}>
+                    {_semAcesso.map(cl=>(
+                      <div key={cl.id} style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11,transition:"all .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.borderColor=cl.color+"66";e.currentTarget.style.background="#fff";}}
+                        onMouseLeave={e=>{e.currentTarget.style.borderColor=C.b1;e.currentTarget.style.background=C.s1;}}>
+                        <div style={{width:38,height:38,borderRadius:9,background:"#fff",border:"1px solid "+C.b1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:3}}>
+                          <ClientLogo clientId={cl.id} size="sm"/>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{color:C.tx,fontWeight:700,fontSize:13,letterSpacing:-.1}}>{cl.name}</div>
+                          <div style={{color:C.td,fontSize:10.5,marginTop:1}}>{cl.sector}</div>
+                        </div>
+                        {isPartner&&(
+                          <button onClick={()=>{setNovoCliente({client_id:cl.id,client_unit:"",email:"",password:"",name:"",photo_base64:"",photo_mime:""});setNovoClienteOpen(true);}}
+                            title={"Criar acesso pra "+cl.name}
+                            style={{background:"linear-gradient(135deg,#16a34a,#15803d)",border:"none",borderRadius:8,padding:"7px 10px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:4,boxShadow:"0 2px 8px rgba(22,163,74,.35)",flexShrink:0}}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Criar
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </>;
+          })()}
 
         </div>
       )}
