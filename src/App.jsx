@@ -24990,7 +24990,7 @@ const PORTAL_MODULES=[
   {id:"faturamento", label:"Faturamento",             icon:"wallet",      desc:"Contratos e faturas"},
 ];
 
-const MAIN_TABS=[["equipe","Time"],["clientes","Clientes"],["storage","Storage"]];
+const MAIN_TABS=[["equipe","Time"],["clientes","Clientes"],["senhas","Senhas"],["storage","Storage"]];
 
 const MEMBER_TABLE_HEADERS=["Colaborador","Função","Nível","Demandas","Status","Ações"];
 
@@ -25468,21 +25468,56 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
           const{data:sess}=await sb.auth.getSession();
           const tok=sess?.session?.access_token;
           const url=(typeof import.meta!=="undefined"?import.meta.env.VITE_SUPABASE_URL:"")||"https://jffvoojcskwumnphsedq.supabase.co";
+
+          // === Upload da foto CLIENT-SIDE (evita timeout na Edge Function) ===
+          let _photoUrl = "";
+          if(novoCliente.photo_base64){
+            try{
+              const _ext = (novoCliente.photo_mime||"image/png").split("/")[1]||"png";
+              const _raw = novoCliente.photo_base64.replace(/^data:[^,]+,/,"");
+              const _bin = atob(_raw);
+              const _bytes = new Uint8Array(_bin.length);
+              for(let i=0;i<_bin.length;i++)_bytes[i]=_bin.charCodeAt(i);
+              const _key = "clients/"+novoCliente.client_id+"/avatar."+_ext;
+              const{error:_upErr} = await sb.storage.from("profiles").upload(_key,_bytes,{contentType:novoCliente.photo_mime,upsert:true});
+              if(_upErr){
+                console.warn("[acessos] photo upload:",_upErr);
+              }else{
+                _photoUrl = url+"/storage/v1/object/public/profiles/"+_key;
+              }
+            }catch(e){console.warn("[acessos] photo prep:",e);}
+          }
+
           const payload={
             email:novoCliente.email.trim().toLowerCase(),
             password:novoCliente.password,
             client_id:novoCliente.client_id,
             client_unit:novoCliente.client_unit||"",
             name:(novoCliente.name||"").trim()||(_clSel?_clSel.name:novoCliente.client_id),
-            photo_base64:novoCliente.photo_base64,
-            photo_mime:novoCliente.photo_mime,
+            photo_url:_photoUrl,
           };
-          const res=await fetch(url+"/functions/v1/create-client-user",{
-            method:"POST",
-            headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},
-            body:JSON.stringify(payload),
-          });
-          const data=await res.json();
+          // Timeout de 45s — evita ficar "Criando..." infinito
+          const _ctrl = new AbortController();
+          const _to = setTimeout(()=>_ctrl.abort(), 45000);
+          let res, data;
+          try{
+            res=await fetch(url+"/functions/v1/create-client-user",{
+              method:"POST",
+              headers:{"Authorization":"Bearer "+tok,"Content-Type":"application/json"},
+              body:JSON.stringify(payload),
+              signal:_ctrl.signal,
+            });
+            data=await res.json().catch(()=>({error:"Resposta inválida do servidor"}));
+          }catch(e){
+            clearTimeout(_to);
+            if(typeof pixelsToast!=="undefined"){
+              if(e.name==="AbortError")pixelsToast.error("Tempo esgotado (45s). A foto pode estar muito grande — tenta sem foto primeiro.");
+              else pixelsToast.error("Erro de rede: "+String(e?.message||e));
+            }
+            setNovoClienteBusy(false);
+            return;
+          }
+          clearTimeout(_to);
           if(!res.ok){
             if(typeof pixelsToast!=="undefined")pixelsToast.error(data.error||"Falha ao criar acesso cliente.");
             setNovoClienteBusy(false);
@@ -25917,10 +25952,280 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
       )}
 
       {/* Tab Storage — só admins */}
+      {mainTab==="senhas"&&isPartner&&<PasswordVault user={user}/>}
       {mainTab==="storage"&&isPartner&&<StorageManager tasks={tasks}/>}
 
     </div>
   </>);
+}
+
+/* ─── PASSWORD VAULT (cofre de senhas — só sócios) ─── */
+function PasswordVault({user}){
+  const [items,setItems] = useState([]);
+  const [loading,setLoading] = useState(true);
+  const [editing,setEditing] = useState(null); // null | {} pra novo, {id,...} pra editar
+  const [search,setSearch] = useState("");
+  const [showPwd,setShowPwd] = useState({});
+
+  const CATS = [
+    {id:"cliente", label:"Cliente",  color:"#16a34a"},
+    {id:"servico", label:"Serviço",  color:"#7c3aed"},
+    {id:"interno", label:"Interno",  color:"#0ea5e9"},
+    {id:"outro",   label:"Outro",    color:"#64748b"},
+  ];
+  const _catOf = (id)=>CATS.find(c=>c.id===id)||CATS[3];
+
+  const _load = async ()=>{
+    try{
+      setLoading(true);
+      const sb=window._sb;
+      const{data,error}=await sb.from("team_passwords").select("*").order("updated_at",{ascending:false});
+      if(!error&&data)setItems(data);
+    }catch(e){console.warn("[vault] load:",e);}
+    finally{setLoading(false);}
+  };
+  useEffect(()=>{_load();},[]);
+
+  const _new = ()=>setEditing({id:"",label:"",category:"cliente",client_id:"",username:"",password:"",url:"",notes:""});
+  const _edit = (it)=>setEditing({...it});
+  const _close = ()=>setEditing(null);
+
+  const _save = async ()=>{
+    if(!editing.label.trim()){
+      if(typeof pixelsToast!=="undefined")pixelsToast.warning("Coloca um título (label).");
+      return;
+    }
+    try{
+      const sb=window._sb;
+      const payload={
+        label:editing.label.trim(),
+        category:editing.category||"outro",
+        client_id:editing.client_id||null,
+        username:editing.username||"",
+        password:editing.password||"",
+        url:editing.url||"",
+        notes:editing.notes||"",
+        author_id:user.id,
+        author_name:user.name,
+        updated_at:new Date().toISOString(),
+      };
+      if(editing.id){
+        const{error}=await sb.from("team_passwords").update(payload).eq("id",editing.id);
+        if(error){if(typeof pixelsToast!=="undefined")pixelsToast.error(error.message);return;}
+      }else{
+        const{error}=await sb.from("team_passwords").insert(payload);
+        if(error){if(typeof pixelsToast!=="undefined")pixelsToast.error(error.message);return;}
+      }
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Salvo.");
+      _close();_load();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+String(e?.message||e));
+    }
+  };
+
+  const _delete = async (it)=>{
+    const ok = (typeof pixelsConfirm==="function")
+      ? await pixelsConfirm("Excluir '"+it.label+"'?",{okText:"Excluir",danger:true})
+      : confirm("Excluir?");
+    if(!ok)return;
+    try{
+      const sb=window._sb;
+      await sb.from("team_passwords").delete().eq("id",it.id);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Excluído.");
+      _load();
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+String(e?.message||e));
+    }
+  };
+
+  const _copy = (txt,what)=>{
+    if(!txt)return;
+    try{
+      navigator.clipboard.writeText(txt);
+      if(typeof pixelsToast!=="undefined")pixelsToast.success((what||"Texto")+" copiado.");
+    }catch(e){
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Falha ao copiar.");
+    }
+  };
+
+  const _filtered = items.filter(it=>{
+    if(!search.trim())return true;
+    const s=search.toLowerCase();
+    return String(it.label||"").toLowerCase().includes(s)
+        || String(it.username||"").toLowerCase().includes(s)
+        || String(it.client_id||"").toLowerCase().includes(s)
+        || String(it.url||"").toLowerCase().includes(s);
+  });
+
+  return <div style={{display:"flex",flexDirection:"column",gap:14}}>
+    {/* Aviso */}
+    <div style={{background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,padding:"10px 14px",display:"flex",gap:9,alignItems:"flex-start"}}>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a16207" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{marginTop:2,flexShrink:0}}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <div style={{color:"#854d0e",fontSize:11.5,lineHeight:1.5,fontWeight:500}}>
+        <strong>Cofre de senhas — só sócios.</strong> Use pra anotar credenciais de portal, contas de cliente, serviços. Senhas ficam em texto puro no Supabase com RLS restringindo acesso a level=1.
+      </div>
+    </div>
+    {/* Header */}
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{position:"relative"}}>
+          <span style={{position:"absolute",left:9,top:"50%",transform:"translateY(-50%)",color:C.td,fontSize:13,pointerEvents:"none"}}>🔍</span>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar por título, login, cliente..."
+            style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:9,padding:"7px 10px 7px 30px",color:C.tx,fontSize:12,outline:"none",width:280,fontFamily:"inherit"}}/>
+        </div>
+        <div style={{color:C.ts,fontSize:12}}>{_filtered.length} senha{_filtered.length===1?"":"s"}</div>
+      </div>
+      <button onClick={_new}
+        style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",border:"none",borderRadius:10,padding:"8px 16px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 4px 14px "+C.a+"55",fontFamily:"inherit"}}>
+        <span style={{fontSize:14,lineHeight:1}}>+</span>Nova senha
+      </button>
+    </div>
+
+    {/* Lista */}
+    {loading
+      ? <div style={{textAlign:"center",color:C.td,fontSize:13,padding:"30px"}}>Carregando…</div>
+      : _filtered.length===0
+        ? <div style={{background:C.card,border:"1px dashed "+C.b1,borderRadius:14,padding:"40px 20px",textAlign:"center"}}>
+            <div style={{color:C.tx,fontWeight:700,fontSize:14,marginBottom:4}}>Nenhuma senha cadastrada ainda</div>
+            <div style={{color:C.td,fontSize:12}}>Clique em "+ Nova senha" pra começar.</div>
+          </div>
+        : <div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,overflow:"hidden"}}>
+            {_filtered.map((it,i)=>{
+              const cat=_catOf(it.category);
+              const showPw=!!showPwd[it.id];
+              return <div key={it.id}
+                style={{display:"grid",gridTemplateColumns:"2fr 1.5fr 1.5fr 120px",padding:"13px 18px",borderBottom:i<_filtered.length-1?"1px solid "+C.b1+"55":"none",alignItems:"center",gap:10,transition:"background .12s"}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.s1}
+                onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                {/* Label + cat + url */}
+                <div style={{minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                    <span style={{background:cat.color+"15",color:cat.color,borderRadius:5,padding:"2px 7px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{cat.label}</span>
+                    {it.client_id && <span style={{color:C.td,fontSize:10.5,fontWeight:600}}>· {it.client_id}</span>}
+                  </div>
+                  <div style={{color:C.tx,fontSize:13,fontWeight:700,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{it.label}</div>
+                  {it.url && <a href={it.url} target="_blank" rel="noopener noreferrer" style={{color:C.a,fontSize:10.5,textDecoration:"none",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"block"}}>{it.url}</a>}
+                </div>
+                {/* Username */}
+                <div style={{minWidth:0}}>
+                  <div style={{color:C.td,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Usuário</div>
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    <span style={{color:C.tx,fontSize:12,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{it.username||"—"}</span>
+                    {it.username && <button onClick={()=>_copy(it.username,"Usuário")} title="Copiar usuário"
+                      style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:4,color:C.ts,display:"inline-flex"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>}
+                  </div>
+                </div>
+                {/* Senha */}
+                <div style={{minWidth:0}}>
+                  <div style={{color:C.td,fontSize:9.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:2}}>Senha</div>
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    <span style={{color:C.tx,fontSize:12,fontFamily:"monospace",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1}}>{showPw?(it.password||"—"):"••••••••"}</span>
+                    {it.password && <button onClick={()=>setShowPwd(p=>({...p,[it.id]:!showPw}))} title={showPw?"Ocultar":"Mostrar"}
+                      style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:4,color:C.ts,display:"inline-flex"}}>
+                      {showPw
+                        ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      }
+                    </button>}
+                    {it.password && <button onClick={()=>_copy(it.password,"Senha")} title="Copiar senha"
+                      style={{background:"transparent",border:"none",cursor:"pointer",padding:3,borderRadius:4,color:C.ts,display:"inline-flex"}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+                    </button>}
+                  </div>
+                </div>
+                {/* Ações */}
+                <div style={{display:"flex",justifyContent:"flex-end",gap:5}}>
+                  <button onClick={()=>_edit(it)} title="Editar"
+                    style={{background:"#f8fafc",border:"1px solid "+C.b1,borderRadius:7,padding:"6px 10px",color:C.ts,fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                    Editar
+                  </button>
+                  <button onClick={()=>_delete(it)} title="Excluir"
+                    style={{background:"#fff",border:"1px solid #fecaca",borderRadius:7,padding:"6px 10px",color:"#dc2626",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                    Excluir
+                  </button>
+                </div>
+              </div>;
+            })}
+          </div>
+    }
+
+    {/* Modal Novo/Editar */}
+    {editing && (()=>{
+      const _clientesAtivos = CLIENTS.filter(c=>c.status!=="interno");
+      return <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.7)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={_close}>
+        <div onClick={e=>e.stopPropagation()} style={{background:C.card,borderRadius:16,width:"100%",maxWidth:560,boxShadow:"0 20px 60px rgba(0,0,0,.25)",overflow:"hidden"}}>
+          <div style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",padding:"16px 22px",color:"#fff"}}>
+            <div style={{fontSize:15,fontWeight:800,letterSpacing:-.2}}>{editing.id?"Editar senha":"Nova senha"}</div>
+            <div style={{fontSize:11,opacity:.85,marginTop:1}}>Anote uma credencial pra consulta futura</div>
+          </div>
+          <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:11,maxHeight:"70vh",overflowY:"auto"}}>
+            {/* Categoria */}
+            <div>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Categoria</div>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                {CATS.map(c=>{
+                  const _on=editing.category===c.id;
+                  return <button key={c.id} type="button" onClick={()=>setEditing(p=>({...p,category:c.id}))}
+                    style={{background:_on?c.color:"#fff",color:_on?"#fff":c.color,border:"1px solid "+(_on?c.color:c.color+"55"),borderRadius:8,padding:"5px 11px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{c.label}</button>;
+                })}
+              </div>
+            </div>
+            {/* Título */}
+            <div>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Título *</div>
+              <input value={editing.label} onChange={e=>setEditing(p=>({...p,label:e.target.value}))} placeholder="Ex: Portal Bioter Chapecó"
+                style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:13,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+            </div>
+            {/* Cliente */}
+            <div>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Cliente vinculado (opcional)</div>
+              <select value={editing.client_id||""} onChange={e=>setEditing(p=>({...p,client_id:e.target.value}))}
+                style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:13,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"inherit",cursor:"pointer"}}>
+                <option value="">— nenhum —</option>
+                {_clientesAtivos.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            {/* Usuário + Senha */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              <div>
+                <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Usuário/Email</div>
+                <input value={editing.username} onChange={e=>setEditing(p=>({...p,username:e.target.value}))} placeholder="exemplo@cliente.com"
+                  style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
+              </div>
+              <div>
+                <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Senha</div>
+                <input type="text" value={editing.password} onChange={e=>setEditing(p=>({...p,password:e.target.value}))} placeholder="senha aqui"
+                  style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"monospace"}}/>
+              </div>
+            </div>
+            {/* URL */}
+            <div>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>URL (opcional)</div>
+              <input value={editing.url} onChange={e=>setEditing(p=>({...p,url:e.target.value}))} placeholder="https://..."
+                style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"inherit"}}/>
+            </div>
+            {/* Notas */}
+            <div>
+              <div style={{color:C.td,fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Observações</div>
+              <textarea value={editing.notes} onChange={e=>setEditing(p=>({...p,notes:e.target.value}))} placeholder="Observações adicionais..."
+                rows={3} style={{width:"100%",background:C.s1,border:"1px solid "+C.b1,borderRadius:8,padding:"8px 11px",fontSize:12.5,color:C.tx,outline:"none",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+            </div>
+            {/* Botões */}
+            <div style={{display:"flex",justifyContent:"flex-end",gap:8,paddingTop:6}}>
+              <button onClick={_close}
+                style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:9,padding:"8px 18px",color:C.ts,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+              <button onClick={_save}
+                style={{background:"linear-gradient(135deg,"+C.a+","+C.aD+")",border:"none",borderRadius:9,padding:"8px 22px",color:"#fff",fontSize:12,fontWeight:800,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 4px 14px "+C.a+"55"}}>
+                {editing.id?"Salvar":"Adicionar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>;
+    })()}
+  </div>;
 }
 
 /* ─── STORAGE MANAGER ─────────────────────────── */
