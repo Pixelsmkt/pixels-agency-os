@@ -25549,12 +25549,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
                   </label>
                   {/* Divisor */}
                   <div style={{height:1,background:C.b1,margin:"3px 0"}}/>
-                  {/* Cada unidade individualmente */}
+                  {/* Cada unidade individualmente — labels "Bioter Chapecó", "Bioter Toledo" etc */}
                   {_allUnits.map(u=>{
                     const active=!_isGrupo&&_selUnits.indexOf(u.id)!==-1;
+                    const _lbl = u.id==="paraguay" ? "Bioter Paraguay" : "Bioter "+(u.pickerLabel||u.label.split("/")[0]);
                     return <label key={u.id} style={_rowStyle(active,_isGrupo)}>
                       <input type="checkbox" checked={active} disabled={_isGrupo} onChange={()=>_toggleUnit(u.id)}/>
-                      <span>{u.label}</span>
+                      <span>{_lbl}</span>
                     </label>;
                   })}
                 </div>
@@ -25792,7 +25793,9 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
               const units=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]);
               const labels=ids.map(id=>{
                 const u=units.find(x=>x.id===id);
-                return u?u.pickerLabel||u.label:id;
+                if(!u)return id;
+                if(u.id==="paraguay")return"Bioter Paraguay";
+                return"Bioter "+(u.pickerLabel||u.label.split("/")[0]);
               });
               return labels.join(" + ");
             };
