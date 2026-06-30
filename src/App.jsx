@@ -50025,10 +50025,181 @@ function PagePlanejamento({isMob}){
     {/* ═══ Seção fixa de Metas (sempre visível embaixo das dailies/weeklies) ═══ */}
     <MetasFixedPanel entries={metas} onEdit={setEditing} onDelete={handleDelete} onUpsert={upsert} onNew={openNew}/>
 
+    {/* ═══ Planejamentos dos clientes (mensal + trimestral) — sincronizado com Portal cliente e aba Planejamento ═══ */}
+    <_PlanejamentosClientes isMob={isMob}/>
+
     {/* ═══ Modal editor ═══ */}
     {editing && <PlanEditModal entry={editing} setEntry={setEditing} onSave={handleSave} onClose={function(){setEditing(null);}}/>}
 
     {loading && <div style={{color:"#94a3b8",fontSize:12,textAlign:"center",padding:"20px 0"}}>Carregando…</div>}
+  </div>;
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// _PlanejamentosClientes — resumo dos planejamentos mensais + trimestrais
+// dos clientes ATIVOS. Carrega de monthly_plans (Supabase) — mesma tabela
+// usada na aba Estratégia > Clientes > Planejamento e no Portal cliente.
+// Mês corrente + trimestre corrente. Cards clicáveis abrem a aba completa.
+// ═════════════════════════════════════════════════════════════════════════
+function _PlanejamentosClientes({isMob}){
+  const _now = new Date();
+  const _year  = _now.getFullYear();
+  const _month = _now.getMonth()+1; // 1..12
+  const _q     = Math.floor(_now.getMonth()/3)+1; // 1..4
+  const _monthEnc = _month;
+  const _quarterEnc = 20+_q; // schema: trimestre é month=20+q (21..24)
+
+  // Mês corrente em label
+  const _mLbl = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"][_month-1];
+  const _qLbl = "Q"+_q+" "+_year;
+
+  const [plans, setPlans] = useState({mensal:{}, trimestral:{}});
+  const [loading, setLoading] = useState(true);
+
+  // Lista clientes ativos (com contrato > 0 e não interno) — espelha o que Estratégia > Clientes usa
+  const _clientes = (typeof CLIENTS!=="undefined" ? CLIENTS : []).filter(function(c){
+    return c.status!=="interno" && Number(c.contract||0)>0;
+  });
+
+  useEffect(function(){
+    if(!window._sb || _clientes.length===0){ setLoading(false); return; }
+    let active = true;
+    Promise.all([
+      window._sb.from("monthly_plans").select("client_id,client_unit,year,month,objetivo,produtos_foco,feiras_eventos,campanhas,conteudos,status_interno,status_cliente,updated_at").eq("year",_year).eq("month",_monthEnc),
+      window._sb.from("monthly_plans").select("client_id,client_unit,year,month,objetivo,produtos_foco,feiras_eventos,campanhas,conteudos,status_interno,status_cliente,updated_at").eq("year",_year).eq("month",_quarterEnc),
+    ]).then(function(rs){
+      if(!active) return;
+      const mensal={}, trimestral={};
+      ((rs[0]&&rs[0].data)||[]).forEach(function(row){
+        // Indexa por client_id (preferindo client_unit vazio = "grupo" pra Bioter)
+        const k = row.client_id;
+        if(!mensal[k] || row.client_unit===""){ mensal[k] = row; }
+      });
+      ((rs[1]&&rs[1].data)||[]).forEach(function(row){
+        const k = row.client_id;
+        if(!trimestral[k] || row.client_unit===""){ trimestral[k] = row; }
+      });
+      setPlans({mensal:mensal, trimestral:trimestral});
+      setLoading(false);
+    }).catch(function(e){
+      console.warn("[_PlanejamentosClientes]",e&&e.message?e.message:e);
+      setLoading(false);
+    });
+    return function(){active=false;};
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[_year,_monthEnc,_quarterEnc]);
+
+  // Status visual
+  const _statusInternoCfg = {
+    rascunho:                 {label:"Rascunho",         color:"#64748b", bg:"#f1f5f9"},
+    em_revisao:               {label:"Em revisão",       color:"#a16207", bg:"#fef3c7"},
+    aprovado_internamente:    {label:"Aprovado interno", color:"#16a34a", bg:"#dcfce7"},
+  };
+  const _statusClienteCfg = {
+    pendente:  {label:"Aguarda cliente",  color:"#94a3b8", bg:"#f1f5f9"},
+    aprovado:  {label:"Cliente aprovou",  color:"#16a34a", bg:"#dcfce7"},
+    em_ajuste: {label:"Em ajuste",        color:"#dc2626", bg:"#fee2e2"},
+  };
+
+  function _hasContent(row){
+    if(!row) return false;
+    const _fs = ["objetivo","produtos_foco","feiras_eventos","campanhas","conteudos"];
+    return _fs.some(function(k){return (row[k]||"").trim().length>0;});
+  }
+
+  function _navToCliente(clId){
+    // Navega pra Estratégia > Clientes > tab Planejamento
+    try{
+      // Strat clientes mantém estado em localStorage; aqui só dispara evento.
+      localStorage.setItem("pixels-active-client", clId);
+      localStorage.setItem("pixels-cl-tab","planejamento");
+      // Se houver um handler global, navega
+      if(typeof window!=="undefined" && window.dispatchEvent){
+        window.dispatchEvent(new CustomEvent("pixels:navto",{detail:{page:"clientes",clientId:clId,tab:"planejamento"}}));
+      }
+    }catch(_){}
+  }
+
+  return <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:12}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",gap:11,padding:"4px 2px"}}>
+      <div style={{width:32,height:32,borderRadius:9,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 12px rgba(14,165,233,.30)"}}>
+        <_PlIco name="layers" size={16} color="#fff"/>
+      </div>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15.5,letterSpacing:-.25}}>Planejamentos dos clientes</div>
+        <div style={{color:"#64748b",fontSize:11.5,fontWeight:500,marginTop:2}}>Mensal ({_mLbl}/{_year}) + trimestral ({_qLbl}) — sincronizado com portal e Estratégia &gt; Clientes</div>
+      </div>
+    </div>
+
+    {loading
+      ? <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"24px 14px",textAlign:"center",color:"#94a3b8",fontSize:12,fontStyle:"italic"}}>Carregando planejamentos…</div>
+      : _clientes.length===0
+        ? <div style={{background:"#fafbfc",border:"1px dashed #e2e8f0",borderRadius:12,padding:"24px 14px",textAlign:"center",color:"#94a3b8",fontSize:12,fontStyle:"italic"}}>Sem clientes ativos cadastrados.</div>
+        : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(320px,1fr))",gap:12}}>
+            {_clientes.map(function(cl){
+              const _m = plans.mensal[cl.id] || null;
+              const _t = plans.trimestral[cl.id] || null;
+              const _hasM = _hasContent(_m);
+              const _hasT = _hasContent(_t);
+              const _clColor = cl.color || "#7c3aed";
+              const _statI = (_m && _statusInternoCfg[_m.status_interno]) || _statusInternoCfg.rascunho;
+              const _statC = (_m && _statusClienteCfg[_m.status_cliente]) || _statusClienteCfg.pendente;
+
+              return <div key={cl.id} onClick={function(){_navToCliente(cl.id);}}
+                style={{background:"#fff",border:"1.5px solid "+_clColor+"22",borderRadius:14,overflow:"hidden",cursor:"pointer",transition:"all .15s",position:"relative"}}
+                onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px rgba(15,23,42,.08)";e.currentTarget.style.borderColor=_clColor+"55";}}
+                onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor=_clColor+"22";}}>
+                {/* Header com logo + nome */}
+                <div style={{background:"linear-gradient(135deg,"+_clColor+"12,"+_clColor+"04 70%,#fff)",padding:"12px 14px 10px",borderBottom:"1px solid "+_clColor+"15",position:"relative"}}>
+                  <div style={{position:"absolute",left:0,top:0,bottom:0,width:3,background:_clColor}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginLeft:4}}>
+                    <div style={{width:34,height:34,borderRadius:8,background:"#fff",border:"1px solid "+_clColor+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:3}}>
+                      {typeof ClientLogo!=="undefined" ? <ClientLogo clientId={cl.id} size="sm"/> : <span style={{color:_clColor,fontWeight:800,fontSize:11}}>{cl.abbr||cl.name.slice(0,2)}</span>}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.2}}>{cl.name}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,flexWrap:"wrap"}}>
+                        <span style={{background:_statI.bg,color:_statI.color,fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:5,letterSpacing:.3,textTransform:"uppercase"}}>{_statI.label}</span>
+                        {_m && <span style={{background:_statC.bg,color:_statC.color,fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:5,letterSpacing:.3,textTransform:"uppercase"}}>{_statC.label}</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Body: 2 mini-sections (Mensal + Trimestral) */}
+                <div style={{padding:"10px 14px 12px",display:"flex",flexDirection:"column",gap:8}}>
+                  {/* Mensal */}
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{width:6,height:6,borderRadius:99,background:_hasM?"#16a34a":"#cbd5e1"}}/>
+                      <span style={{color:"#475569",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Mensal · {_mLbl}</span>
+                    </div>
+                    {_hasM
+                      ? <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.45,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",paddingLeft:12}}>{(_m.objetivo||_m.produtos_foco||_m.campanhas||_m.conteudos||"").slice(0,180)}</div>
+                      : <div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",fontWeight:500,paddingLeft:12}}>Sem objetivo cadastrado</div>}
+                  </div>
+
+                  {/* Trimestral */}
+                  <div style={{display:"flex",flexDirection:"column",gap:4,paddingTop:6,borderTop:"1px solid #f1f5f9"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{width:6,height:6,borderRadius:99,background:_hasT?"#16a34a":"#cbd5e1"}}/>
+                      <span style={{color:"#475569",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Trimestral · {_qLbl}</span>
+                    </div>
+                    {_hasT
+                      ? <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,lineHeight:1.45,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",paddingLeft:12}}>{(_t.objetivo||_t.produtos_foco||_t.campanhas||"").slice(0,180)}</div>
+                      : <div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",fontWeight:500,paddingLeft:12}}>Sem objetivo cadastrado</div>}
+                  </div>
+
+                  {/* CTA discreto */}
+                  <div style={{marginTop:4,color:_clColor,fontSize:10.5,fontWeight:700,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:4,opacity:.85}}>
+                    Abrir planejamento completo →
+                  </div>
+                </div>
+              </div>;
+            })}
+          </div>
+    }
   </div>;
 }
 
@@ -52229,7 +52400,8 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
               <div style={{color:"#94a3b8",fontSize:11.5}}>Crie demandas internas com prioridade Urgente/Alta pra cair no sprint.</div>
             </div>;
           }
-          return <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          // Cards GRANDES estilo dashboard moderno — grid 2 ou 3 colunas com cliente em destaque
+          return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(340px,1fr))",gap:14}}>
             {clientesComConteudo.map(cl=>{
               const itensCl = sprintItems.filter(it=>it.client_id===cl.id);
               const okCl = itensCl.filter(it=>it.status==="concluido").length;
@@ -52237,52 +52409,66 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
               const portalAbertas = (portalAbertasPorCli[cl.id]||[]).filter(t=>!puxadasIds.has(t.id));
               const pctCl = itensCl.length>0 ? Math.round((okCl/itensCl.length)*100) : 0;
               const clColor = cl.color || "#64748b";
-              // Card HORIZONTAL compacto: logo+nome+stats à esquerda · entregas como pills à direita
               return <div key={cl.id}
-                style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:"10px 14px 10px 16px",display:"flex",alignItems:"center",gap:14,fontFamily:DG_INTER,boxShadow:"0 1px 2px rgba(15,23,42,0.025)",transition:"all .15s",position:"relative",overflow:"hidden"}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor=clColor+"55";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.06)";}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.025)";}}>
-                {/* Faixa colorida + leve gradiente da cor do cliente no fundo */}
-                <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:clColor}}/>
-                <div style={{position:"absolute",left:4,top:0,bottom:0,width:60,background:"linear-gradient(90deg,"+clColor+"08,transparent)",pointerEvents:"none"}}/>
-                {/* Logo + nome + contadores (largura fixa) */}
-                <div style={{display:"flex",alignItems:"center",gap:10,minWidth:200,maxWidth:200,flexShrink:0,position:"relative",zIndex:1}}>
-                  <div style={{width:36,height:36,borderRadius:8,background:"#fff",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:3,boxShadow:"0 1px 2px rgba(15,23,42,0.06)"}}>
-                    <ClientLogo clientId={cl.id} size="sm"/>
-                  </div>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.2}}>{cl.name}</div>
-                    <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,flexWrap:"wrap"}}>
-                      {itensCl.length>0
-                        ? <span style={{display:"inline-flex",alignItems:"center",gap:3,color:clColor,fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.1,background:clColor+"12",borderRadius:5,padding:"1px 6px"}}>
-                            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                            {okCl}/{itensCl.length}
-                          </span>
-                        : <span style={{color:"#cbd5e1",fontSize:10,fontWeight:600,fontStyle:"italic"}}>nada planejado</span>}
-                      {lateCl>0&&<span style={{background:"#fee2e2",color:"#dc2626",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.3}}>{lateCl} atr.</span>}
-                      {portalAbertas.length>0&&<span style={{background:"#fef3c7",color:"#a16207",borderRadius:5,padding:"1px 6px",fontSize:9.5,fontWeight:800,letterSpacing:.3}}>{portalAbertas.length} pedido{portalAbertas.length>1?"s":""}</span>}
+                style={{background:"#fff",border:"1.5px solid "+clColor+"22",borderRadius:16,overflow:"hidden",display:"flex",flexDirection:"column",fontFamily:DG_INTER,boxShadow:"0 2px 8px rgba(15,23,42,0.04)",transition:"all .2s"}}
+                onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.10)";e.currentTarget.style.borderColor=clColor+"66";}}
+                onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 2px 8px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor=clColor+"22";}}>
+                {/* Header com gradiente da cor do cliente */}
+                <div style={{background:"linear-gradient(135deg,"+clColor+"14,"+clColor+"05 70%,#fff)",padding:"16px 18px 14px",borderBottom:"1px solid "+clColor+"15",position:"relative"}}>
+                  <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:clColor}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:12,marginLeft:6}}>
+                    <div style={{width:48,height:48,borderRadius:11,background:"#fff",border:"1px solid "+clColor+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden",padding:4,boxShadow:"0 2px 6px "+clColor+"22"}}>
+                      <ClientLogo clientId={cl.id} size="md"/>
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{color:"#0f172a",fontSize:16,fontWeight:800,letterSpacing:-.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.2}}>{cl.name}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:6,flexWrap:"wrap"}}>
+                        {itensCl.length>0 && <span style={{display:"inline-flex",alignItems:"center",gap:4,color:clColor,fontSize:11,fontWeight:800,fontFeatureSettings:"'tnum'",background:clColor+"15",borderRadius:6,padding:"2px 8px"}}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                          {okCl}/{itensCl.length} entrega{itensCl.length>1?"s":""}
+                        </span>}
+                        {lateCl>0 && <span style={{background:"#fee2e2",color:"#dc2626",borderRadius:6,padding:"2px 8px",fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{lateCl} atrasada{lateCl>1?"s":""}</span>}
+                        {portalAbertas.length>0 && <span style={{background:"#fef3c7",color:"#a16207",borderRadius:6,padding:"2px 8px",fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:3}}>
+                          <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                          {portalAbertas.length} pedido{portalAbertas.length>1?"s":""}
+                        </span>}
+                      </div>
                     </div>
                   </div>
+                  {/* Progress bar quando tem item */}
+                  {itensCl.length>0 && <div style={{marginTop:12,height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:pctCl+"%",background:pctCl===100?"linear-gradient(90deg,#16a34a,#22c55e)":"linear-gradient(90deg,"+clColor+","+clColor+"dd)",borderRadius:99,transition:"width .4s"}}/>
+                  </div>}
                 </div>
-                {/* Entregas como pills horizontais (não editáveis — edição via Demandas internas) */}
-                <div style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",position:"relative",zIndex:1}}>
-                  {itensCl.slice(0,4).map(it=>{
+
+                {/* Body: lista vertical de entregas como mini-cards */}
+                <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:6,flex:1}}>
+                  {itensCl.length===0 && portalAbertas.length===0 && <div style={{color:"#cbd5e1",fontSize:12,fontStyle:"italic",fontWeight:500,textAlign:"center",padding:"14px 4px"}}>nada planejado pra essa semana</div>}
+                  {itensCl.map(it=>{
                     const _tcfg = DG_SPRINT_TIPOS.find(x=>x.id===(_dgNormalizarTipo?_dgNormalizarTipo(it.tipo):it.tipo)) || DG_SPRINT_TIPOS[0];
                     const _scfg = DG_SPRINT_STATUS.find(x=>x.id===it.status) || DG_SPRINT_STATUS[0];
                     const _isOk = it.status==="concluido";
                     const _isLate = !_isOk && it.deadline && _dgDays(it.deadline)<0;
-                    // Pill SEM clique de edição. Hover mostra X pra excluir entregas órfãs/zumbis.
-                    // Edição normal é via mini-kanban "Demandas internas" abaixo.
-                    // Entregas sincronizadas de demanda interna (_fromInterna) NÃO mostram X — só zumbis manuais.
                     const _canDelete = !it._fromInterna;
-                    return <span key={it.id}
-                      title={it.title+" · "+_scfg.label}
-                      style={{background:_isOk?"#dcfce7":_isLate?"#fee2e2":"#f8fafc",border:"1px solid "+(_isOk?"#86efac":_isLate?"#fecaca":"#e2e8f0"),borderRadius:8,padding:"4px 9px",display:"inline-flex",alignItems:"center",gap:5,maxWidth:170,minWidth:0,fontFamily:"inherit",position:"relative"}}
-                      onMouseEnter={_canDelete?function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="1";}:null}
-                      onMouseLeave={_canDelete?function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="0";}:null}>
-                      <Ico n={_tcfg.icon} size={10} color={_tcfg.color}/>
-                      <span style={{color:_isOk?"#166534":"#0f172a",fontSize:11,fontWeight:700,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:_isOk?"line-through":"none"}}>{it.title}</span>
-                      {_isLate && <span style={{color:"#dc2626",fontSize:10,fontWeight:800}}>!</span>}
+                    return <div key={it.id}
+                      style={{background:_isOk?"#f0fdf4":_isLate?"#fef2f2":"#fafbfc",border:"1px solid "+(_isOk?"#bbf7d0":_isLate?"#fecaca":"#eef0f3"),borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:9,transition:"all .12s",position:"relative"}}
+                      onMouseEnter={_canDelete?function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="1";e.currentTarget.style.borderColor=_tcfg.color+"66";}:function(e){e.currentTarget.style.borderColor=_tcfg.color+"66";}}
+                      onMouseLeave={_canDelete?function(e){const _x=e.currentTarget.querySelector("[data-pill-x]");if(_x)_x.style.opacity="0";e.currentTarget.style.borderColor=_isOk?"#bbf7d0":_isLate?"#fecaca":"#eef0f3";}:function(e){e.currentTarget.style.borderColor=_isOk?"#bbf7d0":_isLate?"#fecaca":"#eef0f3";}}>
+                      {/* Ícone do tipo */}
+                      <div style={{width:28,height:28,borderRadius:7,background:_tcfg.color+"18",color:_tcfg.color,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <Ico n={_tcfg.icon} size={13} color={_tcfg.color}/>
+                      </div>
+                      {/* Título + tipo */}
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:_isOk?"#166534":"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:_isOk?"line-through":"none",lineHeight:1.3}}>{it.title}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:2}}>
+                          <span style={{color:_tcfg.color,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{_tcfg.label}</span>
+                          <span style={{color:"#cbd5e1",fontSize:9}}>·</span>
+                          <span style={{color:_scfg.color,fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{_scfg.label}</span>
+                          {_isLate && <><span style={{color:"#cbd5e1",fontSize:9}}>·</span><span style={{color:"#dc2626",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>atrasada</span></>}
+                        </div>
+                      </div>
+                      {/* Botão excluir (zumbi órfão) */}
                       {_canDelete && <button data-pill-x
                         onClick={async function(e){
                           e.stopPropagation();
@@ -52292,23 +52478,29 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                           planRemove(it.id);
                         }}
                         title="Excluir entrega"
-                        style={{opacity:0,transition:"opacity .12s",background:"#fff",border:"1px solid #fecaca",borderRadius:5,width:16,height:16,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#dc2626",padding:0,marginLeft:1}}>
-                        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        style={{opacity:0,transition:"opacity .12s",background:"#fff",border:"1px solid #fecaca",borderRadius:6,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#dc2626",padding:0,flexShrink:0}}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                       </button>}
-                    </span>;
+                    </div>;
                   })}
-                  {itensCl.length>4 && <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700}}>+{itensCl.length-4}</span>}
-                  {/* Pedidos do portal compactos com botão Puxar */}
-                  {portalAbertas.slice(0,2).map(t=>(
-                    <button key={"p-"+t.id}
-                      onClick={()=>_puxarPraSprint(t,cl)}
-                      title={"Puxar do portal: "+t.title}
-                      style={{background:"#fffbeb",border:"1px dashed #fde68a",borderRadius:8,padding:"4px 9px",display:"inline-flex",alignItems:"center",gap:5,cursor:"pointer",maxWidth:170,minWidth:0,fontFamily:"inherit",color:"#a16207",fontSize:11,fontWeight:700}}
-                      onMouseEnter={e=>{e.currentTarget.style.background="#fef3c7";}}
-                      onMouseLeave={e=>{e.currentTarget.style.background="#fffbeb";}}>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{t.title}</span>
-                    </button>
+                  {/* Pedidos do portal (chamativos amarelos com botão Puxar) */}
+                  {portalAbertas.length>0 && itensCl.length>0 && <div style={{height:1,background:"#f1f5f9",margin:"4px 0"}}/>}
+                  {portalAbertas.map(t=>(
+                    <div key={"p-"+t.id} style={{background:"#fffbeb",border:"1px dashed #fde68a",borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:9}}>
+                      <div style={{width:28,height:28,borderRadius:7,background:"#fef3c7",color:"#a16207",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{color:"#0f172a",fontSize:12,fontWeight:700,letterSpacing:-.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.3}}>{t.title}</div>
+                        <div style={{color:"#a16207",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginTop:2}}>Pedido do cliente</div>
+                      </div>
+                      <button onClick={()=>_puxarPraSprint(t,cl)} title="Puxar pra esse sprint"
+                        style={{background:"#a16207",color:"#fff",border:"none",borderRadius:7,padding:"5px 9px",fontSize:10.5,fontWeight:800,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:.3,whiteSpace:"nowrap",display:"inline-flex",alignItems:"center",gap:3,flexShrink:0,transition:"all .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 10px rgba(161,98,7,0.3)";}}
+                        onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="none";}}>
+                        + Puxar
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>;
@@ -52672,28 +52864,45 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
             </span>
           </div>
         </div>
-        {/* Lista de dias */}
+        {/* Grid horizontal de cards — 1 card por dia (lado a lado) */}
         {_dates.length===0
           ? <div style={{background:"#fafbfc",border:"1.5px dashed #e2e8f0",borderRadius:12,padding:"28px 14px",textAlign:"center",color:"#94a3b8",fontSize:12.5,fontWeight:500}}>Sem rituais previstos nos próximos 7 dias.</div>
-          : <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          : <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat("+Math.min(_dates.length,5)+",1fr)",gap:10}}>
               {_dates.map(function(iso){
                 const _rits=_byDate[iso];
                 const _isToday=iso===_isoToday;
                 const _d=new Date(iso+"T12:00");
-                const _dow=["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"][_d.getDay()];
+                const _dow=["DOM","SEG","TER","QUA","QUI","SEX","SÁB"][_d.getDay()];
                 const _diaNum=String(_d.getDate()).padStart(2,"0");
                 const _ritsDone=_rits.filter(function(r){return isRitualDone(r.key);}).length;
                 const _allDone=_ritsDone===_rits.length&&_rits.length>0;
-                return <div key={iso} style={{background:_isToday?"linear-gradient(135deg,#eff6ff,#f5f3ff)":"#fff",border:"1px solid "+(_isToday?"#bfdbfe":"#eef0f3"),borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:14,transition:"all .15s",boxShadow:_isToday?"0 2px 8px rgba(59,130,246,0.08)":"none"}}>
-                  {/* Avatar do dia */}
-                  <div style={{width:48,height:48,borderRadius:10,background:_isToday?"linear-gradient(135deg,#3b82f6,#7c3aed)":"#fafbfc",border:_isToday?"none":"1px solid #eef0f3",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0,color:_isToday?"#fff":"#475569"}}>
-                    <span style={{fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",opacity:_isToday?.9:.65}}>{_dow}</span>
-                    <span style={{fontSize:17,fontWeight:800,fontFeatureSettings:"'tnum'",letterSpacing:-.5,lineHeight:1}}>{_diaNum}</span>
+                // Card vertical compacto: dia em cima · pills empilhados embaixo
+                return <div key={iso} style={{
+                  background:_isToday?"linear-gradient(180deg,#eff6ff,#f5f3ff)":"#fff",
+                  border:"1.5px solid "+(_isToday?"#7c3aed55":_allDone?"#bbf7d0":"#eef0f3"),
+                  borderRadius:12,padding:"12px 12px 10px",display:"flex",flexDirection:"column",gap:9,
+                  position:"relative",overflow:"hidden",transition:"all .15s",
+                  boxShadow:_isToday?"0 3px 10px rgba(124,58,237,0.10)":"0 1px 2px rgba(15,23,42,0.025)"
+                }}>
+                  {/* Faixa colorida superior pra HOJE/concluído */}
+                  {_isToday && <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,#3b82f6,#7c3aed)"}}/>}
+                  {_allDone && !_isToday && <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"#16a34a"}}/>}
+
+                  {/* Cabeçalho do dia */}
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                    <div style={{display:"flex",flexDirection:"column",lineHeight:1}}>
+                      <span style={{fontSize:9.5,fontWeight:800,letterSpacing:.8,color:_isToday?"#7c3aed":"#94a3b8",textTransform:"uppercase"}}>{_dow}</span>
+                      <span style={{fontSize:22,fontWeight:800,letterSpacing:-.8,color:_isToday?"#0f172a":"#0f172a",fontFeatureSettings:"'tnum'",marginTop:2}}>{_diaNum}</span>
+                    </div>
+                    {_isToday && <span style={{background:"linear-gradient(135deg,#3b82f6,#7c3aed)",color:"#fff",fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.6,whiteSpace:"nowrap",boxShadow:"0 2px 6px rgba(124,58,237,0.3)"}}>HOJE</span>}
+                    {!_isToday && _rits.length>0 && <div style={{display:"inline-flex",alignItems:"center",gap:3,color:_allDone?"#16a34a":"#94a3b8",fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'",background:_allDone?"#dcfce7":"#f1f5f9",borderRadius:99,padding:"2px 8px"}}>
+                      {_allDone && <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                      {_ritsDone}/{_rits.length}
+                    </div>}
                   </div>
-                  {/* Hoje pill */}
-                  {_isToday&&<span style={{background:"#3b82f6",color:"#fff",fontSize:9,fontWeight:800,padding:"3px 8px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
-                  {/* Chips de rituais */}
-                  <div style={{flex:1,display:"flex",flexWrap:"wrap",gap:6,minWidth:0}}>
+
+                  {/* Pills empilhados verticalmente — ocupam toda largura do card */}
+                  <div style={{display:"flex",flexDirection:"column",gap:5}}>
                     {_rits.map(function(r){
                       const done=isRitualDone(r.key);
                       const cfg=_ritCfg[r.type]||_ritCfg.daily;
@@ -52702,22 +52911,17 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
                           if(typeof toggleRitualDone==="function")toggleRitualDone(r.key,uName,"");
                         }}
                         title={r.label+(done?" — feito · clique pra desmarcar":" — clique pra marcar como feito")}
-                        style={{background:done?"#fff":cfg.color+"0d",color:done?"#94a3b8":cfg.color,border:"1px solid "+(done?"#e2e8f0":cfg.color+"44"),borderRadius:9,padding:"7px 11px 7px 9px",fontSize:11.5,fontWeight:done?500:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:6,fontFamily:DG_INTER,letterSpacing:-.1,lineHeight:1.15,transition:"all .15s cubic-bezier(.4,0,.2,1)",textDecoration:done?"line-through":"none",opacity:done?.7:1,position:"relative"}}
-                        onMouseEnter={function(e){if(!done){e.currentTarget.style.background=cfg.color;e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor=cfg.color;e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 4px 10px "+cfg.color+"44";}}}
-                        onMouseLeave={function(e){if(!done){e.currentTarget.style.background=cfg.color+"0d";e.currentTarget.style.color=cfg.color;e.currentTarget.style.borderColor=cfg.color+"44";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="none";}}}>
+                        style={{background:done?"#f8fafc":cfg.color+"10",color:done?"#94a3b8":cfg.color,border:"1px solid "+(done?"#e2e8f0":cfg.color+"33"),borderRadius:8,padding:"6px 9px",fontSize:11.5,fontWeight:done?600:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6,fontFamily:DG_INTER,letterSpacing:-.1,lineHeight:1.15,transition:"all .12s",textDecoration:done?"line-through":"none",opacity:done?.7:1,width:"100%",textAlign:"left"}}
+                        onMouseEnter={function(e){if(!done){e.currentTarget.style.background=cfg.color;e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor=cfg.color;e.currentTarget.style.boxShadow="0 3px 8px "+cfg.color+"40";}}}
+                        onMouseLeave={function(e){if(!done){e.currentTarget.style.background=cfg.color+"10";e.currentTarget.style.color=cfg.color;e.currentTarget.style.borderColor=cfg.color+"33";e.currentTarget.style.boxShadow="none";}}}>
                         {done
                           ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>
-                          : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:.85}}>{cfg.icon}</span>
+                          : <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,opacity:.95}}>{cfg.icon}</span>
                         }
-                        <span>{r.label}</span>
+                        <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</span>
                       </button>;
                     })}
                   </div>
-                  {/* Mini-indicador de progresso do dia */}
-                  {_rits.length>1&&<div style={{display:"flex",alignItems:"center",gap:5,flexShrink:0,color:_allDone?"#16a34a":"#94a3b8",fontSize:10.5,fontWeight:700,fontFeatureSettings:"'tnum'"}}>
-                    {_allDone?<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>:null}
-                    <span>{_ritsDone}/{_rits.length}</span>
-                  </div>}
                 </div>;
               })}
             </div>
