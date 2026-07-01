@@ -14693,10 +14693,22 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Collab</span>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#dc2626",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#eab308",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="10" height="10" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg"><path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#fff"/><path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#fff"/><path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#fff"/><path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#fff"/><path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#fff"/><path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#fff"/></svg>
           </span>
           <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Vídeo do Drive</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#dc2626",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
+          </span>
+          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Reprovada</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#dc2626",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="#fff" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          </span>
+          <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Pausada</span>
         </div>
       </div>
 
@@ -14978,7 +14990,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
                             {(function(){
                               const isReprovada = t.status==="reprovado";
                               const isPausada = t.status==="pausado";
-                              const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#f59e0b" : pubColor.bg);
+                              const _bg = (isReprovada||isPausada) ? "#dc2626" : (isShortFromDrive ? "#eab308" : pubColor.bg);
                               const _title = isReprovada ? "Reprovada" : (isPausada ? "Pausada" : (isShortFromDrive ? "Vídeo short (do Drive)" : (pubColor.label||t.status)));
                               return <span title={_title} style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:20,height:20,borderRadius:6,background:_bg,color:"#fff",flexShrink:0,boxShadow:"0 1px 2px rgba(0,0,0,0.20)"}}>
                                 {isReprovada
@@ -21516,6 +21528,40 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     setCardIdx(0);setImgIdx(0);
   };
 
+  // ── PAUSAR copy: manda pro status "pausado" (calendário mostra ícone vermelho pausa) ──
+  const pausarCopy=(task)=>{
+    if(!isApprover)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const now=new Date().toISOString();
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{
+      ...t,
+      status:"pausado",
+      ajustar:false,
+      colEnteredAt:now,
+      timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Pausadas",from:"demanda",to:"pausado",at:now,atFmt:nowFmt(),user:actor}]
+    }:t));
+    pushNotif({type:"demanda",icon:"⏸",title:"Copy pausada",body:'"'+task.title+'" foi enviada pra Pausadas',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Copy enviada pra Pausadas.",3500);
+    setCardIdx(0);setImgIdx(0);
+  };
+
+  // ── REPROVAR copy: manda pro status "reprovado" (calendário mostra ícone vermelho !) ──
+  const reprovarCopy=(task)=>{
+    if(!isApprover)return;
+    const actor=effectiveUser?.name||CURRENT_USER.name;
+    const now=new Date().toISOString();
+    if(setTasks)setTasks(p=>p.map(t=>t.id===task.id?{
+      ...t,
+      status:"reprovado",
+      ajustar:false,
+      colEnteredAt:now,
+      timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Reprovadas",from:"demanda",to:"reprovado",at:now,atFmt:nowFmt(),user:actor}]
+    }:t));
+    pushNotif({type:"demanda",icon:"✕",title:"Copy reprovada",body:'"'+task.title+'" foi reprovada',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Copy reprovada.",3500);
+    setCardIdx(0);setImgIdx(0);
+  };
+
   // ── Salvar comentário simples (sem mover de coluna) ──
   const addCopyComment=(task,texto)=>{
     if(!isApprover)return;
@@ -22357,6 +22403,32 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 onMouseEnter={e=>{e.currentTarget.style.background=C.or+"10";e.currentTarget.style.borderColor=C.or;}}
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor=C.or+"66";}}>
                 Solicitar ajuste
+              </button>
+              <button onClick={async()=>{
+                  if(typeof pixelsConfirm==="function"){
+                    if(!await pixelsConfirm("Enviar essa copy pra Pausadas? Ela fica em standby no calendário até você tirar do pause.",{okText:"Enviar pra Pausadas"})) return;
+                  }
+                  pausarCopy(current);
+                }}
+                title="Manda pra coluna Pausadas — o card fica em standby, aparece ícone vermelho de pause no calendário."
+                style={{width:"100%",background:"transparent",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#dc2626";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fecaca";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+                Enviar para Pausadas
+              </button>
+              <button onClick={async()=>{
+                  if(typeof pixelsConfirm==="function"){
+                    if(!await pixelsConfirm("Reprovar essa copy? Vai pra coluna Reprovadas e aparece ícone vermelho no calendário.",{okText:"Reprovar copy",danger:true})) return;
+                  }
+                  reprovarCopy(current);
+                }}
+                title="Manda pra coluna Reprovadas — copy descartada, aparece ícone vermelho de alerta no calendário."
+                style={{width:"100%",background:"transparent",color:"#dc2626",border:"1px solid #fecaca",borderRadius:10,padding:"12px 0",fontWeight:600,fontSize:13,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#dc2626";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fecaca";}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
+                Reprovar copy
               </button>
               <button onClick={()=>setEditCopy(current)}
                 style={{width:"100%",background:"#f8fafc",color:"#475569",border:"1px solid "+C.b1,borderRadius:10,padding:"10px 0",fontWeight:600,fontSize:12,cursor:"pointer",transition:"all .15s",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6}}>
