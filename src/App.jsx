@@ -37002,7 +37002,7 @@ export default function AgencyOS(){
   const _enterClientPreview = (clientUser)=>{
     if(!clientUser) return;
     // Snapshot do estado atual pra restaurar no exit
-    setClientPortalData({...clientUser, _preview:true, _previewOrigin:CURRENT_USER.id});
+    setClientPortal({...clientUser, _preview:true, _previewOrigin:CURRENT_USER.id});
     setAuthState("portal");
   };
   // ═══ PRESENCE — quem está online/ausente/offline ═══
@@ -37676,7 +37676,7 @@ export default function AgencyOS(){
           Você está vendo como <b>{clientPortalData.name||"cliente"}</b> — só preview, ações não afetam nada
         </div>
       </div>
-      <button onClick={()=>{setClientPortalData(null);setAuthState("app");}}
+      <button onClick={()=>{setClientPortal(null);setAuthState("app");}}
         style={{background:"rgba(255,255,255,0.20)",border:"1px solid rgba(255,255,255,0.35)",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s",flexShrink:0}}
         onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.30)";}}
         onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.20)";}}>
