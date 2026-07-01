@@ -48182,7 +48182,6 @@ const PORTF_STARTER_ENTREGAS = [
     cor:"#0ea5e9",
     itens:[
       "Estratégia de anúncios para atrair, engajar e vender",
-      "Criação de campanhas profissionais no Google, Instagram e Facebook",
       "Textos e criativos pensados para gerar cliques e conversões",
       "Públicos segmentados com base no seu cliente ideal",
       "Análise da concorrência para posicionar sua marca com vantagem",
@@ -48218,21 +48217,57 @@ const PORTF_STARTER_TIMELINE = [
     mes:"Mês 1",
     titulo:"Estruturação e Posicionamento",
     resumo:"Fase de diagnóstico, planejamento estratégico e construção da base de conteúdo. Preparamos tudo pra sua marca começar a comunicar com consistência.",
-    itens:["4 artes","4 vídeos","Diagnóstico completo","Planejamento estratégico","Definição de personas e público"],
+    itens:[
+      "Diagnóstico completo do posicionamento atual da marca",
+      "Definição de objetivos estratégicos e KPIs",
+      "Estruturação do plano tático de crescimento",
+      "Análise da concorrência",
+      "Estratégia de anúncios pra atrair, engajar e vender",
+      "Planejamento de calendário editorial",
+      "Criação de copywriting estratégico",
+      "Produção de 4 artes",
+      "Produção de 4 vídeos",
+      "Suporte diário via WhatsApp",
+    ],
     cor:"#7c3aed",
   },
   {
     mes:"Mês 2",
     titulo:"Início de Escala",
     resumo:"Ativação das campanhas de mídia paga e consolidação da presença nas redes. Aqui começa a captação e a comunicação vira máquina.",
-    itens:["2 artes","2 vídeos","Gestão de mídia em Meta Ads","Ajustes finos de campanhas","Otimizações semanais"],
+    itens:[
+      "Ativação das campanhas de mídia paga",
+      "Públicos segmentados com base no cliente ideal",
+      "Textos e criativos pra gerar cliques e conversões",
+      "Otimização diária para gastar menos e vender mais",
+      "Planejamento de calendário editorial",
+      "Criação de copywriting estratégico",
+      "Produção de 2 artes",
+      "Produção de 2 vídeos",
+      "Edição de vídeo",
+      "Design",
+      "Suporte diário via WhatsApp",
+    ],
     cor:"#0ea5e9",
   },
   {
     mes:"Mês 3",
     titulo:"Consolidação e Otimização",
     resumo:"Refinamento total: análise de resultados, otimização de performance e plano de continuidade pra crescimento sustentável.",
-    itens:["2 artes","2 vídeos","Gestão de mídia em Meta Ads","Análise de resultados","Plano de continuidade e escala"],
+    itens:[
+      "Otimização contínua das campanhas",
+      "Relatórios claros: resultado no caixa",
+      "Relatório mensal completo de performance",
+      "Reunião mensal de alinhamento estratégico",
+      "Planejamento de calendário editorial",
+      "Criação de copywriting estratégico",
+      "Produção de 2 artes",
+      "Produção de 2 vídeos",
+      "Edição de vídeo",
+      "Design",
+      "Plano de continuidade e escala",
+      "Suporte diário via WhatsApp",
+    ],
     cor:"#16a34a",
   },
 ];
@@ -48714,7 +48749,6 @@ function PagePortfolio(props){
                     letterSpacing:.5,textTransform:"uppercase",
                     fontFamily:_PORTF_FF,
                   }}>{t.mes}</div>
-                  {!isMob && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:8,fontFamily:_PORTF_FF}}>{t.itens.length} entregas</div>}
                 </div>
               </div>
 
