@@ -31680,18 +31680,30 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 function ContatosView({clientId, bioterUnit}){
   // Aba dedicada a Contatos no CardModal — puxa só os contatos do Playbook (do cliente + unidade).
   // Sincronizada com Estratégia > Playbooks > [área] > Contatos (que pode ser por unidade Bioter).
+  // Fonte: mesma que OrientacoesView — cache localStorage "pixels-playbooks-v1" (populado pelo 27_playbooks.jsx).
   const [playbookData,setPlaybookData]=useState(null);
   const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(c=>c.id===clientId);
   useEffect(()=>{
     if(!clientId)return;
-    const sb=window._sb;
-    if(!sb||!sb.from)return;
-    sb.from("clients").select("orientacoes").eq("client_id",clientId).single()
-      .then(({data:row})=>{
-        const o=row?.orientacoes;
-        if(o&&typeof o==="object")setPlaybookData(o);
-        else setPlaybookData({});
-      }).catch(()=>setPlaybookData({}));
+    function _readPlaybook(){
+      try{
+        const raw = localStorage.getItem("pixels-playbooks-v1");
+        if(!raw) return null;
+        const obj = JSON.parse(raw);
+        return (obj && obj[clientId]) || null;
+      }catch(_){ return null; }
+    }
+    setPlaybookData(_readPlaybook() || {});
+    function _onStorage(e){if(!e||e.key==="pixels-playbooks-v1")setPlaybookData(_readPlaybook() || {});}
+    function _onCustom(){setPlaybookData(_readPlaybook() || {});}
+    window.addEventListener("storage", _onStorage);
+    window.addEventListener("pixels:playbook-updated", _onCustom);
+    const _tid = setInterval(_onCustom, 4000);
+    return function(){
+      window.removeEventListener("storage", _onStorage);
+      window.removeEventListener("pixels:playbook-updated", _onCustom);
+      clearInterval(_tid);
+    };
   },[clientId]);
 
   // Resolve a unidade Bioter (label legível)
