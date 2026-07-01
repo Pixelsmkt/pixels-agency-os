@@ -48427,6 +48427,27 @@ const PORTF_IA = [
 /* ─── HELPERS ─────────────────────────────────────────────── */
 const _PORTF_FF = "'Inter',system-ui,-apple-system,sans-serif";
 
+// Painel de entregáveis do módulo selecionado na calculadora — dark theme
+function _CalcEntregas({cor, titulo, itens}){
+  if(!itens || itens.length===0) return null;
+  return <div style={{marginTop:14,background:"linear-gradient(135deg,rgba(159,67,246,0.10),rgba(30,41,59,0.35))",border:"1px solid rgba(159,67,246,0.25)",borderRadius:12,padding:"14px 16px",fontFamily:_PORTF_FF}}>
+    <div style={{display:"inline-flex",alignItems:"center",gap:7,color:cor||"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:10,fontFamily:_PORTF_FF}}>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      {titulo||"O que está incluso"}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:7,fontFamily:_PORTF_FF}}>
+      {itens.map(function(it,i){
+        return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,color:"#e2e8f0",fontSize:12,lineHeight:1.45,fontFamily:_PORTF_FF}}>
+          <div style={{width:16,height:16,borderRadius:5,background:(cor||"#c4b5fd")+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+            <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={cor||"#c4b5fd"} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <span style={{color:"#cbd5e1",fontFamily:_PORTF_FF}}>{it}</span>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
 function _portfCopiar(texto){
   try{
     navigator.clipboard.writeText(texto);
@@ -48608,25 +48629,52 @@ function PagePortfolio(props){
   const [calcRedes,setCalcRedes]=useState(null);
   const [calcTrafego,setCalcTrafego]=useState(null);
   const [calcExtras,setCalcExtras]=useState({});
+  // ── Entregáveis vindos do Starter 90 dias "O que está incluso" ──
+  const _ENTR_REDES=[
+    "Planejamento de calendário editorial",
+    "Edição de vídeo",
+    "Design",
+    "Criação de copywriting estratégico",
+  ];
+  const _ENTR_MIDIA=[
+    "Estratégia de anúncios para atrair, engajar e vender",
+    "Textos e criativos pensados para gerar cliques e conversões",
+    "Públicos segmentados com base no seu cliente ideal",
+    "Análise da concorrência para posicionar sua marca com vantagem",
+    "Otimização diária para gastar menos e vender mais",
+    "Relatórios claros com o que importa: resultado no caixa",
+  ];
+  const _ENTR_DIAGNOSTICO=[
+    "Diagnóstico completo do posicionamento atual da marca",
+    "Definição de objetivos estratégicos e indicadores de performance (KPIs)",
+    "Estruturação de plano tático com foco em crescimento previsível",
+  ];
+  const _ENTR_SUPORTE=[
+    "Suporte diário via WhatsApp",
+    "Relatórios mensais completos",
+    "Reunião mensal de alinhamento estratégico",
+  ];
+
   const _CALC_REDES=[
-    {id:"2pw", label:"2 posts/semana", desc:"8 por mês", valor:3000},
-    {id:"3pw", label:"3 posts/semana", desc:"12 por mês", valor:4000},
-    {id:"4pw", label:"4 posts/semana", desc:"16 por mês", valor:5000},
+    {id:"2pw", label:"2 posts/semana", desc:"8 por mês", valor:3000, entregas:_ENTR_REDES},
+    {id:"3pw", label:"3 posts/semana", desc:"12 por mês", valor:4000, entregas:_ENTR_REDES},
+    {id:"4pw", label:"4 posts/semana", desc:"16 por mês", valor:5000, entregas:_ENTR_REDES},
   ];
   const _CALC_TRAFEGO=[
-    {id:"none", label:"Sem tráfego pago", desc:"Apenas orgânico", valor:0},
-    {id:"meta", label:"Meta Ads", desc:"Facebook + Instagram", valor:2000},
-    {id:"google", label:"Google Ads", desc:"Search + Display", valor:2000},
-    {id:"ambos", label:"Meta + Google", desc:"Pacote combinado", valor:3000, combo:true},
+    {id:"none", label:"Sem tráfego pago", desc:"Apenas orgânico", valor:0, entregas:[]},
+    {id:"meta", label:"Meta Ads", desc:"Facebook + Instagram", valor:2000, entregas:_ENTR_MIDIA},
+    {id:"google", label:"Google Ads", desc:"Search + Display", valor:2000, entregas:_ENTR_MIDIA},
+    {id:"ambos", label:"Meta + Google", desc:"Pacote combinado", valor:3000, combo:true, entregas:_ENTR_MIDIA},
   ];
   const _CALC_EXTRAS=[
-    {id:"lp",       label:"Landing Page",                  valor:1500, fixo:true},
-    {id:"gmb",      label:"Google Perfil de Empresa",      valor:1000, fixo:true},
-    {id:"id",       label:"Logo e Identidade Visual",      valor:2000, fixo:true},
-    {id:"starter",  label:"Starter 90 dias",               valor:9000, fixo:true},
-    {id:"siteIA",   label:"Sites / Landing Pages com IA",  valor:2500, fixo:false},
-    {id:"chatbot",  label:"Chatbot / Automações com IA",   valor:2500, fixo:false},
-    {id:"sistemas", label:"Sistemas personalizados",       valor:7000, fixo:false},
+    {id:"lp",       label:"Landing Page",                  valor:1500, fixo:true,  entregas:[]},
+    {id:"gmb",      label:"Google Perfil de Empresa",      valor:1000, fixo:true,  entregas:[]},
+    {id:"id",       label:"Logo e Identidade Visual",      valor:2000, fixo:true,  entregas:[]},
+    {id:"starter",  label:"Starter 90 dias",               valor:9000, fixo:true,
+      entregas:[..._ENTR_DIAGNOSTICO, ..._ENTR_MIDIA, ..._ENTR_REDES, ..._ENTR_SUPORTE]},
+    {id:"siteIA",   label:"Sites / Landing Pages com IA",  valor:2500, fixo:false, entregas:[]},
+    {id:"chatbot",  label:"Chatbot / Automações com IA",   valor:2500, fixo:false, entregas:[]},
+    {id:"sistemas", label:"Sistemas personalizados",       valor:7000, fixo:false, entregas:[]},
   ];
   const _calcRedesObj=_CALC_REDES.find(function(r){return r.id===calcRedes;});
   const _calcTrafObj=_CALC_TRAFEGO.find(function(t){return t.id===calcTrafego;});
@@ -48964,6 +49012,8 @@ function PagePortfolio(props){
                 </button>;
               })}
             </div>
+            {/* Entregáveis do módulo Redes sociais */}
+            {_calcRedesObj && _calcRedesObj.entregas && _calcRedesObj.entregas.length>0 && <_CalcEntregas cor="#c4b5fd" titulo={"O que está incluso em "+_calcRedesObj.label} itens={_calcRedesObj.entregas}/>}
           </div>
 
           {/* MÓDULO 2: Tráfego Pago */}
@@ -48990,6 +49040,8 @@ function PagePortfolio(props){
                 </button>;
               })}
             </div>
+            {/* Entregáveis do módulo Tráfego Pago */}
+            {_calcTrafObj && _calcTrafObj.entregas && _calcTrafObj.entregas.length>0 && <_CalcEntregas cor="#c4b5fd" titulo={"O que está incluso em "+_calcTrafObj.label} itens={_calcTrafObj.entregas}/>}
           </div>
 
           {/* MÓDULO 3: Projetos extras */}
@@ -49016,6 +49068,12 @@ function PagePortfolio(props){
                 </button>;
               })}
             </div>
+            {/* Entregáveis dos projetos pontuais selecionados */}
+            {_calcExtrasSel.length>0 && <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:10}}>
+              {_calcExtrasSel.map(function(ex){
+                return <_CalcEntregas key={ex.id} cor="#c4b5fd" titulo={"O que está incluso em "+ex.label} itens={ex.entregas||[]}/>;
+              })}
+            </div>}
           </div>
         </div>
 
