@@ -52744,15 +52744,15 @@ function _DGKpisSection({allTasks}){
 const _DG_RS_DAYS=[{id:"seg",label:"Segunda"},{id:"ter",label:"Terça"},{id:"qua",label:"Quarta"},{id:"qui",label:"Quinta"},{id:"sex",label:"Sexta"}];
 function _DGRotinaSemanal({user, isSocio}){
   const [viewUserId,setViewUserId]=useState(user.id);
-  const [items,setItems]=useState([]); // rows do supabase
+  const [items,setItems]=useState([]);
   const [loading,setLoading]=useState(true);
-  const [adding,setAdding]=useState(null); // {day:"seg"} pra mostrar input inline
-  const [draft,setDraft]=useState("");
-  const [editing,setEditing]=useState(null); // {id, title}
+  const [adding,setAdding]=useState(null); // {day:"seg"}
+  const [draft,setDraft]=useState({hora:"", title:""});
+  const [editing,setEditing]=useState(null); // {id, hora, title}
 
   function reload(){
     if(typeof window==="undefined"||!window._sb){setLoading(false);return;}
-    window._sb.from("rotina_semanal").select("*").eq("user_id",viewUserId).order("position",{ascending:true}).then(function(r){
+    window._sb.from("rotina_semanal").select("*").eq("user_id",viewUserId).then(function(r){
       if(r&&r.data)setItems(r.data);
       setLoading(false);
     }).catch(function(e){console.warn("[rotina_semanal]",e);setLoading(false);});
@@ -52769,112 +52769,225 @@ function _DGRotinaSemanal({user, isSocio}){
     return function(){if(ch){try{window._sb.removeChannel(ch);}catch(_){}}}
   },[viewUserId]);
 
+  // Sort por hora (nulls last)
+  function sortByHora(a,b){
+    const ha=(a.hora||"99:99"), hb=(b.hora||"99:99");
+    if(ha!==hb) return ha.localeCompare(hb);
+    return (a.position||0)-(b.position||0);
+  }
+
+  // Cor sutil por período do dia — inspirado Asana
+  function accentFor(hora){
+    if(!hora) return {bg:"#f8fafc", bar:"#cbd5e1", txt:"#64748b"};
+    const h=parseInt(hora.split(":")[0],10);
+    if(h<12) return {bg:"#fef9c3", bar:"#eab308", txt:"#a16207"};  // manhã — amarelo
+    if(h<18) return {bg:"#dbeafe", bar:"#3b82f6", txt:"#1d4ed8"};  // tarde — azul
+    return    {bg:"#f5f3ff", bar:"#8b5cf6", txt:"#6d28d9"};        // noite — roxo
+  }
+
   function add(day){
-    const title=(draft||"").trim();
-    if(!title){setAdding(null);return;}
+    const title=(draft.title||"").trim();
+    const hora=(draft.hora||"").trim();
+    if(!title){setAdding(null);setDraft({hora:"",title:""});return;}
     const payload={
       user_id:viewUserId,
       day_of_week:day,
       title:title,
+      hora:hora||null,
       position:items.filter(function(x){return x.day_of_week===day;}).length,
       created_by:user.name||user.id,
     };
     window._sb.from("rotina_semanal").insert(payload).then(function(r){
       if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
-      setDraft("");setAdding(null);reload();
+      setDraft({hora:"",title:""});setAdding(null);reload();
     });
   }
   function del(id){
-    if(!window.confirm("Apagar este item da rotina?"))return;
-    window._sb.from("rotina_semanal").delete().eq("id",id).then(function(){reload();});
+    if(typeof pixelsConfirm==="function"){
+      pixelsConfirm("Apagar este bloco?",{okText:"Apagar",danger:true}).then(function(ok){
+        if(!ok) return;
+        window._sb.from("rotina_semanal").delete().eq("id",id).then(function(){reload();});
+      });
+    } else {
+      window._sb.from("rotina_semanal").delete().eq("id",id).then(function(){reload();});
+    }
   }
   function saveEdit(){
     if(!editing||!editing.id)return;
     const t=(editing.title||"").trim();
     if(!t){setEditing(null);return;}
-    window._sb.from("rotina_semanal").update({title:t,updated_at:new Date().toISOString()}).eq("id",editing.id).then(function(){
+    const patch={title:t, hora:(editing.hora||"").trim()||null, updated_at:new Date().toISOString()};
+    window._sb.from("rotina_semanal").update(patch).eq("id",editing.id).then(function(){
       setEditing(null);reload();
     });
   }
 
   const SOCIOS_AVAIL = (typeof TEAM!=="undefined") ? TEAM.filter(function(t){return t.id!=="ocsana_legacy";}) : [];
   const PURPLE="#7c3aed";
+  const DAY_KEYS={seg:0,ter:1,qua:2,qui:3,sex:4};
+  const _today=new Date().getDay();
+  const _todayIdx = _today===0?4:_today-1; // 0=seg..4=sex; domingo cai em sexta
 
-  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+  return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",fontFamily:DG_INTER}}>
     {/* Header */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:14,flexWrap:"wrap"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:18,flexWrap:"wrap"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
-        <div style={{width:34,height:34,borderRadius:10,background:PURPLE+"14",display:"flex",alignItems:"center",justifyContent:"center",color:PURPLE,flexShrink:0}}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,"+PURPLE+",#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0,boxShadow:"0 4px 12px rgba(124,58,237,0.30)"}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
         <div>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Rotina semanal</div>
-          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Itens fixos por dia — sem prazo, sem responsável</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.4,lineHeight:1.15}}>Rotina semanal</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Blocos de hora — organize sua agenda padrão da semana</div>
         </div>
       </div>
       {isSocio && SOCIOS_AVAIL.length>0 && <div style={{display:"flex",alignItems:"center",gap:8}}>
-        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.2}}>Vendo:</span>
+        <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>Vendo</span>
         <select value={viewUserId} onChange={function(e){setViewUserId(e.target.value);}}
-          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"6px 10px",fontSize:12,fontWeight:600,color:"#0f172a",cursor:"pointer",fontFamily:DG_INTER,outline:"none"}}>
+          style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 12px",fontSize:12,fontWeight:600,color:"#0f172a",cursor:"pointer",fontFamily:DG_INTER,outline:"none"}}>
           {SOCIOS_AVAIL.map(function(t){return <option key={t.id} value={t.id}>{t.name}</option>;})}
         </select>
       </div>}
     </div>
-    {/* Grid de 5 dias */}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:12}}>
-      {_DG_RS_DAYS.map(function(d){
-        const dayItems=items.filter(function(x){return x.day_of_week===d.id;});
+
+    {/* Grid de 5 dias — colunas Asana-style */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",gap:14}}>
+      {_DG_RS_DAYS.map(function(d,idx){
+        const dayItems=items.filter(function(x){return x.day_of_week===d.id;}).sort(sortByHora);
         const isAdding=adding&&adding.day===d.id;
-        return <div key={d.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:12,padding:0,display:"flex",flexDirection:"column",minHeight:200,overflow:"hidden"}}>
-          {/* Header dia */}
-          <div style={{padding:"11px 13px 8px",borderBottom:"1px solid #f5f7fa"}}>
-            <div style={{color:"#0f172a",fontWeight:700,fontSize:12,letterSpacing:.4,textTransform:"uppercase"}}>{d.label}</div>
-            <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:2,letterSpacing:.2}}>{dayItems.length}{dayItems.length===1?" item":" itens"}</div>
+        const isToday=DAY_KEYS[d.id]===_todayIdx;
+        return <div key={d.id} style={{
+          background:isToday?"linear-gradient(180deg,#faf5ff,#fff 40%)":"#fafbfc",
+          border:"1px solid "+(isToday?"#c4b5fd":"#eef0f3"),
+          borderRadius:12,
+          padding:"14px 12px 10px",
+          display:"flex",flexDirection:"column",
+          minHeight:280,
+          transition:"all .15s",
+        }}>
+          {/* Header do dia */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,paddingBottom:10,borderBottom:"1px solid "+(isToday?"#e9d5ff":"#eef0f3")}}>
+            <div>
+              <div style={{color:isToday?PURPLE:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",lineHeight:1}}>{d.label}</div>
+              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:4,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{dayItems.length} bloco{dayItems.length===1?"":"s"}</div>
+            </div>
+            {isToday && <span style={{fontSize:9.5,fontWeight:800,color:"#fff",background:"linear-gradient(135deg,#8b5cf6,#7c3aed)",padding:"3px 8px",borderRadius:99,letterSpacing:.6,boxShadow:"0 3px 8px rgba(124,58,237,0.35)"}}>HOJE</span>}
           </div>
-          {/* Items */}
-          <div style={{padding:"10px 11px",flex:1,display:"flex",flexDirection:"column",gap:6}}>
+
+          {/* Blocos */}
+          <div style={{display:"flex",flexDirection:"column",gap:8,flex:1}}>
+            {dayItems.length===0 && !isAdding && <div style={{color:"#cbd5e1",fontSize:11.5,textAlign:"center",padding:"20px 8px",fontWeight:500,fontStyle:"italic"}}>Sem blocos</div>}
             {dayItems.map(function(it){
               const isEd=editing&&editing.id===it.id;
+              const ac=accentFor(it.hora);
+              if(isEd){
+                return <div key={it.id} style={{background:"#fff",border:"1.5px solid "+PURPLE,borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 4px 14px rgba(124,58,237,0.15)"}}>
+                  <input type="time" value={editing.hora||""} onChange={function(e){setEditing(Object.assign({},editing,{hora:e.target.value}));}}
+                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11,color:"#0f172a",fontFamily:DG_INTER,fontWeight:700,outline:"none",width:100,fontFeatureSettings:"'tnum'"}}/>
+                  <input value={editing.title} onChange={function(e){setEditing(Object.assign({},editing,{title:e.target.value}));}}
+                    onKeyDown={function(e){if(e.key==="Enter")saveEdit();if(e.key==="Escape")setEditing(null);}}
+                    autoFocus
+                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 10px",fontSize:12,color:"#0f172a",fontFamily:DG_INTER,fontWeight:600,outline:"none"}}/>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={saveEdit} style={{flex:1,background:PURPLE,border:"none",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700,padding:"6px 0",borderRadius:6,fontFamily:DG_INTER}}>Salvar</button>
+                    <button onClick={function(){setEditing(null);}} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:600,padding:"6px 10px",borderRadius:6,fontFamily:DG_INTER}}>Cancelar</button>
+                  </div>
+                </div>;
+              }
               return <div key={it.id}
-                style={{background:isEd?"#f5f3ff":"#fafbfc",border:"1px solid "+(isEd?"#c4b5fd":"#eef0f3"),borderRadius:8,padding:"8px 10px",display:"flex",alignItems:"center",gap:6,transition:"all .12s"}}
-                onMouseEnter={function(e){if(!isEd){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";}}}
-                onMouseLeave={function(e){if(!isEd){e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderColor="#eef0f3";}}}>
-                {isEd
-                  ? <><input value={editing.title} onChange={function(e){setEditing(Object.assign({},editing,{title:e.target.value}));}}
-                      onKeyDown={function(e){if(e.key==="Enter"){saveEdit();}if(e.key==="Escape"){setEditing(null);}}}
-                      autoFocus
-                      style={{flex:1,background:"transparent",border:"none",fontSize:12,color:"#0f172a",outline:"none",fontFamily:DG_INTER,fontWeight:600}}/>
-                    <button onClick={saveEdit} style={{background:"none",border:"none",color:PURPLE,cursor:"pointer",fontSize:11,fontWeight:700,padding:"2px 6px"}}>OK</button></>
-                  : <><span onClick={function(){setEditing({id:it.id,title:it.title});}}
-                      style={{flex:1,color:"#0f172a",fontSize:12,fontWeight:500,letterSpacing:-.1,cursor:"text",lineHeight:1.35,wordBreak:"break-word"}}>{it.title}</span>
-                    <button onClick={function(){del(it.id);}} title="Apagar" style={{background:"none",border:"none",color:"#cbd5e1",cursor:"pointer",padding:"2px",display:"flex",alignItems:"center",borderRadius:5}}
-                      onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";e.currentTarget.style.background="#fef2f2";}}
-                      onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";e.currentTarget.style.background="none";}}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-                    </button></>
-                }
+                onClick={function(){setEditing({id:it.id,title:it.title,hora:it.hora||""});}}
+                style={{
+                  background:"#fff",
+                  border:"1px solid #eef0f3",
+                  borderLeft:"3px solid "+ac.bar,
+                  borderRadius:8,
+                  padding:"10px 12px",
+                  cursor:"pointer",
+                  transition:"all .15s",
+                  position:"relative",
+                }}
+                onMouseEnter={function(e){
+                  e.currentTarget.style.background="#fff";
+                  e.currentTarget.style.borderColor=ac.bar+"55";
+                  e.currentTarget.style.borderLeftColor=ac.bar;
+                  e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,0.06)";
+                  e.currentTarget.style.transform="translateY(-1px)";
+                  const _x=e.currentTarget.querySelector("[data-rs-x]");if(_x)_x.style.opacity="1";
+                }}
+                onMouseLeave={function(e){
+                  e.currentTarget.style.background="#fff";
+                  e.currentTarget.style.borderColor="#eef0f3";
+                  e.currentTarget.style.borderLeftColor=ac.bar;
+                  e.currentTarget.style.boxShadow="none";
+                  e.currentTarget.style.transform="";
+                  const _x=e.currentTarget.querySelector("[data-rs-x]");if(_x)_x.style.opacity="0";
+                }}>
+                {/* Hora badge */}
+                {it.hora && <div style={{
+                  display:"inline-flex",alignItems:"center",gap:4,
+                  background:ac.bg,color:ac.txt,
+                  fontSize:10,fontWeight:800,letterSpacing:.4,
+                  padding:"2px 7px",borderRadius:5,
+                  fontFeatureSettings:"'tnum'",
+                  marginBottom:5,
+                }}>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  {it.hora}
+                </div>}
+                {/* Título */}
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.4,letterSpacing:-.1,wordBreak:"break-word",paddingRight:16}}>{it.title}</div>
+                {/* Botão apagar */}
+                <button data-rs-x onClick={function(e){e.stopPropagation();del(it.id);}}
+                  title="Apagar"
+                  style={{position:"absolute",top:8,right:8,opacity:0,transition:"opacity .12s",background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,display:"inline-flex"}}
+                  onMouseEnter={function(e){e.currentTarget.style.color="#dc2626";}}
+                  onMouseLeave={function(e){e.currentTarget.style.color="#cbd5e1";}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               </div>;
             })}
-            {/* Input pra adicionar */}
+
+            {/* Adicionar bloco */}
             {isAdding
-              ? <div style={{background:"#fff",border:"1.5px solid "+PURPLE+"77",borderRadius:8,padding:"7px 10px",display:"flex",alignItems:"center",gap:6}}>
-                  <input value={draft} onChange={function(e){setDraft(e.target.value);}}
-                    onKeyDown={function(e){if(e.key==="Enter"){add(d.id);}if(e.key==="Escape"){setAdding(null);setDraft("");}}}
-                    autoFocus placeholder="O que precisa rolar?"
-                    style={{flex:1,background:"transparent",border:"none",fontSize:12,color:"#0f172a",outline:"none",fontFamily:DG_INTER,fontWeight:500}}/>
-                  <button onClick={function(){add(d.id);}} style={{background:PURPLE,border:"none",color:"#fff",cursor:"pointer",fontSize:10.5,fontWeight:700,padding:"4px 9px",borderRadius:5,fontFamily:DG_INTER}}>Add</button>
+              ? <div style={{background:"#fff",border:"1.5px solid "+PURPLE,borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7,boxShadow:"0 4px 14px rgba(124,58,237,0.15)"}}>
+                  <input type="time" value={draft.hora} onChange={function(e){setDraft(Object.assign({},draft,{hora:e.target.value}));}}
+                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11,color:"#0f172a",fontFamily:DG_INTER,fontWeight:700,outline:"none",width:100,fontFeatureSettings:"'tnum'"}}/>
+                  <input value={draft.title} onChange={function(e){setDraft(Object.assign({},draft,{title:e.target.value}));}}
+                    onKeyDown={function(e){if(e.key==="Enter")add(d.id);if(e.key==="Escape"){setAdding(null);setDraft({hora:"",title:""});}}}
+                    autoFocus placeholder="Ex: Revisar clientes críticos"
+                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px",fontSize:12,color:"#0f172a",fontFamily:DG_INTER,fontWeight:600,outline:"none"}}/>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={function(){add(d.id);}} style={{flex:1,background:PURPLE,border:"none",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700,padding:"6px 0",borderRadius:6,fontFamily:DG_INTER}}>Adicionar</button>
+                    <button onClick={function(){setAdding(null);setDraft({hora:"",title:""});}} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:600,padding:"6px 10px",borderRadius:6,fontFamily:DG_INTER}}>Cancelar</button>
+                  </div>
                 </div>
-              : <button onClick={function(){setAdding({day:d.id});setDraft("");}}
-                  style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
-                  onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color=PURPLE;}}
-                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
-                  Adicionar
+              : <button onClick={function(){setAdding({day:d.id});setDraft({hora:"",title:""});}}
+                  style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #cbd5e1",borderRadius:8,padding:"8px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
+                  onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor=PURPLE;e.currentTarget.style.color=PURPLE;}}
+                  onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#94a3b8";}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                  Adicionar bloco
                 </button>
             }
           </div>
         </div>;
       })}
+    </div>
+
+    {/* Legenda dos períodos */}
+    <div style={{display:"flex",alignItems:"center",gap:14,marginTop:14,paddingTop:12,borderTop:"1px solid #f5f7fa",flexWrap:"wrap"}}>
+      <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase"}}>Períodos</span>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <div style={{width:8,height:8,borderRadius:2,background:"#eab308"}}/>
+        <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>Manhã</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <div style={{width:8,height:8,borderRadius:2,background:"#3b82f6"}}/>
+        <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>Tarde</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <div style={{width:8,height:8,borderRadius:2,background:"#8b5cf6"}}/>
+        <span style={{color:"#64748b",fontSize:11,fontWeight:600}}>Noite</span>
+      </div>
     </div>
   </div>;
 }
@@ -53761,215 +53874,103 @@ function DashGustavo({user, isViewing, tasks: propTasks, setTasks, notifs, isMob
     </div>
 
 
-    {/* ══════════ PLANEJAMENTO DA SEMANA — blocos de hora ══════════ */}
-    {(function(){
-      // Faixas horárias (auto-assigned por posição do item na rotina)
-      // Idx 0 → manhã (9h) · 1 → 11h · 2 → almoço/tarde (14h) · 3 → 15h30 · 4 → 17h
-      const _horaSlots = ["09:00","11:00","14:00","15:30","17:00","18:30"];
-      const _slotFor = function(idx){ return _horaSlots[idx] || "—"; };
-      // Slot pra meta livre — usa deadline_time se tiver, senão joga no final "Sem hora"
-      const _metaSlot = function(meta){
-        if(meta && meta.deadline_time) return String(meta.deadline_time).slice(0,5);
-        return null;
-      };
-      return <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"22px 24px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
-        <_DGSec icon="calendar" title="Planejamento da semana" sub="Blocos de hora · rotina personalizada + metas"
-          right={<div style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            {rotinaRemoved.size>0 && <button onClick={async function(){
-                if(typeof pixelsConfirm==="function"){
-                  if(!await pixelsConfirm("Restaurar "+rotinaRemoved.size+" tarefa"+(rotinaRemoved.size>1?"s":"")+" escondida"+(rotinaRemoved.size>1?"s":"")+"?",{okText:"Restaurar"})) return;
-                }
-                restoreRotinaItems();
-              }}
-              title="Restaurar tarefas escondidas"
-              style={{background:"#fff",color:DG_PURPLE,border:"1px solid "+DG_PURPLE+"33",borderRadius:8,padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background=DG_PURPLE+"10";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
-              Restaurar {rotinaRemoved.size}
-            </button>}
-            <div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
-              {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
-                const a = filtroStatus===f.id;
-                return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
-                  style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
-                  {f.l}
-                </button>;
-              })}
-            </div>
-          </div>}/>
+    {/* ══════════ PLANEJAMENTO DA SEMANA — clean ══════════ */}
+    <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:"20px 22px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)"}}>
+      <_DGSec icon="calendar" title="Planejamento da semana" sub="Rotina personalizada + metas adicionadas"
+        right={<div style={{display:"inline-flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          {rotinaRemoved.size>0 && <button onClick={async function(){
+              if(typeof pixelsConfirm==="function"){
+                if(!await pixelsConfirm("Restaurar "+rotinaRemoved.size+" tarefa"+(rotinaRemoved.size>1?"s":"")+" escondida"+(rotinaRemoved.size>1?"s":"")+"?",{okText:"Restaurar"})) return;
+              }
+              restoreRotinaItems();
+            }}
+            title="Restaurar tarefas escondidas"
+            style={{background:"#fff",color:DG_PURPLE,border:"1px solid "+DG_PURPLE+"33",borderRadius:8,padding:"6px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,transition:"all .15s"}}
+            onMouseEnter={e=>{e.currentTarget.style.background=DG_PURPLE+"10";}}
+            onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>
+            Restaurar {rotinaRemoved.size}
+          </button>}
+          <div style={{display:"inline-flex",background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:3}}>
+            {[{id:"todas",l:"Todas"},{id:"pendentes",l:"Pendentes"},{id:"concluidas",l:"Concluídas"}].map(f=>{
+              const a = filtroStatus===f.id;
+              return <button key={f.id} onClick={()=>setFiltroStatus(f.id)}
+                style={{background:a?"#fff":"transparent",color:a?DG_PURPLE:"#64748b",border:"none",borderRadius:7,padding:"6px 13px",fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,boxShadow:a?"0 1px 3px rgba(15,23,42,0.08)":"none",transition:"all .15s",letterSpacing:-.1}}>
+                {f.l}
+              </button>;
+            })}
+          </div>
+        </div>}/>
 
-        {/* Grade Seg-Sex com blocos de hora */}
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12,marginTop:6}}>
-          {DG_DAYS.map(d=>{
-            const metasDia = _filtrar(metasPorDia[d.key]||[]);
-            const totalMetas = (metasPorDia[d.key]||[]).length;
-            const concMetas = (metasPorDia[d.key]||[]).filter(m=>m.status==="concluida").length;
-            const isHoje = _dgWeekDate(d.idx)===hoje;
-            const dayDate = _dgWeekDate(d.idx);
-            const dayNum = dayDate ? parseInt(dayDate.split("-")[2],10) : "";
-            const rotinaDia = _rotinaDias.find(r=>r.id===d.key);
-            const rotinaItens = rotinaDia?.itens||[];
-            const rotinaFiltered = filtroStatus==="todas"?rotinaItens:
-              (filtroStatus==="concluidas"?rotinaItens.filter(it=>rotinaChecks[it.id]):rotinaItens.filter(it=>!rotinaChecks[it.id]));
-            const rotinaConc = rotinaItens.filter(it=>rotinaChecks[it.id]).length;
-            const dayConc = concMetas + rotinaConc;
-            const dayTotal = totalMetas + rotinaItens.length;
-            const pct = dayTotal>0 ? Math.round((dayConc/dayTotal)*100) : 0;
-
-            // Constroi lista unificada de blocos {hora, kind, payload} — ordenada por hora
-            const blocos = [];
-            rotinaFiltered.forEach(function(it, idxRotina){
-              // Descobre o índice REAL do item na rotina (não a filtrada) pra manter hora fixa
-              const realIdx = rotinaItens.findIndex(function(x){return x.id===it.id;});
-              blocos.push({
-                hora: _slotFor(realIdx>=0?realIdx:idxRotina),
-                kind: "rotina",
-                sortH: realIdx>=0?realIdx:idxRotina,
-                data: it,
-              });
-            });
-            metasDia.forEach(function(m, iMeta){
-              const hSlot = _metaSlot(m);
-              blocos.push({
-                hora: hSlot || "Sem hora",
-                kind: "meta",
-                sortH: hSlot ? parseInt(hSlot.replace(":",""),10)/100 : 99+iMeta,
-                data: m,
-              });
-            });
-            blocos.sort(function(a,b){return a.sortH-b.sortH;});
-
-            return <div key={d.key} style={{
-              background:"#fff",
-              border:"1px solid "+(isHoje?"#c4b5fd":"#eef0f3"),
-              borderRadius:14,
-              padding:0,
-              display:"flex",flexDirection:"column",
-              minHeight:340,
-              overflow:"hidden",
-              boxShadow:isHoje?"0 10px 30px rgba(124,58,237,0.12)":"0 1px 2px rgba(15,23,42,0.02)",
-              transition:"all .15s",
-              position:"relative",
-            }}>
-              {/* Faixa superior HOJE */}
-              {isHoje && <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,#8b5cf6,#7c3aed)"}}/>}
-
-              {/* Header do dia */}
-              <div style={{padding:"14px 15px 12px",borderBottom:"1px solid "+(isHoje?"#ede9fe":"#f5f7fa"),background:isHoje?"linear-gradient(180deg,#faf5ff,#fff)":"#fff"}}>
-                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6}}>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-                      <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>{d.label}</div>
-                      {dayNum&&<div style={{color:isHoje?DG_PURPLE:"#cbd5e1",fontSize:14,fontWeight:800,fontFeatureSettings:"'tnum'",opacity:isHoje?.6:1}}>{String(dayNum).padStart(2,"0")}</div>}
-                    </div>
-                    {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:4,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",letterSpacing:-.1}}>{rotinaDia.titulo}</div>}
+      {/* Grade Seg-Sex — clean */}
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(5,minmax(0,1fr))",gap:12}}>
+        {DG_DAYS.map(d=>{
+          const metasDia = _filtrar(metasPorDia[d.key]||[]);
+          const totalMetas = (metasPorDia[d.key]||[]).length;
+          const concMetas = (metasPorDia[d.key]||[]).filter(m=>m.status==="concluida").length;
+          const isHoje = _dgWeekDate(d.idx)===hoje;
+          const dayDate = _dgWeekDate(d.idx);
+          const dayNum = dayDate ? parseInt(dayDate.split("-")[2],10) : "";
+          const rotinaDia = _rotinaDias.find(r=>r.id===d.key);
+          const rotinaItens = rotinaDia?.itens||[];
+          const rotinaFiltered = filtroStatus==="todas"?rotinaItens:
+            (filtroStatus==="concluidas"?rotinaItens.filter(it=>rotinaChecks[it.id]):rotinaItens.filter(it=>!rotinaChecks[it.id]));
+          const rotinaConc = rotinaItens.filter(it=>rotinaChecks[it.id]).length;
+          const dayConc = concMetas + rotinaConc;
+          const dayTotal = totalMetas + rotinaItens.length;
+          const pct = dayTotal>0 ? Math.round((dayConc/dayTotal)*100) : 0;
+          return <div key={d.key} style={{background:"#fff",border:"1px solid "+(isHoje?"#c4b5fd":"#eef0f3"),borderRadius:13,padding:0,display:"flex",flexDirection:"column",minHeight:230,overflow:"hidden",boxShadow:isHoje?"0 8px 24px rgba(124,58,237,0.10)":"none",transition:"all .15s"}}>
+            {/* Header */}
+            <div style={{padding:"12px 13px 10px",borderBottom:"1px solid "+(isHoje?"#ede9fe":"#f5f7fa"),background:isHoje?"#faf5ff":"#fff"}}>
+              <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:6}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{display:"flex",alignItems:"baseline",gap:7}}>
+                    <div style={{color:isHoje?DG_PURPLE:"#0f172a",fontSize:13,fontWeight:800,letterSpacing:.2,textTransform:"uppercase"}}>{d.label}</div>
+                    {dayNum&&<div style={{color:"#cbd5e1",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'"}}>{String(dayNum).padStart(2,"0")}</div>}
                   </div>
-                  {isHoje&&<span style={{fontSize:10,fontWeight:800,color:"#fff",background:"linear-gradient(135deg,#8b5cf6,#7c3aed)",padding:"3px 9px",borderRadius:99,letterSpacing:.6,whiteSpace:"nowrap",flexShrink:0,boxShadow:"0 3px 8px rgba(124,58,237,0.35)"}}>HOJE</span>}
+                  {rotinaDia?.titulo&&<div style={{color:"#94a3b8",fontSize:11.5,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rotinaDia.titulo}</div>}
                 </div>
-                {/* Progress bar */}
-                {dayTotal>0&&<div style={{marginTop:10}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                    <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase"}}>{dayConc}/{dayTotal} feitos</span>
-                    <span style={{color:pct===100?"#16a34a":"#94a3b8",fontSize:10.5,fontWeight:800,fontFeatureSettings:"'tnum'"}}>{pct}%</span>
-                  </div>
-                  <div style={{height:4,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
-                    <div style={{width:pct+"%",height:"100%",background:pct===100?"#16a34a":"linear-gradient(90deg,"+DG_PURPLE+","+DG_PURPLE+"cc)",borderRadius:99,transition:"width .3s"}}/>
-                  </div>
-                </div>}
+                {isHoje&&<span style={{fontSize:11,fontWeight:800,color:"#fff",background:DG_PURPLE,padding:"3px 8px",borderRadius:99,letterSpacing:.5,whiteSpace:"nowrap",flexShrink:0}}>HOJE</span>}
               </div>
+              {/* Progress bar discreta */}
+              {dayTotal>0&&<div style={{marginTop:9}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                  <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.3}}>{dayConc}/{dayTotal} feitos</span>
+                </div>
+                <div style={{height:3,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+                  <div style={{width:pct+"%",height:"100%",background:pct===100?"#16a34a":DG_PURPLE,borderRadius:99,transition:"width .3s"}}/>
+                </div>
+              </div>}
+            </div>
 
-              {/* CORPO: BLOCOS DE HORA */}
-              <div style={{padding:"12px 12px 14px",display:"flex",flexDirection:"column",gap:4,flex:1,position:"relative"}}>
-                {blocos.length===0
-                  ? <div style={{color:"#cbd5e1",fontSize:11.5,textAlign:"center",padding:"30px 4px",lineHeight:1.4,fontWeight:500}}>
-                      {filtroStatus==="todas"?"Dia livre":"Sem "+filtroStatus.toLowerCase()}
-                    </div>
-                  : blocos.map(function(b, bIdx){
-                      // Bloco de hora: coluna de hora à esquerda + task à direita
-                      if(b.kind==="rotina"){
-                        const it = b.data;
-                        const done = !!rotinaChecks[it.id];
-                        return <div key={"r_"+it.id} style={{display:"flex",gap:9,alignItems:"stretch",position:"relative"}}>
-                          {/* Hora */}
-                          <div style={{minWidth:42,display:"flex",flexDirection:"column",alignItems:"flex-start",paddingTop:6,position:"relative"}}>
-                            <div style={{color:done?"#cbd5e1":(isHoje?DG_PURPLE:"#64748b"),fontSize:11,fontWeight:800,letterSpacing:.3,fontFeatureSettings:"'tnum'",fontFamily:DG_INTER,lineHeight:1}}>{b.hora}</div>
-                            {/* Linha vertical conectando blocos */}
-                            {bIdx<blocos.length-1 && <div style={{position:"absolute",left:5,top:20,bottom:-8,width:1.5,background:"#eef0f3",borderRadius:1}}/>}
-                            {/* Bolinha marcador */}
-                            <div style={{position:"absolute",left:0,top:6,width:11,height:11,borderRadius:"50%",background:done?"#dcfce7":(isHoje?DG_PURPLE+"22":"#eef0f3"),border:"2px solid "+(done?"#16a34a":(isHoje?DG_PURPLE:"#cbd5e1")),boxSizing:"border-box"}}/>
-                          </div>
-                          {/* Task */}
-                          <div onClick={()=>rotinaToggle(it.id)}
-                            style={{
-                              flex:1,
-                              cursor:"pointer",
-                              background:done?"#f0fdf4":"#fafbfc",
-                              border:"1px solid "+(done?"#bbf7d0":"#eef0f3"),
-                              borderRadius:9,
-                              padding:"9px 11px",
-                              display:"flex",alignItems:"center",gap:8,
-                              fontFamily:DG_INTER,transition:"all .15s",
-                              position:"relative",
-                              marginBottom:8,
-                            }}
-                            onMouseEnter={function(e){
-                              if(!done){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=DG_PURPLE+"55";e.currentTarget.style.boxShadow="0 3px 10px rgba(15,23,42,0.06)";}
-                              const _x=e.currentTarget.querySelector("[data-rot-x]");if(_x)_x.style.opacity="1";
-                            }}
-                            onMouseLeave={function(e){
-                              if(!done){e.currentTarget.style.background="#fafbfc";e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.boxShadow="none";}
-                              const _x=e.currentTarget.querySelector("[data-rot-x]");if(_x)_x.style.opacity="0";
-                            }}>
-                            <div style={{width:16,height:16,borderRadius:5,border:"1.5px solid "+(done?"#16a34a":"#cbd5e1"),background:done?"#16a34a":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all .12s"}}>
-                              {done&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>}
-                            </div>
-                            <span style={{color:done?"#166534":"#334155",fontSize:12,fontWeight:600,lineHeight:1.35,textDecoration:done?"line-through":"none",flex:1,minWidth:0,letterSpacing:-.1}}>{it.label}</span>
-                            <button data-rot-x
-                              onClick={async function(e){
-                                e.stopPropagation();
-                                if(typeof pixelsConfirm==="function"){
-                                  if(!await pixelsConfirm("Esconder esta tarefa da rotina?",{okText:"Esconder",danger:false})) return;
-                                }
-                                removeRotinaItem(it.id);
-                              }}
-                              title="Esconder esta tarefa"
-                              style={{opacity:0,transition:"opacity .12s",background:"#fff",border:"1px solid #fecaca",borderRadius:5,width:18,height:18,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#dc2626",padding:0,flexShrink:0}}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
-                          </div>
-                        </div>;
-                      } else {
-                        // Meta livre
-                        const m = b.data;
-                        const isOk = m.status==="concluida";
-                        return <div key={"m_"+m.id} style={{display:"flex",gap:9,alignItems:"stretch",position:"relative"}}>
-                          <div style={{minWidth:42,display:"flex",flexDirection:"column",alignItems:"flex-start",paddingTop:6,position:"relative"}}>
-                            <div style={{color:isOk?"#cbd5e1":"#7c3aed",fontSize:10.5,fontWeight:800,letterSpacing:.3,fontFeatureSettings:"'tnum'",fontFamily:DG_INTER,lineHeight:1}}>{b.hora==="Sem hora"?"—":b.hora}</div>
-                            {bIdx<blocos.length-1 && <div style={{position:"absolute",left:5,top:20,bottom:-8,width:1.5,background:"#eef0f3",borderRadius:1}}/>}
-                            <div style={{position:"absolute",left:0,top:6,width:11,height:11,borderRadius:"50%",background:isOk?"#dcfce7":"#f5f3ff",border:"2px solid "+(isOk?"#16a34a":"#c4b5fd"),boxSizing:"border-box"}}/>
-                          </div>
-                          <div style={{flex:1,marginBottom:8}}>
-                            <_DGMetaMini meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>
-                          </div>
-                        </div>;
-                      }
-                    })
-                }
+            {/* Corpo */}
+            <div style={{padding:"11px 12px",display:"flex",flexDirection:"column",gap:7,flex:1}}>
+              {rotinaFiltered.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {rotinaFiltered.map(it=><_DGRotinaItem key={it.id} item={it} checked={!!rotinaChecks[it.id]} onToggle={()=>rotinaToggle(it.id)} onDelete={()=>removeRotinaItem(it.id)}/>)}
+              </div>}
 
-                <button onClick={()=>setNovaMeta({day:d})}
-                  style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:9,padding:"8px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1,marginTop:6}}
-                  onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color=DG_PURPLE;}}
-                  onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
-                  Adicionar bloco
-                </button>
-              </div>
-            </div>;
-          })}
-        </div>
-      </div>;
-    })()}
+              {rotinaFiltered.length>0&&metasDia.length>0&&<div style={{height:1,background:"#f5f7fa",margin:"4px 0"}}/>}
+
+              {metasDia.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {metasDia.map(m=><_DGMetaMini key={m.id} meta={m} onToggle={_toggleMeta} onDelete={_deleteMeta}/>)}
+              </div>}
+
+              {rotinaFiltered.length===0&&metasDia.length===0&&<div style={{color:"#cbd5e1",fontSize:11,textAlign:"center",padding:"16px 4px",lineHeight:1.4,fontWeight:500}}>
+                {filtroStatus==="todas"?"Dia livre":"Sem "+filtroStatus.toLowerCase()}
+              </div>}
+
+              <button onClick={()=>setNovaMeta({day:d})}
+                style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #e2e8f0",borderRadius:8,padding:"6px 8px",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
+                onMouseEnter={e=>{e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.color=DG_PURPLE;}}
+                onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                Adicionar
+              </button>
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
 
     {/* ══════════ MARCOS — histórico cronológico sincronizado entre sócios ══════════ */}
     {(function(){
@@ -55230,13 +55231,10 @@ function _DGEmpty({icon, title, desc}){
 }
 
 // ── Modal Nova Meta ──────────────────────────────────────────
-// mode: "semanal" => sempre sexta · "diaria" => sempre hoje
-function _DGNovaMeta({mode, day, user, weekKey, onClose, onSave}){
-  const isDiaria = mode==="diaria";
-  // Se foi passado um dia específico (vc clicou no "+ Adicionar" da coluna), usa esse dia como prazo
-  const _specificDay = day && day.idx ? day : null;
+function _DGNovaMeta({day, user, weekKey, onClose, onSave}){
   const [title, setTitle] = useState("");
-  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius"||t.id==="ocsana") : [];
+  const [selDay, setSelDay] = useState(day?day.key:DG_DAYS[0].key);
+  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius") : [];
   const [responsaveis, setResponsaveis] = useState([user.id]);
   const _toggleResp = (rid) => setResponsaveis(p => p.indexOf(rid)>=0 ? (p.length>1?p.filter(x=>x!==rid):p) : p.concat([rid]));
   const [category, setCategory] = useState("");
@@ -55244,19 +55242,11 @@ function _DGNovaMeta({mode, day, user, weekKey, onClose, onSave}){
   const [saving, setSaving] = useState(false);
   if(typeof useEscToClose==="function") useEscToClose(true, onClose);
 
-  // Resolve prazo automaticamente
-  const _dgHojeIdx = () => { const w=new Date().getDay(); return w===0?7:w; };
-  // Prioridade: 1) dia específico clicado | 2) hoje (modo diária) | 3) sexta (modo semanal)
-  const _autoDayKey = _specificDay
-    ? _specificDay.key
-    : (isDiaria ? (DG_DAYS.find(d=>d.idx===_dgHojeIdx())?.key || "sex") : "sex");
-  const _autoDeadline = _specificDay
-    ? _dgWeekDate(_specificDay.idx)
-    : (isDiaria ? _dgToday() : _dgWeekDate(5));
-
   const _save = ()=>{
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
     setSaving(true);
+    const dayObj = DG_DAYS.find(d=>d.key===selDay)||DG_DAYS[0];
+    const deadline = _dgWeekDate(dayObj.idx);
     const firstId = responsaveis[0]||user.id;
     const firstResp = TEAM.find(t=>t.id===firstId);
     const payload = {
@@ -55264,8 +55254,8 @@ function _DGNovaMeta({mode, day, user, weekKey, onClose, onSave}){
       type: "meta_semana",
       week_key: weekKey,
       title: title.trim(),
-      deadline: _autoDeadline,
-      day_of_week: _autoDayKey,
+      deadline,
+      day_of_week: selDay,
       category: category||null,
       client_id: clientId||null,
       author_id: user.id,
@@ -55274,7 +55264,6 @@ function _DGNovaMeta({mode, day, user, weekKey, onClose, onSave}){
       responsible_id: firstId,
       responsible_name: firstResp?firstResp.name:user.name,
       status: "em_andamento",
-      mode: isDiaria?"diaria":"semanal",
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -55284,35 +55273,49 @@ function _DGNovaMeta({mode, day, user, weekKey, onClose, onSave}){
 
   return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:80,fontFamily:DG_INTER}}>
     <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(560px,92%)",padding:"24px 26px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)"}}>
-      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>{_specificDay?("Nova meta · "+_specificDay.label):isDiaria?"Nova meta diária":"Nova meta semanal"}</div>
-      <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20}}>{_specificDay?("Entrega até "+_specificDay.label.toLowerCase()+" — algo que precisa sair desse dia."):isDiaria?"Entrega ainda hoje — algo que precisa sair do dia.":"Entrega até sexta-feira — meta pra fechar a semana."}</div>
+      <div style={{fontSize:17,fontWeight:800,color:"#0f172a",marginBottom:4,letterSpacing:-.3}}>Nova meta semanal</div>
+      <div style={{fontSize:12.5,color:"#94a3b8",marginBottom:20}}>Cadastre uma meta e marque o dia em que ela vence.</div>
 
       <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
           <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Título</div>
-          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder={isDiaria?"Ex: Subir campanha do cliente X":"Ex: Revisar campanhas em atenção"}
+          <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Revisar campanhas em atenção"
             onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();_save();}}}
             style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
         </div>
         <div>
-          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prazo</div>
-          <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"#f5f3ff",border:"1px solid #ede9fe",color:DG_PURPLE,borderRadius:9,padding:"8px 14px",fontSize:12.5,fontWeight:700,fontFamily:DG_INTER}}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            {_specificDay?_specificDay.label:isDiaria?"Hoje":"Sexta-feira"} · {(()=>{const d=new Date(_autoDeadline+"T00:00:00");return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"long"});})()}
-          </div>
-        </div>
-        <div>
-          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
-          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-            {_DG_SOCIOS.map(t=>{
-              const a = responsaveis.indexOf(t.id)>=0;
-              return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
-                style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"5px 11px 5px 5px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7}}>
-                <_DGAvatar userId={t.id} size={22}/>
-                {t.name.split(" ")[0]}
-                {a&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2}}><polyline points="20 6 9 17 4 12"/></svg>}
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Dia da semana</div>
+          <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+            {DG_DAYS.map(d=>{
+              const a = selDay===d.key;
+              return <button key={d.key} onClick={()=>setSelDay(d.key)} style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"8px 14px",borderRadius:8,fontSize:12,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER}}>
+                {d.label}
               </button>;
             })}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              {_DG_SOCIOS.map(t=>{
+                const a = responsaveis.indexOf(t.id)>=0;
+                return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
+                  style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"5px 11px 5px 5px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7}}>
+                  <_DGAvatar userId={t.id} size={22}/>
+                  {t.name.split(" ")[0]}
+                  {a&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:2}}><polyline points="20 6 9 17 4 12"/></svg>}
+                </button>;
+              })}
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Categoria <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(opcional)</span></div>
+            <select value={category} onChange={e=>setCategory(e.target.value)}
+              style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fff"}}>
+              <option value="">—</option>
+              {DG_CATEGORIAS.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
           </div>
         </div>
         <div>
@@ -55340,10 +55343,11 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
   const [tipo, setTipo]     = useState(item?.tipo||"arte");
   const [status, setStatus] = useState(item?.status||"planejado");
   const [priority, setPriority] = useState(item?.priority||"media");
+  // Prazo: se já tem item, usa o dele. Se é novo, calcula automático pela prioridade default ("media" = 14 dias úteis)
   const _defaultPrio = item?.priority || "media";
   const _defaultPrioCfg = DG_SPRINT_PRIO.find(x=>x.id===_defaultPrio) || DG_SPRINT_PRIO[1];
   const [deadline, setDeadline] = useState(item?.deadline || _dgAddBusinessDays(_defaultPrioCfg.dias));
-  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius"||t.id==="ocsana") : [];
+  const _DG_SOCIOS = (typeof TEAM!=="undefined") ? TEAM.filter(t=>t.id==="gustavo"||t.id==="vinicius") : [];
   const initResp = Array.isArray(item?.assignees)&&item.assignees.length>0 ? item.assignees : [user.id];
   const [responsaveis, setResponsaveis] = useState(initResp);
   const _toggleResp = (rid) => setResponsaveis(p => p.indexOf(rid)>=0 ? (p.length>1?p.filter(x=>x!==rid):p) : p.concat([rid]));
@@ -55351,7 +55355,6 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
   if(typeof useEscToClose==="function") useEscToClose(true, onClose);
 
   const cl = (CLIENTS||[]).find(c=>c.id===clientId);
-  const clColor = cl?.color || "#7c3aed";
 
   const _save = ()=>{
     if(!title.trim()){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Título obrigatório");return;}
@@ -55380,69 +55383,61 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
     setSaving(false);
   };
 
-  // ── Label helper — tipografia uniforme em todos os campos ──
-  const _lab = (txt, sub) => <div style={{fontSize:11.5,color:"#94a3b8",fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:9}}>
-    {txt}{sub&&<span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0,marginLeft:5}}>{sub}</span>}
-  </div>;
-
-  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:48,fontFamily:DG_INTER}}>
-    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:18,width:"min(680px,94%)",boxShadow:"0 24px 80px rgba(0,0,0,0.28)",maxHeight:"calc(100vh - 80px)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      {/* ─── HEADER com gradiente sutil da cor do cliente ─── */}
-      <div style={{position:"relative",padding:"22px 26px 18px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(180deg,"+clColor+"0a,#fff)"}}>
-        <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:clColor}}/>
-        <div style={{display:"flex",alignItems:"center",gap:14}}>
-          {cl&&<ClientLogo clientId={cl.id} size="sm"/>}
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:11.5,color:clColor,fontWeight:800,textTransform:"uppercase",letterSpacing:.7}}>{isEdit?"Editar entrega":"Nova entrega de sprint"}</div>
-            <div style={{fontSize:19,fontWeight:800,color:"#0f172a",letterSpacing:-.4,marginTop:3,lineHeight:1.2}}>{cl?cl.name:"Sprint"}</div>
-          </div>
-          <button onClick={onClose} title="Fechar" style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,width:34,height:34,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b",transition:"all .15s",padding:0,flexShrink:0}}
-            onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0f172a";}}
-            onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+  return <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:400,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:60,fontFamily:DG_INTER}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,width:"min(620px,94%)",padding:"24px 28px",boxShadow:"0 24px 80px rgba(0,0,0,0.22)",maxHeight:"calc(100vh - 90px)",overflowY:"auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11,marginBottom:18}}>
+        {cl&&<ClientLogo clientId={cl.id} size="sm"/>}
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,color:"#0ea5e9",fontWeight:800,textTransform:"uppercase",letterSpacing:.6}}>{isEdit?"Editar entrega":"Nova entrega"}</div>
+          <div style={{fontSize:17,fontWeight:800,color:"#0f172a",letterSpacing:-.3,marginTop:2}}>{cl?cl.name:"Sprint"}</div>
         </div>
       </div>
 
-      {/* ─── CORPO ─── */}
-      <div style={{padding:"22px 26px 24px",overflowY:"auto",flex:1,display:"flex",flexDirection:"column",gap:22}}>
-        {/* Título */}
+      <div style={{display:"flex",flexDirection:"column",gap:14}}>
         <div>
-          {_lab("O que vai ser entregue")}
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>O que vai ser entregue</div>
           <input value={title} onChange={e=>setTitle(e.target.value)} placeholder="Ex: Carrossel sobre lançamento da campanha"
             onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();_save();}}}
-            style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:11,fontSize:14,boxSizing:"border-box",outline:"none",fontFamily:"inherit",transition:"border-color .15s, background .15s",background:"#fafbfc"}}
-            onFocus={e=>{e.currentTarget.style.borderColor=clColor;e.currentTarget.style.background="#fff";}}
-            onBlur={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fafbfc";}}
-            autoFocus/>
+            style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13.5,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}} autoFocus/>
         </div>
 
-        {/* Tipo */}
         <div>
-          {_lab("Tipo de entrega")}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Tipo</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
             {DG_SPRINT_TIPOS.map(t=>{
               const a = tipo===t.id;
               return <button key={t.id} type="button" onClick={()=>setTipo(t.id)}
-                style={{background:a?t.color:"#fafbfc",color:a?"#fff":"#475569",border:"1.5px solid "+(a?t.color:"#eef0f3"),padding:"11px 10px",borderRadius:11,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,letterSpacing:-.1,fontSize:12.5,fontWeight:a?700:600,transition:"all .15s"}}>
-                <Ico n={t.icon} size={13} color={a?"#fff":t.color}/>
+                style={{background:a?t.color:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?t.color:"#e2e8f0"),padding:"7px 12px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:-.1}}>
+                <Ico n={t.icon} size={11} color={a?"#fff":t.color}/>
                 {t.label}
               </button>;
             })}
           </div>
         </div>
 
-        {/* Prioridade — 4 cards em linha — define prazo */}
         <div>
-          {_lab("Prioridade", "(define o prazo automaticamente)")}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Status</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            {DG_SPRINT_STATUS.map(s=>{
+              const a = status===s.id;
+              return <button key={s.id} type="button" onClick={()=>setStatus(s.id)}
+                style={{background:a?s.color:s.bg,color:a?"#fff":s.color,border:"1px solid "+(a?s.color:s.color+"33"),padding:"7px 13px",borderRadius:99,fontSize:11,fontWeight:a?800:700,cursor:"pointer",fontFamily:DG_INTER,textTransform:"uppercase",letterSpacing:.3,transition:"all .12s"}}>
+                {s.label}
+              </button>;
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prioridade <span style={{color:"#cbd5e1",fontWeight:600,textTransform:"none",letterSpacing:0}}>(define o prazo automaticamente)</span></div>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr 1fr":"repeat(4,1fr)",gap:6}}>
             {DG_SPRINT_PRIO.map(p=>{
               const a = priority===p.id;
               return <button key={p.id} type="button" onClick={()=>{setPriority(p.id);setDeadline(_dgAddBusinessDays(p.dias));}}
-                style={{background:a?p.color:p.bg,color:a?"#fff":p.color,border:"1.5px solid "+(a?p.color:p.color+"33"),padding:"12px 12px",borderRadius:11,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s",textAlign:"left"}}>
-                <div style={{fontSize:12.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,marginBottom:4}}>{p.label}</div>
-                <div style={{fontSize:11,fontWeight:600,opacity:a?.95:.85,display:"inline-flex",alignItems:"center",gap:4}}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                style={{background:a?p.color:p.bg,color:a?"#fff":p.color,border:"1px solid "+(a?p.color:p.color+"44"),padding:"10px 12px",borderRadius:11,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s",textAlign:"left"}}>
+                <div style={{fontSize:12,fontWeight:800,textTransform:"uppercase",letterSpacing:.3,marginBottom:3}}>{p.label}</div>
+                <div style={{fontSize:10.5,fontWeight:600,opacity:a?.9:.85,display:"inline-flex",alignItems:"center",gap:4}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                   {p.dias} {p.dias===1?"dia útil":"dias úteis"}
                 </div>
               </button>;
@@ -55450,34 +55445,21 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
           </div>
         </div>
 
-        {/* Status + Prazo lado a lado */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div>
-            {_lab("Status")}
-            <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {DG_SPRINT_STATUS.map(st=>{
-                const a = status===st.id;
-                return <button key={st.id} type="button" onClick={()=>setStatus(st.id)}
-                  style={{background:a?st.color:st.bg,color:a?"#fff":st.color,border:"1.5px solid "+(a?st.color:st.color+"22"),padding:"9px 12px",borderRadius:9,cursor:"pointer",fontFamily:DG_INTER,fontSize:11.5,fontWeight:a?800:700,textTransform:"uppercase",letterSpacing:.4,transition:"all .15s",textAlign:"left",display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:8,height:8,borderRadius:"50%",background:a?"#fff":st.color,flexShrink:0}}/>
-                  {st.label}
-                </button>;
-              })}
-            </div>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Prazo</div>
+            <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
+              style={{width:"100%",padding:"10px 12px",border:"1px solid #e2e8f0",borderRadius:9,fontSize:13,boxSizing:"border-box",outline:"none",fontFamily:"inherit"}}/>
           </div>
           <div>
-            {_lab("Prazo de entrega")}
-            <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
-              style={{width:"100%",padding:"12px 14px",border:"1.5px solid #e2e8f0",borderRadius:11,fontSize:14,boxSizing:"border-box",outline:"none",fontFamily:"inherit",background:"#fafbfc",marginBottom:14}}/>
-            {_lab("Responsáveis")}
+            <div style={{fontSize:11,color:"#64748b",fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:7}}>Responsáveis</div>
             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
               {_DG_SOCIOS.map(t=>{
                 const a = responsaveis.indexOf(t.id)>=0;
                 return <button key={t.id} type="button" onClick={()=>_toggleResp(t.id)}
-                  style={{background:a?DG_PURPLE:"#fafbfc",color:a?"#fff":"#475569",border:"1.5px solid "+(a?DG_PURPLE:"#eef0f3"),padding:"5px 12px 5px 4px",borderRadius:99,fontSize:12,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s"}}>
-                  <_DGAvatar userId={t.id} size={22}/>
+                  style={{background:a?DG_PURPLE:"#fff",color:a?"#fff":"#475569",border:"1px solid "+(a?DG_PURPLE:"#e2e8f0"),padding:"4px 10px 4px 4px",borderRadius:99,fontSize:11.5,fontWeight:a?700:600,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6}}>
+                  <_DGAvatar userId={t.id} size={20}/>
                   {t.name.split(" ")[0]}
-                  {a&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{marginLeft:1}}><polyline points="20 6 9 17 4 12"/></svg>}
                 </button>;
               })}
             </div>
@@ -55485,28 +55467,11 @@ function _DGNovoSprint({user, clientId, item, weekKey, sextaIso, onClose, onSave
         </div>
       </div>
 
-      {/* ─── FOOTER ─── */}
-      <div style={{padding:"16px 26px",borderTop:"1px solid #f1f5f9",background:"#fafbfc",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexShrink:0}}>
-        {isEdit&&onDelete
-          ? <button onClick={()=>{onDelete(item.id);}}
-              style={{background:"#fff",color:"#dc2626",border:"1.5px solid #fecaca",borderRadius:10,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s",display:"inline-flex",alignItems:"center",gap:6}}
-              onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
-              Excluir
-            </button>
-          : <span/>}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:22}}>
+        {isEdit&&onDelete?<button onClick={()=>{if(window.confirm("Excluir esta entrega?"))onDelete(item.id);}} style={{background:"#fff",color:"#ef4444",border:"1px solid #fecaca",borderRadius:9,padding:"10px 16px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER}}>Excluir</button>:<span/>}
         <div style={{display:"flex",gap:8}}>
-          <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1.5px solid #e2e8f0",borderRadius:10,padding:"11px 18px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,transition:"all .15s"}}
-            onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";}}
-            onMouseLeave={e=>{e.currentTarget.style.background="#fff";}}>
-            Cancelar
-          </button>
-          <button onClick={_save} disabled={saving}
-            style={{background:"linear-gradient(135deg,"+clColor+","+clColor+"dd)",color:"#fff",border:"none",borderRadius:10,padding:"11px 22px",fontSize:13,fontWeight:800,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER,boxShadow:"0 6px 18px "+clColor+"55",display:"inline-flex",alignItems:"center",gap:6,letterSpacing:-.1,transition:"all .15s"}}>
-            {saving?"Salvando...":(isEdit?"Salvar alterações":"Adicionar entrega")}
-            {!saving&&<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>}
-          </button>
+          <button onClick={onClose} style={{background:"#fff",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:DG_INTER}}>Cancelar</button>
+          <button onClick={_save} disabled={saving} style={{background:"#0ea5e9",color:"#fff",border:"none",borderRadius:9,padding:"10px 20px",fontSize:13,fontWeight:700,cursor:saving?"not-allowed":"pointer",opacity:saving?.6:1,fontFamily:DG_INTER,boxShadow:"0 6px 16px rgba(14,165,233,0.30)"}}>{saving?"Salvando...":(isEdit?"Salvar":"Adicionar entrega")}</button>
         </div>
       </div>
     </div>
