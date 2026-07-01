@@ -29077,7 +29077,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
     return 2026;
   });
-  const [bioterUnit,setBioterUnit]=useState(task.bioterUnit||"chapeco");
+  const [bioterUnit,setBioterUnit]=useState(task.bioterUnit || (task.client==="bioter"?"chapeco":""));
   // Etiqueta interna admin (ex: "Pacote 10/06"). Só visível/editável p/ sócios.
   const [adminTag,setAdminTag]=useState(task.adminTag||"");
   // isAdmin = pode editar etiquetas/tags + mês de pagamento. Sócios sempre podem.
@@ -29130,7 +29130,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
       setComments(task.comments||[]);
       setAttachments(task.files||[]);
       setCover(task.cover||null);
-      setBioterUnit(task.bioterUnit||"chapeco");
+      setBioterUnit(task.bioterUnit || (task.client==="bioter"?"chapeco":""));
       setAdminTag(task.adminTag||"");
       setTags(Array.isArray(task.tags)?task.tags:[]);
       setChecklist(task.checklist||[]);
