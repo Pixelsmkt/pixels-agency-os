@@ -52742,13 +52742,36 @@ function _DGKpisSection({allTasks}){
 
 // ── Rotina Semanal — itens fixos por dia, sem prazo, persistido em Supabase ────
 const _DG_RS_DAYS=[{id:"seg",label:"Segunda"},{id:"ter",label:"Terça"},{id:"qua",label:"Quarta"},{id:"qui",label:"Quinta"},{id:"sex",label:"Sexta"}];
+// Opções de horário — 30 em 30 min, de 06:00 até 22:30
+const _DG_HORA_OPCOES = (function(){
+  const arr=[];
+  for(let h=6;h<=22;h++){
+    arr.push(String(h).padStart(2,"0")+":00");
+    arr.push(String(h).padStart(2,"0")+":30");
+  }
+  arr.push("23:00");
+  return arr;
+})();
+// Parse hora que pode ser "HH:MM" (só início) ou "HH:MM-HH:MM" (range)
+function _dgParseHora(raw){
+  if(!raw) return {start:"",end:""};
+  const s=String(raw).trim();
+  const parts=s.split("-").map(x=>x.trim());
+  return {start:parts[0]||"", end:parts[1]||""};
+}
+function _dgFmtHora(start,end){
+  if(!start) return "";
+  if(!end || end===start) return start;
+  return start+"-"+end;
+}
+
 function _DGRotinaSemanal({user, isSocio}){
   const [viewUserId,setViewUserId]=useState(user.id);
   const [items,setItems]=useState([]);
   const [loading,setLoading]=useState(true);
   const [adding,setAdding]=useState(null); // {day:"seg"}
-  const [draft,setDraft]=useState({hora:"", title:""});
-  const [editing,setEditing]=useState(null); // {id, hora, title}
+  const [draft,setDraft]=useState({start:"", end:"", title:""});
+  const [editing,setEditing]=useState(null); // {id, start, end, title}
 
   function reload(){
     if(typeof window==="undefined"||!window._sb){setLoading(false);return;}
@@ -52769,17 +52792,19 @@ function _DGRotinaSemanal({user, isSocio}){
     return function(){if(ch){try{window._sb.removeChannel(ch);}catch(_){}}}
   },[viewUserId]);
 
-  // Sort por hora (nulls last)
+  // Sort por hora início (nulls last)
   function sortByHora(a,b){
-    const ha=(a.hora||"99:99"), hb=(b.hora||"99:99");
+    const pa=_dgParseHora(a.hora), pb=_dgParseHora(b.hora);
+    const ha=pa.start||"99:99", hb=pb.start||"99:99";
     if(ha!==hb) return ha.localeCompare(hb);
     return (a.position||0)-(b.position||0);
   }
 
   // Cor sutil por período do dia — inspirado Asana
   function accentFor(hora){
-    if(!hora) return {bg:"#f8fafc", bar:"#cbd5e1", txt:"#64748b"};
-    const h=parseInt(hora.split(":")[0],10);
+    const p=_dgParseHora(hora);
+    if(!p.start) return {bg:"#f8fafc", bar:"#cbd5e1", txt:"#64748b"};
+    const h=parseInt(p.start.split(":")[0],10);
     if(h<12) return {bg:"#fef9c3", bar:"#eab308", txt:"#a16207"};  // manhã — amarelo
     if(h<18) return {bg:"#dbeafe", bar:"#3b82f6", txt:"#1d4ed8"};  // tarde — azul
     return    {bg:"#f5f3ff", bar:"#8b5cf6", txt:"#6d28d9"};        // noite — roxo
@@ -52787,8 +52812,8 @@ function _DGRotinaSemanal({user, isSocio}){
 
   function add(day){
     const title=(draft.title||"").trim();
-    const hora=(draft.hora||"").trim();
-    if(!title){setAdding(null);setDraft({hora:"",title:""});return;}
+    if(!title){setAdding(null);setDraft({start:"",end:"",title:""});return;}
+    const hora=_dgFmtHora(draft.start,draft.end);
     const payload={
       user_id:viewUserId,
       day_of_week:day,
@@ -52799,7 +52824,7 @@ function _DGRotinaSemanal({user, isSocio}){
     };
     window._sb.from("rotina_semanal").insert(payload).then(function(r){
       if(r&&r.error){if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+r.error.message);return;}
-      setDraft({hora:"",title:""});setAdding(null);reload();
+      setDraft({start:"",end:"",title:""});setAdding(null);reload();
     });
   }
   function del(id){
@@ -52816,10 +52841,82 @@ function _DGRotinaSemanal({user, isSocio}){
     if(!editing||!editing.id)return;
     const t=(editing.title||"").trim();
     if(!t){setEditing(null);return;}
-    const patch={title:t, hora:(editing.hora||"").trim()||null, updated_at:new Date().toISOString()};
+    const hora=_dgFmtHora(editing.start,editing.end);
+    const patch={title:t, hora:hora||null, updated_at:new Date().toISOString()};
     window._sb.from("rotina_semanal").update(patch).eq("id",editing.id).then(function(){
       setEditing(null);reload();
     });
+  }
+
+  // Componente interno: picker moderno de hora (2 dropdowns customizados)
+  function _HoraPicker({start,end,onChange}){
+    const [openStart,setOpenStart]=useState(false);
+    const [openEnd,setOpenEnd]=useState(false);
+    // Fecha ao clicar fora
+    useEffect(function(){
+      function _h(){setOpenStart(false);setOpenEnd(false);}
+      if(openStart||openEnd){document.addEventListener("click",_h);return function(){document.removeEventListener("click",_h);};}
+    },[openStart,openEnd]);
+    const _btnStyle=function(active){return{
+      background:active?"#f5f3ff":"#fff",
+      border:"1.5px solid "+(active?PURPLE:"#e2e8f0"),
+      borderRadius:8,
+      padding:"7px 10px",
+      fontSize:12.5,
+      fontWeight:700,
+      color:start||end?"#0f172a":"#94a3b8",
+      cursor:"pointer",
+      fontFamily:DG_INTER,
+      fontFeatureSettings:"'tnum'",
+      display:"inline-flex",alignItems:"center",gap:5,
+      transition:"all .12s",
+      outline:"none",
+      minWidth:70,
+      justifyContent:"space-between",
+    };};
+    return <div style={{display:"flex",alignItems:"center",gap:6}}>
+      {/* Início */}
+      <div style={{position:"relative"}}>
+        <button type="button" onClick={function(e){e.stopPropagation();setOpenStart(!openStart);setOpenEnd(false);}}
+          style={_btnStyle(openStart)}
+          title="Hora de início">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          <span>{start||"Início"}</span>
+        </button>
+        {openStart && <div onClick={function(e){e.stopPropagation();}}
+          style={{position:"absolute",top:"calc(100% + 4px)",left:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 10px 30px rgba(15,23,42,0.15)",padding:6,zIndex:100,maxHeight:220,overflowY:"auto",minWidth:110}}>
+          {_DG_HORA_OPCOES.map(function(h){
+            const sel=h===start;
+            return <div key={h} onClick={function(){onChange({start:h,end:end});setOpenStart(false);}}
+              style={{padding:"6px 12px",borderRadius:6,fontSize:12.5,fontWeight:sel?700:600,color:sel?"#fff":"#334155",background:sel?PURPLE:"transparent",cursor:"pointer",fontFamily:DG_INTER,fontFeatureSettings:"'tnum'",letterSpacing:.2,transition:"all .08s"}}
+              onMouseEnter={function(e){if(!sel){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color=PURPLE;}}}
+              onMouseLeave={function(e){if(!sel){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#334155";}}}>{h}</div>;
+          })}
+        </div>}
+      </div>
+      <span style={{color:"#cbd5e1",fontSize:14,fontWeight:700,fontFamily:DG_INTER}}>→</span>
+      {/* Fim */}
+      <div style={{position:"relative"}}>
+        <button type="button" onClick={function(e){e.stopPropagation();setOpenEnd(!openEnd);setOpenStart(false);}}
+          style={_btnStyle(openEnd)}
+          title="Hora de fim">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          <span>{end||"Fim"}</span>
+        </button>
+        {openEnd && <div onClick={function(e){e.stopPropagation();}}
+          style={{position:"absolute",top:"calc(100% + 4px)",left:0,background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,boxShadow:"0 10px 30px rgba(15,23,42,0.15)",padding:6,zIndex:100,maxHeight:220,overflowY:"auto",minWidth:110}}>
+          {_DG_HORA_OPCOES.map(function(h){
+            const sel=h===end;
+            const disabled = start && h<start;
+            if(disabled) return null;
+            return <div key={h} onClick={function(){onChange({start:start,end:h});setOpenEnd(false);}}
+              style={{padding:"6px 12px",borderRadius:6,fontSize:12.5,fontWeight:sel?700:600,color:sel?"#fff":"#334155",background:sel?PURPLE:"transparent",cursor:"pointer",fontFamily:DG_INTER,fontFeatureSettings:"'tnum'",letterSpacing:.2,transition:"all .08s"}}
+              onMouseEnter={function(e){if(!sel){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.color=PURPLE;}}}
+              onMouseLeave={function(e){if(!sel){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#334155";}}}>{h}</div>;
+          })}
+        </div>}
+      </div>
+    </div>;
   }
 
   const SOCIOS_AVAIL = (typeof TEAM!=="undefined") ? TEAM.filter(function(t){return t.id!=="ocsana_legacy";}) : [];
@@ -52879,22 +52976,23 @@ function _DGRotinaSemanal({user, isSocio}){
             {dayItems.map(function(it){
               const isEd=editing&&editing.id===it.id;
               const ac=accentFor(it.hora);
+              const p=_dgParseHora(it.hora);
               if(isEd){
-                return <div key={it.id} style={{background:"#fff",border:"1.5px solid "+PURPLE,borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:8,boxShadow:"0 4px 14px rgba(124,58,237,0.15)"}}>
-                  <input type="time" value={editing.hora||""} onChange={function(e){setEditing(Object.assign({},editing,{hora:e.target.value}));}}
-                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11,color:"#0f172a",fontFamily:DG_INTER,fontWeight:700,outline:"none",width:100,fontFeatureSettings:"'tnum'"}}/>
+                return <div key={it.id} style={{background:"#fff",border:"1.5px solid "+PURPLE,borderRadius:10,padding:"12px 12px",display:"flex",flexDirection:"column",gap:10,boxShadow:"0 6px 20px rgba(124,58,237,0.18)"}}>
+                  <_HoraPicker start={editing.start||""} end={editing.end||""}
+                    onChange={function(v){setEditing(Object.assign({},editing,{start:v.start,end:v.end}));}}/>
                   <input value={editing.title} onChange={function(e){setEditing(Object.assign({},editing,{title:e.target.value}));}}
                     onKeyDown={function(e){if(e.key==="Enter")saveEdit();if(e.key==="Escape")setEditing(null);}}
                     autoFocus
-                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"6px 10px",fontSize:12,color:"#0f172a",fontFamily:DG_INTER,fontWeight:600,outline:"none"}}/>
+                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:12.5,color:"#0f172a",fontFamily:DG_INTER,fontWeight:600,outline:"none"}}/>
                   <div style={{display:"flex",gap:6}}>
-                    <button onClick={saveEdit} style={{flex:1,background:PURPLE,border:"none",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700,padding:"6px 0",borderRadius:6,fontFamily:DG_INTER}}>Salvar</button>
-                    <button onClick={function(){setEditing(null);}} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:600,padding:"6px 10px",borderRadius:6,fontFamily:DG_INTER}}>Cancelar</button>
+                    <button onClick={saveEdit} style={{flex:1,background:PURPLE,border:"none",color:"#fff",cursor:"pointer",fontSize:11.5,fontWeight:700,padding:"7px 0",borderRadius:6,fontFamily:DG_INTER}}>Salvar</button>
+                    <button onClick={function(){setEditing(null);}} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",cursor:"pointer",fontSize:11.5,fontWeight:600,padding:"7px 12px",borderRadius:6,fontFamily:DG_INTER}}>Cancelar</button>
                   </div>
                 </div>;
               }
               return <div key={it.id}
-                onClick={function(){setEditing({id:it.id,title:it.title,hora:it.hora||""});}}
+                onClick={function(){setEditing({id:it.id,title:it.title,start:p.start,end:p.end});}}
                 style={{
                   background:"#fff",
                   border:"1px solid #eef0f3",
@@ -52921,17 +53019,17 @@ function _DGRotinaSemanal({user, isSocio}){
                   e.currentTarget.style.transform="";
                   const _x=e.currentTarget.querySelector("[data-rs-x]");if(_x)_x.style.opacity="0";
                 }}>
-                {/* Hora badge */}
-                {it.hora && <div style={{
-                  display:"inline-flex",alignItems:"center",gap:4,
+                {/* Hora badge — range HH:MM → HH:MM */}
+                {p.start && <div style={{
+                  display:"inline-flex",alignItems:"center",gap:5,
                   background:ac.bg,color:ac.txt,
-                  fontSize:10,fontWeight:800,letterSpacing:.4,
-                  padding:"2px 7px",borderRadius:5,
+                  fontSize:10.5,fontWeight:800,letterSpacing:.3,
+                  padding:"3px 8px",borderRadius:6,
                   fontFeatureSettings:"'tnum'",
-                  marginBottom:5,
+                  marginBottom:6,
                 }}>
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  {it.hora}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  <span>{p.start}{p.end ? " → "+p.end : ""}</span>
                 </div>}
                 {/* Título */}
                 <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,lineHeight:1.4,letterSpacing:-.1,wordBreak:"break-word",paddingRight:16}}>{it.title}</div>
@@ -52948,19 +53046,19 @@ function _DGRotinaSemanal({user, isSocio}){
 
             {/* Adicionar bloco */}
             {isAdding
-              ? <div style={{background:"#fff",border:"1.5px solid "+PURPLE,borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7,boxShadow:"0 4px 14px rgba(124,58,237,0.15)"}}>
-                  <input type="time" value={draft.hora} onChange={function(e){setDraft(Object.assign({},draft,{hora:e.target.value}));}}
-                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 8px",fontSize:11,color:"#0f172a",fontFamily:DG_INTER,fontWeight:700,outline:"none",width:100,fontFeatureSettings:"'tnum'"}}/>
+              ? <div style={{background:"#fff",border:"1.5px solid "+PURPLE,borderRadius:10,padding:"12px 12px",display:"flex",flexDirection:"column",gap:10,boxShadow:"0 6px 20px rgba(124,58,237,0.18)"}}>
+                  <_HoraPicker start={draft.start||""} end={draft.end||""}
+                    onChange={function(v){setDraft(Object.assign({},draft,{start:v.start,end:v.end}));}}/>
                   <input value={draft.title} onChange={function(e){setDraft(Object.assign({},draft,{title:e.target.value}));}}
-                    onKeyDown={function(e){if(e.key==="Enter")add(d.id);if(e.key==="Escape"){setAdding(null);setDraft({hora:"",title:""});}}}
+                    onKeyDown={function(e){if(e.key==="Enter")add(d.id);if(e.key==="Escape"){setAdding(null);setDraft({start:"",end:"",title:""});}}}
                     autoFocus placeholder="Ex: Revisar clientes críticos"
-                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:7,padding:"7px 10px",fontSize:12,color:"#0f172a",fontFamily:DG_INTER,fontWeight:600,outline:"none"}}/>
+                    style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:8,padding:"8px 10px",fontSize:12.5,color:"#0f172a",fontFamily:DG_INTER,fontWeight:600,outline:"none"}}/>
                   <div style={{display:"flex",gap:6}}>
-                    <button onClick={function(){add(d.id);}} style={{flex:1,background:PURPLE,border:"none",color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700,padding:"6px 0",borderRadius:6,fontFamily:DG_INTER}}>Adicionar</button>
-                    <button onClick={function(){setAdding(null);setDraft({hora:"",title:""});}} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:600,padding:"6px 10px",borderRadius:6,fontFamily:DG_INTER}}>Cancelar</button>
+                    <button onClick={function(){add(d.id);}} style={{flex:1,background:PURPLE,border:"none",color:"#fff",cursor:"pointer",fontSize:11.5,fontWeight:700,padding:"7px 0",borderRadius:6,fontFamily:DG_INTER}}>Adicionar</button>
+                    <button onClick={function(){setAdding(null);setDraft({start:"",end:"",title:""});}} style={{background:"#fff",border:"1px solid #e2e8f0",color:"#64748b",cursor:"pointer",fontSize:11.5,fontWeight:600,padding:"7px 12px",borderRadius:6,fontFamily:DG_INTER}}>Cancelar</button>
                   </div>
                 </div>
-              : <button onClick={function(){setAdding({day:d.id});setDraft({hora:"",title:""});}}
+              : <button onClick={function(){setAdding({day:d.id});setDraft({start:"",end:"",title:""});}}
                   style={{marginTop:"auto",background:"transparent",color:"#94a3b8",border:"1px dashed #cbd5e1",borderRadius:8,padding:"8px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:5,transition:"all .15s",letterSpacing:-.1}}
                   onMouseEnter={function(e){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor=PURPLE;e.currentTarget.style.color=PURPLE;}}
                   onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#94a3b8";}}>
