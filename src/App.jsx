@@ -16723,12 +16723,27 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       // Coluna "agendado" (Publicadas) -> status real "publicado".
       // Mantém a separação: Aprovado (etapa) vs Publicadas (já publicado).
       const newStatus=toColId==="agendado"?"publicado":toColId;
+      // ── LIMPEZA AUTO em Pausado/Reprovada ──
+      // Quando o card cai em Pausado ou Reprovada, as tags perdem contexto:
+      // - Mês de pagamento (referenceMonth) — não é mais devido
+      // - Responsáveis (assignees/assignee) — freelancer não trabalha nele
+      // - Data/hora de publicação — perdeu o slot
+      // - Tipo de conteúdo — pode ser redefinido quando/se voltar
+      const _stripped = (newStatus==="pausado"||newStatus==="reprovado") ? {
+        assignees:[],
+        assignee:"",
+        publishDate:"",
+        publishTime:"",
+        contentType:"",
+        referenceMonth:"",
+      } : {};
       return {
         ...x,
         status:newStatus,
         colEnteredAt:new Date().toISOString(),
         completedAt:(newStatus==="aprovado"||newStatus==="publicado")?new Date().toISOString().split("T")[0]:x.completedAt,
         timeline:[...(x.timeline||[]),entry],
+        ..._stripped,
       };
     }));
     setDrag(null);setOver(null);
@@ -21413,6 +21428,26 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [copyDirectionTask,setCopyDirectionTask]=useState(null);
   const [copyDirectionText,setCopyDirectionText]=useState("");
 
+  // ── EDIT INLINE de comentários de ajuste/histórico ──
+  // A Hellen (e sócios) podem editar o texto de comentários já enviados.
+  // Formato: {taskId, cmtId, text}
+  const [editingCmt,setEditingCmt]=useState(null);
+  const canEditCmt = !!(CURRENT_USER && (CURRENT_USER.level===1 || CURRENT_USER.dash==="coordinator"));
+  const saveEditedComment = (taskId, cmtId, newText)=>{
+    const txt = String(newText||"").trim();
+    if(!txt || !setTasks) { setEditingCmt(null); return; }
+    setTasks(p=>p.map(t=>{
+      if(t.id!==taskId) return t;
+      const novosComments = (t.comments||[]).map(cc=>{
+        if(cc.id!==cmtId) return cc;
+        return {...cc, text:txt, editedAt:new Date().toISOString(), editedBy:CURRENT_USER.name};
+      });
+      return {...t, comments:novosComments};
+    }));
+    setEditingCmt(null);
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Comentário atualizado.",2500);
+  };
+
   // FIX 1: reset cardIdx, imgIdx, lastApproved e modais ao trocar de aba
   useEffect(()=>{
     if(initTab){
@@ -21538,6 +21573,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       status:"pausado",
       ajustar:false,
       colEnteredAt:now,
+      // Limpar tags que perdem contexto quando o card cai em Pausadas
+      assignees:[], assignee:"", publishDate:"", publishTime:"", contentType:"", referenceMonth:"",
       timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Pausadas",from:"demanda",to:"pausado",at:now,atFmt:nowFmt(),user:actor}]
     }:t));
     pushNotif({type:"demanda",icon:"⏸",title:"Copy pausada",body:'"'+task.title+'" foi enviada pra Pausadas',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
@@ -21555,6 +21592,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       status:"reprovado",
       ajustar:false,
       colEnteredAt:now,
+      // Limpar tags que perdem contexto quando o card cai em Reprovadas
+      assignees:[], assignee:"", publishDate:"", publishTime:"", contentType:"", referenceMonth:"",
       timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Reprovadas",from:"demanda",to:"reprovado",at:now,atFmt:nowFmt(),user:actor}]
     }:t));
     pushNotif({type:"demanda",icon:"✕",title:"Copy reprovada",body:'"'+task.title+'" foi reprovada',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
@@ -22365,7 +22404,34 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                       {r.ts>0&&<span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>{_fmt2(r.ts)}</span>}
                     </div>
                     {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0?6:0}}/>}
-                    {r.comments.map(cc=>(<div key={cc.id} style={{color:C.tx,fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4}}>{String(cc.text||"").replace("AJUSTE NECESSARIO: ","")}</div>))}
+                    {r.comments.map(cc=>{
+                      const txt = String(cc.text||"").replace("AJUSTE NECESSARIO: ","");
+                      const _isEditing = editingCmt && editingCmt.taskId===current.id && editingCmt.cmtId===cc.id;
+                      if(_isEditing){
+                        return(<div key={cc.id} style={{marginBottom:4,display:"flex",flexDirection:"column",gap:6}}>
+                          <textarea value={editingCmt.text} onChange={e=>setEditingCmt({...editingCmt,text:e.target.value})}
+                            autoFocus rows={3}
+                            style={{background:"#fafaff",border:"1px solid "+accent+"55",borderRadius:8,padding:"8px 10px",color:C.tx,fontSize:12.5,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+                          <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+                            <button onClick={()=>setEditingCmt(null)} style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:7,padding:"5px 12px",color:C.td,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                            <button onClick={()=>saveEditedComment(current.id, cc.id, editingCmt.text)} style={{background:accent,border:"none",borderRadius:7,padding:"5px 14px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+                          </div>
+                        </div>);
+                      }
+                      return(<div key={cc.id} style={{color:C.tx,fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4,display:"flex",alignItems:"flex-start",gap:6}}>
+                        <div style={{flex:1,minWidth:0}}>
+                          {txt}
+                          {cc.editedAt&&<span style={{color:C.td,fontSize:9.5,fontWeight:500,marginLeft:6,fontStyle:"italic"}}>(editado)</span>}
+                        </div>
+                        {canEditCmt&&<button onClick={(e)=>{e.stopPropagation();setEditingCmt({taskId:current.id,cmtId:cc.id,text:txt});}}
+                          title="Editar comentário"
+                          style={{background:"transparent",border:"none",padding:2,borderRadius:5,color:C.td,cursor:"pointer",display:"inline-flex",alignItems:"center",flexShrink:0,opacity:.5,transition:"opacity .15s"}}
+                          onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+                          onMouseLeave={e=>e.currentTarget.style.opacity=".5"}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        </button>}
+                      </div>);
+                    })}
                   </div>);
                 })}
               </div>
@@ -22644,7 +22710,31 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                             {r.comments.length>0&&r.comments.map(cc=>{
                               const txt=String(cc.text||"").replace("AJUSTE NECESSARIO: ","").trim();
                               if(!txt)return null;
-                              return(<div key={cc.id} style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",fontWeight:500,marginBottom:r.images.length>0?7:0}}>{txt}</div>);
+                              const _isEditing = editingCmt && editingCmt.taskId===current.id && editingCmt.cmtId===cc.id;
+                              if(_isEditing){
+                                return(<div key={cc.id} style={{marginBottom:r.images.length>0?7:0,display:"flex",flexDirection:"column",gap:6}}>
+                                  <textarea value={editingCmt.text} onChange={e=>setEditingCmt({...editingCmt,text:e.target.value})}
+                                    autoFocus rows={3}
+                                    style={{background:"#fafaff",border:"1px solid "+accent+"55",borderRadius:8,padding:"8px 10px",color:"#0f172a",fontSize:12.5,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+                                  <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+                                    <button onClick={()=>setEditingCmt(null)} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:7,padding:"5px 12px",color:"#64748b",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                                    <button onClick={()=>saveEditedComment(current.id, cc.id, editingCmt.text)} style={{background:accent,border:"none",borderRadius:7,padding:"5px 14px",color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+                                  </div>
+                                </div>);
+                              }
+                              return(<div key={cc.id} style={{color:"#0f172a",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap",wordBreak:"break-word",fontWeight:500,marginBottom:r.images.length>0?7:0,display:"flex",alignItems:"flex-start",gap:6,group:"comment"}}>
+                                <div style={{flex:1,minWidth:0}}>
+                                  {txt}
+                                  {cc.editedAt&&<span style={{color:"#94a3b8",fontSize:9.5,fontWeight:500,marginLeft:6,fontStyle:"italic"}}>(editado)</span>}
+                                </div>
+                                {canEditCmt&&<button onClick={(e)=>{e.stopPropagation();setEditingCmt({taskId:current.id,cmtId:cc.id,text:txt});}}
+                                  title="Editar comentário"
+                                  style={{background:"transparent",border:"none",padding:2,borderRadius:5,color:"#94a3b8",cursor:"pointer",display:"inline-flex",alignItems:"center",flexShrink:0,opacity:.5,transition:"opacity .15s"}}
+                                  onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+                                  onMouseLeave={e=>e.currentTarget.style.opacity=".5"}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                                </button>}
+                              </div>);
                             })}
                             {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:r.comments.length>0?2:0}}>
                               {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" onClick={()=>setOpenCard(current)}
@@ -22719,7 +22809,34 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                             {r.ts>0&&<span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>{_fmt(r.ts)}</span>}
                           </div>
                           {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0||r.images.length>0?6:0}}/>}
-                          {r.comments.map(cc=>(<div key={cc.id} style={{color:C.tx,fontSize:11.5,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4}}>{String(cc.text||"").replace("AJUSTE NECESSARIO: ","")}</div>))}
+                          {r.comments.map(cc=>{
+                            const txt = String(cc.text||"").replace("AJUSTE NECESSARIO: ","");
+                            const _isEditing = editingCmt && editingCmt.taskId===current.id && editingCmt.cmtId===cc.id;
+                            if(_isEditing){
+                              return(<div key={cc.id} style={{marginBottom:4,display:"flex",flexDirection:"column",gap:6}}>
+                                <textarea value={editingCmt.text} onChange={e=>setEditingCmt({...editingCmt,text:e.target.value})}
+                                  autoFocus rows={3}
+                                  style={{background:"#fafaff",border:"1px solid "+accent+"55",borderRadius:8,padding:"7px 9px",color:C.tx,fontSize:11.5,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"inherit",resize:"vertical",lineHeight:1.5}}/>
+                                <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}>
+                                  <button onClick={()=>setEditingCmt(null)} style={{background:"transparent",border:"1px solid "+C.b1,borderRadius:7,padding:"4px 11px",color:C.td,fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+                                  <button onClick={()=>saveEditedComment(current.id, cc.id, editingCmt.text)} style={{background:accent,border:"none",borderRadius:7,padding:"4px 13px",color:"#fff",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+                                </div>
+                              </div>);
+                            }
+                            return(<div key={cc.id} style={{color:C.tx,fontSize:11.5,lineHeight:1.5,whiteSpace:"pre-wrap",wordBreak:"break-word",marginBottom:4,display:"flex",alignItems:"flex-start",gap:6}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                {txt}
+                                {cc.editedAt&&<span style={{color:C.td,fontSize:9.5,fontWeight:500,marginLeft:6,fontStyle:"italic"}}>(editado)</span>}
+                              </div>
+                              {canEditCmt&&<button onClick={(e)=>{e.stopPropagation();setEditingCmt({taskId:current.id,cmtId:cc.id,text:txt});}}
+                                title="Editar comentário"
+                                style={{background:"transparent",border:"none",padding:2,borderRadius:5,color:C.td,cursor:"pointer",display:"inline-flex",alignItems:"center",flexShrink:0,opacity:.5,transition:"opacity .15s"}}
+                                onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+                                onMouseLeave={e=>e.currentTarget.style.opacity=".5"}>
+                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                              </button>}
+                            </div>);
+                          })}
                           {r.images.length>0&&<div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:6}}>
                             {r.images.map((f,i)=>(<img key={f.id} src={f.url} alt="" referrerPolicy="no-referrer" onClick={()=>setOpenCard(current)}
                               title="Abrir cartão pra ver em tamanho grande"
