@@ -31836,144 +31836,179 @@ function OrientacoesView({clientId, bioterUnit}){
     </div>
   );
 
-  const SectionTitle=({label,sub})=>(
-    <div style={{margin:"4px 0 10px"}}>
-      <div style={{color:"#a140ff",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8}}>{label}</div>
-      {sub&&<div style={{color:"#94a3b8",fontSize:11,marginTop:2}}>{sub}</div>}
-    </div>
-  );
+  // Section header moderno com ícone opcional + título grande + sub discreta
+  const SectionTitle=({label,sub,icon,accent})=>{
+    const ac = accent || "#7c3aed";
+    return <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+      {icon && <div style={{width:28,height:28,borderRadius:8,background:ac+"14",color:ac,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <Ico n={icon} size={14}/>
+      </div>}
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.15,fontFamily:"'Inter',system-ui,sans-serif"}}>{label}</div>
+        {sub && <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:2,letterSpacing:-.05}}>{sub}</div>}
+      </div>
+    </div>;
+  };
+
+  // Config das redes sociais/plataformas — labels, cores, geradores de URL
+  const _PLAT = {
+    site:      {label:"Site oficial",  color:"#0ea5e9", icon:"globe",    build:s=>s.startsWith("http")?s:"https://"+s},
+    driveUrl:  {label:"Pasta no Drive",color:"#eab308", icon:"folder",   build:s=>s},
+    instagram: {label:"Instagram",     color:"#ec4899", icon:"sparkles", build:s=>"https://instagram.com/"+s.replace(/^@/,"")},
+    facebook:  {label:"Facebook",      color:"#1877f2", icon:"globe",    build:s=>"https://facebook.com/"+s.replace(/^@/,"")},
+    youtube:   {label:"YouTube",       color:"#ef4444", icon:"video",    build:s=>s.startsWith("http")?s:"https://youtube.com/"+s},
+    linkedin:  {label:"LinkedIn",      color:"#0a66c2", icon:"users",    build:s=>s.startsWith("http")?s:"https://"+s},
+    tiktok:    {label:"TikTok",        color:"#0f172a", icon:"music",    build:s=>"https://tiktok.com/@"+s.replace(/^@/,"")},
+  };
+
+  // Coleta todos os links pra montar a seção Links (unificada)
+  const _linksItems = [];
+  if(data.site) _linksItems.push({k:"site", v:data.site});
+  if(data.driveUrl) _linksItems.push({k:"driveUrl", v:data.driveUrl});
+  if(data.redes) Object.entries(data.redes).filter(function(e){return !!e[1];}).forEach(function(e){_linksItems.push({k:e[0], v:e[1]});});
 
   return(
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* Hero do cliente */}
-      {cl&&<div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",gap:12}}>
-        <div style={{width:44,height:44,borderRadius:10,background:cl.color+"22",border:`0.5px solid ${cl.color}44`,display:"flex",alignItems:"center",justifyContent:"center",color:cl.color,fontWeight:600,fontSize:14}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</div>
+    <div style={{display:"flex",flexDirection:"column",gap:18,fontFamily:"'Inter',system-ui,sans-serif"}}>
+      {/* ═══ Hero do cliente — moderno com logo real ou avatar ═══ */}
+      {cl&&<div style={{background:"linear-gradient(135deg,#fff,#faf5ff)",border:"1px solid #ede9fe",borderRadius:14,padding:"16px 18px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 2px 6px rgba(124,58,237,0.05)"}}>
+        <div style={{width:52,height:52,borderRadius:12,background:"#fff",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:6,flexShrink:0,boxShadow:"0 1px 3px rgba(15,23,42,0.06)"}}>
+          {(typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[cl.id])
+            ? <img src={CLIENT_LOGOS[cl.id]} alt={cl.name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+            : <div style={{color:cl.color||"#7c3aed",fontWeight:800,fontSize:16,letterSpacing:-.3}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</div>
+          }
+        </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{color:"#0f172a",fontWeight:500,fontSize:14}}>{cl.name}{_resolvedUnitName?(" · "+_resolvedUnitName):""}</div>
-          <div style={{color:"#64748b",fontSize:11,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.15}}>
+            {cl.name}
+            {_resolvedUnitName && <span style={{color:"#64748b",fontWeight:600,marginLeft:6}}>· {_resolvedUnitName}</span>}
+          </div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}</div>
         </div>
       </div>}
 
-      {/* Contatos — vem do Playbook. Se o card tem bioterUnit, mostra contatos DAQUELA unidade. */}
-      {_resolvedContatos && (Object.keys(_resolvedContatos).filter(k=>_resolvedContatos[k]).length>0) && <div>
-        <SectionTitle label={"Contatos"+(_resolvedUnitName?(" · "+_resolvedUnitName):"")} sub="dados pra colocar nas artes/vídeos"/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
-          {[
-            {key:"telefone",  label:"Telefone",   icon:"phone"},
-            {key:"whatsapp",  label:"WhatsApp",   icon:"phone"},
-            {key:"email",     label:"E-mail",     icon:"mail"},
-            {key:"site",      label:"Site",       icon:"globe"},
-            {key:"instagram", label:"Instagram",  icon:"sparkles"},
-            {key:"endereco",  label:"Endereço",   icon:"map-pin"},
-          ].filter(it=>_resolvedContatos[it.key]).map(it=>(
-            <div key={it.key} style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"9px 12px",display:"flex",alignItems:"center",gap:9}}>
-              <div style={{width:28,height:28,borderRadius:7,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={12} color="#fff"/></div>
-              <div style={{minWidth:0,flex:1}}>
-                <div style={{color:"#134e4a",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
-                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_resolvedContatos[it.key]}</div>
-              </div>
-              <button type="button" onClick={async()=>{try{await navigator.clipboard.writeText(_resolvedContatos[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}}
-                title="Copiar"
-                style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:3,borderRadius:5,display:"inline-flex",alignItems:"center"}}>
-                <Ico n="copy" size={12}/>
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>}
-
-      {/* Logos */}
+      {/* ═══ Logos ═══ */}
       {data.logos?.length>0&&<div>
-        <SectionTitle label="Logos" sub="clique pra abrir ou baixar"/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8}}>
+        <SectionTitle label="Logos" sub="Clique pra abrir ou baixar" icon="image" accent="#7c3aed"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}}>
           {data.logos.map((l,i)=>(
-            <div key={i} style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:10,overflow:"hidden"}}>
-              <a href={l.url} target="_blank" rel="noopener noreferrer" download={l.externo?undefined:l.nome} style={{display:"block",aspectRatio:"1.4",background:"#f8fafc",alignItems:"center",justifyContent:"center",padding:8,textDecoration:"none"}}>
-                <img src={l.url} alt={l.nome} style={{width:"100%",height:"100%",objectFit:"contain"}} onError={e=>{e.currentTarget.style.display="none";}}/>
+            <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",transition:"all .15s",cursor:"pointer",boxShadow:"0 1px 2px rgba(15,23,42,0.03)"}}
+              onMouseEnter={function(e){e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.boxShadow="0 6px 16px rgba(124,58,237,0.08)";e.currentTarget.style.transform="translateY(-1px)";}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.03)";e.currentTarget.style.transform="";}}>
+              <a href={l.url} target="_blank" rel="noopener noreferrer" download={l.externo?undefined:l.nome} style={{display:"flex",aspectRatio:"1.35",background:"linear-gradient(180deg,#fafbfc,#f5f7fa)",alignItems:"center",justifyContent:"center",padding:14,textDecoration:"none"}}>
+                <img src={l.url} alt={l.nome} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}} onError={e=>{e.currentTarget.style.display="none";}}/>
               </a>
-              <div style={{padding:"8px 10px",borderTop:"0.5px solid #f1f5f9"}}>
-                <div style={{color:"#0f172a",fontSize:11,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.nome}</div>
-                <a href={l.url} target="_blank" rel="noopener noreferrer" download={l.externo?undefined:l.nome} style={{color:"#a140ff",fontSize:10,fontWeight:500,textDecoration:"none",marginTop:3,display:"inline-block"}}>{l.externo?"Abrir ↗":"Baixar ↓"}</a>
+              <div style={{padding:"10px 12px",borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:6}}>
+                <div style={{color:"#0f172a",fontSize:11.5,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>{l.nome}</div>
+                <a href={l.url} target="_blank" rel="noopener noreferrer" download={l.externo?undefined:l.nome}
+                  style={{color:"#7c3aed",fontSize:10.5,fontWeight:700,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:3,background:"#f5f3ff",padding:"3px 8px",borderRadius:6,flexShrink:0,letterSpacing:-.1}}>
+                  {l.externo?"Abrir":"Baixar"}
+                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">{l.externo?<><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></>:<><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>}</svg>
+                </a>
               </div>
             </div>
           ))}
         </div>
       </div>}
 
-      {/* Paleta */}
+      {/* ═══ Paleta ═══ */}
       {data.paleta?.length>0&&<div>
-        <SectionTitle label="Paleta de cores" sub="clique pra copiar o hex"/>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8}}>
+        <SectionTitle label="Paleta de cores" sub="Clique pra copiar o hex" icon="palette" accent="#ec4899"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:10}}>
           {data.paleta.map((c,i)=>(
-            <button key={i} onClick={()=>copyHex(c.hex)} style={{background:c.hex,border:"0.5px solid rgba(0,0,0,0.1)",borderRadius:10,padding:10,minHeight:64,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:"pointer",textAlign:"left"}}>
-              <div style={{color:"#fff",fontSize:11,fontWeight:500,textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{c.nome}</div>
-              <div style={{color:"#fff",fontSize:11,fontFamily:"monospace",textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{copiedHex===c.hex?"copiado!":c.hex.toUpperCase()}</div>
+            <button key={i} onClick={()=>copyHex(c.hex)}
+              style={{background:c.hex,border:"1px solid rgba(0,0,0,0.08)",borderRadius:12,padding:12,minHeight:74,display:"flex",flexDirection:"column",justifyContent:"space-between",cursor:"pointer",textAlign:"left",transition:"all .15s",boxShadow:"0 1px 3px rgba(15,23,42,0.08)",fontFamily:"'Inter',system-ui,sans-serif"}}
+              onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 20px rgba(15,23,42,0.15)";}}
+              onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 1px 3px rgba(15,23,42,0.08)";}}>
+              <div style={{color:"#fff",fontSize:12,fontWeight:700,letterSpacing:-.15,textShadow:"0 1px 2px rgba(0,0,0,0.4)"}}>{c.nome}</div>
+              <div style={{color:"#fff",fontSize:11,fontFamily:"'JetBrains Mono',monospace",fontWeight:600,textShadow:"0 1px 2px rgba(0,0,0,0.4)",letterSpacing:.4}}>{copiedHex===c.hex?"copiado!":c.hex.toUpperCase()}</div>
             </button>
           ))}
         </div>
       </div>}
 
-      {/* Fontes */}
+      {/* ═══ Fontes ═══ */}
       {data.fontes?.length>0&&<div>
-        <SectionTitle label="Fontes" sub="baixe os arquivos pra instalar"/>
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        <SectionTitle label="Fontes" sub="Baixe os arquivos pra instalar" icon="type" accent="#0ea5e9"/>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {data.fontes.map((f,i)=>(
-            <div key={i} style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:36,height:36,borderRadius:8,background:"#a140ff15",color:"#a140ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:500,flexShrink:0}}>Aa</div>
+            <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 14px",display:"flex",alignItems:"center",gap:12,transition:"all .12s"}}
+              onMouseEnter={function(e){e.currentTarget.style.borderColor="#93c5fd";e.currentTarget.style.boxShadow="0 3px 10px rgba(14,165,233,0.06)";}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="none";}}>
+              <div style={{width:38,height:38,borderRadius:9,background:"linear-gradient(135deg,#dbeafe,#e0f2fe)",color:"#0284c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,fontWeight:800,flexShrink:0,letterSpacing:-.5}}>Aa</div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{color:"#0f172a",fontSize:13,fontWeight:500}}>{f.nome}</div>
-                <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>{f.uso?f.uso+" · ":""}{f.formato}{f.externo?" · link externo":""}</div>
+                <div style={{color:"#0f172a",fontSize:13.5,fontWeight:700,letterSpacing:-.2}}>{f.nome}</div>
+                <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:500}}>{f.uso?f.uso+" · ":""}{f.formato}{f.externo?" · link externo":""}</div>
               </div>
-              <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.externo?undefined:f.nome} style={{color:"#a140ff",fontSize:11,textDecoration:"none",fontWeight:500,flexShrink:0}}>{f.externo?"Abrir ↗":"Baixar ↓"}</a>
+              <a href={f.url} target="_blank" rel="noopener noreferrer" download={f.externo?undefined:f.nome}
+                style={{color:"#0284c7",fontSize:11.5,textDecoration:"none",fontWeight:700,flexShrink:0,background:"#dbeafe",padding:"5px 11px",borderRadius:7,display:"inline-flex",alignItems:"center",gap:4,letterSpacing:-.1}}>
+                {f.externo?"Abrir":"Baixar"}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">{f.externo?<><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></>:<><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>}</svg>
+              </a>
             </div>
           ))}
         </div>
       </div>}
 
-      {/* Tom de voz */}
-      {data.tomDeVoz&&<div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-        <SectionTitle label="Tom de voz"/>
-        <div style={{color:"#0f172a",fontSize:13,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{data.tomDeVoz}</div>
+      {/* ═══ Tom de voz ═══ */}
+      {data.tomDeVoz&&<div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px"}}>
+        <SectionTitle label="Tom de voz" icon="mic" accent="#16a34a"/>
+        <div style={{color:"#334155",fontSize:13.5,lineHeight:1.7,whiteSpace:"pre-wrap",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500}}>{data.tomDeVoz}</div>
       </div>}
 
-      {/* Hashtags */}
+      {/* ═══ Hashtags ═══ */}
       {data.hashtags?.length>0&&<div>
-        <SectionTitle label="Hashtags padrão" sub="clique pra copiar"/>
+        <SectionTitle label="Hashtags padrão" sub="Clique pra copiar" icon="hash" accent="#7c3aed"/>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {data.hashtags.map((t,i)=>(
-            <button key={i} onClick={()=>copyHex(t)} style={{background:"#a140ff15",color:"#a140ff",border:"none",borderRadius:99,padding:"5px 12px",fontSize:11,fontWeight:500,cursor:"pointer"}}>{copiedHex===t?"copiado!":t}</button>
+            <button key={i} onClick={()=>copyHex(t)}
+              style={{background:copiedHex===t?"#7c3aed":"#f5f3ff",color:copiedHex===t?"#fff":"#7c3aed",border:"1px solid "+(copiedHex===t?"#7c3aed":"#ede9fe"),borderRadius:99,padding:"6px 13px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1,transition:"all .12s"}}
+              onMouseEnter={function(e){if(copiedHex!==t){e.currentTarget.style.background="#ede9fe";e.currentTarget.style.borderColor="#c4b5fd";}}}
+              onMouseLeave={function(e){if(copiedHex!==t){e.currentTarget.style.background="#f5f3ff";e.currentTarget.style.borderColor="#ede9fe";}}}>
+              {copiedHex===t?"copiado!":t}
+            </button>
           ))}
         </div>
       </div>}
 
-      {/* CTA padrão */}
-      {data.ctaPadrao&&<div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:10,padding:"10px 14px"}}>
-        <div style={{color:"#94a3b8",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>CTA padrão</div>
-        <div style={{color:"#0f172a",fontSize:13}}>{data.ctaPadrao}</div>
+      {/* ═══ CTA padrão ═══ */}
+      {data.ctaPadrao&&<div style={{background:"linear-gradient(135deg,#fff,#faf5ff)",border:"1px solid #ede9fe",borderRadius:12,padding:"13px 16px"}}>
+        <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15 8.5 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 9 8.5 12 2"/></svg>
+          CTA padrão
+        </div>
+        <div style={{color:"#0f172a",fontSize:13.5,fontWeight:600,letterSpacing:-.15}}>{data.ctaPadrao}</div>
       </div>}
 
-      {/* Não fazer */}
-      {data.naoFazer&&<div style={{background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:12,padding:"14px 16px"}}>
-        <div style={{color:"#991b1b",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.8,marginBottom:6}}>NÃO fazer</div>
-        <div style={{color:"#7f1d1d",fontSize:13,lineHeight:1.7,whiteSpace:"pre-wrap"}}>{data.naoFazer}</div>
+      {/* ═══ Não fazer ═══ */}
+      {data.naoFazer&&<div style={{background:"linear-gradient(135deg,#fff,#fef2f2)",border:"1px solid #fecaca",borderRadius:12,padding:"14px 16px"}}>
+        <div style={{color:"#dc2626",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"inline-flex",alignItems:"center",gap:6}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+          NÃO fazer
+        </div>
+        <div style={{color:"#7f1d1d",fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap",fontWeight:500}}>{data.naoFazer}</div>
       </div>}
 
-      {/* Contatos & links */}
-      {(data.site||data.driveUrl||(data.redes&&Object.values(data.redes).some(Boolean)))&&<div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 16px"}}>
-        <SectionTitle label="Contatos & links"/>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {data.site&&<a href={data.site.startsWith("http")?data.site:"https://"+data.site} target="_blank" rel="noopener noreferrer" style={{display:"flex",justifyContent:"space-between",fontSize:12,textDecoration:"none",alignItems:"center"}}>
-            <span style={{color:"#64748b"}}>Site oficial</span><span style={{color:"#a140ff",fontWeight:500}}>{data.site} ↗</span>
-          </a>}
-          {data.driveUrl&&<a href={data.driveUrl} target="_blank" rel="noopener noreferrer" style={{display:"flex",justifyContent:"space-between",fontSize:12,textDecoration:"none",alignItems:"center"}}>
-            <span style={{color:"#64748b"}}>Pasta no Drive</span><span style={{color:"#a140ff",fontWeight:500}}>Abrir Drive ↗</span>
-          </a>}
-          {data.redes&&Object.entries(data.redes).filter(([,v])=>v).map(([k,v])=>{
-            const labels={instagram:"Instagram",facebook:"Facebook",youtube:"YouTube",linkedin:"LinkedIn",tiktok:"TikTok"};
-            const urls={instagram:s=>"https://instagram.com/"+s.replace(/^@/,""),facebook:s=>"https://facebook.com/"+s.replace(/^@/,""),youtube:s=>s.startsWith("http")?s:"https://youtube.com/"+s,linkedin:s=>s.startsWith("http")?s:"https://"+s,tiktok:s=>"https://tiktok.com/@"+s.replace(/^@/,"")};
-            return(<a key={k} href={urls[k](v)} target="_blank" rel="noopener noreferrer" style={{display:"flex",justifyContent:"space-between",fontSize:12,textDecoration:"none",alignItems:"center"}}>
-              <span style={{color:"#64748b"}}>{labels[k]}</span><span style={{color:"#a140ff",fontWeight:500}}>{v} ↗</span>
-            </a>);
+      {/* ═══ Links (renomeado — Contatos agora tem aba própria) ═══ */}
+      {_linksItems.length>0&&<div>
+        <SectionTitle label="Links" sub="Perfis oficiais e recursos externos" icon="link" accent="#7c3aed"/>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
+          {_linksItems.map(function(it){
+            const cfg = _PLAT[it.k] || {label:it.k, color:"#64748b", icon:"link", build:function(s){return s;}};
+            const url = cfg.build(it.v);
+            const displayValue = it.k==="driveUrl" ? "Abrir pasta" : it.v;
+            return <a key={it.k} href={url} target="_blank" rel="noopener noreferrer"
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"10px 12px",display:"flex",alignItems:"center",gap:11,textDecoration:"none",transition:"all .12s"}}
+              onMouseEnter={function(e){e.currentTarget.style.borderColor=cfg.color+"66";e.currentTarget.style.background=cfg.color+"06";e.currentTarget.style.boxShadow="0 3px 10px "+cfg.color+"15";}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";e.currentTarget.style.boxShadow="none";}}>
+              <div style={{width:32,height:32,borderRadius:9,background:cfg.color+"14",color:cfg.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Ico n={cfg.icon} size={14}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:700,letterSpacing:-.15}}>{cfg.label}</div>
+                <div style={{color:"#64748b",fontSize:11,fontWeight:500,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{displayValue}</div>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={cfg.color} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+            </a>;
           })}
         </div>
       </div>}
@@ -56614,12 +56649,9 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 ? ((data.contatos_by_unit||{})[_currentUnit] || {})
                 : (data.contatos||{});
               const FIELDS = [
-                {key:"telefone",  label:"Telefone",   ph:"(00) 0000-0000",          icon:"phone"},
-                {key:"whatsapp",  label:"WhatsApp",   ph:"(00) 0 0000-0000",        icon:"phone"},
-                {key:"email",     label:"E-mail",     ph:"contato@cliente.com.br",  icon:"mail"},
-                {key:"site",      label:"Site",       ph:"cliente.com.br",          icon:"globe"},
-                {key:"instagram", label:"Instagram",  ph:"@cliente",                icon:"sparkles"},
-                {key:"endereco",  label:"Endereço",   ph:"Rua, número — Cidade/UF", icon:"map-pin", full:true},
+                {key:"nome",     label:"Nome",     ph:"Ex: Rodrigo Silva",       icon:"user"},
+                {key:"whatsapp", label:"WhatsApp", ph:"(00) 0 0000-0000",        icon:"phone"},
+                {key:"email",    label:"E-mail",   ph:"contato@cliente.com.br",  icon:"mail"},
               ];
               if(editMode){
                 return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
