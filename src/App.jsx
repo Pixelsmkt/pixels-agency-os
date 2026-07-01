@@ -56717,9 +56717,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               ];
 
               if(editMode){
+                // Se ainda não tem nenhum contato, mostra 1 card em branco pronto pra preencher.
+                // Quando o usuário digitar, _updateAt cria o item no state.
+                const displayList = listEdit.length > 0 ? listEdit : [{nome:"",whatsapp:"",email:""}];
                 return <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  {listEdit.length===0 && <div style={{color:PB_SOFT,fontSize:12.5,fontStyle:"italic",padding:"8px 2px"}}>Nenhum contato ainda — clique em "Adicionar contato" pra começar.</div>}
-                  {listEdit.map(function(ct,idx){
+                  {displayList.map(function(ct,idx){
                     return <div key={idx} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",position:"relative"}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
                         <div style={{color:"#0d9488",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Contato {idx+1}</div>
