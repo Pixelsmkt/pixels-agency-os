@@ -21360,6 +21360,14 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const [tab,setTab]=useState(initTab||"copys");
   const [cardIdx,setCardIdx]=useState(0);
   const [imgIdx,setImgIdx]=useState(0);
+  const [imgZoom,setImgZoom]=useState(false); // Lightbox: clique na imagem → zoom fullscreen
+  // ESC fecha o zoom
+  useEffect(()=>{
+    if(!imgZoom)return;
+    const _onEsc=(e)=>{if(e.key==="Escape")setImgZoom(false);};
+    window.addEventListener("keydown",_onEsc);
+    return()=>window.removeEventListener("keydown",_onEsc);
+  },[imgZoom]);
   const [openCard,setOpenCard]=useState(null);
   // URLs de imagens que já sabemos que falharam — pra esconder thumbs quebradas
   // e auto-pular pra próxima boa quando o user abrir um card.
@@ -22068,8 +22076,10 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               </div>);
             })}
           </div>)}
-          {/* Imagem principal — altura travada pra não empurrar nada (stories verticais ficam contidas) */}
-          <div style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+          {/* Imagem principal — altura travada. Click nela abre lightbox fullscreen (zoom). */}
+          <div onClick={()=>allImgs.length>0&&setImgZoom(true)}
+            title={allImgs.length>0?"Clique pra ampliar":""}
+            style={{background:C.s1,borderRadius:16,overflow:"hidden",height:"min(680px, 72vh)",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",cursor:allImgs.length>0?"zoom-in":"default"}}>
             {allImgs.length>0
               ?(<><_ApprovImg src={allImgs[Math.min(imgIdx,allImgs.length-1)]} idx={imgIdx} key={"k"+imgIdx} onFail={markBroken}/>
                 <div style={{display:"none",position:"absolute",inset:0,alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12,padding:32,background:"linear-gradient(135deg,#fafafa,#f1f5f9)",color:"#94a3b8",textAlign:"center"}}>
@@ -22097,6 +22107,43 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 </div>)
             }
           </div>
+
+          {/* Lightbox fullscreen — click ou ESC pra fechar */}
+          {imgZoom && allImgs.length>0 && <div
+            onClick={()=>setImgZoom(false)}
+            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24,cursor:"zoom-out"}}>
+            {/* Contador + botão fechar no header */}
+            <div style={{position:"absolute",top:16,left:0,right:0,display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 24px",zIndex:2}}>
+              <div style={{color:"#fff",fontSize:13,fontWeight:600,background:"rgba(255,255,255,0.15)",backdropFilter:"blur(10px)",padding:"6px 12px",borderRadius:20}}>
+                {imgIdx+1} / {allImgs.length}
+              </div>
+              <button onClick={(e)=>{e.stopPropagation();setImgZoom(false);}}
+                title="Fechar (ESC)"
+                style={{background:"rgba(255,255,255,0.15)",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:40,height:40,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#fff"}}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            {/* Setinha prev */}
+            {allImgs.length>1 && <button onClick={(e)=>{e.stopPropagation();setImgIdx(i=>(i-1+allImgs.length)%allImgs.length);}}
+              style={{position:"absolute",left:24,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.15)",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:48,height:48,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#fff",zIndex:2}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>}
+            {/* Imagem grande */}
+            <img src={allImgs[Math.min(imgIdx,allImgs.length-1)]}
+              onClick={(e)=>e.stopPropagation()}
+              alt=""
+              referrerPolicy="no-referrer"
+              style={{maxWidth:"92vw",maxHeight:"92vh",objectFit:"contain",borderRadius:8,boxShadow:"0 20px 60px rgba(0,0,0,0.6)",cursor:"default"}}/>
+            {/* Setinha next */}
+            {allImgs.length>1 && <button onClick={(e)=>{e.stopPropagation();setImgIdx(i=>(i+1)%allImgs.length);}}
+              style={{position:"absolute",right:24,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.15)",backdropFilter:"blur(10px)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:48,height:48,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#fff",zIndex:2}}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>}
+            {/* Hint */}
+            <div style={{position:"absolute",bottom:16,left:0,right:0,textAlign:"center",color:"rgba(255,255,255,0.6)",fontSize:11,fontWeight:500,letterSpacing:.3}}>
+              Clique fora ou aperte ESC pra fechar
+            </div>
+          </div>}
         </div>}
 
         {/* Copy panel — briefing centralizado e grande pra leitura confortável */}
