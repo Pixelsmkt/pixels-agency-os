@@ -31702,59 +31702,81 @@ function ContatosView({clientId, bioterUnit}){
     return u?(u.pickerLabel||u.label.split("/")[0]):bioterUnit;
   },[bioterUnit]);
 
-  // Contatos resolvidos: por unidade > default
-  const _resolvedContatos = useMemo(()=>{
-    if(!playbookData)return null;
-    if(bioterUnit && playbookData.contatos_by_unit && playbookData.contatos_by_unit[bioterUnit]){
-      return playbookData.contatos_by_unit[bioterUnit];
+  // Normaliza contatos pra array (backcompat com formato objeto único)
+  const _normContatos = (raw)=>{
+    if(!raw) return [];
+    if(Array.isArray(raw)) return raw.filter(Boolean);
+    if(typeof raw==="object"){
+      const hasAny = raw.nome||raw.whatsapp||raw.email||raw.telefone||raw.site||raw.instagram||raw.endereco;
+      return hasAny ? [{
+        nome: raw.nome||"",
+        whatsapp: raw.whatsapp||raw.telefone||"",
+        email: raw.email||"",
+      }] : [];
     }
-    return playbookData.contatos || null;
+    return [];
+  };
+
+  // Lista de contatos resolvidos: por unidade > default
+  const _resolvedList = useMemo(()=>{
+    if(!playbookData) return [];
+    if(bioterUnit && playbookData.contatos_by_unit && playbookData.contatos_by_unit[bioterUnit]){
+      return _normContatos(playbookData.contatos_by_unit[bioterUnit]);
+    }
+    return _normContatos(playbookData.contatos);
   },[playbookData,bioterUnit]);
 
   if(!playbookData){
     return <div style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8",fontSize:12}}>Carregando contatos…</div>;
   }
-  const _hasAny = _resolvedContatos && Object.keys(_resolvedContatos).filter(k=>_resolvedContatos[k]).length>0;
-  if(!_hasAny){
+  if(_resolvedList.length===0){
     return <div style={{textAlign:"center",padding:"40px 20px"}}>
       <div style={{width:48,height:48,borderRadius:12,background:"#f0fdfa",color:"#0d9488",display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
         <Ico n="phone" size={22} color="#0d9488"/>
       </div>
       <div style={{color:"#0f172a",fontWeight:600,fontSize:13,marginBottom:6}}>Sem contatos cadastrados{_resolvedUnitName?(" para "+_resolvedUnitName):""}</div>
-      <div style={{color:"#64748b",fontSize:11,lineHeight:1.6,maxWidth:380,margin:"0 auto"}}>Vá em <strong>Estratégia → Playbooks → [área] → Contatos</strong> pra cadastrar telefone, e-mail, WhatsApp, site, Instagram e endereço da unidade.</div>
+      <div style={{color:"#64748b",fontSize:11,lineHeight:1.6,maxWidth:380,margin:"0 auto"}}>Vá em <strong>Estratégia → Playbooks → [área] → Contatos</strong> pra cadastrar os contatos da unidade.</div>
     </div>;
   }
+  const _FIELDS = [
+    {key:"whatsapp", label:"WhatsApp", icon:"phone"},
+    {key:"email",    label:"E-mail",   icon:"mail"},
+  ];
   return <div style={{display:"flex",flexDirection:"column",gap:12}}>
     {cl && <div style={{background:"linear-gradient(135deg,#f0fdfa,#fff)",border:"0.5px solid #99f6e4",borderRadius:12,padding:"12px 14px",display:"flex",alignItems:"center",gap:11}}>
       <div style={{width:38,height:38,borderRadius:9,background:cl.color+"22",border:"0.5px solid "+cl.color+"44",display:"flex",alignItems:"center",justifyContent:"center",color:cl.color,fontWeight:700,fontSize:13}}>{cl.abbr||cl.name.slice(0,2).toUpperCase()}</div>
       <div style={{flex:1,minWidth:0}}>
         <div style={{color:"#0f172a",fontWeight:600,fontSize:13.5,letterSpacing:-.1}}>{cl.name}{_resolvedUnitName?(" · "+_resolvedUnitName):""}</div>
-        <div style={{color:"#0d9488",fontSize:11,marginTop:2,fontWeight:600}}>Dados pra colocar nas artes e vídeos</div>
+        <div style={{color:"#0d9488",fontSize:11,marginTop:2,fontWeight:600}}>{_resolvedList.length} contato{_resolvedList.length===1?"":"s"} · dados pra colocar nas artes e vídeos</div>
       </div>
     </div>}
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
-      {[
-        {key:"telefone",  label:"Telefone",   icon:"phone"},
-        {key:"whatsapp",  label:"WhatsApp",   icon:"phone"},
-        {key:"email",     label:"E-mail",     icon:"mail"},
-        {key:"site",      label:"Site",       icon:"globe"},
-        {key:"instagram", label:"Instagram",  icon:"sparkles"},
-        {key:"endereco",  label:"Endereço",   icon:"map-pin"},
-      ].filter(it=>_resolvedContatos[it.key]).map(it=>(
-        <div key={it.key} style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:9}}>
-          <div style={{width:30,height:30,borderRadius:7,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={13} color="#fff"/></div>
-          <div style={{minWidth:0,flex:1}}>
-            <div style={{color:"#134e4a",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
-            <div style={{color:"#0f172a",fontSize:13,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{_resolvedContatos[it.key]}</div>
+    {_resolvedList.map((ct,idx)=>{
+      const items = _FIELDS.filter(it=>ct[it.key]);
+      return <div key={idx} style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:12,padding:"12px 14px"}}>
+        {ct.nome && <div style={{color:"#134e4a",fontSize:14,fontWeight:800,letterSpacing:-.2,marginBottom:items.length>0?10:0,display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:28,height:28,borderRadius:8,background:"#0d9488",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n="user" size={13} color="#fff"/>
           </div>
-          <button type="button" onClick={async()=>{try{await navigator.clipboard.writeText(_resolvedContatos[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}}
-            title="Copiar"
-            style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:4,borderRadius:5,display:"inline-flex",alignItems:"center"}}>
-            <Ico n="copy" size={13}/>
-          </button>
-        </div>
-      ))}
-    </div>
+          {ct.nome}
+        </div>}
+        {items.length>0 && <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
+          {items.map(it=>(
+            <div key={it.key} style={{background:"#fff",border:"1px solid #99f6e480",borderRadius:9,padding:"8px 10px",display:"flex",alignItems:"center",gap:9}}>
+              <div style={{width:26,height:26,borderRadius:7,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={11} color="#fff"/></div>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:"#134e4a",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
+                <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ct[it.key]}</div>
+              </div>
+              <button type="button" onClick={async()=>{try{await navigator.clipboard.writeText(ct[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}}
+                title="Copiar"
+                style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:3,borderRadius:5,display:"inline-flex",alignItems:"center"}}>
+                <Ico n="copy" size={12}/>
+              </button>
+            </div>
+          ))}
+        </div>}
+      </div>;
+    })}
   </div>;
 }
 
@@ -56644,40 +56666,125 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
             </div>}
             {(function(){
               const _currentUnit = _isBioter ? _unitTab : null;
-              // No modo leitura, lê de data.contatos_by_unit[unit] (Bioter) ou data.contatos (resto)
-              const cRead = _isBioter
-                ? ((data.contatos_by_unit||{})[_currentUnit] || {})
-                : (data.contatos||{});
+              // ── Normaliza contatos pra sempre ser array ──
+              // Backcompat: se vier objeto único {nome/whatsapp/email/telefone,...} vira [obj].
+              // Se vier array, mantém.
+              const _norm = function(raw){
+                if(!raw) return [];
+                if(Array.isArray(raw)) return raw.filter(Boolean);
+                if(typeof raw==="object"){
+                  const hasAny = raw.nome||raw.whatsapp||raw.email||raw.telefone||raw.site||raw.instagram||raw.endereco;
+                  return hasAny ? [{
+                    nome: raw.nome||"",
+                    whatsapp: raw.whatsapp||raw.telefone||"",
+                    email: raw.email||"",
+                  }] : [];
+                }
+                return [];
+              };
+              // Lista atual (edição usa state; leitura usa data)
+              const listEdit = editMode
+                ? (_isBioter ? _norm(editContatosByUnit[_currentUnit]) : _norm(editContatos))
+                : [];
+              const listRead = !editMode
+                ? (_isBioter ? _norm((data.contatos_by_unit||{})[_currentUnit]) : _norm(data.contatos))
+                : [];
+              // Setter que salva array
+              const _saveList = function(newList){
+                if(_isBioter){
+                  setEditContatosByUnit(function(p){return Object.assign({},p||{},{[_currentUnit]:newList});});
+                } else {
+                  setEditContatos(newList);
+                }
+              };
+              const _updateAt = function(idx, patch){
+                const cur = [...listEdit];
+                cur[idx] = Object.assign({}, cur[idx]||{}, patch);
+                _saveList(cur);
+              };
+              const _removeAt = function(idx){
+                const cur = listEdit.filter(function(_,i){return i!==idx;});
+                _saveList(cur);
+              };
+              const _addNew = function(){
+                _saveList([...listEdit, {nome:"", whatsapp:"", email:""}]);
+              };
+
               const FIELDS = [
                 {key:"nome",     label:"Nome",     ph:"Ex: Rodrigo Silva",       icon:"user"},
                 {key:"whatsapp", label:"WhatsApp", ph:"(00) 0 0000-0000",        icon:"phone"},
                 {key:"email",    label:"E-mail",   ph:"contato@cliente.com.br",  icon:"mail"},
               ];
+
               if(editMode){
-                return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
-                  {FIELDS.map(function(f){return <div key={f.key} style={f.full?{gridColumn:isMob?"auto":"span 2"}:{}}>
-                    <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{f.label}</div>
-                    <input type="text" placeholder={f.ph}
-                      value={_contatosForUnit(_currentUnit)[f.key]||""}
-                      onChange={function(e){_setContatosForUnit(_currentUnit,{[f.key]:e.target.value});}}
-                      style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
-                  </div>;})}
+                return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  {listEdit.length===0 && <div style={{color:PB_SOFT,fontSize:12.5,fontStyle:"italic",padding:"8px 2px"}}>Nenhum contato ainda — clique em "Adicionar contato" pra começar.</div>}
+                  {listEdit.map(function(ct,idx){
+                    return <div key={idx} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",position:"relative"}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                        <div style={{color:"#0d9488",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Contato {idx+1}</div>
+                        <button type="button" onClick={function(){_removeAt(idx);}} title="Remover contato"
+                          style={{background:"#fff",border:"1px solid #fecaca",color:"#dc2626",borderRadius:7,padding:"4px 9px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",gap:4,transition:"all .12s"}}
+                          onMouseEnter={function(e){e.currentTarget.style.background="#fef2f2";}}
+                          onMouseLeave={function(e){e.currentTarget.style.background="#fff";}}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+                          Remover
+                        </button>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:10}}>
+                        {FIELDS.map(function(f){
+                          const isNome=f.key==="nome";
+                          return <div key={f.key} style={isNome?{gridColumn:isMob?"auto":"span 2"}:{}}>
+                            <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>{f.label}</div>
+                            <input type="text" placeholder={f.ph}
+                              value={ct[f.key]||""}
+                              onChange={function(e){_updateAt(idx,{[f.key]:e.target.value});}}
+                              style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:9,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
+                          </div>;
+                        })}
+                      </div>
+                    </div>;
+                  })}
+                  <button type="button" onClick={_addNew}
+                    style={{background:"linear-gradient(135deg,#0d9488,#14b8a6)",color:"#fff",border:"none",borderRadius:10,padding:"10px 18px",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,alignSelf:"flex-start",boxShadow:"0 4px 12px rgba(13,148,136,0.30)",letterSpacing:-.1,transition:"all .15s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 16px rgba(13,148,136,0.40)";}}
+                    onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 12px rgba(13,148,136,0.30)";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                    Adicionar contato
+                  </button>
                 </div>;
               }
-              const items = FIELDS.filter(function(it){return cRead[it.key];});
-              if(items.length===0)return <_PbEmpty icon="phone" text={_isBioter?"Nenhum contato cadastrado pra esta unidade.":"Nenhum contato cadastrado."} sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>;
-              return <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:9}}>
-                {items.map(function(it){return <div key={it.key} style={{display:"flex",alignItems:"center",gap:9,background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:10,padding:"9px 12px"}}>
-                  <div style={{width:30,height:30,borderRadius:8,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={13} color="#fff"/></div>
-                  <div style={{minWidth:0,flex:1}}>
-                    <div style={{color:"#134e4a",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
-                    <div style={{color:"#0f172a",fontSize:13,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{cRead[it.key]}</div>
-                  </div>
-                  <button type="button" onClick={function(){try{navigator.clipboard.writeText(cRead[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}} title="Copiar"
-                    style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:4,borderRadius:6,display:"inline-flex",alignItems:"center"}}>
-                    <Ico n="copy" size={13}/>
-                  </button>
-                </div>;})}
+
+              // ── Modo leitura ──
+              if(listRead.length===0) return <_PbEmpty icon="phone" text={_isBioter?"Nenhum contato cadastrado pra esta unidade.":"Nenhum contato cadastrado."} sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>;
+              return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                {listRead.map(function(ct,idx){
+                  const items = FIELDS.filter(function(it){return ct[it.key];});
+                  if(items.length===0) return null;
+                  return <div key={idx} style={{background:"#f0fdfa",border:"1px solid #99f6e4",borderRadius:12,padding:"12px 14px"}}>
+                    {ct.nome && <div style={{color:"#134e4a",fontSize:14,fontWeight:800,letterSpacing:-.2,marginBottom:9,display:"flex",alignItems:"center",gap:8}}>
+                      <div style={{width:28,height:28,borderRadius:8,background:"#0d9488",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                        <Ico n="user" size={13}/>
+                      </div>
+                      {ct.nome}
+                    </div>}
+                    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:8}}>
+                      {items.filter(function(it){return it.key!=="nome";}).map(function(it){
+                        return <div key={it.key} style={{display:"flex",alignItems:"center",gap:9,background:"#fff",border:"1px solid #99f6e480",borderRadius:9,padding:"7px 10px"}}>
+                          <div style={{width:26,height:26,borderRadius:7,background:"#0d9488",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><Ico n={it.icon} size={11} color="#fff"/></div>
+                          <div style={{minWidth:0,flex:1}}>
+                            <div style={{color:"#134e4a",fontSize:9,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{it.label}</div>
+                            <div style={{color:"#0f172a",fontSize:12.5,fontWeight:600,marginTop:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ct[it.key]}</div>
+                          </div>
+                          <button type="button" onClick={function(){try{navigator.clipboard.writeText(ct[it.key]||"");if(typeof pixelsToast!=="undefined")pixelsToast.success("Copiado!",1500);}catch(_){}}} title="Copiar"
+                            style={{background:"transparent",border:"none",color:"#0d9488",cursor:"pointer",padding:3,borderRadius:5,display:"inline-flex",alignItems:"center"}}>
+                            <Ico n="copy" size={12}/>
+                          </button>
+                        </div>;
+                      })}
+                    </div>
+                  </div>;
+                })}
               </div>;
             })()}
           </PlaybookBlock>
