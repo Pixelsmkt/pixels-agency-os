@@ -21779,6 +21779,38 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
   const prev=()=>{setCardIdx(i=>queue.length<=1?0:(i<=0?queue.length-1:i-1));setImgIdx(0);};
   const next=()=>{setCardIdx(i=>queue.length<=1?0:(i>=queue.length-1?0:i+1));setImgIdx(0);};
 
+  // === PRELOAD: precarrega imagens do próximo e anterior card em background ===
+  // Assim que o browser cacheia as imagens, quando o usuário navegar já estão prontas.
+  useEffect(()=>{
+    if(queue.length<=1)return;
+    const _idxsToPreload = [
+      (clampedIdx+1)%queue.length,             // próximo
+      (clampedIdx-1+queue.length)%queue.length,// anterior
+      (clampedIdx+2)%queue.length,             // 2 à frente
+    ];
+    const _urls = new Set();
+    _idxsToPreload.forEach(i=>{
+      const t = queue[i];
+      if(!t)return;
+      (t.files||[]).forEach(f=>{
+        if(f&&f.url&&!f.isAnnotation)_urls.add(f.url);
+      });
+      if(t.cover)_urls.add(t.cover);
+    });
+    // Dispara download em background — browser cacheia sem bloquear UI
+    const _imgs=[];
+    _urls.forEach(url=>{
+      try{
+        const img=new Image();
+        img.referrerPolicy="no-referrer";
+        img.src=url;
+        _imgs.push(img);
+      }catch(e){}
+    });
+    // Cleanup: não é obrigatório, mas ajuda GC
+    return()=>{_imgs.forEach(img=>img.src="");};
+  },[clampedIdx,tab,queue.length]);
+
   // FIX 5: resetar cardIdx, imgIdx e lastApproved ao trocar aba manualmente
   const switchTab=(newTab)=>{setTab(newTab);setCardIdx(0);setImgIdx(0);setLastApproved(null);};
 
@@ -48134,10 +48166,53 @@ const PORTF_PROJETOS = [
 ];
 
 const PORTF_STARTER_ENTREGAS = [
-  {icon:"chart",  title:"Diagnóstico e Estratégia",         desc:"Análise do posicionamento atual, direcionamento tático e definição de prioridades."},
-  {icon:"funnel", title:"Gestão de Mídia em Meta Ads",       desc:"Estruturação e otimização de campanhas para alcance, oportunidades e performance."},
-  {icon:"users",  title:"Gestão de Redes Sociais",            desc:"Conteúdo estratégico para posicionamento, autoridade e presença digital."},
-  {icon:"check",  title:"Suporte e Acompanhamento",           desc:"Relatórios mensais, suporte via WhatsApp e alinhamento estratégico contínuo."},
+  {
+    icon:"chart", title:"Diagnóstico e estratégia",
+    desc:"Análise do posicionamento atual, direcionamento tático e definição de prioridades.",
+    cor:"#7c3aed",
+    itens:[
+      "Diagnóstico completo do posicionamento atual da marca",
+      "Definição de objetivos estratégicos e indicadores de performance (KPIs)",
+      "Estruturação de plano tático com foco em crescimento previsível",
+    ],
+  },
+  {
+    icon:"funnel", title:"Meta Ads + Google Ads",
+    desc:"Estruturação e otimização de campanhas para alcance, oportunidades e performance.",
+    cor:"#0ea5e9",
+    itens:[
+      "Estratégia de anúncios para atrair, engajar e vender",
+      "Criação de campanhas profissionais no Google, Instagram e Facebook",
+      "Textos e criativos pensados para gerar cliques e conversões",
+      "Públicos segmentados com base no seu cliente ideal",
+      "Análise da concorrência para posicionar sua marca com vantagem",
+      "Otimização diária para gastar menos e vender mais",
+      "Relatórios claros com o que importa: resultado no caixa",
+    ],
+  },
+  {
+    icon:"users", title:"Social Media completo",
+    desc:"Conteúdo estratégico para posicionamento, autoridade e presença digital.",
+    cor:"#ec4899",
+    itens:[
+      "Planejamento de calendário editorial",
+      "Publicação de 3 conteúdos/semana",
+      "Edição de 1 vídeo/semana",
+      "Produção de 1 card/semana",
+      "Criação de copywriting estratégico",
+      "Interações com o público",
+    ],
+  },
+  {
+    icon:"check", title:"Suporte e acompanhamento",
+    desc:"Relatórios mensais, suporte via WhatsApp e alinhamento estratégico contínuo.",
+    cor:"#16a34a",
+    itens:[
+      "Suporte diário via WhatsApp",
+      "Relatórios mensais completos",
+      "Reunião mensal de alinhamento estratégico",
+    ],
+  },
 ];
 
 const PORTF_STARTER_TIMELINE = [
@@ -48524,19 +48599,43 @@ function PagePortfolio(props){
         </div>
       </div>
 
-      {/* Entregas principais */}
+      {/* O que está incluso — cards verticais grandes, um por área */}
       <div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:10,fontFamily:_PORTF_FF}}>Entregas principais</div>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:12}}>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",marginBottom:14,fontFamily:_PORTF_FF,display:"flex",alignItems:"center",gap:8}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          O que está incluso
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fit,minmax(280px,1fr))",gap:14}}>
           {PORTF_STARTER_ENTREGAS.map(function(e,i){
-            return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",display:"flex",gap:11,alignItems:"flex-start",fontFamily:_PORTF_FF}}>
-              <div style={{width:34,height:34,borderRadius:9,background:"#f5f0fe",border:"1px solid #ede9fe",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <Ico n={e.icon} size={16} color="#9F43F6"/>
+            return <div key={i}
+              style={{background:"#fff",border:"1.5px solid "+e.cor+"22",borderRadius:16,padding:"20px 22px",display:"flex",flexDirection:"column",gap:14,fontFamily:_PORTF_FF,boxShadow:"0 4px 14px rgba(15,23,42,0.04)",transition:"all .18s",position:"relative",overflow:"hidden"}}
+              onMouseEnter={function(evt){evt.currentTarget.style.borderColor=e.cor+"66";evt.currentTarget.style.boxShadow="0 12px 32px rgba(15,23,42,0.10)";evt.currentTarget.style.transform="translateY(-3px)";}}
+              onMouseLeave={function(evt){evt.currentTarget.style.borderColor=e.cor+"22";evt.currentTarget.style.boxShadow="0 4px 14px rgba(15,23,42,0.04)";evt.currentTarget.style.transform="translateY(0)";}}>
+              {/* Barra colorida no topo */}
+              <div style={{position:"absolute",top:0,left:0,right:0,height:4,background:e.cor}}/>
+              {/* Header do card: ícone + título */}
+              <div style={{display:"flex",alignItems:"center",gap:12,marginTop:4}}>
+                <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,"+e.cor+","+e.cor+"cc)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px "+e.cor+"40"}}>
+                  <Ico n={e.icon} size={20} color="#fff"/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,lineHeight:1.2,fontFamily:_PORTF_FF}}>{e.title}</div>
+                  <div style={{color:e.cor,fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginTop:3,fontFamily:_PORTF_FF}}>{(e.itens||[]).length} entregas</div>
+                </div>
               </div>
-              <div style={{minWidth:0}}>
-                <div style={{color:"#0f172a",fontWeight:700,fontSize:13.5,letterSpacing:-.2,fontFamily:_PORTF_FF}}>{e.title}</div>
-                <div style={{color:"#64748b",fontSize:12,marginTop:3,lineHeight:1.5,fontFamily:_PORTF_FF}}>{e.desc}</div>
-              </div>
+              {/* Descrição */}
+              <div style={{color:"#64748b",fontSize:12.5,lineHeight:1.55,fontFamily:_PORTF_FF,paddingBottom:8,borderBottom:"1px solid #f1f5f9"}}>{e.desc}</div>
+              {/* Lista de itens */}
+              <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:8,fontFamily:_PORTF_FF}}>
+                {(e.itens||[]).map(function(it,j){
+                  return <li key={j} style={{color:"#0f172a",fontSize:12.5,lineHeight:1.5,display:"flex",gap:9,alignItems:"flex-start",fontFamily:_PORTF_FF}}>
+                    <span style={{width:18,height:18,borderRadius:5,background:e.cor+"15",color:e.cor,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </span>
+                    <span style={{flex:1}}>{it}</span>
+                  </li>;
+                })}
+              </ul>
             </div>;
           })}
         </div>
