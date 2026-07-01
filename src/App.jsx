@@ -52800,14 +52800,13 @@ function _DGKpisSection({allTasks}){
 
 // ── Rotina Semanal — itens fixos por dia, sem prazo, persistido em Supabase ────
 const _DG_RS_DAYS=[{id:"seg",label:"Segunda"},{id:"ter",label:"Terça"},{id:"qua",label:"Quarta"},{id:"qui",label:"Quinta"},{id:"sex",label:"Sexta"}];
-// Opções de horário — 30 em 30 min, de 06:00 até 22:30
+// Opções de horário — 30 em 30 min, dia inteiro (00:00 até 23:30)
 const _DG_HORA_OPCOES = (function(){
   const arr=[];
-  for(let h=6;h<=22;h++){
+  for(let h=0;h<24;h++){
     arr.push(String(h).padStart(2,"0")+":00");
     arr.push(String(h).padStart(2,"0")+":30");
   }
-  arr.push("23:00");
   return arr;
 })();
 // Parse hora que pode ser "HH:MM" (só início) ou "HH:MM-HH:MM" (range)
