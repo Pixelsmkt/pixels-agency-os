@@ -54477,6 +54477,9 @@ function DashCoordinator({user, isViewing, tasks: propTasks, setTasks, notifs, i
     {/* ══════════ DOCUMENTOS ══════════ */}
     <_DGDocumentos user={user} isMob={isMob}/>
 
+    {/* ══════════ PROCESSOS INTERNOS — playbooks/guias padronizados ══════════ */}
+    <_DGProcessos user={user} isMob={isMob}/>
+
   </div>;
 }
 
@@ -54736,6 +54739,341 @@ function _DGDocumentos({user, isMob}){
         </div>
       </div>
     </div>}
+  </section>;
+}
+
+// ── Processos Internos — playbooks/guias padronizados da agência ─
+// Sócios cadastram roteiros passo-a-passo (reunião de diagnóstico, kickoff, etc)
+// com etapas + perguntas/tópicos. Serve pra padronizar processos internos.
+function _DGProcessos({user, isMob}){
+  const [processes,setProcesses]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [expanded,setExpanded]=useState(null); // id do processo aberto
+  const [editing,setEditing]=useState(null); // {process}
+  const [novoTitulo,setNovoTitulo]=useState("");
+  const [novoCat,setNovoCat]=useState("comercial");
+
+  const _CATS = [
+    {id:"comercial",   label:"Comercial",   color:"#7c3aed"},
+    {id:"onboarding",  label:"Onboarding",  color:"#0ea5e9"},
+    {id:"reuniao",     label:"Reunião",     color:"#ec4899"},
+    {id:"operacional", label:"Operacional", color:"#ea580c"},
+    {id:"estrategia",  label:"Estratégia",  color:"#16a34a"},
+  ];
+  const _catOf = (id)=>_CATS.find(c=>c.id===id)||_CATS[0];
+
+  // ── Seed fallback: se a tabela não existir, mostra pelo menos o de diagnóstico ──
+  const SEED = [{
+    id:"seed_diag",
+    title:"Reunião de diagnóstico",
+    description:"Primeira reunião com prospect. Entender contexto, dor e objetivo antes de propor.",
+    category:"comercial",
+    color:"#7c3aed",
+    icon:"search",
+    steps:[
+      {id:"s1",title:"Contexto sobre o cliente",notes:"Rapport + entender de onde ele vem.",questions:[
+        "Qual é o segmento e há quanto tempo estão no mercado?",
+        "Como estão estruturados hoje (equipe, faturamento aproximado)?",
+        "Qual é o principal produto/serviço?",
+      ]},
+      {id:"s2",title:"Público-alvo e persona",notes:"Perguntas centrais do Briefing.",questions:[
+        "Quem é o cliente ideal de vocês?",
+        "Qual é a principal dor desse público?",
+        "O que ele valoriza na hora de comprar?",
+        "Onde ele consome conteúdo hoje?",
+      ]},
+      {id:"s3",title:"Concorrência",notes:"Cenário competitivo e posicionamento.",questions:[
+        "Quem são os 3 principais concorrentes?",
+        "O que eles fazem melhor que vocês?",
+        "Vocês seguem alguma referência de comunicação?",
+      ]},
+      {id:"s4",title:"Objetivo e indicadores",notes:"Aqui já molda o escopo da proposta.",questions:[
+        "Qual é o principal objetivo com a Pixels nos próximos 90 dias?",
+        "Como vocês medem sucesso hoje?",
+        "Qual é a meta de crescimento pro próximo ano?",
+      ]},
+      {id:"s5",title:"Próximos passos e fechamento",notes:"Nunca saia sem próxima ação agendada.",questions:[
+        "Definir cronograma pra envio da proposta",
+        "Confirmar decisor(es) que vão avaliar",
+        "Agendar reunião de apresentação da proposta",
+      ]},
+    ],
+    position:0,
+  }];
+
+  const _load = async ()=>{
+    try{
+      setLoading(true);
+      const sb=window._sb;
+      if(!sb){ setProcesses(SEED); setLoading(false); return; }
+      const{data,error}=await sb.from("team_processes").select("*").order("position",{ascending:true}).limit(50);
+      if(error){
+        console.warn("[processos] erro:",error.message);
+        // Se a tabela não existe (42P01), usa seed local
+        setProcesses(SEED);
+      } else {
+        setProcesses(data && data.length>0 ? data : SEED);
+      }
+    }catch(e){
+      console.warn("[processos] exception:",e);
+      setProcesses(SEED);
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  useEffect(()=>{_load();},[]);
+
+  const _createNew = async ()=>{
+    const title=String(novoTitulo||"").trim();
+    if(!title){ if(typeof pixelsToast!=="undefined")pixelsToast.error("Dê um título ao processo."); return; }
+    const cfg=_catOf(novoCat);
+    const payload={
+      title,
+      description:"",
+      category:novoCat,
+      color:cfg.color,
+      icon:"clipboard",
+      steps:[{id:"s"+Date.now(),title:"Nova etapa",notes:"",questions:[]}],
+      position:processes.length,
+      author_id:user?.id||null,
+      author_name:user?.name||null,
+    };
+    try{
+      const sb=window._sb;
+      if(sb){
+        const{data,error}=await sb.from("team_processes").insert(payload).select().single();
+        if(error) throw error;
+        setProcesses(p=>[...p,data]);
+        setExpanded(data.id);
+      } else {
+        const local={...payload, id:"local_"+Date.now()};
+        setProcesses(p=>[...p,local]);
+        setExpanded(local.id);
+      }
+      setNovoTitulo("");
+      if(typeof pixelsToast!=="undefined")pixelsToast.success("Processo criado.");
+    }catch(e){
+      console.warn("[processos] createNew:",e);
+      if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro: "+(e?.message||e));
+    }
+  };
+
+  const _saveProcess = async (proc, patch)=>{
+    const updated={...proc, ...patch, updated_at:new Date().toISOString()};
+    setProcesses(p=>p.map(x=>x.id===proc.id?updated:x));
+    try{
+      const sb=window._sb;
+      if(sb && !String(proc.id).startsWith("seed_") && !String(proc.id).startsWith("local_")){
+        const{error}=await sb.from("team_processes").update(patch).eq("id",proc.id);
+        if(error) console.warn("[processos] update:",error.message);
+      }
+    }catch(e){ console.warn("[processos] saveProcess:",e); }
+  };
+
+  const _deleteProcess = async (proc)=>{
+    if(typeof pixelsConfirm==="function"){
+      if(!await pixelsConfirm('Excluir processo "'+proc.title+'"? Não dá pra desfazer.',{okText:"Excluir",danger:true})) return;
+    }
+    setProcesses(p=>p.filter(x=>x.id!==proc.id));
+    setExpanded(null);
+    try{
+      const sb=window._sb;
+      if(sb && !String(proc.id).startsWith("seed_") && !String(proc.id).startsWith("local_")){
+        await sb.from("team_processes").delete().eq("id",proc.id);
+      }
+    }catch(e){ console.warn("[processos] delete:",e); }
+    if(typeof pixelsToast!=="undefined")pixelsToast.success("Processo excluído.");
+  };
+
+  const _addStep = (proc)=>{
+    const step={id:"s"+Date.now(),title:"Nova etapa",notes:"",questions:[]};
+    const steps=[...(proc.steps||[]), step];
+    _saveProcess(proc,{steps});
+  };
+  const _updateStep = (proc, stepId, patch)=>{
+    const steps=(proc.steps||[]).map(s=>s.id===stepId?{...s,...patch}:s);
+    _saveProcess(proc,{steps});
+  };
+  const _deleteStep = (proc, stepId)=>{
+    const steps=(proc.steps||[]).filter(s=>s.id!==stepId);
+    _saveProcess(proc,{steps});
+  };
+  const _addQuestion = (proc, stepId)=>{
+    const steps=(proc.steps||[]).map(s=>s.id===stepId?{...s,questions:[...(s.questions||[]),"Nova pergunta"]}:s);
+    _saveProcess(proc,{steps});
+  };
+  const _updateQuestion = (proc, stepId, idx, val)=>{
+    const steps=(proc.steps||[]).map(s=>{
+      if(s.id!==stepId) return s;
+      const qs=[...(s.questions||[])]; qs[idx]=val;
+      return {...s,questions:qs};
+    });
+    _saveProcess(proc,{steps});
+  };
+  const _deleteQuestion = (proc, stepId, idx)=>{
+    const steps=(proc.steps||[]).map(s=>{
+      if(s.id!==stepId) return s;
+      const qs=(s.questions||[]).filter((_,i)=>i!==idx);
+      return {...s,questions:qs};
+    });
+    _saveProcess(proc,{steps});
+  };
+
+  return <section style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:isMob?"18px 16px":"24px 26px",boxShadow:"0 1px 2px rgba(15,23,42,0.025)",fontFamily:DG_INTER}}>
+    {/* Header */}
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:18,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,minWidth:0}}>
+        <div style={{width:38,height:38,borderRadius:11,background:"linear-gradient(135deg,#7c3aed,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",boxShadow:"0 4px 12px rgba(124,58,237,0.30)",flexShrink:0}}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 11H15M9 15H15M17 21H7A2 2 0 015 19V5A2 2 0 017 3H12L19 10V19A2 2 0 0117 21Z"/><polyline points="12 3 12 10 19 10"/></svg>
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?15:17,letterSpacing:-.4,lineHeight:1.15}}>Processos internos</div>
+          <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500}}>Playbooks passo-a-passo — reuniões, onboarding, rituais padrão</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Criar novo */}
+    <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:12,padding:"12px 14px",marginBottom:14,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+      <input value={novoTitulo} onChange={e=>setNovoTitulo(e.target.value)}
+        onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();_createNew();}}}
+        placeholder='Ex: "Reunião de diagnóstico", "Kickoff de cliente", "Reunião mensal de resultados"...'
+        style={{flex:1,minWidth:220,background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:12.5,color:"#0f172a",fontFamily:DG_INTER,outline:"none",transition:"border-color .12s"}}
+        onFocus={e=>e.currentTarget.style.borderColor="#a855f7"}
+        onBlur={e=>e.currentTarget.style.borderColor="#e2e8f0"}
+      />
+      <select value={novoCat} onChange={e=>setNovoCat(e.target.value)}
+        style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 10px",fontSize:12,color:"#334155",fontFamily:DG_INTER,cursor:"pointer",outline:"none"}}>
+        {_CATS.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+      </select>
+      <button onClick={_createNew}
+        style={{background:"linear-gradient(135deg,#7c3aed,#a855f7)",color:"#fff",border:"none",borderRadius:9,padding:"9px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 3px 10px rgba(124,58,237,0.30)",transition:"all .12s"}}
+        onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 14px rgba(124,58,237,0.40)";}}
+        onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 3px 10px rgba(124,58,237,0.30)";}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Novo processo
+      </button>
+    </div>
+
+    {/* Lista de processos */}
+    {loading
+      ? <div style={{padding:"30px 12px",textAlign:"center",color:"#94a3b8",fontSize:12.5}}>Carregando processos...</div>
+      : processes.length===0
+        ? <div style={{padding:"30px 12px",textAlign:"center",color:"#94a3b8",fontSize:12.5}}>Nenhum processo cadastrado ainda.</div>
+        : <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {processes.map(function(proc){
+              const cfg=_catOf(proc.category);
+              const isOpen=expanded===proc.id;
+              const nSteps=(proc.steps||[]).length;
+              const nQ=(proc.steps||[]).reduce((a,s)=>a+(s.questions||[]).length,0);
+              return <div key={proc.id} style={{background:"#fff",border:"1.5px solid "+(isOpen?cfg.color+"55":"#eef0f3"),borderRadius:12,overflow:"hidden",transition:"all .15s"}}>
+                {/* Header do card — clicável pra expandir */}
+                <div onClick={()=>setExpanded(isOpen?null:proc.id)}
+                  style={{padding:"14px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,background:isOpen?cfg.color+"08":"#fff",transition:"background .12s"}}
+                  onMouseEnter={e=>{if(!isOpen)e.currentTarget.style.background="#fafbfc";}}
+                  onMouseLeave={e=>{if(!isOpen)e.currentTarget.style.background="#fff";}}>
+                  <div style={{width:36,height:36,borderRadius:10,background:cfg.color+"18",color:cfg.color,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                      <div style={{color:"#0f172a",fontSize:14.5,fontWeight:800,letterSpacing:-.2}}>{proc.title}</div>
+                      <span style={{background:cfg.color+"18",color:cfg.color,fontSize:10,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{cfg.label}</span>
+                    </div>
+                    {proc.description && <div style={{color:"#64748b",fontSize:12,marginTop:3,lineHeight:1.4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{proc.description}</div>}
+                    <div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>
+                      {nSteps} etapa{nSteps===1?"":"s"} · {nQ} pergunta{nQ===1?"":"s"}
+                    </div>
+                  </div>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{transform:isOpen?"rotate(180deg)":"none",transition:"transform .18s",flexShrink:0}}><polyline points="6 9 12 15 18 9"/></svg>
+                </div>
+
+                {/* Corpo expandido */}
+                {isOpen && <div style={{padding:"4px 16px 16px",borderTop:"1px solid "+cfg.color+"22",background:cfg.color+"04"}}>
+                  {/* Meta (título + descrição editáveis) */}
+                  <div style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"12px 14px",marginTop:12,marginBottom:12}}>
+                    <input value={proc.title} onChange={e=>_saveProcess(proc,{title:e.target.value})}
+                      placeholder="Título do processo"
+                      style={{width:"100%",background:"transparent",border:"none",fontSize:14,fontWeight:800,color:"#0f172a",fontFamily:DG_INTER,outline:"none",padding:0,letterSpacing:-.2}}/>
+                    <textarea value={proc.description||""} onChange={e=>_saveProcess(proc,{description:e.target.value})}
+                      placeholder="Descrição breve — pra que serve este processo?"
+                      rows={2}
+                      style={{width:"100%",background:"transparent",border:"none",fontSize:12.5,color:"#64748b",fontFamily:DG_INTER,outline:"none",padding:0,resize:"vertical",marginTop:6,lineHeight:1.5}}/>
+                  </div>
+
+                  {/* Etapas */}
+                  {(proc.steps||[]).map(function(step,idx){
+                    return <div key={step.id} style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:10,padding:"14px 16px",marginBottom:8,position:"relative"}}>
+                      {/* Numbering + delete */}
+                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                        <div style={{width:26,height:26,borderRadius:8,background:cfg.color,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0,fontFeatureSettings:"'tnum'"}}>{idx+1}</div>
+                        <input value={step.title} onChange={e=>_updateStep(proc,step.id,{title:e.target.value})}
+                          placeholder="Título da etapa"
+                          style={{flex:1,background:"transparent",border:"none",fontSize:13.5,fontWeight:700,color:"#0f172a",fontFamily:DG_INTER,outline:"none",padding:0,letterSpacing:-.15}}/>
+                        <button onClick={()=>_deleteStep(proc,step.id)}
+                          title="Remover etapa"
+                          style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:4,borderRadius:5,transition:"color .12s"}}
+                          onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
+                          onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+                        </button>
+                      </div>
+                      {/* Notas */}
+                      <textarea value={step.notes||""} onChange={e=>_updateStep(proc,step.id,{notes:e.target.value})}
+                        placeholder="Observações / contexto pra conduzir esta etapa (opcional)"
+                        rows={2}
+                        style={{width:"100%",background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:8,padding:"8px 10px",fontSize:12,color:"#475569",fontFamily:DG_INTER,outline:"none",resize:"vertical",lineHeight:1.5,fontStyle:"italic"}}/>
+                      {/* Perguntas / tópicos */}
+                      <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:5}}>
+                        {(step.questions||[]).map(function(q,qi){
+                          return <div key={qi} style={{display:"flex",alignItems:"flex-start",gap:8,background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:7,padding:"7px 10px"}}>
+                            <div style={{width:5,height:5,borderRadius:"50%",background:cfg.color,marginTop:8,flexShrink:0}}/>
+                            <input value={q} onChange={e=>_updateQuestion(proc,step.id,qi,e.target.value)}
+                              placeholder="Pergunta ou tópico"
+                              style={{flex:1,background:"transparent",border:"none",fontSize:12.5,color:"#334155",fontFamily:DG_INTER,outline:"none",padding:0,lineHeight:1.5}}/>
+                            <button onClick={()=>_deleteQuestion(proc,step.id,qi)}
+                              title="Remover"
+                              style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:2,borderRadius:4,transition:"color .12s",flexShrink:0}}
+                              onMouseEnter={e=>e.currentTarget.style.color="#dc2626"}
+                              onMouseLeave={e=>e.currentTarget.style.color="#cbd5e1"}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          </div>;
+                        })}
+                        <button onClick={()=>_addQuestion(proc,step.id)}
+                          style={{background:"transparent",border:"1px dashed #cbd5e1",borderRadius:7,padding:"6px 10px",fontSize:11.5,fontWeight:600,color:"#94a3b8",cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s",alignSelf:"flex-start",marginTop:2}}
+                          onMouseEnter={e=>{e.currentTarget.style.background=cfg.color+"10";e.currentTarget.style.color=cfg.color;e.currentTarget.style.borderColor=cfg.color+"66";}}
+                          onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";e.currentTarget.style.borderColor="#cbd5e1";}}>
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                          Adicionar pergunta / tópico
+                        </button>
+                      </div>
+                    </div>;
+                  })}
+
+                  {/* Add step + delete process */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:12,flexWrap:"wrap"}}>
+                    <button onClick={()=>_addStep(proc)}
+                      style={{background:cfg.color,color:"#fff",border:"none",borderRadius:9,padding:"9px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:6,boxShadow:"0 3px 10px "+cfg.color+"33",transition:"all .12s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 5px 14px "+cfg.color+"55";}}
+                      onMouseLeave={e=>{e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 3px 10px "+cfg.color+"33";}}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                      Adicionar etapa
+                    </button>
+                    <button onClick={()=>_deleteProcess(proc)}
+                      style={{background:"transparent",color:"#dc2626",border:"1px solid #fecaca",borderRadius:9,padding:"8px 14px",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:DG_INTER,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+                      onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";e.currentTarget.style.borderColor="#dc2626";}}
+                      onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fecaca";}}>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 01-2 2H9a2 2 0 01-2-2L5 6"/></svg>
+                      Excluir processo
+                    </button>
+                  </div>
+                </div>}
+              </div>;
+            })}
+          </div>
+    }
   </section>;
 }
 
