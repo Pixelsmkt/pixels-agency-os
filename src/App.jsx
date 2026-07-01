@@ -14508,7 +14508,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
   const getPubColor=(status)=>{
     if(status==="publicado")return{bg:"#7c3aed",border:"#a78bfa",label:"Publicado"};
     if(status==="aprovado"||status==="agendado")return{bg:"#ec4899",border:"#fbcfe8",label:"Agendar"};
-    return{bg:"#ea580c",border:"#fed7aa",label:"Em produção"};
+    return{bg:"#06b6d4",border:"#a5f3fc",label:"Em produção"};
   };
 
   // Dias do mês
@@ -14669,7 +14669,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       <div style={{display:"flex",gap:14,flexWrap:"wrap",alignItems:"center",fontFamily:"'Inter',system-ui,sans-serif"}}>
         <span style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>Status</span>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#ea580c",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
+          <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:18,height:18,borderRadius:5,background:"#06b6d4",color:"#fff",boxShadow:"0 1px 2px rgba(0,0,0,0.18)",flexShrink:0}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
           </span>
           <span style={{color:"#475569",fontSize:11.5,fontWeight:500}}>Em produção</span>
@@ -14790,7 +14790,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
           </div>
           <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
             {_kpi("Total",_total,"#0f172a",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>)}
-            {_kpi("Em produção",_producao,"#ea580c",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>)}
+            {_kpi("Em produção",_producao,"#06b6d4",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>)}
             {_kpi("Agendar",_agendar,"#ec4899",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>)}
             {_kpi("Publicado",_publicado,"#7c3aed",<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>)}
           </div>
