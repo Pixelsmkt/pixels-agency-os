@@ -14260,7 +14260,9 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       publishTime:"11:00",
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
       deletedAt:null,bioterUnit:(filterBioterUnit!=="todos"?filterBioterUnit:null),
-      referenceMonth:refMonth,
+      // Mês de pagamento fica vazio até que um freelancer (Andre/Maria/Guilherme) seja atribuído.
+      // O CardModal e o handleSave vão auto-preencher com base no dia>10 SÓ SE tiver freelancer nos responsáveis.
+      referenceMonth:"",
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:respName,
       timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
@@ -16135,7 +16137,9 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       publishTime:"11:00",
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
       deletedAt:null,bioterUnit:(filterBioterUnit!=="todos"?filterBioterUnit:null),
-      referenceMonth:refMonth,
+      // Mês de pagamento fica vazio até que um freelancer (Andre/Maria/Guilherme) seja atribuído.
+      // O CardModal e o handleSave vão auto-preencher com base no dia>10 SÓ SE tiver freelancer nos responsáveis.
+      referenceMonth:"",
       colEnteredAt:now.toISOString(),
       createdAt:nowFmt,createdBy:respName,
       timeline:[{type:"created",label:"Demanda criada por "+respName+" pelo Calendário",atFmt:nowFmt,user:respName}],
