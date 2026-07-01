@@ -25169,7 +25169,7 @@ const LEVEL_STRUCTURE=[
   {l:5,name:"Clientes",    c:C.gr, desc:"Portal de aprovações e acompanhamento das demandas."},
 ];
 
-function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
+function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
   const [viewUser,setViewUser]=useState(null);
   const [viewDash,setViewDash]=useState(null);
   const [editCollab,setEditCollab]=useState(null);
@@ -26114,8 +26114,18 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,tasks}){
                           <span style={{color:C.td,fontSize:11.5,fontStyle:"italic"}}>Acesso total</span>
                         )}
                       </div>
-                      {/* Ações: Revogar */}
-                      <div style={{display:"flex",justifyContent:"flex-end"}}>
+                      {/* Ações: Ver como + Revogar */}
+                      <div style={{display:"flex",justifyContent:"flex-end",gap:6}}>
+                        {isPartner&&onViewAsClient&&(
+                          <button onClick={()=>onViewAsClient(user)}
+                            title={"Ver o portal como "+(user.name||cl.name)}
+                            style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"7px 12px",color:C.a,fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+                            onMouseEnter={e=>{e.currentTarget.style.background=C.a+"10";e.currentTarget.style.borderColor=C.a+"55";}}
+                            onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=C.b1;}}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            Ver como
+                          </button>
+                        )}
                         {isPartner&&(
                           <button onClick={()=>revogarClienteAcesso(user.id,cl.name)}
                             title="Revogar acesso"
@@ -36987,6 +36997,14 @@ export default function AgencyOS(){
     }catch(_){}
   },[notifs]);
   const [viewingAs,setViewingAs]   = useState(null);
+  // Ver como cliente: usa o mesmo mecanismo de authState/clientPortalData que o login real
+  // Salva o profile do cliente e a marca isPreview pra sabermos que é impersonation
+  const _enterClientPreview = (clientUser)=>{
+    if(!clientUser) return;
+    // Snapshot do estado atual pra restaurar no exit
+    setClientPortalData({...clientUser, _preview:true, _previewOrigin:CURRENT_USER.id});
+    setAuthState("portal");
+  };
   // ═══ PRESENCE — quem está online/ausente/offline ═══
   const [presenceMap,setPresenceMap] = useState({});
 
@@ -37618,7 +37636,7 @@ export default function AgencyOS(){
       case "gestao_enps":           return <PageGestaoENPS {...p}/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
-      case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
+      case "acessos":               return (effectivePerms.verAcessos||isSocio)?<PageAcessos {...p} livePerms={livePerms} setLivePerms={setLivePerms} onViewAs={(uid)=>{setViewingAs(uid);nav("meudash");}} onViewAsClient={_enterClientPreview} tasks={tasks} setTasks={setTasks}/>:<NoPerm/>;
       case "portal":
       case "portal_dashboard":
       case "portal_demandas":
@@ -37650,15 +37668,34 @@ export default function AgencyOS(){
       onLoginClient={(p)=>{ls.set(PROFILE_KEY,p);setClientPortal(p);setAuthState("portal");}}
     />
   );
-  if(authState==="portal"&&clientPortalData) return <PagePortalCliente
-    isMob={isMob}
-    tasks={tasks}
-    setTasks={setTasks}
-    initTab="dashboard"
-    lockedClientId={clientPortalData.primary_client||clientPortalData.client_id||clientPortalData.id}
-    lockedUnit={clientPortalData.primary_unit||""}
-    currentClientUser={clientPortalData}
-  />;
+  if(authState==="portal"&&clientPortalData) return <div style={{position:"relative",minHeight:"100vh"}}>
+    {clientPortalData._preview && <div style={{position:"fixed",top:0,left:0,right:0,zIndex:9999,background:"linear-gradient(90deg,#7c3aed,#a855f7)",color:"#fff",padding:"8px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 2px 12px rgba(124,58,237,0.35)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0}}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        <div style={{fontSize:12.5,fontWeight:700,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          Você está vendo como <b>{clientPortalData.name||"cliente"}</b> — só preview, ações não afetam nada
+        </div>
+      </div>
+      <button onClick={()=>{setClientPortalData(null);setAuthState("app");}}
+        style={{background:"rgba(255,255,255,0.20)",border:"1px solid rgba(255,255,255,0.35)",color:"#fff",borderRadius:8,padding:"5px 12px",fontSize:11.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .12s",flexShrink:0}}
+        onMouseEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.30)";}}
+        onMouseLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.20)";}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Sair do preview
+      </button>
+    </div>}
+    <div style={{paddingTop: clientPortalData._preview ? 40 : 0}}>
+      <PagePortalCliente
+        isMob={isMob}
+        tasks={tasks}
+        setTasks={setTasks}
+        initTab="dashboard"
+        lockedClientId={clientPortalData.primary_client||clientPortalData.client_id||clientPortalData.id}
+        lockedUnit={clientPortalData.primary_unit||""}
+        currentClientUser={clientPortalData}
+      />
+    </div>
+  </div>;
   if(!loaded) return <LoadingScreen msg="Carregando dados..."/>;
 
   // ── UI principal ──────────────────────────────────────────
