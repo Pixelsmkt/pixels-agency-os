@@ -48177,7 +48177,7 @@ const PORTF_STARTER_ENTREGAS = [
     ],
   },
   {
-    icon:"funnel", title:"Meta Ads + Google Ads",
+    icon:"funnel", title:"Gestão de mídia paga",
     desc:"Estruturação e otimização de campanhas para alcance, oportunidades e performance.",
     cor:"#0ea5e9",
     itens:[
@@ -48191,16 +48191,14 @@ const PORTF_STARTER_ENTREGAS = [
     ],
   },
   {
-    icon:"users", title:"Social Media completo",
+    icon:"users", title:"Gestão de redes sociais",
     desc:"Conteúdo estratégico para posicionamento, autoridade e presença digital.",
     cor:"#ec4899",
     itens:[
       "Planejamento de calendário editorial",
-      "Publicação de 3 conteúdos/semana",
-      "Edição de 1 vídeo/semana",
-      "Produção de 1 card/semana",
+      "Edição de vídeo",
+      "Design",
       "Criação de copywriting estratégico",
-      "Interações com o público",
     ],
   },
   {
@@ -48216,9 +48214,27 @@ const PORTF_STARTER_ENTREGAS = [
 ];
 
 const PORTF_STARTER_TIMELINE = [
-  {mes:"Mês 1", titulo:"Estruturação e Posicionamento", itens:["4 cards","4 vídeos"]},
-  {mes:"Mês 2", titulo:"Início de Escala",              itens:["2 cards","2 vídeos","Gestão de mídia em Meta Ads"]},
-  {mes:"Mês 3", titulo:"Consolidação e Otimização",     itens:["2 cards","2 vídeos","Gestão de mídia em Meta Ads"]},
+  {
+    mes:"Mês 1",
+    titulo:"Estruturação e Posicionamento",
+    resumo:"Fase de diagnóstico, planejamento estratégico e construção da base de conteúdo. Preparamos tudo pra sua marca começar a comunicar com consistência.",
+    itens:["4 artes","4 vídeos","Diagnóstico completo","Planejamento estratégico","Definição de personas e público"],
+    cor:"#7c3aed",
+  },
+  {
+    mes:"Mês 2",
+    titulo:"Início de Escala",
+    resumo:"Ativação das campanhas de mídia paga e consolidação da presença nas redes. Aqui começa a captação e a comunicação vira máquina.",
+    itens:["2 artes","2 vídeos","Gestão de mídia em Meta Ads","Ajustes finos de campanhas","Otimizações semanais"],
+    cor:"#0ea5e9",
+  },
+  {
+    mes:"Mês 3",
+    titulo:"Consolidação e Otimização",
+    resumo:"Refinamento total: análise de resultados, otimização de performance e plano de continuidade pra crescimento sustentável.",
+    itens:["2 artes","2 vídeos","Gestão de mídia em Meta Ads","Análise de resultados","Plano de continuidade e escala"],
+    cor:"#16a34a",
+  },
 ];
 
 const PORTF_IA = [
@@ -48641,22 +48657,103 @@ function PagePortfolio(props){
         </div>
       </div>
 
-      {/* Linha do tempo 3 meses */}
+      {/* Linha do tempo 3 meses — cards grandes verticais */}
       <div>
-        <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.7,textTransform:"uppercase",marginBottom:10,fontFamily:_PORTF_FF}}>Linha do tempo</div>
-        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6,fontFamily:_PORTF_FF}}>
+          <div style={{width:24,height:2,background:"linear-gradient(90deg,#9F43F6,transparent)",borderRadius:2}}/>
+          <div style={{color:"#94a3b8",fontSize:11,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Linha do tempo — 90 dias</div>
+        </div>
+        <div style={{color:"#64748b",fontSize:13,marginBottom:18,fontFamily:_PORTF_FF,maxWidth:640,lineHeight:1.55}}>
+          Um plano estruturado em três fases pra construir presença, ativar mídia e otimizar resultados.
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:14,position:"relative"}}>
+          {/* Linha vertical conectando os meses */}
+          <div style={{position:"absolute",left:24,top:32,bottom:32,width:2,background:"linear-gradient(180deg,#7c3aed 0%,#0ea5e9 50%,#16a34a 100%)",borderRadius:2,opacity:0.35,pointerEvents:"none"}}/>
+
           {PORTF_STARTER_TIMELINE.map(function(t,i){
-            return <div key={i} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px",fontFamily:_PORTF_FF}}>
-              <div style={{display:"inline-flex",alignItems:"center",gap:6,background:"#9F43F6",color:"#fff",fontSize:10,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",marginBottom:9,fontFamily:_PORTF_FF}}>{t.mes}</div>
-              <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2,marginBottom:9,fontFamily:_PORTF_FF}}>{t.titulo}</div>
-              <ul style={{listStyle:"none",padding:0,margin:0,display:"flex",flexDirection:"column",gap:5,fontFamily:_PORTF_FF}}>
-                {t.itens.map(function(it,j){
-                  return <li key={j} style={{color:"#475569",fontSize:12,paddingLeft:13,position:"relative",lineHeight:1.5,fontFamily:_PORTF_FF}}>
-                    <span style={{position:"absolute",left:0,top:6,width:5,height:5,borderRadius:"50%",background:"#9F43F6"}}/>
-                    {it}
-                  </li>;
-                })}
-              </ul>
+            const cor = t.cor || "#9F43F6";
+            return <div key={i} style={{
+              background:"#fff",
+              border:"1px solid #e2e8f0",
+              borderRadius:16,
+              padding: isMob ? "18px 18px 20px" : "22px 26px 24px",
+              fontFamily:_PORTF_FF,
+              display:"flex",
+              flexDirection: isMob ? "column" : "row",
+              gap: isMob ? 14 : 22,
+              alignItems:"stretch",
+              transition:"all .2s ease",
+              position:"relative",
+              boxShadow:"0 2px 6px rgba(15,23,42,0.03)",
+            }}
+            onMouseEnter={function(e){ e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.08)"; e.currentTarget.style.borderColor=cor+"55"; }}
+            onMouseLeave={function(e){ e.currentTarget.style.boxShadow="0 2px 6px rgba(15,23,42,0.03)"; e.currentTarget.style.borderColor="#e2e8f0"; }}>
+
+              {/* Coluna esquerda: badge do mês + número */}
+              <div style={{display:"flex",flexDirection: isMob ? "row" : "column",alignItems: isMob ? "center" : "flex-start",gap:12,minWidth: isMob ? "auto" : 130,position:"relative",zIndex:1}}>
+                {/* Círculo com número do mês (bola da timeline) */}
+                <div style={{
+                  width:50,height:50,borderRadius:"50%",
+                  background:"linear-gradient(135deg,"+cor+","+cor+"cc)",
+                  boxShadow:"0 6px 18px "+cor+"55",
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  color:"#fff",fontWeight:900,fontSize:19,letterSpacing:-.5,
+                  border:"3px solid #fff",
+                  fontFamily:_PORTF_FF,
+                  flexShrink:0,
+                }}>
+                  {i+1}
+                </div>
+                <div>
+                  <div style={{
+                    display:"inline-flex",alignItems:"center",
+                    background:cor+"18",
+                    color:cor,
+                    fontSize:10.5,fontWeight:800,
+                    padding:"4px 10px",borderRadius:99,
+                    letterSpacing:.5,textTransform:"uppercase",
+                    fontFamily:_PORTF_FF,
+                  }}>{t.mes}</div>
+                  {!isMob && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginTop:8,fontFamily:_PORTF_FF}}>{t.itens.length} entregas</div>}
+                </div>
+              </div>
+
+              {/* Coluna direita: conteúdo */}
+              <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:12}}>
+                <div>
+                  <div style={{color:"#0f172a",fontWeight:800,fontSize: isMob ? 17 : 20,letterSpacing:-.5,lineHeight:1.2,fontFamily:_PORTF_FF,marginBottom:6}}>{t.titulo}</div>
+                  <div style={{color:"#64748b",fontSize: isMob ? 12.5 : 13.5,lineHeight:1.6,fontFamily:_PORTF_FF,maxWidth:640}}>{t.resumo}</div>
+                </div>
+
+                {/* Entregas grid 2 colunas */}
+                <div style={{
+                  display:"grid",
+                  gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(220px,1fr))",
+                  gap:8,
+                  marginTop:4,
+                  padding:"14px 16px",
+                  background:"#f8fafc",
+                  border:"1px solid #f1f5f9",
+                  borderRadius:12,
+                }}>
+                  {t.itens.map(function(it,j){
+                    return <div key={j} style={{
+                      display:"flex",alignItems:"flex-start",gap:9,
+                      color:"#334155",fontSize:12.5,
+                      lineHeight:1.4,fontFamily:_PORTF_FF,fontWeight:500,
+                    }}>
+                      <div style={{
+                        width:18,height:18,borderRadius:6,
+                        background:cor+"18",
+                        display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,
+                      }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={cor} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                      </div>
+                      <span>{it}</span>
+                    </div>;
+                  })}
+                </div>
+              </div>
             </div>;
           })}
         </div>
