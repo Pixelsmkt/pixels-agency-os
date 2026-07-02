@@ -2811,11 +2811,8 @@ function _useBriefing(clientId){
           const remote = r && r.data && r.data.briefing_data;
           if(remote && typeof remote==="object"){
             setData(remote);
-            try{
-              if(remote.identidade && typeof saveClientIdentity==="function"){
-                saveClientIdentity(clientId, remote.identidade);
-              }
-            }catch(e){}
+            // NÃO espelhar identidade pra localStorage aqui — evita override
+            // do nome do card por razão social do briefing.
           }
         })
         .catch(function(e){
@@ -2899,11 +2896,9 @@ function BriefingFormCanonico(props){
     const next = Object.assign({}, data);
     next[sec] = Object.assign({}, next[sec]||{}, {[fid]:val});
     briefing.save(next);
-    // Espelha campos da seção Identidade pra localStorage — usado pelos cards
-    // da PageClientes e pelo header do ClienteDetail (sem precisar carregar briefing).
-    if(sec==="identidade" && typeof saveClientIdentity==="function"){
-      try{ saveClientIdentity(cl.id, {[fid]: val}); }catch(e){}
-    }
+    // NÃO espelhar identidade pra localStorage — isso causava o bug de
+    // razão social sobrescrever o nome do cliente no card da PageClientes.
+    // Cada tela busca briefing_data direto do Supabase se precisar.
   }
   function toggleMulti(sec, fid, opt){
     if(!canEdit) return;
@@ -11390,11 +11385,14 @@ function PageClientes({isMob, tasks}){
         const hasLogo = !!_logoSrc;
         const _segmento = (profile&&profile.segmento)||cl.sector;
         // Cidade — preferir Briefing > Identidade; fallback pra perfil estendido ou cl.cidade
-        const _cidadeBr = (_ident.cidade||"").trim();
-        const _cidadeUf = _cidadeBr ? _cidadeBr
-          : (profile&&(profile.cidade||profile.estado) ? [profile.cidade,profile.estado].filter(Boolean).join("/") : (cl.cidade ? [cl.cidade,cl.estado].filter(Boolean).join("/") : null));
-        // Nome — preferir Razão social do Briefing se cadastrada
-        const _displayName = (_ident.nome_empresarial||"").trim() || (profile&&profile.name) || cl.name;
+        // Cidade — usa perfil estendido ou cl.cidade (NÃO puxa do briefing pra evitar
+        // que edição no Portal do Cliente mude o card na Estratégia).
+        const _cidadeUf = (profile&&(profile.cidade||profile.estado))
+          ? [profile.cidade,profile.estado].filter(Boolean).join("/")
+          : (cl.cidade ? [cl.cidade,cl.estado].filter(Boolean).join("/") : null);
+        // Nome — usa SEMPRE o nome real do cliente. Razão social do briefing é dado
+        // separado e não deve sobrescrever o nome do card.
+        const _displayName = (profile&&profile.name) || cl.name;
 
         return <div key={cl.id}
           style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:16,padding:0,boxShadow:"0 1px 2px rgba(15,23,42,0.03)",display:"flex",flexDirection:"column",transition:"all .2s cubic-bezier(.4,0,.2,1)",cursor:"pointer",overflow:"hidden",position:"relative"}}
