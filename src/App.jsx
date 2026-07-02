@@ -48860,7 +48860,7 @@ function PagePortfolio(props){
     {id:"lp",       label:"Landing Page",                  valor:1500, fixo:true,  entregas:[]},
     {id:"gmb",      label:"Google Perfil de Empresa",      valor:1000, fixo:true,  entregas:[]},
     {id:"id",       label:"Logo e Identidade Visual",      valor:2000, fixo:true,  entregas:[]},
-    {id:"starter",  label:"Starter 90 dias",               valor:9000, fixo:true,
+    {id:"starter",  label:"Starter 90 dias",                   valor:10500, fixo:true,
       entregas:[..._ENTR_DIAGNOSTICO, ..._ENTR_MIDIA, ..._ENTR_REDES, ..._ENTR_SUPORTE]},
     {id:"siteIA",   label:"Sites / Landing Pages com IA",  valor:2500, fixo:false, entregas:[]},
     {id:"chatbot",  label:"Chatbot / Automações com IA",   valor:2500, fixo:false, entregas:[]},
