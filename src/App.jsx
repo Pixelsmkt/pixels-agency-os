@@ -11088,50 +11088,17 @@ function PageClientes({isMob, tasks}){
   const [mindmapActive,setMindmapActive]=useState(false);
   const [search,setSearch]=useState("");
   const [showNovo,setShowNovo]=useState(false);
-  // extraClients = clientes cadastrados via modal "Novo cliente" (dinâmicos, no Supabase).
-  // Inicializa do cache localStorage pra evitar flash. Depois recarrega do Supabase no mount.
-  const [extraClients,setExtraClients]=useState(function(){
-    try{ const raw=localStorage.getItem("pixels-extra-clients-v1"); if(raw) return JSON.parse(raw)||[]; }catch(_){}
-    return [];
-  });
-
-  // ── Carrega clientes dinâmicos do Supabase (is_dynamic=true) ──
-  // Roda no mount + escuta eventos "pixels:client-added" pra atualização instantânea
-  // quando o modal "Novo cliente" salva.
+  // Nota: clientes dinâmicos são carregados pelo loader global em 00_clientes_data.jsx
+  // (window.loadDynamicClientsFromSupabase) e injetados direto no CLIENTS.
+  // Também escutamos "pixels:client-added" pra re-fetch quando modal "Novo cliente" salva.
   useEffect(function(){
-    async function _loadDynamic(){
-      if(!window._sb) return;
-      try{
-        const {data,error} = await window._sb.from("clients")
-          .select("client_id,name,abbr,sector,cidade,estado,color,logo_url,status,since_label,manager,profile_data")
-          .eq("is_dynamic",true);
-        if(error){ console.warn("[loadDynamic]", error.message); return; }
-        const _known = new Set((typeof CLIENTS!=="undefined"?CLIENTS:[]).map(function(c){return c.id;}));
-        const rows = (data||[]).filter(function(r){return !_known.has(r.client_id);}).map(function(r){
-          const pd = r.profile_data||{};
-          return {
-            id: r.client_id, name: r.name||r.client_id,
-            abbr: r.abbr||(r.name||"").slice(0,2).toUpperCase(),
-            color: r.color||"#7c3aed",
-            sector: r.sector||"", cidade: r.cidade||"", estado: r.estado||"",
-            status: r.status||"ativo", since: r.since_label||"",
-            logoUrl: r.logo_url||null, manager: r.manager||"vinicius",
-            meta: pd.meta||{}, google: pd.google||{}, social: pd.social||{},
-            socialUrls: pd.socialUrls||{}, reporteiUrl: pd.reporteiUrl||"",
-            upsell: pd.upsell||[], connected: pd.connected||false,
-            health: 80, nps: 75, contract: 0,
-            history:[], driveUrl:"", payment:{status:"pendente",date:""},
-            contacts:[], goals:[], meetingNotes:[],
-          };
-        });
-        setExtraClients(rows);
-        try{ localStorage.setItem("pixels-extra-clients-v1", JSON.stringify(rows)); }catch(_){}
-      }catch(e){ console.warn("[loadDynamic ex]", e); }
+    function _refresh(){
+      if(typeof window.loadDynamicClientsFromSupabase==="function"){
+        window.loadDynamicClientsFromSupabase().catch(function(){});
+      }
     }
-    _loadDynamic();
-    function _onAdded(){ _loadDynamic(); }
-    window.addEventListener("pixels:client-added", _onAdded);
-    return function(){ window.removeEventListener("pixels:client-added", _onAdded); };
+    window.addEventListener("pixels:client-added", _refresh);
+    return function(){ window.removeEventListener("pixels:client-added", _refresh); };
   },[]);
   const [filterStatus,setFilterStatus]=useState("todos");
   const [bioterExpanded,setBioterExpanded]=useState(false);
@@ -11148,13 +11115,12 @@ function PageClientes({isMob, tasks}){
     };
   },[]);
 
-  // Dedup por id — o loader global (00_clientes_data.jsx) já injeta dinâmicos
-  // no CLIENTS, e o loader local também popula extraClients. Sem dedup, cliente
-  // dinâmico (ex: Acreforte) aparece 2x na listagem.
+  // Fonte única: CLIENTS (o loader global de 00_clientes_data.jsx injeta hardcoded
+  // + dinâmicos aqui). Dedup defensivo por id, só por precaução.
   const allClients = (function(){
     const seen = new Set();
     const out = [];
-    [...CLIENTS, ...extraClients].forEach(function(c){
+    CLIENTS.forEach(function(c){
       if(!c || !c.id || seen.has(c.id)) return;
       seen.add(c.id);
       out.push(c);
@@ -11288,7 +11254,7 @@ function PageClientes({isMob, tasks}){
   ];
 
   return (<div style={{display:"flex",flexDirection:"column",gap:22,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    {showNovo&&<NovoClienteModal onClose={()=>setShowNovo(false)} onSave={cl=>setExtraClients(p=>[...p,cl])}/>}
+    {showNovo&&<NovoClienteModal onClose={()=>setShowNovo(false)} onSave={function(){ try{ window.dispatchEvent(new CustomEvent("pixels:client-added")); }catch(_){}}}/>}
 
     {/* ── HEADER ── */}
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
