@@ -45483,6 +45483,9 @@ function PageComercial({isMob, perms, effectiveUser}){
     {id:"propostas", label:"Propostas"},
     {id:"followups", label:"Follow-ups"},
     {id:"portfolio", label:"Portfólio"},
+    // Contratos: gerencia MRR / LTV / upsells / cross-sells ao longo do tempo.
+    // Só sócios veem (dado sensível de faturamento).
+    ...(isSocio?[{id:"contratos", label:"Contratos"}]:[]),
     {id:"historico", label:"Histórico"},
   ];
 
@@ -45513,6 +45516,7 @@ function PageComercial({isMob, perms, effectiveUser}){
     {tab==="propostas"&&<ComPropostas store={store} update={update} log={log} canEdit={canEdit}/>}
     {tab==="followups"&&<ComFollowUps store={store} update={update} log={log} canEdit={canEdit}/>}
     {tab==="portfolio"&&typeof PagePortfolio==="function"&&<PagePortfolio isMob={isMob}/>}
+    {tab==="contratos"&&isSocio&&<ComContratos canEdit={canEdit&&isSocio}/>}
     {tab==="historico"&&<ComHistorico store={store}/>}
   </div>;
 }
@@ -46925,6 +46929,592 @@ function MonthlyPlanComments({data, onAdd, clColor}){
         style={{flex:1,background:"#fafbfc",border:"1px solid #cbd5e1",borderRadius:8,padding:"8px 11px",color:"#0f172a",fontSize:12.5,outline:"none",resize:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
       <button onClick={enviar} disabled={!txt.trim()}
         style={{background:txt.trim()?(clColor||"#0f172a"):"#cbd5e1",color:"#fff",border:"none",borderRadius:8,padding:"0 14px",fontSize:14,fontWeight:700,cursor:txt.trim()?"pointer":"not-allowed",fontFamily:"inherit"}}>↑</button>
+    </div>
+  </div>;
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   CONTRATOS — Histórico de contratos por cliente
+   Tabela: contract_events (sql/contract_events.sql)
+   Só sócios (level 1) veem essa aba.
+   ═══════════════════════════════════════════════════════════════ */
+
+const CONTRATO_EVENT_TYPES = [
+  {id:"inicio",       label:"Início de contrato", color:"#16a34a", bg:"#dcfce7", desc:"Entrada do cliente na Pixels", affectsMrr:true},
+  {id:"upsell",       label:"Upsell",             color:"#7c3aed", bg:"#f5f3ff", desc:"Aumento do mensal recorrente", affectsMrr:true},
+  {id:"cross_sell",   label:"Cross-sell",         color:"#0284c7", bg:"#e0f2fe", desc:"Projeto pontual (não muda MRR)", affectsMrr:false},
+  {id:"downsell",     label:"Downsell",           color:"#ea580c", bg:"#fff7ed", desc:"Redução do mensal recorrente",  affectsMrr:true},
+  {id:"pausa",        label:"Pausa",              color:"#ca8a04", bg:"#fef9c3", desc:"Cliente pausou temporariamente", affectsMrr:false},
+  {id:"cancelamento", label:"Cancelamento",       color:"#dc2626", bg:"#fee2e2", desc:"Fim do contrato (churn)",        affectsMrr:false},
+  {id:"renegociacao", label:"Renegociação",       color:"#64748b", bg:"#f1f5f9", desc:"Mudança sem impacto financeiro", affectsMrr:false},
+];
+
+// Sugestões de entregáveis pra auto-complete
+const CONTRATO_ENTREGAVEIS_SUGESTOES = [
+  "Gestão de Instagram","Gestão de Facebook","Gestão de LinkedIn","Gestão de TikTok",
+  "8 posts/mês","12 posts/mês","16 posts/mês","20 posts/mês",
+  "2 vídeos/mês","4 vídeos/mês","8 vídeos/mês",
+  "Stories diários","Stories 3x/semana",
+  "Gestão de Meta Ads","Gestão de Google Ads","Gestão de LinkedIn Ads",
+  "Relatório mensal","Reunião semanal","Reunião quinzenal","Reunião mensal",
+  "Landing Page","Site institucional","Redesign de site",
+  "Setup Pixel/Tag","CRM/Automação","Portal do cliente",
+  "Fotografia de produto","Filmagem em campo","Edição de vídeo",
+  "Google Meu Negócio","Copy pra WhatsApp","Foto de obra",
+];
+
+function _contFmtBRL(n){
+  const v=Number(n)||0;
+  return "R$ "+v.toLocaleString("pt-BR",{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+function _contFmtDateLong(ds){
+  if(!ds)return "—";
+  try{
+    const d=new Date((ds+"").length===10?ds+"T12:00:00":ds);
+    if(isNaN(d.getTime()))return ds;
+    return d.toLocaleDateString("pt-BR",{day:"2-digit",month:"short",year:"numeric"});
+  }catch(e){return ds;}
+}
+function _contParseSinceLabel(sinceLabel){
+  // Aceita "Jan 2024", "jan 2024", "Jan/2024", "2024-01" etc → retorna YYYY-MM-01
+  if(!sinceLabel) return null;
+  const s=String(sinceLabel).trim().toLowerCase();
+  const MESES={jan:"01",fev:"02",mar:"03",abr:"04",mai:"05",jun:"06",jul:"07",ago:"08",set:"09","out":"10",nov:"11",dez:"12"};
+  const m1=s.match(/(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z\/\.]*\s*(\d{4})/);
+  if(m1) return m1[2]+"-"+MESES[m1[1]]+"-01";
+  const m2=s.match(/(\d{4})-(\d{2})/);
+  if(m2) return m2[1]+"-"+m2[2]+"-01";
+  return null;
+}
+function _contMonthsBetween(d1,d2){
+  // Nº de meses cheios entre datas (aproximado, adequado pra LTV)
+  if(!d1||!d2) return 0;
+  const a=new Date((d1+"").length===10?d1+"T12:00:00":d1);
+  const b=new Date((d2+"").length===10?d2+"T12:00:00":d2);
+  if(isNaN(a.getTime())||isNaN(b.getTime())) return 0;
+  const yr=b.getFullYear()-a.getFullYear();
+  const mo=b.getMonth()-a.getMonth();
+  return Math.max(0, yr*12 + mo);
+}
+
+// Dado um array de eventos ordenado por data, calcula LTV, MRR atual, meses ativos, upsells, cross-sells
+function _contComputeStats(events){
+  const today=new Date().toISOString().slice(0,10);
+  let ltv=0, mrrAtual=0, upsells=0, crossSells=0, downsells=0, ativo=true;
+  let ultimaAlteracaoMrr=null;
+  let mrrCorrente=0;
+  let dataInicio=null;
+  const sorted=[...events].sort(function(a,b){
+    return (a.event_date||"").localeCompare(b.event_date||"");
+  });
+  for(let i=0;i<sorted.length;i++){
+    const e=sorted[i];
+    if(e.event_type==="inicio"){
+      if(!dataInicio) dataInicio=e.event_date;
+      mrrCorrente=Number(e.valor_mensal_novo)||0;
+      ultimaAlteracaoMrr=e.event_date;
+    }
+    else if(e.event_type==="upsell" || e.event_type==="downsell"){
+      // Acumula meses no MRR anterior
+      if(ultimaAlteracaoMrr){
+        const meses=_contMonthsBetween(ultimaAlteracaoMrr,e.event_date);
+        ltv += mrrCorrente * meses;
+      }
+      mrrCorrente=Number(e.valor_mensal_novo)||mrrCorrente;
+      ultimaAlteracaoMrr=e.event_date;
+      if(e.event_type==="upsell") upsells++;
+      else downsells++;
+    }
+    else if(e.event_type==="cross_sell"){
+      ltv += Number(e.valor_pontual)||0;
+      crossSells++;
+    }
+    else if(e.event_type==="cancelamento"){
+      if(ultimaAlteracaoMrr){
+        const meses=_contMonthsBetween(ultimaAlteracaoMrr,e.event_date);
+        ltv += mrrCorrente * meses;
+      }
+      mrrCorrente=0;
+      ativo=false;
+      ultimaAlteracaoMrr=null;
+    }
+    else if(e.event_type==="pausa"){
+      if(ultimaAlteracaoMrr){
+        const meses=_contMonthsBetween(ultimaAlteracaoMrr,e.event_date);
+        ltv += mrrCorrente * meses;
+      }
+      ultimaAlteracaoMrr=null;
+    }
+  }
+  // Adiciona meses até hoje se ainda ativo
+  if(ativo && ultimaAlteracaoMrr && mrrCorrente){
+    const meses=_contMonthsBetween(ultimaAlteracaoMrr,today);
+    ltv += mrrCorrente * meses;
+    mrrAtual=mrrCorrente;
+  }
+  const mesesTotal=dataInicio?_contMonthsBetween(dataInicio,today):0;
+  return {ltv, mrrAtual, mesesTotal, upsells, crossSells, downsells, ativo, dataInicio};
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PAGE — Contratos (root)
+   ═══════════════════════════════════════════════════════════════ */
+function ComContratos({canEdit}){
+  const [events,setEvents]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [drawerClient,setDrawerClient]=useState(null); // client obj com timeline aberta
+  const [showForm,setShowForm]=useState(false);
+  const [editEvent,setEditEvent]=useState(null); // evento em edição (ou null p/ novo)
+
+  // ── Carrega eventos do Supabase ──
+  const _reload=async function(){
+    if(!window._sb){ setLoading(false); return; }
+    try{
+      const {data,error}=await window._sb.from("contract_events")
+        .select("*").order("event_date",{ascending:true});
+      if(error){ console.warn("[contratos]",error.message); setLoading(false); return; }
+      setEvents(data||[]);
+    }catch(e){ console.warn("[contratos ex]",e); }
+    setLoading(false);
+  };
+  useEffect(function(){ _reload(); },[]);
+
+  // ── Auto-seed: cria evento "inicio" pra clientes que ainda não têm nenhum ──
+  useEffect(function(){
+    if(loading) return;
+    if(!window._sb || !canEdit) return;
+    const clientsWithEvent=new Set(events.map(function(e){return e.client_id;}));
+    const missing=CLIENTS.filter(function(c){
+      if(!c || c.status==="interno") return false;
+      if(clientsWithEvent.has(c.id)) return false;
+      if(!c.contract || Number(c.contract)<=0) return false;
+      return true;
+    });
+    if(missing.length===0) return;
+    // Cria eventos "inicio" em batch
+    const rows=missing.map(function(c){
+      return {
+        client_id: c.id,
+        event_type: "inicio",
+        event_date: _contParseSinceLabel(c.since) || new Date().toISOString().slice(0,10),
+        valor_mensal_novo: Number(c.contract)||0,
+        descricao: "Início do contrato (seed automático)",
+        servicos: [],
+        created_by: (typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:"",
+      };
+    });
+    window._sb.from("contract_events").insert(rows).then(function(res){
+      if(res.error){ console.warn("[contratos seed]",res.error.message); return; }
+      _reload();
+    });
+  },[loading,events.length,canEdit]);
+
+  // ── Agrega por cliente ──
+  const perClient=CLIENTS
+    .filter(function(c){return c && c.status!=="interno";})
+    .map(function(c){
+      const clEvents=events.filter(function(e){return e.client_id===c.id;});
+      const stats=_contComputeStats(clEvents);
+      return {client:c, events:clEvents, stats:stats};
+    })
+    .sort(function(a,b){return b.stats.ltv - a.stats.ltv;});
+
+  // ── KPIs agregados ──
+  const kpi={
+    mrrTotal: perClient.reduce(function(s,x){return s+(x.stats.ativo?x.stats.mrrAtual:0);},0),
+    ltvMedio: (function(){
+      const ativos=perClient.filter(function(x){return x.stats.ltv>0;});
+      if(ativos.length===0) return 0;
+      return ativos.reduce(function(s,x){return s+x.stats.ltv;},0)/ativos.length;
+    })(),
+    ativos: perClient.filter(function(x){return x.stats.ativo && x.stats.mrrAtual>0;}).length,
+    upsellsMes: (function(){
+      const ini=new Date();ini.setDate(1);const iso=ini.toISOString().slice(0,10);
+      return events.filter(function(e){return e.event_type==="upsell" && (e.event_date||"")>=iso;}).length;
+    })(),
+  };
+
+  const _openNovoEvento=function(client){
+    setDrawerClient(client);
+    setEditEvent(null);
+    setShowForm(true);
+  };
+  const _openEditEvento=function(client,ev){
+    setDrawerClient(client);
+    setEditEvent(ev);
+    setShowForm(true);
+  };
+  const _deleteEvento=async function(ev){
+    if(!window._sb) return;
+    if(typeof pixelsConfirm==="function"){
+      const ok=await pixelsConfirm({title:"Apagar evento?", message:"Essa ação não pode ser desfeita.", danger:true});
+      if(!ok) return;
+    } else if(!window.confirm("Apagar evento?")){ return; }
+    const {error}=await window._sb.from("contract_events").delete().eq("id",ev.id);
+    if(error){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+error.message); return; }
+    if(typeof pixelsToast!=="undefined") pixelsToast.success("Evento apagado.");
+    _reload();
+  };
+
+  if(loading){
+    return <div style={{padding:32,textAlign:"center",color:"#64748b",fontSize:13}}>Carregando contratos…</div>;
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:18}}>
+    {/* KPIs agregados */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
+      <_ContKpiCard label="MRR total" value={_contFmtBRL(kpi.mrrTotal)} sub="soma dos mensais ativos" color="#16a34a" bg="#dcfce7"/>
+      <_ContKpiCard label="LTV médio" value={_contFmtBRL(kpi.ltvMedio)} sub="por cliente com histórico" color="#7c3aed" bg="#f5f3ff"/>
+      <_ContKpiCard label="Contratos ativos" value={String(kpi.ativos)} sub="clientes com MRR > 0" color="#0284c7" bg="#e0f2fe"/>
+      <_ContKpiCard label="Upsells no mês" value={String(kpi.upsellsMes)} sub="mês corrente" color="#ea580c" bg="#fff7ed"/>
+    </div>
+
+    {/* Lista de clientes */}
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      {perClient.map(function(row){
+        const c=row.client, s=row.stats;
+        return <div key={c.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"16px 18px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+          {/* Logo + nome */}
+          <div style={{display:"flex",alignItems:"center",gap:12,minWidth:220,flex:"1 1 240px"}}>
+            <div style={{width:40,height:40,borderRadius:10,background:(c.color||"#94a3b8")+"15",border:"1px solid "+(c.color||"#94a3b8")+"33",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,overflow:"hidden"}}>
+              {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[c.id])
+                ? <img src={CLIENT_LOGOS[c.id]} alt={c.name} style={{maxWidth:32,maxHeight:32,objectFit:"contain"}}/>
+                : <span style={{color:c.color||"#64748b",fontWeight:900,fontSize:13}}>{c.abbr||(c.name||"").slice(0,2).toUpperCase()}</span>}
+            </div>
+            <div style={{minWidth:0,flex:1}}>
+              <div style={{color:"#0f172a",fontWeight:700,fontSize:14,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</div>
+              <div style={{color:"#94a3b8",fontSize:11,marginTop:2,fontWeight:500}}>
+                {s.dataInicio?"Desde "+_contFmtDateLong(s.dataInicio):"Sem contrato"} · {s.mesesTotal} meses
+              </div>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div style={{display:"flex",gap:18,flex:"2 1 400px",flexWrap:"wrap"}}>
+            <_ContMiniStat label="MRR atual" value={s.ativo?_contFmtBRL(s.mrrAtual):"—"} color={s.ativo?"#16a34a":"#94a3b8"}/>
+            <_ContMiniStat label="LTV" value={_contFmtBRL(s.ltv)} color="#7c3aed"/>
+            <_ContMiniStat label="Upsells" value={String(s.upsells)} color="#0284c7"/>
+            <_ContMiniStat label="Cross-sells" value={String(s.crossSells)} color="#ea580c"/>
+            {!s.ativo && <_ContMiniStat label="Status" value="Encerrado" color="#dc2626"/>}
+          </div>
+
+          {/* Ações */}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={function(){setDrawerClient(c);}}
+              style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",color:"#0f172a",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}
+              onMouseEnter={function(e){e.currentTarget.style.background="#0f172a";e.currentTarget.style.color="#fff";}}
+              onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.color="#0f172a";}}>
+              Ver histórico
+            </button>
+            {canEdit && <button onClick={function(){_openNovoEvento(c);}}
+              title="Registrar novo evento"
+              style={{background:c.color||"#7c3aed",border:"none",borderRadius:9,padding:"7px 14px",color:"#fff",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+              + Evento
+            </button>}
+          </div>
+        </div>;
+      })}
+    </div>
+
+    {/* Timeline drawer */}
+    {drawerClient && !showForm && <ContratoTimelineDrawer
+      client={drawerClient}
+      events={events.filter(function(e){return e.client_id===drawerClient.id;})}
+      canEdit={canEdit}
+      onClose={function(){setDrawerClient(null);}}
+      onNew={function(){_openNovoEvento(drawerClient);}}
+      onEdit={function(ev){_openEditEvento(drawerClient,ev);}}
+      onDelete={_deleteEvento}
+    />}
+
+    {/* Form modal */}
+    {showForm && drawerClient && <ContratoEventoModal
+      client={drawerClient}
+      editing={editEvent}
+      onClose={function(){setShowForm(false);}}
+      onSaved={function(){setShowForm(false); _reload();}}
+    />}
+  </div>;
+}
+
+function _ContKpiCard({label,value,sub,color,bg}){
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"14px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+      <div style={{width:8,height:8,borderRadius:99,background:color}}/>
+      <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6}}>{label}</div>
+    </div>
+    <div style={{color:"#0f172a",fontWeight:800,fontSize:22,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{value}</div>
+    {sub && <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2,fontWeight:500}}>{sub}</div>}
+  </div>;
+}
+
+function _ContMiniStat({label,value,color}){
+  return <div style={{display:"flex",flexDirection:"column",minWidth:80}}>
+    <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
+    <div style={{color:color||"#0f172a",fontWeight:700,fontSize:14,marginTop:3,fontFeatureSettings:"'tnum'"}}>{value}</div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Timeline Drawer — histórico de eventos de um cliente
+   ═══════════════════════════════════════════════════════════════ */
+function ContratoTimelineDrawer({client, events, canEdit, onClose, onNew, onEdit, onDelete}){
+  if(typeof useEscToClose==="function") useEscToClose(true,onClose);
+  const stats=_contComputeStats(events);
+  const sorted=[...events].sort(function(a,b){return (b.event_date||"").localeCompare(a.event_date||"");});
+  const cor=client.color||"#7c3aed";
+  return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(4px)",zIndex:500,display:"flex",justifyContent:"flex-end",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div onMouseDown={function(e){e.stopPropagation();}}
+      style={{background:"#fff",width:"min(680px,100%)",height:"100vh",overflow:"auto",boxShadow:"-16px 0 40px rgba(15,23,42,0.25)"}}>
+      {/* Header */}
+      <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(135deg,"+cor+"12,transparent 65%)",position:"relative"}}>
+        <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:cor}}/>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginLeft:8}}>
+          <div style={{width:48,height:48,borderRadius:12,background:"#fff",border:"1px solid "+cor+"33",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden"}}>
+            {(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[client.id])
+              ? <img src={CLIENT_LOGOS[client.id]} alt={client.name} style={{maxWidth:38,maxHeight:38,objectFit:"contain"}}/>
+              : <span style={{color:cor,fontWeight:900,fontSize:16}}>{client.abbr||(client.name||"").slice(0,2).toUpperCase()}</span>}
+          </div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:18,letterSpacing:-.3}}>{client.name}</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:2}}>Histórico do contrato · {events.length} evento{events.length===1?"":"s"}</div>
+          </div>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:32,height:32,color:"#64748b",cursor:"pointer",fontSize:13}}>✕</button>
+        </div>
+        {/* Resumo */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(110px,1fr))",gap:10,marginTop:16,marginLeft:8}}>
+          <_ContMiniStat label="LTV total" value={_contFmtBRL(stats.ltv)} color="#7c3aed"/>
+          <_ContMiniStat label="MRR atual" value={stats.ativo?_contFmtBRL(stats.mrrAtual):"—"} color={stats.ativo?"#16a34a":"#94a3b8"}/>
+          <_ContMiniStat label="Meses" value={String(stats.mesesTotal)} color="#0f172a"/>
+          <_ContMiniStat label="Upsells" value={String(stats.upsells)} color="#0284c7"/>
+          <_ContMiniStat label="Cross-sells" value={String(stats.crossSells)} color="#ea580c"/>
+        </div>
+      </div>
+
+      {/* Botão registrar */}
+      {canEdit && <div style={{padding:"14px 24px",borderBottom:"1px solid #f1f5f9"}}>
+        <button onClick={onNew}
+          style={{background:cor,border:"none",borderRadius:10,padding:"10px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+          + Registrar evento
+        </button>
+      </div>}
+
+      {/* Timeline */}
+      <div style={{padding:"18px 24px 40px"}}>
+        {sorted.length===0
+          ? <div style={{padding:24,textAlign:"center",color:"#94a3b8",fontSize:13}}>Nenhum evento registrado ainda.</div>
+          : <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              {sorted.map(function(ev,idx){
+                const cfg=CONTRATO_EVENT_TYPES.find(function(t){return t.id===ev.event_type;})||CONTRATO_EVENT_TYPES[0];
+                const servs=Array.isArray(ev.servicos)?ev.servicos:[];
+                return <div key={ev.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"14px 16px",position:"relative"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:6}}>
+                        <span style={{background:cfg.bg,color:cfg.color,fontSize:11,fontWeight:800,padding:"3px 10px",borderRadius:99,textTransform:"uppercase",letterSpacing:.4}}>{cfg.label}</span>
+                        <span style={{color:"#64748b",fontSize:12,fontWeight:600}}>{_contFmtDateLong(ev.event_date)}</span>
+                      </div>
+                      {/* Valores */}
+                      <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:servs.length?8:0}}>
+                        {cfg.affectsMrr && ev.valor_mensal_novo!=null && <div>
+                          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Novo MRR</div>
+                          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,fontFeatureSettings:"'tnum'"}}>{_contFmtBRL(ev.valor_mensal_novo)}/mês</div>
+                        </div>}
+                        {ev.event_type==="cross_sell" && ev.valor_pontual!=null && <div>
+                          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5}}>Valor pontual</div>
+                          <div style={{color:"#0f172a",fontWeight:700,fontSize:14,fontFeatureSettings:"'tnum'"}}>{_contFmtBRL(ev.valor_pontual)}</div>
+                        </div>}
+                      </div>
+                      {/* Entregáveis */}
+                      {servs.length>0 && <div style={{marginBottom:8}}>
+                        <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>Entregáveis</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                          {servs.map(function(sv,i){
+                            return <span key={i} style={{background:"#f1f5f9",color:"#334155",fontSize:11,fontWeight:600,padding:"3px 9px",borderRadius:99,border:"1px solid #e2e8f0"}}>{sv}</span>;
+                          })}
+                        </div>
+                      </div>}
+                      {ev.descricao && <div style={{color:"#475569",fontSize:12,lineHeight:1.5,marginTop:4}}>{ev.descricao}</div>}
+                    </div>
+                    {canEdit && <div style={{display:"flex",gap:4,flexShrink:0}}>
+                      <button onClick={function(){onEdit(ev);}} title="Editar" style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:7,width:28,height:28,color:"#64748b",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                      </button>
+                      <button onClick={function(){onDelete(ev);}} title="Apagar" style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:7,width:28,height:28,color:"#dc2626",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+                      </button>
+                    </div>}
+                  </div>
+                </div>;
+              })}
+            </div>
+        }
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Modal — registra/edita evento de contrato
+   ═══════════════════════════════════════════════════════════════ */
+function ContratoEventoModal({client, editing, onClose, onSaved}){
+  if(typeof useEscToClose==="function") useEscToClose(true,onClose);
+  const [tipo,setTipo]=useState(editing?.event_type||"upsell");
+  const [dataStr,setData]=useState(editing?.event_date||new Date().toISOString().slice(0,10));
+  const [valorMensal,setValorMensal]=useState(editing?.valor_mensal_novo!=null?String(editing.valor_mensal_novo):"");
+  const [valorPontual,setValorPontual]=useState(editing?.valor_pontual!=null?String(editing.valor_pontual):"");
+  const [descricao,setDescricao]=useState(editing?.descricao||"");
+  const [servicos,setServicos]=useState(Array.isArray(editing?.servicos)?editing.servicos:[]);
+  const [novoServ,setNovoServ]=useState("");
+  const [saving,setSaving]=useState(false);
+  const [err,setErr]=useState("");
+
+  const cfg=CONTRATO_EVENT_TYPES.find(function(t){return t.id===tipo;})||CONTRATO_EVENT_TYPES[0];
+  const cor=client.color||"#7c3aed";
+
+  function _addServ(txt){
+    const t=(txt||"").trim();
+    if(!t) return;
+    if(servicos.includes(t)) return;
+    setServicos([...servicos, t]);
+    setNovoServ("");
+  }
+  function _removeServ(i){
+    setServicos(servicos.filter(function(_,idx){return idx!==i;}));
+  }
+
+  async function handleSave(){
+    setErr("");
+    if(!tipo){ setErr("Escolha o tipo do evento."); return; }
+    if(!dataStr){ setErr("Data é obrigatória."); return; }
+    if(cfg.affectsMrr && !valorMensal){ setErr("Informe o novo valor mensal."); return; }
+    if(tipo==="cross_sell" && !valorPontual){ setErr("Informe o valor pontual."); return; }
+    if(!window._sb){ setErr("Supabase offline."); return; }
+    setSaving(true);
+    const row={
+      client_id: client.id,
+      event_type: tipo,
+      event_date: dataStr,
+      valor_mensal_novo: cfg.affectsMrr ? (Number(valorMensal)||0) : null,
+      valor_pontual: tipo==="cross_sell" ? (Number(valorPontual)||0) : null,
+      descricao: descricao.trim() || null,
+      servicos: servicos,
+      created_by: (typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:"",
+    };
+    let res;
+    if(editing && editing.id){
+      res=await window._sb.from("contract_events").update(row).eq("id",editing.id);
+    } else {
+      res=await window._sb.from("contract_events").insert(row);
+    }
+    if(res.error){ setErr("Erro: "+res.error.message); setSaving(false); return; }
+    if(typeof pixelsToast!=="undefined") pixelsToast.success(editing?"Evento atualizado.":"Evento registrado.");
+    setSaving(false);
+    onSaved && onSaved();
+  }
+
+  const inp={background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 14px",color:"#0f172a",fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:"'Inter',system-ui,sans-serif",fontWeight:500};
+  const lbl={color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6};
+
+  return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",zIndex:600,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:24,overflowY:"auto",fontFamily:"'Inter',system-ui,sans-serif"}}>
+    <div onMouseDown={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,marginTop:24,boxShadow:"0 32px 80px rgba(15,23,42,0.28)",overflow:"hidden"}}>
+      {/* Header */}
+      <div style={{padding:"20px 24px 16px",borderBottom:"1px solid #f1f5f9",background:"linear-gradient(135deg,"+cor+"12,transparent 65%)",position:"relative"}}>
+        <div style={{position:"absolute",left:0,top:0,bottom:0,width:4,background:cor}}/>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginLeft:8,justifyContent:"space-between"}}>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>{editing?"Editar":"Registrar"} evento</div>
+            <div style={{color:"#64748b",fontSize:12,marginTop:3}}>{client.name}</div>
+          </div>
+          <button onClick={onClose} style={{background:"#f1f5f9",border:"none",borderRadius:8,width:30,height:30,color:"#64748b",cursor:"pointer",fontSize:13}}>✕</button>
+        </div>
+      </div>
+
+      <div style={{padding:22,display:"flex",flexDirection:"column",gap:14,maxHeight:"70vh",overflowY:"auto"}}>
+        {err && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:9,padding:"9px 12px",color:"#b91c1c",fontSize:12.5,fontWeight:600}}>{err}</div>}
+
+        {/* Tipo de evento */}
+        <div>
+          <div style={lbl}>Tipo do evento</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:6}}>
+            {CONTRATO_EVENT_TYPES.map(function(t){
+              const active=tipo===t.id;
+              return <button key={t.id} onClick={function(){setTipo(t.id);}}
+                style={{background:active?t.bg:"#fff",border:"1px solid "+(active?t.color:"#e2e8f0"),borderRadius:9,padding:"8px 10px",color:active?t.color:"#64748b",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",textAlign:"left",transition:"all .12s"}}>
+                {t.label}
+              </button>;
+            })}
+          </div>
+          <div style={{color:"#94a3b8",fontSize:11,marginTop:6,fontWeight:500}}>{cfg.desc}</div>
+        </div>
+
+        {/* Data */}
+        <div>
+          <div style={lbl}>Data do evento</div>
+          <input type="date" value={dataStr} onChange={function(e){setData(e.target.value);}} style={inp}/>
+        </div>
+
+        {/* Valores condicionais */}
+        {cfg.affectsMrr && <div>
+          <div style={lbl}>Novo valor mensal (MRR após o evento)</div>
+          <input type="number" min="0" step="100" value={valorMensal} onChange={function(e){setValorMensal(e.target.value);}} style={inp} placeholder="Ex: 4500"/>
+          <div style={{color:"#94a3b8",fontSize:10.5,marginTop:5,fontWeight:500}}>Coloque o MRR TOTAL após o evento, não só a diferença.</div>
+        </div>}
+
+        {tipo==="cross_sell" && <div>
+          <div style={lbl}>Valor pontual (projeto único)</div>
+          <input type="number" min="0" step="100" value={valorPontual} onChange={function(e){setValorPontual(e.target.value);}} style={inp} placeholder="Ex: 3000"/>
+        </div>}
+
+        {/* Entregáveis */}
+        <div>
+          <div style={lbl}>Entregáveis / escopo</div>
+          <div style={{display:"flex",gap:6,marginBottom:8}}>
+            <input value={novoServ} onChange={function(e){setNovoServ(e.target.value);}}
+              onKeyDown={function(e){if(e.key==="Enter"){e.preventDefault();_addServ(novoServ);}}}
+              placeholder="Ex: 8 posts/mês" style={inp}/>
+            <button type="button" onClick={function(){_addServ(novoServ);}}
+              style={{background:cor,border:"none",borderRadius:9,padding:"0 16px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",flexShrink:0,fontFamily:"inherit"}}>+</button>
+          </div>
+          {/* Sugestões */}
+          <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:8}}>
+            {CONTRATO_ENTREGAVEIS_SUGESTOES.filter(function(s){return !servicos.includes(s);}).slice(0,10).map(function(s){
+              return <button key={s} type="button" onClick={function(){_addServ(s);}}
+                style={{background:"#f8fafc",border:"1px dashed #cbd5e1",borderRadius:99,padding:"3px 9px",color:"#64748b",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>+ {s}</button>;
+            })}
+          </div>
+          {/* Selecionados */}
+          {servicos.length>0 && <div style={{display:"flex",flexWrap:"wrap",gap:5,padding:"8px 10px",background:"#f8fafc",borderRadius:8,border:"1px solid #e2e8f0"}}>
+            {servicos.map(function(s,i){
+              return <span key={i} style={{background:cor+"15",color:cor,fontSize:11,fontWeight:700,padding:"3px 4px 3px 10px",borderRadius:99,display:"inline-flex",alignItems:"center",gap:6}}>
+                {s}
+                <button onClick={function(){_removeServ(i);}} style={{background:"transparent",border:"none",color:cor,cursor:"pointer",fontSize:12,padding:"0 6px",fontWeight:900}}>×</button>
+              </span>;
+            })}
+          </div>}
+        </div>
+
+        {/* Descrição */}
+        <div>
+          <div style={lbl}>Observação (opcional)</div>
+          <textarea value={descricao} onChange={function(e){setDescricao(e.target.value);}} rows={3}
+            style={Object.assign({},inp,{resize:"vertical",fontFamily:"inherit"})}
+            placeholder="Ex: Cliente aceitou incluir Google Ads no plano após reunião"/>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{padding:"14px 22px",borderTop:"1px solid #f1f5f9",display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} disabled={saving}
+          style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:9,padding:"10px 20px",color:"#475569",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={handleSave} disabled={saving}
+          style={{background:saving?"#94a3b8":cor,border:"none",borderRadius:9,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"wait":"pointer",fontFamily:"inherit"}}>
+          {saving?"Salvando…":(editing?"Atualizar":"Registrar")}
+        </button>
+      </div>
     </div>
   </div>;
 }
