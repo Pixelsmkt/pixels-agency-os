@@ -48438,9 +48438,9 @@ const PORTF_PROJETOS = [
     short:"Posicionamento e início de escala em 90 dias.",
     long:"Posicionamento, construção de presença e início de escala. Diagnóstico, mídia, redes sociais e acompanhamento.",
     entregas:["Diagnóstico e estratégia","Gestão de Meta Ads","Gestão de Redes Sociais","Suporte e acompanhamento"],
-    valor:"R$ 9.000",
-    parcelas:"3x de R$ 3.000",
-    resumo:"Projeto Starter — 90 dias por R$ 9.000 (ou 3x de R$ 3.000). Posicionamento, construção de presença e início de escala.",
+    valor:"R$ 3.500",
+    unidade:"/mês",
+    resumo:"Projeto Starter — 90 dias por R$ 3.500/mês. Posicionamento, construção de presença e início de escala.",
   },
   {
     id:"landing", icon:"globe",
@@ -48939,7 +48939,7 @@ function PagePortfolio(props){
     {view==="overview" && <section style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:14,fontFamily:_PORTF_FF}}>
       <_OverviewCard icon="rotate"   ac="#9F43F6" title="Serviços Recorrentes" sub="Mensalidades pra construir presença, demanda e crescimento previsível." tabId="recorrentes" count={PORTF_RECORRENTES.length} footer="A partir de R$ 2.000/mês"/>
       <_OverviewCard icon="layers"   ac="#7c3aed" title="Projetos"             sub="Entregas estruturadas com começo, meio e fim — pra estruturar e acelerar resultados." tabId="projetos"    count={PORTF_PROJETOS.length}    footer="A partir de R$ 1.000"/>
-      <_OverviewCard icon="play"     ac="#0f172a" title="Projeto Starter"      sub="Solução completa em 90 dias pra posicionamento e início de escala."                  tabId="starter"     count="90 dias"                  footer="R$ 9.000 ou 3x"/>
+      <_OverviewCard icon="play"     ac="#0f172a" title="Projeto Starter"      sub="Solução completa em 90 dias pra posicionamento e início de escala."                  tabId="starter"     count="90 dias"                  footer="R$ 3.500/mês"/>
       <_OverviewCard icon="sparkles" ac="#6366f1" title="Soluções IA"          sub="Sistemas, sites e chatbots sob medida pra destravar gargalos e escalar."             tabId="ia"          count={PORTF_IA.length}          footer="A partir de R$ 2.500"/>
     </section>}
 
@@ -48990,9 +48990,8 @@ function PagePortfolio(props){
 
     {/* ════ STARTER 90 DIAS — seção dedicada ════ */}
     {view==="starter" && <section style={{display:"flex",flexDirection:"column",gap:16,fontFamily:_PORTF_FF}}>
-      {/* Header dark elegante */}
+      {/* Header dark elegante — sem glow neon (removido a pedido do Gustavo) */}
       <div style={{background:"linear-gradient(135deg,#0f172a,#1e1b4b)",borderRadius:16,padding:"28px 30px",color:"#fff",position:"relative",overflow:"hidden",boxShadow:"0 14px 36px rgba(15,23,42,0.30)",fontFamily:_PORTF_FF}}>
-        <div style={{position:"absolute",top:-50,right:-50,width:200,height:200,borderRadius:"50%",background:"radial-gradient(circle,rgba(159,67,246,0.30),transparent 70%)",pointerEvents:"none"}}/>
         <div style={{position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:16,flexWrap:"wrap"}}>
           <div>
             <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.8,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Proposta detalhada</div>
@@ -49001,8 +49000,8 @@ function PagePortfolio(props){
           </div>
           <div style={{textAlign:"right",fontFamily:_PORTF_FF}}>
             <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",fontFamily:_PORTF_FF}}>Investimento</div>
-            <div style={{color:"#fff",fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3,fontFamily:_PORTF_FF}}>R$ 9.000</div>
-            <div style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,marginTop:2,fontFamily:_PORTF_FF}}>ou 3x de R$ 3.000</div>
+            <div style={{color:"#fff",fontWeight:900,fontSize:26,letterSpacing:-.7,fontFeatureSettings:"'tnum'",marginTop:3,fontFamily:_PORTF_FF}}>R$ 3.500<span style={{fontSize:14,fontWeight:600,color:"#cbd5e1",marginLeft:2}}>/mês</span></div>
+            <div style={{color:"#cbd5e1",fontSize:11.5,fontWeight:600,marginTop:2,fontFamily:_PORTF_FF}}>Total em 90 dias: R$ 10.500</div>
           </div>
         </div>
       </div>
