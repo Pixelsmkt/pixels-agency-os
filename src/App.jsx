@@ -11148,7 +11148,19 @@ function PageClientes({isMob, tasks}){
     };
   },[]);
 
-  const allClients=[...CLIENTS,...extraClients];
+  // Dedup por id — o loader global (00_clientes_data.jsx) já injeta dinâmicos
+  // no CLIENTS, e o loader local também popula extraClients. Sem dedup, cliente
+  // dinâmico (ex: Acreforte) aparece 2x na listagem.
+  const allClients = (function(){
+    const seen = new Set();
+    const out = [];
+    [...CLIENTS, ...extraClients].forEach(function(c){
+      if(!c || !c.id || seen.has(c.id)) return;
+      seen.add(c.id);
+      out.push(c);
+    });
+    return out;
+  })();
 
   // Atalho "/" pra focar busca — sem hint visual ("pressione /" removido)
   const searchRef=useRef(null);
