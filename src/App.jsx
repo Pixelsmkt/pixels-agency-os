@@ -38000,10 +38000,12 @@ export default function AgencyOS(){
 
   // ── Realtime ──────────────────────────────────────────────
   useEffect(()=>{
-    if(authState!=="app") return;
+    // Realtime também roda no portal do cliente — cliente aprovando post,
+    // adicionando comentário, criando demanda → equipe vê na hora e vice-versa.
+    if(authState!=="app" && authState!=="portal") return;
     // Nome de canal constante por usuário — evita criar canais duplicados
-    // que consomem quota do Supabase Realtime e vazam listeners.
-    const channelName=`pixels-rt-tasks-${CURRENT_USER.id}`;
+    const _who = (typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.id) || "anon";
+    const channelName=`pixels-rt-tasks-${_who}`;
     // Remove canal antigo se ainda existir (safety após HMR/re-render)
     try{const existing=_sb.getChannels().find(c=>c.topic===`realtime:${channelName}`);if(existing)_sb.removeChannel(existing);}catch{}
     const ch=_sb.channel(channelName)
