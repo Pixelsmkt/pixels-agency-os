@@ -2404,8 +2404,10 @@ function ClientLogo({clientId,size="sm"}){
   const h=CLIENT_LOGO_SIZES[size]||28;
   const cl=CLIENTS.find(c=>c.id===clientId);
   if(!cl)return null;
-  if(CLIENT_LOGOS[clientId]){
-    return <img src={CLIENT_LOGOS[clientId]} alt={cl.name}
+  // Prioridade: CLIENT_LOGOS (hardcoded) → cl.logoUrl (dinâmicos criados no app)
+  const _src = CLIENT_LOGOS[clientId] || cl.logoUrl || null;
+  if(_src){
+    return <img src={_src} alt={cl.name}
       style={{height:h,maxWidth:h*4,objectFit:"contain",display:"block"}}/>;
   }
   return <span style={{color:cl.color,fontWeight:700,fontSize:Math.round(h*0.55),
@@ -57547,7 +57549,7 @@ function PagePlaybooks({isMob, perms, viewingAs}){
                 <ClientLogo clientId={cl.id} size="md"/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{color:PB_INK,fontWeight:700,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.name}</div>
-                  <div style={{color:PB_SOFT,fontSize:10.5,marginTop:2,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>{cl.sector||""}</div>
+                  <div style={{color:PB_SOFT,fontSize:11.5,marginTop:2,fontWeight:500,letterSpacing:-.1}}>{cl.sector||""}</div>
                 </div>
               </div>
               {data.sobre && <div style={{color:"#475569",fontSize:11.5,lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{data.sobre}</div>}
