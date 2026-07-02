@@ -6921,11 +6921,17 @@ function ClienteConcorrencia({cl,tab,setTab}){
       instagram:CLIENT_INSTAGRAM_DEFAULTS[cl.id]||"",
       facebook:"",linkedin:"",tiktok:"",youtube:"",whatsapp:"",site:"",
     },
-    competitors:(COMP_LINKS[cl.id]||COMP_LINKS.construschorr).map(c=>({
-      name:c.comp,
-      instagram:c.instagram||"",facebook:c.facebook||"",linkedin:c.linkedin||"",
-      tiktok:c.tiktok||"",youtube:"",whatsapp:"",site:"",
-    })),
+    // COMP_LINKS foi removido do codebase — guard defensivo pra não dar tela preta
+    competitors: (function(){
+      try{
+        if(typeof COMP_LINKS!=="undefined" && COMP_LINKS){
+          return (COMP_LINKS[cl.id]||COMP_LINKS.construschorr||[]).map(function(c){
+            return {name:c.comp,instagram:c.instagram||"",facebook:c.facebook||"",linkedin:c.linkedin||"",tiktok:c.tiktok||"",youtube:"",whatsapp:"",site:""};
+          });
+        }
+      }catch(_){}
+      return [];
+    })(),
   };
 
   const [links,setLinks]=useState(defaultLinks);
