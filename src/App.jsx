@@ -10437,35 +10437,72 @@ function NovoClienteModal({onClose,onSave}){
       contacts:[], goals:[], meetingNotes:[],
     };
 
-    onSave(newCl);
-
-    // Seed Onboarding com prazos em dias úteis
-    try{ if(typeof seedClientOnboarding==="function") seedClientOnboarding(id); }catch(e){console.warn("[onb seed]",e);}
-
-    // Seed Metas no Supabase — popula pilares Seguidores e Engajamento com o valor atual.
-    // Esses dados aparecem direto na aba Estratégia > Clientes > Metas (sem precisar redigitar).
-    try{
-      if(window._sb){
+    // ═══ PERSISTIR NO SUPABASE ═══
+    // Todo o cliente (nome, setor, cor, logo, dados de tráfego/social/etc) vai
+    // pra tabela `clients`. Assim aparece pra todos os sócios/colabs/portal —
+    // não fica só na sessão local.
+    (async function(){
+      try{
+        if(!window._sb){ throw new Error("Supabase offline. Cliente salvo só localmente."); }
         const _d=new Date();
         const _ymKey=_d.getFullYear()+"-"+String(_d.getMonth()+1).padStart(2,"0");
-        const metas={};
         const fNum=parseInt(followers)||0;
         const eNum=parseFloat(eng)||0;
-        if(fNum>0){
-          metas.seguidores={target:0,current:fNum,history:{[_ymKey]:{target:0,current:fNum}}};
-        }
-        if(eNum>0){
-          metas.engajamento={target:0,current:eNum,history:{[_ymKey]:{target:0,current:eNum}}};
-        }
-        if(Object.keys(metas).length>0){
-          window._sb.from("clients").upsert({client_id:id, metas:metas}, {onConflict:"client_id"})
-            .then(function(r){ if(r&&r.error) console.warn("[metas seed]", r.error.message); });
-        }
-      }
-    }catch(e){console.warn("[metas seed]",e);}
+        const metas={};
+        if(fNum>0) metas.seguidores={target:0,current:fNum,history:{[_ymKey]:{target:0,current:fNum}}};
+        if(eNum>0) metas.engajamento={target:0,current:eNum,history:{[_ymKey]:{target:0,current:eNum}}};
 
-    setSaving(false);
-    onClose();
+        // Dados estendidos ficam em profile_data (JSONB). Assim não precisa
+        // adicionar 20 colunas na tabela pra cada campo.
+        const profileData = {
+          meta:newCl.meta, google:newCl.google, social:newCl.social,
+          socialUrls:newCl.socialUrls, reporteiUrl:newCl.reporteiUrl,
+          upsell:newCl.upsell, connected:newCl.connected,
+        };
+
+        const row = {
+          client_id: id,
+          name: newCl.name,
+          abbr: newCl.abbr,
+          sector: newCl.sector||null,
+          cidade: newCl.cidade||null,
+          estado: newCl.estado||null,
+          color: newCl.color||"#7c3aed",
+          logo_url: newCl.logoUrl||null,
+          status: "ativo",
+          since_label: newCl.since||null,
+          manager: newCl.manager||"vinicius",
+          is_dynamic: true,
+          profile_data: profileData,
+        };
+        if(Object.keys(metas).length>0) row.metas = metas;
+
+        const {error} = await window._sb.from("clients").upsert(row, {onConflict:"client_id"});
+        if(error){
+          console.warn("[cliente save]", error.message);
+          setError("Erro ao salvar no Supabase: "+error.message+". Cliente salvo só localmente.");
+          setSaving(false);
+          return;
+        }
+
+        // Cliente persistido — agora aplica no estado local e fecha
+        onSave(newCl);
+
+        // Seed Onboarding (agora que o cliente existe no Supabase)
+        try{ if(typeof seedClientOnboarding==="function") seedClientOnboarding(id); }catch(e){console.warn("[onb seed]",e);}
+
+        // Dispara evento pra outros componentes recarregarem a lista de clientes
+        try{ window.dispatchEvent(new CustomEvent("pixels:client-added",{detail:{clientId:id, client:newCl}})); }catch(_){}
+
+        if(typeof pixelsToast!=="undefined") pixelsToast.success("Cliente "+newCl.name+" cadastrado.");
+        setSaving(false);
+        onClose();
+      }catch(e){
+        console.warn("[cliente save exception]", e);
+        setError("Erro: "+String(e?.message||e));
+        setSaving(false);
+      }
+    })();
   }
 
   return (<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"24px 16px",overflowY:"auto",backdropFilter:"blur(6px)",fontFamily:FF}} onClick={onClose}>
@@ -10746,7 +10783,51 @@ function PageClientes({isMob, tasks}){
   const [mindmapActive,setMindmapActive]=useState(false);
   const [search,setSearch]=useState("");
   const [showNovo,setShowNovo]=useState(false);
-  const [extraClients,setExtraClients]=useState([]);
+  // extraClients = clientes cadastrados via modal "Novo cliente" (dinâmicos, no Supabase).
+  // Inicializa do cache localStorage pra evitar flash. Depois recarrega do Supabase no mount.
+  const [extraClients,setExtraClients]=useState(function(){
+    try{ const raw=localStorage.getItem("pixels-extra-clients-v1"); if(raw) return JSON.parse(raw)||[]; }catch(_){}
+    return [];
+  });
+
+  // ── Carrega clientes dinâmicos do Supabase (is_dynamic=true) ──
+  // Roda no mount + escuta eventos "pixels:client-added" pra atualização instantânea
+  // quando o modal "Novo cliente" salva.
+  useEffect(function(){
+    async function _loadDynamic(){
+      if(!window._sb) return;
+      try{
+        const {data,error} = await window._sb.from("clients")
+          .select("client_id,name,abbr,sector,cidade,estado,color,logo_url,status,since_label,manager,profile_data")
+          .eq("is_dynamic",true);
+        if(error){ console.warn("[loadDynamic]", error.message); return; }
+        const _known = new Set((typeof CLIENTS!=="undefined"?CLIENTS:[]).map(function(c){return c.id;}));
+        const rows = (data||[]).filter(function(r){return !_known.has(r.client_id);}).map(function(r){
+          const pd = r.profile_data||{};
+          return {
+            id: r.client_id, name: r.name||r.client_id,
+            abbr: r.abbr||(r.name||"").slice(0,2).toUpperCase(),
+            color: r.color||"#7c3aed",
+            sector: r.sector||"", cidade: r.cidade||"", estado: r.estado||"",
+            status: r.status||"ativo", since: r.since_label||"",
+            logoUrl: r.logo_url||null, manager: r.manager||"vinicius",
+            meta: pd.meta||{}, google: pd.google||{}, social: pd.social||{},
+            socialUrls: pd.socialUrls||{}, reporteiUrl: pd.reporteiUrl||"",
+            upsell: pd.upsell||[], connected: pd.connected||false,
+            health: 80, nps: 75, contract: 0,
+            history:[], driveUrl:"", payment:{status:"pendente",date:""},
+            contacts:[], goals:[], meetingNotes:[],
+          };
+        });
+        setExtraClients(rows);
+        try{ localStorage.setItem("pixels-extra-clients-v1", JSON.stringify(rows)); }catch(_){}
+      }catch(e){ console.warn("[loadDynamic ex]", e); }
+    }
+    _loadDynamic();
+    function _onAdded(){ _loadDynamic(); }
+    window.addEventListener("pixels:client-added", _onAdded);
+    return function(){ window.removeEventListener("pixels:client-added", _onAdded); };
+  },[]);
   const [filterStatus,setFilterStatus]=useState("todos");
   const [bioterExpanded,setBioterExpanded]=useState(false);
   const [_identTick,_setIdentTick]=useState(0);
@@ -13326,7 +13407,7 @@ function PageCalendarioInterno({isMob}){
       window._sb.from("clients").select("client_events").eq("client_id",item.clientId).single().then(function(res){
         if(!res||!res.data||!Array.isArray(res.data.client_events)) return;
         const next=res.data.client_events.map(function(e){return e.id===item.id?Object.assign({},e,{date:targetDateIso}):e;});
-        window._sb.from("clients").update({client_events:next}).eq("client_id",item.clientId).then(function(r2){
+        window._sb.from("clients").upsert({client_id:item.clientId, client_events:next}, {onConflict:"client_id"}).then(function(r2){
           if(r2&&r2.error){
             if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao mover evento: "+r2.error.message,4000);
             return;
@@ -14189,7 +14270,7 @@ function PageCalendarioPublicacoes({isMob, tasks:propTasks, setTasks}){
       window._sb.from("clients").select("client_events").eq("client_id",ev.clientId).single().then(function(res){
         if(!res||!res.data||!Array.isArray(res.data.client_events))return;
         const next=res.data.client_events.filter(function(e){return e.id!==ev.id;});
-        window._sb.from("clients").update({client_events:next}).eq("client_id",ev.clientId).then(function(){
+        window._sb.from("clients").upsert({client_id:ev.clientId, client_events:next}, {onConflict:"client_id"}).then(function(){
           setAllClientEvents(function(prev){return (prev||[]).filter(function(e){return e.id!==ev.id;});});
           if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento do cliente apagado.",3000);
         }).catch(function(e){console.warn("[client-events] delete:",e?.message||e);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao apagar evento.");});
@@ -17466,7 +17547,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 </div>
                 <div style={{color:"#0f172a",fontWeight:700,fontSize:14,marginBottom:3}}>Lixeira vazia</div>
                 <div style={{color:"#94a3b8",fontSize:12}}>Nada por aqui — tudo limpo</div>
-              </div>
+                      </div>
             : trashVisible.length===0
               ? <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:32,textAlign:"center"}}>
                   <div style={{color:"#64748b",fontSize:13,fontWeight:600}}>Nenhum resultado pra "{trashSearch}"</div>
@@ -40208,7 +40289,7 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     setClientEvents(newEvents);
     try{
       if(typeof window!=="undefined"&&window._sb){
-        window._sb.from("clients").update({client_events:newEvents}).eq("client_id",cl.id).then(function(){
+        window._sb.from("clients").upsert({client_id:cl.id, client_events:newEvents}, {onConflict:"client_id"}).then(function(){
           if(typeof pixelsToast!=="undefined")pixelsToast.info("Evento apagado.",3000);
         }).catch(function(e){console.warn("[client-events] delete:",e?.message||e);});
       }
@@ -40229,7 +40310,7 @@ function PortalCalendario({cl, tasks, isMob, selUnit, clientEvents:initialEvents
     // Persistir em Supabase
     try{
       if(typeof window!=="undefined"&&window._sb){
-        window._sb.from("clients").update({client_events:newEvents}).eq("client_id",cl.id).then(function(){
+        window._sb.from("clients").upsert({client_id:cl.id, client_events:newEvents}, {onConflict:"client_id"}).then(function(){
           if(typeof pixelsToast!=="undefined")pixelsToast.success("Evento enviado pra equipe da Pixels!",4000);
         }).catch(function(e){console.warn("[client-events] save:",e?.message||e);if(typeof pixelsToast!=="undefined")pixelsToast.error("Erro ao salvar evento.");});
       }
@@ -43301,7 +43382,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
           // Atualiza local + persiste em Supabase via window._sb
           try{
             if(typeof window!=="undefined"&&window._sb){
-              window._sb.from("clients").update({client_events:newEvents}).eq("client_id",cl.id).then(function(){
+              window._sb.from("clients").upsert({client_id:cl.id, client_events:newEvents}, {onConflict:"client_id"}).then(function(){
                 if(typeof pixelsToast!=="undefined")pixelsToast.success("Evento enviado pra equipe da Pixels!",4000);
               });
             }
