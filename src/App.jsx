@@ -2825,23 +2825,17 @@ function _useBriefing(clientId){
 
     _fetch().then(function(){ if(active) setLoading(false); });
 
-    // Realtime: escuta UPDATE no cliente e sincroniza (ignora se veio da própria edição recente)
+    // Realtime: escuta QUALQUER mudança na row do cliente e refaz o fetch.
+    // Refetch em vez de ler do payload — funciona mesmo se REPLICA IDENTITY
+    // não estiver FULL (payload.new pode não conter briefing_data completo).
     let ch=null;
     try{
       ch = window._sb.channel("briefing-rt-"+clientId)
-        .on("postgres_changes",{event:"UPDATE",schema:"public",table:"clients",filter:"client_id=eq."+clientId},function(payload){
+        .on("postgres_changes",{event:"*",schema:"public",table:"clients",filter:"client_id=eq."+clientId},function(){
           if(!active) return;
-          // Se a última edição local foi há menos de 1.5s, provavelmente esse evento é eco da nossa própria escrita — ignora pra não sobrepor input mid-typing
+          // Ignora eco da própria edição recente (evita sobrepor input mid-typing)
           if(Date.now() - _localTsRef.current < 1500) return;
-          const remote = payload && payload.new && payload.new.briefing_data;
-          if(remote && typeof remote==="object"){
-            setData(remote);
-            try{
-              if(remote.identidade && typeof saveClientIdentity==="function"){
-                saveClientIdentity(clientId, remote.identidade);
-              }
-            }catch(_){}
-          }
+          _fetch();
         })
         .subscribe();
     }catch(_){}
