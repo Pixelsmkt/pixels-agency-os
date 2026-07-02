@@ -3328,13 +3328,15 @@ function subscribeRituaisRealtime(){
    Ambos disparam CustomEvent "pixels:clients-registry-updated" quando muda algo.
    ══════════════════════════════════════════════════════════════════ */
 
-// Normaliza row do Supabase pra shape do CLIENTS
-function _clientRowToObj(r){
-  // ── DEFENSIVE ── se name vier vazio, cliente foi hardcoded (bioter/arabuta/etc)
-  // que ganhou is_dynamic=true por acidente do DEFAULT no ALTER TABLE. Ignora.
+// Normaliza row do Supabase pra shape do CLIENTS.
+// Se `existing` for passado (hardcoded), retorna apenas os campos editáveis
+// (não sobrescreve contract/meta/google/social/history/contacts etc.).
+function _clientRowToObj(r, existing){
+  // ── DEFENSIVE ── se name vier vazio, ignora a row (poderia corromper registry)
   if(!r || !r.name || !String(r.name).trim()) return null;
   const pd = r.profile_data || {};
-  return {
+  // Campos editáveis via EditarClienteModal (comuns a hardcoded + dinâmicos)
+  const editable = {
     id: r.client_id,
     name: r.name,
     abbr: r.abbr || (r.name||"").slice(0,2).toUpperCase(),
@@ -3346,6 +3348,14 @@ function _clientRowToObj(r){
     since: r.since_label || "",
     logoUrl: r.logo_url || null,
     manager: r.manager || "vinicius",
+  };
+  // Se já existe cliente hardcoded (Bioter, Arabutã, etc.), NÃO sobrescreve
+  // os dados ricos (contract, meta, google, social, history, contacts…).
+  if(existing){
+    return editable;
+  }
+  // Cliente novo (dinâmico) — cria com defaults completos.
+  return Object.assign(editable, {
     contract: 0, health: 80, nps: 75,
     meta: pd.meta || {}, google: pd.google || {}, social: pd.social || {},
     socialUrls: pd.socialUrls || {}, reporteiUrl: pd.reporteiUrl || "",
@@ -3353,7 +3363,7 @@ function _clientRowToObj(r){
     history: [], driveUrl: "", payment: {status:"pendente", date:""},
     contacts: [], goals: [], meetingNotes: [],
     _dynamic: true,
-  };
+  });
 }
 
 // Adiciona/atualiza cliente in-place em CLIENTS (mutação).
@@ -3373,20 +3383,34 @@ window.registerDynamicClient = function(cl){
   return true;
 };
 
-// Busca clientes dinâmicos do Supabase e faz merge no CLIENTS.
-// Também atualiza o cache localStorage.
+// Busca TODOS os clientes do Supabase (hardcoded + dinâmicos) e faz merge no CLIENTS.
+// Preserva riqueza dos hardcoded (contract/meta/google/social/history/contacts…).
+// Também atualiza o cache localStorage só com os dinâmicos.
 window.loadDynamicClientsFromSupabase = async function(){
   if(!window._sb) return false;
   try{
     const res = await window._sb.from("clients")
-      .select("client_id,name,abbr,sector,cidade,estado,color,logo_url,status,since_label,manager,profile_data")
-      .eq("is_dynamic", true);
+      .select("client_id,name,abbr,sector,cidade,estado,color,logo_url,status,since_label,manager,profile_data,is_dynamic");
     if(res.error){ console.warn("[loadDynamicClients]", res.error.message); return false; }
     const rows = res.data || [];
-    const objs = rows.map(_clientRowToObj).filter(function(x){return x!==null;});
-    objs.forEach(function(cl){ window.registerDynamicClient(cl); });
-    // Cache local pra boot rápido no próximo F5
-    try{ localStorage.setItem("pixels-extra-clients-v1", JSON.stringify(objs)); }catch(_){}
+    const dynamicCache = [];
+    rows.forEach(function(r){
+      const existing = CLIENTS.find(function(c){return c.id===r.client_id;});
+      const obj = _clientRowToObj(r, existing);
+      if(!obj) return;
+      window.registerDynamicClient(obj);
+      // Só cachea localStorage os dinâmicos (novos criados via app)
+      if(!existing || r.is_dynamic===true){
+        dynamicCache.push(obj);
+      }
+      // Também sincroniza CLIENT_LOGOS in-memory quando tem logo_url
+      try{
+        if(typeof CLIENT_LOGOS==="object" && CLIENT_LOGOS && r.logo_url){
+          CLIENT_LOGOS[r.client_id] = r.logo_url;
+        }
+      }catch(_){}
+    });
+    try{ localStorage.setItem("pixels-extra-clients-v1", JSON.stringify(dynamicCache)); }catch(_){}
     return true;
   }catch(e){
     console.warn("[loadDynamicClients ex]", e);
@@ -10844,9 +10868,9 @@ function NovoClienteModal({onClose,onSave}){
 }
 
 // ══════════════════════════════════════════════════════════════════
-// MODAL EDITAR CLIENTE — só clientes dinâmicos (is_dynamic=true)
-// Sócio muda: nome, setor, cidade/UF, cor, logo, subtítulo (via sector)
-// Persiste em `clients` no Supabase, atualiza registry global e cache.
+// MODAL EDITAR CLIENTE — funciona pra QUALQUER cliente (hardcoded + dinâmico)
+// Sócio muda: nome, setor/subtítulo, cidade/UF, cor, logo, "Cliente desde"
+// Persiste em `clients` no Supabase (upsert). Preserva riqueza dos hardcoded.
 // ══════════════════════════════════════════════════════════════════
 function EditarClienteModal({cl, onClose}){
   const FF = "'Inter',system-ui,-apple-system,sans-serif";
@@ -10857,7 +10881,8 @@ function EditarClienteModal({cl, onClose}){
   const [cidade,setCidade]=useState(cl.cidade||"");
   const [estado,setEstado]=useState(cl.estado||"");
   const [color,setColor]=useState(cl.color||"#7c3aed");
-  const [logoUrl,setLogoUrl]=useState(cl.logoUrl||"");
+  const [logoUrl,setLogoUrl]=useState(cl.logoUrl||(typeof CLIENT_LOGOS!=="undefined"&&CLIENT_LOGOS[cl.id])||"");
+  const [sinceLabel,setSinceLabel]=useState(cl.since||"");
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
 
@@ -10876,27 +10901,39 @@ function EditarClienteModal({cl, onClose}){
     setSaving(true); setError("");
     try{
       if(!window._sb){ throw new Error("Supabase offline"); }
+      // Preserva a flag _dynamic original — se já era hardcoded, continua hardcoded
+      const wasHardcoded = !cl._dynamic;
       const patch = {
         client_id: cl.id,
         name: name.trim(),
-        abbr: name.trim().slice(0,2).toUpperCase(),
+        abbr: (cl.abbr && wasHardcoded ? cl.abbr : name.trim().slice(0,2).toUpperCase()),
         sector: sector.trim()||null,
         cidade: cidade.trim()||null,
-        estado: estado.trim().toUpperCase()||null,
+        estado: (estado||"").trim().toUpperCase()||null,
         color: color||"#7c3aed",
         logo_url: logoUrl||null,
+        since_label: sinceLabel.trim()||null,
+        is_dynamic: wasHardcoded ? false : true,
       };
       const {error:err} = await window._sb.from("clients").upsert(patch, {onConflict:"client_id"});
       if(err){ setError("Erro: "+err.message); setSaving(false); return; }
-      // Atualiza registry global (muda in-place em CLIENTS)
+      // Atualiza registry global (mescla in-place em CLIENTS preservando riqueza)
       if(typeof window.registerDynamicClient==="function"){
         window.registerDynamicClient({
           id: cl.id, name: patch.name, abbr: patch.abbr,
           sector: patch.sector||"", cidade: patch.cidade||"", estado: patch.estado||"",
           color: patch.color, logoUrl: patch.logo_url,
-          _dynamic: true,
+          since: patch.since_label||"",
+          // NÃO seta _dynamic — preserva a flag original do cliente
         });
       }
+      // Também atualiza CLIENT_LOGOS in-memory pra logo aparecer sem reload
+      try{
+        if(typeof CLIENT_LOGOS==="object" && CLIENT_LOGOS){
+          if(patch.logo_url) CLIENT_LOGOS[cl.id] = patch.logo_url;
+          else delete CLIENT_LOGOS[cl.id];
+        }
+      }catch(_){}
       if(typeof pixelsToast!=="undefined") pixelsToast.success("Cliente atualizado.");
       setSaving(false);
       onClose();
@@ -10961,7 +10998,14 @@ function EditarClienteModal({cl, onClose}){
         {/* Setor (aparece como subtítulo) */}
         <div>
           <LBL t="Setor / subtítulo"/>
-          <input value={sector} onChange={function(e){setSector(e.target.value);}} style={inp} placeholder="Ex: Construção civil, Agronegócio…"/>
+          <input value={sector} onChange={function(e){setSector(e.target.value);}} style={inp} placeholder="Ex: Construção civil, Agência digital…"/>
+        </div>
+
+        {/* Cliente desde */}
+        <div>
+          <LBL t="Cliente desde"/>
+          <input value={sinceLabel} onChange={function(e){setSinceLabel(e.target.value);}} style={inp} placeholder="Ex: Jan 2024"/>
+          <div style={{color:"#94a3b8",fontSize:10.5,marginTop:6,fontWeight:500}}>Rótulo livre que aparece no card do cliente (formato sugerido: "Mmm AAAA")</div>
         </div>
 
         {/* Cidade / UF */}
@@ -11095,9 +11139,11 @@ function PageClientes({isMob, tasks}){
   useEffect(function(){
     function _bump(){ _setIdentTick(function(n){return n+1;}); }
     window.addEventListener("pixels:identity-updated", _bump);
+    window.addEventListener("pixels:clients-registry-updated", _bump);
     window.addEventListener("storage", _bump);
     return function(){
       window.removeEventListener("pixels:identity-updated", _bump);
+      window.removeEventListener("pixels:clients-registry-updated", _bump);
       window.removeEventListener("storage", _bump);
     };
   },[]);
@@ -12211,8 +12257,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
         <div style={{flex:1,minWidth:100}}>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4}}>{cl.name}</div>
-            {/* Botão editar — só pra sócios + só cliente dinâmico (evita mexer nos hardcoded) */}
-            {(typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level===1 && (cl._dynamic||false)) &&
+            {/* Botão editar — pra sócios (funciona pra qualquer cliente, hardcoded ou dinâmico) */}
+            {(typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level===1) &&
               <button onClick={function(){setShowEdit(true);}}
                 title="Editar dados do cliente"
                 style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit",transition:"all .15s"}}
@@ -17854,6 +17900,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                             </>}
                           </div>
                         </div>
+                
                       </div>
                       <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
                         {canDelete&&<button onClick={()=>restoreTask(t.id)} title="Restaurar cartão pra demanda"
