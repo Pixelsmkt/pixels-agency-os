@@ -6940,26 +6940,47 @@ function ClienteConcorrencia({cl,tab,setTab}){
   const [addingComp,setAddingComp]=useState(false);
   const [newCompName,setNewCompName]=useState("");
 
-  // Load saved links on mount
+  // Load saved links: primeiro cache local (abertura instantânea), depois Supabase (fonte de verdade)
   useEffect(()=>{
+    // Cache local pra abrir sem flash
+    try{
+      const cached=localStorage.getItem(STORAGE_KEY);
+      if(cached){ setLinks(JSON.parse(cached)); }
+    }catch(_){}
+    // Fetch do Supabase
     (async()=>{
+      if(!window._sb) return;
       try{
-        const saved=(()=>{try{const _v=localStorage.getItem(STORAGE_KEY);return _v?{value:_v}:null;}catch(_e){return null;}})();
-        if(saved?.value){
-          const parsed=JSON.parse(saved.value);
-          setLinks(parsed);
+        const {data,error}=await window._sb.from("client_competitors")
+          .select("own_links,competitors").eq("client_id",cl.id).maybeSingle();
+        if(error){ console.warn("[concorr load]",error.message); return; }
+        if(data){
+          const remote={ client: data.own_links||{}, competitors: Array.isArray(data.competitors)?data.competitors:[] };
+          setLinks(remote);
+          try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); }catch(_){}
         }
-      }catch(e){}
+      }catch(e){ console.warn("[concorr load ex]",e); }
     })();
   },[cl.id]);
 
+  // Save: grava no Supabase (upsert) e no cache local
   const saveLinks=async(newLinks)=>{
     setSaveStatus("saving");
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(newLinks)); }catch(_){}
+    if(!window._sb){ setSaveStatus("saved"); setTimeout(()=>setSaveStatus(""),2000); return; }
     try{
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(newLinks));
+      const row={
+        client_id: cl.id,
+        own_links: newLinks.client||{},
+        competitors: newLinks.competitors||[],
+        updated_by: (typeof CURRENT_USER!=="undefined"&&CURRENT_USER)?CURRENT_USER.id:"",
+        updated_at: new Date().toISOString(),
+      };
+      const {error}=await window._sb.from("client_competitors").upsert(row,{onConflict:"client_id"});
+      if(error){ console.warn("[concorr save]",error.message); setSaveStatus("error"); setTimeout(()=>setSaveStatus(""),3000); return; }
       setSaveStatus("saved");
       setTimeout(()=>setSaveStatus(""),2000);
-    }catch(e){setSaveStatus("error");setTimeout(()=>setSaveStatus(""),3000);}
+    }catch(e){ console.warn("[concorr save ex]",e); setSaveStatus("error"); setTimeout(()=>setSaveStatus(""),3000); }
   };
 
   const updateClientLink=(platform,value)=>{
@@ -7104,10 +7125,13 @@ Análise estratégica CONCISA (máx 120 palavras) em pt-BR:
     setAnalyzingId(null);
   };
 
-  // Get client metrics for comparison
+  // Get client metrics for comparison — cliente novo pode não ter cl.meta ainda
+  const _clMeta = (cl && cl.meta) || {};
+  const _clLeads = Number(_clMeta.leads)||0;
+  const _clSpend = Number(_clMeta.spend)||0;
   const clientMetric={
-    instagram:{engagement:Math.round(cl.meta.leads*14),views:Math.round(cl.meta.spend*42)},
-    facebook:{engagement:Math.round(cl.meta.leads*8),views:Math.round(cl.meta.spend*28)},
+    instagram:{engagement:Math.round(_clLeads*14),views:Math.round(_clSpend*42)},
+    facebook:{engagement:Math.round(_clLeads*8),views:Math.round(_clSpend*28)},
   };
 
   const compLinks=COMP_LINKS[cl.id]||COMP_LINKS.construschorr;
@@ -40404,71 +40428,137 @@ const PORTAL_STATUS_LABELS={demanda:"Copys em aprovação",recebida:"Em fila",ex
 // STATUS_COLORS usa variáveis de tema (C.*) — lidas em tempo de uso
 const getPortalStatusColor=(status)=>({demanda:C.a,recebida:C.pk,execucao:C.yw,avaliacao:C.or,aprovado:C.gr,agendado:"#0284c7"}[status]||C.a);
 
-/* ── Chat sync via localStorage ── */
-const portalChatKey=(clientId)=>"pixels-chat-portal-"+clientId;
-
-const loadPortalMsgs=(clientId)=>{
+/* ── Chat sync via Supabase + realtime ── */
+const portalChatKey=(clientId)=>"pixels-chat-portal-cache-"+clientId;
+const _welcomeMsg=(clientColor)=>({
+  id:"welcome",u:"Pixels Agência",uid:"sistema",av:"⭐",color:clientColor||"#a140ff",
+  txt:"Bem-vindo ao seu canal exclusivo com a equipe Pixels. Envie mensagens, tire dúvidas e acompanhe o andamento do seu projeto por aqui.",
+  time:"09:00",reactions:[],type:"text",
+});
+function _chatRowToMsg(r){
+  const att=Array.isArray(r.attachments)?r.attachments:[];
+  const firstImg=att.find(function(a){return a&&(a.type==="image"||(a.url&&/\.(jpe?g|png|gif|webp)$/i.test(a.url)));});
+  const t=r.created_at?new Date(r.created_at):new Date();
+  const hh=String(t.getHours()).padStart(2,"0"), mm=String(t.getMinutes()).padStart(2,"0");
+  return {
+    id:r.id,
+    u:r.author_name||(r.author_type==="client"?"Cliente":"Pixels"),
+    uid:r.author_id||(r.author_type==="client"?"cliente":"sistema"),
+    av:r.author_photo||"",
+    color:r.author_type==="client"?"#0284c7":"#a140ff",
+    txt:r.message||"",
+    time:hh+":"+mm,
+    type:firstImg?"image":"text",
+    imageUrl:firstImg?firstImg.url:undefined,
+    reactions:[],
+    _authorType:r.author_type,
+  };
+}
+const loadPortalMsgsCache=(clientId,clientColor)=>{
   try{
     const s=localStorage.getItem(portalChatKey(clientId));
-    if(s)return JSON.parse(s);
-  }catch(e){}
-  return [{
-    id:1,u:"Pixels Agência",uid:"sistema",av:"⭐",color:"#a140ff",
-    txt:"Olá! Bem-vindo ao seu canal exclusivo com a equipe Pixels. Aqui você pode enviar mensagens, tirar dúvidas e acompanhar seu projeto. 🚀",
-    time:"09:00",reactions:[],type:"text",
-  }];
+    if(s){ const parsed=JSON.parse(s); if(Array.isArray(parsed)&&parsed.length) return parsed; }
+  }catch(_){}
+  return [_welcomeMsg(clientColor)];
 };
-
-const savePortalMsgs=(clientId,msgs)=>{
-  try{localStorage.setItem(portalChatKey(clientId),JSON.stringify(msgs));}catch(e){}
+const savePortalMsgsCache=(clientId,msgs)=>{
+  try{localStorage.setItem(portalChatKey(clientId),JSON.stringify(msgs));}catch(_){}
 };
+async function fetchPortalMsgs(clientId){
+  if(!window._sb) return null;
+  try{
+    const {data,error}=await window._sb.from("portal_chat_messages")
+      .select("*").eq("client_id",clientId).order("created_at",{ascending:true}).limit(500);
+    if(error){ console.warn("[chat fetch]",error.message); return null; }
+    return (data||[]).map(_chatRowToMsg);
+  }catch(e){ console.warn("[chat fetch ex]",e); return null; }
+}
+async function sendPortalMsg(clientId,payload){
+  if(!window._sb) return null;
+  try{
+    const {data,error}=await window._sb.from("portal_chat_messages").insert(payload).select().single();
+    if(error){ console.warn("[chat send]",error.message); return null; }
+    return _chatRowToMsg(data);
+  }catch(e){ console.warn("[chat send ex]",e); return null; }
+}
+// Compat: shims pra não quebrar imports antigos
+const loadPortalMsgs=(clientId)=>loadPortalMsgsCache(clientId,null);
+const savePortalMsgs=(clientId,msgs)=>savePortalMsgsCache(clientId,msgs);
 
 /* ── PortalChat component ── */
 function PortalChat({cl, isClientView}){
-  const [msgs,setMsgs]=useState(()=>loadPortalMsgs(cl.id));
+  const [msgs,setMsgs]=useState(function(){return loadPortalMsgsCache(cl.id, cl.color);});
   const [input,setInput]=useState("");
   const [photoPreview,setPhotoPreview]=useState(null);
   const photoRef=useRef(null);
   const endRef=useRef(null);
   const taRef=useRef(null);
-  const photoUrlRef=useRef(null); // rastreia URL para revoke
-
-  // Revoga Object URL ao desmontar
+  const photoUrlRef=useRef(null);
   useEffect(()=>()=>{if(photoUrlRef.current)URL.revokeObjectURL(photoUrlRef.current);},[]);
 
-  // Sync: reload from localStorage every 5s (simulates real-time)
-  useEffect(()=>{
-    const interval=setInterval(()=>{
-      const fresh=loadPortalMsgs(cl.id);
-      // only update if there are new messages
-      setMsgs(prev=>fresh.length>prev.length?fresh:prev);
-    },5000);
-    return()=>clearInterval(interval);
+  // Fetch inicial do Supabase + subscription realtime
+  useEffect(function(){
+    let alive=true;
+    (async function(){
+      const rows=await fetchPortalMsgs(cl.id);
+      if(!alive||!rows) return;
+      const combined = rows.length===0 ? [_welcomeMsg(cl.color)] : rows;
+      setMsgs(combined);
+      savePortalMsgsCache(cl.id,combined);
+    })();
+    if(!window._sb) return function(){ alive=false; };
+    const ch=window._sb.channel("portal-chat-"+cl.id)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"portal_chat_messages",filter:"client_id=eq."+cl.id},function(payload){
+        if(!alive) return;
+        const m=_chatRowToMsg(payload.new);
+        setMsgs(function(prev){
+          if(prev.some(function(x){return x.id===m.id;})) return prev;
+          const filtered=prev.filter(function(x){return x.id!=="welcome";});
+          return [...filtered,m];
+        });
+      })
+      .subscribe();
+    return function(){ alive=false; try{window._sb.removeChannel(ch);}catch(_){} };
   },[cl.id]);
 
   useEffect(()=>{endRef.current?.scrollIntoView({behavior:"smooth"});},[msgs]);
 
-  const nowTime=_nowTime;
-
-  const pushMsg=(extra)=>{
-    const sender=isClientView
-      ?{u:cl.name,uid:"cliente_"+cl.id,av:cl.name.slice(0,2).toUpperCase(),color:cl.color}
-      :{u:CURRENT_USER.name,uid:CURRENT_USER.id,av:CURRENT_USER.av,color:CURRENT_USER.color};
-    const m={id:Date.now(),time:nowTime(),reactions:[],...sender,...extra};
-    const updated=[...msgs,m];
-    setMsgs(updated);
-    savePortalMsgs(cl.id,updated);
-  };
-
-  const send=()=>{
-    if(photoPreview){
-      pushMsg({type:"image",imageUrl:photoPreview.url,txt:input.trim()});
-      setPhotoPreview(null);setInput("");return;
+  const send=async function(){
+    const text=input.trim();
+    const hasImg=!!photoPreview;
+    if(!text && !hasImg) return;
+    const authorType = isClientView ? "client" : "agency";
+    const authorId   = isClientView ? "" : ((CURRENT_USER&&CURRENT_USER.id)||"");
+    const authorName = isClientView ? cl.name : ((CURRENT_USER&&CURRENT_USER.name)||"Pixels");
+    let attachments=[];
+    if(hasImg && photoPreview.file && window._sb){
+      try{
+        const ext=(photoPreview.file.name||"img").split(".").pop().toLowerCase();
+        const key="chat/"+cl.id+"/"+Date.now()+"."+ext;
+        const {error:upErr}=await window._sb.storage.from("agency-files").upload(key,photoPreview.file,{upsert:false,contentType:photoPreview.file.type});
+        if(!upErr){
+          const {data:pub}=window._sb.storage.from("agency-files").getPublicUrl(key);
+          if(pub&&pub.publicUrl) attachments.push({type:"image",url:pub.publicUrl});
+        }
+      }catch(_){}
     }
-    if(!input.trim())return;
-    pushMsg({type:"text",txt:input.trim()});
+    const payload={client_id:cl.id,author_type:authorType,author_id:authorId,author_name:authorName,author_photo:"",message:text||"",attachments:attachments};
+    const optimistic={id:"tmp-"+Date.now(),u:authorName,uid:authorId||"self",av:"",color:isClientView?cl.color:((CURRENT_USER&&CURRENT_USER.color)||"#a140ff"),txt:text,time:_nowTime(),type:attachments.length?"image":"text",imageUrl:attachments.length?attachments[0].url:undefined,reactions:[],_authorType:authorType};
+    setMsgs(function(prev){const filtered=prev.filter(function(x){return x.id!=="welcome";}); return [...filtered,optimistic];});
     setInput("");
+    setPhotoPreview(null);
     if(taRef.current){taRef.current.style.height="auto";}
+    const real=await sendPortalMsg(cl.id,payload);
+    if(!real){
+      setMsgs(function(prev){return prev.filter(function(x){return x.id!==optimistic.id;});});
+      if(typeof pixelsToast!=="undefined") pixelsToast.error("Não foi possível enviar. Tenta de novo.");
+    } else {
+      setMsgs(function(prev){
+        const filtered=prev.filter(function(x){return x.id!==optimistic.id;});
+        if(filtered.some(function(x){return x.id===real.id;})) return filtered;
+        return [...filtered,real];
+      });
+    }
   };
 
   const handlePhoto=(e)=>{
@@ -43567,9 +43657,9 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
     {/* ── DEMANDAS ── (visão limpa, sem info operacional) */}
     {tab==="demandas"&&<PortalDemandasCliente cl={cl} clTasks={clTasks} setTasks={setTasks} isMob={isMob}/>}
     {tab==="briefing"&&typeof BriefingFormCanonico==="function"&&(function(){
-      // Briefing no portal: cliente pode editar livremente — é a fonte de informação dele.
-      // Gestores Pixels também editam quando acessam o portal (mesma view).
-      return <BriefingFormCanonico cl={cl} canEdit={true} accentColor="#9F43F6"/>;
+      // Briefing no portal: SÓ gestores Pixels (level<=2) editam. Cliente vê em read-only.
+      const _gestor = (typeof CURRENT_USER!=="undefined") && CURRENT_USER && CURRENT_USER.level && CURRENT_USER.level<=2;
+      return <BriefingFormCanonico cl={cl} canEdit={_gestor} accentColor="#9F43F6"/>;
     })()}
     {tab==="marcos"&&typeof CMarcos==="function"&&(function(){
       // Edição de Marcos no portal: liberada pra gestores Pixels (level<=2: sócios+coordinator+gestor mídia).
