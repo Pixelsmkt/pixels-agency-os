@@ -3330,10 +3330,13 @@ function subscribeRituaisRealtime(){
 
 // Normaliza row do Supabase pra shape do CLIENTS
 function _clientRowToObj(r){
+  // ── DEFENSIVE ── se name vier vazio, cliente foi hardcoded (bioter/arabuta/etc)
+  // que ganhou is_dynamic=true por acidente do DEFAULT no ALTER TABLE. Ignora.
+  if(!r || !r.name || !String(r.name).trim()) return null;
   const pd = r.profile_data || {};
   return {
     id: r.client_id,
-    name: r.name || r.client_id,
+    name: r.name,
     abbr: r.abbr || (r.name||"").slice(0,2).toUpperCase(),
     color: r.color || "#7c3aed",
     sector: r.sector || "",
@@ -3356,6 +3359,9 @@ function _clientRowToObj(r){
 // Adiciona/atualiza cliente in-place em CLIENTS (mutação).
 window.registerDynamicClient = function(cl){
   if(!cl || !cl.id) return false;
+  // ── DEFENSIVE ── nunca merga um cl.name vazio por cima de cliente existente
+  // (evita corromper Bioter, Arabutã, etc. se algum edge case passar por aqui).
+  if(!cl.name || !String(cl.name).trim()) return false;
   const existing = CLIENTS.find(function(c){return c.id===cl.id;});
   if(existing){
     // Atualiza in-place — não substitui referência (React precisa)
@@ -3377,7 +3383,7 @@ window.loadDynamicClientsFromSupabase = async function(){
       .eq("is_dynamic", true);
     if(res.error){ console.warn("[loadDynamicClients]", res.error.message); return false; }
     const rows = res.data || [];
-    const objs = rows.map(_clientRowToObj);
+    const objs = rows.map(_clientRowToObj).filter(function(x){return x!==null;});
     objs.forEach(function(cl){ window.registerDynamicClient(cl); });
     // Cache local pra boot rápido no próximo F5
     try{ localStorage.setItem("pixels-extra-clients-v1", JSON.stringify(objs)); }catch(_){}
@@ -10837,6 +10843,159 @@ function NovoClienteModal({onClose,onSave}){
   </div>);
 }
 
+// ══════════════════════════════════════════════════════════════════
+// MODAL EDITAR CLIENTE — só clientes dinâmicos (is_dynamic=true)
+// Sócio muda: nome, setor, cidade/UF, cor, logo, subtítulo (via sector)
+// Persiste em `clients` no Supabase, atualiza registry global e cache.
+// ══════════════════════════════════════════════════════════════════
+function EditarClienteModal({cl, onClose}){
+  const FF = "'Inter',system-ui,-apple-system,sans-serif";
+  const inp = {background:"#fff",border:"1px solid #e2e8f0",borderRadius:11,padding:"11px 14px",color:"#0f172a",fontSize:13.5,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:FF,fontWeight:500};
+  const LBL = ({t})=>(<div style={{color:"#64748b",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:.7,marginBottom:6}}>{t}</div>);
+  const [name,setName]=useState(cl.name||"");
+  const [sector,setSector]=useState(cl.sector||"");
+  const [cidade,setCidade]=useState(cl.cidade||"");
+  const [estado,setEstado]=useState(cl.estado||"");
+  const [color,setColor]=useState(cl.color||"#7c3aed");
+  const [logoUrl,setLogoUrl]=useState(cl.logoUrl||"");
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
+
+  function _handleLogo(e){
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    if(f.size > 5*1024*1024){ setError("Arquivo muito grande (máx 5MB)"); return; }
+    setError("");
+    const reader = new FileReader();
+    reader.onload = function(){ setLogoUrl(reader.result); };
+    reader.readAsDataURL(f);
+  }
+
+  async function handleSave(){
+    if(!name.trim()){ setError("Nome é obrigatório."); return; }
+    setSaving(true); setError("");
+    try{
+      if(!window._sb){ throw new Error("Supabase offline"); }
+      const patch = {
+        client_id: cl.id,
+        name: name.trim(),
+        abbr: name.trim().slice(0,2).toUpperCase(),
+        sector: sector.trim()||null,
+        cidade: cidade.trim()||null,
+        estado: estado.trim().toUpperCase()||null,
+        color: color||"#7c3aed",
+        logo_url: logoUrl||null,
+      };
+      const {error:err} = await window._sb.from("clients").upsert(patch, {onConflict:"client_id"});
+      if(err){ setError("Erro: "+err.message); setSaving(false); return; }
+      // Atualiza registry global (muda in-place em CLIENTS)
+      if(typeof window.registerDynamicClient==="function"){
+        window.registerDynamicClient({
+          id: cl.id, name: patch.name, abbr: patch.abbr,
+          sector: patch.sector||"", cidade: patch.cidade||"", estado: patch.estado||"",
+          color: patch.color, logoUrl: patch.logo_url,
+          _dynamic: true,
+        });
+      }
+      if(typeof pixelsToast!=="undefined") pixelsToast.success("Cliente atualizado.");
+      setSaving(false);
+      onClose();
+    }catch(e){
+      setError("Erro: "+String(e?.message||e));
+      setSaving(false);
+    }
+  }
+
+  // ESC fecha
+  useEffect(function(){
+    function _esc(e){ if(e.key==="Escape") onClose(); }
+    window.addEventListener("keydown",_esc);
+    return function(){ window.removeEventListener("keydown",_esc); };
+  },[]);
+
+  return (<div style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.55)",zIndex:400,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"24px 16px",overflowY:"auto",backdropFilter:"blur(6px)",fontFamily:FF}} onClick={onClose}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:18,width:"100%",maxWidth:560,marginTop:24,boxShadow:"0 32px 80px rgba(15,23,42,0.25)",overflow:"hidden"}}>
+      <div style={{padding:"22px 26px 18px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:13,minWidth:0}}>
+          <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,"+color+","+color+"cc)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 6px 16px "+color+"40"}}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          </div>
+          <div>
+            <div style={{color:"#0f172a",fontWeight:800,fontSize:17}}>Editar cliente</div>
+            <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2}}>Alterações sincronizam pra todos e pro Portal do cliente</div>
+          </div>
+        </div>
+        <button onClick={onClose} title="Fechar" style={{background:"#f1f5f9",border:"none",borderRadius:10,width:32,height:32,cursor:"pointer",color:"#64748b",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <div style={{padding:"22px 26px",display:"flex",flexDirection:"column",gap:16,maxHeight:"70vh",overflowY:"auto"}}>
+        {error && <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",color:"#b91c1c",fontSize:12.5,fontWeight:600}}>{error}</div>}
+
+        {/* Logo */}
+        <div>
+          <LBL t="Logo"/>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:70,height:70,borderRadius:12,border:"1px solid #e2e8f0",background:"#fff",display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0}}>
+              {logoUrl
+                ? <img src={logoUrl} alt="logo" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                : <span style={{color:color,fontWeight:900,fontSize:20}}>{(name||"—").slice(0,2).toUpperCase()}</span>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              <label style={{background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 14px",color:"#0f172a",fontSize:12,fontWeight:600,cursor:"pointer",display:"inline-block"}}>
+                Trocar imagem
+                <input type="file" accept="image/*" onChange={_handleLogo} style={{display:"none"}}/>
+              </label>
+              {logoUrl && <button onClick={function(){setLogoUrl("");}} style={{background:"transparent",border:"none",color:"#dc2626",fontSize:11,fontWeight:600,cursor:"pointer",textAlign:"left",padding:0}}>Remover logo</button>}
+            </div>
+          </div>
+        </div>
+
+        {/* Nome */}
+        <div>
+          <LBL t="Nome"/>
+          <input value={name} onChange={function(e){setName(e.target.value);}} style={inp} autoFocus/>
+        </div>
+
+        {/* Setor (aparece como subtítulo) */}
+        <div>
+          <LBL t="Setor / subtítulo"/>
+          <input value={sector} onChange={function(e){setSector(e.target.value);}} style={inp} placeholder="Ex: Construção civil, Agronegócio…"/>
+        </div>
+
+        {/* Cidade / UF */}
+        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:12}}>
+          <div>
+            <LBL t="Cidade"/>
+            <input value={cidade} onChange={function(e){setCidade(e.target.value);}} style={inp}/>
+          </div>
+          <div>
+            <LBL t="UF"/>
+            <input value={estado} onChange={function(e){setEstado(e.target.value.toUpperCase().slice(0,2));}} style={Object.assign({},inp,{textTransform:"uppercase"})} maxLength={2}/>
+          </div>
+        </div>
+
+        {/* Cor */}
+        <div>
+          <LBL t="Cor da marca"/>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <input type="color" value={color} onChange={function(e){setColor(e.target.value);}} style={{width:56,height:44,border:"1px solid #e2e8f0",borderRadius:10,cursor:"pointer",padding:2,background:"#fff"}}/>
+            <input value={color} onChange={function(e){setColor(e.target.value);}} style={Object.assign({},inp,{fontFamily:"monospace"})}/>
+          </div>
+        </div>
+      </div>
+
+      <div style={{padding:"16px 26px",borderTop:"1px solid #f1f5f9",display:"flex",gap:10,justifyContent:"flex-end"}}>
+        <button onClick={onClose} disabled={saving} style={{background:"transparent",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 20px",color:"#475569",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:FF}}>Cancelar</button>
+        <button onClick={handleSave} disabled={saving} style={{background:saving?"#94a3b8":color,border:"none",borderRadius:10,padding:"10px 22px",color:"#fff",fontSize:13,fontWeight:700,cursor:saving?"wait":"pointer",fontFamily:FF,boxShadow:"0 4px 14px "+color+"40"}}>
+          {saving?"Salvando…":"Salvar alterações"}
+        </button>
+      </div>
+    </div>
+  </div>);
+}
+
 // ── Score calculator ───────────────────────────
 function calcScore(cl, tasks){
   let live=getLiveClient(cl.id)||cl;
@@ -11876,6 +12035,8 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
   cl=getLiveClient(cl.id)||cl;
   let [tab,setTab]=useState("analises");
   let [concorrenciaTab,setConcorrenciaTab]=useState("social_insta");
+  // Modal editar cliente (só p/ clientes dinâmicos, botão só aparece pra sócio)
+  let [showEdit,setShowEdit]=useState(false);
   // ═══ AI RESUMO ═══
   let [iaModal,setIaModal]=useState(false);
   let [iaLoading,setIaLoading]=useState(false);
@@ -12050,11 +12211,24 @@ function ClienteDetail({cl,onMindmap,onBack,isMob,tasks,perms}){
         <div style={{flex:1,minWidth:100}}>
           <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
             <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4}}>{cl.name}</div>
+            {/* Botão editar — só pra sócios + só cliente dinâmico (evita mexer nos hardcoded) */}
+            {(typeof CURRENT_USER!=="undefined" && CURRENT_USER && CURRENT_USER.level===1 && (cl._dynamic||false)) &&
+              <button onClick={function(){setShowEdit(true);}}
+                title="Editar dados do cliente"
+                style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"4px 10px",color:"#64748b",cursor:"pointer",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit",transition:"all .15s"}}
+                onMouseEnter={function(e){e.currentTarget.style.background=cl.color;e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor=cl.color;}}
+                onMouseLeave={function(e){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#64748b";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                Editar
+              </button>}
           </div>
           <div style={{color:C.td,fontSize:12,marginTop:2}}>{cl.sector}</div>
         </div>
       </div>
     </div>
+
+    {/* Modal editar cliente */}
+    {showEdit && typeof EditarClienteModal==="function" && <EditarClienteModal cl={cl} onClose={function(){setShowEdit(false);}}/>}
 
     {/* TABS PRINCIPAIS — mesmo padrão visual do Portal do Cliente: Ico + cor do cliente */}
     <div style={{display:"flex",gap:0,borderBottom:"1px solid "+C.b1,marginBottom:20,overflowX:"auto",flexWrap:"wrap"}}>
