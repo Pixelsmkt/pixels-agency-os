@@ -2797,34 +2797,68 @@ function _useBriefing(clientId){
   const [data,setData] = useState(()=>JSON.parse(JSON.stringify(BRIEFING_SEED[clientId]||{})));
   const [loading,setLoading] = useState(true);
   const [saving,setSaving] = useState(false);
+  const _localTsRef = useRef(0); // marca timestamp da última edição local — pra ignorar realtime que a gente mesmo disparou
   useEffect(function(){
     if(!clientId){setLoading(false);return;}
     if(!window._sb){setLoading(false);return;}
     let active=true;
-    window._sb.from("clients").select("briefing_data").eq("client_id",clientId).maybeSingle()
-      .then(function(r){
-        if(!active)return;
-        const remote = r && r.data && r.data.briefing_data;
-        if(remote && typeof remote==="object"){
-          // Merge: seed (vetservice) é só pra primeira vez. Remote sempre prevalece.
-          setData(remote);
-          // Espelha seção Identidade pra localStorage — outros componentes leem dali
-          try{
-            if(remote.identidade && typeof saveClientIdentity==="function"){
-              saveClientIdentity(clientId, remote.identidade);
-            }
-          }catch(e){}
-        }
-        setLoading(false);
-      })
-      .catch(function(e){
-        console.warn("[briefing load]", e && e.message ? e.message : e);
-        setLoading(false);
-      });
-    return function(){active=false;};
+
+    // Função de fetch — reusada no load inicial + focus reload
+    function _fetch(){
+      return window._sb.from("clients").select("briefing_data").eq("client_id",clientId).maybeSingle()
+        .then(function(r){
+          if(!active)return;
+          const remote = r && r.data && r.data.briefing_data;
+          if(remote && typeof remote==="object"){
+            setData(remote);
+            try{
+              if(remote.identidade && typeof saveClientIdentity==="function"){
+                saveClientIdentity(clientId, remote.identidade);
+              }
+            }catch(e){}
+          }
+        })
+        .catch(function(e){
+          console.warn("[briefing load]", e && e.message ? e.message : e);
+        });
+    }
+
+    _fetch().then(function(){ if(active) setLoading(false); });
+
+    // Realtime: escuta UPDATE no cliente e sincroniza (ignora se veio da própria edição recente)
+    let ch=null;
+    try{
+      ch = window._sb.channel("briefing-rt-"+clientId)
+        .on("postgres_changes",{event:"UPDATE",schema:"public",table:"clients",filter:"client_id=eq."+clientId},function(payload){
+          if(!active) return;
+          // Se a última edição local foi há menos de 1.5s, provavelmente esse evento é eco da nossa própria escrita — ignora pra não sobrepor input mid-typing
+          if(Date.now() - _localTsRef.current < 1500) return;
+          const remote = payload && payload.new && payload.new.briefing_data;
+          if(remote && typeof remote==="object"){
+            setData(remote);
+            try{
+              if(remote.identidade && typeof saveClientIdentity==="function"){
+                saveClientIdentity(clientId, remote.identidade);
+              }
+            }catch(_){}
+          }
+        })
+        .subscribe();
+    }catch(_){}
+
+    // Focus reload — se alguém volta pra aba depois de tempo fora, força refetch
+    function _onFocus(){ if(active) _fetch(); }
+    window.addEventListener("focus", _onFocus);
+
+    return function(){
+      active=false;
+      window.removeEventListener("focus", _onFocus);
+      try{ if(ch) window._sb.removeChannel(ch); }catch(_){}
+    };
   },[clientId]);
   const save = function(next){
     setData(next);
+    _localTsRef.current = Date.now();
     if(!clientId || !window._sb) return Promise.resolve();
     setSaving(true);
     return window._sb.from("clients").upsert({client_id:clientId, briefing_data:next},{onConflict:"client_id"})
@@ -12756,7 +12790,27 @@ function CMarcos({cl,canEdit,selUnit}){
     }catch(e){console.warn("[marcos] load:",e?.message||e);}
     setLoading(false);
   };
-  useEffect(function(){reload();},[_rootId]);
+  useEffect(function(){
+    let alive=true;
+    reload();
+    if(!sb) return function(){alive=false;};
+    // Realtime: escuta insert/update/delete em client_milestones do cliente atual e refetch
+    let ch=null;
+    try{
+      ch=sb.channel("marcos-rt-"+_rootId)
+        .on("postgres_changes",{event:"*",schema:"public",table:"client_milestones",filter:"client_id=eq."+_rootId},function(){
+          if(alive) reload();
+        })
+        .subscribe();
+    }catch(_){}
+    function _onFocus(){ if(alive) reload(); }
+    window.addEventListener("focus", _onFocus);
+    return function(){
+      alive=false;
+      window.removeEventListener("focus", _onFocus);
+      try{ if(ch) sb.removeChannel(ch); }catch(_){}
+    };
+  },[_rootId]);
 
   // Filtra marcos pela unidade resolvida.
   // "grupo" mostra TODOS (group + qualquer unidade).
@@ -43750,7 +43804,7 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
         <div style={{background:cl.color+"0a",border:"1px solid "+cl.color+"22",borderRadius:10,padding:"10px 14px",fontSize:11,color:cl.color,fontWeight:600}}>
           💬 Canal exclusivo entre <strong>{cl.name}</strong> e a equipe Pixels Agência. As mensagens são sincronizadas automaticamente.
         </div>
-        <PortalChat cl={cl} isClientView={false}/>
+        <PortalChat cl={cl} isClientView={typeof CURRENT_USER==="undefined" || !CURRENT_USER || (CURRENT_USER.user_type==="client") || (typeof currentClientUser!=="undefined" && currentClientUser)}/>
         <div style={{background:C.s1,borderRadius:10,padding:"10px 14px",fontSize:10,color:C.td,lineHeight:1.6}}>
           <strong>Como o cliente vê:</strong> No portal do cliente, ele acessa apenas este chat. As mensagens enviadas aqui aparecem em tempo real para ele, e as respostas dele chegam aqui para a equipe.
         </div>
@@ -46547,11 +46601,12 @@ function useMonthlyPlan(clientId, clientUnit, year, month){
   const [data,setData]=useState(null);
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
+  const _localTsRef = useRef(0);
 
   useEffect(function(){
     let active=true;
     setLoading(true);
-    (async function(){
+    async function _fetch(){
       if(!window._sb){if(active)setLoading(false);return;}
       try{
         const {data:row}=await window._sb.from("monthly_plans")
@@ -46561,13 +46616,40 @@ function useMonthlyPlan(clientId, clientUnit, year, month){
           .maybeSingle();
         if(active)setData(row||null);
       }catch(e){console.warn("[MP load]",e);}
-      if(active)setLoading(false);
-    })();
-    return function(){active=false;};
+    }
+    _fetch().then(function(){ if(active)setLoading(false); });
+
+    // Realtime: subscription filtrada por client_id
+    let ch=null;
+    try{
+      if(window._sb){
+        ch=window._sb.channel("mp-rt-"+clientId+"-"+(clientUnit||"")+"-"+year+"-"+month)
+          .on("postgres_changes",{event:"*",schema:"public",table:"monthly_plans",filter:"client_id=eq."+clientId},function(payload){
+            if(!active) return;
+            // Ignora eco se veio da própria escrita recente
+            if(Date.now() - _localTsRef.current < 1500) return;
+            const row = payload && payload.new;
+            if(row && row.client_unit===(clientUnit||"") && row.year===year && row.month===month){
+              setData(row);
+            }
+          })
+          .subscribe();
+      }
+    }catch(_){}
+
+    function _onFocus(){ if(active) _fetch(); }
+    window.addEventListener("focus", _onFocus);
+
+    return function(){
+      active=false;
+      window.removeEventListener("focus", _onFocus);
+      try{ if(ch) window._sb.removeChannel(ch); }catch(_){}
+    };
   },[clientId,clientUnit,year,month]);
 
   const save=async function(partial){
     if(!window._sb)return;
+    _localTsRef.current = Date.now();
     setSaving(true);
     try{
       const payload=Object.assign({
