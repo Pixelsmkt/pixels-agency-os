@@ -3308,6 +3308,100 @@ function subscribeRituaisRealtime(){
   }catch(e){return null;}
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   CLIENTES DINÂMICOS — registry global
+   ══════════════════════════════════════════════════════════════════
+   Clientes cadastrados via modal "Novo cliente" (sql/clients_dynamic.sql).
+   São armazenados na tabela `clients` com is_dynamic=true e ficam
+   MERGADOS na constante CLIENTS acima em runtime — assim TODOS os
+   módulos que fazem CLIENTS.find(c=>c.id===X) veem eles sem alteração.
+
+   Duas fases:
+   1) BOOT SYNC — recupera do cache localStorage ANTES da render.
+      Assim clientes já cadastrados aparecem imediatamente no F5.
+   2) SUPABASE FETCH — chamado logo após o auth pronto (17_gestao_midia.jsx
+      dispara depois de window._sb=_sb). Reconcilia com o servidor.
+
+   API global:
+   - window.registerDynamicClient(cl)           — adiciona/atualiza cliente in-place
+   - window.loadDynamicClientsFromSupabase()    — busca do Supabase (usa auth)
+   Ambos disparam CustomEvent "pixels:clients-registry-updated" quando muda algo.
+   ══════════════════════════════════════════════════════════════════ */
+
+// Normaliza row do Supabase pra shape do CLIENTS
+function _clientRowToObj(r){
+  const pd = r.profile_data || {};
+  return {
+    id: r.client_id,
+    name: r.name || r.client_id,
+    abbr: r.abbr || (r.name||"").slice(0,2).toUpperCase(),
+    color: r.color || "#7c3aed",
+    sector: r.sector || "",
+    cidade: r.cidade || "",
+    estado: r.estado || "",
+    status: r.status || "ativo",
+    since: r.since_label || "",
+    logoUrl: r.logo_url || null,
+    manager: r.manager || "vinicius",
+    contract: 0, health: 80, nps: 75,
+    meta: pd.meta || {}, google: pd.google || {}, social: pd.social || {},
+    socialUrls: pd.socialUrls || {}, reporteiUrl: pd.reporteiUrl || "",
+    upsell: pd.upsell || [], connected: pd.connected || false,
+    history: [], driveUrl: "", payment: {status:"pendente", date:""},
+    contacts: [], goals: [], meetingNotes: [],
+    _dynamic: true,
+  };
+}
+
+// Adiciona/atualiza cliente in-place em CLIENTS (mutação).
+window.registerDynamicClient = function(cl){
+  if(!cl || !cl.id) return false;
+  const existing = CLIENTS.find(function(c){return c.id===cl.id;});
+  if(existing){
+    // Atualiza in-place — não substitui referência (React precisa)
+    Object.assign(existing, cl);
+  } else {
+    CLIENTS.push(cl);
+  }
+  try{ window.dispatchEvent(new CustomEvent("pixels:clients-registry-updated",{detail:{clientId:cl.id}})); }catch(_){}
+  return true;
+};
+
+// Busca clientes dinâmicos do Supabase e faz merge no CLIENTS.
+// Também atualiza o cache localStorage.
+window.loadDynamicClientsFromSupabase = async function(){
+  if(!window._sb) return false;
+  try{
+    const res = await window._sb.from("clients")
+      .select("client_id,name,abbr,sector,cidade,estado,color,logo_url,status,since_label,manager,profile_data")
+      .eq("is_dynamic", true);
+    if(res.error){ console.warn("[loadDynamicClients]", res.error.message); return false; }
+    const rows = res.data || [];
+    const objs = rows.map(_clientRowToObj);
+    objs.forEach(function(cl){ window.registerDynamicClient(cl); });
+    // Cache local pra boot rápido no próximo F5
+    try{ localStorage.setItem("pixels-extra-clients-v1", JSON.stringify(objs)); }catch(_){}
+    return true;
+  }catch(e){
+    console.warn("[loadDynamicClients ex]", e);
+    return false;
+  }
+};
+
+// ── BOOT SYNC ── recupera do cache local antes da primeira render
+(function _bootRegisterCached(){
+  try{
+    const raw = localStorage.getItem("pixels-extra-clients-v1");
+    if(!raw) return;
+    const rows = JSON.parse(raw);
+    if(!Array.isArray(rows)) return;
+    const known = new Set(CLIENTS.map(function(c){return c.id;}));
+    rows.forEach(function(r){
+      if(r && r.id && !known.has(r.id)) CLIENTS.push(r);
+    });
+  }catch(_){}
+})();
+
 // ======= 01_dashboard.jsx =======
 
 // Barra de progresso simples
@@ -10487,6 +10581,14 @@ function NovoClienteModal({onClose,onSave}){
 
         // Cliente persistido — agora aplica no estado local e fecha
         onSave(newCl);
+
+        // ── REGISTRY GLOBAL — muta CLIENTS in-place pra TODO app enxergar ──
+        // Assim CardModal, Calendário, Portal, filtros do kanban, etc — tudo
+        // acha esse cliente no CLIENTS.find(c=>c.id===X) imediatamente,
+        // sem precisar refresh.
+        try{
+          if(typeof window.registerDynamicClient==="function") window.registerDynamicClient(newCl);
+        }catch(e){console.warn("[registry]",e);}
 
         // Seed Onboarding (agora que o cliente existe no Supabase)
         try{ if(typeof seedClientOnboarding==="function") seedClientOnboarding(id); }catch(e){console.warn("[onb seed]",e);}
@@ -36816,6 +36918,17 @@ window._sb = _sb;
 try{
   if(typeof loadRituaisDone==="function"){loadRituaisDone();}
   if(typeof subscribeRituaisRealtime==="function"){subscribeRituaisRealtime();}
+}catch(_){}
+
+// ─── Clientes dinâmicos: carrega do Supabase após auth ready ───
+// Merges clientes cadastrados via modal "Novo cliente" em CLIENTS pra que
+// todos os módulos (CardModal, Calendário, Portal, etc) vejam eles.
+try{
+  setTimeout(function(){
+    if(typeof window.loadDynamicClientsFromSupabase==="function"){
+      window.loadDynamicClientsFromSupabase().catch(function(){});
+    }
+  }, 1200);
 }catch(_){}
 
 const SB_URL  = import.meta.env.VITE_SUPABASE_URL;
