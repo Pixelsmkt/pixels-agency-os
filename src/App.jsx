@@ -46615,19 +46615,17 @@ function useMonthlyPlan(clientId, clientUnit, year, month){
     }
     _fetch().then(function(){ if(active)setLoading(false); });
 
-    // Realtime: subscription filtrada por client_id
+    // Realtime: subscription filtrada por client_id.
+    // Sempre refaz o fetch em vez de ler payload — funciona mesmo sem REPLICA IDENTITY FULL.
     let ch=null;
     try{
       if(window._sb){
         ch=window._sb.channel("mp-rt-"+clientId+"-"+(clientUnit||"")+"-"+year+"-"+month)
-          .on("postgres_changes",{event:"*",schema:"public",table:"monthly_plans",filter:"client_id=eq."+clientId},function(payload){
+          .on("postgres_changes",{event:"*",schema:"public",table:"monthly_plans",filter:"client_id=eq."+clientId},function(){
             if(!active) return;
-            // Ignora eco se veio da própria escrita recente
+            // Ignora eco se veio da própria escrita recente (evita loop mid-typing)
             if(Date.now() - _localTsRef.current < 1500) return;
-            const row = payload && payload.new;
-            if(row && row.client_unit===(clientUnit||"") && row.year===year && row.month===month){
-              setData(row);
-            }
+            _fetch();
           })
           .subscribe();
       }
