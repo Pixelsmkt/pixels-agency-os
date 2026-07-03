@@ -49892,7 +49892,7 @@ function _CalcEntregas({cor, titulo, itens}){
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       {titulo||"O que está incluso"}
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:7,fontFamily:_PORTF_FF}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:7,fontFamily:_PORTF_FF}}>
       {itens.map(function(it,i){
         return <div key={i} style={{display:"flex",alignItems:"flex-start",gap:8,color:"#e2e8f0",fontSize:12,lineHeight:1.45,fontFamily:_PORTF_FF}}>
           <div style={{width:16,height:16,borderRadius:5,background:(cor||"#c4b5fd")+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
@@ -50213,7 +50213,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
   }
 
   // ═══ Sub-componentes de UI ═══
-  const cardStyle = {background:PX_GRAD_TOP,border:"1px solid "+BORD,borderRadius:18,padding:isMob?"22px 20px":"26px 28px",boxShadow:"0 4px 14px rgba(88,64,166,.06), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"};
+  const cardStyle = {background:PX_GRAD_TOP,border:"1px solid "+BORD,borderRadius:16,padding:isMob?"20px 18px":"22px 22px",boxShadow:"0 4px 14px rgba(88,64,166,.06), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"};
   const cardStyleActive = Object.assign({}, cardStyle, {border:"1px solid "+PX_BD,boxShadow:"0 14px 34px rgba(159,67,246,0.16), 0 2px 6px rgba(15,23,42,.05)"});
 
   // Header modernizado estilo V4 — check circular + pills Versão + Nível
@@ -50230,7 +50230,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
         <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>{title}</div>
         <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>{subtitle}</div>
       </div>
-      <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:150,flexShrink:0}}>
+      <div style={{display:"flex",flexDirection:"column",gap:4,minWidth:120,flexShrink:0,alignItems:"flex-end"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
           <span style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Versão Escolhida</span>
           <span style={{background:active?PX_BG:"#f1f5f9",color:active?PX_DK:MUTE,border:"1px solid "+(active?PX_BD:BORD),fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{versaoLabel||"—"}</span>
@@ -50321,6 +50321,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           <div style={{color:MUTE,fontSize:13.5,marginTop:8,lineHeight:1.55,maxWidth:640}}>Selecione os módulos, canais e entregas para montar uma estimativa comercial.</div>
         </div>
 
+        {/* ═══ MÓDULOS EM GRID 2-COL (desktop) — 2×2 estilo dashboard V4 ═══ */}
+        <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 1fr",gap:16,alignItems:"start"}}>
+
         {/* ═══ 1. GESTÃO DE REDES SOCIAIS ═══ */}
         <div style={socialActive?cardStyleActive:cardStyle}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:socialActive?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
@@ -50343,8 +50346,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           <div style={{color:SOFT,fontSize:11,marginTop:2}}>Selecione ao menos um canal · o valor escala pela quantidade de publicações/semana</div>
 
           {socialActive && <>
-            {/* Entregáveis por blocos — grid 3 colunas no desktop, empilhado no mobile */}
-            <div style={{marginTop:16,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+            {/* Entregáveis por blocos empilhados dentro do card compacto */}
+            <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:8}}>
               <_IncluiList titulo="Diagnóstico e Estratégia" cor={PX} itens={[
                 "Diagnóstico do posicionamento atual da marca",
                 "Estruturação de plano tático",
@@ -50395,7 +50398,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 
           <div style={{marginTop:16}}>
             <_BlocoTitulo titulo="Limites/mês"/>
-            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
               <_QtyControl label="Criativos estáticos" unitPrice={cfg.creatives.staticCreative} value={creatives.staticCreatives}
                 onChange={function(v){setCreatives(c => Object.assign({},c,{staticCreatives:v}));}}/>
               <_QtyControl label="Vídeos editados" unitPrice={cfg.creatives.editedVideo} value={creatives.editedVideos}
@@ -50447,8 +50450,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
                 return <span key={ch} style={{background:PX_BG,border:"1px solid "+PX_BD,color:PX_DK,fontSize:11.5,fontWeight:700,padding:"5px 12px",borderRadius:99}}>{ch}</span>;
               })}
             </div>
-            {/* Entregáveis por blocos: grid 2 colunas no desktop, 1 no mobile */}
-            <div style={{marginTop:16,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
+            {/* Entregáveis por blocos empilhados dentro do card compacto */}
+            <div style={{marginTop:14,display:"flex",flexDirection:"column",gap:8}}>
               {TRAFFIC_BLOCOS.map(function(b,i){
                 return <_IncluiList key={i} titulo={b.titulo} cor={PX} itens={b.itens}/>;
               })}
@@ -50461,8 +50464,8 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           </>}
         </div>
 
-        {/* ═══ 4. PROJETOS PONTUAIS ═══ */}
-        <div style={oneTimeIds.length>0?cardStyleActive:cardStyle}>
+        {/* ═══ 4. PROJETOS PONTUAIS — full width no grid pra caber os cards ═══ */}
+        <div style={Object.assign({},oneTimeIds.length>0?cardStyleActive:cardStyle,{gridColumn:isMob?"auto":"1 / -1"})}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:oneTimeIds.length>0?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
           <_ModuleHeader num="4" active={oneTimeIds.length>0}
             title="Projetos Pontuais"
@@ -50470,7 +50473,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
             nivelLabel="Pontual"/>
 
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
             {cfg.oneTimeProjects.map(function(p){
               const sel = oneTimeIds.indexOf(p.id)>=0;
               return <button key={p.id} type="button" onClick={function(){setOneTimeIds(prev => sel?prev.filter(x=>x!==p.id):prev.concat([p.id]));}}
@@ -50487,6 +50490,9 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             })}
           </div>
         </div>
+
+        </div>
+        {/* fim do grid de módulos */}
 
         {/* Rodapé: dica de resumo pra mobile — resumo repete embaixo */}
         {isMob && hasAnySelection && <_ResumoBox
@@ -50857,7 +50863,7 @@ function PagePortfolio(props){
                 {/* Entregas grid 2 colunas */}
                 <div style={{
                   display:"grid",
-                  gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(220px,1fr))",
+                  gridTemplateColumns: isMob ? "1fr" : "repeat(auto-fill,minmax(180px,1fr))",
                   gap:8,
                   marginTop:4,
                   padding:"14px 16px",
