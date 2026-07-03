@@ -49575,27 +49575,24 @@ function OnboardingChecklist(props){
 
 
 // ═══════════════════════════════════════════════════════════════
-//  PRICE_CONFIG — tabela única de preços da Calculadora Comercial
-//  Todos os valores mensais/unitários vivem aqui pra facilitar reajuste.
+//  PRICE_CONFIG — tabela de preços única da Calculadora Comercial.
+//  Todos os valores mensais e unitários ficam aqui pra facilitar
+//  reajustes e novos planos.
 // ═══════════════════════════════════════════════════════════════
 const PRICE_CONFIG = {
-  socialMedia: {
-    baseManagement: 1000,       // taxa fixa de gestão mensal
-    minimumMonthly: 2000,       // valor mínimo quando o módulo tá ativo
-    staticCreative: 250,        // preço por criativo estático
-    editedVideo: 500,           // preço por vídeo editado
-    smallVariation: 100,        // pequena alteração/variação
+  socialManagement: {
+    firstChannelPackage: 2000,      // primeiro pacote de canal
+    additionalChannelPackage: 1000, // cada pacote adicional
     channels: {
-      facebookInstagram: 0,     // par obrigatório — sempre juntos
-      tiktok: 0,                // opcional, cost zero por enquanto
-      linkedin: 0,              // opcional
+      facebookInstagram: { label: "Facebook + Instagram", countsAsPackage: true },
+      tiktok:            { label: "TikTok",               countsAsPackage: true },
+      linkedin:          { label: "LinkedIn",             countsAsPackage: true },
     },
-    presets: [
-      { id:"1-post-week", label:"1 post/semana",  mainDeliveriesPerMonth: 4  },
-      { id:"2-posts-week",label:"2 posts/semana", mainDeliveriesPerMonth: 8  },
-      { id:"3-posts-week",label:"3 posts/semana", mainDeliveriesPerMonth: 12 },
-      { id:"4-posts-week",label:"4 posts/semana", mainDeliveriesPerMonth: 16 },
-    ],
+  },
+  creatives: {
+    staticCreative: 150, // por criativo estático
+    editedVideo:    400, // por vídeo editado
+    videoVariation: 50,  // por variação de vídeo
   },
   traffic: {
     none:       { id:"none",       label:"Sem tráfego pago", price:0,    channels:[] },
@@ -49614,21 +49611,26 @@ const PRICE_CONFIG = {
   ],
 };
 
-// ── Funções de cálculo (isoladas pra teste/manutenção) ─────────────
-function calculateSocialMediaPrice(state){
-  // state = { active, channels:{fbInsta,tiktok,linkedin}, staticCreatives, editedVideos, smallVariations }
-  if(!state || !state.active) return 0;
-  const cfg = PRICE_CONFIG.socialMedia;
-  const items =
-      (Number(state.staticCreatives)||0) * cfg.staticCreative
-    + (Number(state.editedVideos)||0)    * cfg.editedVideo
-    + (Number(state.smallVariations)||0) * cfg.smallVariation;
-  const channels =
-      (state.channels && state.channels.fbInsta   ? cfg.channels.facebookInstagram : 0)
-    + (state.channels && state.channels.tiktok    ? cfg.channels.tiktok            : 0)
-    + (state.channels && state.channels.linkedin  ? cfg.channels.linkedin          : 0);
-  const total = cfg.baseManagement + items + channels;
-  return Math.max(total, cfg.minimumMonthly);
+// ── Funções de cálculo ─────────────────────────────────────
+// Gestão de Redes Sociais: primeiro canal ativo R$ 2.000, cada canal
+// adicional +R$ 1.000. FB+IG contam como 1 pacote. TikTok e LinkedIn
+// são pacotes individuais.
+function calculateSocialManagementPrice(channelsState){
+  if(!channelsState) return 0;
+  const cfg = PRICE_CONFIG.socialManagement;
+  const activeCount =
+      (channelsState.fbInsta  ? 1 : 0)
+    + (channelsState.tiktok   ? 1 : 0)
+    + (channelsState.linkedin ? 1 : 0);
+  if(activeCount === 0) return 0;
+  return cfg.firstChannelPackage + (activeCount - 1) * cfg.additionalChannelPackage;
+}
+function calculateCreativesPrice(state){
+  if(!state) return 0;
+  const c = PRICE_CONFIG.creatives;
+  return (Number(state.staticCreatives)||0) * c.staticCreative
+       + (Number(state.editedVideos)||0)    * c.editedVideo
+       + (Number(state.videoVariations)||0) * c.videoVariation;
 }
 function calculateTrafficPrice(trafficKey){
   const t = PRICE_CONFIG.traffic[trafficKey];
@@ -49637,14 +49639,16 @@ function calculateTrafficPrice(trafficKey){
 function calculateOneTimeProjects(selectedIds){
   if(!selectedIds || !Array.isArray(selectedIds)) return 0;
   return PRICE_CONFIG.oneTimeProjects
-    .filter(p => selectedIds.indexOf(p.id)>=0)
-    .reduce((s,p)=>s+p.price, 0);
+    .filter(p => selectedIds.indexOf(p.id) >= 0)
+    .reduce((s,p) => s + p.price, 0);
 }
-function calculateMonthlyTotal(socialState, trafficKey){
-  return calculateSocialMediaPrice(socialState) + calculateTrafficPrice(trafficKey);
+function calculateMonthlyRecurringTotal(socialChannels, creativesState, trafficKey){
+  return calculateSocialManagementPrice(socialChannels)
+       + calculateCreativesPrice(creativesState)
+       + calculateTrafficPrice(trafficKey);
 }
-function calculateFirstMonthTotal(socialState, trafficKey, oneTimeIds){
-  return calculateMonthlyTotal(socialState, trafficKey) + calculateOneTimeProjects(oneTimeIds);
+function calculateOneTimeTotal(selectedIds){
+  return calculateOneTimeProjects(selectedIds);
 }
 function _calcFmtBRL(n){ return "R$ "+Number(n||0).toLocaleString("pt-BR"); }
 const PORTF_RECORRENTES = [
@@ -50059,358 +50063,468 @@ function _PortfDrawer(props){
 
 
 /* ═══════════════════════════════════════════════════════════════
-   _CalculadoraModular — Cards de módulos comerciais.
-   Cards grandes selecionáveis, canais, entregáveis, limites/mês e
-   resumo lateral fixo. Copiar resumo comercial no formato pedido.
+   _CalculadoraModular — versão LIGHT, VERTICAL, comercial premium.
+   Módulos empilhados: Gestão de Redes Sociais → Criativos → Tráfego
+   → Projetos Pontuais → Resumo. Resumo sticky à direita no desktop.
 ═══════════════════════════════════════════════════════════════ */
 function _CalculadoraModular({isMob}){
   const PX = "#9F43F6";
   const PX_DK = "#7c3aed";
+  const PX_BG = "#faf5ff";
+  const PX_BD = "#ede9fe";
+  const INK = "#0f172a";
+  const MUTE = "#64748b";
+  const SOFT = "#94a3b8";
+  const BORD = "#e2e8f0";
+  const BG_PAGE = "#F7F8FC";
   const cfg = PRICE_CONFIG;
-
-  // Estado do módulo 1 — Redes Sociais
-  const [social,setSocial] = useState({
-    active: false,
-    channels: { fbInsta:true, tiktok:false, linkedin:false }, // FB+IG obrigatórios juntos
-    staticCreatives: 8,   // default = preset 2 posts/semana
-    editedVideos: 0,
-    smallVariations: 0,
-  });
-  // Estado do módulo 2 — Tráfego Pago
-  const [trafficKey,setTrafficKey] = useState("none");
-  // Estado do módulo 3 — Projetos Pontuais
-  const [oneTimeIds,setOneTimeIds] = useState([]);
-
-  // Aplicar preset (mantém tipo dominante — se já tem vídeo, preserva proporção)
-  function applyPreset(p){
-    setSocial(s => Object.assign({}, s, {
-      active: true,
-      staticCreatives: p.mainDeliveriesPerMonth,
-      editedVideos: 0,
-      smallVariations: 0,
-    }));
-  }
-
-  // Cálculos
-  const socialPrice = calculateSocialMediaPrice(social);
-  const trafficPrice = calculateTrafficPrice(trafficKey);
-  const oneTimePrice = calculateOneTimeProjects(oneTimeIds);
-  const monthlyTotal = socialPrice + trafficPrice;
-  const firstMonthTotal = monthlyTotal + oneTimePrice;
   const fmt = _calcFmtBRL;
 
-  // Copiar resumo comercial
+  // ═══ Estado ═══
+  // 1) Gestão de Redes Sociais: só canais (FB+IG obrigatórios juntos)
+  const [socialChannels,setSocialChannels] = useState({ fbInsta:true, tiktok:false, linkedin:false });
+  // 2) Criativos: quantidades mensais
+  const [creatives,setCreatives] = useState({ staticCreatives:4, editedVideos:0, videoVariations:0 });
+  // 3) Tráfego pago
+  const [trafficKey,setTrafficKey] = useState("none");
+  // 4) Projetos pontuais
+  const [oneTimeIds,setOneTimeIds] = useState([]);
+  // Estado do módulo Gestão ativo/inativo (depende de ter algum canal)
+  const socialActive = !!(socialChannels.fbInsta || socialChannels.tiktok || socialChannels.linkedin);
+  // Módulo Criativos ativo = alguma quantidade > 0
+  const creativesActive = (creatives.staticCreatives + creatives.editedVideos + creatives.videoVariations) > 0;
+
+  // ═══ Cálculos ═══
+  const socialPrice   = calculateSocialManagementPrice(socialChannels);
+  const creativesPrice = calculateCreativesPrice(creatives);
+  const trafficPrice   = calculateTrafficPrice(trafficKey);
+  const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
+  const monthlyRecurring = calculateMonthlyRecurringTotal(socialChannels, creatives, trafficKey);
+
+  // ═══ Textos comuns ═══
+  const SOCIAL_INCLUSOS = [
+    "Diagnóstico do posicionamento atual da marca",
+    "Estruturação de plano tático",
+    "Planejamento de calendário editorial",
+    "Publicação de 2 conteúdos por semana",
+    "Criação de copywriting estratégico",
+    "Suporte diário 24 horas",
+    "Reunião mensal de alinhamento estratégico",
+  ];
+  const CREATIVES_INCLUSOS = [
+    "Planejamento criativo",
+    "Criação de roteiros estratégicos para vídeos",
+    "Padronização visual conforme identidade da marca",
+  ];
+  const TRAFFIC_INCLUSOS = [
+    "Estratégia de anúncios",
+    "Textos e criativos pensados para cliques e conversões",
+    "Públicos segmentados com base no cliente ideal",
+    "Análise da concorrência",
+    "Otimização para gastar melhor e vender mais",
+    "Relatórios claros com foco em resultado comercial",
+  ];
+
+  // ═══ Nome dos canais de Redes Sociais selecionados ═══
+  function _selectedSocialLabels(){
+    const out = [];
+    if(socialChannels.fbInsta) out.push("Facebook + Instagram");
+    if(socialChannels.tiktok)   out.push("TikTok");
+    if(socialChannels.linkedin) out.push("LinkedIn");
+    return out;
+  }
+
+  // ═══ Copiar resumo comercial ═══
   function copyResumo(){
     const trafObj = cfg.traffic[trafficKey];
     const oneItems = cfg.oneTimeProjects.filter(p => oneTimeIds.indexOf(p.id)>=0);
-    const socialCh = [];
-    if(social.channels.fbInsta) { socialCh.push("Facebook","Instagram"); }
-    if(social.channels.tiktok)   socialCh.push("TikTok");
-    if(social.channels.linkedin) socialCh.push("LinkedIn");
+    const socialCh = _selectedSocialLabels();
 
-    const lines = ["Estimativa Comercial — Pixels Marketing Digital", ""];
-    lines.push("Módulos selecionados:");
-    if(social.active){
-      lines.push("- Gestão de Redes Sociais");
-      lines.push("  Canais: " + socialCh.join(", "));
-      const entregas = [];
-      if(social.staticCreatives>0) entregas.push(social.staticCreatives+" criativos estáticos");
-      if(social.editedVideos>0)    entregas.push(social.editedVideos+" vídeos editados");
-      if(social.smallVariations>0) entregas.push(social.smallVariations+" variações");
-      lines.push("  Entregas/mês: " + (entregas.join(", ") || "—"));
-      lines.push("  Valor: " + fmt(socialPrice) + "/mês");
+    const lines = ["Estimativa Comercial — Pixels Marketing Digital", "", "Serviços recorrentes:", ""];
+
+    if(socialActive){
+      lines.push("Gestão de Redes Sociais");
+      lines.push("Canais: " + socialCh.join(", "));
+      lines.push("Inclui:");
+      SOCIAL_INCLUSOS.forEach(i => lines.push("- " + i));
+      lines.push("Valor: " + fmt(socialPrice) + "/mês");
+      lines.push("");
+    }
+    if(creativesActive){
+      lines.push("Criativos");
+      lines.push("Entregas/mês:");
+      if(creatives.staticCreatives>0) lines.push("- " + creatives.staticCreatives + " criativos estáticos");
+      if(creatives.editedVideos>0)    lines.push("- " + creatives.editedVideos    + " vídeos editados");
+      if(creatives.videoVariations>0) lines.push("- " + creatives.videoVariations + " variações de vídeo");
+      lines.push("Inclui:");
+      CREATIVES_INCLUSOS.forEach(i => lines.push("- " + i));
+      lines.push("Valor: " + fmt(creativesPrice) + "/mês");
+      lines.push("");
     }
     if(trafObj && trafObj.price>0){
-      lines.push("- Tráfego Pago");
-      lines.push("  Canais: " + trafObj.channels.join(", "));
-      lines.push("  Valor de gestão: " + fmt(trafObj.price) + "/mês");
-      lines.push("  Observação: verba de anúncios não inclusa");
+      lines.push("Tráfego Pago");
+      lines.push("Canais: " + trafObj.label);
+      lines.push("Inclui:");
+      TRAFFIC_INCLUSOS.forEach(i => lines.push("- " + i));
+      lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
+      lines.push("Observação: verba de anúncios não inclusa");
+      lines.push("");
     }
     if(oneItems.length>0){
-      lines.push("");
       lines.push("Projetos pontuais:");
       oneItems.forEach(p => lines.push("- " + p.label + ": " + fmt(p.price)));
+      lines.push("");
     }
-    lines.push("");
     lines.push("Resumo:");
-    lines.push("Mensal recorrente: " + fmt(monthlyTotal) + "/mês");
+    lines.push("Mensal recorrente: " + fmt(monthlyRecurring) + "/mês");
     if(oneTimePrice>0) lines.push("Investimento pontual: " + fmt(oneTimePrice));
-    lines.push("Primeiro mês estimado: " + fmt(firstMonthTotal));
-    if(oneTimePrice>0) lines.push("Depois do primeiro mês: " + fmt(monthlyTotal) + "/mês");
+    lines.push("");
+    lines.push("Observação:");
+    lines.push("Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.");
 
     const txt = lines.join("\n");
     try{ navigator.clipboard.writeText(txt); if(typeof pixelsToast!=="undefined") pixelsToast.success("Resumo comercial copiado!"); }
     catch(_){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Não consegui copiar. Copia manual."); }
   }
 
-  // ── Sub-componentes visuais ──
-  function _StepNum({n}){
-    return <div style={{width:26,height:26,borderRadius:8,background:"rgba(159,67,246,0.2)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,flexShrink:0}}>{n}</div>;
+  // ═══ Sub-componentes de UI ═══
+  const cardStyle = {background:"#fff",border:"1px solid "+BORD,borderRadius:16,padding:isMob?"20px 18px":"24px 26px",boxShadow:"0 2px 10px rgba(15,23,42,.04)",fontFamily:_PORTF_FF};
+  const cardStyleActive = Object.assign({}, cardStyle, {border:"1px solid "+PX,boxShadow:"0 8px 24px rgba(159,67,246,0.12)"});
+
+  function _StepNum({n, active}){
+    return <div style={{width:30,height:30,borderRadius:9,background:active?PX:PX_BG,color:active?"#fff":PX,border:"1px solid "+(active?PX:PX_BD),display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>{n}</div>;
   }
-  function _Chip({label, tone}){
-    const bg = tone==="warn"?"linear-gradient(90deg,#f59e0b,#d97706)":tone==="ok"?"linear-gradient(90deg,#9F43F6,#7c3aed)":"rgba(148,163,184,0.15)";
-    const col = tone==="warn"||tone==="ok"?"#fff":"#94a3b8";
-    return <span style={{background:bg,color:col,fontSize:9.5,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>;
-  }
-  function _QtyControl({label, value, onChange, min, sub}){
-    return <div style={{background:"rgba(15,23,42,0.55)",border:"1px solid #334155",borderRadius:11,padding:"12px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-      <div style={{minWidth:0,flex:1}}>
-        <div style={{color:"#e2e8f0",fontSize:12.5,fontWeight:700,letterSpacing:-.1}}>{label}</div>
-        {sub && <div style={{color:"#94a3b8",fontSize:10.5,marginTop:2}}>{sub}</div>}
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-        <button type="button" onClick={function(){onChange(Math.max(min||0, value-1));}}
-          style={{width:28,height:28,borderRadius:8,background:"rgba(159,67,246,0.15)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",fontSize:16,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>−</button>
-        <div style={{minWidth:36,textAlign:"center",color:"#fff",fontWeight:800,fontSize:14,fontFeatureSettings:"'tnum'"}}>{value}</div>
-        <button type="button" onClick={function(){onChange(value+1);}}
-          style={{width:28,height:28,borderRadius:8,background:"rgba(159,67,246,0.15)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",fontSize:16,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>+</button>
-      </div>
-    </div>;
+  function _ChipTag({label, tone}){
+    const bg = tone==="warn"?"#fef3c7":tone==="ok"?PX_BG:"#f1f5f9";
+    const col = tone==="warn"?"#a16207":tone==="ok"?PX_DK:MUTE;
+    const bd = tone==="warn"?"#fde68a":tone==="ok"?PX_BD:BORD;
+    return <span style={{background:bg,color:col,border:"1px solid "+bd,fontSize:10,fontWeight:800,padding:"3px 9px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase",whiteSpace:"nowrap"}}>{label}</span>;
   }
   function _ChannelPill({label, active, obligatory, onClick}){
     return <button type="button" onClick={obligatory?undefined:onClick} disabled={!!obligatory}
-      style={{background:active?"linear-gradient(135deg,rgba(159,67,246,0.30),rgba(124,58,237,0.18))":"rgba(30,41,59,0.55)",border:"1px solid "+(active?"#9F43F6":"#334155"),color:active?"#fff":"#94a3b8",borderRadius:99,padding:"6px 14px",fontSize:11.5,fontWeight:700,cursor:obligatory?"default":"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
+      style={{background:active?PX_BG:"#fff",border:"1px solid "+(active?PX:BORD),color:active?PX_DK:MUTE,borderRadius:99,padding:"7px 14px",fontSize:12,fontWeight:700,cursor:obligatory?"default":"pointer",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s"}}>
       {active && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
       {label}
-      {obligatory && <span style={{fontSize:9,opacity:.65,marginLeft:4}}>(base)</span>}
     </button>;
   }
+  function _QtyControl({label, unitPrice, value, onChange}){
+    return <div style={{background:"#fafbfc",border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+      <div style={{minWidth:0,flex:1}}>
+        <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>{label}</div>
+        <div style={{color:MUTE,fontSize:11,marginTop:2}}>{fmt(unitPrice)} cada</div>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+        <button type="button" onClick={function(){onChange(Math.max(0, value-1));}}
+          style={{width:32,height:32,borderRadius:9,background:"#fff",border:"1px solid "+BORD,color:PX,fontSize:18,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>−</button>
+        <div style={{minWidth:38,textAlign:"center",color:INK,fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'"}}>{value}</div>
+        <button type="button" onClick={function(){onChange(value+1);}}
+          style={{width:32,height:32,borderRadius:9,background:PX_BG,border:"1px solid "+PX_BD,color:PX,fontSize:18,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>+</button>
+      </div>
+    </div>;
+  }
+  function _IncluiList({titulo, cor, itens}){
+    return <div style={{background:"#fafbfc",border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px"}}>
+      <div style={{color:cor||MUTE,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>{titulo}</div>
+      <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:6}}>
+        {itens.map(function(it,i){
+          return <li key={i} style={{color:INK,fontSize:12.5,display:"flex",gap:8,alignItems:"flex-start"}}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={cor||PX} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:2}}><polyline points="20 6 9 17 4 12"/></svg>
+            <span>{it}</span>
+          </li>;
+        })}
+      </ul>
+    </div>;
+  }
+  function _BlocoTitulo({titulo}){
+    return <div style={{color:INK,fontSize:12,fontWeight:800,letterSpacing:-.1,marginBottom:8,marginTop:6}}>{titulo}</div>;
+  }
+  function _ValorModulo({label, price, mini}){
+    return <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,paddingTop:mini?8:12,borderTop:"1px solid "+BORD,marginTop:mini?10:14}}>
+      <div>
+        <div style={{color:SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>{label||"Valor do módulo"}</div>
+        <div style={{color:INK,fontWeight:900,fontSize:mini?18:22,letterSpacing:-.6,marginTop:3,fontFeatureSettings:"'tnum'"}}>{fmt(price)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
+      </div>
+      <span style={{background:PX_BG,color:PX_DK,border:"1px solid "+PX_BD,fontSize:10,fontWeight:800,padding:"4px 10px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>No mensal</span>
+    </div>;
+  }
 
-  return <section style={{background:"linear-gradient(160deg,#0f172a,#1e1b4b 60%,#0f172a)",borderRadius:18,padding:isMob?"22px 18px":"30px 32px",fontFamily:_PORTF_FF,color:"#fff",position:"relative",overflow:"hidden",border:"1px solid #312e81"}}>
-    {/* Decoração */}
-    <div style={{position:"absolute",top:-80,right:-60,width:280,height:280,borderRadius:"50%",background:"radial-gradient(circle at 30% 30%,rgba(159,67,246,0.25),transparent 65%)",pointerEvents:"none"}}/>
-    <div style={{position:"absolute",bottom:-100,left:-40,width:240,height:240,borderRadius:"50%",background:"radial-gradient(circle,rgba(99,102,241,0.18),transparent 70%)",pointerEvents:"none"}}/>
+  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || oneTimeIds.length>0;
 
-    <div style={{position:"relative",display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 360px",gap:24,alignItems:"start"}}>
-      {/* ═══════════════ COLUNA ESQUERDA ═══════════════ */}
-      <div style={{display:"flex",flexDirection:"column",gap:22}}>
+  return <section style={{background:BG_PAGE,borderRadius:18,padding:isMob?"22px 16px":"28px 32px",fontFamily:_PORTF_FF,color:INK,position:"relative"}}>
+
+    <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"1fr 360px",gap:22,alignItems:"start"}}>
+
+      {/* ═══════════════ COLUNA ESQUERDA — MÓDULOS VERTICAIS ═══════════════ */}
+      <div style={{display:"flex",flexDirection:"column",gap:18}}>
+
         {/* HEADER */}
         <div>
-          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:"rgba(159,67,246,0.18)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",fontSize:10.5,fontWeight:800,padding:"5px 12px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:7,background:PX_BG,border:"1px solid "+PX_BD,color:PX_DK,fontSize:10.5,fontWeight:800,padding:"5px 12px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase"}}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            Montagem de escopo modular
+            Montagem de escopo
           </div>
-          <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:28,letterSpacing:-.8,lineHeight:1.15,marginTop:10}}>Monte o pacote do cliente</div>
-          <div style={{color:"#94a3b8",fontSize:13.5,marginTop:8,lineHeight:1.55,maxWidth:600}}>Ative os módulos que fazem sentido, ajuste canais e entregas por mês. O valor recalcula automaticamente.</div>
+          <div style={{color:INK,fontWeight:800,fontSize:isMob?22:28,letterSpacing:-.8,lineHeight:1.15,marginTop:10}}>Monte o pacote do cliente</div>
+          <div style={{color:MUTE,fontSize:13.5,marginTop:8,lineHeight:1.55,maxWidth:640}}>Selecione os módulos, canais e entregas para montar uma estimativa comercial.</div>
         </div>
 
-        {/* ═══ MÓDULO 1: GESTÃO DE REDES SOCIAIS ═══ */}
-        <div style={{background:social.active?"linear-gradient(160deg,rgba(159,67,246,0.14),rgba(30,27,75,0.55))":"rgba(30,41,59,0.35)",border:"1px solid "+(social.active?"#9F43F6":"#334155"),borderRadius:16,padding:"20px 22px",transition:"all .2s",boxShadow:social.active?"0 12px 32px rgba(159,67,246,0.20)":"none"}}>
-          {/* Header do módulo */}
-          <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,marginBottom:14}}>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <_StepNum n="1"/>
-              <div>
-                <div style={{color:"#fff",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Gestão de Redes Sociais</div>
-                <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2}}>Presença estratégica, autoridade e consistência.</div>
-              </div>
+        {/* ═══ 1. GESTÃO DE REDES SOCIAIS ═══ */}
+        <div style={socialActive?cardStyleActive:cardStyle}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
+            <_StepNum n="1" active={socialActive}/>
+            <div style={{flex:1}}>
+              <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Gestão de Redes Sociais</div>
+              <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Estratégia, planejamento, publicação e acompanhamento.</div>
             </div>
-            <label style={{display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer"}}>
-              <input type="checkbox" checked={social.active} onChange={function(e){setSocial(s => Object.assign({}, s, {active:e.target.checked}));}} style={{display:"none"}}/>
-              <div style={{width:42,height:24,borderRadius:99,background:social.active?"#9F43F6":"#334155",position:"relative",transition:"all .18s"}}>
-                <div style={{position:"absolute",top:2,left:social.active?20:2,width:20,height:20,borderRadius:"50%",background:"#fff",transition:"all .18s",boxShadow:"0 2px 6px rgba(0,0,0,0.25)"}}/>
-              </div>
-              <span style={{color:social.active?"#fff":"#94a3b8",fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>{social.active?"Selecionado":"Ativar"}</span>
-            </label>
+            {socialActive && <_ChipTag label="Selecionado" tone="ok"/>}
           </div>
 
-          {social.active && <div style={{display:"flex",flexDirection:"column",gap:16}}>
-            {/* Canais */}
-            <div>
-              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Canais</div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-                <_ChannelPill label="Facebook + Instagram" active={true} obligatory={true}/>
-                <_ChannelPill label="TikTok" active={social.channels.tiktok}
-                  onClick={function(){setSocial(s => Object.assign({}, s, {channels:Object.assign({},s.channels,{tiktok:!s.channels.tiktok})}));}}/>
-                <_ChannelPill label="LinkedIn" active={social.channels.linkedin}
-                  onClick={function(){setSocial(s => Object.assign({}, s, {channels:Object.assign({},s.channels,{linkedin:!s.channels.linkedin})}));}}/>
-              </div>
-            </div>
+          {/* Canais */}
+          <_BlocoTitulo titulo="Canais"/>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:6}}>
+            <_ChannelPill label="Facebook + Instagram" active={socialChannels.fbInsta}
+              onClick={function(){setSocialChannels(c => Object.assign({},c,{fbInsta:!c.fbInsta}));}}/>
+            <_ChannelPill label="TikTok" active={socialChannels.tiktok}
+              onClick={function(){setSocialChannels(c => Object.assign({},c,{tiktok:!c.tiktok}));}}/>
+            <_ChannelPill label="LinkedIn" active={socialChannels.linkedin}
+              onClick={function(){setSocialChannels(c => Object.assign({},c,{linkedin:!c.linkedin}));}}/>
+          </div>
+          <div style={{color:SOFT,fontSize:11,marginTop:2}}>Primeiro pacote R$ 2.000/mês · cada pacote adicional +R$ 1.000/mês</div>
 
-            {/* Presets rápidos */}
-            <div>
-              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Presets rápidos</div>
-              <div style={{display:"grid",gridTemplateColumns:isMob?"repeat(2,1fr)":"repeat(4,1fr)",gap:8}}>
-                {cfg.socialMedia.presets.map(function(p){
-                  const active = social.staticCreatives===p.mainDeliveriesPerMonth && social.editedVideos===0 && social.smallVariations===0;
-                  return <button key={p.id} type="button" onClick={function(){applyPreset(p);}}
-                    style={{background:active?"linear-gradient(135deg,rgba(159,67,246,0.25),rgba(124,58,237,0.12))":"rgba(15,23,42,0.55)",border:"1px solid "+(active?"#9F43F6":"#334155"),color:active?"#fff":"#cbd5e1",borderRadius:10,padding:"9px 10px",fontSize:11.5,fontWeight:700,cursor:"pointer",textAlign:"center",letterSpacing:-.1}}>
-                    {p.label}
-                    <div style={{color:active?"#c4b5fd":"#64748b",fontSize:10,fontWeight:600,marginTop:2}}>{p.mainDeliveriesPerMonth} criativos</div>
-                  </button>;
-                })}
-              </div>
+          {socialActive && <>
+            {/* Entregáveis por blocos */}
+            <div style={{marginTop:16,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+              <_IncluiList titulo="Diagnóstico e Estratégia" cor={PX} itens={[
+                "Diagnóstico do posicionamento atual da marca",
+                "Estruturação de plano tático",
+              ]}/>
+              <_IncluiList titulo="Gestão de Redes Sociais" cor={PX} itens={[
+                "Planejamento de calendário editorial",
+                "Publicação de 2 conteúdos por semana",
+                "Criação de copywriting estratégico",
+              ]}/>
+              <_IncluiList titulo="Suporte e Acompanhamento" cor={PX} itens={[
+                "Suporte diário 24 horas",
+                "Reunião mensal de alinhamento estratégico",
+              ]}/>
             </div>
-
-            {/* Controles de quantidade */}
-            <div>
-              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Limites/mês</div>
-              <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:8}}>
-                <_QtyControl label="Criativos estáticos" sub={fmt(cfg.socialMedia.staticCreative)+" cada"} value={social.staticCreatives} min={0}
-                  onChange={function(v){setSocial(s => Object.assign({}, s, {staticCreatives:v}));}}/>
-                <_QtyControl label="Vídeos editados"    sub={fmt(cfg.socialMedia.editedVideo)+" cada"}    value={social.editedVideos} min={0}
-                  onChange={function(v){setSocial(s => Object.assign({}, s, {editedVideos:v}));}}/>
-                <_QtyControl label="Variações"          sub={fmt(cfg.socialMedia.smallVariation)+" cada"} value={social.smallVariations} min={0}
-                  onChange={function(v){setSocial(s => Object.assign({}, s, {smallVariations:v}));}}/>
-              </div>
-            </div>
-
-            {/* Entregáveis inclusos */}
-            <div style={{background:"rgba(15,23,42,0.45)",border:"1px solid #334155",borderRadius:11,padding:"12px 14px"}}>
-              <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Entregáveis inclusos</div>
-              <div style={{color:"#cbd5e1",fontSize:12,lineHeight:1.7}}>
-                Planejamento de calendário editorial · Copywriting estratégico · Design · Edição de vídeo · Organização de publicações
-              </div>
-            </div>
-
-            {/* Preço do módulo */}
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",paddingTop:10,borderTop:"1px solid #334155"}}>
-              <div>
-                <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Valor do módulo</div>
-                <div style={{color:"#fff",fontWeight:900,fontSize:22,letterSpacing:-.6,marginTop:3,fontFeatureSettings:"'tnum'"}}>{fmt(socialPrice)}<span style={{color:"#94a3b8",fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
-              </div>
-              {socialPrice===cfg.socialMedia.minimumMonthly && <_Chip label="Mínimo do módulo" tone="warn"/>}
-            </div>
-          </div>}
+            <_ValorModulo price={socialPrice}/>
+          </>}
+          {!socialActive && <div style={{color:MUTE,fontSize:12,marginTop:12,fontStyle:"italic"}}>Selecione ao menos um canal para ativar o módulo.</div>}
         </div>
 
-        {/* ═══ MÓDULO 2: TRÁFEGO PAGO ═══ */}
-        <div style={{background:trafficKey!=="none"?"linear-gradient(160deg,rgba(159,67,246,0.14),rgba(30,27,75,0.55))":"rgba(30,41,59,0.35)",border:"1px solid "+(trafficKey!=="none"?"#9F43F6":"#334155"),borderRadius:16,padding:"20px 22px",transition:"all .2s",boxShadow:trafficKey!=="none"?"0 12px 32px rgba(159,67,246,0.20)":"none"}}>
-          <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:14}}>
-            <_StepNum n="2"/>
-            <div>
-              <div style={{color:"#fff",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Tráfego Pago</div>
-              <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2}}>Gestão de campanhas para alcance e conversão.</div>
+        {/* ═══ 2. CRIATIVOS ═══ */}
+        <div style={creativesActive?cardStyleActive:cardStyle}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
+            <_StepNum n="2" active={creativesActive}/>
+            <div style={{flex:1}}>
+              <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Criativos</div>
+              <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Produção dos materiais que serão publicados.</div>
+            </div>
+            {creativesActive && <_ChipTag label="Selecionado" tone="ok"/>}
+          </div>
+
+          <_BlocoTitulo titulo="Entregáveis inclusos"/>
+          <_IncluiList titulo="O que está incluso" cor={PX} itens={CREATIVES_INCLUSOS}/>
+
+          <div style={{marginTop:16}}>
+            <_BlocoTitulo titulo="Limites/mês"/>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+              <_QtyControl label="Criativos estáticos" unitPrice={cfg.creatives.staticCreative} value={creatives.staticCreatives}
+                onChange={function(v){setCreatives(c => Object.assign({},c,{staticCreatives:v}));}}/>
+              <_QtyControl label="Vídeos editados" unitPrice={cfg.creatives.editedVideo} value={creatives.editedVideos}
+                onChange={function(v){setCreatives(c => Object.assign({},c,{editedVideos:v}));}}/>
+              <_QtyControl label="Variações de vídeo" unitPrice={cfg.creatives.videoVariation} value={creatives.videoVariations}
+                onChange={function(v){setCreatives(c => Object.assign({},c,{videoVariations:v}));}}/>
             </div>
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(4,1fr)",gap:8}}>
+          {creativesActive && <_ValorModulo price={creativesPrice}/>}
+        </div>
+
+        {/* ═══ 3. TRÁFEGO PAGO ═══ */}
+        <div style={trafficKey!=="none"?cardStyleActive:cardStyle}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
+            <_StepNum n="3" active={trafficKey!=="none"}/>
+            <div style={{flex:1}}>
+              <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Tráfego Pago</div>
+              <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Gestão de campanhas para alcance e conversão.</div>
+            </div>
+            {trafficKey!=="none" && <_ChipTag label="Selecionado" tone="ok"/>}
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
             {Object.keys(cfg.traffic).map(function(k){
               const t = cfg.traffic[k];
               const sel = trafficKey===k;
               return <button key={k} type="button" onClick={function(){setTrafficKey(k);}}
-                style={{background:sel?"linear-gradient(135deg,rgba(159,67,246,0.25),rgba(124,58,237,0.12))":"rgba(15,23,42,0.55)",border:"1px solid "+(sel?"#9F43F6":"#334155"),borderRadius:13,padding:"14px 12px",cursor:"pointer",textAlign:"left",transition:"all .15s",position:"relative",boxShadow:sel?"0 8px 20px rgba(159,67,246,0.25)":"none"}}>
-                {t.combo && <div style={{position:"absolute",top:-8,left:10,background:"linear-gradient(90deg,#f59e0b,#d97706)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",boxShadow:"0 4px 10px rgba(245,158,11,0.35)"}}>Combo</div>}
-                {sel && <div style={{position:"absolute",top:10,right:10,width:18,height:18,borderRadius:"50%",background:"#9F43F6",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                </div>}
-                <div style={{color:sel?"#fff":"#cbd5e1",fontSize:13,fontWeight:700,letterSpacing:-.1}}>{t.label}</div>
-                <div style={{color:sel?"#c4b5fd":"#94a3b8",fontWeight:800,fontSize:t.price===0?12:16,marginTop:8,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>
-                  {t.price===0?"Grátis":fmt(t.price)}
-                  {t.price>0 && <span style={{color:"#64748b",fontSize:10,fontWeight:600,marginLeft:4}}>/mês</span>}
+                style={{background:sel?PX_BG:"#fff",border:"1px solid "+(sel?PX:BORD),borderRadius:12,padding:"14px 16px",cursor:"pointer",textAlign:"left",transition:"all .15s",position:"relative",boxShadow:sel?"0 6px 18px rgba(159,67,246,0.15)":"none"}}>
+                {t.combo && <div style={{position:"absolute",top:-8,right:12,background:"linear-gradient(90deg,#f59e0b,#d97706)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase",boxShadow:"0 4px 10px rgba(245,158,11,0.30)"}}>Combo</div>}
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <div style={{width:20,height:20,borderRadius:99,border:"2px solid "+(sel?PX:BORD),background:sel?PX:"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    {sel && <div style={{width:8,height:8,borderRadius:99,background:"#fff"}}/>}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{color:INK,fontSize:13.5,fontWeight:700,letterSpacing:-.1}}>{t.label}</div>
+                    <div style={{color:sel?PX_DK:MUTE,fontWeight:800,fontSize:t.price===0?12:15,marginTop:4,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>
+                      {t.price===0?"Grátis":fmt(t.price)}
+                      {t.price>0 && <span style={{color:SOFT,fontSize:11,fontWeight:600,marginLeft:4}}>/mês</span>}
+                    </div>
+                  </div>
                 </div>
               </button>;
             })}
           </div>
 
           {trafficKey!=="none" && <>
-            <div style={{marginTop:14,display:"flex",flexWrap:"wrap",gap:6}}>
-              <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",width:"100%",marginBottom:2}}>Canais ativados</div>
+            <div style={{marginTop:14,display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+              <div style={{color:SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",width:"100%",marginBottom:4}}>Canais ativados</div>
               {cfg.traffic[trafficKey].channels.map(function(ch){
-                return <span key={ch} style={{background:"rgba(159,67,246,0.15)",border:"1px solid rgba(159,67,246,0.35)",color:"#c4b5fd",fontSize:11,fontWeight:700,padding:"4px 11px",borderRadius:99}}>{ch}</span>;
+                return <span key={ch} style={{background:PX_BG,border:"1px solid "+PX_BD,color:PX_DK,fontSize:11.5,fontWeight:700,padding:"5px 12px",borderRadius:99}}>{ch}</span>;
               })}
             </div>
-            <div style={{background:"rgba(15,23,42,0.45)",border:"1px solid #334155",borderRadius:11,padding:"12px 14px",marginTop:14}}>
-              <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Entregáveis inclusos</div>
-              <div style={{color:"#cbd5e1",fontSize:12,lineHeight:1.7}}>
-                Estratégia de anúncios · Textos e criativos para cliques e conversões · Públicos segmentados no cliente ideal · Análise da concorrência · Otimização para gastar melhor e vender mais · Relatórios com foco em resultado comercial
-              </div>
-            </div>
-            <div style={{marginTop:10,padding:"9px 12px",background:"rgba(245,158,11,0.12)",border:"1px solid rgba(245,158,11,0.30)",borderRadius:9,color:"#fbbf24",fontSize:11,fontWeight:600,display:"inline-flex",alignItems:"center",gap:7}}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <div style={{marginTop:14}}><_IncluiList titulo="Entregáveis inclusos" cor={PX} itens={TRAFFIC_INCLUSOS}/></div>
+            <div style={{marginTop:12,padding:"10px 14px",background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,color:"#a16207",fontSize:12,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               Valor de gestão. Verba de anúncios não inclusa.
             </div>
+            <_ValorModulo price={trafficPrice}/>
           </>}
         </div>
 
-        {/* ═══ MÓDULO 3: PROJETOS PONTUAIS ═══ */}
-        <div style={{background:oneTimeIds.length>0?"linear-gradient(160deg,rgba(159,67,246,0.10),rgba(30,27,75,0.45))":"rgba(30,41,59,0.35)",border:"1px solid "+(oneTimeIds.length>0?"#9F43F6":"#334155"),borderRadius:16,padding:"20px 22px",transition:"all .2s"}}>
-          <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:14}}>
-            <_StepNum n="3"/>
-            <div>
-              <div style={{color:"#fff",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Projetos Pontuais</div>
-              <div style={{color:"#94a3b8",fontSize:11.5,marginTop:2}}>Investimento único que soma no primeiro mês.</div>
+        {/* ═══ 4. PROJETOS PONTUAIS ═══ */}
+        <div style={oneTimeIds.length>0?cardStyleActive:cardStyle}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
+            <_StepNum n="4" active={oneTimeIds.length>0}/>
+            <div style={{flex:1}}>
+              <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Projetos Pontuais</div>
+              <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Investimento único, separado do mensal.</div>
             </div>
+            {oneTimeIds.length>0 && <_ChipTag label={oneTimeIds.length+" selecionado"+(oneTimeIds.length>1?"s":"")} tone="ok"/>}
           </div>
 
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
             {cfg.oneTimeProjects.map(function(p){
               const sel = oneTimeIds.indexOf(p.id)>=0;
               return <button key={p.id} type="button" onClick={function(){setOneTimeIds(prev => sel?prev.filter(x=>x!==p.id):prev.concat([p.id]));}}
-                style={{background:sel?"linear-gradient(135deg,rgba(159,67,246,0.20),rgba(124,58,237,0.08))":"rgba(15,23,42,0.45)",border:"1px solid "+(sel?"#9F43F6":"#334155"),borderRadius:11,padding:"11px 13px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:10,minHeight:56,position:"relative"}}>
+                style={{background:sel?PX_BG:"#fff",border:"1px solid "+(sel?PX:BORD),borderRadius:11,padding:"12px 14px",cursor:"pointer",textAlign:"left",display:"flex",alignItems:"center",gap:10,minHeight:58,position:"relative"}}>
                 {p.destaque && <div style={{position:"absolute",top:-8,right:10,background:"linear-gradient(90deg,#9F43F6,#7c3aed)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 8px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Mais vendido</div>}
-                <div style={{width:18,height:18,borderRadius:5,background:sel?"#9F43F6":"transparent",border:"1.5px solid "+(sel?"#9F43F6":"#475569"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  {sel && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                <div style={{width:20,height:20,borderRadius:6,background:sel?PX:"#fff",border:"1.5px solid "+(sel?PX:BORD),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  {sel && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{color:sel?"#fff":"#cbd5e1",fontSize:12.5,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.label}</div>
-                  <div style={{color:sel?"#c4b5fd":"#94a3b8",fontSize:11,fontWeight:700,marginTop:2,fontFeatureSettings:"'tnum'"}}>{p.fixo?"":"a partir de "}{fmt(p.price)}</div>
+                  <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.label}</div>
+                  <div style={{color:sel?PX_DK:MUTE,fontSize:11.5,fontWeight:700,marginTop:2,fontFeatureSettings:"'tnum'"}}>{p.fixo?"":"a partir de "}{fmt(p.price)}</div>
                 </div>
               </button>;
             })}
           </div>
         </div>
+
+        {/* Rodapé: dica de resumo pra mobile — resumo repete embaixo */}
+        {isMob && hasAnySelection && <_ResumoBox
+          fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
+          socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice}
+          creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} cfg={cfg}
+          oneTimeIds={oneTimeIds} onCopy={copyResumo}
+          PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
+
       </div>
 
-      {/* ═══════════════ COLUNA DIREITA — RESUMO ═══════════════ */}
-      <div style={{position:isMob?"static":"sticky",top:20,display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{background:"linear-gradient(160deg,#1e1b4b,#0f172a)",border:"1px solid #4338ca44",borderRadius:16,padding:"22px 22px",boxShadow:"0 16px 48px rgba(67,56,202,0.30)"}}>
-          <div style={{color:"#c4b5fd",fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Estimativa comercial</div>
-          <div style={{color:"#fff",fontWeight:900,fontSize:16,letterSpacing:-.3,lineHeight:1.2}}>Resumo do escopo</div>
-
-          {/* Blocos de valor */}
-          <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:12}}>
-            <div style={{background:"rgba(15,23,42,0.55)",border:"1px solid #334155",borderRadius:11,padding:"12px 14px"}}>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Mensal recorrente</div>
-              <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(monthlyTotal)}<span style={{color:"#94a3b8",fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
-            </div>
-
-            {oneTimePrice>0 && <div style={{background:"rgba(15,23,42,0.55)",border:"1px solid #334155",borderRadius:11,padding:"12px 14px"}}>
-              <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Investimento pontual</div>
-              <div style={{color:"#fff",fontWeight:900,fontSize:20,letterSpacing:-.6,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(oneTimePrice)}</div>
-              <div style={{color:"#64748b",fontSize:10.5,marginTop:2}}>pagamento único</div>
-            </div>}
-
-            <div style={{background:"linear-gradient(135deg,rgba(159,67,246,0.25),rgba(124,58,237,0.12))",border:"1px solid rgba(159,67,246,0.45)",borderRadius:11,padding:"12px 14px"}}>
-              <div style={{color:"#c4b5fd",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>1º mês estimado</div>
-              <div style={{color:"#fff",fontWeight:900,fontSize:24,letterSpacing:-.8,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(firstMonthTotal)}</div>
-              {oneTimePrice>0 && <div style={{color:"#c4b5fd",fontSize:10.5,marginTop:4}}>Depois: {fmt(monthlyTotal)}/mês</div>}
-            </div>
-          </div>
-
-          {/* Linhas do resumo */}
-          {(social.active || trafficKey!=="none" || oneTimeIds.length>0) && <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid #334155",display:"flex",flexDirection:"column",gap:6}}>
-            <div style={{color:"#94a3b8",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:2}}>Selecionados</div>
-            {social.active && <div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:"#cbd5e1",gap:8}}>
-              <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· Redes sociais</span>
-              <span style={{color:"#fff",fontWeight:700,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(socialPrice)}</span>
-            </div>}
-            {trafficKey!=="none" && cfg.traffic[trafficKey].price>0 && <div style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:"#cbd5e1",gap:8}}>
-              <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· {cfg.traffic[trafficKey].label}</span>
-              <span style={{color:"#fff",fontWeight:700,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(trafficPrice)}</span>
-            </div>}
-            {oneTimeIds.map(function(id){
-              const p = cfg.oneTimeProjects.find(x=>x.id===id);
-              if(!p) return null;
-              return <div key={id} style={{display:"flex",justifyContent:"space-between",fontSize:11.5,color:"#cbd5e1",gap:8}}>
-                <span style={{minWidth:0,overflow:"hidden",textOverflow:"ellipsis"}}>· {p.label}</span>
-                <span style={{color:"#fff",fontWeight:700,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap"}}>{fmt(p.price)}</span>
-              </div>;
-            })}
-          </div>}
-
-          {/* CTAs */}
-          <button onClick={copyResumo}
-            disabled={!social.active && trafficKey==="none" && oneTimeIds.length===0}
-            style={{marginTop:16,width:"100%",background:(!social.active && trafficKey==="none" && oneTimeIds.length===0)?"#334155":"linear-gradient(135deg,#9F43F6,#7c3aed)",color:"#fff",border:"none",borderRadius:11,padding:"12px 18px",fontWeight:800,fontSize:12.5,cursor:(!social.active && trafficKey==="none" && oneTimeIds.length===0)?"not-allowed":"pointer",boxShadow:(!social.active && trafficKey==="none" && oneTimeIds.length===0)?"none":"0 10px 24px rgba(159,67,246,0.45)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-.1}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-            Copiar resumo comercial
-          </button>
-          <div style={{color:"#64748b",fontSize:10.5,marginTop:11,lineHeight:1.5}}>Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
-        </div>
-      </div>
+      {/* ═══════════════ COLUNA DIREITA — RESUMO STICKY ═══════════════ */}
+      {!isMob && <div style={{position:"sticky",top:20}}>
+        <_ResumoBox
+          fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
+          socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice}
+          creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} cfg={cfg}
+          oneTimeIds={oneTimeIds} onCopy={copyResumo}
+          PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
+      </div>}
     </div>
   </section>;
+}
+
+/* ─── _ResumoBox — cartão de resumo comercial (reusado desktop/mobile) ── */
+function _ResumoBox(p){
+  const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice,
+    creativesActive, creatives, creativesPrice, trafficKey, trafficPrice, cfg,
+    oneTimeIds, onCopy, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
+  const hasAny = socialActive || creativesActive || trafficKey!=="none" || oneTimeIds.length>0;
+  return <div style={{background:"#fff",border:"1px solid "+BORD,borderRadius:16,padding:"22px 22px",boxShadow:"0 10px 32px rgba(15,23,42,0.08)",fontFamily:_PORTF_FF}}>
+    <div style={{color:PX_DK,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Estimativa comercial</div>
+    <div style={{color:INK,fontWeight:900,fontSize:18,letterSpacing:-.4,lineHeight:1.2}}>Resumo do escopo</div>
+
+    {/* Blocos de valor */}
+    <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:12}}>
+      <div style={{background:PX_BG,border:"1px solid "+PX_BD,borderRadius:12,padding:"14px 16px"}}>
+        <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Mensal recorrente</div>
+        <div style={{color:INK,fontWeight:900,fontSize:26,letterSpacing:-.8,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
+      </div>
+
+      {oneTimePrice>0 && <div style={{background:"#fafbfc",border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px"}}>
+        <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Investimento pontual</div>
+        <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.6,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(oneTimePrice)}</div>
+        <div style={{color:MUTE,fontSize:10.5,marginTop:2}}>pagamento único</div>
+      </div>}
+    </div>
+
+    {/* Módulos selecionados */}
+    {hasAny && <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+BORD,display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Módulos selecionados</div>
+
+      {socialActive && <div>
+        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+          <span style={{color:INK,fontSize:12,fontWeight:700}}>· Gestão de Redes Sociais</span>
+          <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(socialPrice)}</span>
+        </div>
+        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>Canais: {socialChannels.join(", ")}</div>
+      </div>}
+
+      {creativesActive && <div>
+        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+          <span style={{color:INK,fontSize:12,fontWeight:700}}>· Criativos</span>
+          <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(creativesPrice)}</span>
+        </div>
+        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>
+          {[
+            creatives.staticCreatives>0 && (creatives.staticCreatives+" estáticos"),
+            creatives.editedVideos>0    && (creatives.editedVideos+" vídeos"),
+            creatives.videoVariations>0 && (creatives.videoVariations+" variações"),
+          ].filter(Boolean).join(" · ")}
+        </div>
+      </div>}
+
+      {trafficKey!=="none" && cfg.traffic[trafficKey].price>0 && <div>
+        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+          <span style={{color:INK,fontSize:12,fontWeight:700}}>· {cfg.traffic[trafficKey].label}</span>
+          <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(trafficPrice)}</span>
+        </div>
+        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>Verba de mídia não inclusa</div>
+      </div>}
+
+      {oneTimeIds.length>0 && <div style={{marginTop:6,paddingTop:10,borderTop:"1px dashed "+BORD}}>
+        <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Projetos pontuais</div>
+        {oneTimeIds.map(function(id){
+          const proj = cfg.oneTimeProjects.find(x=>x.id===id);
+          if(!proj) return null;
+          return <div key={id} style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:4}}>
+            <span style={{color:INK,fontSize:12,fontWeight:600}}>· {proj.label}</span>
+            <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(proj.price)}</span>
+          </div>;
+        })}
+      </div>}
+    </div>}
+
+    {/* CTA */}
+    <button onClick={onCopy}
+      disabled={!hasAny}
+      style={{marginTop:18,width:"100%",background:!hasAny?"#e2e8f0":"linear-gradient(135deg,#9F43F6,#7c3aed)",color:!hasAny?"#94a3b8":"#fff",border:"none",borderRadius:11,padding:"13px 18px",fontWeight:800,fontSize:13,cursor:!hasAny?"not-allowed":"pointer",boxShadow:!hasAny?"none":"0 10px 24px rgba(159,67,246,0.35)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-.1}}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      Copiar resumo comercial
+    </button>
+    <div style={{color:MUTE,fontSize:11,marginTop:11,lineHeight:1.5}}>Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
+  </div>;
 }
 
 /* ─── PÁGINA PRINCIPAL ────────────────────────────────────── */
