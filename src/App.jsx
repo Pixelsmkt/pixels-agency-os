@@ -49585,7 +49585,7 @@ const PRICE_CONFIG = {
     // (precisa ter pelo menos 1) mas não afetam o valor.
     basePostsPerWeek: 2,             // ponto base do pacote
     basePrice: 2000,                 // valor base pra 2 publicações/semana
-    additionalPostPrice: 200,        // cada publicação/semana acima ou abaixo do base
+    additionalPostPrice: 250,        // cada publicação/semana acima ou abaixo do base
     minPostsPerWeek: 1,
     maxPostsPerWeek: 7,
     channels: {
