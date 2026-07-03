@@ -32261,12 +32261,13 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 function ContatosView({clientId, bioterUnit}){
   // Aba dedicada a Contatos no CardModal — puxa só os contatos do Playbook (do cliente + unidade).
   // Sincronizada com Estratégia > Playbooks > [área] > Contatos (que pode ser por unidade Bioter).
-  // Fonte: mesma que OrientacoesView — cache localStorage "pixels-playbooks-v1" (populado pelo 27_playbooks.jsx).
+  // Fonte: 1) localStorage cache (rápido) + 2) Supabase direto (fresh) + 3) realtime (auto-sync).
   const [playbookData,setPlaybookData]=useState(null);
   const cl=(typeof CLIENTS!=="undefined"?CLIENTS:[]).find(c=>c.id===clientId);
   useEffect(()=>{
     if(!clientId)return;
-    function _readPlaybook(){
+    let active=true;
+    function _readPlaybookLS(){
       try{
         const raw = localStorage.getItem("pixels-playbooks-v1");
         if(!raw) return null;
@@ -32274,16 +32275,42 @@ function ContatosView({clientId, bioterUnit}){
         return (obj && obj[clientId]) || null;
       }catch(_){ return null; }
     }
-    setPlaybookData(_readPlaybook() || {});
-    function _onStorage(e){if(!e||e.key==="pixels-playbooks-v1")setPlaybookData(_readPlaybook() || {});}
-    function _onCustom(){setPlaybookData(_readPlaybook() || {});}
+    // 1) Leitura imediata do cache local (rápida)
+    setPlaybookData(_readPlaybookLS() || {});
+    // 2) Fetch fresh direto do Supabase (garante consistência mesmo se cache estiver stale)
+    (async function _fetchFromSupabase(){
+      try{
+        if(!window._sb) return;
+        const {data,error} = await window._sb.from("playbooks").select("data").eq("client_id", clientId).maybeSingle();
+        if(!active) return;
+        if(error){ console.warn("[ContatosView fetch]", error.message); return; }
+        if(data && data.data) setPlaybookData(data.data);
+      }catch(e){ console.warn("[ContatosView fetch exception]", e); }
+    })();
+    // 3) Listeners locais + realtime Supabase
+    function _onStorage(e){if(!e||e.key==="pixels-playbooks-v1")setPlaybookData(_readPlaybookLS() || {});}
+    function _onCustom(){setPlaybookData(_readPlaybookLS() || {});}
     window.addEventListener("storage", _onStorage);
     window.addEventListener("pixels:playbook-updated", _onCustom);
     const _tid = setInterval(_onCustom, 4000);
+    let _ch = null;
+    if(window._sb){
+      try{
+        _ch = window._sb.channel("contatos-view-"+clientId+"-"+Math.random().toString(36).slice(2,7))
+          .on("postgres_changes", {event:"*", schema:"public", table:"playbooks", filter:"client_id=eq."+clientId}, function(payload){
+            if(!active) return;
+            const row = payload && payload.new;
+            if(row && row.data) setPlaybookData(row.data);
+          })
+          .subscribe();
+      }catch(e){ console.warn("[ContatosView realtime]", e); }
+    }
     return function(){
+      active=false;
       window.removeEventListener("storage", _onStorage);
       window.removeEventListener("pixels:playbook-updated", _onCustom);
       clearInterval(_tid);
+      if(_ch && window._sb){ try{ window._sb.removeChannel(_ch); }catch(_){} }
     };
   },[clientId]);
 
