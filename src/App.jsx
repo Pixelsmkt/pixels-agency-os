@@ -50590,26 +50590,33 @@ function _ResumoBox(p){
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
   return <div style={{background:"linear-gradient(180deg,#faf5ff 0%,#ffffff 40%)",border:"1px solid "+BORD,borderRadius:18,padding:"22px 22px",boxShadow:"0 16px 40px rgba(88,64,166,.12), 0 2px 6px rgba(15,23,42,.05)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,#9F43F6,#7c3aed)"}}/>
-    <div style={{color:PX_DK,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Estimativa comercial</div>
-    <div style={{color:INK,fontWeight:900,fontSize:18,letterSpacing:-.4,lineHeight:1.2}}>Resumo do escopo</div>
+    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+      <div style={{width:24,height:24,borderRadius:7,background:"linear-gradient(135deg,#9F43F6,#7c3aed)",display:"inline-flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 10px rgba(159,67,246,0.35)"}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      </div>
+      <div style={{color:INK,fontWeight:800,fontSize:15,letterSpacing:-.3}}>Resumo do escopo</div>
+    </div>
 
     {/* Blocos de valor */}
-    <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:12}}>
-      <div style={{background:PX_BG,border:"1px solid "+PX_BD,borderRadius:12,padding:"14px 16px"}}>
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{background:"linear-gradient(135deg,#f5f0ff,#ffffff)",border:"1px solid "+PX_BD,borderRadius:14,padding:"16px 18px",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:0,right:0,bottom:0,width:4,background:"linear-gradient(180deg,#9F43F6,#7c3aed)"}}/>
         <div style={{color:PX_DK,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Mensal recorrente</div>
-        <div style={{color:INK,fontWeight:900,fontSize:26,letterSpacing:-.8,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
+        <div style={{color:INK,fontWeight:900,fontSize:28,letterSpacing:-1,marginTop:2,fontFeatureSettings:"'tnum'",lineHeight:1.05}}>{fmt(monthlyRecurring)}<span style={{color:MUTE,fontSize:12,fontWeight:700,marginLeft:5}}>/mês</span></div>
       </div>
 
-      {oneTimePrice>0 && <div style={{background:"#fafbfc",border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px"}}>
+      {oneTimePrice>0 && <div style={{background:"#fafbfc",border:"1px solid "+BORD,borderRadius:14,padding:"14px 16px"}}>
         <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Investimento pontual</div>
-        <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.6,marginTop:4,fontFeatureSettings:"'tnum'"}}>{fmt(oneTimePrice)}</div>
-        <div style={{color:MUTE,fontSize:10.5,marginTop:2}}>pagamento único</div>
+        <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.6,marginTop:2,fontFeatureSettings:"'tnum'"}}>{fmt(oneTimePrice)} <span style={{color:MUTE,fontSize:11,fontWeight:600,marginLeft:2}}>· único</span></div>
       </div>}
     </div>
 
     {/* Módulos selecionados */}
-    {hasAny && <div style={{marginTop:16,paddingTop:14,borderTop:"1px solid "+BORD,display:"flex",flexDirection:"column",gap:10}}>
-      <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Módulos selecionados</div>
+    {hasAny && <div style={{marginTop:14,paddingTop:14,borderTop:"1px dashed "+BORD,display:"flex",flexDirection:"column",gap:10}}>
+      <div style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",display:"flex",alignItems:"center",gap:6}}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Módulos selecionados
+      </div>
 
       {socialActive && <div>
         <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
@@ -50663,13 +50670,16 @@ function _ResumoBox(p){
     </div>}
 
     {/* CTA */}
-    <button onClick={onCopy}
-      disabled={!hasAny}
-      style={{marginTop:18,width:"100%",background:!hasAny?"#e2e8f0":"linear-gradient(135deg,#9F43F6,#7c3aed)",color:!hasAny?"#94a3b8":"#fff",border:"none",borderRadius:11,padding:"13px 18px",fontWeight:800,fontSize:13,cursor:!hasAny?"not-allowed":"pointer",boxShadow:!hasAny?"none":"0 10px 24px rgba(159,67,246,0.35)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,letterSpacing:-.1}}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-      Copiar resumo comercial
+    <button onClick={onCopy} disabled={!hasAny}
+      title="Copia o resumo formatado pra colar no WhatsApp ou e-mail do cliente"
+      style={{marginTop:16,width:"100%",background:!hasAny?"transparent":"#0f172a",color:!hasAny?"#cbd5e1":"#fff",border:"1px solid "+(!hasAny?BORD:"#0f172a"),borderRadius:10,padding:"10px 14px",fontWeight:700,fontSize:12.5,cursor:!hasAny?"not-allowed":"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,letterSpacing:-.1,transition:"all .15s"}}
+      onMouseEnter={function(e){if(hasAny){e.currentTarget.style.background="#1e293b";}}}
+      onMouseLeave={function(e){if(hasAny){e.currentTarget.style.background="#0f172a";}}}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      Copiar resumo
     </button>
-    <div style={{color:MUTE,fontSize:11,marginTop:11,lineHeight:1.5}}>Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
+    <div style={{color:SOFT,fontSize:10.5,marginTop:9,lineHeight:1.5,textAlign:"center"}}>Cola no WhatsApp ou e-mail — texto formatado pra cliente.</div>
+    <div style={{color:MUTE,fontSize:10.5,marginTop:12,lineHeight:1.5,paddingTop:12,borderTop:"1px dashed "+BORD,fontStyle:"italic"}}>Estimativa inicial. O valor final pode variar conforme escopo, complexidade e necessidade da operação.</div>
   </div>;
 }
 
@@ -50732,11 +50742,7 @@ function PagePortfolio(props){
             <div style={{color:"#64748b",fontSize:12.5,marginTop:3,fontFamily:_PORTF_FF}}>Soluções recorrentes e projetos para posicionamento, crescimento e performance.</div>
           </div>
         </div>
-        <button onClick={function(){if(typeof pixelsToast!=="undefined")pixelsToast.info("Em breve: gerador de proposta automática.",3500);}}
-          style={{background:"#9F43F6",color:"#fff",border:"none",borderRadius:11,padding:"10px 20px",fontWeight:800,fontSize:12.5,cursor:"pointer",fontFamily:_PORTF_FF,boxShadow:"0 6px 16px rgba(159,67,246,0.30)",display:"inline-flex",alignItems:"center",gap:7,flexShrink:0,alignSelf:"flex-start"}}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          Gerar proposta
-        </button>
+
       </div>
     </section>
 
