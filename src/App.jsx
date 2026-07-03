@@ -49601,6 +49601,11 @@ const PRICE_CONFIG = {
     editedVideo:    400, // por vídeo editado
     videoVariation: 50,  // por variação de vídeo
   },
+  audiovisualCapture: {
+    firstDaily:     1500, // primeira diária/mês
+    additionalDaily:1000, // cada diária adicional
+    maxDailiesPerMonth: 12,
+  },
   traffic: {
     none:       { id:"none",       label:"Sem tráfego pago", price:0,    channels:[] },
     meta:       { id:"meta",       label:"Meta Ads",         price:2000, channels:["Facebook","Instagram"] },
@@ -49646,16 +49651,23 @@ function calculateTrafficPrice(trafficKey){
   const t = PRICE_CONFIG.traffic[trafficKey];
   return t ? t.price : 0;
 }
+function calculateAudiovisualCapturePrice(dailies){
+  const d = Math.max(0, Number(dailies)||0);
+  if(d === 0) return 0;
+  const cfg = PRICE_CONFIG.audiovisualCapture;
+  return cfg.firstDaily + (d - 1) * cfg.additionalDaily;
+}
 function calculateOneTimeProjects(selectedIds){
   if(!selectedIds || !Array.isArray(selectedIds)) return 0;
   return PRICE_CONFIG.oneTimeProjects
     .filter(p => selectedIds.indexOf(p.id) >= 0)
     .reduce((s,p) => s + p.price, 0);
 }
-function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey){
+function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey, captureDailies){
   return calculateSocialManagementPrice(socialState)
        + calculateCreativesPrice(creativesState)
-       + calculateTrafficPrice(trafficKey);
+       + calculateTrafficPrice(trafficKey)
+       + calculateAudiovisualCapturePrice(captureDailies);
 }
 function calculateOneTimeTotal(selectedIds){
   return calculateOneTimeProjects(selectedIds);
@@ -50100,20 +50112,25 @@ function _CalculadoraModular({isMob}){
   const [creatives,setCreatives] = useState({ staticCreatives:4, editedVideos:0, videoVariations:0 });
   // 3) Tráfego pago
   const [trafficKey,setTrafficKey] = useState("none");
-  // 4) Projetos pontuais
+  // 4) Captação audiovisual (diárias/mês)
+  const [captureDailies,setCaptureDailies] = useState(0);
+  // 5) Projetos pontuais
   const [oneTimeIds,setOneTimeIds] = useState([]);
   // Estado do módulo Gestão ativo/inativo (depende de ter algum canal)
   const socialActive = !!(socialChannels.fbInsta || socialChannels.tiktok || socialChannels.linkedin);
   // Módulo Criativos ativo = alguma quantidade > 0
   const creativesActive = (creatives.staticCreatives + creatives.editedVideos + creatives.videoVariations) > 0;
+  // Módulo Captação audiovisual ativo = diárias > 0
+  const captureActive = captureDailies > 0;
 
   // ═══ Cálculos ═══
   const _socialState = { channels: socialChannels, postsPerWeek: socialPosts };
   const socialPrice   = calculateSocialManagementPrice(_socialState);
   const creativesPrice = calculateCreativesPrice(creatives);
   const trafficPrice   = calculateTrafficPrice(trafficKey);
+  const capturePrice   = calculateAudiovisualCapturePrice(captureDailies);
   const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
-  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey);
+  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey, captureDailies);
 
   // ═══ Textos comuns ═══
   const SOCIAL_INCLUSOS = [
@@ -50131,6 +50148,13 @@ function _CalculadoraModular({isMob}){
     "Edição de vídeo",
     "Criação de roteiros estratégicos para vídeos",
     "Padronização visual conforme identidade da marca",
+  ];
+  const CAPTURE_INCLUSOS = [
+    "Cinegrafista profissional em campo",
+    "Equipamento de captação (câmera, áudio, iluminação básica)",
+    "Direção de conteúdo durante a diária",
+    "Backup e organização do material captado",
+    "Entrega dos arquivos brutos pra edição",
   ];
   const TRAFFIC_BLOCOS = [
     { titulo:"Diagnóstico e Estratégia", itens:[
@@ -50308,7 +50332,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
     </div>;
   }
 
-  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || oneTimeIds.length>0;
+  const hasAnySelection = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
 
   return <section style={{background:BG_PAGE,borderRadius:18,padding:isMob?"22px 16px":"28px 32px",fontFamily:_PORTF_FF,color:INK,position:"relative"}}>
 
@@ -50470,10 +50494,44 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           </>}
         </div>
 
-        {/* ═══ 4. PROJETOS PONTUAIS — full width no grid pra caber os cards ═══ */}
+        {/* ═══ 4. CAPTAÇÃO AUDIOVISUAL ═══ */}
+        <div style={captureActive?cardStyleActive:cardStyle}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:captureActive?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
+          <_ModuleHeader num="4" active={captureActive}
+            title="Captação Audiovisual"
+            subtitle="Diárias de captação com equipamento e equipe."
+            versaoLabel={captureActive?(captureDailies+" diária"+(captureDailies>1?"s":"")+"/mês"):"Não selecionado"}
+            nivelLabel="Pro"/>
+
+          {/* Entregáveis */}
+          <_BlocoTitulo titulo="Entregáveis inclusos"/>
+          <_IncluiList titulo="O que está incluso" cor={PX} itens={CAPTURE_INCLUSOS}/>
+
+          {/* Stepper de diárias/mês */}
+          <div style={{marginTop:14}}>
+            <_BlocoTitulo titulo="Diárias/mês"/>
+            <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+              <div style={{minWidth:0,flex:1}}>
+                <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>Diárias de captação</div>
+                <div style={{color:MUTE,fontSize:11,marginTop:2}}>1ª diária {fmt(cfg.audiovisualCapture.firstDaily)} · cada adicional +{fmt(cfg.audiovisualCapture.additionalDaily)}</div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                <button type="button" onClick={function(){setCaptureDailies(function(v){return Math.max(0, v-1);});}}
+                  style={{width:32,height:32,borderRadius:9,background:"#fff",border:"1px solid "+BORD,color:PX,fontSize:18,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                <div style={{minWidth:38,textAlign:"center",color:INK,fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'"}}>{captureDailies}</div>
+                <button type="button" onClick={function(){setCaptureDailies(function(v){return Math.min(cfg.audiovisualCapture.maxDailiesPerMonth, v+1);});}}
+                  style={{width:32,height:32,borderRadius:9,background:PX_BG,border:"1px solid "+PX_BD,color:PX,fontSize:18,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>+</button>
+              </div>
+            </div>
+          </div>
+
+          {captureActive && <_ValorModulo price={capturePrice}/>}
+        </div>
+
+        {/* ═══ 5. PROJETOS PONTUAIS — full width no grid pra caber os cards ═══ */}
         <div style={Object.assign({},oneTimeIds.length>0?cardStyleActive:cardStyle,{gridColumn:isMob?"auto":"1 / -1"})}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:oneTimeIds.length>0?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
-          <_ModuleHeader num="4" active={oneTimeIds.length>0}
+          <_ModuleHeader num="5" active={oneTimeIds.length>0}
             title="Projetos Pontuais"
             subtitle="Investimento único, separado do mensal."
             versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
@@ -50505,7 +50563,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>}
 
@@ -50517,7 +50575,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
           socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
-          trafficKey={trafficKey} trafficPrice={trafficPrice} cfg={cfg}
+          trafficKey={trafficKey} trafficPrice={trafficPrice} captureActive={captureActive} captureDailies={captureDailies} capturePrice={capturePrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo}
           PX={PX} PX_DK={PX_DK} PX_BG={PX_BG} PX_BD={PX_BD} INK={INK} MUTE={MUTE} SOFT={SOFT} BORD={BORD}/>
       </div>}
@@ -50528,9 +50586,10 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
 /* ─── _ResumoBox — cartão de resumo comercial (reusado desktop/mobile) ── */
 function _ResumoBox(p){
   const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
-    creativesActive, creatives, creativesPrice, trafficKey, trafficPrice, cfg,
+    creativesActive, creatives, creativesPrice, trafficKey, trafficPrice,
+    captureActive, captureDailies, capturePrice, cfg,
     oneTimeIds, onCopy, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
-  const hasAny = socialActive || creativesActive || trafficKey!=="none" || oneTimeIds.length>0;
+  const hasAny = socialActive || creativesActive || trafficKey!=="none" || captureActive || oneTimeIds.length>0;
   return <div style={{background:"linear-gradient(180deg,#faf5ff 0%,#ffffff 40%)",border:"1px solid "+BORD,borderRadius:18,padding:"22px 22px",boxShadow:"0 16px 40px rgba(88,64,166,.12), 0 2px 6px rgba(15,23,42,.05)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}>
     <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,#9F43F6,#7c3aed)"}}/>
     <div style={{color:PX_DK,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Estimativa comercial</div>
@@ -50582,6 +50641,14 @@ function _ResumoBox(p){
           <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(trafficPrice)}</span>
         </div>
         <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>Verba de mídia não inclusa</div>
+      </div>}
+
+      {captureActive && <div>
+        <div style={{display:"flex",justifyContent:"space-between",gap:8}}>
+          <span style={{color:INK,fontSize:12,fontWeight:700}}>· Captação Audiovisual</span>
+          <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(capturePrice)}</span>
+        </div>
+        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>{captureDailies} diária{captureDailies>1?"s":""}/mês</div>
       </div>}
 
       {oneTimeIds.length>0 && <div style={{marginTop:6,paddingTop:10,borderTop:"1px dashed "+BORD}}>
