@@ -49581,11 +49581,13 @@ function OnboardingChecklist(props){
 // ═══════════════════════════════════════════════════════════════
 const PRICE_CONFIG = {
   socialManagement: {
-    // Preço agora escala por publicações/semana. Canais são seleção obrigatória
-    // (precisa ter pelo menos 1) mas não afetam o valor.
-    basePostsPerWeek: 2,             // ponto base do pacote
-    basePrice: 2000,                 // valor base pra 2 publicações/semana
-    additionalPostPrice: 250,        // cada publicação/semana acima ou abaixo do base
+    // Preço escala por publicações/semana + canais adicionais.
+    // Base = 2 publicações + 1 canal = R$ 2.000. Cada publicação ±R$ 250.
+    // Cada canal adicional (2º, 3º...) = +R$ 1.000.
+    basePostsPerWeek: 2,
+    basePrice: 2000,
+    additionalPostPrice: 250,
+    additionalChannelPackage: 1000,  // cada canal adicional (após o primeiro)
     minPostsPerWeek: 1,
     maxPostsPerWeek: 7,
     channels: {
@@ -49622,14 +49624,16 @@ const PRICE_CONFIG = {
 // são pacotes individuais.
 function calculateSocialManagementPrice(state){
   // state = { channels:{fbInsta,tiktok,linkedin}, postsPerWeek }
+  // Base: 2 pubs + 1 canal = R$ 2.000. Cada pub ±R$ 250. Cada canal extra +R$ 1.000.
   if(!state) return 0;
   const cfg = PRICE_CONFIG.socialManagement;
   const ch = state.channels || {};
   const activeCount = (ch.fbInsta?1:0) + (ch.tiktok?1:0) + (ch.linkedin?1:0);
-  if(activeCount === 0) return 0; // precisa pelo menos 1 canal
+  if(activeCount === 0) return 0;
   const posts = Math.max(cfg.minPostsPerWeek, Math.min(cfg.maxPostsPerWeek, Number(state.postsPerWeek)||cfg.basePostsPerWeek));
-  const delta = posts - cfg.basePostsPerWeek;
-  return cfg.basePrice + delta * cfg.additionalPostPrice;
+  const postsDelta = posts - cfg.basePostsPerWeek;
+  const channelsExtra = (activeCount - 1) * cfg.additionalChannelPackage;
+  return cfg.basePrice + postsDelta * cfg.additionalPostPrice + channelsExtra;
 }
 function calculateCreativesPrice(state){
   if(!state) return 0;
@@ -50123,6 +50127,8 @@ function _CalculadoraModular({isMob}){
   ];
   const CREATIVES_INCLUSOS = [
     "Planejamento criativo",
+    "Design",
+    "Edição de vídeo",
     "Criação de roteiros estratégicos para vídeos",
     "Padronização visual conforme identidade da marca",
   ];
@@ -50343,7 +50349,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
             <_ChannelPill label="LinkedIn" active={socialChannels.linkedin}
               onClick={function(){setSocialChannels(c => Object.assign({},c,{linkedin:!c.linkedin}));}}/>
           </div>
-          <div style={{color:SOFT,fontSize:11,marginTop:2}}>Selecione ao menos um canal · o valor escala pela quantidade de publicações/semana</div>
+          <div style={{color:SOFT,fontSize:11,marginTop:2}}>Base 2 pubs + 1 canal = R$ 2.000 · +R$ 1.000 por canal adicional · ±R$ 250 por publicação</div>
 
           {socialActive && <>
             {/* Entregáveis por blocos empilhados dentro do card compacto */}
