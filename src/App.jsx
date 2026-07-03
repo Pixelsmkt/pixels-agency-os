@@ -50070,13 +50070,15 @@ function _PortfDrawer(props){
 function _CalculadoraModular({isMob}){
   const PX = "#9F43F6";
   const PX_DK = "#7c3aed";
-  const PX_BG = "#faf5ff";
-  const PX_BD = "#ede9fe";
+  const PX_BG = "#f5f0ff";
+  const PX_BD = "#e9d8fe";
+  const PX_GRAD_TOP = "linear-gradient(180deg,#faf5ff 0%,#ffffff 60%)";
   const INK = "#0f172a";
   const MUTE = "#64748b";
   const SOFT = "#94a3b8";
-  const BORD = "#e2e8f0";
-  const BG_PAGE = "#F7F8FC";
+  const BORD = "#e5e0f2";
+  const BG_PAGE = "#F6F4FB";
+  const BG_INNER = "#fbfaff";
   const cfg = PRICE_CONFIG;
   const fmt = _calcFmtBRL;
 
@@ -50116,14 +50118,33 @@ function _CalculadoraModular({isMob}){
     "Criação de roteiros estratégicos para vídeos",
     "Padronização visual conforme identidade da marca",
   ];
-  const TRAFFIC_INCLUSOS = [
-    "Estratégia de anúncios",
-    "Textos e criativos pensados para cliques e conversões",
-    "Públicos segmentados com base no cliente ideal",
-    "Análise da concorrência",
-    "Otimização para gastar melhor e vender mais",
-    "Relatórios claros com foco em resultado comercial",
+  const TRAFFIC_BLOCOS = [
+    { titulo:"Diagnóstico e Estratégia", itens:[
+      "Diagnóstico do funil digital e posicionamento atual",
+      "Definição de objetivos de campanha: leads, tráfego, vendas ou alcance",
+      "Estruturação da estratégia de anúncios e segmentações",
+    ]},
+    { titulo:"Configuração e Gestão de Campanhas", itens:[
+      "Criação e configuração das campanhas",
+      "Definição de públicos, criativos e copies",
+      "Gestão contínua de orçamento e lances",
+    ]},
+    { titulo:"Copywriting e Testes", itens:[
+      "Criação de copywriting estratégico para anúncios",
+      "Testes A/B de criativos e mensagens",
+    ]},
+    { titulo:"Otimização e Performance", itens:[
+      "Monitoramento diário das campanhas",
+      "Otimização contínua de públicos, anúncios e orçamento",
+      "Análise de métricas e performance",
+    ]},
   ];
+  // Limites/mês por opção de tráfego pago
+  const TRAFFIC_LIMITS = {
+    meta:       { copies:10, campaigns:4, tests:4 },
+    google:     { copies:10, campaigns:4, tests:4 },
+    metaGoogle: { copies:20, campaigns:8, tests:8 },
+  };
 
   // ═══ Nome dos canais de Redes Sociais selecionados ═══
   function _selectedSocialLabels(){
@@ -50165,7 +50186,14 @@ function _CalculadoraModular({isMob}){
       lines.push("Tráfego Pago");
       lines.push("Canais: " + trafObj.label);
       lines.push("Inclui:");
-      TRAFFIC_INCLUSOS.forEach(i => lines.push("- " + i));
+      TRAFFIC_BLOCOS.forEach(b => b.itens.forEach(it => lines.push("- " + it)));
+      const lim = TRAFFIC_LIMITS[trafficKey];
+      if(lim){
+        lines.push("Limites/mês:");
+        lines.push("- Até " + lim.copies + " copies");
+        lines.push("- Até " + lim.campaigns + " campanhas ativas");
+        lines.push("- Até " + lim.tests + " testes A/B");
+      }
       lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       lines.push("Observação: verba de anúncios não inclusa");
       lines.push("");
@@ -50188,8 +50216,8 @@ function _CalculadoraModular({isMob}){
   }
 
   // ═══ Sub-componentes de UI ═══
-  const cardStyle = {background:"#fff",border:"1px solid "+BORD,borderRadius:16,padding:isMob?"20px 18px":"24px 26px",boxShadow:"0 2px 10px rgba(15,23,42,.04)",fontFamily:_PORTF_FF};
-  const cardStyleActive = Object.assign({}, cardStyle, {border:"1px solid "+PX,boxShadow:"0 8px 24px rgba(159,67,246,0.12)"});
+  const cardStyle = {background:PX_GRAD_TOP,border:"1px solid "+BORD,borderRadius:18,padding:isMob?"22px 20px":"26px 28px",boxShadow:"0 4px 14px rgba(88,64,166,.06), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"};
+  const cardStyleActive = Object.assign({}, cardStyle, {border:"1px solid "+PX_BD,boxShadow:"0 14px 34px rgba(159,67,246,0.16), 0 2px 6px rgba(15,23,42,.05)"});
 
   function _StepNum({n, active}){
     return <div style={{width:30,height:30,borderRadius:9,background:active?PX:PX_BG,color:active?"#fff":PX,border:"1px solid "+(active?PX:PX_BD),display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>{n}</div>;
@@ -50208,7 +50236,7 @@ function _CalculadoraModular({isMob}){
     </button>;
   }
   function _QtyControl({label, unitPrice, value, onChange}){
-    return <div style={{background:"#fafbfc",border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+    return <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
       <div style={{minWidth:0,flex:1}}>
         <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>{label}</div>
         <div style={{color:MUTE,fontSize:11,marginTop:2}}>{fmt(unitPrice)} cada</div>
@@ -50223,7 +50251,7 @@ function _CalculadoraModular({isMob}){
     </div>;
   }
   function _IncluiList({titulo, cor, itens}){
-    return <div style={{background:"#fafbfc",border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px"}}>
+    return <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px"}}>
       <div style={{color:cor||MUTE,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>{titulo}</div>
       <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:6}}>
         {itens.map(function(it,i){
@@ -50269,6 +50297,7 @@ function _CalculadoraModular({isMob}){
 
         {/* ═══ 1. GESTÃO DE REDES SOCIAIS ═══ */}
         <div style={socialActive?cardStyleActive:cardStyle}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:socialActive?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
           <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
             <_StepNum n="1" active={socialActive}/>
             <div style={{flex:1}}>
@@ -50291,8 +50320,8 @@ function _CalculadoraModular({isMob}){
           <div style={{color:SOFT,fontSize:11,marginTop:2}}>Primeiro pacote R$ 2.000/mês · cada pacote adicional +R$ 1.000/mês</div>
 
           {socialActive && <>
-            {/* Entregáveis por blocos */}
-            <div style={{marginTop:16,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+            {/* Entregáveis por blocos — sempre em coluna única (mais premium/vertical) */}
+            <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:10}}>
               <_IncluiList titulo="Diagnóstico e Estratégia" cor={PX} itens={[
                 "Diagnóstico do posicionamento atual da marca",
                 "Estruturação de plano tático",
@@ -50314,6 +50343,7 @@ function _CalculadoraModular({isMob}){
 
         {/* ═══ 2. CRIATIVOS ═══ */}
         <div style={creativesActive?cardStyleActive:cardStyle}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:creativesActive?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
           <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
             <_StepNum n="2" active={creativesActive}/>
             <div style={{flex:1}}>
@@ -50328,7 +50358,7 @@ function _CalculadoraModular({isMob}){
 
           <div style={{marginTop:16}}>
             <_BlocoTitulo titulo="Limites/mês"/>
-            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
               <_QtyControl label="Criativos estáticos" unitPrice={cfg.creatives.staticCreative} value={creatives.staticCreatives}
                 onChange={function(v){setCreatives(c => Object.assign({},c,{staticCreatives:v}));}}/>
               <_QtyControl label="Vídeos editados" unitPrice={cfg.creatives.editedVideo} value={creatives.editedVideos}
@@ -50343,6 +50373,7 @@ function _CalculadoraModular({isMob}){
 
         {/* ═══ 3. TRÁFEGO PAGO ═══ */}
         <div style={trafficKey!=="none"?cardStyleActive:cardStyle}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:trafficKey!=="none"?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
           <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
             <_StepNum n="3" active={trafficKey!=="none"}/>
             <div style={{flex:1}}>
@@ -50382,7 +50413,30 @@ function _CalculadoraModular({isMob}){
                 return <span key={ch} style={{background:PX_BG,border:"1px solid "+PX_BD,color:PX_DK,fontSize:11.5,fontWeight:700,padding:"5px 12px",borderRadius:99}}>{ch}</span>;
               })}
             </div>
-            <div style={{marginTop:14}}><_IncluiList titulo="Entregáveis inclusos" cor={PX} itens={TRAFFIC_INCLUSOS}/></div>
+            {/* Entregáveis por blocos empilhados */}
+            <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:10}}>
+              {TRAFFIC_BLOCOS.map(function(b,i){
+                return <_IncluiList key={i} titulo={b.titulo} cor={PX} itens={b.itens}/>;
+              })}
+            </div>
+            {/* Limites/mês */}
+            {TRAFFIC_LIMITS[trafficKey] && <div style={{marginTop:14}}>
+              <div style={{color:INK,fontSize:12,fontWeight:800,letterSpacing:-.1,marginBottom:8}}>Limites/mês</div>
+              <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
+                <div>
+                  <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Copies</div>
+                  <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.4,marginTop:2,fontFeatureSettings:"'tnum'"}}>Até {TRAFFIC_LIMITS[trafficKey].copies}</div>
+                </div>
+                <div>
+                  <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Campanhas ativas</div>
+                  <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.4,marginTop:2,fontFeatureSettings:"'tnum'"}}>Até {TRAFFIC_LIMITS[trafficKey].campaigns}</div>
+                </div>
+                <div>
+                  <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Testes A/B</div>
+                  <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.4,marginTop:2,fontFeatureSettings:"'tnum'"}}>Até {TRAFFIC_LIMITS[trafficKey].tests}</div>
+                </div>
+              </div>
+            </div>}
             <div style={{marginTop:12,padding:"10px 14px",background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,color:"#a16207",fontSize:12,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8}}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               Valor de gestão. Verba de anúncios não inclusa.
@@ -50393,6 +50447,7 @@ function _CalculadoraModular({isMob}){
 
         {/* ═══ 4. PROJETOS PONTUAIS ═══ */}
         <div style={oneTimeIds.length>0?cardStyleActive:cardStyle}>
+          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:oneTimeIds.length>0?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
           <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
             <_StepNum n="4" active={oneTimeIds.length>0}/>
             <div style={{flex:1}}>
@@ -50451,7 +50506,8 @@ function _ResumoBox(p){
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice, cfg,
     oneTimeIds, onCopy, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || oneTimeIds.length>0;
-  return <div style={{background:"#fff",border:"1px solid "+BORD,borderRadius:16,padding:"22px 22px",boxShadow:"0 10px 32px rgba(15,23,42,0.08)",fontFamily:_PORTF_FF}}>
+  return <div style={{background:"linear-gradient(180deg,#faf5ff 0%,#ffffff 40%)",border:"1px solid "+BORD,borderRadius:18,padding:"22px 22px",boxShadow:"0 16px 40px rgba(88,64,166,.12), 0 2px 6px rgba(15,23,42,.05)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"}}>
+    <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:"linear-gradient(90deg,#9F43F6,#7c3aed)"}}/>
     <div style={{color:PX_DK,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Estimativa comercial</div>
     <div style={{color:INK,fontWeight:900,fontSize:18,letterSpacing:-.4,lineHeight:1.2}}>Resumo do escopo</div>
 
