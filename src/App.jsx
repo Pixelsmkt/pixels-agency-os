@@ -50137,7 +50137,6 @@ function _CalculadoraModular({isMob}){
     "Diagnóstico do posicionamento atual da marca",
     "Estruturação de plano tático",
     "Planejamento de calendário editorial",
-    "Publicação de 2 conteúdos por semana",
     "Criação de copywriting estratégico",
     "Suporte diário 24 horas",
     "Reunião mensal de alinhamento estratégico",
@@ -50384,8 +50383,7 @@ lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
               ]}/>
               <_IncluiList titulo="Gestão de Redes Sociais" cor={PX} itens={[
                 "Planejamento de calendário editorial",
-                "Publicação de 2 conteúdos por semana",
-                "Criação de copywriting estratégico",
+                            "Criação de copywriting estratégico",
               ]}/>
               <_IncluiList titulo="Suporte e Acompanhamento" cor={PX} itens={[
                 "Suporte diário 24 horas",
