@@ -50147,12 +50147,7 @@ function _CalculadoraModular({isMob}){
       "Análise de métricas e performance",
     ]},
   ];
-  // Limites/mês por opção de tráfego pago
-  const TRAFFIC_LIMITS = {
-    meta:       { copies:10, campaigns:4, tests:4 },
-    google:     { copies:10, campaigns:4, tests:4 },
-    metaGoogle: { copies:20, campaigns:8, tests:8 },
-  };
+
 
   // ═══ Nome dos canais de Redes Sociais selecionados ═══
   function _selectedSocialLabels(){
@@ -50196,14 +50191,7 @@ function _CalculadoraModular({isMob}){
       lines.push("Canais: " + trafObj.label);
       lines.push("Inclui:");
       TRAFFIC_BLOCOS.forEach(b => b.itens.forEach(it => lines.push("- " + it)));
-      const lim = TRAFFIC_LIMITS[trafficKey];
-      if(lim){
-        lines.push("Limites/mês:");
-        lines.push("- Até " + lim.copies + " copies");
-        lines.push("- Até " + lim.campaigns + " campanhas ativas");
-        lines.push("- Até " + lim.tests + " testes A/B");
-      }
-      lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
+lines.push("Valor de gestão: " + fmt(trafObj.price) + "/mês");
       lines.push("Observação: verba de anúncios não inclusa");
       lines.push("");
     }
@@ -50355,8 +50343,8 @@ function _CalculadoraModular({isMob}){
           <div style={{color:SOFT,fontSize:11,marginTop:2}}>Selecione ao menos um canal · o valor escala pela quantidade de publicações/semana</div>
 
           {socialActive && <>
-            {/* Entregáveis por blocos — sempre em coluna única (mais premium/vertical) */}
-            <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:10}}>
+            {/* Entregáveis por blocos — grid 3 colunas no desktop, empilhado no mobile */}
+            <div style={{marginTop:16,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
               <_IncluiList titulo="Diagnóstico e Estratégia" cor={PX} itens={[
                 "Diagnóstico do posicionamento atual da marca",
                 "Estruturação de plano tático",
@@ -50407,7 +50395,7 @@ function _CalculadoraModular({isMob}){
 
           <div style={{marginTop:16}}>
             <_BlocoTitulo titulo="Limites/mês"/>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:10}}>
               <_QtyControl label="Criativos estáticos" unitPrice={cfg.creatives.staticCreative} value={creatives.staticCreatives}
                 onChange={function(v){setCreatives(c => Object.assign({},c,{staticCreatives:v}));}}/>
               <_QtyControl label="Vídeos editados" unitPrice={cfg.creatives.editedVideo} value={creatives.editedVideos}
@@ -50459,30 +50447,12 @@ function _CalculadoraModular({isMob}){
                 return <span key={ch} style={{background:PX_BG,border:"1px solid "+PX_BD,color:PX_DK,fontSize:11.5,fontWeight:700,padding:"5px 12px",borderRadius:99}}>{ch}</span>;
               })}
             </div>
-            {/* Entregáveis por blocos empilhados */}
-            <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:10}}>
+            {/* Entregáveis por blocos: grid 2 colunas no desktop, 1 no mobile */}
+            <div style={{marginTop:16,display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
               {TRAFFIC_BLOCOS.map(function(b,i){
                 return <_IncluiList key={i} titulo={b.titulo} cor={PX} itens={b.itens}/>;
               })}
             </div>
-            {/* Limites/mês */}
-            {TRAFFIC_LIMITS[trafficKey] && <div style={{marginTop:14}}>
-              <div style={{color:INK,fontSize:12,fontWeight:800,letterSpacing:-.1,marginBottom:8}}>Limites/mês</div>
-              <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(3,1fr)",gap:12}}>
-                <div>
-                  <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Copies</div>
-                  <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.4,marginTop:2,fontFeatureSettings:"'tnum'"}}>Até {TRAFFIC_LIMITS[trafficKey].copies}</div>
-                </div>
-                <div>
-                  <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Campanhas ativas</div>
-                  <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.4,marginTop:2,fontFeatureSettings:"'tnum'"}}>Até {TRAFFIC_LIMITS[trafficKey].campaigns}</div>
-                </div>
-                <div>
-                  <div style={{color:SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Testes A/B</div>
-                  <div style={{color:INK,fontWeight:900,fontSize:20,letterSpacing:-.4,marginTop:2,fontFeatureSettings:"'tnum'"}}>Até {TRAFFIC_LIMITS[trafficKey].tests}</div>
-                </div>
-              </div>
-            </div>}
             <div style={{marginTop:12,padding:"10px 14px",background:"#fef3c7",border:"1px solid #fde68a",borderRadius:10,color:"#a16207",fontSize:12,fontWeight:600,display:"inline-flex",alignItems:"center",gap:8}}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               Valor de gestão. Verba de anúncios não inclusa.
@@ -50500,7 +50470,7 @@ function _CalculadoraModular({isMob}){
             versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
             nivelLabel="Pontual"/>
 
-          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
+          <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>
             {cfg.oneTimeProjects.map(function(p){
               const sel = oneTimeIds.indexOf(p.id)>=0;
               return <button key={p.id} type="button" onClick={function(){setOneTimeIds(prev => sel?prev.filter(x=>x!==p.id):prev.concat([p.id]));}}
