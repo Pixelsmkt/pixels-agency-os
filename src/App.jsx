@@ -49581,12 +49581,17 @@ function OnboardingChecklist(props){
 // ═══════════════════════════════════════════════════════════════
 const PRICE_CONFIG = {
   socialManagement: {
-    firstChannelPackage: 2000,      // primeiro pacote de canal
-    additionalChannelPackage: 1000, // cada pacote adicional
+    // Preço agora escala por publicações/semana. Canais são seleção obrigatória
+    // (precisa ter pelo menos 1) mas não afetam o valor.
+    basePostsPerWeek: 2,             // ponto base do pacote
+    basePrice: 2000,                 // valor base pra 2 publicações/semana
+    additionalPostPrice: 200,        // cada publicação/semana acima ou abaixo do base
+    minPostsPerWeek: 1,
+    maxPostsPerWeek: 7,
     channels: {
-      facebookInstagram: { label: "Facebook + Instagram", countsAsPackage: true },
-      tiktok:            { label: "TikTok",               countsAsPackage: true },
-      linkedin:          { label: "LinkedIn",             countsAsPackage: true },
+      facebookInstagram: { label: "Facebook + Instagram" },
+      tiktok:            { label: "TikTok" },
+      linkedin:          { label: "LinkedIn" },
     },
   },
   creatives: {
@@ -49615,15 +49620,16 @@ const PRICE_CONFIG = {
 // Gestão de Redes Sociais: primeiro canal ativo R$ 2.000, cada canal
 // adicional +R$ 1.000. FB+IG contam como 1 pacote. TikTok e LinkedIn
 // são pacotes individuais.
-function calculateSocialManagementPrice(channelsState){
-  if(!channelsState) return 0;
+function calculateSocialManagementPrice(state){
+  // state = { channels:{fbInsta,tiktok,linkedin}, postsPerWeek }
+  if(!state) return 0;
   const cfg = PRICE_CONFIG.socialManagement;
-  const activeCount =
-      (channelsState.fbInsta  ? 1 : 0)
-    + (channelsState.tiktok   ? 1 : 0)
-    + (channelsState.linkedin ? 1 : 0);
-  if(activeCount === 0) return 0;
-  return cfg.firstChannelPackage + (activeCount - 1) * cfg.additionalChannelPackage;
+  const ch = state.channels || {};
+  const activeCount = (ch.fbInsta?1:0) + (ch.tiktok?1:0) + (ch.linkedin?1:0);
+  if(activeCount === 0) return 0; // precisa pelo menos 1 canal
+  const posts = Math.max(cfg.minPostsPerWeek, Math.min(cfg.maxPostsPerWeek, Number(state.postsPerWeek)||cfg.basePostsPerWeek));
+  const delta = posts - cfg.basePostsPerWeek;
+  return cfg.basePrice + delta * cfg.additionalPostPrice;
 }
 function calculateCreativesPrice(state){
   if(!state) return 0;
@@ -49642,8 +49648,8 @@ function calculateOneTimeProjects(selectedIds){
     .filter(p => selectedIds.indexOf(p.id) >= 0)
     .reduce((s,p) => s + p.price, 0);
 }
-function calculateMonthlyRecurringTotal(socialChannels, creativesState, trafficKey){
-  return calculateSocialManagementPrice(socialChannels)
+function calculateMonthlyRecurringTotal(socialState, creativesState, trafficKey){
+  return calculateSocialManagementPrice(socialState)
        + calculateCreativesPrice(creativesState)
        + calculateTrafficPrice(trafficKey);
 }
@@ -50083,8 +50089,9 @@ function _CalculadoraModular({isMob}){
   const fmt = _calcFmtBRL;
 
   // ═══ Estado ═══
-  // 1) Gestão de Redes Sociais: só canais (FB+IG obrigatórios juntos)
+  // 1) Gestão de Redes Sociais: canais + publicações/semana (default 2)
   const [socialChannels,setSocialChannels] = useState({ fbInsta:true, tiktok:false, linkedin:false });
+  const [socialPosts,setSocialPosts] = useState(cfg.socialManagement.basePostsPerWeek);
   // 2) Criativos: quantidades mensais
   const [creatives,setCreatives] = useState({ staticCreatives:4, editedVideos:0, videoVariations:0 });
   // 3) Tráfego pago
@@ -50097,11 +50104,12 @@ function _CalculadoraModular({isMob}){
   const creativesActive = (creatives.staticCreatives + creatives.editedVideos + creatives.videoVariations) > 0;
 
   // ═══ Cálculos ═══
-  const socialPrice   = calculateSocialManagementPrice(socialChannels);
+  const _socialState = { channels: socialChannels, postsPerWeek: socialPosts };
+  const socialPrice   = calculateSocialManagementPrice(_socialState);
   const creativesPrice = calculateCreativesPrice(creatives);
   const trafficPrice   = calculateTrafficPrice(trafficKey);
   const oneTimePrice   = calculateOneTimeTotal(oneTimeIds);
-  const monthlyRecurring = calculateMonthlyRecurringTotal(socialChannels, creatives, trafficKey);
+  const monthlyRecurring = calculateMonthlyRecurringTotal(_socialState, creatives, trafficKey);
 
   // ═══ Textos comuns ═══
   const SOCIAL_INCLUSOS = [
@@ -50166,6 +50174,7 @@ function _CalculadoraModular({isMob}){
     if(socialActive){
       lines.push("Gestão de Redes Sociais");
       lines.push("Canais: " + socialCh.join(", "));
+      lines.push("Publicações/semana: " + socialPosts);
       lines.push("Inclui:");
       SOCIAL_INCLUSOS.forEach(i => lines.push("- " + i));
       lines.push("Valor: " + fmt(socialPrice) + "/mês");
@@ -50176,7 +50185,7 @@ function _CalculadoraModular({isMob}){
       lines.push("Entregas/mês:");
       if(creatives.staticCreatives>0) lines.push("- " + creatives.staticCreatives + " criativos estáticos");
       if(creatives.editedVideos>0)    lines.push("- " + creatives.editedVideos    + " vídeos editados");
-      if(creatives.videoVariations>0) lines.push("- " + creatives.videoVariations + " variações de vídeo");
+      if(creatives.videoVariations>0) lines.push("- " + creatives.videoVariations + " pequenas variações de vídeo");
       lines.push("Inclui:");
       CREATIVES_INCLUSOS.forEach(i => lines.push("- " + i));
       lines.push("Valor: " + fmt(creativesPrice) + "/mês");
@@ -50218,6 +50227,35 @@ function _CalculadoraModular({isMob}){
   // ═══ Sub-componentes de UI ═══
   const cardStyle = {background:PX_GRAD_TOP,border:"1px solid "+BORD,borderRadius:18,padding:isMob?"22px 20px":"26px 28px",boxShadow:"0 4px 14px rgba(88,64,166,.06), 0 1px 3px rgba(15,23,42,.04)",fontFamily:_PORTF_FF,position:"relative",overflow:"hidden"};
   const cardStyleActive = Object.assign({}, cardStyle, {border:"1px solid "+PX_BD,boxShadow:"0 14px 34px rgba(159,67,246,0.16), 0 2px 6px rgba(15,23,42,.05)"});
+
+  // Header modernizado estilo V4 — check circular + pills Versão + Nível
+  function _ModuleHeader({num, title, subtitle, active, versaoLabel, nivelLabel, badge}){
+    return <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16,flexWrap:"wrap"}}>
+      <div style={{width:44,height:44,borderRadius:"50%",background:active?"linear-gradient(135deg,#22c55e,#16a34a)":"linear-gradient(135deg,#e2e8f0,#cbd5e1)",border:"3px solid #fff",boxShadow:active?"0 6px 16px rgba(34,197,94,0.30)":"0 3px 10px rgba(15,23,42,0.10)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,position:"relative"}}>
+        {active
+          ? <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        }
+        <div style={{position:"absolute",bottom:-6,right:-4,width:18,height:18,borderRadius:"50%",background:active?PX:"#94a3b8",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:900,border:"2px solid #fff"}}>{num}</div>
+      </div>
+      <div style={{flex:1,minWidth:180}}>
+        <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>{title}</div>
+        <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>{subtitle}</div>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:6,minWidth:150,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <span style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Versão Escolhida</span>
+          <span style={{background:active?PX_BG:"#f1f5f9",color:active?PX_DK:MUTE,border:"1px solid "+(active?PX_BD:BORD),fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{versaoLabel||"—"}</span>
+        </div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+          <span style={{color:SOFT,fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase"}}>Nível da Equipe</span>
+          <span style={{background:"#f8fafc",color:MUTE,border:"1px solid "+BORD,fontSize:10.5,fontWeight:800,padding:"3px 10px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",whiteSpace:"nowrap"}}>{nivelLabel||"Pro"}</span>
+        </div>
+      </div>
+      {badge}
+    </div>;
+  }
+
 
   function _StepNum({n, active}){
     return <div style={{width:30,height:30,borderRadius:9,background:active?PX:PX_BG,color:active?"#fff":PX,border:"1px solid "+(active?PX:PX_BD),display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,flexShrink:0}}>{n}</div>;
@@ -50298,14 +50336,11 @@ function _CalculadoraModular({isMob}){
         {/* ═══ 1. GESTÃO DE REDES SOCIAIS ═══ */}
         <div style={socialActive?cardStyleActive:cardStyle}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:socialActive?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
-          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
-            <_StepNum n="1" active={socialActive}/>
-            <div style={{flex:1}}>
-              <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Gestão de Redes Sociais</div>
-              <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Estratégia, planejamento, publicação e acompanhamento.</div>
-            </div>
-            {socialActive && <_ChipTag label="Selecionado" tone="ok"/>}
-          </div>
+          <_ModuleHeader num="1" active={socialActive}
+            title="Gestão de Redes Sociais"
+            subtitle="Estratégia, planejamento, publicação e acompanhamento."
+            versaoLabel={socialActive?(socialPosts+" pubs/semana"):"Não selecionado"}
+            nivelLabel="Pro"/>
 
           {/* Canais */}
           <_BlocoTitulo titulo="Canais"/>
@@ -50317,7 +50352,7 @@ function _CalculadoraModular({isMob}){
             <_ChannelPill label="LinkedIn" active={socialChannels.linkedin}
               onClick={function(){setSocialChannels(c => Object.assign({},c,{linkedin:!c.linkedin}));}}/>
           </div>
-          <div style={{color:SOFT,fontSize:11,marginTop:2}}>Primeiro pacote R$ 2.000/mês · cada pacote adicional +R$ 1.000/mês</div>
+          <div style={{color:SOFT,fontSize:11,marginTop:2}}>Selecione ao menos um canal · o valor escala pela quantidade de publicações/semana</div>
 
           {socialActive && <>
             {/* Entregáveis por blocos — sempre em coluna única (mais premium/vertical) */}
@@ -50336,6 +50371,23 @@ function _CalculadoraModular({isMob}){
                 "Reunião mensal de alinhamento estratégico",
               ]}/>
             </div>
+            {/* Publicações/semana — stepper personalizável */}
+            <div style={{marginTop:16}}>
+              <_BlocoTitulo titulo="Limites/mês"/>
+              <div style={{background:BG_INNER,border:"1px solid "+BORD,borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{color:INK,fontSize:13,fontWeight:700,letterSpacing:-.1}}>Publicações/semana</div>
+                  <div style={{color:MUTE,fontSize:11,marginTop:2}}>Base {cfg.socialManagement.basePostsPerWeek} pubs = {fmt(cfg.socialManagement.basePrice)} · cada +1 publicação {fmt(cfg.socialManagement.additionalPostPrice)}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                  <button type="button" onClick={function(){setSocialPosts(function(p){return Math.max(cfg.socialManagement.minPostsPerWeek, p-1);});}}
+                    style={{width:32,height:32,borderRadius:9,background:"#fff",border:"1px solid "+BORD,color:PX,fontSize:18,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>−</button>
+                  <div style={{minWidth:38,textAlign:"center",color:INK,fontWeight:800,fontSize:15,fontFeatureSettings:"'tnum'"}}>{socialPosts}</div>
+                  <button type="button" onClick={function(){setSocialPosts(function(p){return Math.min(cfg.socialManagement.maxPostsPerWeek, p+1);});}}
+                    style={{width:32,height:32,borderRadius:9,background:PX_BG,border:"1px solid "+PX_BD,color:PX,fontSize:18,fontWeight:800,cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>+</button>
+                </div>
+              </div>
+            </div>
             <_ValorModulo price={socialPrice}/>
           </>}
           {!socialActive && <div style={{color:MUTE,fontSize:12,marginTop:12,fontStyle:"italic"}}>Selecione ao menos um canal para ativar o módulo.</div>}
@@ -50344,14 +50396,11 @@ function _CalculadoraModular({isMob}){
         {/* ═══ 2. CRIATIVOS ═══ */}
         <div style={creativesActive?cardStyleActive:cardStyle}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:creativesActive?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
-          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
-            <_StepNum n="2" active={creativesActive}/>
-            <div style={{flex:1}}>
-              <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Criativos</div>
-              <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Produção dos materiais que serão publicados.</div>
-            </div>
-            {creativesActive && <_ChipTag label="Selecionado" tone="ok"/>}
-          </div>
+          <_ModuleHeader num="2" active={creativesActive}
+            title="Criativos"
+            subtitle="Produção dos materiais que serão publicados."
+            versaoLabel={creativesActive?"Personalizado":"Não selecionado"}
+            nivelLabel="Pro"/>
 
           <_BlocoTitulo titulo="Entregáveis inclusos"/>
           <_IncluiList titulo="O que está incluso" cor={PX} itens={CREATIVES_INCLUSOS}/>
@@ -50363,7 +50412,7 @@ function _CalculadoraModular({isMob}){
                 onChange={function(v){setCreatives(c => Object.assign({},c,{staticCreatives:v}));}}/>
               <_QtyControl label="Vídeos editados" unitPrice={cfg.creatives.editedVideo} value={creatives.editedVideos}
                 onChange={function(v){setCreatives(c => Object.assign({},c,{editedVideos:v}));}}/>
-              <_QtyControl label="Variações de vídeo" unitPrice={cfg.creatives.videoVariation} value={creatives.videoVariations}
+              <_QtyControl label="Pequenas variações de vídeo" unitPrice={cfg.creatives.videoVariation} value={creatives.videoVariations}
                 onChange={function(v){setCreatives(c => Object.assign({},c,{videoVariations:v}));}}/>
             </div>
           </div>
@@ -50374,14 +50423,11 @@ function _CalculadoraModular({isMob}){
         {/* ═══ 3. TRÁFEGO PAGO ═══ */}
         <div style={trafficKey!=="none"?cardStyleActive:cardStyle}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:trafficKey!=="none"?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
-          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
-            <_StepNum n="3" active={trafficKey!=="none"}/>
-            <div style={{flex:1}}>
-              <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Tráfego Pago</div>
-              <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Gestão de campanhas para alcance e conversão.</div>
-            </div>
-            {trafficKey!=="none" && <_ChipTag label="Selecionado" tone="ok"/>}
-          </div>
+          <_ModuleHeader num="3" active={trafficKey!=="none"}
+            title="Tráfego Pago"
+            subtitle="Gestão de campanhas para alcance e conversão."
+            versaoLabel={trafficKey!=="none"?cfg.traffic[trafficKey].label:"Não selecionado"}
+            nivelLabel="Pro"/>
 
           <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(2,1fr)",gap:10}}>
             {Object.keys(cfg.traffic).map(function(k){
@@ -50448,14 +50494,11 @@ function _CalculadoraModular({isMob}){
         {/* ═══ 4. PROJETOS PONTUAIS ═══ */}
         <div style={oneTimeIds.length>0?cardStyleActive:cardStyle}>
           <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:oneTimeIds.length>0?"linear-gradient(90deg,#9F43F6,#7c3aed)":"linear-gradient(90deg,#e9d8fe55,transparent)"}}/>
-          <div style={{display:"flex",alignItems:"flex-start",gap:12,marginBottom:14}}>
-            <_StepNum n="4" active={oneTimeIds.length>0}/>
-            <div style={{flex:1}}>
-              <div style={{color:INK,fontWeight:800,fontSize:17,letterSpacing:-.3}}>Projetos Pontuais</div>
-              <div style={{color:MUTE,fontSize:12.5,marginTop:3}}>Investimento único, separado do mensal.</div>
-            </div>
-            {oneTimeIds.length>0 && <_ChipTag label={oneTimeIds.length+" selecionado"+(oneTimeIds.length>1?"s":"")} tone="ok"/>}
-          </div>
+          <_ModuleHeader num="4" active={oneTimeIds.length>0}
+            title="Projetos Pontuais"
+            subtitle="Investimento único, separado do mensal."
+            versaoLabel={oneTimeIds.length>0?(oneTimeIds.length+" projeto"+(oneTimeIds.length>1?"s":"")):"Não selecionado"}
+            nivelLabel="Pontual"/>
 
           <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(240px,1fr))",gap:8}}>
             {cfg.oneTimeProjects.map(function(p){
@@ -50478,7 +50521,7 @@ function _CalculadoraModular({isMob}){
         {/* Rodapé: dica de resumo pra mobile — resumo repete embaixo */}
         {isMob && hasAnySelection && <_ResumoBox
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
-          socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice}
+          socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo}
@@ -50490,7 +50533,7 @@ function _CalculadoraModular({isMob}){
       {!isMob && <div style={{position:"sticky",top:20}}>
         <_ResumoBox
           fmt={fmt} monthlyRecurring={monthlyRecurring} oneTimePrice={oneTimePrice}
-          socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice}
+          socialActive={socialActive} socialChannels={_selectedSocialLabels()} socialPrice={socialPrice} socialPosts={socialPosts}
           creativesActive={creativesActive} creatives={creatives} creativesPrice={creativesPrice}
           trafficKey={trafficKey} trafficPrice={trafficPrice} cfg={cfg}
           oneTimeIds={oneTimeIds} onCopy={copyResumo}
@@ -50502,7 +50545,7 @@ function _CalculadoraModular({isMob}){
 
 /* ─── _ResumoBox — cartão de resumo comercial (reusado desktop/mobile) ── */
 function _ResumoBox(p){
-  const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice,
+  const {fmt, monthlyRecurring, oneTimePrice, socialActive, socialChannels, socialPrice, socialPosts,
     creativesActive, creatives, creativesPrice, trafficKey, trafficPrice, cfg,
     oneTimeIds, onCopy, PX, PX_DK, PX_BG, PX_BD, INK, MUTE, SOFT, BORD} = p;
   const hasAny = socialActive || creativesActive || trafficKey!=="none" || oneTimeIds.length>0;
@@ -50534,7 +50577,7 @@ function _ResumoBox(p){
           <span style={{color:INK,fontSize:12,fontWeight:700}}>· Gestão de Redes Sociais</span>
           <span style={{color:INK,fontWeight:800,fontFeatureSettings:"'tnum'",whiteSpace:"nowrap",fontSize:12}}>{fmt(socialPrice)}</span>
         </div>
-        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>Canais: {socialChannels.join(", ")}</div>
+        <div style={{color:MUTE,fontSize:11,marginTop:3,marginLeft:10}}>Canais: {socialChannels.join(", ")} · {p.socialPosts} pubs/semana</div>
       </div>}
 
       {creativesActive && <div>
