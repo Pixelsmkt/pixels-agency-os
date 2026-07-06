@@ -16895,7 +16895,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       assignee:respId,assignees:[respId],watchers:[],
       client:"",sector:"",priority:"",status:colId,
       startDate:now.toISOString().split("T")[0],
-      deadline:new Date(Date.now()+7*86400000).toISOString().split("T")[0],
+      // Deadline: se veio publishDate em extraProps (calendário/kanban), usa como prazo.
+      // Senão, fallback pro default de 7 dias a partir de hoje.
+      deadline:(function(){
+        const pd = extraProps && extraProps.publishDate;
+        if(pd && /^\d{4}-\d{2}-\d{2}/.test(pd)) return pd.slice(0,10);
+        return new Date(Date.now()+7*86400000).toISOString().split("T")[0];
+      })(),
       completedAt:null,score:null,tags:[],comments:[],files:[],cover:null,
       deletedAt:null,bioterUnit:null,referenceMonth:(function(){
         // Só auto-set mês de pagamento se o responsável for um dos freelancers pagos por demanda (André/Maria/Guilherme)
