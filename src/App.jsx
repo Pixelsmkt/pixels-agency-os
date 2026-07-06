@@ -29704,6 +29704,18 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const [showAssigneesPicker,setShowAssigneesPicker]=useState(false);
   const [publishDate,setPublishDate]=useState(task.publishDate||"");
   const [publishTime,setPublishTime]=useState(task.publishTime||"11:00");
+  // Auto-sync: quando muda a data de publicação, o prazo (deadline) acompanha automaticamente.
+  // Evita ter prazo depois da publicação, que não faz sentido.
+  useEffect(function(){
+    if(!publishDate) return;
+    if(!/^\d{4}-\d{2}-\d{2}/.test(publishDate)) return;
+    const pd = publishDate.slice(0,10);
+    // Só ajusta se o deadline atual for POSTERIOR à data de publicação (ou vazio).
+    // Isso preserva edits manuais válidos (ex: prazo antes da publicação).
+    if(!deadline || deadline > pd){
+      setDeadline(pd);
+    }
+  },[publishDate]);
   const [caption,setCaption]=useState(task.caption||"");
   // ═══ SLA (prazo de entrega / ampulheta de cobrança) ═══
   const [slaHours,setSlaHours]=useState(task.slaHours||null); // null | 12 | 24 | 48 | 72 | 96 | 120 | custom
@@ -32186,7 +32198,10 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                 const displayDeadline=()=>{
                   if(!deadline)return "Selecionar prazo";
                   const dt=new Date(deadline+"T12:00:00");
-                  return dt.toLocaleDateString("pt-BR",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});
+                  const _WD=["dom","seg","ter","qua","qui","sex","sáb"];
+                  const _MN=["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+                  // Formato compacto que cabe em 1 linha: "seg 06 jul 2026"
+                  return _WD[dt.getDay()]+" "+String(dt.getDate()).padStart(2,"0")+" "+_MN[dt.getMonth()]+" "+dt.getFullYear();
                 };
                 const stepDay=function(delta){
                   const base=deadline?new Date(deadline+"T12:00:00"):new Date();
@@ -32219,7 +32234,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                             <line x1="8" y1="2" x2="8" y2="6"/>
                             <line x1="3" y1="10" x2="21" y2="10"/>
                           </svg>
-                          <span style={{flex:1,color:deadline?"#0f172a":"#94a3b8",fontSize:12.5,fontWeight:deadline?600:500,letterSpacing:-.1}}>{displayDeadline()}</span>
+                          <span style={{flex:1,color:deadline?"#0f172a":"#94a3b8",fontSize:12.5,fontWeight:deadline?600:500,letterSpacing:-.1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{displayDeadline()}</span>
                           {deadline&&<span onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDeadline("");}} style={{background:"#f1f5f9",color:"#64748b",cursor:"pointer",fontSize:11,padding:"2px 6px",borderRadius:6,display:"inline-flex",alignItems:"center",justifyContent:"center",lineHeight:1,transition:"all .12s"}} title="Limpar prazo"
                             onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
                             onMouseLeaveCapture={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>×</span>}
@@ -32228,21 +32243,21 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     }
                     {canEdit&&<ArrowD dir="next"/>}
                   </div>
-                  {showCalendar&&canEdit&&<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:200,background:"#fff",border:"1px solid #ede9fe",borderRadius:16,boxShadow:"0 20px 50px rgba(88,64,166,0.16), 0 4px 12px rgba(15,23,42,0.06)",padding:"14px 16px 12px",minWidth:296,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                  {showCalendar&&canEdit&&<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:200,background:"#fff",border:"1px solid #ede9fe",borderRadius:14,boxShadow:"0 16px 40px rgba(88,64,166,0.16), 0 3px 10px rgba(15,23,42,0.06)",padding:"10px 12px 10px",width:232,fontFamily:"'Inter',system-ui,sans-serif"}}>
                     {/* Header: navegação de mês */}
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                       <button onClick={()=>{if(calViewMonth===0){setCalViewMonth(11);setCalViewYear(y=>y-1);}else setCalViewMonth(m=>m-1);}}
-                        style={{width:28,height:28,borderRadius:"50%",border:"1px solid #ede9fe",background:"#faf5ff",color:"#9F43F6",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .12s"}}
+                        style={{width:24,height:24,borderRadius:"50%",border:"1px solid #ede9fe",background:"#faf5ff",color:"#9F43F6",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .12s"}}
                         onMouseEnter={e=>{e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}
                         onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#9F43F6";}}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                       </button>
                       <div style={{display:"flex",alignItems:"baseline",gap:5}}>
-                        <span style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2,textTransform:"capitalize"}}>{MESES[calViewMonth].toLowerCase()}</span>
-                        <span style={{color:"#94a3b8",fontWeight:600,fontSize:13,fontFeatureSettings:"'tnum'"}}>{calViewYear}</span>
+                        <span style={{color:"#0f172a",fontWeight:800,fontSize:13,letterSpacing:-.2,textTransform:"capitalize"}}>{MESES[calViewMonth].toLowerCase()}</span>
+                        <span style={{color:"#94a3b8",fontWeight:600,fontSize:11.5,fontFeatureSettings:"'tnum'"}}>{calViewYear}</span>
                       </div>
                       <button onClick={()=>{if(calViewMonth===11){setCalViewMonth(0);setCalViewYear(y=>y+1);}else setCalViewMonth(m=>m+1);}}
-                        style={{width:28,height:28,borderRadius:"50%",border:"1px solid #ede9fe",background:"#faf5ff",color:"#9F43F6",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .12s"}}
+                        style={{width:24,height:24,borderRadius:"50%",border:"1px solid #ede9fe",background:"#faf5ff",color:"#9F43F6",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .12s"}}
                         onMouseEnter={e=>{e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}
                         onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#9F43F6";}}>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
@@ -32250,7 +32265,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     </div>
                     {/* Dias da semana */}
                     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:6,gap:2}}>
-                      {DIAS_SEMANA.map(d=><div key={d} style={{textAlign:"center",color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.6,padding:"4px 0",textTransform:"uppercase"}}>{d.slice(0,3)}</div>)}
+                      {DIAS_SEMANA.map(d=><div key={d} style={{textAlign:"center",color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.5,padding:"3px 0",textTransform:"uppercase"}}>{d.slice(0,3)}</div>)}
                     </div>
                     {/* Grid de dias */}
                     <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
@@ -32264,7 +32279,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         const isToday=dt.getTime()===_today.getTime();
                         const isPast=dt<_today;
                         return <button key={d} onClick={()=>pickDay(d)} type="button"
-                          style={{textAlign:"center",padding:0,height:34,borderRadius:"50%",cursor:"pointer",fontSize:12.5,fontWeight:isSel?800:(isToday?700:500),
+                          style={{textAlign:"center",padding:0,height:28,borderRadius:"50%",cursor:"pointer",fontSize:11.5,fontWeight:isSel?800:(isToday?700:500),
                             border:isToday&&!isSel?"1.5px solid #9F43F6":"1.5px solid transparent",
                             background:isSel?"linear-gradient(135deg,#9F43F6,#7c3aed)":"transparent",
                             color:isSel?"#fff":isToday?"#9F43F6":isWeekend?"#f97316":(isPast?"#cbd5e1":"#0f172a"),
@@ -32277,9 +32292,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                       })}
                     </div>
                     {/* Rodapé: Hoje + Fechar */}
-                    <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
+                    <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}}>
                       <button onClick={()=>{const t=new Date();const mm=String(t.getMonth()+1).padStart(2,"0");const dd=String(t.getDate()).padStart(2,"0");setDeadline(`${t.getFullYear()}-${mm}-${dd}`);setShowCalendar(false);}}
-                        style={{background:"#faf5ff",border:"1px solid #ede9fe",color:"#7c3aed",cursor:"pointer",fontSize:11.5,fontWeight:800,padding:"6px 14px",borderRadius:99,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+                        style={{background:"#faf5ff",border:"1px solid #ede9fe",color:"#7c3aed",cursor:"pointer",fontSize:10.5,fontWeight:800,padding:"4px 10px",borderRadius:99,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:4,transition:"all .12s"}}
                         onMouseEnter={e=>{e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#9F43F6";}}
                         onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#ede9fe";}}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
