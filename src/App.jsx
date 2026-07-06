@@ -32210,27 +32210,50 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                     {canEdit&&<ArrowD dir="prev"/>}
                     {canEdit
                       ? <button onClick={()=>setShowCalendar(v=>!v)}
-                          style={{...SI,flex:1,display:"flex",alignItems:"center",gap:8,cursor:"pointer",textAlign:"left",background:!deadline?"#fff7f7":undefined,borderColor:!deadline?"#fca5a5":undefined}}>
-                          <span style={{fontSize:14}}>📅</span>
-                          <span style={{flex:1,color:deadline?"#1e293b":"#94a3b8",fontSize:12}}>{displayDeadline()}</span>
-                          {deadline&&<button onMouseDown={e=>{e.stopPropagation();setDeadline("");}} style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:13,padding:"0 2px"}} title="Limpar">×</button>}
+                          style={{...SI,flex:1,display:"flex",alignItems:"center",gap:9,cursor:"pointer",textAlign:"left",padding:"9px 12px",borderRadius:10,border:"1px solid "+(deadline?"#e2e8f0":"#fca5a5"),background:deadline?"#fff":"#fff7f7",transition:"all .15s"}}
+                          onMouseEnter={e=>{if(deadline){e.currentTarget.style.borderColor="#c4b5fd";e.currentTarget.style.background="#faf5ff";}}}
+                          onMouseLeave={e=>{if(deadline){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={deadline?"#9F43F6":"#94a3b8"} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}>
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6"/>
+                            <line x1="8" y1="2" x2="8" y2="6"/>
+                            <line x1="3" y1="10" x2="21" y2="10"/>
+                          </svg>
+                          <span style={{flex:1,color:deadline?"#0f172a":"#94a3b8",fontSize:12.5,fontWeight:deadline?600:500,letterSpacing:-.1}}>{displayDeadline()}</span>
+                          {deadline&&<span onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDeadline("");}} style={{background:"#f1f5f9",color:"#64748b",cursor:"pointer",fontSize:11,padding:"2px 6px",borderRadius:6,display:"inline-flex",alignItems:"center",justifyContent:"center",lineHeight:1,transition:"all .12s"}} title="Limpar prazo"
+                            onMouseEnter={e=>{e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
+                            onMouseLeaveCapture={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#64748b";}}>×</span>}
                         </button>
                       : <div style={{...SI,flex:1}}>{deadline?new Date(deadline+"T12:00:00").toLocaleDateString("pt-BR",{weekday:"long",day:"2-digit",month:"long",year:"numeric"}):"—"}</div>
                     }
                     {canEdit&&<ArrowD dir="next"/>}
                   </div>
-                  {showCalendar&&canEdit&&<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 4px)",left:0,zIndex:200,background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,boxShadow:"0 8px 32px rgba(0,0,0,0.15)",padding:14,minWidth:260}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  {showCalendar&&canEdit&&<div onClick={e=>e.stopPropagation()} style={{position:"absolute",top:"calc(100% + 6px)",left:0,zIndex:200,background:"#fff",border:"1px solid #ede9fe",borderRadius:16,boxShadow:"0 20px 50px rgba(88,64,166,0.16), 0 4px 12px rgba(15,23,42,0.06)",padding:"14px 16px 12px",minWidth:296,fontFamily:"'Inter',system-ui,sans-serif"}}>
+                    {/* Header: navegação de mês */}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
                       <button onClick={()=>{if(calViewMonth===0){setCalViewMonth(11);setCalViewYear(y=>y-1);}else setCalViewMonth(m=>m-1);}}
-                        style={{background:"none",border:"none",cursor:"pointer",color:"#64748b",fontSize:16,padding:"2px 8px",borderRadius:6}}>‹</button>
-                      <span style={{color:"#1e293b",fontWeight:700,fontSize:13}}>{MESES[calViewMonth]} {calViewYear}</span>
+                        style={{width:28,height:28,borderRadius:"50%",border:"1px solid #ede9fe",background:"#faf5ff",color:"#9F43F6",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}
+                        onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#9F43F6";}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                      </button>
+                      <div style={{display:"flex",alignItems:"baseline",gap:5}}>
+                        <span style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.2,textTransform:"capitalize"}}>{MESES[calViewMonth].toLowerCase()}</span>
+                        <span style={{color:"#94a3b8",fontWeight:600,fontSize:13,fontFeatureSettings:"'tnum'"}}>{calViewYear}</span>
+                      </div>
                       <button onClick={()=>{if(calViewMonth===11){setCalViewMonth(0);setCalViewYear(y=>y+1);}else setCalViewMonth(m=>m+1);}}
-                        style={{background:"none",border:"none",cursor:"pointer",color:"#64748b",fontSize:16,padding:"2px 8px",borderRadius:6}}>›</button>
+                        style={{width:28,height:28,borderRadius:"50%",border:"1px solid #ede9fe",background:"#faf5ff",color:"#9F43F6",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,transition:"all .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";}}
+                        onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#9F43F6";}}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                      </button>
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:4}}>
-                      {DIAS_SEMANA.map(d=><div key={d} style={{textAlign:"center",color:"#94a3b8",fontSize:9,fontWeight:700,padding:"2px 0"}}>{d}</div>)}
+                    {/* Dias da semana */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",marginBottom:6,gap:2}}>
+                      {DIAS_SEMANA.map(d=><div key={d} style={{textAlign:"center",color:"#94a3b8",fontSize:9.5,fontWeight:800,letterSpacing:.6,padding:"4px 0",textTransform:"uppercase"}}>{d.slice(0,3)}</div>)}
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+                    {/* Grid de dias */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
                       {Array.from({length:firstDay},(_,i)=><div key={"e"+i}/>)}
                       {Array.from({length:daysInMonth},(_,i)=>{
                         const d=i+1;
@@ -32239,26 +32262,35 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                         const isWeekend=dt.getDay()===0||dt.getDay()===6;
                         const _today=new Date();_today.setHours(0,0,0,0);
                         const isToday=dt.getTime()===_today.getTime();
-                        // Datas passadas são PERMITIDAS (Hellen pode registrar posts feitos fora do app).
-                        // Indicador visual sutil: levemente mais claras, mas totalmente clicáveis.
                         const isPast=dt<_today;
-                        return <button key={d} onClick={()=>pickDay(d)}
-                          style={{textAlign:"center",padding:"5px 0",borderRadius:7,border:isToday&&!isSel?"1.5px solid #6366f1":"none",cursor:"pointer",fontSize:11,fontWeight:isSel?700:(isToday?700:400),
-                            background:isSel?"#6366f1":"#fff",
-                            color:isSel?"#fff":isToday?"#6366f1":isWeekend?"#f97316":(isPast?"#94a3b8":"#1e293b"),
-                            boxShadow:isSel?"0 2px 8px rgba(99,102,241,0.4)":undefined,
-                            transition:"background .12s"}}
-                          onMouseEnter={e=>{if(!isSel)e.currentTarget.style.background="#f1f5f9";}}
-                          onMouseLeave={e=>{if(!isSel)e.currentTarget.style.background="#fff";}}>
+                        return <button key={d} onClick={()=>pickDay(d)} type="button"
+                          style={{textAlign:"center",padding:0,height:34,borderRadius:"50%",cursor:"pointer",fontSize:12.5,fontWeight:isSel?800:(isToday?700:500),
+                            border:isToday&&!isSel?"1.5px solid #9F43F6":"1.5px solid transparent",
+                            background:isSel?"linear-gradient(135deg,#9F43F6,#7c3aed)":"transparent",
+                            color:isSel?"#fff":isToday?"#9F43F6":isWeekend?"#f97316":(isPast?"#cbd5e1":"#0f172a"),
+                            boxShadow:isSel?"0 6px 14px rgba(159,67,246,0.35)":"none",
+                            transition:"all .12s",fontFeatureSettings:"'tnum'",fontFamily:"inherit"}}
+                          onMouseEnter={e=>{if(!isSel){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=isToday?"#7c3aed":"#0f172a";}}}
+                          onMouseLeave={e=>{if(!isSel){e.currentTarget.style.background="transparent";e.currentTarget.style.color=isToday?"#9F43F6":isWeekend?"#f97316":(isPast?"#cbd5e1":"#0f172a");}}}>
                           {d}
                         </button>;
                       })}
                     </div>
-                    <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    {/* Rodapé: Hoje + Fechar */}
+                    <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}>
                       <button onClick={()=>{const t=new Date();const mm=String(t.getMonth()+1).padStart(2,"0");const dd=String(t.getDate()).padStart(2,"0");setDeadline(`${t.getFullYear()}-${mm}-${dd}`);setShowCalendar(false);}}
-                        style={{background:"none",border:"none",color:"#6366f1",cursor:"pointer",fontSize:11,fontWeight:700}}>Hoje</button>
+                        style={{background:"#faf5ff",border:"1px solid #ede9fe",color:"#7c3aed",cursor:"pointer",fontSize:11.5,fontWeight:800,padding:"6px 14px",borderRadius:99,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,transition:"all .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background="#9F43F6";e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#9F43F6";}}
+                        onMouseLeave={e=>{e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color="#7c3aed";e.currentTarget.style.borderColor="#ede9fe";}}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Hoje
+                      </button>
                       <button onClick={()=>setShowCalendar(false)}
-                        style={{background:"none",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:11}}>Fechar</button>
+                        style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",fontSize:11.5,fontWeight:600,padding:"6px 10px",borderRadius:8,transition:"all .12s"}}
+                        onMouseEnter={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#475569";}}
+                        onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
+                        Fechar
+                      </button>
                     </div>
                   </div>}
                 </div>;
