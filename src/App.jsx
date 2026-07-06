@@ -16641,6 +16641,15 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   // Picker de coluna ao clicar em "+ Nova" — usuário escolhe Rascunhos/Copys/Demanda
   const [newColPicker,setNewColPicker]=useState(null); // null | {extraProps}
   const [viewMode,setViewMode]=useState("cartao");
+  // Guarda a última view não-lixeira pra restaurar quando desligar o toggle
+  const _prevViewRef = useRef("cartao");
+  function _toggleTrash(){
+    setViewMode(v => {
+      if(v === "trash") return _prevViewRef.current || "cartao";
+      _prevViewRef.current = v;
+      return "trash";
+    });
+  }
   const [filterUser,setFilterUser]=useState("todos");
   const [filterSector,setFilterSector]=useState("todos_setores");
   const [searchTerm,setSearchTerm]=useState("");
@@ -16718,7 +16727,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
   };
   // Ordenação dos cards no kanban (persistida em localStorage)
   const [sortMode,setSortMode]=useState(function(){
-    try{return localStorage.getItem("pixels-kanban-sort")||"smart";}catch(e){return"smart";}
+    // Padrão novo: entregaDesc. Migra automaticamente quem tinha "smart"
+    // (default histórico) pra o novo padrão.
+    try{
+      const saved = localStorage.getItem("pixels-kanban-sort");
+      if(!saved || saved === "smart") return "entregaDesc";
+      return saved;
+    }catch(e){return "entregaDesc";}
   });
   useEffect(function(){try{localStorage.setItem("pixels-kanban-sort",sortMode);}catch(e){}},[sortMode]);
   const [showTrashConfirm,setShowTrashConfirm]=useState(null);
@@ -17394,7 +17409,7 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>}
           </div>
-          {myPerms.verLixeira&&<button key="trash" onClick={()=>setViewMode("trash")}
+          {myPerms.verLixeira&&<button key="trash" onClick={_toggleTrash}
             style={{background:viewMode==="trash"?"#fee2e2":"#fff",color:viewMode==="trash"?"#dc2626":"#0f172a",border:`1px solid ${viewMode==="trash"?"#fecaca":"#e2e8f0"}`,borderRadius:11,padding:"0 16px",height:40,fontSize:13,fontWeight:viewMode==="trash"?700:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8,fontFamily:"'Inter',system-ui,sans-serif",transition:"all .15s",boxSizing:"border-box"}}
             onMouseEnter={e=>{if(viewMode!=="trash"){e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#cbd5e1";}}}
             onMouseLeave={e=>{if(viewMode!=="trash"){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}}>
@@ -17524,11 +17539,13 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
           const colTasks=visible
             .filter(t=>col.id==="agendado"?(t.status==="agendado"||t.status==="publicado"):t.status===col.id)
             .sort((a,b)=>{
-            // Override por coluna — ordenação por data de publicação (asc/desc)
-            if(_colSort==="pubAsc")return compareByPublishDate(a,b,true);
-            if(_colSort==="pubDesc")return compareByPublishDate(a,b,false);
-            if(_colSort==="entregaDesc")return compareByCompletedAt(a,b,false);
-            if(_colSort==="entregaAsc")return compareByCompletedAt(a,b,true);
+            // Modos de ordenação por data — funcionam tanto como override por coluna
+            // quanto como padrão global (sortMode). _colSort tem prioridade.
+            const _sort = _colSort || sortMode;
+            if(_sort==="pubAsc")return compareByPublishDate(a,b,true);
+            if(_sort==="pubDesc")return compareByPublishDate(a,b,false);
+            if(_sort==="entregaDesc")return compareByCompletedAt(a,b,false);
+            if(_sort==="entregaAsc")return compareByCompletedAt(a,b,true);
             // Manual: respeita position; quem não tem position vai pro final (cinza)
             if(sortMode==="manual"){
               const pa=a.position??999999,pb=b.position??999999;
@@ -17606,8 +17623,8 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
                 })()}
                 {colMenuOpen===col.id&&(function(){
                   const opts=[
-                    {id:"pubAsc",     label:"Publicação mais próxima",    hint:"Mais próxima no topo",          icon:"calendar-asc", color:"#7c3aed"},
-                    {id:"pubDesc",    label:"Publicação mais distante",   hint:"Mais distante no topo",         icon:"calendar-desc", color:"#7c3aed"},
+                    {id:"pubDesc",    label:"Publicação mais próxima",    hint:"Mais próxima no topo",          icon:"calendar-asc", color:"#7c3aed"},
+                    {id:"pubAsc",     label:"Publicação mais distante",   hint:"Mais distante no topo",         icon:"calendar-desc", color:"#7c3aed"},
                     {id:"entregaDesc",label:"Entregas mais recentes",     hint:"Recém-entregues no topo",       icon:"check-recent", color:"#16a34a"},
                     {id:"entregaAsc", label:"Entregas mais antigas",      hint:"Mais antigas no topo",          icon:"check-old", color:"#16a34a"},
                   ];
@@ -29884,7 +29901,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }
     // Validações obrigatórias
     if(!client){pixelsToast.warning("Selecione um cliente antes de salvar.");return;}
-    if(!sector){pixelsToast.warning("Selecione um setor antes de salvar.");return;}
     if(!assignees||assignees.length===0){pixelsToast.warning("Selecione pelo menos um responsável antes de salvar.");return;}
     // Prioridade não é mais obrigatória — pode salvar sem definir.
     // ── Auto-formatar título: Title Case + Sentence Case + colapso de espaços ──
@@ -31925,8 +31941,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
           {!isAgendado&&<div>
             <label style={LB}><Ico n="tag" size={12} color="#94a3b8"/> Setor</label>
             <select value={sector} onChange={e=>setSector(e.target.value)} disabled={!canEdit}
-              style={{...SI,borderColor:!sector?"#fca5a5":undefined,background:!sector?"#fff7f7":undefined}}>
-              <option value="">Selecione o setor</option>
+              style={{...SI}}>
+              <option value="">Sem setor definido</option>
               {SECTORS.map(s=><option key={s} value={s}>{SECTOR_LABELS[s]}</option>)}
             </select>
           </div>}
