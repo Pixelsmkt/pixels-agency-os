@@ -14253,18 +14253,18 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
                   setColor(_cor);
                 }
               }}
-                title={cfg.hint||("Seleciona todas as "+cfg.unitIds.length+" unidades")}
-                style={{background:_allSel?_cor+"12":"#fff",border:"1.5px solid "+(_allSel?_cor:_cor+"55"),borderRadius:8,padding:"7px 10px",fontSize:12,fontWeight:800,color:_cor,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"flex-start",gap:8,transition:"all .15s",letterSpacing:-.1,width:"100%",boxSizing:"border-box",minHeight:34,overflow:"hidden"}}
-                onMouseEnter={function(e){if(!_allSel){e.currentTarget.style.background=_cor+"08";e.currentTarget.style.borderColor=_cor;}}}
-                onMouseLeave={function(e){if(!_allSel){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=_cor+"55";}}}>
-                <span style={{width:18,height:18,borderRadius:5,background:cfg.logoSrc?"#fff":_cor,border:"1px solid "+(cfg.logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:cfg.logoSrc?1.5:0}}>
+                title={cfg.coveredByParent ? "Já coberto pelo Grupo Bioter" : (cfg.hint||("Seleciona todas as "+cfg.unitIds.length+" unidades"))}
+                style={{background:_allSel && !cfg.coveredByParent?_cor+"12":"#fff",border:"1.5px "+(cfg.coveredByParent?"dashed":"solid")+" "+(_allSel && !cfg.coveredByParent?_cor:(cfg.coveredByParent?"#cbd5e1":_cor+"55")),borderRadius:8,padding:"7px 10px",fontSize:12,fontWeight:cfg.coveredByParent?600:800,color:cfg.coveredByParent?"#94a3b8":_cor,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"flex-start",gap:8,transition:"all .15s",letterSpacing:-.1,width:"100%",boxSizing:"border-box",minHeight:34,overflow:"hidden",opacity:cfg.coveredByParent?0.6:1}}
+                onMouseEnter={function(e){if(!_allSel && !cfg.coveredByParent){e.currentTarget.style.background=_cor+"08";e.currentTarget.style.borderColor=_cor;}}}
+                onMouseLeave={function(e){if(!_allSel && !cfg.coveredByParent){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=_cor+"55";}}}>
+                <span style={{width:18,height:18,borderRadius:5,background:cfg.logoSrc?"#fff":_cor,border:"1px solid "+(cfg.logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:cfg.logoSrc?1.5:0,filter:cfg.coveredByParent?"grayscale(0.6)":"none"}}>
                   {cfg.logoSrc
                     ? <img src={cfg.logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
                     : <span style={{color:"#fff",fontSize:9,fontWeight:900}}>{cfg.badge||""}</span>
                   }
                 </span>
-                <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"left"}}>{cfg.name}</span>
-                {_selCount>0 && <span style={{background:_cor+"22",color:_cor,fontSize:9.5,fontWeight:800,padding:"2px 6px",borderRadius:99,flexShrink:0,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{_selCount}/{cfg.unitIds.length}</span>}
+                <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"left"}}>{cfg.name}{cfg.coveredByParent?" · já coberto":""}</span>
+                {_selCount>0 && !cfg.coveredByParent && <span style={{background:_cor+"22",color:_cor,fontSize:9.5,fontWeight:800,padding:"2px 6px",borderRadius:99,flexShrink:0,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{_selCount}/{cfg.unitIds.length}</span>}
               </button>;
             };
 
@@ -14283,8 +14283,13 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
               _blocks.push(<div key="grp-bioter" style={{display:"flex",flexDirection:"column",gap:5}}>
                 <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Agrupadores Bioter</div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:6}}>
-                  {_renderAgrupador({id:"bioter",name:"Grupo Bioter",color:_bioterCor,unitIds:_allUnitIds,logoSrc:_bioterLogo,badge:"GB",hint:"Todas as unidades (BR + PY)"})}
-                  {_brasilUnitIds.length>0 && _renderAgrupador({id:"bioter_brasil",name:"Bioter Brasil",color:_bioterCor,unitIds:_brasilUnitIds,logoSrc:_bioterLogo,badge:"BR",hint:"Só unidades brasileiras (exclui Paraguay)"})}
+                  {(function(){
+                    const _grupoFully = _allUnitIds.length>0 && _allUnitIds.every(function(uid){return clientIds.indexOf(uid)>=0;});
+                    return <>
+                      {_renderAgrupador({id:"bioter",name:"Grupo Bioter",color:_bioterCor,unitIds:_allUnitIds,logoSrc:_bioterLogo,badge:"GB",hint:"Todas as unidades (BR + PY)"})}
+                      {_brasilUnitIds.length>0 && _renderAgrupador({id:"bioter_brasil",name:"Bioter Brasil",color:_bioterCor,unitIds:_brasilUnitIds,logoSrc:_bioterLogo,badge:"BR",hint:"Só unidades brasileiras (exclui Paraguay)",coveredByParent:_grupoFully})}
+                    </>;
+                  })()}
                 </div>
               </div>);
             }
