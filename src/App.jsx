@@ -22952,7 +22952,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
                   <video ref={videoRef} src={currentSrc} controls
                     onTimeUpdate={function(e){setVideoCurrentTime(e.target.currentTime||0);}}
                     onLoadedMetadata={function(e){setVideoCurrentTime(e.target.currentTime||0);}}
-                    style={{maxWidth:"100%",maxHeight:"78vh",width:"auto",height:"auto",objectFit:"contain",display:"block",background:"#0f172a",margin:"0 auto"}}/>
+                    style={{maxWidth:"100%",maxHeight:"62vh",width:"auto",height:"auto",objectFit:"contain",display:"block",background:"#0f172a",margin:"0 auto"}}/>
                   {/* Botao Baixar vídeo — flutuante no top-right do container, fora dos controles nativos */}
                   <button onClick={_downloadNow} title="Baixar vídeo original"
                     style={{position:"absolute",top:12,right:12,zIndex:10,background:"rgba(15,23,42,0.72)",backdropFilter:"blur(6px)",color:"#fff",border:"1px solid rgba(255,255,255,0.18)",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",boxShadow:"0 4px 14px rgba(0,0,0,0.35)",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1}}
@@ -22998,7 +22998,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
         </div>
 
         {/* Right — feedback panel (redesign moderno 2026-06: Linear/Notion style) */}
-        <div style={{width:380,flexShrink:0,background:"#fff",borderLeft:"1px solid #e5e7eb",display:"flex",flexDirection:"column",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
+        <div style={{width:480,flexShrink:0,background:"#fff",borderLeft:"1px solid #e5e7eb",display:"flex",flexDirection:"column",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}>
           {/* Conteúdo scrollável */}
           <div style={{flex:1,overflowY:"auto",padding:"24px 24px 20px",display:"flex",flexDirection:"column",gap:22}}>
 
@@ -23858,7 +23858,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
     })()}
 
     {/* Card view */}
-    {current&&(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1280,margin:"0 auto",width:"100%"}}>
+    {current&&(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",width:"100%"}}>
 
       {/* Navigation — setas juntas, roxo Pixels */}
       <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:8,padding:"4px 0"}}>
@@ -23880,7 +23880,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       </div>
 
       {/* Main content: image + sidebar — grid responsivo */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(tab==="copys"?"1fr 360px":"1fr 380px"),gap:18,alignItems:"flex-start"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(tab==="copys"?"1fr 360px":"1fr 480px"),gap:18,alignItems:"flex-start"}}>
 
         {/* Image panel — só para Aprovação de conteúdo (publicacao). */}
         {(tab==="publicacao"||tab==="video")&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -23917,7 +23917,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             if(sentAt)metaTags.push({key:"sent",icon:"clock",label:"Enviado "+fmtSentBR(sentAt),color:"#6366f1",bg:"#6366f114"});
             if(dl)metaTags.push({key:"dl",icon:"clock",label:"Entrega "+fmtBR(dl),color:"#f97316",bg:"#f9731614"});
             if(pubD)metaTags.push({key:"pub",icon:"calendar",label:"Publicação "+fmtBR(pubD)+(pubT?" "+pubT:""),color:"#0ea5e9",bg:"#0ea5e914"});
-            if(refMes)metaTags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#475569",bg:"#f1f5f9"});
+            if(refMes)metaTags.push({key:"ref",icon:"dollar",label:fmtMes(refMes),color:"#16a34a",bg:"#dcfce7"});
             if(priCfg)metaTags.push({key:"pri",icon:"flame",label:priCfg.label,color:priCfg.color,bg:priCfg.color+"14"});
             const bioterSel=(cl&&cl.id==="bioter"&&current.bioterUnit)?String(current.bioterUnit).split(",").map(s=>s.trim()).filter(Boolean):[];
             const assigneeIds=Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
@@ -23927,13 +23927,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             return(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:11,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
               {/* Linha 1: cliente + unidades + responsáveis */}
               {(cl||bioterSel.length>0||assigneeUsers.length>0)&&(<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"5px 14px",display:"flex",alignItems:"center"}}>
+                {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"6px 14px",display:"flex",alignItems:"center"}}>
                   {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:26,maxWidth:110,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:13,fontWeight:700}}>{cl.abbr||cl.name}</span>)}
                 </div>)}
                 {bioterSel.map(uid=>{
                   const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
                   if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center"}}>
+                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"6px 14px",fontSize:14,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center"}}>
                     {u.pickerLabel||u.label}
                   </span>);
                 })}
@@ -23950,8 +23950,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               </div>)}
               {/* Linha 2: tipo + prazos + mês + prioridade — chips grandes, padronizados com linha 1 */}
               {metaTags.length>0&&(<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:9,padding:"5px 14px",fontSize:13,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:6,whiteSpace:"nowrap"}}>
-                  <Ico n={t.icon} size={14} color={t.color}/>{t.label}
+                {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:9,padding:"6px 14px",fontSize:14,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
+                  <Ico n={t.icon} size={15} color={t.color}/>{t.label}
                 </span>))}
               </div>)}
             </div>);
@@ -24284,6 +24284,32 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               {/* Botões estilo Linear/Vercel — chip colorido pro ícone, texto escuro, hover com glow */}
               {(function(){
                 const _BTNS=[
+                  ...(tab==="video"?[{label:"Baixar vídeo", color:"#0ea5e9", colorDark:"#0284c7", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>, onClick:async()=>{
+                    try{
+                      // Pega URL do primeiro video anexo (final)
+                      const _videos = (current.files||[]).filter(f=>!f.isAnnotation && (String(f.type||"").startsWith("video/") || _isVideoUrl(f.url))).filter(f=>!f.tipo || f.tipo==="final");
+                      const _v = _videos[0] || allImgs.find(u=>typeof _isVideoUrl==="function"&&_isVideoUrl(u));
+                      const _url = _v ? (typeof _v==="string"?_v:_v.url) : null;
+                      if(!_url){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nenhum vídeo anexado.",3000); return; }
+                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando vídeo…",2000);
+                      let _fname = "";
+                      try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
+                      if(!_fname || _fname.length<4){
+                        const _t = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : "video";
+                        _fname = _t + ".mp4";
+                      }
+                      const _r = await fetch(_url);
+                      const _b = await _r.blob();
+                      const _u = URL.createObjectURL(_b);
+                      const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
+                      document.body.appendChild(_a); _a.click();
+                      setTimeout(function(){ URL.revokeObjectURL(_u); _a.remove(); }, 250);
+                      if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname, 3000);
+                    }catch(e){
+                      console.warn("[download btn sidebar]", e);
+                      if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
+                    }
+                  }, title:"Baixa o vídeo original com 1 clique"}]:[]),
                   {label:"Aprovar publicação", color:"#16a34a", colorDark:"#15803d", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>, onClick:()=>approvePub(current), kbd:"Enter"},
                   {label:"Reprovar publicação", color:"#dc2626", colorDark:"#b91c1c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>, onClick:async()=>{ if(await pixelsConfirm("Reprovar este material? Ele vai pra coluna Reprovadas. A produção foi feita, então ainda conta no pagamento do mês.",{okText:"Reprovar",danger:true})) rejectPub(current); }, title:"Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."},
                   {label:"Solicitar ajuste", color:"#ea580c", colorDark:"#c2410c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, onClick:()=>setEditAnnot(current)},
