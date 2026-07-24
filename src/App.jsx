@@ -63838,7 +63838,8 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   const [openClient, setOpenClient] = useState(null);
   const [search, setSearch] = useState("");
   const [store, _updateClient] = _usePlaybooksStore();
-  const [editMode, setEditMode] = useState(false);
+  // editMode SEMPRE true pra admins — tudo editável inline com auto-save
+  const [editMode, setEditMode] = useState(true);
   // Re-render quando clientes dinâmicos carregarem do Supabase (evita Agroforte sumir no F5)
   const [_clientsTick, setClientsTick] = useState(0);
   useEffect(function(){
@@ -64203,6 +64204,42 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     if(typeof pixelsToast!=="undefined") pixelsToast.success("Playbook salvo!");
   };
 
+  // ── AUTO-SAVE CENTRAL — debounce 800ms ──
+  // Sempre que qualquer estado editável muda, salva sozinho no Supabase.
+  // Guarda contra: (1) primeira render (não salvar valores iniciais),
+  //                (2) troca de cliente/area (que reseta os states via useEffect).
+  const _autosaveSkipRef = useRef(true);
+  useEffect(function(){
+    // Reset flag ao trocar cliente/area — a próxima mudança dos states
+    // vem do useEffect de reset, não de edição do usuário.
+    _autosaveSkipRef.current = true;
+    const _t = setTimeout(function(){ _autosaveSkipRef.current = false; }, 500);
+    return function(){ clearTimeout(_t); };
+  },[cl.id, area]);
+  useEffect(function(){
+    if(_autosaveSkipRef.current) return;
+    const _tid = setTimeout(function(){
+      try{
+        const _patch = {};
+        if((editSobre||"") !== (data.sobre||"")) _patch.sobre = editSobre;
+        if((editComm||"") !== (data.comunicacao||"")) _patch.comunicacao = editComm;
+        if(JSON.stringify(editContatos||{}) !== JSON.stringify(data.contatos||{})) _patch.contatos = editContatos;
+        if(JSON.stringify(editContatosByUnit||{}) !== JSON.stringify(data.contatos_by_unit||{})) _patch.contatos_by_unit = editContatosByUnit;
+        if(JSON.stringify(editProdutos||[]) !== JSON.stringify(data.produtos||[])) _patch.produtos = editProdutos;
+        if(Object.keys(_patch).length > 0){
+          onUpdate(_patch);
+        }
+        const _chkArr = (editChk||"").split("\n").map(function(s){return s.trim();}).filter(Boolean);
+        const _curChk = Array.isArray(areaData.checklist) ? areaData.checklist : [];
+        if(JSON.stringify(_chkArr) !== JSON.stringify(_curChk)){
+          onUpdateArea({checklist:_chkArr});
+        }
+      }catch(err){ console.warn("[playbook autosave]", err); }
+    }, 800);
+    return function(){ clearTimeout(_tid); };
+  // eslint-disable-next-line
+  },[editSobre, editComm, editContatos, editContatosByUnit, editProdutos, editChk]);
+
   // Helper Bioter contatos por unidade: ler/escrever
   const _contatosForUnit=function(unitId){
     if(!unitId)return editContatos||{};
@@ -64322,18 +64359,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               </div>}
             </div>
           </div>
-          {isAdmin && <div style={{display:"flex",gap:8,flexShrink:0,paddingTop:2}}>
-            {editMode
-              ? <>
-                  <button onClick={()=>setEditMode(false)} style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:11,padding:"9px 16px",color:"#475569",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
-                  <button onClick={handleSave} style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",border:"none",borderRadius:11,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 20px rgba(159,67,246,.5)",display:"inline-flex",alignItems:"center",gap:6}}>
-                    <Ico n="check" size={14} color="#fff"/> Salvar
-                  </button>
-                </>
-              : <button onClick={()=>setEditMode(true)} style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",border:"none",borderRadius:11,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 20px rgba(159,67,246,.5)",display:"inline-flex",alignItems:"center",gap:6}}>
-                  <Ico n="edit" size={13} color="#fff"/> Editar playbook
-                </button>
-            }
+          {/* Sem botão global — cada aba salva ao editar (auto-save inline) */}
+          {isAdmin && <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,paddingTop:2,color:PB_SOFT,fontSize:11,fontWeight:600,letterSpacing:.2}}>
+            <span style={{display:"inline-flex",width:6,height:6,borderRadius:"50%",background:"#22c55e",boxShadow:"0 0 8px rgba(34,197,94,.5)"}}/>
+            Edição inline ativa — tudo salva automaticamente
           </div>}
         </div>
       </div>
@@ -64359,14 +64388,14 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Sobre a empresa */}
           <PlaybookBlock id="pb-sobre" title="Sobre a empresa" subtitle="Quem é o cliente, onde atua e posicionamento" icon="building" color={PB_PURPLE}>
             {editMode
-              ? <textarea value={editSobre} onChange={e=>setEditSobre(e.target.value)} rows={5}
+              ? <textarea value={editSobre} onChange={e=>setEditSobre(e.target.value)} onBlur={function(){if((editSobre||"")!==(data.sobre||"")) onUpdate({sobre:editSobre});}} rows={5}
                   placeholder="Quem é o cliente, o que vende, onde atua, posicionamento principal..."
                   style={_pbInpStyle()}/>
               : (function(){
                   const _s = data.sobre || _pbAutoSobre(cl.id);
                   return _s
                     ? <PbProse text={_s}/>
-                    : <_PbEmpty icon="building" text="Sem descrição cadastrada." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>;
+                    : <_PbEmpty icon="building" text="Sem descrição cadastrada." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>;
                 })()
             }
           </PlaybookBlock>
@@ -64374,12 +64403,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Comunicação da marca */}
           <PlaybookBlock id="pb-comunicacao" title="Comunicação da marca" subtitle="Tom de voz, estilo e linguagem" icon="sparkles" color="#0ea5e9">
             {editMode
-              ? <textarea value={editComm} onChange={e=>setEditComm(e.target.value)} rows={5}
+              ? <textarea value={editComm} onChange={e=>setEditComm(e.target.value)} onBlur={function(){if((editComm||"")!==(data.comunicacao||"")) onUpdate({comunicacao:editComm});}} rows={5}
                   placeholder="Tom de voz, estilo de mensagem, tipo de linguagem, o que a marca transmite..."
                   style={_pbInpStyle()}/>
               : (data.comunicacao
                   ? <PbProse text={data.comunicacao}/>
-                  : <_PbEmpty icon="sparkles" text="Sem orientação de comunicação cadastrada." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>)
+                  : <_PbEmpty icon="sparkles" text="Sem orientação de comunicação cadastrada." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>)
             }
             {!editMode && Array.isArray(data.pilares) && data.pilares.length>0 && <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid "+PB_BORDER2}}>
               <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:9}}>Pilares de comunicação</div>
@@ -64497,7 +64526,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               }
 
               // ── Modo leitura ──
-              if(listRead.length===0) return <_PbEmpty icon="phone" text={_isBioter?"Nenhum contato cadastrado pra esta unidade.":"Nenhum contato cadastrado."} sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>;
+              if(listRead.length===0) return <_PbEmpty icon="phone" text={_isBioter?"Nenhum contato cadastrado pra esta unidade.":"Nenhum contato cadastrado."} sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>;
               return <div style={{display:"flex",flexDirection:"column",gap:12}}>
                 {listRead.map(function(ct,idx){
                   const items = FIELDS.filter(function(it){return ct[it.key];});
@@ -64732,7 +64761,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         </div>;
                       })}
                     </div>
-                    : <_PbEmpty icon="package" text={_isBioter?"Nenhum produto cadastrado pra esta unidade.":"Nenhum produto cadastrado."} sub={isAdmin?"Clique em \"Editar playbook\" pra adicionar.":""}/>;
+                    : <_PbEmpty icon="package" text={_isBioter?"Nenhum produto cadastrado pra esta unidade.":"Nenhum produto cadastrado."} sub={isAdmin?"Use o botão abaixo pra adicionar.":""}/>;
                 })()
             }
                     </PlaybookBlock>
@@ -64778,7 +64807,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=PB_PURPLE_BD;}}>
               <Ico n="plus" size={15} color={PB_PURPLE_DK}/> Adicionar novo template
             </button>}
-            {templates.length===0 && !editMode && <_PbEmpty icon="image" text="Nenhum template cadastrado." sub={isAdmin?"Edite o playbook pra adicionar templates (Ajuste de template, Carrossel, Story etc).":""}/>}
+            {templates.length===0 && !editMode && <_PbEmpty icon="image" text="Nenhum template cadastrado." sub={isAdmin?"Use o botão abaixo pra adicionar templates.":""}/>}
           </div>}
 
           {/* Orientações para a equipe — só na área Design.
@@ -65633,11 +65662,19 @@ function _PbVisualOrientations({areaData, isAdmin, editMode, onUpdate, areaColor
   }
   function _remove(id){
     const _item = _list.find(function(it){return it.id===id;});
-    const _title = (_item && _item.title) || "Orientação";
-    function _doDelete(){ _save(_list.filter(function(it){return it.id!==id;})); }
+    if(!_item){ return; }
+    // Se é placeholder recém-criado (título default, sem imagem e sem descrição), apaga direto
+    const _isPlaceholder = (_item.title==="Nova orientação" || !_item.title) && !_item.imgUrl && !_item.description;
+    function _doDelete(){
+      const _next = _list.filter(function(it){return it.id!==id;});
+      _save(_next);
+      if(typeof pixelsToast!=="undefined") pixelsToast.info("Orientação removida",1500);
+    }
+    if(_isPlaceholder){ _doDelete(); return; }
+    const _title = _item.title || "Orientação";
     if(typeof pixelsConfirm==="function"){
-      pixelsConfirm({title:"Excluir orientação visual?",message:'"'+_title+'" será removido.',confirmLabel:"Excluir",danger:true,onConfirm:_doDelete});
-    }else if(confirm("Excluir esta orientação?")) _doDelete();
+      pixelsConfirm({title:"Excluir orientação visual?",message:'"'+_title+'" será removida.',confirmLabel:"Excluir",danger:true,onConfirm:_doDelete});
+    }else if(window.confirm('Excluir "'+_title+'"?')){ _doDelete(); }
   }
 
   if(_list.length===0 && !editMode){
@@ -65918,7 +65955,7 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
         {perfis.length===0
           ? <_PbEmpty icon="users"
               text="Nenhum perfil cadastrado ainda."
-              sub={editMode && isAdmin ? "Adicione o primeiro perfil com o botão acima." : (isAdmin ? "Clique em \"Editar playbook\" pra adicionar." : "")}/>
+              sub={editMode && isAdmin ? "Adicione o primeiro perfil com o botão acima." : (isAdmin ? "Use o botão abaixo pra adicionar." : "")}/>
           : <div style={{display:"flex",flexDirection:"column",gap:8}}>
               {perfis.map(function(p,i){ return _renderPerfilCard(p, i); })}
             </div>
@@ -65989,7 +66026,7 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
             style={Object.assign({},_pbInpStyle(),{minHeight:100,resize:"vertical"})}/>
         : (particularidades
             ? <div style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",color:PB_TEXT,fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{particularidades}</div>
-            : <_PbEmpty icon="sparkles" text="Sem particularidades cadastradas." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>
+            : <_PbEmpty icon="sparkles" text="Sem particularidades cadastradas." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>
           )
       }
     </div>
@@ -66008,7 +66045,7 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
             style={Object.assign({},_pbInpStyle(),{minHeight:80,resize:"vertical"})}/>
         : (restricoes
             ? <div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"12px 14px",color:"#7f1d1d",fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{restricoes}</div>
-            : <_PbEmpty icon="alert" text="Sem restrições cadastradas." sub={isAdmin?"Clique em \"Editar playbook\" pra preencher.":""}/>
+            : <_PbEmpty icon="alert" text="Sem restrições cadastradas." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>
           )
       }
     </div>
