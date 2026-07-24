@@ -14219,17 +14219,17 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
                   setColor(_cor);
                 }
               }}
-                style={{background:_sel?_cor:"#fff",border:"1px solid "+(_sel?_cor:"#e2e8f0"),borderRadius:8,padding:"4px 10px 4px 4px",fontSize:11.5,fontWeight:_sel?700:600,color:_sel?"#fff":"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",boxShadow:_sel?"0 2px 6px "+_cor+"33":"none"}}
-                onMouseEnter={function(e){if(!_sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"08";}}}
-                onMouseLeave={function(e){if(!_sel){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
-                <span style={{width:18,height:18,borderRadius:5,background:_sel?"rgba(255,255,255,0.9)":(_logoSrc?"#fff":_cor),border:_sel?"none":("1px solid "+(_logoSrc?"#e2e8f0":"transparent")),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?1.5:0}}>
+                style={{background:_sel?_cor+"12":"#fff",border:"1px solid "+(_sel?_cor:"#e2e8f0"),borderRadius:8,padding:"7px 10px",fontSize:12,fontWeight:_sel?700:500,color:_sel?_cor:"#475569",cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"flex-start",gap:8,transition:"all .15s",width:"100%",boxSizing:"border-box",minHeight:34,overflow:"hidden"}}
+                onMouseEnter={function(e){if(!_sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"06";e.currentTarget.style.color=_cor;}}}
+                onMouseLeave={function(e){if(!_sel){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";}}}>
+                <span style={{width:18,height:18,borderRadius:5,background:_logoSrc?"#fff":_cor,border:"1px solid "+(_logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?1.5:0}}>
                   {_logoSrc
                     ? <img src={_logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
-                    : <span style={{color:_sel?_cor:"#fff",fontSize:9,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
+                    : <span style={{color:"#fff",fontSize:9,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
                   }
                 </span>
-                <span>{cl.name||cl.nome||cl.id}</span>
-                {_sel&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginLeft:1}}><polyline points="20 6 9 17 4 12"/></svg>}
+                <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"left"}}>{cl.name||cl.nome||cl.id}</span>
+                {_sel&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_cor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
               </button>;
             };
 
@@ -14254,17 +14254,17 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
                 }
               }}
                 title={cfg.hint||("Seleciona todas as "+cfg.unitIds.length+" unidades")}
-                style={{background:_allSel?_cor:"#fff",border:"1.5px solid "+(_allSel?_cor:_cor+"55"),borderRadius:8,padding:"4px 10px 4px 4px",fontSize:11.5,fontWeight:800,color:_allSel?"#fff":_cor,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",boxShadow:_allSel?"0 2px 6px "+_cor+"33":"none",letterSpacing:-.1}}
-                onMouseEnter={function(e){if(!_allSel){e.currentTarget.style.background=_cor+"10";e.currentTarget.style.borderColor=_cor;}}}
+                style={{background:_allSel?_cor+"12":"#fff",border:"1.5px solid "+(_allSel?_cor:_cor+"55"),borderRadius:8,padding:"7px 10px",fontSize:12,fontWeight:800,color:_cor,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"flex-start",gap:8,transition:"all .15s",letterSpacing:-.1,width:"100%",boxSizing:"border-box",minHeight:34,overflow:"hidden"}}
+                onMouseEnter={function(e){if(!_allSel){e.currentTarget.style.background=_cor+"08";e.currentTarget.style.borderColor=_cor;}}}
                 onMouseLeave={function(e){if(!_allSel){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=_cor+"55";}}}>
-                <span style={{width:18,height:18,borderRadius:5,background:_allSel?"rgba(255,255,255,0.9)":(cfg.logoSrc?"#fff":_cor),border:_allSel?"none":("1px solid "+(cfg.logoSrc?"#e2e8f0":"transparent")),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:cfg.logoSrc?1.5:0}}>
+                <span style={{width:18,height:18,borderRadius:5,background:cfg.logoSrc?"#fff":_cor,border:"1px solid "+(cfg.logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:cfg.logoSrc?1.5:0}}>
                   {cfg.logoSrc
                     ? <img src={cfg.logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
-                    : <span style={{color:_allSel?_cor:"#fff",fontSize:9,fontWeight:900}}>{cfg.badge||""}</span>
+                    : <span style={{color:"#fff",fontSize:9,fontWeight:900}}>{cfg.badge||""}</span>
                   }
                 </span>
-                <span>{cfg.name}</span>
-                {_selCount>0 && <span style={{background:_allSel?"rgba(255,255,255,0.28)":_cor,color:"#fff",fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:99,marginLeft:1,letterSpacing:.2}}>{_selCount}/{cfg.unitIds.length}</span>}
+                <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"left"}}>{cfg.name}</span>
+                {_selCount>0 && <span style={{background:_cor+"22",color:_cor,fontSize:9.5,fontWeight:800,padding:"2px 6px",borderRadius:99,flexShrink:0,letterSpacing:.2,fontFeatureSettings:"'tnum'"}}>{_selCount}/{cfg.unitIds.length}</span>}
               </button>;
             };
 
@@ -14282,7 +14282,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             if(_units.length>0){
               _blocks.push(<div key="grp-bioter" style={{display:"flex",flexDirection:"column",gap:5}}>
                 <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Agrupadores Bioter</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(2, 1fr)",gap:6}}>
                   {_renderAgrupador({id:"bioter",name:"Grupo Bioter",color:_bioterCor,unitIds:_allUnitIds,logoSrc:_bioterLogo,badge:"GB",hint:"Todas as unidades (BR + PY)"})}
                   {_brasilUnitIds.length>0 && _renderAgrupador({id:"bioter_brasil",name:"Bioter Brasil",color:_bioterCor,unitIds:_brasilUnitIds,logoSrc:_bioterLogo,badge:"BR",hint:"Só unidades brasileiras (exclui Paraguay)"})}
                 </div>
@@ -14293,7 +14293,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             if(_units.length>0){
               _blocks.push(<div key="grp-unidades" style={{display:"flex",flexDirection:"column",gap:5,paddingTop:8,borderTop:"1px dashed #f1f5f9"}}>
                 <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Unidades Bioter</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6}}>
                   {_units.map(function(u){
                     return _renderPill({id:u.id, name:u.name, color:_bioterCor, _isUnit:true});
                   })}
@@ -14305,7 +14305,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             if(_outros.length>0){
               _blocks.push(<div key="grp-outros" style={{display:"flex",flexDirection:"column",gap:5,paddingTop:8,borderTop:"1px dashed #f1f5f9"}}>
                 <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Outros clientes</div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:6}}>
                   {_outros.map(_renderPill)}
                 </div>
               </div>);
@@ -24513,6 +24513,31 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="#fecaca";}}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
                 Reprovar copy
+              </button>
+              {/* Ver detalhes do cartão — pra editar campos antes de aprovar */}
+              <button onClick={()=>setOpenCard(current)} title="Abre o cartão completo pra editar/ver detalhes"
+                style={{width:"100%",background:"linear-gradient(180deg,#ffffff,#fafbfc)",color:"#0f172a",border:"1px solid #e5e7eb",borderRadius:10,padding:"8px 11px",fontWeight:600,fontSize:12.5,letterSpacing:-.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 1px 2px rgba(15,23,42,0.04)",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif",marginTop:4}}
+                onMouseEnter={e=>{
+                  e.currentTarget.style.background="linear-gradient(180deg,#fff,#64748b08)";
+                  e.currentTarget.style.borderColor="#64748b66";
+                  e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04), 0 0 0 4px rgba(100,116,139,.10), 0 8px 20px rgba(100,116,139,.15)";
+                  e.currentTarget.style.transform="translateY(-1px)";
+                  const c=e.currentTarget.querySelector("[data-chip]");
+                  if(c){c.style.background="#64748b";c.style.color="#fff";c.style.transform="scale(1.06)";}
+                }}
+                onMouseLeave={e=>{
+                  e.currentTarget.style.background="linear-gradient(180deg,#ffffff,#fafbfc)";
+                  e.currentTarget.style.borderColor="#e5e7eb";
+                  e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,0.04)";
+                  e.currentTarget.style.transform="";
+                  const c=e.currentTarget.querySelector("[data-chip]");
+                  if(c){c.style.background="#64748b15";c.style.color="#64748b";c.style.transform="";}
+                }}>
+                <span data-chip style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:7,background:"#64748b15",color:"#64748b",flexShrink:0,transition:"all .18s cubic-bezier(.4,0,.2,1)"}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </span>
+                <span style={{transition:"color .18s",letterSpacing:-.15}}>Ver detalhes do cartão</span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#cbd5e1",flexShrink:0,opacity:.4,transition:"opacity .18s"}}><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </>)}
 
