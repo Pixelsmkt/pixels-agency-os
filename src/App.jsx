@@ -29527,32 +29527,32 @@ function _ArmazenamentoPanel({tasks}){
   }, []);
 
   // Bytes REAIS do bucket agency-files (buscado via API do Supabase Storage).
-  // Fica null enquanto carrega; quando resolve, sobrescreve a estimativa.
+  // Fica null enquanto carrega. Nunca mostra numero chutado — so real.
   const [_realBytes, setRealBytes] = useState(null);
   const [_realFiles, setRealFiles] = useState(null);
   const [_realLoading, setRealLoading] = useState(false);
+  const [_realError, setRealError] = useState(null);
 
   // Fetch real: lista TODAS as pastas do bucket recursivamente e soma metadata.size
   const _fetchRealUsage = React.useCallback(async function(){
-    if(!window._sb) return;
+    if(!window._sb){ setRealError("Supabase não conectado"); return; }
     setRealLoading(true);
+    setRealError(null);
     try{
       let _totalBytes = 0, _totalFiles = 0;
-      // Lista raiz + recursao manual (list nao tem recursivo nativo)
+      let _failed = false;
       async function _walk(prefix){
         let _offset = 0;
         const _limit = 1000;
         while(true){
           const {data, error} = await window._sb.storage.from("agency-files").list(prefix, {limit:_limit, offset:_offset});
-          if(error){ console.warn("[armazenamento] list", prefix, error.message); break; }
+          if(error){ console.warn("[armazenamento] list", prefix, error.message); _failed = true; return; }
           if(!data || data.length===0) break;
           for(const item of data){
-            // Se metadata existe = arquivo. Se nao = pasta (recursar).
             if(item.metadata && typeof item.metadata.size === "number"){
               _totalBytes += item.metadata.size;
               _totalFiles++;
             } else if(item.name && !item.metadata){
-              // pasta
               await _walk(prefix ? (prefix+"/"+item.name) : item.name);
             }
           }
@@ -29561,10 +29561,15 @@ function _ArmazenamentoPanel({tasks}){
         }
       }
       await _walk("");
-      setRealBytes(_totalBytes);
-      setRealFiles(_totalFiles);
+      if(_failed){
+        setRealError("Erro ao listar bucket");
+      } else {
+        setRealBytes(_totalBytes);
+        setRealFiles(_totalFiles);
+      }
     }catch(e){
       console.warn("[armazenamento] fetch real:", e && e.message||e);
+      setRealError((e && e.message) || "Erro desconhecido");
     }
     setRealLoading(false);
   }, []);
@@ -29572,47 +29577,26 @@ function _ArmazenamentoPanel({tasks}){
   // Roda 1x no mount pra ter numero real
   useEffect(function(){ _fetchRealUsage(); }, [_fetchRealUsage]);
 
-  // Uso TOTAL: prefere numero real; se ainda nao carregou, usa estimativa por extensao
+  // Uso TOTAL: SO dado real. Se ainda nao carregou, retorna placeholders (nunca chuta).
   const _uso = React.useMemo(function(){
-    // Estimativa por extensao (fallback)
-    const _guessSize = function(f){
-      if(typeof f.size === "number" && f.size>0) return f.size;
-      const _u = String(f.url||f.name||"").toLowerCase();
-      if(/\.(mp4|mov|webm|avi|mkv|m4v)(\?|$)/.test(_u)) return 30*1024*1024;  // Videos ~30MB
-      if(/\.(png|jpg|jpeg|webp|gif|svg|avif)(\?|$)/.test(_u)) return 500*1024; // Imagens ~500KB
-      if(/\.(pdf)(\?|$)/.test(_u)) return 3*1024*1024;                          // PDFs ~3MB
-      return 2*1024*1024;                                                       // Outros ~2MB
-    };
-    let _estBytes = 0, _estFiles = 0, _cards = 0;
-    (tasks||[]).forEach(function(t){
-      if(!t || t.deletedAt) return;
-      const _fs = Array.isArray(t.files) ? t.files : [];
-      let _hadFile = false;
-      _fs.forEach(function(f){
-        if(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0)){
-          _estFiles++;
-          _estBytes += _guessSize(f);
-          _hadFile = true;
-        }
-      });
-      if(_hadFile) _cards++;
-    });
-    // Se tem dado real, usa. Senao, usa estimativa.
-    const _bytes = (_realBytes!==null) ? _realBytes : _estBytes;
-    const _files = (_realFiles!==null) ? _realFiles : _estFiles;
+    const _hasReal = _realBytes !== null;
+    const _bytes = _hasReal ? _realBytes : 0;
+    const _files = _hasReal ? _realFiles : 0;
     const _totalPlanBytes = 100 * 1024 * 1024 * 1024; // 100 GB Pro
-    const _pct = Math.min(100, Math.round((_bytes/_totalPlanBytes)*100 * 10) / 10);
-    const _gbUsed = (_bytes / (1024*1024*1024));
+    const _pct = _hasReal ? Math.min(100, Math.round((_bytes/_totalPlanBytes)*100 * 10) / 10) : 0;
+    const _gbUsed = _bytes / (1024*1024*1024);
     const _gbFree = Math.max(0, 100 - _gbUsed);
     return {
-      bytes:_bytes, files:_files, cards:_cards,
+      bytes:_bytes, files:_files,
       gbUsed:_gbUsed, gbFree:_gbFree, pct:_pct,
-      usedLabel: _gbUsed >= 1 ? _gbUsed.toFixed(2)+" GB" : Math.round(_bytes/(1024*1024))+" MB",
-      freeLabel: _gbFree.toFixed(1)+" GB",
-      isReal: _realBytes!==null,
+      usedLabel: _hasReal ? (_gbUsed >= 1 ? _gbUsed.toFixed(2)+" GB" : Math.round(_bytes/(1024*1024))+" MB") : "—",
+      freeLabel: _hasReal ? _gbFree.toFixed(1)+" GB" : "—",
+      isReal: _hasReal,
       isLoading: _realLoading,
+      hasError: !!_realError,
+      errorMsg: _realError,
     };
-  }, [tasks, _realBytes, _realFiles, _realLoading]);
+  }, [_realBytes, _realFiles, _realLoading, _realError]);
 
   // Cards candidatos: status publicado/reprovado + completedAt (ou colEnteredAt) > N meses
   const _candidatos = React.useMemo(function(){
@@ -29763,8 +29747,11 @@ function _ArmazenamentoPanel({tasks}){
       <div style={{flex:1,minWidth:0}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,display:"inline-flex",alignItems:"center",gap:8}}>
           Armazenamento
-          {_uso.isLoading && <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>Calculando...</span>}
-          {_uso.isReal && !_uso.isLoading && <span style={{background:"#dcfce7",color:"#15803d",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Dado real</span>}
+          {_uso.isLoading && <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{animation:"pixels-spin 1s linear infinite"}}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            Consultando bucket...
+          </span>}
+          {_uso.hasError && <span style={{background:"#fee2e2",color:"#b91c1c",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Erro: {_uso.errorMsg}</span>}
         </div>
         <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2,lineHeight:1.4}}>Uso atual do Supabase Storage. Plano Pro: 100 GB. Drive tem backup completo.</div>
       </div>
