@@ -29441,9 +29441,169 @@ const scoreLabel=s=>s>=80?"Excelente":s>=60?"Bom":s>=40?"Regular":"Atenção";
 const medal=r=>r===0?"🥇":r===1?"🥈":r===2?"🥉":"#"+(r+1);
 
 function PageInterno({tasks}){
+  const _isSocio = CURRENT_USER && CURRENT_USER.level === 1;
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
+    {_isSocio && <_ArmazenamentoPanel tasks={tasks}/>}
     <CalendarioInterno tasks={tasks}/>
   </div>);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   _ArmazenamentoPanel — Retenção de arquivos do Storage (só sócios)
+   Lista cards publicados/reprovados com > 6 meses e permite limpar
+   os arquivos do bucket agency-files. Card + timeline + comments +
+   demand_history são preservados. Drive já tem backup (sync roda 24/7).
+   ═══════════════════════════════════════════════════════════════════ */
+function _ArmazenamentoPanel({tasks}){
+  const [busy,setBusy] = useState(false);
+  const [meses,setMeses] = useState(6);
+  const [preview,setPreview] = useState(null); // {cards:[], totalFiles, totalMB}
+
+  // Cards candidatos: status publicado/reprovado + completedAt (ou colEnteredAt) > N meses
+  const _candidatos = React.useMemo(function(){
+    const _now = Date.now();
+    const _limitMs = meses * 30 * 24 * 60 * 60 * 1000;
+    const _list = (tasks||[]).filter(function(t){
+      if(!t || t.deletedAt) return false;
+      if(t.status !== "publicado" && t.status !== "reprovado") return false;
+      // Precisa ter arquivos pra fazer sentido limpar
+      const _files = Array.isArray(t.files) ? t.files : [];
+      const _hasFiles = _files.some(function(f){ return f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0); });
+      if(!_hasFiles) return false;
+      // Idade
+      const _dtStr = t.completedAt || t.colEnteredAt || t.updated_at || t.updatedAt;
+      if(!_dtStr) return false;
+      const _dt = new Date(_dtStr).getTime();
+      if(isNaN(_dt)) return false;
+      return (_now - _dt) > _limitMs;
+    });
+    // Contar arquivos e MB (aproximação: se f.size existir, soma; senão estima 500KB média)
+    let _totalFiles = 0, _totalBytes = 0;
+    _list.forEach(function(t){
+      const _files = Array.isArray(t.files) ? t.files : [];
+      _files.forEach(function(f){
+        if(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0)){
+          _totalFiles++;
+          _totalBytes += (typeof f.size === "number" && f.size>0) ? f.size : 500*1024;
+        }
+      });
+    });
+    return { cards:_list, totalFiles:_totalFiles, totalMB: Math.round(_totalBytes/(1024*1024)) };
+  }, [tasks, meses]);
+
+  // Extrai storagePath de uma URL do Supabase (fallback quando f.storagePath não existe)
+  function _extractPath(url){
+    if(!url) return null;
+    try{
+      const _m = String(url).match(/\/storage\/v1\/object\/(?:public|sign)\/agency-files\/(.+?)(?:\?|$)/);
+      if(_m && _m[1]) return decodeURIComponent(_m[1]);
+    }catch(_){}
+    return null;
+  }
+
+  async function _executarLimpeza(){
+    if(!window._sb){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Sem conexão com Supabase"); return; }
+    if(_candidatos.cards.length === 0){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nada pra limpar."); return; }
+    const _ok = typeof pixelsConfirm==="function"
+      ? await pixelsConfirm({
+          title:"Limpar arquivos antigos?",
+          message:"Vai remover "+_candidatos.totalFiles+" arquivos (~"+_candidatos.totalMB+" MB) de "+_candidatos.cards.length+" cards publicados/reprovados com mais de "+meses+" meses.\n\nOs cards, histórico e comentários SÃO PRESERVADOS. O Drive já tem backup completo. Só os bytes do Storage são liberados.",
+          confirmLabel:"Limpar "+_candidatos.totalMB+" MB",
+          danger:true
+        })
+      : confirm("Limpar "+_candidatos.totalFiles+" arquivos (~"+_candidatos.totalMB+" MB)? Cards permanecem, só arquivos apagados.");
+    if(!_ok) return;
+    setBusy(true);
+    if(typeof pixelsToast!=="undefined") pixelsToast.info("Limpando... "+_candidatos.totalFiles+" arquivos", 3000);
+    let _cleaned = 0, _errors = 0;
+    for(const _t of _candidatos.cards){
+      try{
+        const _files = Array.isArray(_t.files) ? _t.files : [];
+        const _paths = [];
+        _files.forEach(function(f){
+          if(!f || !f.url) return;
+          const _p = f.storagePath || _extractPath(f.url);
+          if(_p) _paths.push(_p);
+        });
+        if(_paths.length > 0){
+          const {error} = await window._sb.storage.from("agency-files").remove(_paths);
+          if(error){ console.warn("[armazenamento] remove err task",_t.id,":",error.message); _errors++; }
+          else { _cleaned += _paths.length; }
+        }
+        // Atualiza task.files = [] e adiciona timeline entry
+        const _newTl = (_t.timeline||[]).concat([{
+          type:"system", label:"Arquivos removidos (limpeza automática > "+meses+" meses)",
+          at:new Date().toISOString(), atFmt:(new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})),
+          user:CURRENT_USER.name, note:_paths.length+" arquivos removidos do Storage. Drive preserva a cópia."
+        }]);
+        await window._sb.from("tasks").update({files:[], timeline:_newTl, updated_at:new Date().toISOString()}).eq("id", _t.id);
+      }catch(e){ console.warn("[armazenamento] task",_t.id,e); _errors++; }
+    }
+    setBusy(false);
+    if(typeof pixelsToast!=="undefined"){
+      if(_errors > 0) pixelsToast.warning(_cleaned+" arquivos removidos, "+_errors+" erros (ver console)", 6000);
+      else pixelsToast.success(_cleaned+" arquivos removidos (~"+_candidatos.totalMB+" MB liberados)!", 5000);
+    }
+    // Trigger re-render sem reload — polling pega em 30s
+    setPreview(null);
+  }
+
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,paddingBottom:12,borderBottom:"1px solid #f1f5f9"}}>
+      <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,#0f172a,#334155)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.25}}>Armazenamento</div>
+        <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2,lineHeight:1.4}}>Libera espaço no Supabase apagando arquivos antigos do Storage. O Drive mantém a cópia completa.</div>
+      </div>
+    </div>
+
+    <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <span style={{color:"#475569",fontSize:12.5,fontWeight:600}}>Cards com mais de</span>
+        <select value={meses} onChange={function(e){setMeses(parseInt(e.target.value,10)||6);}} disabled={busy}
+          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",cursor:"pointer",fontFamily:"inherit"}}>
+          <option value={3}>3 meses</option>
+          <option value={6}>6 meses</option>
+          <option value={12}>12 meses</option>
+          <option value={24}>24 meses</option>
+        </select>
+        <span style={{color:"#475569",fontSize:12.5,fontWeight:600}}>com status</span>
+        <span style={{background:"#dcfce7",color:"#15803d",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.3,textTransform:"uppercase"}}>Publicado</span>
+        <span style={{color:"#94a3b8",fontSize:11}}>ou</span>
+        <span style={{background:"#fee2e2",color:"#b91c1c",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.3,textTransform:"uppercase"}}>Reprovado</span>
+      </div>
+    </div>
+
+    {/* Preview */}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:10,marginBottom:14}}>
+      <div style={{background:"linear-gradient(135deg,#f8fafc,#fff)",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px"}}>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Cards elegíveis</div>
+        <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{_candidatos.cards.length}</div>
+      </div>
+      <div style={{background:"linear-gradient(135deg,#f8fafc,#fff)",border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px"}}>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Arquivos</div>
+        <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{_candidatos.totalFiles}</div>
+      </div>
+      <div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #ede9fe",borderRadius:10,padding:"12px 14px"}}>
+        <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Espaço estimado</div>
+        <div style={{color:"#7c3aed",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>~{_candidatos.totalMB} MB</div>
+      </div>
+    </div>
+
+    {/* Botão */}
+    <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
+      <button onClick={_executarLimpeza} disabled={busy || _candidatos.cards.length===0}
+        style={{background:_candidatos.cards.length===0?"#f1f5f9":"linear-gradient(135deg,#dc2626,#b91c1c)",color:_candidatos.cards.length===0?"#94a3b8":"#fff",border:"none",borderRadius:10,padding:"11px 20px",fontSize:13,fontWeight:700,cursor:(busy||_candidatos.cards.length===0)?"not-allowed":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,letterSpacing:-.1,boxShadow:_candidatos.cards.length===0?"none":"0 4px 12px rgba(220,38,38,.28)"}}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+        {busy ? "Limpando..." : "Limpar arquivos"}
+      </button>
+      <span style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",flex:1,minWidth:200}}>
+        Preserva card, histórico, comentários e demand_history. Só remove bytes do Storage.
+      </span>
+    </div>
+  </div>;
 }
 
 /* ── CALENDÁRIO COM FILTROS ────────────────── */
