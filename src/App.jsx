@@ -29526,23 +29526,80 @@ function _ArmazenamentoPanel({tasks}){
     }
   }, []);
 
-  // Uso TOTAL do storage: soma bytes de todas as tasks (independente de status/idade)
-  // Serve pra mostrar "quanto ja gastei" no header. Plano Pro Supabase = 100 GB.
+  // Bytes REAIS do bucket agency-files (buscado via API do Supabase Storage).
+  // Fica null enquanto carrega; quando resolve, sobrescreve a estimativa.
+  const [_realBytes, setRealBytes] = useState(null);
+  const [_realFiles, setRealFiles] = useState(null);
+  const [_realLoading, setRealLoading] = useState(false);
+
+  // Fetch real: lista TODAS as pastas do bucket recursivamente e soma metadata.size
+  const _fetchRealUsage = React.useCallback(async function(){
+    if(!window._sb) return;
+    setRealLoading(true);
+    try{
+      let _totalBytes = 0, _totalFiles = 0;
+      // Lista raiz + recursao manual (list nao tem recursivo nativo)
+      async function _walk(prefix){
+        let _offset = 0;
+        const _limit = 1000;
+        while(true){
+          const {data, error} = await window._sb.storage.from("agency-files").list(prefix, {limit:_limit, offset:_offset});
+          if(error){ console.warn("[armazenamento] list", prefix, error.message); break; }
+          if(!data || data.length===0) break;
+          for(const item of data){
+            // Se metadata existe = arquivo. Se nao = pasta (recursar).
+            if(item.metadata && typeof item.metadata.size === "number"){
+              _totalBytes += item.metadata.size;
+              _totalFiles++;
+            } else if(item.name && !item.metadata){
+              // pasta
+              await _walk(prefix ? (prefix+"/"+item.name) : item.name);
+            }
+          }
+          if(data.length < _limit) break;
+          _offset += _limit;
+        }
+      }
+      await _walk("");
+      setRealBytes(_totalBytes);
+      setRealFiles(_totalFiles);
+    }catch(e){
+      console.warn("[armazenamento] fetch real:", e && e.message||e);
+    }
+    setRealLoading(false);
+  }, []);
+
+  // Roda 1x no mount pra ter numero real
+  useEffect(function(){ _fetchRealUsage(); }, [_fetchRealUsage]);
+
+  // Uso TOTAL: prefere numero real; se ainda nao carregou, usa estimativa por extensao
   const _uso = React.useMemo(function(){
-    let _bytes = 0, _files = 0, _cards = 0;
+    // Estimativa por extensao (fallback)
+    const _guessSize = function(f){
+      if(typeof f.size === "number" && f.size>0) return f.size;
+      const _u = String(f.url||f.name||"").toLowerCase();
+      if(/\.(mp4|mov|webm|avi|mkv|m4v)(\?|$)/.test(_u)) return 30*1024*1024;  // Videos ~30MB
+      if(/\.(png|jpg|jpeg|webp|gif|svg|avif)(\?|$)/.test(_u)) return 500*1024; // Imagens ~500KB
+      if(/\.(pdf)(\?|$)/.test(_u)) return 3*1024*1024;                          // PDFs ~3MB
+      return 2*1024*1024;                                                       // Outros ~2MB
+    };
+    let _estBytes = 0, _estFiles = 0, _cards = 0;
     (tasks||[]).forEach(function(t){
       if(!t || t.deletedAt) return;
       const _fs = Array.isArray(t.files) ? t.files : [];
       let _hadFile = false;
       _fs.forEach(function(f){
         if(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0)){
-          _files++;
-          _bytes += (typeof f.size === "number" && f.size>0) ? f.size : 500*1024;
+          _estFiles++;
+          _estBytes += _guessSize(f);
           _hadFile = true;
         }
       });
       if(_hadFile) _cards++;
     });
+    // Se tem dado real, usa. Senao, usa estimativa.
+    const _bytes = (_realBytes!==null) ? _realBytes : _estBytes;
+    const _files = (_realFiles!==null) ? _realFiles : _estFiles;
     const _totalPlanBytes = 100 * 1024 * 1024 * 1024; // 100 GB Pro
     const _pct = Math.min(100, Math.round((_bytes/_totalPlanBytes)*100 * 10) / 10);
     const _gbUsed = (_bytes / (1024*1024*1024));
@@ -29550,11 +29607,12 @@ function _ArmazenamentoPanel({tasks}){
     return {
       bytes:_bytes, files:_files, cards:_cards,
       gbUsed:_gbUsed, gbFree:_gbFree, pct:_pct,
-      // Labels formatados
       usedLabel: _gbUsed >= 1 ? _gbUsed.toFixed(2)+" GB" : Math.round(_bytes/(1024*1024))+" MB",
       freeLabel: _gbFree.toFixed(1)+" GB",
+      isReal: _realBytes!==null,
+      isLoading: _realLoading,
     };
-  }, [tasks]);
+  }, [tasks, _realBytes, _realFiles, _realLoading]);
 
   // Cards candidatos: status publicado/reprovado + completedAt (ou colEnteredAt) > N meses
   const _candidatos = React.useMemo(function(){
@@ -29574,14 +29632,22 @@ function _ArmazenamentoPanel({tasks}){
       if(isNaN(_dt)) return false;
       return (_now - _dt) > _limitMs;
     });
-    // Contar arquivos e MB (aproximação: se f.size existir, soma; senão estima 500KB média)
+    // Contar arquivos e MB — estimativa por extensao (bem mais realista que 500KB fixo)
+    const _guess = function(f){
+      if(typeof f.size === "number" && f.size>0) return f.size;
+      const _u = String(f.url||f.name||"").toLowerCase();
+      if(/\.(mp4|mov|webm|avi|mkv|m4v)(\?|$)/.test(_u)) return 30*1024*1024;
+      if(/\.(png|jpg|jpeg|webp|gif|svg|avif)(\?|$)/.test(_u)) return 500*1024;
+      if(/\.(pdf)(\?|$)/.test(_u)) return 3*1024*1024;
+      return 2*1024*1024;
+    };
     let _totalFiles = 0, _totalBytes = 0;
     _list.forEach(function(t){
       const _files = Array.isArray(t.files) ? t.files : [];
       _files.forEach(function(f){
         if(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0)){
           _totalFiles++;
-          _totalBytes += (typeof f.size === "number" && f.size>0) ? f.size : 500*1024;
+          _totalBytes += _guess(f);
         }
       });
     });
@@ -29695,68 +29761,90 @@ function _ArmazenamentoPanel({tasks}){
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Armazenamento</div>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3,display:"inline-flex",alignItems:"center",gap:8}}>
+          Armazenamento
+          {_uso.isLoading && <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>Calculando...</span>}
+          {_uso.isReal && !_uso.isLoading && <span style={{background:"#dcfce7",color:"#15803d",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>Dado real</span>}
+        </div>
         <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2,lineHeight:1.4}}>Uso atual do Supabase Storage. Plano Pro: 100 GB. Drive tem backup completo.</div>
       </div>
+      <button onClick={_fetchRealUsage} disabled={_realLoading} title="Recalcular a partir do bucket"
+        style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:9,padding:"7px 11px",fontSize:11.5,fontWeight:700,color:"#475569",cursor:_realLoading?"not-allowed":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:_realLoading?.6:1,flexShrink:0}}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Recalcular
+      </button>
     </div>
 
-    {/* ─── USO ATUAL DO STORAGE — KPIs limpos, sem gradientes ────── */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.4fr",gap:10,marginBottom:18}}>
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 16px"}}>
-        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Espaço usado</div>
-        <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.usedLabel}</div>
-        <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:5}}>de 100 GB · {_uso.files} arquivos</div>
-      </div>
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 16px"}}>
-        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Espaço livre</div>
-        <div style={{color:"#15803d",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.freeLabel}</div>
-        <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:5}}>disponível</div>
-      </div>
-      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 16px"}}>
-        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Ocupação</div>
-        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-          <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.pct}%</div>
-          <div style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>do plano Pro</div>
+    {/* ─── OCUPACAO — bloco destacado com barra grande + 3 stats ───── */}
+    <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"18px 20px",marginBottom:16}}>
+      {/* Numero grande + label */}
+      <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",gap:16,marginBottom:12,flexWrap:"wrap"}}>
+        <div>
+          <div style={{color:"#64748b",fontSize:11,fontWeight:700,letterSpacing:.6,textTransform:"uppercase",marginBottom:4}}>Espaço usado do plano Pro</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:8}}>
+            <div style={{color:"#0f172a",fontSize:34,fontWeight:800,letterSpacing:-.9,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.usedLabel}</div>
+            <div style={{color:"#94a3b8",fontSize:15,fontWeight:600,letterSpacing:-.2}}>/ 100 GB</div>
+          </div>
         </div>
-        <div style={{marginTop:8,height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
-          <div style={{width:_uso.pct+"%",height:"100%",background:_uso.pct>=80?"#dc2626":_uso.pct>=60?"#f59e0b":"#0f172a",borderRadius:99,transition:"width .3s"}}/>
+        <div style={{textAlign:"right"}}>
+          <div style={{color:_uso.pct>=80?"#dc2626":_uso.pct>=60?"#b45309":"#15803d",fontSize:28,fontWeight:800,letterSpacing:-.7,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.pct}%</div>
+          <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,letterSpacing:.3,textTransform:"uppercase",marginTop:3}}>Ocupação</div>
+        </div>
+      </div>
+      {/* Barra grande de ocupacao */}
+      <div style={{height:10,background:"#e2e8f0",borderRadius:99,overflow:"hidden",marginBottom:12}}>
+        <div style={{width:_uso.pct+"%",height:"100%",background:_uso.pct>=80?"linear-gradient(90deg,#dc2626,#b91c1c)":_uso.pct>=60?"linear-gradient(90deg,#f59e0b,#d97706)":"linear-gradient(90deg,#16a34a,#15803d)",borderRadius:99,transition:"width .4s"}}/>
+      </div>
+      {/* 3 mini-stats abaixo */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:12,paddingTop:10,borderTop:"1px solid #f1f5f9"}}>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginBottom:3}}>Livre</div>
+          <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{_uso.freeLabel}</div>
+        </div>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginBottom:3}}>Arquivos</div>
+          <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{typeof _uso.files === "number" ? _uso.files.toLocaleString("pt-BR") : _uso.files}</div>
+        </div>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:10,fontWeight:700,letterSpacing:.4,textTransform:"uppercase",marginBottom:3}}>Média/arquivo</div>
+          <div style={{color:"#0f172a",fontSize:15,fontWeight:800,letterSpacing:-.3,fontFeatureSettings:"'tnum'"}}>{_uso.files>0 ? (function(){var _m = _uso.bytes/_uso.files/(1024*1024); return _m>=1?_m.toFixed(1)+" MB":Math.round(_m*1024)+" KB";})() : "—"}</div>
         </div>
       </div>
     </div>
 
     {/* ─── SEÇÃO LIMPEZA ────────────────────────────────────────── */}
-    <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"16px 18px"}}>
-      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:14}}>
-        <div style={{width:28,height:28,borderRadius:8,background:"#fef2f2",color:"#dc2626",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
+    <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,padding:"18px 20px"}}>
+      {/* Header da secao */}
+      <div style={{display:"flex",alignItems:"flex-start",gap:11,marginBottom:16,paddingBottom:14,borderBottom:"1px solid #f1f5f9"}}>
+        <div style={{width:32,height:32,borderRadius:9,background:"#fef2f2",color:"#dc2626",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
         </div>
         <div style={{flex:1,minWidth:0}}>
-          <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Liberar espaço</div>
-          <div style={{color:"#64748b",fontSize:11.5,fontWeight:500,marginTop:1}}>Apaga arquivos antigos do Storage. Card, histórico e comentários ficam preservados.</div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:14.5,letterSpacing:-.25}}>Liberar espaço</div>
+          <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2,lineHeight:1.4}}>Apaga arquivos antigos do Storage. Card, histórico e comentários ficam preservados.</div>
         </div>
-        {ultimaLimpeza && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,background:"#fff",padding:"5px 9px",borderRadius:7,border:"1px solid #e2e8f0"}}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        {ultimaLimpeza && <div style={{color:"#64748b",fontSize:11,fontWeight:600,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,background:"#f8fafc",padding:"6px 10px",borderRadius:8,border:"1px solid #e2e8f0"}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Última: {_diasDesde} {_diasDesde===1?"dia":"dias"} atrás
         </div>}
       </div>
 
-    <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
-      <div style={{display:"flex",alignItems:"center",gap:6}}>
-        <span style={{color:"#475569",fontSize:12.5,fontWeight:600}}>Cards com mais de</span>
+      {/* Filtro em linha destacada */}
+      <div style={{background:"#f8fafc",border:"1px solid #f1f5f9",borderRadius:10,padding:"12px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+        <span style={{color:"#475569",fontSize:12.5,fontWeight:600}}>Filtrar cards com mais de</span>
         <select value={meses} onChange={function(e){setMeses(parseInt(e.target.value,10)||6);}} disabled={busy}
-          style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",cursor:"pointer",fontFamily:"inherit"}}>
+          style={{background:"#fff",border:"1px solid #cbd5e1",borderRadius:8,padding:"7px 12px",fontSize:12.5,fontWeight:700,color:"#0f172a",cursor:"pointer",fontFamily:"inherit",boxShadow:"0 1px 2px rgba(15,23,42,.04)"}}>
           <option value={1}>1 mês</option>
           <option value={3}>3 meses</option>
           <option value={6}>6 meses</option>
           <option value={12}>12 meses</option>
           <option value={24}>24 meses</option>
         </select>
-        <span style={{color:"#475569",fontSize:12.5,fontWeight:600}}>com status</span>
-        <span style={{background:"#dcfce7",color:"#15803d",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.3,textTransform:"uppercase"}}>Publicado</span>
-        <span style={{color:"#94a3b8",fontSize:11}}>ou</span>
-        <span style={{background:"#fee2e2",color:"#b91c1c",fontSize:10.5,fontWeight:800,padding:"3px 8px",borderRadius:6,letterSpacing:.3,textTransform:"uppercase"}}>Reprovado</span>
+        <span style={{color:"#475569",fontSize:12.5,fontWeight:600}}>e status</span>
+        <span style={{background:"#dcfce7",color:"#15803d",fontSize:10.5,fontWeight:800,padding:"4px 9px",borderRadius:6,letterSpacing:.3,textTransform:"uppercase"}}>Publicado</span>
+        <span style={{color:"#94a3b8",fontSize:11,fontWeight:600}}>ou</span>
+        <span style={{background:"#fee2e2",color:"#b91c1c",fontSize:10.5,fontWeight:800,padding:"4px 9px",borderRadius:6,letterSpacing:.3,textTransform:"uppercase"}}>Reprovado</span>
       </div>
-    </div>
 
     {/* Preview */}
     <div style={{display:"grid",gridTemplateColumns:"repeat(3, 1fr)",gap:10,marginBottom:14}}>
