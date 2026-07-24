@@ -24652,42 +24652,6 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                       if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
                     }
                   }, title:"Baixa a arte final (última imagem enviada) com 1 clique"}]:[]),
-                  ...(tab==="publicacao"?[{label:"Baixar arte", color:"#0ea5e9", colorDark:"#0284c7", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>, onClick:async()=>{
-                    try{
-                      const _isVid = function(u){ return typeof _isVideoUrl==="function" && _isVideoUrl(u); };
-                      const _imgs = (current.files||[]).filter(function(f){
-                        if(!f || f.isAnnotation) return false;
-                        if(f.tipo && f.tipo!=="final") return false;
-                        if(String(f.type||"").startsWith("video/")) return false;
-                        if(_isVid(f.url)) return false;
-                        return !!f.url;
-                      });
-                      const _pT = function(s){ if(!s) return 0; const _i=new Date(s).getTime(); return isNaN(_i)?0:_i; };
-                      _imgs.sort(function(a,b){ return (_pT(b.addedAtIso)||_pT(b.addedAt)||0) - (_pT(a.addedAtIso)||_pT(a.addedAt)||0); });
-                      let _url = _imgs[0]&&_imgs[0].url;
-                      if(!_url && Array.isArray(allImgs)){
-                        for(let i=0;i<allImgs.length;i++){ const _u = typeof allImgs[i]==="string"?allImgs[i]:(allImgs[i]&&allImgs[i].url); if(_u && !_isVid(_u)){ _url = _u; break; } }
-                      }
-                      if(!_url){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nenhuma arte anexada.",3000); return; }
-                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando arte…",2000);
-                      let _fname = "";
-                      try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
-                      if(!_fname || _fname.length<4){
-                        const _t = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : "arte";
-                        const _extM = String(_url).toLowerCase().match(/\.(png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
-                        _fname = _t + "." + (_extM?_extM[1]:"png");
-                      }
-                      const _r = await fetch(_url); const _b = await _r.blob();
-                      const _u = URL.createObjectURL(_b);
-                      const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
-                      document.body.appendChild(_a); _a.click();
-                      setTimeout(function(){ URL.revokeObjectURL(_u); _a.remove(); }, 250);
-                      if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname, 3000);
-                    }catch(e){
-                      console.warn("[download arte sidebar]", e);
-                      if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
-                    }
-                  }, title:"Baixa a arte final (última imagem enviada) com 1 clique"}]:[]),
                   {label:"Ver detalhes do cartão", color:"#64748b", colorDark:"#475569", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>, onClick:()=>setOpenCard(current), title:"Abre o cartão completo pra editar/ver detalhes"},
                 ];
                 return _BTNS.map(function(b,i){
@@ -29532,6 +29496,8 @@ function _ArmazenamentoPanel({tasks}){
   const [_realFiles, setRealFiles] = useState(null);
   const [_realLoading, setRealLoading] = useState(false);
   const [_realError, setRealError] = useState(null);
+  // Map de storagePath -> bytes (populado no walk, usado pra estimar candidatos com dado real)
+  const [_realSizeMap, setRealSizeMap] = useState(null);
 
   // Fetch real: lista TODAS as pastas do bucket recursivamente e soma metadata.size
   const _fetchRealUsage = React.useCallback(async function(){
@@ -29541,6 +29507,7 @@ function _ArmazenamentoPanel({tasks}){
     try{
       let _totalBytes = 0, _totalFiles = 0;
       let _failed = false;
+      const _sizeMap = {};
       async function _walk(prefix){
         let _offset = 0;
         const _limit = 1000;
@@ -29552,6 +29519,9 @@ function _ArmazenamentoPanel({tasks}){
             if(item.metadata && typeof item.metadata.size === "number"){
               _totalBytes += item.metadata.size;
               _totalFiles++;
+              // Guarda tamanho real por path completo (pra cruzar com task.files depois)
+              const _fullPath = prefix ? (prefix+"/"+item.name) : item.name;
+              _sizeMap[_fullPath] = item.metadata.size;
             } else if(item.name && !item.metadata){
               await _walk(prefix ? (prefix+"/"+item.name) : item.name);
             }
@@ -29566,6 +29536,7 @@ function _ArmazenamentoPanel({tasks}){
       } else {
         setRealBytes(_totalBytes);
         setRealFiles(_totalFiles);
+        setRealSizeMap(_sizeMap);
       }
     }catch(e){
       console.warn("[armazenamento] fetch real:", e && e.message||e);
@@ -29616,27 +29587,53 @@ function _ArmazenamentoPanel({tasks}){
       if(isNaN(_dt)) return false;
       return (_now - _dt) > _limitMs;
     });
-    // Contar arquivos e MB — estimativa por extensao (bem mais realista que 500KB fixo)
-    const _guess = function(f){
-      if(typeof f.size === "number" && f.size>0) return f.size;
-      const _u = String(f.url||f.name||"").toLowerCase();
-      if(/\.(mp4|mov|webm|avi|mkv|m4v)(\?|$)/.test(_u)) return 30*1024*1024;
-      if(/\.(png|jpg|jpeg|webp|gif|svg|avif)(\?|$)/.test(_u)) return 500*1024;
-      if(/\.(pdf)(\?|$)/.test(_u)) return 3*1024*1024;
-      return 2*1024*1024;
+    // Extrai storagePath de uma URL do Supabase pra cruzar com _realSizeMap
+    const _pathOf = function(f){
+      if(f.storagePath) return f.storagePath;
+      if(!f.url) return null;
+      try{
+        const _m = String(f.url).match(/\/storage\/v1\/object\/(?:public|sign)\/agency-files\/(.+?)(?:\?|$)/);
+        if(_m && _m[1]) return decodeURIComponent(_m[1]);
+      }catch(_){}
+      return null;
     };
-    let _totalFiles = 0, _totalBytes = 0;
+    // SO conta arquivos com tamanho REAL (do Map do bucket walk).
+    // Se f.size existe, usa. Senao, lookup no Map. Sem fallback estimado.
+    let _totalFiles = 0, _totalBytes = 0, _missing = 0;
     _list.forEach(function(t){
       const _files = Array.isArray(t.files) ? t.files : [];
       _files.forEach(function(f){
-        if(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0)){
-          _totalFiles++;
-          _totalBytes += _guess(f);
+        if(!(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0))) return;
+        _totalFiles++;
+        // Prioridade 1: f.size (algumas tasks tem gravado)
+        if(typeof f.size === "number" && f.size>0){
+          _totalBytes += f.size;
+          return;
         }
+        // Prioridade 2: Map real do bucket walk
+        if(_realSizeMap){
+          const _p = _pathOf(f);
+          if(_p && typeof _realSizeMap[_p] === "number"){
+            _totalBytes += _realSizeMap[_p];
+            return;
+          }
+          // Arquivo esta no card mas nao no bucket (orfao/ja apagado)
+          _missing++;
+          return;
+        }
+        // Map ainda nao carregou — nao chuta
+        _missing++;
       });
     });
-    return { cards:_list, totalFiles:_totalFiles, totalMB: Math.round(_totalBytes/(1024*1024)) };
-  }, [tasks, meses]);
+    const _ready = !!_realSizeMap;
+    return {
+      cards:_list,
+      totalFiles:_totalFiles,
+      totalMB: _ready ? Math.round(_totalBytes/(1024*1024)) : null, // null = ainda calculando
+      missingFiles: _missing,
+      ready: _ready,
+    };
+  }, [tasks, meses, _realSizeMap]);
 
   // Extrai storagePath de uma URL do Supabase (fallback quando f.storagePath não existe)
   function _extractPath(url){
@@ -29652,14 +29649,15 @@ function _ArmazenamentoPanel({tasks}){
     if(!window._sb){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Sem conexão com Supabase"); return; }
     if(_candidatos.cards.length === 0){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nada pra limpar."); return; }
     const _lbl = meses===1 ? "1 mês" : (meses+" meses");
+    const _sizeLbl = _candidatos.totalMB >= 1024 ? (_candidatos.totalMB/1024).toFixed(2)+" GB" : _candidatos.totalMB+" MB";
     const _ok = typeof pixelsConfirm==="function"
       ? await pixelsConfirm({
           title:"Limpar arquivos antigos?",
-          message:"Vai remover "+_candidatos.totalFiles+" arquivos (~"+_candidatos.totalMB+" MB) de "+_candidatos.cards.length+" cards publicados/reprovados com mais de "+_lbl+".\n\nOs cards, histórico e comentários SÃO PRESERVADOS. O Drive já tem backup completo. Só os bytes do Storage são liberados.",
-          confirmLabel:"Limpar "+_candidatos.totalMB+" MB",
+          message:"Vai remover "+_candidatos.totalFiles+" arquivos ("+_sizeLbl+") de "+_candidatos.cards.length+" cards publicados/reprovados com mais de "+_lbl+".\n\nOs cards, histórico e comentários SÃO PRESERVADOS. O Drive já tem backup completo. Só os bytes do Storage são liberados.",
+          confirmLabel:"Liberar "+_sizeLbl,
           danger:true
         })
-      : confirm("Limpar "+_candidatos.totalFiles+" arquivos (~"+_candidatos.totalMB+" MB)? Cards permanecem, só arquivos apagados.");
+      : confirm("Limpar "+_candidatos.totalFiles+" arquivos ("+_sizeLbl+")? Cards permanecem, só arquivos apagados.");
     if(!_ok) return;
     setBusy(true);
     if(typeof pixelsToast!=="undefined") pixelsToast.info("Limpando... "+_candidatos.totalFiles+" arquivos", 3000);
@@ -29844,15 +29842,20 @@ function _ArmazenamentoPanel({tasks}){
         <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>{_candidatos.totalFiles}</div>
       </div>
       <div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #ede9fe",borderRadius:10,padding:"12px 14px"}}>
-        <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Espaço estimado</div>
-        <div style={{color:"#7c3aed",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>~{_candidatos.totalMB} MB</div>
+        <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>Espaço a liberar</div>
+        <div style={{color:"#7c3aed",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'"}}>
+          {_candidatos.ready
+            ? (_candidatos.totalMB >= 1024 ? (_candidatos.totalMB/1024).toFixed(2)+" GB" : _candidatos.totalMB+" MB")
+            : <span style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>Calculando…</span>}
+        </div>
+        {_candidatos.ready && _candidatos.missingFiles>0 && <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,marginTop:3}}>{_candidatos.missingFiles} arquivo(s) órfão(s)</div>}
       </div>
     </div>
 
     {/* Botão */}
     <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-      <button onClick={_executarLimpeza} disabled={busy || _candidatos.cards.length===0}
-        style={{background:_candidatos.cards.length===0?"#f1f5f9":"linear-gradient(135deg,#dc2626,#b91c1c)",color:_candidatos.cards.length===0?"#94a3b8":"#fff",border:"none",borderRadius:10,padding:"11px 20px",fontSize:13,fontWeight:700,cursor:(busy||_candidatos.cards.length===0)?"not-allowed":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,letterSpacing:-.1,boxShadow:_candidatos.cards.length===0?"none":"0 4px 12px rgba(220,38,38,.28)"}}>
+      <button onClick={_executarLimpeza} disabled={busy || _candidatos.cards.length===0 || !_candidatos.ready}
+        style={{background:(_candidatos.cards.length===0||!_candidatos.ready)?"#f1f5f9":"linear-gradient(135deg,#dc2626,#b91c1c)",color:(_candidatos.cards.length===0||!_candidatos.ready)?"#94a3b8":"#fff",border:"none",borderRadius:10,padding:"11px 20px",fontSize:13,fontWeight:700,cursor:(busy||_candidatos.cards.length===0||!_candidatos.ready)?"not-allowed":"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,letterSpacing:-.1,boxShadow:(_candidatos.cards.length===0||!_candidatos.ready)?"none":"0 4px 12px rgba(220,38,38,.28)"}}>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
         {busy ? "Limpando..." : "Limpar arquivos"}
       </button>
@@ -48111,6 +48114,46 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   },[selCl,portalBioterUnit]);
 
   const cl=CLIENTS.find(c=>c.id===selCl);
+  // FALLBACK: cliente dinamico (criado via "Novo cliente") pode nao estar em CLIENTS
+  // se o usuario logado for o proprio cliente (RLS impede ele de listar todos).
+  // Nesse caso, busca a propria row do Supabase e adiciona ao registry.
+  const [_dynClFetch, setDynClFetch] = useState(0);
+  useEffect(function(){
+    if(!selCl || cl) return; // ja tem, nao precisa buscar
+    if(!window._sb) return;
+    let alive = true;
+    window._sb.from("clients")
+      .select("client_id,name,abbr,sector,cidade,estado,color,logo_url,status,since_label,manager,profile_data")
+      .eq("client_id", selCl).maybeSingle()
+      .then(function(res){
+        if(!alive) return;
+        if(res.error){ console.warn("[portal cliente dynamic fetch]", res.error.message); return; }
+        if(!res.data) return;
+        // Constroi obj no formato do CLIENTS array
+        const r = res.data;
+        const _pd = r.profile_data || {};
+        const obj = {
+          id: r.client_id, name: r.name||r.client_id, abbr: r.abbr||"", sector: r.sector||"",
+          cidade: r.cidade||"", estado: r.estado||"", color: r.color||"#7c3aed",
+          status: r.status||"ativo", since: r.since_label||"", manager: r.manager||"vinicius",
+          meta: _pd.meta||{}, google: _pd.google||{}, social: _pd.social||{},
+          socialUrls: _pd.socialUrls||{}, reporteiUrl: _pd.reporteiUrl||"",
+          upsell: _pd.upsell||[], connected: !!_pd.connected,
+        };
+        if(typeof window.registerDynamicClient === "function"){
+          window.registerDynamicClient(obj);
+          if(r.logo_url && typeof CLIENT_LOGOS === "object" && CLIENT_LOGOS){
+            CLIENT_LOGOS[r.client_id] = r.logo_url;
+          }
+          // Trigger re-render — CLIENTS foi mutado in-place, precisa forçar update
+          setDynClFetch(function(v){return v+1;});
+        }
+      })
+      .catch(function(e){ console.warn("[portal cliente dynamic fetch ex]", e && e.message||e); });
+    return function(){ alive = false; };
+  }, [selCl, cl]);
+  // Re-lookup depois do fetch
+  const clResolved = cl || CLIENTS.find(function(c){return c.id===selCl;});
   // Guard: só inclui tarefas se selCl é válido (evita match com client=="")
   const clTasksAll=selCl?TASKS.filter(t=>t.client===selCl&&!t.deletedAt):[];
 
@@ -48186,7 +48229,16 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   };
   const TABS=ALL_TABS.filter(t=>tabEnabled(t.id));
 
-  if(!cl)return<div style={{padding:40,textAlign:"center",color:C.td}}>Nenhum cliente disponível</div>;
+  // Se ainda nao carregou o cliente dinamico, mostra loading em vez de "nao disponivel"
+  if(!clResolved){
+    if(selCl){
+      return <div style={{padding:40,textAlign:"center",color:C.td,display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{animation:"pixels-spin 1s linear infinite",opacity:.6}}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        <div>Carregando dados do cliente...</div>
+      </div>;
+    }
+    return <div style={{padding:40,textAlign:"center",color:C.td}}>Nenhum cliente disponível</div>;
+  }
 
   // Faturamento data (from contracts)
   const clContract=cl.contract||0;
