@@ -2366,6 +2366,7 @@ function NavIcon({id,size=18,color}){
   // ── Submenus Gestão ──
   if(id==="gestao_financeiro")  return <svg {...p}><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 100 7h5a3.5 3.5 0 010 7H6"/></svg>;
   if(id==="gestao_time")        return <svg {...p}><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>;
+  if(id==="gestao_armazenamento") return <svg {...p}><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>;
   if(id==="gestao_operacional") return <svg {...p}><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>;
   if(id==="gestao_portfolio")   return <svg {...p}><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>;
   if(id==="gestao_enps")        return <svg {...p}><path d="M3 12a9 9 0 1118 0"/><line x1="12" y1="12" x2="16" y2="8"/><circle cx="12" cy="12" r="1.5"/></svg>;
@@ -2421,6 +2422,7 @@ const NAV=[
     {id:"gestao_financeiro",    icon:"▤", label:"Financeiro"},
     {id:"gestao_operacional",   icon:"◈", label:"Operação"},
     {id:"gestao_time",          icon:"◉", label:"Time"},
+    {id:"gestao_armazenamento", icon:"⛃", label:"Armazenamento"},
   ]},
   {id:"acessos",    icon:"◬", label:"Acessos"},
   // Menu "Interno" removido (2026-07-14) — era do MVP inicial e todas as sub-abas
@@ -13834,6 +13836,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const [date,setDate]=useState((initial&&initial.date)||new Date().toISOString().slice(0,10));
   const [hour,setHour]=useState((initial&&initial.hour)||"");
   const [recurrence,setRecurrence]=useState((initial&&initial.recurrence)||"");
+  const [recurrenceUntil,setRecurrenceUntil]=useState((initial&&initial.recurrence_until)||"");
   const [category,setCategory]=useState((initial&&initial.category)||"");
   // Cor padrão por categoria
   const _CAT_COLORS={
@@ -13903,6 +13906,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       date:date,
       hour:hour||null,
       recurrence:recurrence||null,
+      recurrence_until:(recurrence && recurrenceUntil && recurrenceUntil>=date)?recurrenceUntil:null,
       color:color||null,
       category:category||null,
       // client_id só quando é 1 cliente (semântica clara); multi vai só em client_ids
@@ -13936,7 +13940,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         if(r&&r.error){
           const _msg=(r.error.message||"").toLowerCase();
           // Detecta colunas opcionais que ainda não foram migradas (SQL não rodado)
-          const _optionalCols=["city","client_ids","end_date","responsibles"];
+          const _optionalCols=["city","client_ids","end_date","responsibles","recurrence_until"];
           let _retryPayload=null;
           for(let _i=0;_i<_optionalCols.length;_i++){
             const _col=_optionalCols[_i];
@@ -14127,12 +14131,29 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         <div style={{display:"flex",gap:6}}>
           {[{id:"",label:"Não repete"},{id:"weekly",label:"Semanal"},{id:"biweekly",label:"A cada 2 semanas"},{id:"monthly",label:"Mensal"},{id:"yearly",label:"Anual"}].map(function(opt){
             const sel=recurrence===opt.id;
-            return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id);}}
+            return <button key={opt.id||"none"} type="button" onClick={function(){setRecurrence(opt.id); if(!opt.id) setRecurrenceUntil("");}}
               style={{flex:1,background:sel?PURPLE+"15":"#fff",border:"1px solid "+(sel?PURPLE+"55":"#e2e8f0"),borderRadius:9,padding:"9px 10px",fontSize:12.5,fontWeight:sel?700:600,color:sel?PURPLE:"#475569",cursor:"pointer",fontFamily:"inherit"}}>
               {opt.label}
             </button>;
           })}
         </div>
+        {/* Data de término da recorrência — só aparece quando repete */}
+        {recurrence && <div style={{marginTop:10,background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:6,color:"#475569",fontSize:11.5,fontWeight:700}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="15" y1="15" x2="9" y2="15"/></svg>
+            Termina em
+          </div>
+          <input type="date" value={recurrenceUntil||""} min={date} onChange={function(e){setRecurrenceUntil(e.target.value);}}
+            style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12.5,fontWeight:600,color:"#0f172a",fontFamily:"inherit",outline:"none",cursor:"pointer"}}/>
+          {recurrenceUntil && <button type="button" onClick={function(){setRecurrenceUntil("");}} title="Limpar (repetir pra sempre)"
+            style={{background:"transparent",border:"none",color:"#94a3b8",fontSize:11,fontWeight:600,cursor:"pointer",padding:"2px 6px",display:"inline-flex",alignItems:"center",gap:3}}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Sem fim
+          </button>}
+          <span style={{color:"#94a3b8",fontSize:10.5,fontStyle:"italic",flexBasis:"100%",fontWeight:500}}>
+            {recurrenceUntil ? "Repete até "+(function(){const _p=recurrenceUntil.split("-");return _p.length===3?(_p[2]+"/"+_p[1]+"/"+_p[0]):recurrenceUntil;})() : "Deixe vazio pra repetir indefinidamente"}
+          </span>
+        </div>}
       </div>}
       {/* Categoria */}
       <div style={{marginBottom:14}}>
@@ -14445,12 +14466,15 @@ function PageCalendarioInterno({isMob}){
       if(filterType==="eventos"&&(ev.category==="assinatura"||ev.category==="feira"||ev.category==="presenca_feira"||ev.category==="captacao"||ev.category==="entrega"||ev.category==="operacional"||ev.category==="gestao_midia"||ev.category==="reuniao"||ev.category==="comemorativa"))return false;
       if(filterType==="marcos")return false;
       if(filterType==="equipe"||filterType==="clientes")return false;
+      // Data de término da recorrência: se dIso > recurrence_until, não mostra mais
+      const _recUntil = ev.recurrence_until || "";
+      const _pastEnd = _recUntil && dIso > _recUntil;
       if(ev.recurrence==="weekly"){
-        // mesmo dia da semana, a partir da data original
+        if(_pastEnd) return false;
         try{const start=new Date(ev.date+"T12:00");return start.getDay()===dDow && ev.date<=dIso;}catch(_){return false;}
       }
       if(ev.recurrence==="biweekly"){
-        // mesmo dia da semana, e diff em dias múltiplo de 14
+        if(_pastEnd) return false;
         try{
           const start=new Date(ev.date+"T12:00");
           const cur=new Date(dIso+"T12:00");
@@ -14460,11 +14484,11 @@ function PageCalendarioInterno({isMob}){
         }catch(_){return false;}
       }
       if(ev.recurrence==="monthly"){
-        // mesmo dia do mês
+        if(_pastEnd) return false;
         return Number(ev.date.slice(8,10))===dDay && ev.date<=dIso;
       }
       if(ev.recurrence==="yearly"){
-        // mesmo MM-DD
+        if(_pastEnd) return false;
         return ev.date.slice(5,10)===dm && ev.date<=dIso;
       }
       // Multi-dia: se tem end_date, evento aparece em todos os dias do intervalo [date..end_date]
@@ -20300,16 +20324,21 @@ function PageDemandasInternas({ isMob, tasks, setTasks, notifs, setNotifs, perms
     </div>
   );
 
-  // Ordenação canônica: urgentes primeiro, depois prazo crescente, atrasados ainda mais alto
+  // Ordenação canônica: urgentes primeiro; dentro da mesma prioridade, MAIS RECENTE no topo
+  // (novas demandas criadas por último aparecem primeiro pra facilitar decisão)
   const _sortByUrgencyDeadline = (a,b)=>{
     const prio={urgente:0,alta:1,media:2,baixa:3};
     const pa=prio[a.priority]??2, pb=prio[b.priority]??2;
     if(pa!==pb) return pa-pb;
-    const da=dlInt(a.deadline), db=dlInt(b.deadline);
-    if(da===null && db===null) return 0;
-    if(da===null) return 1;
-    if(db===null) return -1;
-    return da-db; // menor (mais atrasado/próximo) primeiro
+    // Dentro do mesmo tier: mais RECENTE primeiro (created_at DESC)
+    const _ct = function(t){
+      const raw = t.createdAt || t.created_at || t.colEnteredAt || t.col_entered_at || t.id;
+      if(!raw) return 0;
+      if(typeof raw==="number") return raw;
+      const d = new Date(raw); const _t = d.getTime();
+      return isNaN(_t) ? (typeof raw==="string" ? raw.length : 0) : _t;
+    };
+    return _ct(b) - _ct(a);
   };
 
   const LIMIT_EXECUTADAS = 8;
@@ -29441,10 +29470,16 @@ const scoreLabel=s=>s>=80?"Excelente":s>=60?"Bom":s>=40?"Regular":"Atenção";
 const medal=r=>r===0?"🥇":r===1?"🥈":r===2?"🥉":"#"+(r+1);
 
 function PageInterno({tasks}){
-  const _isSocio = CURRENT_USER && CURRENT_USER.level === 1;
   return(<div style={{display:"flex",flexDirection:"column",gap:16}}>
-    {_isSocio && <_ArmazenamentoPanel tasks={tasks}/>}
     <CalendarioInterno tasks={tasks}/>
+  </div>);
+}
+
+// PageGestaoArmazenamento — página wrapper do painel de retenção de arquivos
+// Acessada via menu Gestão > Armazenamento (só sócios)
+function PageGestaoArmazenamento({tasks, isMob}){
+  return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:900}}>
+    <_ArmazenamentoPanel tasks={tasks}/>
   </div>);
 }
 
@@ -29456,8 +29491,28 @@ function PageInterno({tasks}){
    ═══════════════════════════════════════════════════════════════════ */
 function _ArmazenamentoPanel({tasks}){
   const [busy,setBusy] = useState(false);
-  const [meses,setMeses] = useState(6);
-  const [preview,setPreview] = useState(null); // {cards:[], totalFiles, totalMB}
+  const [meses,setMeses] = useState(3); // Default: trimestral
+  const [preview,setPreview] = useState(null);
+  const [ultimaLimpeza,setUltimaLimpeza] = useState(null); // ISO date da última execução
+
+  // Carrega última limpeza (localStorage + fallback Supabase team_data)
+  useEffect(function(){
+    try{
+      const _local = localStorage.getItem("pixels-ultima-limpeza-storage");
+      if(_local) setUltimaLimpeza(_local);
+    }catch(_){}
+    // Tenta buscar do Supabase (sincronizado entre sócios)
+    if(window._sb){
+      window._sb.from("team_data").select("data").eq("tipo","ultima_limpeza_storage").maybeSingle()
+        .then(function(r){
+          if(r && r.data && r.data.data && r.data.data.at){
+            const _remote = r.data.data.at;
+            // Se o remote for mais recente que o local, usa ele
+            setUltimaLimpeza(function(cur){ return (!cur || _remote > cur) ? _remote : cur; });
+          }
+        }).catch(function(){});
+    }
+  }, []);
 
   // Cards candidatos: status publicado/reprovado + completedAt (ou colEnteredAt) > N meses
   const _candidatos = React.useMemo(function(){
@@ -29540,15 +29595,58 @@ function _ArmazenamentoPanel({tasks}){
       }catch(e){ console.warn("[armazenamento] task",_t.id,e); _errors++; }
     }
     setBusy(false);
+    // Registra data da última limpeza (local + supabase pra sincronizar entre sócios)
+    const _nowIso = new Date().toISOString();
+    try{ localStorage.setItem("pixels-ultima-limpeza-storage", _nowIso); }catch(_){}
+    setUltimaLimpeza(_nowIso);
+    if(window._sb){
+      try{
+        await window._sb.from("team_data").upsert({
+          tipo:"ultima_limpeza_storage",
+          data:{at:_nowIso, by:CURRENT_USER.name, cleaned:_cleaned, mb:_candidatos.totalMB, meses:meses},
+          updated_at:_nowIso
+        },{onConflict:"tipo"});
+      }catch(e){ console.warn("[armazenamento] salvar última limpeza:",e); }
+    }
     if(typeof pixelsToast!=="undefined"){
       if(_errors > 0) pixelsToast.warning(_cleaned+" arquivos removidos, "+_errors+" erros (ver console)", 6000);
       else pixelsToast.success(_cleaned+" arquivos removidos (~"+_candidatos.totalMB+" MB liberados)!", 5000);
     }
-    // Trigger re-render sem reload — polling pega em 30s
     setPreview(null);
   }
 
-  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:"18px 22px",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:"0 2px 8px rgba(15,23,42,.04)"}}>
+  // Calcula quanto tempo desde a última limpeza (dias)
+  const _diasDesde = (function(){
+    if(!ultimaLimpeza) return null;
+    try{
+      const _t = new Date(ultimaLimpeza).getTime();
+      if(isNaN(_t)) return null;
+      return Math.floor((Date.now() - _t) / (1000*60*60*24));
+    }catch(_){ return null; }
+  })();
+  const _precisaLimpar = (_diasDesde===null || _diasDesde>=90) && _candidatos.cards.length>0;
+  const _fmtData = function(iso){
+    if(!iso) return "nunca";
+    try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return "desconhecido"; }
+  };
+
+  return <div style={{background:"#fff",border:"1px solid "+(_precisaLimpar?"#c4b5fd":"#e2e8f0"),borderRadius:14,padding:"18px 22px",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:_precisaLimpar?"0 4px 20px rgba(124,58,237,.15)":"0 2px 8px rgba(15,23,42,.04)"}}>
+    {/* BANNER trimestral — aparece quando passou 3 meses OU nunca limpou + tem candidatos */}
+    {_precisaLimpar && <div style={{background:"linear-gradient(135deg,#7c3aed,#6d28d9)",borderRadius:11,padding:"14px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:12,color:"#fff",boxShadow:"0 6px 18px rgba(124,58,237,.32)"}}>
+      <div style={{width:38,height:38,borderRadius:10,background:"rgba(255,255,255,.18)",backdropFilter:"blur(6px)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#fff",fontWeight:800,fontSize:13.5,letterSpacing:-.2,marginBottom:2,display:"inline-flex",alignItems:"center",gap:6}}>
+          Hora da limpeza trimestral
+          <span style={{background:"rgba(255,255,255,.22)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{_candidatos.cards.length} cards · ~{_candidatos.totalMB} MB</span>
+        </div>
+        <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,fontWeight:500,lineHeight:1.4}}>
+          {_diasDesde===null ? "Nunca foi feita uma limpeza." : ("Última limpeza há "+_diasDesde+" dias ("+_fmtData(ultimaLimpeza)+").")} Autoriza abaixo pra liberar espaço.
+        </div>
+      </div>
+    </div>}
+
     <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,paddingBottom:12,borderBottom:"1px solid #f1f5f9"}}>
       <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,#0f172a,#334155)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0}}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
@@ -29556,6 +29654,10 @@ function _ArmazenamentoPanel({tasks}){
       <div style={{flex:1,minWidth:0}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.25}}>Armazenamento</div>
         <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2,lineHeight:1.4}}>Libera espaço no Supabase apagando arquivos antigos do Storage. O Drive mantém a cópia completa.</div>
+        {ultimaLimpeza && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:4,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Última limpeza: {_fmtData(ultimaLimpeza)} ({_diasDesde} {_diasDesde===1?"dia":"dias"} atrás)
+        </div>}
       </div>
     </div>
 
@@ -32378,34 +32480,56 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }catch(e){console.warn("[cardmodal] mediaRec stop:",e?.message||e);}
   },[]);
 
+  // Snapshot baseline: capturado 500ms após mount, quando auto-infers já rodaram
+  // (sector é auto-inferido dos assignees, deadline é auto-corrigido, etc).
+  // hasChanges compara contra o snapshot pra evitar falso positivo.
+  const _snapRef = useRef(null);
+  useEffect(function(){
+    // Aguarda auto-infers assentarem (sector, deadline, etc)
+    const _t = setTimeout(function(){
+      _snapRef.current = {
+        title, desc,
+        assignees: JSON.stringify(assignees||[]),
+        watchers: JSON.stringify(watchers||[]),
+        priority, contentType, referenceMonth, deadline, sector, client,
+        checklist: JSON.stringify(checklist||[]),
+        publishDate, publishTime, caption,
+        cover: cover||null,
+        adminTag: adminTag||"",
+        tags: JSON.stringify(tags||[]),
+        // Anexos: só os finalizados
+        files: JSON.stringify((attachments||[]).filter(a=>!a.uploading&&a.url).map(f=>f.id||f.url).sort()),
+      };
+    }, 500);
+    return function(){ clearTimeout(_t); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id]);
+
   const hasChanges=useCallback(()=>{
-    // Normaliza prioridade — "media" é tratado como "" no estado local (força escolha explícita)
-    // sem essa normalização, todo cartão com priority=media dispararia "deseja salvar?" no abrir
-    const taskPriorityNorm=(task.priority&&task.priority!=="media")?task.priority:"";
-    if(title!==(task.title||""))return true;
-    if(desc!==(task.desc||""))return true;
-    if(JSON.stringify(assignees)!==JSON.stringify(task.assignees||[task.assignee]))return true;
-    if(JSON.stringify(watchers)!==JSON.stringify(task.watchers||[]))return true;
-    if(priority!==taskPriorityNorm)return true;
-    if(contentType!==(task.contentType||""))return true;
-    if(referenceMonth!==(task.referenceMonth||""))return true;
-    // Compara contra baseline (deadline auto-corrigido no mount) - evita falso positivo
-    if(deadline!==(_baselineDeadlineRef.current||""))return true;
-    if(sector!==(task.sector||""))return true;
-    if(client!==(task.client||""))return true;
-    if(JSON.stringify(checklist)!==JSON.stringify(task.checklist||[]))return true;
-    if(publishDate!==(task.publishDate||""))return true;
-    if(publishTime!==(task.publishTime||"11:00"))return true;
-    if(caption!==(task.caption||""))return true;
-    if(cover!==(task.cover||null))return true;
-    if((adminTag||"")!==(task.adminTag||""))return true;
-    if(JSON.stringify(tags||[])!==JSON.stringify(task.tags||[]))return true;
-    // Compara só anexos finalizados (ignora placeholders de upload em ambos os lados)
-    const taskFiles=(task.files||[]).filter(f=>!f.uploading&&f.url).map(f=>f.id||f.url);
-    const curFiles=attachments.filter(a=>!a.uploading&&a.url).map(f=>f.id||f.url);
-    if(JSON.stringify(taskFiles.sort())!==JSON.stringify(curFiles.sort()))return true;
+    // Snapshot ainda não pronto → nunca "dirty" (evita bug de fechar durante inicialização)
+    if(!_snapRef.current) return false;
+    const s = _snapRef.current;
+    if(title !== s.title) return true;
+    if(desc !== s.desc) return true;
+    if(JSON.stringify(assignees||[]) !== s.assignees) return true;
+    if(JSON.stringify(watchers||[]) !== s.watchers) return true;
+    if(priority !== s.priority) return true;
+    if(contentType !== s.contentType) return true;
+    if(referenceMonth !== s.referenceMonth) return true;
+    if(deadline !== s.deadline) return true;
+    if(sector !== s.sector) return true;
+    if(client !== s.client) return true;
+    if(JSON.stringify(checklist||[]) !== s.checklist) return true;
+    if(publishDate !== s.publishDate) return true;
+    if(publishTime !== s.publishTime) return true;
+    if(caption !== s.caption) return true;
+    if((cover||null) !== s.cover) return true;
+    if((adminTag||"") !== s.adminTag) return true;
+    if(JSON.stringify(tags||[]) !== s.tags) return true;
+    const curFiles = JSON.stringify((attachments||[]).filter(a=>!a.uploading&&a.url).map(f=>f.id||f.url).sort());
+    if(curFiles !== s.files) return true;
     return false;
-  },[title,desc,assignees,watchers,priority,deadline,sector,client,checklist,publishDate,publishTime,caption,cover,attachments,adminTag,tags,task]);
+  },[title,desc,assignees,watchers,priority,contentType,referenceMonth,deadline,sector,client,checklist,publishDate,publishTime,caption,cover,adminTag,tags,attachments]);
 
   // Conta uploads em andamento (placeholders com uploading:true sem url ainda)
   const uploadingCount=attachments.filter(a=>a.uploading).length;
@@ -41710,6 +41834,7 @@ export default function AgencyOS(){
       case "gestao_operacional":   return isSocio;
       case "gestao_portfolio":     return isSocio;
       case "gestao_time":          return isSocio;  // Time: só sócios podem ver
+      case "gestao_armazenamento": return isSocio;  // Armazenamento: só sócios
       case "gestao_enps":          return true;  // todos veem (filtragem dentro)
       case "acessos":              return p.verAcessos||isSocio;
       case "interno":
@@ -41805,6 +41930,7 @@ export default function AgencyOS(){
       case "gestao_operacional":    return isSocio?<PageOperacional {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_portfolio":      return isSocio?<PagePortfolio {...p}/>:<NoPerm/>;
       case "gestao_time":           return isSocio?<PageGestaoTime {...p} currentUser={CURRENT_USER} onNavTo={nav}/>:<NoPerm/>;
+      case "gestao_armazenamento":  return isSocio?<PageGestaoArmazenamento {...p} tasks={tasks}/>:<NoPerm/>;
       case "gestao_enps":           return <PageGestaoENPS {...p}/>;
       case "ia":
       case "ia_diagnostico":        return (effectivePerms.pixelsIA||isSocio)?<PageIAPixels {...p} tasks={tasks}/>:<NoPerm/>;
@@ -47893,19 +48019,42 @@ function PagePortalCliente({isMob, tasks, setTasks, initTab, lockedClientId, loc
   return(<div style={{display:"flex",flexDirection:"column",gap:16,maxWidth:1600,margin:"0 auto",padding:isMob?"14px 12px 32px":"20px 28px 40px",boxSizing:"border-box",width:"100%"}}>
 
     {/* Header — sem emoji, tipografia limpa */}
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:12}}>
-      <div>
-        <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4,display:"flex",alignItems:"center",gap:8}}>
-          <Ico n="globe" size={20} color={cl.color}/>
-          Portal do cliente
-        </div>
-        <div style={{color:C.td,fontSize:11.5,marginTop:3,fontWeight:500}}>Visão exclusiva do cliente · sem informações internas</div>
+    <div>
+      <div style={{color:C.tx,fontWeight:800,fontSize:20,letterSpacing:-.4,display:"flex",alignItems:"center",gap:8}}>
+        <Ico n="globe" size={20} color={cl.color}/>
+        Portal do cliente
       </div>
-      {isSocio&&!lockedClientId&&<select value={selCl} onChange={e=>setSelCl(e.target.value)}
-        style={{background:C.s1,border:"1px solid "+C.b1,borderRadius:10,padding:"9px 14px",color:C.tx,fontSize:13,fontWeight:700,outline:"none",cursor:"pointer"}}>
-        {CLIENTS.filter(c=>c.status!=="interno").map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>}
+      <div style={{color:C.td,fontSize:11.5,marginTop:3,fontWeight:500}}>Visão exclusiva do cliente · sem informações internas</div>
     </div>
+
+    {/* Barrinha horizontal de clientes — 1 clique pra alternar. Só sócios sem lock. */}
+    {isSocio && !lockedClientId ? (
+      <div style={{display:"flex",gap:6,overflowX:"auto",padding:"2px 0",scrollbarWidth:"thin"}}>
+        {CLIENTS.filter(function(c){return c.status!=="interno";}).map(function(c){
+          const _active = selCl===c.id;
+          const _cor = c.color || "#7c3aed";
+          const _logoSrc = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[c.id]) || null;
+          const _initials = (c.name||"?").trim().split(" ").map(function(w){return w[0]||"";}).slice(0,2).join("").toUpperCase();
+          return (
+            <button key={c.id} onClick={function(){setSelCl(c.id);}} title={c.name}
+              style={{background:_active?_cor+"12":"#fff",border:"1.5px solid "+(_active?_cor:"#e2e8f0"),borderRadius:10,padding:"6px 12px 6px 5px",fontSize:12.5,fontWeight:_active?700:600,color:_active?_cor:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap",flexShrink:0,transition:"all .12s",boxShadow:_active?"0 2px 8px "+_cor+"22":"none"}}
+              onMouseEnter={function(e){if(!_active){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"06";e.currentTarget.style.color=_cor;}}}
+              onMouseLeave={function(e){if(!_active){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";e.currentTarget.style.color="#475569";}}}>
+              <span style={{width:22,height:22,borderRadius:6,background:_logoSrc?"#fff":_cor,border:"1px solid "+(_logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?2:0}}>
+                {_logoSrc
+                  ? <img src={_logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                  : <span style={{color:"#fff",fontSize:9.5,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
+                }
+              </span>
+              <span>{c.name}</span>
+              {_active ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={_cor} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+    ) : null}
 
     {/* Client bar — refinada */}
     <div style={{background:"linear-gradient(135deg,"+cl.color+"15,"+cl.color+"05)",borderRadius:14,padding:"14px 18px",border:"1px solid "+cl.color+"28",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
@@ -59028,15 +59177,73 @@ function _PlanejamentosClientes({isMob}){
     </div>;
   }
 
+  // Estado global de mês/trimestre — sincroniza TODOS os cards
+  const _nowP = new Date();
+  const [_globalYear, _setGlobalYear] = useState(_nowP.getFullYear());
+  const [_globalMonth, _setGlobalMonth] = useState(_nowP.getMonth()+1);
+  const [_globalQuarter, _setGlobalQuarter] = useState(Math.floor(_nowP.getMonth()/3)+1);
+
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
-    {/* Header premium */}
-    <div style={{display:"flex",alignItems:"center",gap:12,padding:"4px 2px"}}>
+    {/* Header premium com seletores globais */}
+    <div style={{display:"flex",alignItems:"center",gap:12,padding:"4px 2px",flexWrap:"wrap"}}>
       <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,#0ea5e9,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 8px 20px rgba(14,165,233,.32)"}}>
         <_PlIco name="layers" size={19} color="#fff"/>
       </div>
       <div style={{minWidth:0,flex:1}}>
         <div style={{color:"#0f172a",fontWeight:800,fontSize:17,letterSpacing:-.3}}>Planejamentos dos clientes</div>
-        <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>Cada card tem seletor próprio de mês/trimestre — sincronizado com Portal e Estratégia › Clientes</div>
+        <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>Selecione mês/trimestre aqui — cards com conteúdo abrem automaticamente, vazios ficam colapsados</div>
+      </div>
+      {/* Seletores globais */}
+      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        {(function(){
+          const _MESES_NM = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+          function _shiftM(d){
+            let ny=_globalYear, nm=_globalMonth+d;
+            while(nm<1){nm+=12;ny-=1;}
+            while(nm>12){nm-=12;ny+=1;}
+            _setGlobalYear(ny); _setGlobalMonth(nm);
+          }
+          function _shiftQ(d){
+            let ny=_globalYear, nq=_globalQuarter+d;
+            while(nq<1){nq+=4;ny-=1;}
+            while(nq>4){nq-=4;ny+=1;}
+            _setGlobalYear(ny); _setGlobalQuarter(nq);
+          }
+          return <>
+            {/* Mês global */}
+            <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:3,boxShadow:"0 2px 6px rgba(15,23,42,.04)"}}>
+              <button onClick={function(){_shiftM(-1);}} title="Mês anterior"
+                style={{background:"transparent",border:"none",borderRadius:7,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0ea5e9";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <div style={{padding:"0 12px",fontSize:12.5,fontWeight:800,color:"#0f172a",minWidth:110,textAlign:"center",fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{_MESES_NM[_globalMonth-1]+" "+_globalYear}</div>
+              <button onClick={function(){_shiftM(1);}} title="Próximo mês"
+                style={{background:"transparent",border:"none",borderRadius:7,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0ea5e9";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+            {/* Trimestre global */}
+            <div style={{display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:3,boxShadow:"0 2px 6px rgba(15,23,42,.04)"}}>
+              <button onClick={function(){_shiftQ(-1);}} title="Trimestre anterior"
+                style={{background:"transparent",border:"none",borderRadius:7,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0ea5e9";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <div style={{padding:"0 12px",fontSize:12.5,fontWeight:800,color:"#0f172a",minWidth:70,textAlign:"center",fontFeatureSettings:"'tnum'",letterSpacing:-.2}}>{"Q"+_globalQuarter+" "+_globalYear}</div>
+              <button onClick={function(){_shiftQ(1);}} title="Próximo trimestre"
+                style={{background:"transparent",border:"none",borderRadius:7,width:28,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}
+                onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color="#0ea5e9";}}
+                onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          </>;
+        })()}
       </div>
     </div>
 
@@ -59056,6 +59263,9 @@ function _PlanejamentosClientes({isMob}){
               eventsFor={_eventsFor}
               periodBounds={_periodBounds}
               renderEventos={_RenderEventosLinkados}
+              globalYear={_globalYear}
+              globalMonth={_globalMonth}
+              globalQuarter={_globalQuarter}
               isMob={isMob}
             />;
           })}
@@ -59068,19 +59278,27 @@ function _PlanejamentosClientes({isMob}){
 // _ClientePlanCard — 1 card por cliente, com seletor de mês próprio,
 // collapse automático quando vazio, e header dentro do cover.
 // ═════════════════════════════════════════════════════════════════════════
-function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, statusClienteCfg, onNav, intEvents, eventsFor, periodBounds, renderEventos, isMob}){
+function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, statusClienteCfg, onNav, intEvents, eventsFor, periodBounds, renderEventos, globalYear, globalMonth, globalQuarter, isMob}){
   const _MESES_NM = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const _now = new Date();
   const _clColor = cl.color || "#7c3aed";
   const _logoSrc = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[cl.id]) || null;
 
-  // State local por card — cada card tem seu próprio mês/trimestre
-  const [year, setYear]     = useState(_now.getFullYear());
-  const [month, setMonth]   = useState(_now.getMonth()+1); // 1..12
-  const [quarter, setQuarter] = useState(Math.floor(_now.getMonth()/3)+1); // 1..4
+  // State local por card — inicializa com global (se disponível), depois sincroniza
+  const [year, setYear]     = useState(globalYear||_now.getFullYear());
+  const [month, setMonth]   = useState(globalMonth||(_now.getMonth()+1));
+  const [quarter, setQuarter] = useState(globalQuarter||(Math.floor(_now.getMonth()/3)+1));
   const [mensal, setMensal]     = useState(null);
   const [trimestral, setTrim]   = useState(null);
   const [loading, setLoading]   = useState(true);
+
+  // Sync com seletores globais (do PagePlanejamento no topo)
+  useEffect(function(){
+    if(globalYear && globalYear!==year) setYear(globalYear);
+    if(globalMonth && globalMonth!==month) setMonth(globalMonth);
+    if(globalQuarter && globalQuarter!==quarter) setQuarter(globalQuarter);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[globalYear, globalMonth, globalQuarter]);
 
   // Fetch mensal + trimestral pra esse cliente/período
   useEffect(function(){
@@ -59118,14 +59336,19 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
   // Collapse: default aberto se tem conteúdo, fechado se vazio — MAS só decide UMA VEZ (no primeiro load).
   // Depois disso só o usuário controla pelo toggle. Trocar o mês NUNCA fecha automaticamente.
   const [_expanded, setExpanded] = useState(false);
-  const _initedRef = useRef(false);
+  // Auto-expand/collapse: sempre que carregar dados de novo mês/trim,
+  // se tem conteúdo → abre; se vazio → fecha. Usuário ainda pode toggle manual.
+  const _userToggledRef = useRef(false);
   useEffect(function(){
-    if(_initedRef.current) return;   // já inicializou → não faz mais nada
-    if(loading) return;              // ainda carregando primeiro fetch → aguarda
-    _initedRef.current = true;
+    if(loading) return;
+    // Se o usuário mexeu no toggle manualmente NESTE mês/trim, respeita.
+    // Trocar de mês/trim reseta o flag pra voltar ao auto-comportamento.
+    if(_userToggledRef.current) return;
     setExpanded(_filledM>0 || _filledT>0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[loading, _filledM, _filledT]);
+  },[loading, _filledM, _filledT, month, quarter, year]);
+  // Reset flag ao trocar de mês/trim/ano
+  useEffect(function(){ _userToggledRef.current = false; },[month, quarter, year]);
 
   // Steppers
   function _shiftMonth(delta){
@@ -59209,8 +59432,8 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
 
   return <div
     style={{background:"#fff",border:"1px solid #eef0f3",borderRadius:20,overflow:"hidden",boxShadow:"0 4px 14px rgba(15,23,42,0.04)",transition:"all .25s cubic-bezier(.4,0,.2,1)",display:"flex",flexDirection:"column"}}
-    onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 24px 48px rgba(15,23,42,0.12)";e.currentTarget.style.borderColor=_clColor+"66";e.currentTarget.style.transform="translateY(-4px)";}}
-    onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 4px 14px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.transform="translateY(0)";}}>
+    onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 12px 28px rgba(15,23,42,0.08)";e.currentTarget.style.borderColor=_clColor+"44";}}
+    onMouseLeave={function(e){e.currentTarget.style.boxShadow="0 4px 14px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#eef0f3";}}>
 
     {/* COVER — gradient cor cliente + logo + nome + KPIs TUDO DENTRO */}
     <div style={{position:"relative",background:"linear-gradient(135deg, "+_clColor+" 0%, "+_clColor+"cc 100%)",padding:"20px 24px",overflow:"hidden"}}>
@@ -59240,7 +59463,7 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
           </div>
         </div>
         {/* Toggle Expandir/Recolher — funciona nos dois estados */}
-        <button onClick={function(e){_stop(e);setExpanded(function(v){return !v;});}} title={_expanded?"Recolher":"Expandir"}
+        <button onClick={function(e){_stop(e);(function(){_userToggledRef.current=true; setExpanded(function(v){return !v;});})();}} title={_expanded?"Recolher":"Expandir"}
           style={{background:"rgba(255,255,255,0.95)",border:"none",borderRadius:10,width:36,height:36,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:_clColor,flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,0.1)",transition:"transform .15s"}}
           onMouseEnter={function(e){e.currentTarget.style.transform="scale(1.08)";}}
           onMouseLeave={function(e){e.currentTarget.style.transform="scale(1)";}}>
@@ -60743,20 +60966,20 @@ function _DGDemandasInternasSection({allTasks, setTasks, user, isMob}){
         // Triagem cai na coluna Entrada também
         _byCol.interno_demanda = _byCol.interno_demanda.concat(_internas.filter(t=>t.status==="interno_triagem"));
         // Ordena: URGENTE sempre no topo, depois ALTA/MÉDIA/BAIXA.
-        // Dentro de cada tier: atrasadas primeiro (mais dias atraso = mais no topo), depois prazo mais próximo.
+        // Dentro de cada tier: MAIS RECENTE primeiro (novas demandas aparecem no topo).
+        const _createdTs = function(t){
+          const raw = t.createdAt || t.created_at || t.colEnteredAt || t.col_entered_at || t.id;
+          if(!raw) return 0;
+          if(typeof raw==="number") return raw;
+          const d = new Date(raw); const _t = d.getTime();
+          return isNaN(_t) ? (typeof raw==="string" ? raw.length : 0) : _t;
+        };
         _MK_COLS.forEach(c=>{
           _byCol[c.id] = _byCol[c.id].sort(function(a,b){
             const _aPr=_PRIO_RANK[a.priority]??2, _bPr=_PRIO_RANK[b.priority]??2;
             if(_aPr!==_bPr) return _aPr - _bPr;
-            const _aA=_atrasada(a)?1:0, _bA=_atrasada(b)?1:0;
-            if(_aA!==_bA) return _bA - _aA;
-            if(_aA && _bA){
-              const _aD=Math.abs(_dl(a.deadline)), _bD=Math.abs(_dl(b.deadline));
-              if(_aD!==_bD) return _bD - _aD;
-            }
-            const _aDl=a.deadline||"9999-12-31", _bDl=b.deadline||"9999-12-31";
-            if(_aDl!==_bDl) return _aDl < _bDl ? -1 : 1;
-            return 0;
+            // Dentro do mesmo tier: mais RECENTE primeiro
+            return _createdTs(b) - _createdTs(a);
           });
         });
         const _MK_LIMIT = 5;
