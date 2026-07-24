@@ -28464,9 +28464,16 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
         };
         r.readAsDataURL(file);
       };
+      // Regex simples pra validar formato de email — evita erro cru do Supabase
+      const _isValidEmail=(e)=>/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(e||"").trim());
+      const _emailInvalid = novoCliente.email.trim().length>0 && !_isValidEmail(novoCliente.email);
       const submit=async()=>{
         if(!novoCliente.client_id||!novoCliente.email.trim()||!novoCliente.password.trim()){
           if(typeof pixelsToast!=="undefined")pixelsToast.warning("Preencha cliente, email e senha.");
+          return;
+        }
+        if(!_isValidEmail(novoCliente.email)){
+          if(typeof pixelsToast!=="undefined")pixelsToast.error("Email invalido. Use o formato nome@dominio.com (ex: marketing@cliente.com).");
           return;
         }
         if(novoCliente.password.length<6){
@@ -28636,8 +28643,13 @@ function PageAcessos({livePerms,setLivePerms,onViewAs,onViewAsClient,tasks}){
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
               <div>
                 <div style={lbl}>Email do cliente *</div>
-                <input type="email" value={novoCliente.email} onChange={e=>setNovoCliente(p=>({...p,email:e.target.value}))}
-                  placeholder="marketing@cliente.com" style={inp}/>
+                <input type="email" autoComplete="off" value={novoCliente.email} onChange={e=>setNovoCliente(p=>({...p,email:e.target.value}))}
+                  placeholder="marketing@cliente.com"
+                  style={{...inp,border:"1px solid "+(_emailInvalid?"#ef4444":C.b1),background:_emailInvalid?"#fef2f2":C.s1}}/>
+                {_emailInvalid && <div style={{color:"#dc2626",fontSize:10.5,marginTop:4,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  Formato invalido - use nome@dominio.com
+                </div>}
               </div>
               <div>
                 <div style={lbl}>Senha *</div>
@@ -33676,13 +33688,34 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   if(!newId||newId===task.status||typeof setTasks!=="function")return;
                   const _now=new Date().toISOString();
                   const _newCol=(typeof KANBAN_COLS!=="undefined"?KANBAN_COLS:[]).find(function(c){return c.id===newId;});
+                  const _tlEntry={type:"status",fromLabel:col.label,toLabel:_newCol&&_newCol.label||newId,from:task.status,to:newId,at:_now,atFmt:nowFmt(),user:user.name,note:"Movido via header do modal"};
+                  // Update local (otimista)
                   setTasks(function(prev){
                     return (prev||[]).map(function(t){
                       if(t.id!==task.id)return t;
-                      const _tlEntry={type:"status",fromLabel:col.label,toLabel:_newCol&&_newCol.label||newId,from:task.status,to:newId,at:_now,atFmt:nowFmt(),user:user.name,note:"Movido via header do modal"};
                       return Object.assign({},t,{status:newId,colEnteredAt:_now,timeline:[...(t.timeline||[]),_tlEntry]});
                     });
                   });
+                  // CRITICO: persistir no Supabase, senao polling reverte
+                  // (bug reportado: trocar pra Publicadas no modal, calendario continuava mostrando "Agendar")
+                  try{
+                    if(typeof window!=="undefined" && window._sb){
+                      const _curTask = (tasks||[]).find(function(t){return t.id===task.id;}) || task;
+                      const _newTl = [...(_curTask.timeline||[]), _tlEntry];
+                      window._sb.from("tasks")
+                        .update({status:newId, col_entered_at:_now, timeline:_newTl})
+                        .eq("id", task.id)
+                        .then(function(r){
+                          if(r && r.error){
+                            console.warn("[_moveTo] persist error:", r.error.message);
+                            if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro ao salvar status: "+r.error.message, 5000);
+                          }
+                        })
+                        .catch(function(e){
+                          console.warn("[_moveTo] persist catch:", e && e.message||e);
+                        });
+                    }
+                  }catch(e){ console.warn("[_moveTo] persist outer:", e && e.message||e); }
                   setShowColPicker(false);
                 };
                 return <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
@@ -59336,17 +59369,31 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
   // Collapse: default aberto se tem conteúdo, fechado se vazio — MAS só decide UMA VEZ (no primeiro load).
   // Depois disso só o usuário controla pelo toggle. Trocar o mês NUNCA fecha automaticamente.
   const [_expanded, setExpanded] = useState(false);
-  // Auto-expand/collapse: sempre que carregar dados de novo mês/trim,
-  // se tem conteúdo → abre; se vazio → fecha. Usuário ainda pode toggle manual.
+  // Auto-expand/collapse: considera tanto campos preenchidos QUANTO eventos linkados
+  // do calendario interno (feiras_eventos, datas_importantes). Sem isso, cliente com
+  // so eventos linkados (ex: Grupo Bioter com Agroleite) ficaria fechado.
   const _userToggledRef = useRef(false);
+  // Conta eventos linkados no periodo mensal + trimestral atual pra esse cliente
+  const _linkedCount = (function(){
+    if(typeof eventsFor!=="function" || typeof periodBounds!=="function") return 0;
+    try{
+      const _pad = function(n){return String(n).padStart(2,"0");};
+      const _mKey = year+"-"+_pad(month);
+      const _qKey = year+"-Q"+quarter;
+      const _mBnd = periodBounds("mensal", _mKey);
+      const _qBnd = periodBounds("trimestral", _qKey);
+      const _mFeiras = eventsFor(cl.id, "feiras_eventos", _mBnd.start, _mBnd.end)||[];
+      const _mDatas  = eventsFor(cl.id, "datas_importantes", _mBnd.start, _mBnd.end)||[];
+      const _qFeiras = eventsFor(cl.id, "feiras_eventos", _qBnd.start, _qBnd.end)||[];
+      return _mFeiras.length + _mDatas.length + _qFeiras.length;
+    }catch(e){return 0;}
+  })();
   useEffect(function(){
     if(loading) return;
-    // Se o usuário mexeu no toggle manualmente NESTE mês/trim, respeita.
-    // Trocar de mês/trim reseta o flag pra voltar ao auto-comportamento.
     if(_userToggledRef.current) return;
-    setExpanded(_filledM>0 || _filledT>0);
+    setExpanded(_filledM>0 || _filledT>0 || _linkedCount>0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[loading, _filledM, _filledT, month, quarter, year]);
+  },[loading, _filledM, _filledT, _linkedCount, month, quarter, year]);
   // Reset flag ao trocar de mês/trim/ano
   useEffect(function(){ _userToggledRef.current = false; },[month, quarter, year]);
 
@@ -59475,14 +59522,14 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
     {/* COLLAPSED — linha discreta. Só mostra mensagem "Sem planejamento" se REALMENTE vazio.
         Se tem conteúdo, mostra um resumo dos %preenchidos pra deixar claro que tem algo lá. */}
     {!_expanded
-      ? (_filledM===0 && _filledT===0)
+      ? (_filledM===0 && _filledT===0 && _linkedCount===0)
         ? <div style={{padding:"14px 24px",display:"flex",alignItems:"center",gap:8,color:"#94a3b8",fontSize:12.5,fontStyle:"italic",background:"#fafbfc"}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             Sem planejamento definido pra {_mLbl} / {_qLbl} — clique na setinha ao lado pra expandir e preencher
           </div>
         : <div style={{padding:"14px 24px",display:"flex",alignItems:"center",gap:10,color:"#475569",fontSize:12.5,background:"#f8fafc",flexWrap:"wrap"}}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            <span><strong style={{color:"#0f172a",fontWeight:700}}>{_filledM}/{CAMPOS_MENSAL.length}</strong> preenchido no mensal · <strong style={{color:"#0f172a",fontWeight:700}}>{_filledT}/{CAMPOS_TRIM.length}</strong> no trimestral</span>
+            <span><strong style={{color:"#0f172a",fontWeight:700}}>{_filledM}/{CAMPOS_MENSAL.length}</strong> preenchido no mensal · <strong style={{color:"#0f172a",fontWeight:700}}>{_filledT}/{CAMPOS_TRIM.length}</strong> no trimestral{_linkedCount>0?" · "+_linkedCount+" evento(s) linkado(s)":""}</span>
             <span style={{color:"#cbd5e1"}}>·</span>
             <span style={{color:"#94a3b8",fontStyle:"italic"}}>clique na setinha pra expandir</span>
           </div>
@@ -59496,22 +59543,7 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
                   <_PlIco name="calendar" size={13} color={_clColor}/>
                 </div>
                 <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>Mensal</div>
-                {/* Stepper de mês inline */}
-                <div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:2}}>
-                  <button onClick={function(e){_stop(e);_shiftMonth(-1);}} title="Mês anterior"
-                    style={{background:"transparent",border:"none",borderRadius:5,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color=_clColor;}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                  </button>
-                  <div style={{padding:"0 8px",fontSize:11,fontWeight:700,color:_clColor,minWidth:100,textAlign:"center",fontFeatureSettings:"'tnum'"}}>{_mLbl}</div>
-                  <button onClick={function(e){_stop(e);_shiftMonth(1);}} title="Próximo mês"
-                    style={{background:"transparent",border:"none",borderRadius:5,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color=_clColor;}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                  </button>
-                </div>
+                <div style={{marginLeft:"auto",color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{_mLbl}</div>
               </div>
               {loading
                 ? <div style={{color:"#cbd5e1",fontSize:11.5,fontStyle:"italic",padding:"14px 0",textAlign:"center"}}>Carregando…</div>
@@ -59564,22 +59596,7 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
                   <_PlIco name="layers" size={13} color={_clColor}/>
                 </div>
                 <div style={{color:"#0f172a",fontSize:12.5,fontWeight:800,letterSpacing:-.2}}>Trimestral</div>
-                {/* Stepper de trimestre inline */}
-                <div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:2}}>
-                  <button onClick={function(e){_stop(e);_shiftQuarter(-1);}} title="Trimestre anterior"
-                    style={{background:"transparent",border:"none",borderRadius:5,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color=_clColor;}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                  </button>
-                  <div style={{padding:"0 8px",fontSize:11,fontWeight:700,color:_clColor,minWidth:70,textAlign:"center",fontFeatureSettings:"'tnum'"}}>{_qLbl}</div>
-                  <button onClick={function(e){_stop(e);_shiftQuarter(1);}} title="Próximo trimestre"
-                    style={{background:"transparent",border:"none",borderRadius:5,width:22,height:22,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:"#64748b"}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.color=_clColor;}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#64748b";}}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                  </button>
-                </div>
+                <div style={{marginLeft:"auto",color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"'tnum'"}}>{_qLbl}</div>
               </div>
               {loading
                 ? <div style={{color:"#cbd5e1",fontSize:11.5,fontStyle:"italic",padding:"14px 0",textAlign:"center"}}>Carregando…</div>
