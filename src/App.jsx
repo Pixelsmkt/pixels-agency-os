@@ -14157,10 +14157,43 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
           <div style={{fontSize:10.5,color:"#64748b",fontWeight:600,textTransform:"uppercase",letterSpacing:.4}}>Clientes (opcional)</div>
           {(function(){
-            const _all=(typeof CLIENTS!=="undefined"?CLIENTS:[]);
-            const _allSel=_all.length>0&&clientIds.length===_all.length;
+            // Fallback hardcoded — garante que unidades Bioter sejam sempre incluídas mesmo se BIOTER_GROUP_UNITS
+            // estiver fora de scope por qualquer razão de concatenação
+            const _BIOTER_UNITS_FALLBACK = ["bioter_chapeco","bioter_toledo","bioter_castro","bioter_gloria","bioter_uberlandia","bioter_paraguay"];
+            let _unitIds = [];
+            try{
+              if(typeof BIOTER_GROUP_UNITS!=="undefined" && Array.isArray(BIOTER_GROUP_UNITS) && BIOTER_GROUP_UNITS.length>0){
+                _unitIds = BIOTER_GROUP_UNITS.map(function(u){return u.id;});
+              }
+            }catch(_){}
+            if(_unitIds.length===0) _unitIds = _BIOTER_UNITS_FALLBACK;
+
+            // Clientes reais (menos pixels, menos bioter parent — as unidades cobrem)
+            const _base = (typeof CLIENTS!=="undefined"?CLIENTS:[]).filter(function(c){return c.id!=="pixels" && c.id!=="bioter";});
+            const _outrosIds = _base.map(function(c){return c.id;});
+
+            // Todos os IDs = outros clientes + todas unidades bioter
+            const _allIds = _outrosIds.concat(_unitIds);
+            const _allSel = _allIds.length>0 && _allIds.every(function(id){return clientIds.indexOf(id)>=0;});
+
             return <div style={{display:"flex",gap:6}}>
-              <button type="button" onClick={function(){setClientIds(_allSel?[]:_all.map(function(c){return c.id;}));}} style={{background:_allSel?"#7c3aed":"#f1f5f9",color:_allSel?"#fff":"#475569",border:"none",borderRadius:6,padding:"3px 10px",fontSize:10.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit",letterSpacing:.2,textTransform:"uppercase"}}>{_allSel?"Limpar":"Todos"}</button>
+              <button type="button"
+                onClick={function(){
+                  if(_allSel){
+                    setClientIds([]);
+                  }else{
+                    // Marca TODAS as unidades Bioter (que satisfaz o Grupo Bioter auto) + todos outros clientes
+                    setClientIds(_allIds);
+                    // Cor default se ainda não tocou
+                    if(!colorTouched && category!=="assinatura" && category!=="operacional" && category!=="gestao_midia" && category!=="reuniao"){
+                      setColor("#7c3aed");
+                    }
+                  }
+                }}
+                title={_allSel?"Desmarcar todos":"Selecionar TODOS: Grupo Bioter (todas unidades) + todos os outros clientes"}
+                style={{background:_allSel?"#dc2626":"#7c3aed",color:"#fff",border:"none",borderRadius:6,padding:"3px 12px",fontSize:10.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",letterSpacing:.4,textTransform:"uppercase",boxShadow:_allSel?"0 2px 6px rgba(220,38,38,.3)":"0 2px 6px rgba(124,58,237,.3)"}}>
+                {_allSel?"Limpar":"Todos"}
+              </button>
             </div>;
           })()}
         </div>
@@ -14186,17 +14219,17 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
                   setColor(_cor);
                 }
               }}
-                style={{background:_sel?_cor+"12":"#fff",border:"1.5px solid "+(_sel?_cor:"#e2e8f0"),borderRadius:10,padding:"5px 12px 5px 5px",fontSize:12.5,fontWeight:_sel?700:600,color:_sel?_cor:"#334155",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",boxShadow:_sel?"0 2px 8px "+_cor+"22":"none"}}
-                onMouseEnter={function(e){if(!_sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"06";}}}
+                style={{background:_sel?_cor:"#fff",border:"1px solid "+(_sel?_cor:"#e2e8f0"),borderRadius:8,padding:"4px 10px 4px 4px",fontSize:11.5,fontWeight:_sel?700:600,color:_sel?"#fff":"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",boxShadow:_sel?"0 2px 6px "+_cor+"33":"none"}}
+                onMouseEnter={function(e){if(!_sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"08";}}}
                 onMouseLeave={function(e){if(!_sel){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
-                <span style={{width:22,height:22,borderRadius:6,background:_logoSrc?"#fff":_cor,border:"1px solid "+(_logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?2:0}}>
+                <span style={{width:18,height:18,borderRadius:5,background:_sel?"rgba(255,255,255,0.9)":(_logoSrc?"#fff":_cor),border:_sel?"none":("1px solid "+(_logoSrc?"#e2e8f0":"transparent")),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?1.5:0}}>
                   {_logoSrc
                     ? <img src={_logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
-                    : <span style={{color:"#fff",fontSize:10,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
+                    : <span style={{color:_sel?_cor:"#fff",fontSize:9,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
                   }
                 </span>
                 <span>{cl.name||cl.nome||cl.id}</span>
-                {_sel&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginRight:2}}><polyline points="20 6 9 17 4 12"/></svg>}
+                {_sel&&<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginLeft:1}}><polyline points="20 6 9 17 4 12"/></svg>}
               </button>;
             };
 
@@ -14209,10 +14242,8 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
               return <button key={cfg.id} type="button" onClick={function(){
                 let _next;
                 if(_allSel){
-                  // Desmarca todas do grupo
                   _next = clientIds.filter(function(x){return cfg.unitIds.indexOf(x)<0 && x!==cfg.id;});
                 }else{
-                  // Marca todas do grupo (dedup)
                   const _set = new Set(clientIds);
                   cfg.unitIds.forEach(function(uid){ _set.add(uid); });
                   _next = Array.from(_set);
@@ -14223,17 +14254,17 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
                 }
               }}
                 title={cfg.hint||("Seleciona todas as "+cfg.unitIds.length+" unidades")}
-                style={{background:_allSel?_cor+"18":"#fff",border:"2px solid "+(_allSel?_cor:_cor+"55"),borderRadius:10,padding:"6px 14px 6px 5px",fontSize:13,fontWeight:800,color:_allSel?_cor:_cor,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,transition:"all .15s",boxShadow:_allSel?"0 3px 10px "+_cor+"33":"none",letterSpacing:-.15}}
-                onMouseEnter={function(e){if(!_allSel){e.currentTarget.style.background=_cor+"08";e.currentTarget.style.borderColor=_cor;}}}
+                style={{background:_allSel?_cor:"#fff",border:"1.5px solid "+(_allSel?_cor:_cor+"55"),borderRadius:8,padding:"4px 10px 4px 4px",fontSize:11.5,fontWeight:800,color:_allSel?"#fff":_cor,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .15s",boxShadow:_allSel?"0 2px 6px "+_cor+"33":"none",letterSpacing:-.1}}
+                onMouseEnter={function(e){if(!_allSel){e.currentTarget.style.background=_cor+"10";e.currentTarget.style.borderColor=_cor;}}}
                 onMouseLeave={function(e){if(!_allSel){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=_cor+"55";}}}>
-                <span style={{width:24,height:24,borderRadius:6,background:cfg.logoSrc?"#fff":_cor,border:"1px solid "+(cfg.logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:cfg.logoSrc?2:0}}>
+                <span style={{width:18,height:18,borderRadius:5,background:_allSel?"rgba(255,255,255,0.9)":(cfg.logoSrc?"#fff":_cor),border:_allSel?"none":("1px solid "+(cfg.logoSrc?"#e2e8f0":"transparent")),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:cfg.logoSrc?1.5:0}}>
                   {cfg.logoSrc
                     ? <img src={cfg.logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
-                    : <span style={{color:"#fff",fontSize:11,fontWeight:900}}>{cfg.badge||""}</span>
+                    : <span style={{color:_allSel?_cor:"#fff",fontSize:9,fontWeight:900}}>{cfg.badge||""}</span>
                   }
                 </span>
                 <span>{cfg.name}</span>
-                {_selCount>0 && <span style={{background:_cor,color:"#fff",fontSize:9.5,fontWeight:800,padding:"2px 6px",borderRadius:99,marginLeft:2,letterSpacing:.3}}>{_selCount}/{cfg.unitIds.length}</span>}
+                {_selCount>0 && <span style={{background:_allSel?"rgba(255,255,255,0.28)":_cor,color:"#fff",fontSize:9,fontWeight:800,padding:"1px 5px",borderRadius:99,marginLeft:1,letterSpacing:.2}}>{_selCount}/{cfg.unitIds.length}</span>}
               </button>;
             };
 
