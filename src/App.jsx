@@ -24247,6 +24247,83 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
         {/* Right sidebar — info expandida */}
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
 
+          {/* ─── Card "Enviado por" — mostra quem/quando subiu a entrega ─── */}
+          {(function(){
+            // Busca o ÚLTIMO arquivo FINAL (não anotação, não referência) subido
+            const _finalFiles = (current.files||[]).filter(function(f){
+              return f && !f.isAnnotation && (!f.tipo || f.tipo==="final");
+            });
+            const _parseT = function(s){
+              if(!s) return 0;
+              const _s = String(s);
+              if(/^\d{4}-\d{2}-\d{2}T/.test(_s)){ const _i=new Date(_s).getTime(); if(!isNaN(_i)&&_i>0) return _i; }
+              const _m = _s.match(/(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+              if(_m){ const _t=new Date(_m[3]+"-"+_m[2]+"-"+_m[1]+"T"+(_m[4]||"00").padStart(2,"0")+":"+(_m[5]||"00")+":00").getTime(); if(!isNaN(_t)) return _t; }
+              return 0;
+            };
+            // Ordena pelo mais recente (addedAtIso > addedAt)
+            const _sorted = _finalFiles.slice().sort(function(a,b){
+              const _ta = _parseT(a.addedAtIso) || _parseT(a.addedAt) || 0;
+              const _tb = _parseT(b.addedAtIso) || _parseT(b.addedAt) || 0;
+              return _tb - _ta;
+            });
+            const _last = _sorted[0];
+            let _senderName = "";
+            let _sentAtTs = 0;
+            if(_last){
+              _senderName = _last.addedBy || "";
+              _sentAtTs = _parseT(_last.addedAtIso) || _parseT(_last.addedAt) || 0;
+            }
+            // Fallback: colEnteredAt (quando entrou em avaliação)
+            if(!_sentAtTs && current.colEnteredAt){
+              _sentAtTs = _parseT(current.colEnteredAt);
+            }
+            // Fallback pro nome: pega o último assignee que é designer/editor
+            if(!_senderName){
+              try{
+                const _asigs = Array.isArray(current.assignees)?current.assignees:(current.assignee?[current.assignee]:[]);
+                for(let i=_asigs.length-1;i>=0;i--){
+                  const _u = (typeof TEAM!=="undefined")?TEAM.find(function(u){return u.id===_asigs[i];}):null;
+                  if(_u && (_u.dash==="designer"||_u.dash==="editor")){ _senderName = _u.name; break; }
+                }
+                if(!_senderName && _asigs.length>0){
+                  const _u0 = (typeof TEAM!=="undefined")?TEAM.find(function(u){return u.id===_asigs[0];}):null;
+                  _senderName = (_u0 && _u0.name) || _asigs[0];
+                }
+              }catch(_){}
+            }
+            if(!_sentAtTs && !_senderName) return null;
+            const _d = _sentAtTs ? new Date(_sentAtTs) : null;
+            const _fmtDate = _d ? (_d.toLocaleDateString("pt-BR")+" · "+_d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})) : "";
+            // Info do sender (foto + cor)
+            let _senderUser = null;
+            try{
+              if(typeof TEAM!=="undefined" && _senderName){
+                _senderUser = TEAM.find(function(u){return (u.name||"").toLowerCase().indexOf(String(_senderName).toLowerCase().split(" ")[0])===0;});
+              }
+            }catch(_){}
+            const _photo = (_senderUser && _senderUser.profile_data && _senderUser.profile_data.photo)
+                        || (_senderUser && typeof getProfilePhoto!=="undefined" && getProfilePhoto(_senderUser.id))
+                        || "";
+            const _color = (_senderUser && _senderUser.color) || "#7c3aed";
+            const _initial = String(_senderName||"?").trim().charAt(0).toUpperCase();
+            const _firstName = String(_senderName||"").split(" ")[0] || "Colaborador";
+            return (<div style={{background:"linear-gradient(135deg,#fff,#faf5ff)",border:"1px solid #ede9fe",borderRadius:12,padding:"11px 14px",display:"flex",alignItems:"center",gap:11,boxShadow:"0 1px 3px rgba(124,58,237,0.06)"}}>
+              {_photo
+                ? <img src={_photo} alt={_senderName} referrerPolicy="no-referrer" style={{width:38,height:38,borderRadius:"50%",objectFit:"cover",border:"2px solid #fff",boxShadow:"0 2px 8px rgba(15,23,42,0.12)",flexShrink:0}}/>
+                : <span style={{width:38,height:38,borderRadius:"50%",background:_color,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:800,border:"2px solid #fff",boxShadow:"0 2px 8px rgba(15,23,42,0.12)",flexShrink:0}}>{_initial}</span>
+              }
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:2,display:"inline-flex",alignItems:"center",gap:5}}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                  Enviado para avaliação
+                </div>
+                <div style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{_firstName}</div>
+                {_fmtDate && <div style={{color:"#64748b",fontSize:11,fontWeight:600,marginTop:2,fontFeatureSettings:"'tnum'"}}>{_fmtDate}</div>}
+              </div>
+            </div>);
+          })()}
+
           {/* Action buttons — FIXOS NO TOPO (sticky) */}
           {isApprover?(<div style={{position:"sticky",top:8,zIndex:5,background:C.card,borderRadius:14,padding:"14px",border:"1px solid "+C.b1,boxShadow:"0 2px 12px rgba(15,23,42,0.04)",display:"flex",flexDirection:"column",gap:8}}>
             {tab==="copys"&&(<>
@@ -24323,6 +24400,51 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                       if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
                     }
                   }, title:"Baixa o vídeo original com 1 clique"}]:[]),
+                  // Botão Baixar arte — só na aba Avaliação de design (tab==="publicacao")
+                  // Baixa a última imagem FINAL anexada com 1 clique
+                  ...(tab==="publicacao"?[{label:"Baixar arte", color:"#0ea5e9", colorDark:"#0284c7", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>, onClick:async()=>{
+                    try{
+                      // Isola só imagens FINAIS (não anotação, não referência) e não-vídeos
+                      const _isVid = function(u){ return typeof _isVideoUrl==="function" && _isVideoUrl(u); };
+                      const _imgs = (current.files||[]).filter(function(f){
+                        if(!f || f.isAnnotation) return false;
+                        if(f.tipo && f.tipo!=="final") return false;
+                        if(String(f.type||"").startsWith("video/")) return false;
+                        if(_isVid(f.url)) return false;
+                        return !!f.url;
+                      });
+                      // Ordena pelo mais recente (addedAtIso)
+                      const _parseT = function(s){ if(!s) return 0; const _i=new Date(s).getTime(); return isNaN(_i)?0:_i; };
+                      _imgs.sort(function(a,b){ return (_parseT(b.addedAtIso)||_parseT(b.addedAt)||0) - (_parseT(a.addedAtIso)||_parseT(a.addedAt)||0); });
+                      let _url = null;
+                      let _srcFile = _imgs[0];
+                      if(_srcFile) _url = _srcFile.url;
+                      // Fallback: pega da lista allImgs (que exclui videos)
+                      if(!_url && Array.isArray(allImgs)){
+                        for(let i=0;i<allImgs.length;i++){ const _u = typeof allImgs[i]==="string"?allImgs[i]:(allImgs[i]&&allImgs[i].url); if(_u && !_isVid(_u)){ _url = _u; break; } }
+                      }
+                      if(!_url){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nenhuma arte anexada.",3000); return; }
+                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando arte…",2000);
+                      let _fname = "";
+                      try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
+                      if(!_fname || _fname.length<4){
+                        const _t = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : "arte";
+                        // detecta extensão pela URL
+                        const _extM = String(_url).toLowerCase().match(/\.(png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
+                        _fname = _t + "." + (_extM?_extM[1]:"png");
+                      }
+                      const _r = await fetch(_url);
+                      const _b = await _r.blob();
+                      const _u = URL.createObjectURL(_b);
+                      const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
+                      document.body.appendChild(_a); _a.click();
+                      setTimeout(function(){ URL.revokeObjectURL(_u); _a.remove(); }, 250);
+                      if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname, 3000);
+                    }catch(e){
+                      console.warn("[download arte sidebar]", e);
+                      if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
+                    }
+                  }, title:"Baixa a arte final (última imagem enviada) com 1 clique"}]:[]),
                   {label:"Ver detalhes do cartão", color:"#64748b", colorDark:"#475569", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>, onClick:()=>setOpenCard(current), title:"Abre o cartão completo pra editar/ver detalhes"},
                 ];
                 return _BTNS.map(function(b,i){
