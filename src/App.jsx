@@ -34187,7 +34187,7 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
 
           {/* ORIENTAÇÕES — read-only, só quando o cartão tem cliente vinculado.
               Passa bioterUnit pra puxar contatos automaticamente da unidade certa do Playbook. */}
-          {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client} bioterUnit={bioterUnit||""}/>}
+          {activeTab==="orientacoes"&&client&&<OrientacoesView clientId={client} bioterUnit={bioterUnit||""} sector={sector||""}/>}
 
           {/* CONTATOS — só os contatos do Playbook, da unidade Bioter do card. */}
           {activeTab==="contatos"&&client&&<ContatosView clientId={client} bioterUnit={bioterUnit||""}/>}
@@ -35220,7 +35220,7 @@ function ContatosView({clientId, bioterUnit}){
   </div>;
 }
 
-function OrientacoesView({clientId, bioterUnit}){
+function OrientacoesView({clientId, bioterUnit, sector}){
   const sb=window._sb;
   const [data,setData]=useState(null);
   const [playbookData,setPlaybookData]=useState(null); // do cache do Playbook (contatos por unidade)
@@ -35288,7 +35288,12 @@ function OrientacoesView({clientId, bioterUnit}){
   if(error)return<div style={{padding:16,background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:10,color:"#991b1b",fontSize:12}}>Erro ao carregar: {error}</div>;
 
   const _hasContatos = _resolvedContatos && Object.keys(_resolvedContatos).filter(k=>_resolvedContatos[k]).length>0;
-  const hasContent=_hasContatos||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
+  // Orientações visuais desta area (via mapping do setor do card)
+  const _SECTOR_TO_AREA_H = {design:"design", video:"video", trafego:"midia", social:"social"};
+  const _areaH = _SECTOR_TO_AREA_H[String(sector||"").toLowerCase()] || "design";
+  const _areaObjH = (playbookData && playbookData[_areaH]) || null;
+  const _hasOrientacoesVisuais = _areaObjH && Array.isArray(_areaObjH.orientacoes_visuais) && _areaObjH.orientacoes_visuais.some(function(x){return x && (x.imgUrl || x.description || x.title);});
+  const hasContent=_hasContatos||_hasOrientacoesVisuais||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
 
   if(!hasContent)return(
     <div style={{padding:32,textAlign:"center",background:"#f8fafc",border:"0.5px solid #e2e8f0",borderRadius:12}}>
@@ -35347,6 +35352,38 @@ function OrientacoesView({clientId, bioterUnit}){
           <div style={{color:"#64748b",fontSize:12,marginTop:3,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{cl.sector||"—"}</div>
         </div>
       </div>}
+
+      {/* ═══ Orientações visuais (Playbook desta área) ═══
+          Puxa do playbookData[area].orientacoes_visuais e filtra pelo setor do card.
+          Mapping: design→design, video→video, trafego→midia, social→social;
+          fallback (coordenacao/etc) → design. */}
+      {(function(){
+        const _SECTOR_TO_AREA = {design:"design", video:"video", trafego:"midia", social:"social"};
+        const _area = _SECTOR_TO_AREA[String(sector||"").toLowerCase()] || "design";
+        const _areaObj = (playbookData && playbookData[_area]) || null;
+        const _ovs = (_areaObj && Array.isArray(_areaObj.orientacoes_visuais)) ? _areaObj.orientacoes_visuais.filter(function(x){return x && (x.imgUrl || x.description || x.title);}) : [];
+        if(_ovs.length===0) return null;
+        const _areaLabel = ({design:"Design", video:"Vídeo", midia:"Mídia", social:"Social"})[_area] || _area;
+        return <div>
+          <SectionTitle label="Orientações visuais" sub={"Referências desta área ("+_areaLabel+") — cadastradas no Playbook"} icon="image" accent="#7c3aed"/>
+          <div style={{display:"flex",flexDirection:"column",gap:10}}>
+            {_ovs.map(function(ov){
+              return <div key={ov.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",display:"grid",gridTemplateColumns:ov.imgUrl?"180px 1fr":"1fr",gap:0,alignItems:"stretch",boxShadow:"0 2px 8px rgba(15,23,42,.03)"}}>
+                {ov.imgUrl && <a href={ov.imgUrl} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"#fafafa",borderRight:"1px solid #f1f5f9",minHeight:120,textDecoration:"none"}}>
+                  <img src={ov.imgUrl} alt={ov.title||""} referrerPolicy="no-referrer" style={{width:"100%",height:"100%",maxHeight:200,objectFit:"cover",display:"block"}} onError={function(e){e.currentTarget.style.display="none";}}/>
+                </a>}
+                <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+                  {ov.title && <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.2}}>{ov.title}</div>}
+                  {ov.description
+                    ? <div style={{color:"#334155",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{ov.description}</div>
+                    : <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic"}}>Sem descrição.</div>
+                  }
+                </div>
+              </div>;
+            })}
+          </div>
+        </div>;
+      })()}
 
       {/* ═══ Logos ═══ */}
       {data.logos?.length>0&&<div>
@@ -64250,6 +64287,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   if(area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações", icon:areaCfg.icon});
   if(area==="video") SECTIONS.push({id:"pb-processos", label:"Processos técnicos", icon:"play"});
   if(area==="social") SECTIONS.push({id:"pb-social", label:"Publicação", icon:"users"});
+  SECTIONS.push({id:"pb-orientacoes-visuais", label:"Orientações visuais", icon:"image"});
   if(hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
   SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
 
@@ -64762,6 +64800,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {area==="social" && <PlaybookBlock id="pb-social" title="Publicação" subtitle="Perfis a marcar, cadência, tipos de post e particularidades desse cliente" icon="users" color="#ec4899">
             <_PbSocialConfig areaData={areaData} isAdmin={isAdmin} editMode={editMode} onUpdate={onUpdateArea} clientId={cl.id}/>
           </PlaybookBlock>}
+
+          {/* Orientações visuais — imagem + descrição por área. Aparece nos cards do setor correspondente. */}
+          <PlaybookBlock id="pb-orientacoes-visuais" title="Orientações visuais" subtitle={"Referências visuais desta área — aparecem automaticamente nos cards de "+areaCfg.label} icon="image" color={areaCfg.color||PB_PURPLE_DK}>
+            <_PbVisualOrientations areaData={areaData} isAdmin={isAdmin} editMode={editMode} onUpdate={onUpdateArea} areaColor={areaCfg.color||PB_PURPLE_DK}/>
+          </PlaybookBlock>
 
         </div>
 
@@ -65565,6 +65608,104 @@ function _PbEmpty({icon, text, sub}){
 
 function _pbInpStyle(){
   return {background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"10px 13px",color:PB_INK,fontSize:13,outline:"none",width:"100%",boxSizing:"border-box",fontFamily:PB_INTER,resize:"vertical",lineHeight:1.6};
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  _PbVisualOrientations — Orientações visuais por área
+//  Lista de {id, title, description, imgUrl, createdAt}. Salva no
+//  areaData.orientacoes_visuais via onUpdate. Consumido pelo CardModal
+//  filtrado por setor (design/video/midia/social).
+// ═══════════════════════════════════════════════════════════════
+function _PbVisualOrientations({areaData, isAdmin, editMode, onUpdate, areaColor}){
+  const _color = areaColor || PB_PURPLE_DK;
+  const _list = Array.isArray(areaData && areaData.orientacoes_visuais) ? areaData.orientacoes_visuais : [];
+
+  function _save(nextList){
+    if(typeof onUpdate==="function") onUpdate({orientacoes_visuais: nextList});
+  }
+  function _add(){
+    const _id = "orv-"+Date.now()+"-"+Math.random().toString(36).slice(2,7);
+    const _new = {id:_id, title:"Nova orientação", description:"", imgUrl:"", createdAt:new Date().toISOString()};
+    _save([..._list, _new]);
+  }
+  function _update(id, patch){
+    _save(_list.map(function(it){ return it.id===id ? Object.assign({},it,patch) : it; }));
+  }
+  function _remove(id){
+    const _item = _list.find(function(it){return it.id===id;});
+    const _title = (_item && _item.title) || "Orientação";
+    function _doDelete(){ _save(_list.filter(function(it){return it.id!==id;})); }
+    if(typeof pixelsConfirm==="function"){
+      pixelsConfirm({title:"Excluir orientação visual?",message:'"'+_title+'" será removido.',confirmLabel:"Excluir",danger:true,onConfirm:_doDelete});
+    }else if(confirm("Excluir esta orientação?")) _doDelete();
+  }
+
+  if(_list.length===0 && !editMode){
+    return <_PbEmpty icon="image" text="Nenhuma orientação visual cadastrada." sub={isAdmin?"Edite o playbook para adicionar imagens de referência (ex: como posicionar o piso, cor correta, layout etc).":""}/>;
+  }
+
+  return <div style={{display:"flex",flexDirection:"column",gap:12}}>
+    {_list.map(function(item){
+      return <_PbVisualOrientItem key={item.id} item={item} editMode={editMode} isAdmin={isAdmin}
+        color={_color}
+        onUpdate={function(patch){_update(item.id, patch);}}
+        onRemove={function(){_remove(item.id);}}/>;
+    })}
+    {editMode && isAdmin && <button type="button" onClick={_add}
+      style={{background:"#fff",border:"1.5px dashed "+_color+"66",borderRadius:12,padding:"14px 18px",color:_color,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:PB_INTER,display:"inline-flex",alignItems:"center",justifyContent:"center",gap:8,transition:"all .15s"}}
+      onMouseEnter={function(e){e.currentTarget.style.background=_color+"0d";e.currentTarget.style.borderColor=_color;}}
+      onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=_color+"66";}}>
+      <Ico n="plus" size={15} color={_color}/> Adicionar orientação visual
+    </button>}
+  </div>;
+}
+
+function _PbVisualOrientItem({item, editMode, isAdmin, color, onUpdate, onRemove}){
+  const _color = color || PB_PURPLE_DK;
+  const [tTitle,setTTitle] = useState(item.title||"");
+  const [tDesc,setTDesc]   = useState(item.description||"");
+  useEffect(function(){ setTTitle(item.title||""); setTDesc(item.description||""); }, [item.id, item.title, item.description, editMode]);
+
+  return <div style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:0,overflow:"hidden",boxShadow:"0 2px 8px rgba(15,23,42,.04)",display:"grid",gridTemplateColumns:"180px 1fr",gap:0,alignItems:"stretch"}}>
+    {/* Imagem */}
+    <div style={{background:"#fafafa",borderRight:"1px solid "+PB_BORDER2,minHeight:140,display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+      {item.imgUrl
+        ? <img src={item.imgUrl} alt={item.title||""} style={{width:"100%",height:"100%",objectFit:"cover",maxHeight:200,display:"block"}} referrerPolicy="no-referrer" onError={function(e){e.currentTarget.style.display="none";}}/>
+        : <div style={{padding:14,textAlign:"center"}}>
+            <Ico n="image" size={26} color="#cbd5e1"/>
+            <div style={{color:PB_MUTE,fontSize:10.5,marginTop:5,fontWeight:600,letterSpacing:.2}}>Sem imagem</div>
+          </div>
+      }
+      {editMode && isAdmin && <button type="button" onClick={function(){_pbTemplateUploadImg(function(patch){onUpdate({imgUrl:patch.imgUrl});});}}
+        style={{position:"absolute",bottom:6,right:6,background:"rgba(15,23,42,.86)",border:"none",borderRadius:8,padding:"5px 9px",color:"#fff",fontSize:10.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,backdropFilter:"blur(6px)"}}>
+        <Ico n="upload" size={11} color="#fff"/> {item.imgUrl?"Trocar":"Subir"}
+      </button>}
+    </div>
+    {/* Texto */}
+    <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
+      <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+        {editMode && isAdmin
+          ? <input type="text" value={tTitle} onChange={function(e){setTTitle(e.target.value);}} onBlur={function(){if(tTitle!==item.title) onUpdate({title:tTitle});}}
+              placeholder="Título curto (ex: Posição correta do piso)"
+              style={{flex:1,background:"#fafafa",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"7px 11px",color:PB_INK,fontSize:13.5,fontWeight:700,letterSpacing:-.15,outline:"none",fontFamily:PB_INTER}}/>
+          : <div style={{flex:1,color:PB_INK,fontSize:14,fontWeight:800,letterSpacing:-.25,lineHeight:1.2}}>{item.title||"(sem título)"}</div>
+        }
+        {editMode && isAdmin && <button type="button" onClick={onRemove} title="Excluir"
+          style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:8,width:28,height:28,color:"#b91c1c",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <Ico n="trash" size={13} color="#b91c1c"/>
+        </button>}
+      </div>
+      {editMode && isAdmin
+        ? <textarea value={tDesc} onChange={function(e){setTDesc(e.target.value);}} onBlur={function(){if(tDesc!==item.description) onUpdate({description:tDesc});}} rows={4}
+            placeholder="Descreva o que a imagem representa e como aplicar (aparece nos cards do setor)."
+            style={Object.assign({},_pbInpStyle(),{minHeight:80,fontSize:12.5})}/>
+        : (item.description
+            ? <div style={{color:PB_TEXT,fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{item.description}</div>
+            : <div style={{color:PB_MUTE,fontSize:11.5,fontStyle:"italic"}}>Sem descrição.</div>
+          )
+      }
+    </div>
+  </div>;
 }
 
 // ═══════════════════════════════════════════════════════════════
