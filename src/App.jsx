@@ -29526,6 +29526,36 @@ function _ArmazenamentoPanel({tasks}){
     }
   }, []);
 
+  // Uso TOTAL do storage: soma bytes de todas as tasks (independente de status/idade)
+  // Serve pra mostrar "quanto ja gastei" no header. Plano Pro Supabase = 100 GB.
+  const _uso = React.useMemo(function(){
+    let _bytes = 0, _files = 0, _cards = 0;
+    (tasks||[]).forEach(function(t){
+      if(!t || t.deletedAt) return;
+      const _fs = Array.isArray(t.files) ? t.files : [];
+      let _hadFile = false;
+      _fs.forEach(function(f){
+        if(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0)){
+          _files++;
+          _bytes += (typeof f.size === "number" && f.size>0) ? f.size : 500*1024;
+          _hadFile = true;
+        }
+      });
+      if(_hadFile) _cards++;
+    });
+    const _totalPlanBytes = 100 * 1024 * 1024 * 1024; // 100 GB Pro
+    const _pct = Math.min(100, Math.round((_bytes/_totalPlanBytes)*100 * 10) / 10);
+    const _gbUsed = (_bytes / (1024*1024*1024));
+    const _gbFree = Math.max(0, 100 - _gbUsed);
+    return {
+      bytes:_bytes, files:_files, cards:_cards,
+      gbUsed:_gbUsed, gbFree:_gbFree, pct:_pct,
+      // Labels formatados
+      usedLabel: _gbUsed >= 1 ? _gbUsed.toFixed(2)+" GB" : Math.round(_bytes/(1024*1024))+" MB",
+      freeLabel: _gbFree.toFixed(1)+" GB",
+    };
+  }, [tasks]);
+
   // Cards candidatos: status publicado/reprovado + completedAt (ou colEnteredAt) > N meses
   const _candidatos = React.useMemo(function(){
     const _now = Date.now();
@@ -29659,25 +29689,71 @@ function _ArmazenamentoPanel({tasks}){
       </div>
     </div>}
 
-    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,paddingBottom:12,borderBottom:"1px solid #f1f5f9"}}>
-      <div style={{width:40,height:40,borderRadius:11,background:"linear-gradient(135deg,#0f172a,#334155)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0}}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,paddingBottom:14,borderBottom:"1px solid #f1f5f9"}}>
+      <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#0f172a,#334155)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0}}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#0f172a",fontWeight:800,fontSize:15,letterSpacing:-.25}}>Armazenamento</div>
-        <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2,lineHeight:1.4}}>Libera espaço no Supabase apagando arquivos antigos do Storage. O Drive mantém a cópia completa.</div>
-        {ultimaLimpeza && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,marginTop:4,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5}}>
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Última limpeza: {_fmtData(ultimaLimpeza)} ({_diasDesde} {_diasDesde===1?"dia":"dias"} atrás)
-        </div>}
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Armazenamento</div>
+        <div style={{color:"#64748b",fontSize:12.5,fontWeight:500,marginTop:2,lineHeight:1.4}}>Uso atual do Supabase Storage. Plano Pro: 100 GB. Drive tem backup completo.</div>
       </div>
     </div>
+
+    {/* ─── USO ATUAL DO STORAGE — 3 KPIs grandes ─────────────────── */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.4fr",gap:12,marginBottom:20}}>
+      <div style={{background:"linear-gradient(135deg,#f8fafc,#fff)",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px"}}>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          Espaço usado
+        </div>
+        <div style={{color:"#0f172a",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.usedLabel}</div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:5}}>de 100 GB · {_uso.files} arquivos</div>
+      </div>
+      <div style={{background:"linear-gradient(135deg,#f0fdf4,#fff)",border:"1px solid #bbf7d0",borderRadius:12,padding:"16px 18px"}}>
+        <div style={{color:"#15803d",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+          Espaço livre
+        </div>
+        <div style={{color:"#15803d",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.freeLabel}</div>
+        <div style={{color:"#86efac",fontSize:11,fontWeight:600,marginTop:5}}>disponível pra uso</div>
+      </div>
+      <div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #ede9fe",borderRadius:12,padding:"16px 18px"}}>
+        <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+          Ocupação
+        </div>
+        <div style={{display:"flex",alignItems:"baseline",gap:6}}>
+          <div style={{color:"#7c3aed",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.pct}%</div>
+          <div style={{color:"#a78bfa",fontSize:11,fontWeight:600}}>do plano Pro</div>
+        </div>
+        <div style={{marginTop:8,height:6,background:"#ede9fe",borderRadius:99,overflow:"hidden"}}>
+          <div style={{width:_uso.pct+"%",height:"100%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",borderRadius:99,transition:"width .3s"}}/>
+        </div>
+      </div>
+    </div>
+
+    {/* ─── SEÇÃO LIMPEZA ────────────────────────────────────────── */}
+    <div style={{background:"#fafbfc",border:"1px solid #f1f5f9",borderRadius:12,padding:"16px 18px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:14}}>
+        <div style={{width:28,height:28,borderRadius:8,background:"#fef2f2",color:"#dc2626",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/></svg>
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:13.5,letterSpacing:-.2}}>Liberar espaço</div>
+          <div style={{color:"#64748b",fontSize:11.5,fontWeight:500,marginTop:1}}>Apaga arquivos antigos do Storage. Card, histórico e comentários ficam preservados.</div>
+        </div>
+        {ultimaLimpeza && <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.2,display:"inline-flex",alignItems:"center",gap:5,flexShrink:0,background:"#fff",padding:"5px 9px",borderRadius:7,border:"1px solid #e2e8f0"}}>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Última: {_diasDesde} {_diasDesde===1?"dia":"dias"} atrás
+        </div>}
+      </div>
 
     <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         <span style={{color:"#475569",fontSize:12.5,fontWeight:600}}>Cards com mais de</span>
         <select value={meses} onChange={function(e){setMeses(parseInt(e.target.value,10)||6);}} disabled={busy}
           style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",cursor:"pointer",fontFamily:"inherit"}}>
+          <option value={1}>1 mes</option>
           <option value={3}>3 meses</option>
           <option value={6}>6 meses</option>
           <option value={12}>12 meses</option>
@@ -29716,6 +29792,7 @@ function _ArmazenamentoPanel({tasks}){
       <span style={{color:"#94a3b8",fontSize:11,fontStyle:"italic",flex:1,minWidth:200}}>
         Preserva card, histórico, comentários e demand_history. Só remove bytes do Storage.
       </span>
+    </div>
     </div>
   </div>;
 }
