@@ -31804,6 +31804,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   const _dragCountRefRef=useRef(0);
   const _dragCountFinRef=useRef(0);
   const _dragCountOuterRef=useRef(0);
+  const _dragLeaveTimerRefRef=useRef(null);
+  const _dragLeaveTimerFinRef=useRef(null);
+  const _dragLeaveTimerOuterRef=useRef(null);
   const _resetDragSection=()=>{
     _dragCountRefRef.current=0;
     _dragCountFinRef.current=0;
@@ -33981,17 +33984,27 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               onDragEnter={e=>{
                 e.preventDefault();e.stopPropagation();
                 if(!canEdit&&!canEditRef)return;
+                if(_dragLeaveTimerOuterRef.current){clearTimeout(_dragLeaveTimerOuterRef.current);_dragLeaveTimerOuterRef.current=null;}
                 _dragCountOuterRef.current++;
-                // Só ativa o estado externo quando NENHUMA seção está hover (deixa as seções terem prioridade visual)
-                if(!dragOverSection)setDragOverFiles(true);
+                // Só ativa o estado externo quando NENHUMA seção está hover
+                if(!dragOverSection && !dragOverFiles)setDragOverFiles(true);
               }}
               onDragOver={e=>{e.preventDefault();e.stopPropagation();}}
               onDragLeave={e=>{
                 e.preventDefault();e.stopPropagation();
                 _dragCountOuterRef.current=Math.max(0,_dragCountOuterRef.current-1);
-                if(_dragCountOuterRef.current===0)setDragOverFiles(false);
+                if(_dragLeaveTimerOuterRef.current) clearTimeout(_dragLeaveTimerOuterRef.current);
+                _dragLeaveTimerOuterRef.current=setTimeout(function(){
+                  _dragLeaveTimerOuterRef.current=null;
+                  if(_dragCountOuterRef.current===0) setDragOverFiles(false);
+                },60);
               }}
-              onDrop={e=>handleFilesDrop(e)}
+              onDrop={e=>{
+                if(_dragLeaveTimerOuterRef.current){clearTimeout(_dragLeaveTimerOuterRef.current);_dragLeaveTimerOuterRef.current=null;}
+                _dragCountOuterRef.current=0;
+                setDragOverFiles(false);
+                handleFilesDrop(e);
+              }}
               style={{position:"relative",borderRadius:10,border:(dragOverFiles&&!dragOverSection)?"2px dashed #a140ff":"2px dashed transparent",background:(dragOverFiles&&!dragOverSection)?"#faf5ff":"transparent",padding:(dragOverFiles&&!dragOverSection)?12:0,transition:"border .12s, background .12s, padding .12s",minHeight:(dragOverFiles&&!dragOverSection)?100:0}}>
               {dragOverFiles&&!dragOverSection&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
                 <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"16px 24px",fontSize:13,fontWeight:500,color:"#7c3aed",boxShadow:"0 4px 14px rgba(124,58,237,0.15)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="download" size={15}/> Arraste até a seção desejada abaixo</div>
@@ -34071,16 +34084,27 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   onDragEnter={e=>{
                     e.preventDefault();e.stopPropagation();
                     if(!canEditRef)return;
+                    // Cancela leave pendente (fix pisca ao mover entre filhos)
+                    if(_dragLeaveTimerRefRef.current){clearTimeout(_dragLeaveTimerRefRef.current);_dragLeaveTimerRefRef.current=null;}
                     _dragCountRefRef.current++;
-                    if(_dragCountRefRef.current===1)setDragOverSection("ref");
+                    if(dragOverSection!=="ref")setDragOverSection("ref");
                   }}
                   onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEditRef)e.dataTransfer.dropEffect="copy";}}
                   onDragLeave={e=>{
                     e.preventDefault();e.stopPropagation();
                     _dragCountRefRef.current=Math.max(0,_dragCountRefRef.current-1);
-                    if(_dragCountRefRef.current===0&&dragOverSection==="ref")setDragOverSection(null);
+                    // Debounce 60ms — dá tempo pro próximo dragEnter cancelar
+                    if(_dragLeaveTimerRefRef.current) clearTimeout(_dragLeaveTimerRefRef.current);
+                    _dragLeaveTimerRefRef.current=setTimeout(function(){
+                      _dragLeaveTimerRefRef.current=null;
+                      if(_dragCountRefRef.current===0) setDragOverSection(function(cur){return cur==="ref"?null:cur;});
+                    },60);
                   }}
-                  onDrop={e=>handleFilesDrop(e,"referencia")}
+                  onDrop={e=>{
+                    if(_dragLeaveTimerRefRef.current){clearTimeout(_dragLeaveTimerRefRef.current);_dragLeaveTimerRefRef.current=null;}
+                    _dragCountRefRef.current=0;
+                    handleFilesDrop(e,"referencia");
+                  }}
                   style={{marginTop:4,marginBottom:18,position:"relative",borderRadius:12,border:_refActive?"2px dashed #a140ff":"2px dashed transparent",background:_refActive?"#faf5ff":"transparent",padding:_refActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
                   {_refActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
                     <div style={{background:"#fff",border:"0.5px solid #e9d5ff",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#7c3aed",boxShadow:"0 8px 22px rgba(124,58,237,0.22)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="pin" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Imagens de referência</span></div>
@@ -34225,16 +34249,25 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
                   onDragEnter={e=>{
                     e.preventDefault();e.stopPropagation();
                     if(!canEdit)return;
+                    if(_dragLeaveTimerFinRef.current){clearTimeout(_dragLeaveTimerFinRef.current);_dragLeaveTimerFinRef.current=null;}
                     _dragCountFinRef.current++;
-                    if(_dragCountFinRef.current===1)setDragOverSection("fin");
+                    if(dragOverSection!=="fin")setDragOverSection("fin");
                   }}
                   onDragOver={e=>{e.preventDefault();e.stopPropagation();if(canEdit)e.dataTransfer.dropEffect="copy";}}
                   onDragLeave={e=>{
                     e.preventDefault();e.stopPropagation();
                     _dragCountFinRef.current=Math.max(0,_dragCountFinRef.current-1);
-                    if(_dragCountFinRef.current===0&&dragOverSection==="fin")setDragOverSection(null);
+                    if(_dragLeaveTimerFinRef.current) clearTimeout(_dragLeaveTimerFinRef.current);
+                    _dragLeaveTimerFinRef.current=setTimeout(function(){
+                      _dragLeaveTimerFinRef.current=null;
+                      if(_dragCountFinRef.current===0) setDragOverSection(function(cur){return cur==="fin"?null:cur;});
+                    },60);
                   }}
-                  onDrop={e=>handleFilesDrop(e,"final")}
+                  onDrop={e=>{
+                    if(_dragLeaveTimerFinRef.current){clearTimeout(_dragLeaveTimerFinRef.current);_dragLeaveTimerFinRef.current=null;}
+                    _dragCountFinRef.current=0;
+                    handleFilesDrop(e,"final");
+                  }}
                   style={{position:"relative",borderRadius:12,border:_finActive?"2px dashed #0f172a":"2px dashed transparent",background:_finActive?"#f8fafc":"transparent",padding:_finActive?12:0,transition:"border .12s, background .12s, padding .12s"}}>
                   {_finActive&&<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",zIndex:5,pointerEvents:"none"}}>
                     <div style={{background:"#fff",border:"0.5px solid #e2e8f0",borderRadius:12,padding:"14px 22px",fontSize:13,fontWeight:600,color:"#0f172a",boxShadow:"0 8px 22px rgba(15,23,42,0.18)",display:"inline-flex",alignItems:"center",gap:8}}><Ico n="image" size={15}/> Solte aqui em <span style={{textDecoration:"underline"}}>Arquivo final</span></div>
