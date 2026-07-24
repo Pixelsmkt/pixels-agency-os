@@ -15013,7 +15013,7 @@ function PageCalendarioInterno({isMob}){
                     }
                     const _clLogo = _cl && typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_cl.id];
                     const _multiClients=_evCids.length>1;
-                    const _catColors={aniversario:"#ec4899",reuniao:"#0ea5e9",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",entrega:"#0284c7",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777"};
+                    const _catColors={aniversario:"#ec4899",reuniao:"#0ea5e9",evento:"#a855f7",feira:"#f59e0b",presenca_feira:"#d97706",captacao:"#0891b2",entrega:"#0284c7",assinatura:"#16a34a",operacional:"#7c3aed",gestao_midia:"#db2777",comemorativa:"#f43f5e"};
                     // PRIORIDADE: cor por TIPO de evento (categoria) — identidade visual do calendário interno.
                     // Cliente é identificado pela LOGO no pill, não pela cor de fundo.
                     // Eventos antigos sem categoria: infere pelo título (palavras-chave).
@@ -15021,6 +15021,7 @@ function PageCalendarioInterno({isMob}){
                     if(!_evCat||!_catColors[_evCat]){
                       const _t=(ev.title||"").toLowerCase();
                       if(/reuni[aã]o|meeting|call/.test(_t))_evCat="reuniao";
+                      else if(/dia (nacional|mundial|internacional|do|da|de)|comemorativ|celebra/.test(_t))_evCat="comemorativa";
                       else if(/anivers/.test(_t))_evCat="aniversario";
                       else if(/feira/.test(_t))_evCat="feira";
                       else if(/captaç|capta[cç][aã]o/.test(_t))_evCat="captacao";
@@ -15040,7 +15041,7 @@ function PageCalendarioInterno({isMob}){
                       captacao:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>,
                       assinatura:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>,
                       operacional:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
-                      gestao_midia:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,entrega:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M16.5 9.4L7.55 4.24"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+                      gestao_midia:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,entrega:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><path d="M16.5 9.4L7.55 4.24"/><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,comemorativa:<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>,
                     }[ev.category];
                     return <div key={ev.id+"-"+_dayIso} onClick={function(e){e.stopPropagation();const _u=(typeof CURRENT_USER!=="undefined")?CURRENT_USER:null;if(!_u||_u.level!==1){if(typeof pixelsToast!=="undefined")pixelsToast.info("Só sócios podem editar eventos.");return;}setEditingEvent(ev);}}
                       onContextMenu={function(e){
