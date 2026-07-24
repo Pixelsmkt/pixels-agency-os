@@ -59045,11 +59045,15 @@ function PagePlanejamento({isMob, effectiveUser}){
     {/* ═══ Planejamentos dos clientes — SEMPRE PRIMEIRO (é a razão da aba existir) ═══ */}
     <_PlanejamentosClientes isMob={isMob}/>
 
-    {/* ═══ Divider visual entre planejamentos dos clientes e rotina da Pixels ═══ */}
-    <div style={{display:"flex",alignItems:"center",gap:12,margin:"8px 2px 4px"}}>
-      <div style={{flex:1,height:1,background:"linear-gradient(to right, transparent, #e2e8f0 30%, #e2e8f0 70%, transparent)"}}/>
-      <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:800,textTransform:"uppercase",letterSpacing:1.2}}>Rotina interna da Pixels</div>
-      <div style={{flex:1,height:1,background:"linear-gradient(to right, transparent, #e2e8f0 30%, #e2e8f0 70%, transparent)"}}/>
+    {/* ═══ SEPARADOR forte entre planejamentos dos clientes e rotina interna ═══ */}
+    <div style={{marginTop:32,marginBottom:8,paddingTop:24,borderTop:"2px dashed #e2e8f0",display:"flex",alignItems:"center",gap:14}}>
+      <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#7c3aed,#9F43F6)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0,boxShadow:"0 6px 18px rgba(124,58,237,.32)"}}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 7h-9M14 17H5M17 3l3 3-3 3M7 21l-3-3 3-3"/></svg>
+      </div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Rotina interna da Pixels</div>
+        <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>Dailies, weeklies e monthlies da equipe - separado dos clientes acima</div>
+      </div>
     </div>
 
     {/* ═══ KPIs ═══ */}
