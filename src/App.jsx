@@ -18350,13 +18350,12 @@ function PageDemandas({isMob, tasks: propTasks, setTasks: propSetTasks, perms, n
       // Coluna "agendado" (Publicadas) -> status real "publicado".
       // Mantém a separação: Aprovado (etapa) vs Publicadas (já publicado).
       const newStatus=toColId==="agendado"?"publicado":toColId;
-      // ── LIMPEZA AUTO em Pausado/Reprovada ──
-      // Quando o card cai em Pausado ou Reprovada, as tags perdem contexto:
-      // - Mês de pagamento (referenceMonth) — não é mais devido
-      // - Responsáveis (assignees/assignee) — freelancer não trabalha nele
-      // - Data/hora de publicação — perdeu o slot
-      // - Tipo de conteúdo — pode ser redefinido quando/se voltar
-      const _stripped = (newStatus==="pausado"||newStatus==="reprovado") ? {
+      // ── LIMPEZA AUTO em Pausado APENAS ──
+      // Em REPROVADO NÃO limpa nada: o designer/editor fez a arte, então
+      // responsáveis, mês de pagamento, tipo de conteúdo etc devem ser preservados
+      // pra contabilizar corretamente o pagamento e histórico.
+      // Em PAUSADO faz sentido limpar: o card ficou em standby antes da produção.
+      const _stripped = (newStatus==="pausado") ? {
         assignees:[],
         assignee:"",
         publishDate:"",
@@ -23511,8 +23510,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       status:"reprovado",
       ajustar:false,
       colEnteredAt:now,
-      // Limpar tags que perdem contexto quando o card cai em Reprovadas
-      assignees:[], assignee:"", publishDate:"", publishTime:"", contentType:"", referenceMonth:"",
+      // NÃO limpar tags: preserva responsáveis, mês de pagamento, tipo, publicação.
+      // Se a copy foi reprovada é decisão editorial — o histórico e contexto ficam.
       timeline:[...(t.timeline||[]),{type:"status",fromLabel:"Copys",toLabel:"Reprovadas",from:"demanda",to:"reprovado",at:now,atFmt:nowFmt(),user:actor}]
     }:t));
     pushNotif({type:"demanda",icon:"✕",title:"Copy reprovada",body:'"'+task.title+'" foi reprovada',user:actor,at:"Agora",targetUsers:_notifTargets(task)});
