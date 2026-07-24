@@ -14065,7 +14065,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
   const COLORS=["#0f172a","#7c3aed","#0ea5e9","#16a34a","#f59e0b","#dc2626","#ec4899","#0891b2"];
   return <div onMouseDown={function(e){if(e.target===e.currentTarget)onClose();}}
     style={{position:"fixed",inset:0,zIndex:600,background:"rgba(15,23,42,0.55)",backdropFilter:"blur(6px)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:16,paddingTop:80,fontFamily:"'Inter',system-ui,sans-serif"}}>
-    <div style={{background:"#fff",borderRadius:18,padding:"24px 26px 22px",maxWidth:520,width:"100%",boxShadow:"0 30px 70px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9",maxHeight:"85vh",overflow:"auto"}}>
+    <div style={{background:"#fff",borderRadius:18,padding:"24px 26px 22px",maxWidth:720,width:"100%",boxShadow:"0 30px 70px rgba(15,23,42,0.22)",border:"1px solid #f1f5f9",maxHeight:"90vh",overflow:"auto"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
         <div>
           <div style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.5,textTransform:"uppercase"}}>Calendário interno</div>
@@ -14164,7 +14164,7 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             </div>;
           })()}
         </div>
-        <div style={{display:"flex",flexDirection:"column",gap:10,border:"1px solid #e2e8f0",borderRadius:10,padding:10,background:"#fff",maxHeight:280,overflowY:"auto"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:10,border:"1px solid #e2e8f0",borderRadius:10,padding:10,background:"#fff"}}>
           {(function(){
             const _base = (typeof CLIENTS!=="undefined"?CLIENTS:[]);
             const _units = (typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]);
