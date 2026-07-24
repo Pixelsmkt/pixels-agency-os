@@ -13905,7 +13905,8 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
       recurrence:recurrence||null,
       color:color||null,
       category:category||null,
-      client_id:clientId||null,
+      // client_id só quando é 1 cliente (semântica clara); multi vai só em client_ids
+      client_id:(clientIds && clientIds.length===1)?clientIds[0]:(clientIds && clientIds.length===0 && clientId ? clientId : null),
       client_ids:(clientIds&&clientIds.length)?clientIds:null,
       city:city.trim()||null,
       end_date:(endDate&&endDate>date)?endDate:null,
@@ -14163,66 +14164,124 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
             </div>;
           })()}
         </div>
-        <div style={{display:"flex",gap:6,flexWrap:"wrap",border:"1px solid #e2e8f0",borderRadius:10,padding:8,background:"#fff",maxHeight:200,overflowY:"auto"}}>
+        <div style={{display:"flex",flexDirection:"column",gap:10,border:"1px solid #e2e8f0",borderRadius:10,padding:10,background:"#fff",maxHeight:280,overflowY:"auto"}}>
           {(function(){
-            // Expande CLIENTS: pra Bioter (parent), insere todas BIOTER_GROUP_UNITS como opções separadas
             const _base = (typeof CLIENTS!=="undefined"?CLIENTS:[]);
             const _units = (typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]);
-            const _expanded = [];
-            _base.forEach(function(c){
-              _expanded.push(c);
-              if(c.id==="bioter" && _units.length>0){
-                _units.forEach(function(u){
-                  _expanded.push({id:u.id, name:u.name, color:c.color, _isUnit:true});
-                });
-              }
-            });
-            return _expanded;
-          })().length===0
-            ? <div style={{color:"#94a3b8",fontSize:12,padding:"6px 4px"}}>Sem clientes cadastrados</div>
-            : (function(){
-                const _base = (typeof CLIENTS!=="undefined"?CLIENTS:[]);
-                const _units = (typeof BIOTER_GROUP_UNITS!=="undefined"?BIOTER_GROUP_UNITS:[]);
-                const _expanded = [];
-                _base.forEach(function(c){
-                  _expanded.push(c);
-                  if(c.id==="bioter" && _units.length>0){
-                    _units.forEach(function(u){
-                      _expanded.push({id:u.id, name:u.name, color:c.color, _isUnit:true});
-                    });
+            if(_base.length===0) return <div style={{color:"#94a3b8",fontSize:12,padding:"6px 4px"}}>Sem clientes cadastrados</div>;
+
+            // Helper: monta pill de cliente/unidade
+            const _renderPill = function(cl){
+              const _sel = clientIds.indexOf(cl.id)>=0;
+              const _cor = cl.color || "#0f172a";
+              const _logoId = cl._isUnit ? "bioter" : cl.id;
+              const _logoSrc = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_logoId]) || cl.logoUrl || null;
+              const _initials = (cl.name||cl.nome||cl.id||"?").trim().split(" ").map(function(w){return w[0]||"";}).slice(0,2).join("").toUpperCase();
+              return <button key={cl.id} type="button" onClick={function(){
+                let _next;
+                if(_sel){_next=clientIds.filter(function(x){return x!==cl.id;});}
+                else{_next=clientIds.concat([cl.id]);}
+                setClientIds(_next);
+                if(!colorTouched&&_next.length===1&&category!=="assinatura"&&category!=="operacional"&&category!=="gestao_midia"&&category!=="reuniao"){
+                  setColor(_cor);
+                }
+              }}
+                style={{background:_sel?_cor+"12":"#fff",border:"1.5px solid "+(_sel?_cor:"#e2e8f0"),borderRadius:10,padding:"5px 12px 5px 5px",fontSize:12.5,fontWeight:_sel?700:600,color:_sel?_cor:"#334155",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",boxShadow:_sel?"0 2px 8px "+_cor+"22":"none"}}
+                onMouseEnter={function(e){if(!_sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"06";}}}
+                onMouseLeave={function(e){if(!_sel){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
+                <span style={{width:22,height:22,borderRadius:6,background:_logoSrc?"#fff":_cor,border:"1px solid "+(_logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?2:0}}>
+                  {_logoSrc
+                    ? <img src={_logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                    : <span style={{color:"#fff",fontSize:10,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
                   }
-                });
-                return _expanded;
-              })().map(function(cl){
-                const _sel=clientIds.indexOf(cl.id)>=0;
-                const _cor=cl.color||"#0f172a";
-                // Logo do cliente: se for unit Bioter, usa logo do Bioter parent
-                const _logoId = cl._isUnit ? "bioter" : cl.id;
-                const _logoSrc = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_logoId]) || cl.logoUrl || null;
-                const _initials = (cl.name||cl.nome||cl.id||"?").trim().split(" ").map(function(w){return w[0]||"";}).slice(0,2).join("").toUpperCase();
-                return <button key={cl.id} type="button" onClick={function(){
-                  let _next;
-                  if(_sel){_next=clientIds.filter(function(x){return x!==cl.id;});}
-                  else{_next=clientIds.concat([cl.id]);}
-                  setClientIds(_next);
-                  // Cor automática do cliente: se só 1 cliente e usuário não mexeu na cor e categoria não é fixa
-                  if(!colorTouched&&_next.length===1&&category!=="assinatura"&&category!=="operacional"&&category!=="gestao_midia"&&category!=="reuniao"){
-                    setColor(_cor);
+                </span>
+                <span>{cl.name||cl.nome||cl.id}</span>
+                {_sel&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginRight:2}}><polyline points="20 6 9 17 4 12"/></svg>}
+              </button>;
+            };
+
+            // Helper: pill AGRUPADOR (Grupo Bioter / Bioter Brasil) — quando clicado, toggle todas as unidades daquele grupo
+            const _renderAgrupador = function(cfg){
+              // cfg: {id, name, color, unitIds:[], logoSrc}
+              const _selCount = cfg.unitIds.filter(function(uid){return clientIds.indexOf(uid)>=0;}).length;
+              const _allSel = _selCount === cfg.unitIds.length && _selCount > 0;
+              const _cor = cfg.color;
+              return <button key={cfg.id} type="button" onClick={function(){
+                let _next;
+                if(_allSel){
+                  // Desmarca todas do grupo
+                  _next = clientIds.filter(function(x){return cfg.unitIds.indexOf(x)<0 && x!==cfg.id;});
+                }else{
+                  // Marca todas do grupo (dedup)
+                  const _set = new Set(clientIds);
+                  cfg.unitIds.forEach(function(uid){ _set.add(uid); });
+                  _next = Array.from(_set);
+                }
+                setClientIds(_next);
+                if(!colorTouched && _next.length>0 && category!=="assinatura" && category!=="operacional" && category!=="gestao_midia" && category!=="reuniao"){
+                  setColor(_cor);
+                }
+              }}
+                title={cfg.hint||("Seleciona todas as "+cfg.unitIds.length+" unidades")}
+                style={{background:_allSel?_cor+"18":"#fff",border:"2px solid "+(_allSel?_cor:_cor+"55"),borderRadius:10,padding:"6px 14px 6px 5px",fontSize:13,fontWeight:800,color:_allSel?_cor:_cor,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:8,transition:"all .15s",boxShadow:_allSel?"0 3px 10px "+_cor+"33":"none",letterSpacing:-.15}}
+                onMouseEnter={function(e){if(!_allSel){e.currentTarget.style.background=_cor+"08";e.currentTarget.style.borderColor=_cor;}}}
+                onMouseLeave={function(e){if(!_allSel){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor=_cor+"55";}}}>
+                <span style={{width:24,height:24,borderRadius:6,background:cfg.logoSrc?"#fff":_cor,border:"1px solid "+(cfg.logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:cfg.logoSrc?2:0}}>
+                  {cfg.logoSrc
+                    ? <img src={cfg.logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                    : <span style={{color:"#fff",fontSize:11,fontWeight:900}}>{cfg.badge||""}</span>
                   }
-                }}
-                  style={{background:_sel?_cor+"12":"#fff",border:"1.5px solid "+(_sel?_cor:"#e2e8f0"),borderRadius:10,padding:cl._isUnit?"4px 12px 4px 5px":"5px 12px 5px 5px",fontSize:cl._isUnit?11.5:12.5,fontWeight:_sel?700:600,color:_sel?_cor:"#334155",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,opacity:cl._isUnit?0.95:1,transition:"all .15s",boxShadow:_sel?"0 2px 8px "+_cor+"22":"none"}}
-                  onMouseEnter={function(e){if(!_sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"06";}}}
-                  onMouseLeave={function(e){if(!_sel){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
-                  <span style={{width:cl._isUnit?18:22,height:cl._isUnit?18:22,borderRadius:cl._isUnit?5:6,background:_logoSrc?"#fff":_cor,border:"1px solid "+(_logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?2:0}}>
-                    {_logoSrc
-                      ? <img src={_logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
-                      : <span style={{color:"#fff",fontSize:cl._isUnit?8.5:10,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
-                    }
-                  </span>
-                  <span>{cl.name||cl.nome||cl.id}</span>
-                  {_sel&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginRight:2}}><polyline points="20 6 9 17 4 12"/></svg>}
-                </button>;
-              })}
+                </span>
+                <span>{cfg.name}</span>
+                {_selCount>0 && <span style={{background:_cor,color:"#fff",fontSize:9.5,fontWeight:800,padding:"2px 6px",borderRadius:99,marginLeft:2,letterSpacing:.3}}>{_selCount}/{cfg.unitIds.length}</span>}
+              </button>;
+            };
+
+            // Split clientes
+            const _bioter = _base.find(function(c){return c.id==="bioter";});
+            const _outros = _base.filter(function(c){return c.id!=="bioter" && c.id!=="pixels";});
+            const _bioterLogo = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS["bioter"]) || null;
+            const _bioterCor = (_bioter && _bioter.color) || "#16a34a";
+            const _brasilUnitIds = _units.filter(function(u){return u.pais==="BR";}).map(function(u){return u.id;});
+            const _allUnitIds = _units.map(function(u){return u.id;});
+
+            const _blocks = [];
+
+            // BLOCO 1: Agrupadores Bioter (Grupo + Brasil)
+            if(_units.length>0){
+              _blocks.push(<div key="grp-bioter" style={{display:"flex",flexDirection:"column",gap:5}}>
+                <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Agrupadores Bioter</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {_renderAgrupador({id:"bioter",name:"Grupo Bioter",color:_bioterCor,unitIds:_allUnitIds,logoSrc:_bioterLogo,badge:"GB",hint:"Todas as unidades (BR + PY)"})}
+                  {_brasilUnitIds.length>0 && _renderAgrupador({id:"bioter_brasil",name:"Bioter Brasil",color:_bioterCor,unitIds:_brasilUnitIds,logoSrc:_bioterLogo,badge:"BR",hint:"Só unidades brasileiras (exclui Paraguay)"})}
+                </div>
+              </div>);
+            }
+
+            // BLOCO 2: Unidades Bioter (alinhadas em grid)
+            if(_units.length>0){
+              _blocks.push(<div key="grp-unidades" style={{display:"flex",flexDirection:"column",gap:5,paddingTop:8,borderTop:"1px dashed #f1f5f9"}}>
+                <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Unidades Bioter</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {_units.map(function(u){
+                    return _renderPill({id:u.id, name:u.name, color:_bioterCor, _isUnit:true});
+                  })}
+                </div>
+              </div>);
+            }
+
+            // BLOCO 3: Outros clientes
+            if(_outros.length>0){
+              _blocks.push(<div key="grp-outros" style={{display:"flex",flexDirection:"column",gap:5,paddingTop:8,borderTop:"1px dashed #f1f5f9"}}>
+                <div style={{color:"#94a3b8",fontSize:9,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",padding:"0 2px"}}>Outros clientes</div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {_outros.map(_renderPill)}
+                </div>
+              </div>);
+            }
+
+            return _blocks;
+          })()}
         </div>
         {clientIds.length>1&&<div style={{color:"#94a3b8",fontSize:10.5,marginTop:4,fontStyle:"italic"}}>{clientIds.length} clientes selecionados — 1 marco será criado pra cada cliente.</div>}
       </div>
@@ -22434,6 +22493,10 @@ function PublicacaoEditModal({task, onClose, onReject}){
 
   const [refImages,setRefImages]=useState([]); // imagens de referência subidas no painel
   const [refUploading,setRefUploading]=useState(false);
+  // Drag & drop state pras Referências (permite arrastar imagens direto pro card)
+  const [_refDropOver, setRefDropOver] = useState(false);
+  const _refDropCount = useRef(0);
+  const _refDropLeaveTimer = useRef(null);
   const mediaRecRef=useRef(null);
   const recTimerRef=useRef(null);
   const refFileInputRef=useRef(null);
@@ -23082,8 +23145,40 @@ function PublicacaoEditModal({task, onClose, onReject}){
               </div>}
             </div>}
 
-            {/* Imagens de referência */}
-            <div>
+            {/* Imagens de referência — com drag & drop */}
+            <div
+              onDragEnter={function(e){
+                e.preventDefault();e.stopPropagation();
+                if(refUploading)return;
+                if(_refDropLeaveTimer.current){clearTimeout(_refDropLeaveTimer.current);_refDropLeaveTimer.current=null;}
+                _refDropCount.current++;
+                if(!_refDropOver)setRefDropOver(true);
+              }}
+              onDragOver={function(e){e.preventDefault();e.stopPropagation();if(!refUploading)e.dataTransfer.dropEffect="copy";}}
+              onDragLeave={function(e){
+                e.preventDefault();e.stopPropagation();
+                _refDropCount.current=Math.max(0,_refDropCount.current-1);
+                if(_refDropLeaveTimer.current)clearTimeout(_refDropLeaveTimer.current);
+                _refDropLeaveTimer.current=setTimeout(function(){
+                  _refDropLeaveTimer.current=null;
+                  if(_refDropCount.current===0) setRefDropOver(false);
+                },60);
+              }}
+              onDrop={function(e){
+                e.preventDefault();e.stopPropagation();
+                if(_refDropLeaveTimer.current){clearTimeout(_refDropLeaveTimer.current);_refDropLeaveTimer.current=null;}
+                _refDropCount.current=0;
+                setRefDropOver(false);
+                if(refUploading)return;
+                const _fs = Array.from((e.dataTransfer&&e.dataTransfer.files)||[]).filter(function(f){return f&&f.type&&f.type.startsWith("image/");});
+                if(_fs.length===0){if(typeof pixelsToast!=="undefined")pixelsToast.warning("Solte imagens (PNG, JPG, etc)",2500);return;}
+                handleRefUpload(_fs);
+              }}
+              style={{position:"relative",padding:_refDropOver?8:0,margin:_refDropOver?-8:0,borderRadius:12,background:_refDropOver?"#faf5ff":"transparent",border:_refDropOver?"2px dashed #a140ff":"2px dashed transparent",transition:"background .12s, border .12s, padding .12s, margin .12s"}}>
+              {_refDropOver&&<div style={{position:"absolute",top:8,right:8,zIndex:5,pointerEvents:"none",background:"#fff",border:"1px solid #e9d5ff",borderRadius:8,padding:"4px 10px",fontSize:11,fontWeight:700,color:"#7c3aed",boxShadow:"0 4px 12px rgba(124,58,237,0.18)",display:"inline-flex",alignItems:"center",gap:5}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
+                Solte pra anexar
+              </div>}
               <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:8}}>
                 <label style={{color:"#0f172a",fontSize:13,fontWeight:600,letterSpacing:-.1}}>Referências</label>
                 {refImages.length>0&&<span style={{color:"#94a3b8",fontSize:12,fontWeight:500}}>{refImages.length} {refImages.length===1?"imagem":"imagens"}</span>}
@@ -58605,17 +58700,28 @@ function _PlanejamentosClientes({isMob}){
   const [_intEvents, _setIntEvents] = useState([]);
   useEffect(function(){
     if(!window._sb) return;
+    let _debounceT = null;
     function _reload(){
       window._sb.from("internal_events").select("*").order("date",{ascending:true})
-        .then(function(r){ if(r && Array.isArray(r.data)) _setIntEvents(r.data); })
+        .then(function(r){
+          if(r && r.error){ console.warn("[planejamento internal_events]", r.error.message||r.error); return; }
+          if(r && Array.isArray(r.data)) _setIntEvents(r.data);
+        })
         .catch(function(e){ console.warn("[planejamento internal_events]", e&&e.message?e.message:e); });
     }
+    // Reload direto no mount + debounced nos realtime updates (evita burst)
     _reload();
+    function _reloadDebounced(){
+      if(_debounceT) clearTimeout(_debounceT);
+      _debounceT = setTimeout(function(){ _debounceT=null; _reload(); }, 300);
+    }
     try{
-      const _ch = window._sb.channel("planejamento_int_events_"+Date.now())
-        .on("postgres_changes",{event:"*",schema:"public",table:"internal_events"},function(){_reload();})
+      const _ch = window._sb.channel("planejamento_int_events_"+Math.random().toString(36).slice(2))
+        .on("postgres_changes",{event:"*",schema:"public",table:"internal_events"},_reloadDebounced)
         .subscribe();
-      return function(){ try{ window._sb.removeChannel(_ch); }catch(_){}
+      return function(){
+        if(_debounceT) clearTimeout(_debounceT);
+        try{ window._sb.removeChannel(_ch); }catch(_){}
       };
     }catch(_){}
   }, []);
@@ -58634,11 +58740,21 @@ function _PlanejamentosClientes({isMob}){
 
   function _eventsFor(clientId, sectionKey, periodStart, periodEnd){
     if(!Array.isArray(_intEvents) || !clientId) return [];
+    // Expansão: cliente "bioter" (Grupo) → aparece em TODAS as unidades Bioter.
+    // "bioter_brasil" → só unidades BR. Unidade individual "bioter_toledo" → só ela.
+    const _isBioterUnit = String(clientId).indexOf("bioter_")===0;
+    const _isBrUnit = _isBioterUnit && (typeof BIOTER_GROUP_UNITS!=="undefined") && BIOTER_GROUP_UNITS.some(function(u){return u.id===clientId && u.pais==="BR";});
     return _intEvents.filter(function(ev){
       if(!ev || !ev.date) return false;
       if(_CAT_TO_SECTION[ev.category] !== sectionKey) return false;
       const _ids = Array.isArray(ev.client_ids) ? ev.client_ids : (ev.client_id ? [ev.client_id] : []);
-      if(_ids.indexOf(clientId) < 0) return false;
+      // Match direto
+      let _match = _ids.indexOf(clientId) >= 0;
+      // Se card é unidade Bioter, também considera se evento tem "bioter" (Grupo)
+      if(!_match && _isBioterUnit && _ids.indexOf("bioter")>=0) _match = true;
+      // Se card é unidade Bioter BR, também considera "bioter_brasil"
+      if(!_match && _isBrUnit && _ids.indexOf("bioter_brasil")>=0) _match = true;
+      if(!_match) return false;
       const _d = String(ev.date);
       if(_d < periodStart || _d > periodEnd) return false;
       return true;
