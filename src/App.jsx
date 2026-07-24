@@ -22961,7 +22961,7 @@ function PublicacaoEditModal({task, onClose, onReject}){
                   <video ref={videoRef} src={currentSrc} controls
                     onTimeUpdate={function(e){setVideoCurrentTime(e.target.currentTime||0);}}
                     onLoadedMetadata={function(e){setVideoCurrentTime(e.target.currentTime||0);}}
-                    style={{maxWidth:"100%",maxHeight:"56vh",width:"auto",height:"auto",objectFit:"contain",display:"block",background:"#0f172a",margin:"0 auto"}}/>
+                    style={{maxWidth:"100%",maxHeight:"68vh",width:"auto",height:"auto",objectFit:"contain",display:"block",background:"#0f172a",margin:"0 auto"}}/>
                   {/* Botao Baixar vídeo — flutuante no top-right do container, fora dos controles nativos */}
                   <button onClick={_downloadNow} title="Baixar vídeo original"
                     style={{position:"absolute",top:12,right:12,zIndex:10,background:"rgba(15,23,42,0.72)",backdropFilter:"blur(6px)",color:"#fff",border:"1px solid rgba(255,255,255,0.18)",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",boxShadow:"0 4px 14px rgba(0,0,0,0.35)",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1}}
@@ -23889,7 +23889,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
       </div>
 
       {/* Main content: image + sidebar — grid responsivo */}
-      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(tab==="copys"?"1fr 360px":(tab==="video"?"340px 1fr":"1fr 480px")),gap:18,alignItems:"flex-start"}}>
+      <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":(tab==="copys"?"1fr 360px":"1fr 380px"),gap:18,alignItems:"flex-start"}}>
 
         {/* Image panel — só para Aprovação de conteúdo (publicacao). */}
         {(tab==="publicacao"||tab==="video")&&<div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -23936,13 +23936,13 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             return(<div style={{background:C.card,borderRadius:14,border:"1px solid "+C.b1,padding:"14px 18px",display:"flex",flexDirection:"column",gap:11,boxShadow:"0 1px 3px rgba(15,23,42,0.04)"}}>
               {/* Linha 1: cliente + unidades + responsáveis */}
               {(cl||bioterSel.length>0||assigneeUsers.length>0)&&(<div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:9,padding:"6px 14px",display:"flex",alignItems:"center"}}>
+                {cl&&(<div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center"}}>
                   {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:26,maxWidth:110,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:13,fontWeight:700}}>{cl.abbr||cl.name}</span>)}
                 </div>)}
                 {bioterSel.map(uid=>{
                   const u=(typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS:[]).find(x=>x.id===uid);
                   if(!u)return null;
-                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:9,padding:"6px 14px",fontSize:14,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center"}}>
+                  return(<span key={uid} style={{background:u.color+"15",color:u.color,border:"1px solid "+u.color+"40",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center"}}>
                     {u.pickerLabel||u.label}
                   </span>);
                 })}
@@ -23959,8 +23959,8 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
               </div>)}
               {/* Linha 2: tipo + prazos + mês + prioridade — chips grandes, padronizados com linha 1 */}
               {metaTags.length>0&&(<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:9,padding:"6px 14px",fontSize:14,fontWeight:700,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:7,whiteSpace:"nowrap"}}>
-                  <Ico n={t.icon} size={15} color={t.color}/>{t.label}
+                {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
+                  <Ico n={t.icon} size={12} color={t.color}/>{t.label}
                 </span>))}
               </div>)}
             </div>);
@@ -24326,7 +24326,7 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                 ];
                 return _BTNS.map(function(b,i){
                   return <button key={i} onClick={b.onClick} title={b.title||b.label}
-                    style={{width:"100%",background:"linear-gradient(180deg,#ffffff,#fafbfc)",color:"#0f172a",border:"1px solid #e5e7eb",borderRadius:12,padding:"11px 14px",fontWeight:600,fontSize:13.5,letterSpacing:-.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"flex",alignItems:"center",justifyContent:"center",gap:10,boxShadow:"0 1px 2px rgba(15,23,42,0.04), 0 0 0 0 transparent",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}
+                    style={{width:"100%",background:"linear-gradient(180deg,#ffffff,#fafbfc)",color:"#0f172a",border:"1px solid #e5e7eb",borderRadius:10,padding:"8px 11px",fontWeight:600,fontSize:12.5,letterSpacing:-.1,cursor:"pointer",transition:"all .18s cubic-bezier(.4,0,.2,1)",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 1px 2px rgba(15,23,42,0.04), 0 0 0 0 transparent",position:"relative",overflow:"hidden",fontFamily:"'Inter',system-ui,sans-serif"}}
                     onMouseEnter={e=>{
                       e.currentTarget.style.background="linear-gradient(180deg,#fff,"+b.color+"08)";
                       e.currentTarget.style.borderColor=b.color+"66";
@@ -24349,9 +24349,9 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                     }}
                     onMouseDown={e=>{e.currentTarget.style.transform="translateY(0) scale(0.985)";}}
                     onMouseUp={e=>{e.currentTarget.style.transform="translateY(-1px)";}}>
-                    <span data-chip style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:26,height:26,borderRadius:8,background:b.color+"15",color:b.color,flexShrink:0,transition:"all .18s cubic-bezier(.4,0,.2,1)"}}>{b.icon}</span>
+                    <span data-chip style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:22,height:22,borderRadius:7,background:b.color+"15",color:b.color,flexShrink:0,transition:"all .18s cubic-bezier(.4,0,.2,1)"}}>{b.icon}</span>
                     <span data-label style={{transition:"color .18s",letterSpacing:-.15}}>{b.label}</span>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",color:"#cbd5e1",flexShrink:0,opacity:.45,transition:"opacity .18s, transform .18s"}}><polyline points="9 18 15 12 9 6"/></svg>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{position:"absolute",right:11,top:"50%",transform:"translateY(-50%)",color:"#cbd5e1",flexShrink:0,opacity:.4,transition:"opacity .18s, transform .18s"}}><polyline points="9 18 15 12 9 6"/></svg>
                   </button>;
                 });
               })()}
