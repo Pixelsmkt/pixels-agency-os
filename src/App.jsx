@@ -29601,10 +29601,11 @@ function _ArmazenamentoPanel({tasks}){
   async function _executarLimpeza(){
     if(!window._sb){ if(typeof pixelsToast!=="undefined") pixelsToast.error("Sem conexão com Supabase"); return; }
     if(_candidatos.cards.length === 0){ if(typeof pixelsToast!=="undefined") pixelsToast.info("Nada pra limpar."); return; }
+    const _lbl = meses===1 ? "1 mês" : (meses+" meses");
     const _ok = typeof pixelsConfirm==="function"
       ? await pixelsConfirm({
           title:"Limpar arquivos antigos?",
-          message:"Vai remover "+_candidatos.totalFiles+" arquivos (~"+_candidatos.totalMB+" MB) de "+_candidatos.cards.length+" cards publicados/reprovados com mais de "+meses+" meses.\n\nOs cards, histórico e comentários SÃO PRESERVADOS. O Drive já tem backup completo. Só os bytes do Storage são liberados.",
+          message:"Vai remover "+_candidatos.totalFiles+" arquivos (~"+_candidatos.totalMB+" MB) de "+_candidatos.cards.length+" cards publicados/reprovados com mais de "+_lbl+".\n\nOs cards, histórico e comentários SÃO PRESERVADOS. O Drive já tem backup completo. Só os bytes do Storage são liberados.",
           confirmLabel:"Limpar "+_candidatos.totalMB+" MB",
           danger:true
         })
@@ -29629,7 +29630,7 @@ function _ArmazenamentoPanel({tasks}){
         }
         // Atualiza task.files = [] e adiciona timeline entry
         const _newTl = (_t.timeline||[]).concat([{
-          type:"system", label:"Arquivos removidos (limpeza automática > "+meses+" meses)",
+          type:"system", label:"Arquivos removidos (limpeza automática > "+(meses===1?"1 mês":(meses+" meses"))+")",
           at:new Date().toISOString(), atFmt:(new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})),
           user:CURRENT_USER.name, note:_paths.length+" arquivos removidos do Storage. Drive preserva a cópia."
         }]);
@@ -29671,20 +29672,20 @@ function _ArmazenamentoPanel({tasks}){
     if(!iso) return "nunca";
     try{ const d=new Date(iso); return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}); }catch(_){ return "desconhecido"; }
   };
+  const _mesesLbl = meses===1 ? "1 mês" : (meses+" meses");
 
   return <div style={{background:"#fff",border:"1px solid "+(_precisaLimpar?"#c4b5fd":"#e2e8f0"),borderRadius:14,padding:"18px 22px",fontFamily:"'Inter',system-ui,sans-serif",boxShadow:_precisaLimpar?"0 4px 20px rgba(124,58,237,.15)":"0 2px 8px rgba(15,23,42,.04)"}}>
-    {/* BANNER trimestral — aparece quando passou 3 meses OU nunca limpou + tem candidatos */}
-    {_precisaLimpar && <div style={{background:"linear-gradient(135deg,#7c3aed,#6d28d9)",borderRadius:11,padding:"14px 16px",marginBottom:14,display:"flex",alignItems:"center",gap:12,color:"#fff",boxShadow:"0 6px 18px rgba(124,58,237,.32)"}}>
-      <div style={{width:38,height:38,borderRadius:10,background:"rgba(255,255,255,.18)",backdropFilter:"blur(6px)",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    {/* BANNER discreto — aparece quando ha candidatos + passou 90 dias OU nunca limpou */}
+    {_precisaLimpar && <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"12px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:11}}>
+      <div style={{width:32,height:32,borderRadius:8,background:"#fef3c7",color:"#b45309",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       </div>
       <div style={{flex:1,minWidth:0}}>
-        <div style={{color:"#fff",fontWeight:800,fontSize:13.5,letterSpacing:-.2,marginBottom:2,display:"inline-flex",alignItems:"center",gap:6}}>
-          Hora da limpeza trimestral
-          <span style={{background:"rgba(255,255,255,.22)",color:"#fff",fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.4,textTransform:"uppercase"}}>{_candidatos.cards.length} cards · ~{_candidatos.totalMB} MB</span>
+        <div style={{color:"#78350f",fontWeight:700,fontSize:13,letterSpacing:-.15,marginBottom:2}}>
+          {_candidatos.cards.length} cards elegíveis pra limpeza · ~{_candidatos.totalMB} MB
         </div>
-        <div style={{color:"rgba(255,255,255,.85)",fontSize:11.5,fontWeight:500,lineHeight:1.4}}>
-          {_diasDesde===null ? "Nunca foi feita uma limpeza." : ("Última limpeza há "+_diasDesde+" dias ("+_fmtData(ultimaLimpeza)+").")} Autoriza abaixo pra liberar espaço.
+        <div style={{color:"#92400e",fontSize:11.5,fontWeight:500,lineHeight:1.4}}>
+          {_diasDesde===null ? "Nunca foi feita uma limpeza." : ("Última limpeza há "+_diasDesde+" dias.")} Autoriza abaixo pra liberar espaço.
         </div>
       </div>
     </div>}
@@ -29699,35 +29700,26 @@ function _ArmazenamentoPanel({tasks}){
       </div>
     </div>
 
-    {/* ─── USO ATUAL DO STORAGE — 3 KPIs grandes ─────────────────── */}
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.4fr",gap:12,marginBottom:20}}>
-      <div style={{background:"linear-gradient(135deg,#f8fafc,#fff)",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px 18px"}}>
-        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-          Espaço usado
-        </div>
-        <div style={{color:"#0f172a",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.usedLabel}</div>
-        <div style={{color:"#94a3b8",fontSize:11,fontWeight:600,marginTop:5}}>de 100 GB · {_uso.files} arquivos</div>
+    {/* ─── USO ATUAL DO STORAGE — KPIs limpos, sem gradientes ────── */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1.4fr",gap:10,marginBottom:18}}>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 16px"}}>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Espaço usado</div>
+        <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.usedLabel}</div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:5}}>de 100 GB · {_uso.files} arquivos</div>
       </div>
-      <div style={{background:"linear-gradient(135deg,#f0fdf4,#fff)",border:"1px solid #bbf7d0",borderRadius:12,padding:"16px 18px"}}>
-        <div style={{color:"#15803d",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-          Espaço livre
-        </div>
-        <div style={{color:"#15803d",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.freeLabel}</div>
-        <div style={{color:"#86efac",fontSize:11,fontWeight:600,marginTop:5}}>disponível pra uso</div>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 16px"}}>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Espaço livre</div>
+        <div style={{color:"#15803d",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.freeLabel}</div>
+        <div style={{color:"#94a3b8",fontSize:11,fontWeight:500,marginTop:5}}>disponível</div>
       </div>
-      <div style={{background:"linear-gradient(135deg,#faf5ff,#fff)",border:"1px solid #ede9fe",borderRadius:12,padding:"16px 18px"}}>
-        <div style={{color:"#7c3aed",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6,display:"inline-flex",alignItems:"center",gap:5}}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-          Ocupação
-        </div>
+      <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 16px"}}>
+        <div style={{color:"#64748b",fontSize:10.5,fontWeight:700,letterSpacing:.5,textTransform:"uppercase",marginBottom:6}}>Ocupação</div>
         <div style={{display:"flex",alignItems:"baseline",gap:6}}>
-          <div style={{color:"#7c3aed",fontSize:24,fontWeight:800,letterSpacing:-.6,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.pct}%</div>
-          <div style={{color:"#a78bfa",fontSize:11,fontWeight:600}}>do plano Pro</div>
+          <div style={{color:"#0f172a",fontSize:22,fontWeight:800,letterSpacing:-.5,fontFeatureSettings:"'tnum'",lineHeight:1}}>{_uso.pct}%</div>
+          <div style={{color:"#94a3b8",fontSize:11,fontWeight:500}}>do plano Pro</div>
         </div>
-        <div style={{marginTop:8,height:6,background:"#ede9fe",borderRadius:99,overflow:"hidden"}}>
-          <div style={{width:_uso.pct+"%",height:"100%",background:"linear-gradient(90deg,#7c3aed,#a78bfa)",borderRadius:99,transition:"width .3s"}}/>
+        <div style={{marginTop:8,height:5,background:"#f1f5f9",borderRadius:99,overflow:"hidden"}}>
+          <div style={{width:_uso.pct+"%",height:"100%",background:_uso.pct>=80?"#dc2626":_uso.pct>=60?"#f59e0b":"#0f172a",borderRadius:99,transition:"width .3s"}}/>
         </div>
       </div>
     </div>
@@ -29753,7 +29745,7 @@ function _ArmazenamentoPanel({tasks}){
         <span style={{color:"#475569",fontSize:12.5,fontWeight:600}}>Cards com mais de</span>
         <select value={meses} onChange={function(e){setMeses(parseInt(e.target.value,10)||6);}} disabled={busy}
           style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"6px 10px",fontSize:12.5,fontWeight:700,color:"#0f172a",cursor:"pointer",fontFamily:"inherit"}}>
-          <option value={1}>1 mes</option>
+          <option value={1}>1 mês</option>
           <option value={3}>3 meses</option>
           <option value={6}>6 meses</option>
           <option value={12}>12 meses</option>
