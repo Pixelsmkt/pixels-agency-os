@@ -14196,6 +14196,10 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
               })().map(function(cl){
                 const _sel=clientIds.indexOf(cl.id)>=0;
                 const _cor=cl.color||"#0f172a";
+                // Logo do cliente: se for unit Bioter, usa logo do Bioter parent
+                const _logoId = cl._isUnit ? "bioter" : cl.id;
+                const _logoSrc = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[_logoId]) || cl.logoUrl || null;
+                const _initials = (cl.name||cl.nome||cl.id||"?").trim().split(" ").map(function(w){return w[0]||"";}).slice(0,2).join("").toUpperCase();
                 return <button key={cl.id} type="button" onClick={function(){
                   let _next;
                   if(_sel){_next=clientIds.filter(function(x){return x!==cl.id;});}
@@ -14206,10 +14210,17 @@ function _InternalEventModal({initial, isEdit, onClose, onSaved, onDeleted}){
                     setColor(_cor);
                   }
                 }}
-                  style={{background:_sel?_cor+"18":"#fff",border:"1px solid "+(_sel?_cor+"66":"#e2e8f0"),borderRadius:8,padding:cl._isUnit?"5px 10px 5px 14px":"6px 10px",fontSize:cl._isUnit?11.5:12,fontWeight:_sel?700:600,color:_sel?_cor:"#475569",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,opacity:cl._isUnit?0.92:1}}>
-                  <span style={{width:cl._isUnit?6:8,height:cl._isUnit?6:8,borderRadius:"50%",background:_cor,opacity:_sel?1:.5,flexShrink:0}}/>
+                  style={{background:_sel?_cor+"12":"#fff",border:"1.5px solid "+(_sel?_cor:"#e2e8f0"),borderRadius:10,padding:cl._isUnit?"4px 12px 4px 5px":"5px 12px 5px 5px",fontSize:cl._isUnit?11.5:12.5,fontWeight:_sel?700:600,color:_sel?_cor:"#334155",cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,opacity:cl._isUnit?0.95:1,transition:"all .15s",boxShadow:_sel?"0 2px 8px "+_cor+"22":"none"}}
+                  onMouseEnter={function(e){if(!_sel){e.currentTarget.style.borderColor=_cor+"66";e.currentTarget.style.background=_cor+"06";}}}
+                  onMouseLeave={function(e){if(!_sel){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#fff";}}}>
+                  <span style={{width:cl._isUnit?18:22,height:cl._isUnit?18:22,borderRadius:cl._isUnit?5:6,background:_logoSrc?"#fff":_cor,border:"1px solid "+(_logoSrc?"#e2e8f0":"transparent"),display:"inline-flex",alignItems:"center",justifyContent:"center",overflow:"hidden",flexShrink:0,padding:_logoSrc?2:0}}>
+                    {_logoSrc
+                      ? <img src={_logoSrc} alt="" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                      : <span style={{color:"#fff",fontSize:cl._isUnit?8.5:10,fontWeight:800,letterSpacing:-.2}}>{_initials}</span>
+                    }
+                  </span>
                   <span>{cl.name||cl.nome||cl.id}</span>
-                  {_sel&&<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0}}><polyline points="20 6 9 17 4 12"/></svg>}
+                  {_sel&&<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginRight:2}}><polyline points="20 6 9 17 4 12"/></svg>}
                 </button>;
               })}
         </div>
@@ -24195,7 +24206,19 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                       {isLatest&&rounds2.length>1&&<span style={{background:"#fef3c7",color:"#92400e",fontSize:8.5,padding:"1px 7px",borderRadius:99,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ recente</span>}
                       {r.ts>0&&<span style={{color:C.td,fontSize:10,marginLeft:"auto"}}>{_fmt2(r.ts)}</span>}
                     </div>
-                    {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0?6:0}}/>}
+                    {isSent && r.sentFiles && r.sentFiles.length>0 && <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:0}}>
+                              {r.sentFiles.slice(0,6).map(function(f){
+                                const _isVid = f && f.url && ((String(f.type||"").startsWith("video/")) || (typeof _isVideoUrl==="function" && _isVideoUrl(f.url)));
+                                return <div key={f.id||f.url} onClick={function(){setOpenCard(current);}} title="Clique pra abrir o cartão"
+                                  style={{width:52,height:52,borderRadius:8,overflow:"hidden",border:"1px solid #e2e8f0",cursor:"pointer",background:"#0f172a",position:"relative"}}>
+                                  {_isVid
+                                    ? <div style={{width:"100%",height:"100%",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff"}}><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg></div>
+                                    : <img src={f.url} alt="" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} onError={function(e){e.currentTarget.style.display="none";}}/>}
+                                </div>;
+                              })}
+                              {r.sentFiles.length>6 && <div style={{width:52,height:52,borderRadius:8,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:700}}>+{r.sentFiles.length-6}</div>}
+                            </div>}
+                            {r.audio&&r.audio.audioUrl&&<audio src={r.audio.audioUrl} controls style={{width:"100%",height:28,marginBottom:r.comments.length>0?6:0}}/>}
                     {r.comments.map(cc=>{
                       const txt = String(cc.text||"").replace("AJUSTE NECESSARIO: ","");
                       const _isEditing = editingCmt && editingCmt.taskId===current.id && editingCmt.cmtId===cc.id;
@@ -24445,6 +24468,42 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                       if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
                     }
                   }, title:"Baixa a arte final (última imagem enviada) com 1 clique"}]:[]),
+                  ...(tab==="publicacao"?[{label:"Baixar arte", color:"#0ea5e9", colorDark:"#0284c7", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>, onClick:async()=>{
+                    try{
+                      const _isVid = function(u){ return typeof _isVideoUrl==="function" && _isVideoUrl(u); };
+                      const _imgs = (current.files||[]).filter(function(f){
+                        if(!f || f.isAnnotation) return false;
+                        if(f.tipo && f.tipo!=="final") return false;
+                        if(String(f.type||"").startsWith("video/")) return false;
+                        if(_isVid(f.url)) return false;
+                        return !!f.url;
+                      });
+                      const _pT = function(s){ if(!s) return 0; const _i=new Date(s).getTime(); return isNaN(_i)?0:_i; };
+                      _imgs.sort(function(a,b){ return (_pT(b.addedAtIso)||_pT(b.addedAt)||0) - (_pT(a.addedAtIso)||_pT(a.addedAt)||0); });
+                      let _url = _imgs[0]&&_imgs[0].url;
+                      if(!_url && Array.isArray(allImgs)){
+                        for(let i=0;i<allImgs.length;i++){ const _u = typeof allImgs[i]==="string"?allImgs[i]:(allImgs[i]&&allImgs[i].url); if(_u && !_isVid(_u)){ _url = _u; break; } }
+                      }
+                      if(!_url){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nenhuma arte anexada.",3000); return; }
+                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando arte…",2000);
+                      let _fname = "";
+                      try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
+                      if(!_fname || _fname.length<4){
+                        const _t = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : "arte";
+                        const _extM = String(_url).toLowerCase().match(/\.(png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
+                        _fname = _t + "." + (_extM?_extM[1]:"png");
+                      }
+                      const _r = await fetch(_url); const _b = await _r.blob();
+                      const _u = URL.createObjectURL(_b);
+                      const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
+                      document.body.appendChild(_a); _a.click();
+                      setTimeout(function(){ URL.revokeObjectURL(_u); _a.remove(); }, 250);
+                      if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname, 3000);
+                    }catch(e){
+                      console.warn("[download arte sidebar]", e);
+                      if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
+                    }
+                  }, title:"Baixa a arte final (última imagem enviada) com 1 clique"}]:[]),
                   {label:"Ver detalhes do cartão", color:"#64748b", colorDark:"#475569", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>, onClick:()=>setOpenCard(current), title:"Abre o cartão completo pra editar/ver detalhes"},
                 ];
                 return _BTNS.map(function(b,i){
@@ -24562,12 +24621,12 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
             const descTxt=stripHtml(current.desc);
             return(
               <div style={{background:C.card,borderRadius:14,padding:"18px 20px",border:"1px solid "+C.b1,display:"flex",flexDirection:"column",gap:14}}>
-                {/* Header: cliente + responsável */}
+                {/* Header: logo + nome do CLIENTE (não do responsável) */}
                 {cl&&(<div style={{display:"flex",alignItems:"center",gap:10}}>
                   <div style={{background:"#fff",border:"1px solid "+C.b1,borderRadius:8,padding:"4px 10px",display:"flex",alignItems:"center"}}>
                     {CLIENT_LOGOS[cl.id]?(<img src={CLIENT_LOGOS[cl.id]} style={{height:18,maxWidth:80,objectFit:"contain"}}/>):(<span style={{color:cl.color,fontSize:10,fontWeight:700}}>{cl.abbr}</span>)}
                   </div>
-                  {assigneeUser&&(<span style={{color:C.ts,fontSize:12,fontWeight:500}}>{assigneeUser.name}</span>)}
+                  <span style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.15}}>{cl.name}</span>
                 </div>)}
 
                 {/* Título */}
@@ -24614,28 +24673,48 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                     if(ts>r.ts)r.ts=ts;
                     if(!r.user&&f.addedBy)r.user=f.addedBy;
                   });
-                  const rounds=Array.from(map.values()).filter(r=>r.comments.length>0||r.audio||r.images.length>0).sort((a,b)=>b.ts-a.ts);
+                  // Injetar rounds "ENVIADO PARA AVALIAÇÃO" — uploads FINAL do designer/editor
+                  (function(){
+                    const _finals=(current.files||[]).filter(function(f){
+                      if(!f || f.isAnnotation) return false;
+                      if(f.tipo && f.tipo!=="final") return false;
+                      return !!f.url;
+                    });
+                    _finals.forEach(function(f){
+                      const _ts=_fTs(f);
+                      if(!_ts) return;
+                      const _k = "sent-" + (f.batchId || Math.floor(_ts/60000));
+                      if(!map.has(_k)) map.set(_k, {key:_k, ts:_ts, comments:[], audio:null, images:[], user:f.addedBy||"", isSent:true, sentFiles:[]});
+                      const r=map.get(_k);
+                      r.sentFiles.push(f);
+                      if(_ts>r.ts) r.ts=_ts;
+                      if(!r.user && f.addedBy) r.user=f.addedBy;
+                    });
+                  })();
+                  const rounds=Array.from(map.values()).filter(r=>r.comments.length>0||r.audio||r.images.length>0||(r.isSent&&r.sentFiles&&r.sentFiles.length>0)).sort((a,b)=>b.ts-a.ts);
                   if(rounds.length===0)return null;
                   const _fmt=(ts)=>{if(!ts)return"";const d=new Date(ts);if(isNaN(d.getTime()))return"";return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});};
                   return(<div style={{borderTop:"1px solid "+C.b1,paddingTop:16}}>
                     {/* Header minimal */}
                     <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",marginBottom:12,gap:8}}>
-                      <span style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Ajustes pedidos</span>
-                      <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"\'tnum\'"}}>{rounds.length} round{rounds.length>1?"s":""}</span>
+                      <span style={{color:"#0f172a",fontSize:13,fontWeight:700,letterSpacing:-.2}}>Histórico</span>
+                      {(function(){ const _n = rounds.filter(function(x){return !x.isSent;}).length; return <span style={{color:"#94a3b8",fontSize:11,fontWeight:600,fontFeatureSettings:"\'tnum\'"}}>{_n} round{_n===1?"":"s"} de ajuste</span>; })()}
                     </div>
                     <div style={{display:"flex",flexDirection:"column",gap:14,position:"relative"}}>
                       {/* Linha vertical sutil conectando os rounds (timeline) */}
                       {rounds.length>1&&<div style={{position:"absolute",left:14,top:14,bottom:14,width:1,background:"linear-gradient(180deg,#e2e8f0,#f1f5f9,#e2e8f0)",zIndex:0}}/>}
                       {rounds.map((r,ri)=>{
                         const firstC=r.comments[0]||r.audio||{};
-                        const isClient=firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0;
-                        const accent=isClient?"#ea580c":"#7c3aed";
-                        const accentSoft=isClient?"#fff7ed":"#faf5ff";
+                        const isSent = !!r.isSent;
+                        const isClient=!isSent && (firstC.type==="client_request"||String(firstC.user||"").toLowerCase().indexOf("cliente:")===0);
+                        const accent = isSent ? "#16a34a" : (isClient?"#ea580c":"#7c3aed");
+                        const accentSoft = isSent ? "#f0fdf4" : (isClient?"#fff7ed":"#faf5ff");
                         const _clientPhoto=firstC.userPhoto||r.userPhoto||"";
                         const _clientPersonName=firstC.userName||r.userName||"";
                         const userName=String(r.user||firstC.user||"Revisor").replace(/^Cliente:\s*/i,"");
                         const isLatest=ri===0;
-                        const _roundNum=rounds.length-ri;
+                        const _nonSentRounds = rounds.filter(function(x){return !x.isSent;});
+                        const _roundNum = isSent ? 0 : (_nonSentRounds.length - _nonSentRounds.indexOf(r));
                         const _initial=(userName||"?").trim().charAt(0).toUpperCase();
                         // Tenta achar TEAM user pela foto/cor
                         let _teamUser=null;
@@ -24648,14 +24727,14 @@ function PageAprovacoes({isMob, tasks, setTasks, globalNotifs, setGlobalNotifs, 
                             {_photo
                               ? <img src={_photo} alt={userName} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover",border:"2px solid #fff",boxShadow:"0 1px 3px rgba(15,23,42,0.12)"}}/>
                               : <span style={{width:28,height:28,borderRadius:"50%",background:_userColor,color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,border:"2px solid #fff",boxShadow:"0 1px 3px rgba(15,23,42,0.12)"}}>{_initial}</span>}
-                            <span style={{fontSize:9,fontWeight:800,color:accent,background:accentSoft,padding:"1px 6px",borderRadius:99,letterSpacing:.4,fontFeatureSettings:"\'tnum\'"}}>R{_roundNum}</span>
+                            <span style={{fontSize:9,fontWeight:800,color:accent,background:accentSoft,padding:"1px 6px",borderRadius:99,letterSpacing:.4,fontFeatureSettings:"\'tnum\'"}}>{isSent?"ENVIO":"R"+_roundNum}</span>
                           </div>
                           {/* Conteúdo */}
                           <div style={{flex:1,minWidth:0,background:"#fff",border:"1px solid "+(isLatest?accent+"33":"#e2e8f0"),borderRadius:12,padding:"10px 12px",boxShadow:isLatest?"0 2px 10px "+accent+"15":"none",transition:"all .15s"}}>
                             <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7,flexWrap:"wrap"}}>
                               <span style={{color:"#0f172a",fontSize:12,fontWeight:700,letterSpacing:-.1}}>{userName}</span>
                               {isClient&&_clientPhoto&&<img src={_clientPhoto} alt={_clientPersonName||""} referrerPolicy="no-referrer" style={{width:20,height:20,borderRadius:"50%",objectFit:"cover",border:"1.5px solid "+_userColor+"44",flexShrink:0,marginRight:2}}/>}
-                              <span style={{color:_userColor,fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,padding:"1px 6px",background:_userColor+"15",borderRadius:4}}>{isClient?"Cliente":"Equipe"}</span>
+                              <span style={{color:isSent?"#15803d":_userColor,fontSize:9,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,padding:"1px 6px",background:(isSent?"#16a34a":_userColor)+"15",borderRadius:4,display:"inline-flex",alignItems:"center",gap:4}}>{isSent&&<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>}{isSent?"Enviou p/ avaliação":(isClient?"Cliente":"Equipe")}</span>
                               {isLatest&&rounds.length>1&&<span style={{background:"#dcfce7",color:"#15803d",fontSize:8.5,padding:"1px 6px",borderRadius:99,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Atual</span>}
                               {r.ts>0&&<span style={{color:"#94a3b8",fontSize:10,marginLeft:"auto",fontWeight:500,fontFeatureSettings:"\'tnum\'"}}>{_fmt(r.ts)}</span>}
                             </div>
@@ -35410,11 +35489,17 @@ function OrientacoesView({clientId, bioterUnit, sector}){
   if(error)return<div style={{padding:16,background:"#fef2f2",border:"0.5px solid #fecaca",borderRadius:10,color:"#991b1b",fontSize:12}}>Erro ao carregar: {error}</div>;
 
   const _hasContatos = _resolvedContatos && Object.keys(_resolvedContatos).filter(k=>_resolvedContatos[k]).length>0;
-  // Orientações visuais desta area (via mapping do setor do card)
-  const _SECTOR_TO_AREA_H = {design:"design", video:"video", trafego:"midia", social:"social"};
-  const _areaH = _SECTOR_TO_AREA_H[String(sector||"").toLowerCase()] || "design";
-  const _areaObjH = (playbookData && playbookData[_areaH]) || null;
-  const _hasOrientacoesVisuais = _areaObjH && Array.isArray(_areaObjH.orientacoes_visuais) && _areaObjH.orientacoes_visuais.some(function(x){return x && (x.imgUrl || x.description || x.title);});
+  // Orientações visuais UNIFICADAS: merge de root + design + video + social do playbook
+  const _mergeOV = function(pd){
+    if(!pd) return [];
+    const _out=[]; const _seen={};
+    [pd.orientacoes_visuais, pd.design&&pd.design.orientacoes_visuais, pd.video&&pd.video.orientacoes_visuais, pd.social&&pd.social.orientacoes_visuais].forEach(function(arr){
+      if(Array.isArray(arr)) arr.forEach(function(it){ if(it&&it.id&&!_seen[it.id]){ _seen[it.id]=true; _out.push(it); } });
+    });
+    return _out;
+  };
+  const _allOV = _mergeOV(playbookData).filter(function(x){return x && (x.imgUrl || x.description || x.title);});
+  const _hasOrientacoesVisuais = _allOV.length > 0;
   const hasContent=_hasContatos||_hasOrientacoesVisuais||(data&&((data.logos?.length>0)||(data.paleta?.length>0)||(data.fontes?.length>0)||data.tomDeVoz||(data.hashtags?.length>0)||data.naoFazer||data.site));
 
   if(!hasContent)return(
@@ -35475,19 +35560,14 @@ function OrientacoesView({clientId, bioterUnit, sector}){
         </div>
       </div>}
 
-      {/* ═══ Orientações visuais (Playbook desta área) ═══
-          Puxa do playbookData[area].orientacoes_visuais e filtra pelo setor do card.
-          Mapping: design→design, video→video, trafego→midia, social→social;
-          fallback (coordenacao/etc) → design. */}
+      {/* ═══ Orientações visuais UNIFICADAS (todas as áreas do Playbook) ═══
+          Mostra TODAS as orientações visuais cadastradas no Playbook deste cliente,
+          sem filtrar por setor. Merge de data.orientacoes_visuais + design + video + social. */}
       {(function(){
-        const _SECTOR_TO_AREA = {design:"design", video:"video", trafego:"midia", social:"social"};
-        const _area = _SECTOR_TO_AREA[String(sector||"").toLowerCase()] || "design";
-        const _areaObj = (playbookData && playbookData[_area]) || null;
-        const _ovs = (_areaObj && Array.isArray(_areaObj.orientacoes_visuais)) ? _areaObj.orientacoes_visuais.filter(function(x){return x && (x.imgUrl || x.description || x.title);}) : [];
+        const _ovs = _allOV;
         if(_ovs.length===0) return null;
-        const _areaLabel = ({design:"Design", video:"Vídeo", midia:"Mídia", social:"Social"})[_area] || _area;
         return <div>
-          <SectionTitle label="Orientações visuais" sub={"Referências desta área ("+_areaLabel+") — cadastradas no Playbook"} icon="image" accent="#7c3aed"/>
+          <SectionTitle label="Orientações visuais" sub="Referências pra equipe — cadastradas no Playbook" icon="image" accent="#7c3aed"/>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_ovs.map(function(ov){
               return <div key={ov.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",display:"grid",gridTemplateColumns:ov.imgUrl?"180px 1fr":"1fr",gap:0,alignItems:"stretch",boxShadow:"0 2px 8px rgba(15,23,42,.03)"}}>
@@ -58488,6 +58568,97 @@ function _PlanejamentosClientes({isMob}){
     {k:"conteudos",         label:"Pilares de conteúdo",    ico:"video"},
   ];
 
+  // ── Sync com calendário interno: carrega internal_events e renderiza abaixo dos textareas
+  const [_intEvents, _setIntEvents] = useState([]);
+  useEffect(function(){
+    if(!window._sb) return;
+    function _reload(){
+      window._sb.from("internal_events").select("*").order("date",{ascending:true})
+        .then(function(r){ if(r && Array.isArray(r.data)) _setIntEvents(r.data); })
+        .catch(function(e){ console.warn("[planejamento internal_events]", e&&e.message?e.message:e); });
+    }
+    _reload();
+    try{
+      const _ch = window._sb.channel("planejamento_int_events_"+Date.now())
+        .on("postgres_changes",{event:"*",schema:"public",table:"internal_events"},function(){_reload();})
+        .subscribe();
+      return function(){ try{ window._sb.removeChannel(_ch); }catch(_){}
+      };
+    }catch(_){}
+  }, []);
+
+  // Categorias que sincronizam com o Planejamento
+  const _CAT_TO_SECTION = {
+    feira: "feiras_eventos",
+    presenca_feira: "feiras_eventos",
+    captacao: "feiras_eventos",
+    entrega: "feiras_eventos",
+    evento: "feiras_eventos",
+    comemorativa: "datas_importantes",
+  };
+  const _CAT_LABEL = {feira:"Feira", presenca_feira:"Presença", captacao:"Captação", entrega:"Entrega", evento:"Evento", comemorativa:"Data comemorativa"};
+  const _CAT_COLOR = {feira:"#f59e0b", presenca_feira:"#d97706", captacao:"#0891b2", entrega:"#0284c7", evento:"#a855f7", comemorativa:"#f43f5e"};
+
+  function _eventsFor(clientId, sectionKey, periodStart, periodEnd){
+    if(!Array.isArray(_intEvents) || !clientId) return [];
+    return _intEvents.filter(function(ev){
+      if(!ev || !ev.date) return false;
+      if(_CAT_TO_SECTION[ev.category] !== sectionKey) return false;
+      const _ids = Array.isArray(ev.client_ids) ? ev.client_ids : (ev.client_id ? [ev.client_id] : []);
+      if(_ids.indexOf(clientId) < 0) return false;
+      const _d = String(ev.date);
+      if(_d < periodStart || _d > periodEnd) return false;
+      return true;
+    }).sort(function(a,b){ return String(a.date).localeCompare(String(b.date)); });
+  }
+
+  function _fmtEvDate(d){
+    if(!d) return "";
+    const _p = String(d).split("-");
+    if(_p.length!==3) return d;
+    return _p[2]+"/"+_p[1];
+  }
+
+  function _periodBounds(mode, key){
+    if(!key) return {start:"", end:""};
+    const _pad = function(n){return String(n).padStart(2,"0");};
+    if(mode==="trimestral"){
+      const _m = String(key).match(/(\d{4})-Q([1-4])/);
+      if(!_m) return {start:"", end:""};
+      const _y = _m[1]; const _q = parseInt(_m[2],10);
+      const _startM = (_q-1)*3 + 1;
+      const _endM = _q*3;
+      const _last = new Date(parseInt(_y,10), _endM, 0).getDate();
+      return {start:_y+"-"+_pad(_startM)+"-01", end:_y+"-"+_pad(_endM)+"-"+String(_last).padStart(2,"0")};
+    }
+    const _m = String(key).match(/(\d{4})-(\d{2})/);
+    if(!_m) return {start:"", end:""};
+    const _y = _m[1]; const _mo = parseInt(_m[2],10);
+    const _last = new Date(parseInt(_y,10), _mo, 0).getDate();
+    return {start:_y+"-"+_pad(_mo)+"-01", end:_y+"-"+_pad(_mo)+"-"+String(_last).padStart(2,"0")};
+  }
+
+  function _RenderEventosLinkados(props){
+    const _list = props.list || [];
+    if(_list.length===0) return null;
+    return <div style={{marginTop:8,paddingTop:10,borderTop:"1px dashed #e2e8f0",display:"flex",flexDirection:"column",gap:6}}>
+      <div style={{color:"#7c3aed",fontSize:9.5,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",display:"inline-flex",alignItems:"center",gap:5}}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Do calendário interno
+      </div>
+      {_list.map(function(ev){
+        const _c = _CAT_COLOR[ev.category] || "#64748b";
+        const _lbl = _CAT_LABEL[ev.category] || ev.category;
+        return <div key={ev.id} style={{background:"#fafafa",border:"1px solid #e2e8f0",borderRadius:8,padding:"7px 10px",display:"flex",alignItems:"center",gap:8}}>
+          <span style={{background:_c,color:"#fff",fontSize:9.5,fontWeight:800,padding:"2px 7px",borderRadius:99,letterSpacing:.3,textTransform:"uppercase",flexShrink:0}}>{_lbl}</span>
+          <span style={{color:"#94a3b8",fontSize:11,fontWeight:700,fontFeatureSettings:"'tnum'",flexShrink:0,minWidth:36}}>{_fmtEvDate(ev.date)}{ev.end_date?"→"+_fmtEvDate(ev.end_date):""}</span>
+          <span style={{color:"#0f172a",fontSize:12.5,fontWeight:600,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.title||"(sem título)"}</span>
+          {ev.city && <span style={{color:"#94a3b8",fontSize:11,fontWeight:500,flexShrink:0}}>• {ev.city}</span>}
+        </div>;
+      })}
+    </div>;
+  }
+
   return <div style={{display:"flex",flexDirection:"column",gap:14}}>
     {/* Header premium */}
     <div style={{display:"flex",alignItems:"center",gap:12,padding:"4px 2px"}}>
@@ -58512,6 +58683,10 @@ function _PlanejamentosClientes({isMob}){
               statusInternoCfg={_statusInternoCfg}
               statusClienteCfg={_statusClienteCfg}
               onNav={_navToCliente}
+              intEvents={_intEvents}
+              eventsFor={_eventsFor}
+              periodBounds={_periodBounds}
+              renderEventos={_RenderEventosLinkados}
               isMob={isMob}
             />;
           })}
@@ -58524,7 +58699,7 @@ function _PlanejamentosClientes({isMob}){
 // _ClientePlanCard — 1 card por cliente, com seletor de mês próprio,
 // collapse automático quando vazio, e header dentro do cover.
 // ═════════════════════════════════════════════════════════════════════════
-function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, statusClienteCfg, onNav, isMob}){
+function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, statusClienteCfg, onNav, intEvents, eventsFor, periodBounds, renderEventos, isMob}){
   const _MESES_NM = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const _now = new Date();
   const _clColor = cl.color || "#7c3aed";
@@ -58778,6 +58953,13 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
                           ? <div style={{color:"#334155",fontSize:12,fontWeight:500,lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",marginLeft:17}}>{_val}</div>
                           : <div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",fontWeight:500,marginLeft:17}}>Vazio · clique pra preencher</div>
                       }
+                      {typeof eventsFor==="function" && typeof periodBounds==="function" && typeof renderEventos==="function" && (c.k==="feiras_eventos" || c.k==="datas_importantes") && (function(){
+                        const _pad = function(n){return String(n).padStart(2,"0");};
+                        const _key = year+"-"+_pad(month);
+                        const _b = periodBounds("mensal", _key);
+                        const _list = eventsFor(cl.id, c.k, _b.start, _b.end);
+                        return renderEventos({list:_list});
+                      })()}
                     </div>;
                   })
               }
@@ -58839,6 +59021,12 @@ function _ClientePlanCard({cl, CAMPOS_MENSAL, CAMPOS_TRIM, statusInternoCfg, sta
                           ? <div style={{color:"#334155",fontSize:12,fontWeight:500,lineHeight:1.5,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:3,WebkitBoxOrient:"vertical",marginLeft:17}}>{_val}</div>
                           : <div style={{color:"#cbd5e1",fontSize:11,fontStyle:"italic",fontWeight:500,marginLeft:17}}>Vazio · clique pra preencher</div>
                       }
+                      {typeof eventsFor==="function" && typeof periodBounds==="function" && typeof renderEventos==="function" && c.k==="feiras_eventos" && (function(){
+                        const _key = year+"-Q"+quarter;
+                        const _b = periodBounds("trimestral", _key);
+                        const _list = eventsFor(cl.id, c.k, _b.start, _b.end);
+                        return renderEventos({list:_list});
+                      })()}
                     </div>;
                   })
               }
@@ -63950,13 +64138,8 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   const isFreelaVideo  = effectiveUser.dash === "editor";
   const isFreelaMidia  = effectiveUser.id === "erick";
 
-  const VISIBLE_TABS = [];
-  if(isAdmin || isFreelaDesign) VISIBLE_TABS.push({id:"design", label:"Design",            icon:"image",        color:"#9F43F6"});
-  if(isAdmin || isFreelaVideo)  VISIBLE_TABS.push({id:"video",  label:"Edição de Vídeo",   icon:"play",         color:"#0ea5e9"});
-  if(isAdmin || isFreelaMidia)  VISIBLE_TABS.push({id:"midia",  label:"Gestão de Mídia",   icon:"trending-up",  color:"#16a34a"});
-  if(isAdmin)                   VISIBLE_TABS.push({id:"social", label:"Social Media",      icon:"users",        color:"#ec4899"});
-
-  const [tab, setTab] = useState(VISIBLE_TABS[0]?.id || "design");
+  // UNIFICADO: sem sub-abas de área. Um playbook por cliente com tudo junto.
+  const _accessOK = isAdmin || isFreelaDesign || isFreelaVideo || isFreelaMidia;
   const [openClient, setOpenClient] = useState(null);
   const [search, setSearch] = useState("");
   const [store, _updateClient] = _usePlaybooksStore();
@@ -63974,7 +64157,7 @@ function PagePlaybooks({isMob, perms, viewingAs}){
     return function(){ window.removeEventListener("pixels:clients-registry-updated", _bump); };
   }, []);
 
-  if(VISIBLE_TABS.length === 0){
+  if(!_accessOK){
     return <div style={{padding:24,fontFamily:PB_INTER,color:PB_MUTE}}>Você não tem acesso aos playbooks.</div>;
   }
 
@@ -63982,17 +64165,14 @@ function PagePlaybooks({isMob, perms, viewingAs}){
   if(openClient){
     const clCfg = (CLIENTS||[]).find(c=>c.id===openClient) || {id:openClient,name:openClient};
     const data = store[openClient] || {};
-    const areaCfg = VISIBLE_TABS.find(t=>t.id===tab) || {label:tab, icon:"folder", color:PB_PURPLE};
+    // UNIFICADO: area="all", cfg genérico
+    const areaCfg = {label:"Playbook", icon:"file-text", color:PB_PURPLE_DK};
     return <PlaybookDetalhe
-      cl={clCfg} area={tab} areaCfg={areaCfg} data={data}
+      cl={clCfg} area={"all"} areaCfg={areaCfg} data={data}
       isAdmin={isAdmin} editMode={editMode} setEditMode={setEditMode}
       onBack={()=>{setOpenClient(null); setEditMode(false);}}
       onUpdate={(patch)=>_updateClient(openClient, cur => Object.assign({}, cur, patch))}
-      onUpdateArea={(areaPatch)=>_updateClient(openClient, cur => {
-        const next = Object.assign({}, cur);
-        next[tab] = Object.assign({}, next[tab]||{}, areaPatch);
-        return next;
-      })}
+      onUpdateArea={(areaPatch)=>_updateClient(openClient, cur => Object.assign({}, cur, areaPatch))}
       isMob={isMob}/>;
   }
 
@@ -64017,7 +64197,7 @@ function PagePlaybooks({isMob, perms, viewingAs}){
           <span style={{color:"#cbd5e1",fontSize:10.5,fontWeight:700,letterSpacing:.6,textTransform:"uppercase"}}>Central de playbooks</span>
         </div>
         <div style={{color:"#fff",fontWeight:800,fontSize:isMob?22:26,letterSpacing:-.8,lineHeight:1.15}}>Playbooks</div>
-        <div style={{color:"#94a3b8",fontSize:12,marginTop:4,fontWeight:500,lineHeight:1.4}}>Orientações por cliente pra Design, Edição de Vídeo e Gestão de Mídia.</div>
+        <div style={{color:"#94a3b8",fontSize:12,marginTop:4,fontWeight:500,lineHeight:1.4}}>Um playbook por cliente — tudo no mesmo lugar.</div>
       </div>
       <div style={{display:"flex",gap:10,alignItems:"center",position:"relative",zIndex:1}}>
         <div style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
@@ -64030,17 +64210,7 @@ function PagePlaybooks({isMob, perms, viewingAs}){
       </div>
     </div>
 
-    {/* ══ Sub-abas (Design / Vídeo / Mídia) ══ */}
-    {VISIBLE_TABS.length>1 && <div style={{display:"flex",gap:4,background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:14,padding:5,overflowX:"auto"}}>
-      {VISIBLE_TABS.map(t=>{
-        const active = tab===t.id;
-        return <button key={t.id} onClick={()=>setTab(t.id)}
-          style={{flex:isMob?"0 0 auto":1,background:active?"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)":"transparent",color:active?"#fff":"#475569",border:"none",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:active?700:600,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,transition:"all .15s",boxShadow:active?"0 4px 14px rgba(159,67,246,0.3)":"none",whiteSpace:"nowrap"}}>
-          <Ico n={t.icon} size={13} color={active?"#fff":"currentColor"}/>
-          {t.label}
-        </button>;
-      })}
-    </div>}
+    {/* Sub-abas de área removidas — Playbook unificado */}
 
     {/* ══ Grid de clientes — mesmo estilo Carteira ══ */}
     {clientList.length === 0
@@ -64050,7 +64220,16 @@ function PagePlaybooks({isMob, perms, viewingAs}){
       : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
           {clientList.map(cl=>{
             const data = store[cl.id] || {};
-            const hasArea = !!(data[tab] && (data[tab].orientacoes || (data[tab].templates||[]).length>0));
+            // Playbook OK se tem QUALQUER dado preenchido (sobre, contatos, produtos, orientações etc.)
+            const hasArea = !!(data.sobre || data.comunicacao || (Array.isArray(data.produtos)&&data.produtos.length>0)
+              || (data.contatos && Object.keys(data.contatos).some(function(k){return data.contatos[k];}))
+              || (data.contatos_by_unit && Object.keys(data.contatos_by_unit).length>0)
+              || (Array.isArray(data.orientacoes_visuais)&&data.orientacoes_visuais.length>0)
+              || (Array.isArray(data.templates)&&data.templates.length>0)
+              // Legacy: dados antigos por área
+              || (data.design && (data.design.templates||data.design.orientacoes_visuais||data.design.checklist))
+              || (data.video && (data.video.processos||data.video.orientacoes_visuais||data.video.checklist))
+              || (data.social && (data.social.perfis||data.social.orientacoes_visuais||data.social.checklist)));
             const _accentCl = cl.color || "#94a3b8";
             const _logoSrc = (typeof CLIENT_LOGOS!=="undefined" && CLIENT_LOGOS[cl.id]) || cl.logoUrl || null;
             const hasLogo = !!_logoSrc;
@@ -64293,7 +64472,41 @@ function _PbVideoProcesses({isAdmin}){
 //  PlaybookDetalhe — página de um cliente/área específica
 // ═══════════════════════════════════════════════════════════════
 function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMode, onBack, onUpdate, onUpdateArea, isMob}){
-  const areaData = data[area] || {};
+  // UNIFICADO: quando area==="all", areaData = MERGE de root + legacy por área.
+  // Orientações visuais são mescladas de todas as áreas numa lista única.
+  const areaData = (function(){
+    if(area !== "all") return data[area] || {};
+    const _design = data.design || {};
+    const _video = data.video || {};
+    const _social = data.social || {};
+    // Templates: root primeiro, senão design (era só design que tinha)
+    const _templates = Array.isArray(data.templates) ? data.templates : (Array.isArray(_design.templates) ? _design.templates : []);
+    // Orientações visuais: MESCLA (root + design + video + social), dedup por id
+    const _ovMerged = [];
+    const _seen = {};
+    [data.orientacoes_visuais, _design.orientacoes_visuais, _video.orientacoes_visuais, _social.orientacoes_visuais].forEach(function(arr){
+      if(Array.isArray(arr)) arr.forEach(function(it){
+        if(it && it.id && !_seen[it.id]){ _seen[it.id]=true; _ovMerged.push(it); }
+      });
+    });
+    // Checklist: root, senão pega do design/video/social (o mais preenchido)
+    let _chk = Array.isArray(data.checklist) ? data.checklist : null;
+    if(!_chk){
+      const _candidates = [_design.checklist, _video.checklist, _social.checklist].filter(function(x){return Array.isArray(x)&&x.length>0;});
+      _chk = _candidates[0] || [];
+    }
+    return Object.assign({}, _design, _video, _social, data, {
+      templates: _templates,
+      orientacoes_visuais: _ovMerged,
+      checklist: _chk,
+      // Social: perfis, cadencia, mix vêm de _social
+      perfis: (data.perfis || _social.perfis || []),
+      cadencia: (data.cadencia || _social.cadencia || null),
+      mix: (data.mix || _social.mix || null),
+      particularidades: (data.particularidades || _social.particularidades || ""),
+      restricoes: (data.restricoes || _social.restricoes || "")
+    });
+  })();
 
   // Edição inline
   const [editSobre,setEditSobre] = useState(data.sobre||"");
@@ -64434,7 +64647,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
   // Tem template?
   const templates = (areaData.templates||[]);
-  const hasTemplate = area==="design" && (templates.length>0 || editMode);
+  const hasTemplate = (area==="all" || area==="design") && (templates.length>0 || editMode);
 
   // Anchors visíveis nesta área
   const SECTIONS = [
@@ -64443,11 +64656,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
     {id:"pb-contatos",     label:"Contatos",     icon:"phone"},
     {id:"pb-produtos",     label:"Produtos",     icon:"package"},
   ];
-  if(area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações", icon:areaCfg.icon});
-  if(area==="video") SECTIONS.push({id:"pb-processos", label:"Processos técnicos", icon:"play"});
-  if(area==="social") SECTIONS.push({id:"pb-social", label:"Publicação", icon:"users"});
+  // UNIFICADO: mostra TODAS as seções sempre (area==="all")
+  if(area==="all" || area==="design") SECTIONS.push({id:"pb-equipe", label:"Orientações", icon:"sparkles"});
+  if(area==="all" || area==="video") SECTIONS.push({id:"pb-processos", label:"Processos técnicos", icon:"play"});
+  if(area==="all" || area==="social") SECTIONS.push({id:"pb-social", label:"Publicação social", icon:"users"});
   SECTIONS.push({id:"pb-orientacoes-visuais", label:"Orientações visuais", icon:"image"});
-  if(hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
+  if(area==="all" || hasTemplate) SECTIONS.push({id:"pb-templates", label:"Templates", icon:"image"});
   SECTIONS.push({id:"pb-checklist", label:"Checklist", icon:"checkCircle"});
 
   // ─────────── Layout ───────────
@@ -64936,24 +65150,24 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               Logos, paleta de cores copiável, fontes, tom de voz, hashtags, CTA,
               não-fazer e redes sociais. Mesma fonte (Supabase clients.orientacoes)
               que o card de cada cliente lê — alterações refletem em todo lugar. */}
-          {area==="design" && typeof COrientacoes==="function" &&
+          {(area==="all" || area==="design") && typeof COrientacoes==="function" &&
             <PlaybookBlock id="pb-equipe" title="Orientações" subtitle="Logos, paleta, fontes, tom de voz — referência única usada nos cartões" icon="sparkles" color={PB_PURPLE_DK}>
               <COrientacoes cl={cl}/>
             </PlaybookBlock>
           }
 
           {/* Processos técnicos — GLOBAIS pra todos os vídeos (sincronizado entre clientes via team_data) */}
-          {area==="video" && <PlaybookBlock id="pb-processos" title="Processos técnicos" subtitle="Etapas obrigatórias pra todo vídeo da agência (aplica em todos os clientes)" icon="play" color="#0ea5e9">
+          {(area==="all" || area==="video") && <PlaybookBlock id="pb-processos" title="Processos técnicos de vídeo" subtitle="Etapas obrigatórias pra todo vídeo da agência (aplica em todos os clientes)" icon="play" color="#0ea5e9">
             <_PbVideoProcesses isAdmin={isAdmin}/>
           </PlaybookBlock>}
 
           {/* Configuração de publicação — Social Media (perfis a marcar, cadência, particularidades) */}
-          {area==="social" && <PlaybookBlock id="pb-social" title="Publicação" subtitle="Perfis a marcar, cadência, tipos de post e particularidades desse cliente" icon="users" color="#ec4899">
+          {(area==="all" || area==="social") && <PlaybookBlock id="pb-social" title="Publicação social" subtitle="Perfis a marcar, cadência, tipos de post e particularidades desse cliente" icon="users" color="#ec4899">
             <_PbSocialConfig areaData={areaData} isAdmin={isAdmin} editMode={editMode} onUpdate={onUpdateArea} clientId={cl.id}/>
           </PlaybookBlock>}
 
           {/* Orientações visuais — imagem + descrição por área. Aparece nos cards do setor correspondente. */}
-          <PlaybookBlock id="pb-orientacoes-visuais" title="Orientações visuais" subtitle={"Referências visuais desta área — aparecem automaticamente nos cards de "+areaCfg.label} icon="image" color={areaCfg.color||PB_PURPLE_DK}>
+          <PlaybookBlock id="pb-orientacoes-visuais" title="Orientações visuais" subtitle={area==="all" ? "Referências pra equipe — aparecem automaticamente nos cards deste cliente" : ("Referências visuais desta área — aparecem automaticamente nos cards de "+areaCfg.label)} icon="image" color={areaCfg.color||PB_PURPLE_DK}>
             <_PbVisualOrientations areaData={areaData} isAdmin={isAdmin} editMode={editMode} onUpdate={onUpdateArea} areaColor={areaCfg.color||PB_PURPLE_DK}/>
           </PlaybookBlock>
 
