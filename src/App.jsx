@@ -29597,40 +29597,47 @@ function _ArmazenamentoPanel({tasks}){
       }catch(_){}
       return null;
     };
-    // SO conta arquivos com tamanho REAL (do Map do bucket walk).
-    // Se f.size existe, usa. Senao, lookup no Map. Sem fallback estimado.
-    let _totalFiles = 0, _totalBytes = 0, _missing = 0;
+    // SO conta arquivos com tamanho REAL do bucket walk.
+    // Ordem: Map do bucket (fonte da verdade) → f.size (fallback) → ignora
+    let _totalFiles = 0, _totalBytes = 0, _missing = 0, _fromMap = 0, _fromSize = 0;
+    const _debugMisses = [];
     _list.forEach(function(t){
       const _files = Array.isArray(t.files) ? t.files : [];
       _files.forEach(function(f){
         if(!(f && f.url && (f.storagePath || String(f.url).indexOf("agency-files")>=0))) return;
         _totalFiles++;
-        // Prioridade 1: f.size (algumas tasks tem gravado)
-        if(typeof f.size === "number" && f.size>0){
-          _totalBytes += f.size;
-          return;
-        }
-        // Prioridade 2: Map real do bucket walk
+        // Prioridade 1: Map real do bucket walk (fonte da verdade)
         if(_realSizeMap){
           const _p = _pathOf(f);
           if(_p && typeof _realSizeMap[_p] === "number"){
             _totalBytes += _realSizeMap[_p];
+            _fromMap++;
             return;
           }
-          // Arquivo esta no card mas nao no bucket (orfao/ja apagado)
-          _missing++;
+          // Path nao bateu — guarda pra debug
+          if(_debugMisses.length < 5) _debugMisses.push(_p||"(sem path)");
+        }
+        // Prioridade 2: f.size gravado na task
+        if(typeof f.size === "number" && f.size>0){
+          _totalBytes += f.size;
+          _fromSize++;
           return;
         }
-        // Map ainda nao carregou — nao chuta
+        // Sem dado real — nao chuta
         _missing++;
       });
     });
     const _ready = !!_realSizeMap;
+    if(_ready && _debugMisses.length>0){
+      console.info("[armazenamento] paths nao encontrados no bucket (exemplos):", _debugMisses);
+    }
     return {
       cards:_list,
       totalFiles:_totalFiles,
-      totalMB: _ready ? Math.round(_totalBytes/(1024*1024)) : null, // null = ainda calculando
+      totalMB: _ready ? Math.round(_totalBytes/(1024*1024)) : null,
       missingFiles: _missing,
+      fromMap: _fromMap,
+      fromSize: _fromSize,
       ready: _ready,
     };
   }, [tasks, meses, _realSizeMap]);
@@ -29848,7 +29855,9 @@ function _ArmazenamentoPanel({tasks}){
             ? (_candidatos.totalMB >= 1024 ? (_candidatos.totalMB/1024).toFixed(2)+" GB" : _candidatos.totalMB+" MB")
             : <span style={{color:"#94a3b8",fontSize:14,fontWeight:600}}>Calculando…</span>}
         </div>
-        {_candidatos.ready && _candidatos.missingFiles>0 && <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,marginTop:3}}>{_candidatos.missingFiles} arquivo(s) órfão(s)</div>}
+        {_candidatos.ready && <div style={{color:"#94a3b8",fontSize:10,fontWeight:500,marginTop:3}}>
+          {_candidatos.fromMap} bucket · {_candidatos.fromSize} task.size{_candidatos.missingFiles>0?" · "+_candidatos.missingFiles+" sem tamanho":""}
+        </div>}
       </div>
     </div>
 
@@ -32639,6 +32648,33 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     }catch(e){console.warn("[cardmodal] mediaRec stop:",e?.message||e);}
   },[]);
 
+  // Flag: só true quando USUARIO efetivamente mexeu em algo (change/input event).
+  // Muda de state assincronas (realtime, refetch) NAO ligam essa flag.
+  const _userDirtyRef = useRef(false);
+  // Listener global: qualquer input/change/keydown de tipo edicao marca dirty.
+  // Filtra pra evitar false positives (ex: mudanca de aba, mouse over).
+  useEffect(function(){
+    const _mark = function(e){
+      const _t = e.target;
+      if(!_t) return;
+      const _tag = (_t.tagName||"").toUpperCase();
+      if(_tag==="INPUT" || _tag==="TEXTAREA" || _tag==="SELECT"){
+        _userDirtyRef.current = true;
+        return;
+      }
+      if(_t.isContentEditable) _userDirtyRef.current = true;
+    };
+    // capture=true pra pegar bubbling do modal antes do stopPropagation
+    document.addEventListener("input", _mark, true);
+    document.addEventListener("change", _mark, true);
+    return function(){
+      try{ document.removeEventListener("input", _mark, true); document.removeEventListener("change", _mark, true); }catch(_){}
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id]);
+  // Reset flag ao trocar de task
+  useEffect(function(){ _userDirtyRef.current = false; }, [task.id]);
+
   // Snapshot baseline: capturado 500ms após mount, quando auto-infers já rodaram
   // (sector é auto-inferido dos assignees, deadline é auto-corrigido, etc).
   // hasChanges compara contra o snapshot pra evitar falso positivo.
@@ -32665,6 +32701,8 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   }, [task.id]);
 
   const hasChanges=useCallback(()=>{
+    // Usuario nao interagiu → nao é dirty. Ponto final.
+    if(!_userDirtyRef.current) return false;
     // Snapshot ainda não pronto → nunca "dirty" (evita bug de fechar durante inicialização)
     if(!_snapRef.current) return false;
     const s = _snapRef.current;
@@ -36222,15 +36260,15 @@ function OrientacoesView({clientId, bioterUnit, sector}){
           <SectionTitle label="Orientações visuais" sub="Referências pra equipe — cadastradas no Playbook" icon="image" accent="#7c3aed"/>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {_ovs.map(function(ov){
-              return <div key={ov.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",display:"grid",gridTemplateColumns:ov.imgUrl?"180px 1fr":"1fr",gap:0,alignItems:"stretch",boxShadow:"0 2px 8px rgba(15,23,42,.03)"}}>
-                {ov.imgUrl && <a href={ov.imgUrl} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"#fafafa",borderRight:"1px solid #f1f5f9",minHeight:120,textDecoration:"none"}}>
-                  <img src={ov.imgUrl} alt={ov.title||""} referrerPolicy="no-referrer" style={{width:"100%",height:"100%",maxHeight:200,objectFit:"cover",display:"block"}} onError={function(e){e.currentTarget.style.display="none";}}/>
+              return <div key={ov.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:12,overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 2px 8px rgba(15,23,42,.03)"}}>
+                {ov.imgUrl && <a href={ov.imgUrl} target="_blank" rel="noopener noreferrer" style={{display:"block",background:"#fafafa",borderBottom:"1px solid #f1f5f9",textDecoration:"none",cursor:"zoom-in"}}>
+                  <img src={ov.imgUrl} alt={ov.title||""} referrerPolicy="no-referrer" style={{width:"100%",height:"auto",maxHeight:520,objectFit:"contain",display:"block",background:"#fafafa"}} onError={function(e){e.currentTarget.style.display="none";}}/>
                 </a>}
-                <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
-                  {ov.title && <div style={{color:"#0f172a",fontSize:13.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.2}}>{ov.title}</div>}
+                <div style={{padding:"14px 18px",display:"flex",flexDirection:"column",gap:6,minWidth:0}}>
+                  {ov.title && <div style={{color:"#0f172a",fontSize:14.5,fontWeight:800,letterSpacing:-.2,lineHeight:1.2}}>{ov.title}</div>}
                   {ov.description
-                    ? <div style={{color:"#334155",fontSize:12.5,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{ov.description}</div>
-                    : <div style={{color:"#94a3b8",fontSize:11.5,fontStyle:"italic"}}>Sem descrição.</div>
+                    ? <div style={{color:"#334155",fontSize:13,lineHeight:1.55,whiteSpace:"pre-wrap"}}>{ov.description}</div>
+                    : <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic"}}>Sem descrição.</div>
                   }
                 </div>
               </div>;
@@ -65499,9 +65537,14 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                 <span style={{color:"#94a3b8",fontSize:10.5,fontWeight:600,letterSpacing:.3,textTransform:"uppercase"}}>Playbook</span>
               </div>
               <div style={{color:"#0f172a",fontWeight:800,fontSize:isMob?22:30,letterSpacing:-.7,lineHeight:1.1}}>{cl.name}</div>
-              {(data.descricaoCurta||data.sobre) && <div style={{color:"#64748b",fontSize:13,marginTop:8,lineHeight:1.55,maxWidth:640,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
-                {data.descricaoCurta||data.sobre}
-              </div>}
+              {(function(){
+                // Mesma fonte que Estrategia > Clientes: data.sobre (editavel no bloco "Sobre a empresa")
+                // com fallback pra _pbAutoSobre. NAO usa descricaoCurta (que pode ter valor stale do seed).
+                const _desc = (data.sobre && data.sobre.trim()) || (typeof _pbAutoSobre==="function" ? _pbAutoSobre(cl.id) : "");
+                return _desc ? <div style={{color:"#64748b",fontSize:13,marginTop:8,lineHeight:1.55,maxWidth:640,display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical",overflow:"hidden"}}>
+                  {_desc}
+                </div> : null;
+              })()}
             </div>
           </div>
           {/* Sem botão global — cada aba salva ao editar (auto-save inline) */}
