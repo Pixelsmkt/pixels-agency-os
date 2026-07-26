@@ -65201,6 +65201,32 @@ function _pbStepUploadImg(cb){
   }catch(err){ console.warn(err); }
 }
 
+// Ícones disponíveis pro processo técnico — cada um com id + nome do Ico
+const _PB_PROC_ICONS = [
+  {id:"play",     label:"Play"},
+  {id:"music",    label:"Áudio"},
+  {id:"film",     label:"Vídeo"},
+  {id:"camera",   label:"Câmera"},
+  {id:"image",    label:"Imagem"},
+  {id:"sparkles", label:"Efeitos"},
+  {id:"edit",     label:"Editar"},
+  {id:"scissors", label:"Cortar"},
+  {id:"fileText", label:"Roteiro"},
+  {id:"check",    label:"Concluir"},
+  {id:"flag",     label:"Bandeira"},
+  {id:"eye",      label:"Revisar"},
+  {id:"pin",      label:"Marco"},
+  {id:"package",  label:"Pacote"},
+  {id:"alert",    label:"Atenção"},
+  {id:"upload",   label:"Export"}
+];
+// Fallback quando o processo nao tem icone salvo — usa um padrao rotativo por index
+function _pbProcIcon(proc, idx){
+  if(proc && proc.icon) return proc.icon;
+  const _defaults = ["play","music","edit","sparkles","scissors","film","check"];
+  return _defaults[idx % _defaults.length];
+}
+
 function _PbVideoProcesses({isAdmin}){
   const [processes, setProcesses] = useState(function(){
     try{ const r=localStorage.getItem(_PB_VP_KEY); if(r) return JSON.parse(r); }catch(_){}
@@ -65296,6 +65322,20 @@ function _PbVideoProcesses({isAdmin}){
           style={_pbInpStyle()}/>
       </div>
       <div>
+        <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:6}}>Ícone</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {_PB_PROC_ICONS.map(function(_ic){
+            const _active = (editing.draft.icon||"") === _ic.id;
+            return <button key={_ic.id} type="button" onClick={function(){_setDraft({icon:_ic.id});}} title={_ic.label}
+              style={{width:40,height:40,borderRadius:9,background:_active?"#0284c7":"#f8fafc",border:"1px solid "+(_active?"#0284c7":"#e2e8f0"),display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",transition:"all .12s",boxShadow:_active?"0 4px 12px rgba(2,132,199,.3)":"none"}}
+              onMouseEnter={function(e){if(!_active){e.currentTarget.style.borderColor="#0284c7";e.currentTarget.style.background="#eff6ff";}}}
+              onMouseLeave={function(e){if(!_active){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#f8fafc";}}}>
+              <Ico n={_ic.id} size={16} color={_active?"#fff":"#0284c7"}/>
+            </button>;
+          })}
+        </div>
+      </div>
+      <div>
         <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:6}}>Descrição / contexto</div>
         <textarea value={editing.draft.descricao} onChange={function(e){_setDraft({descricao:e.target.value});}} rows={3}
           placeholder="Por que esse processo existe, quando aplicar, qual o objetivo..."
@@ -65350,8 +65390,8 @@ function _PbVideoProcesses({isAdmin}){
       var open = !!expanded[idx];
       return <div key={proc.id||idx} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:12,overflow:"hidden"}}>
         <div onClick={function(){_toggle(idx);}} style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none"}}>
-          <div style={{width:28,height:28,borderRadius:8,background:"#0ea5e914",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-            <span style={{color:"#0284c7",fontWeight:800,fontSize:12}}>{idx+1}</span>
+          <div style={{width:32,height:32,borderRadius:9,background:"#0ea5e914",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <Ico n={_pbProcIcon(proc, idx)} size={16} color="#0284c7"/>
           </div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{color:PB_INK,fontWeight:700,fontSize:13.5,letterSpacing:-.2}}>{proc.title}</div>
@@ -67168,27 +67208,19 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
         var _cfg = _platCfg(p.plataforma);
         var _handleClean = String(p.handle||"").replace(/^@+/,"");
         if(!editMode || !isAdmin){
-          return <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"9px 11px"}}>
-            <div style={{width:28,height:28,borderRadius:8,background:_cfg.color+"14",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <span style={{color:_cfg.color,fontWeight:800,fontSize:10}}>{_cfg.label.slice(0,2)}</span>
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{color:PB_INK,fontWeight:800,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                {_handleClean ? "@"+_handleClean : <span style={{color:PB_SOFT,fontWeight:500}}>(sem @)</span>}
-              </div>
+          return <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"10px 14px"}}>
+            <span style={{color:_cfg.color,fontWeight:800,fontSize:16,flexShrink:0,lineHeight:1}}>@</span>
+            <div style={{flex:1,minWidth:0,color:PB_INK,fontWeight:700,fontSize:14.5,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              {_handleClean || <span style={{color:PB_SOFT,fontWeight:500,fontStyle:"italic"}}>sem @</span>}
             </div>
           </div>;
         }
         return <div key={i} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"9px 11px",display:"flex",gap:7,alignItems:"center"}}>
-          <select value={p.plataforma||"instagram"} onChange={function(e){_perfilSet(i,{plataforma:e.target.value});}}
-            style={Object.assign({},_pbInpStyle(),{width:110,padding:"6px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"})}>
-            {PLATAFORMAS.map(function(pl){return <option key={pl.id} value={pl.id}>{pl.label}</option>;})}
-          </select>
-          <div style={{flex:1,display:"flex",alignItems:"center",background:"#fff",border:"1px solid "+PB_BORDER2,borderRadius:8,overflow:"hidden",height:30}}>
-            <span style={{color:_cfg.color,fontWeight:800,fontSize:13,padding:"0 4px 0 10px",userSelect:"none"}}>@</span>
+          <div style={{flex:1,display:"flex",alignItems:"center",background:"#fff",border:"1px solid "+PB_BORDER2,borderRadius:8,overflow:"hidden",height:34,minWidth:0}}>
+            <span style={{color:_cfg.color,fontWeight:800,fontSize:15,padding:"0 4px 0 12px",userSelect:"none"}}>@</span>
             <input value={_handleClean} onChange={function(e){_perfilSet(i,{handle:e.target.value.replace(/^@+/,"").replace(/\s/g,"")});}}
               placeholder="usuario"
-              style={{flex:1,border:"none",outline:"none",background:"transparent",fontSize:13,fontFamily:"inherit",color:PB_INK,padding:"0 8px 0 0",minWidth:0,fontWeight:600}}/>
+              style={{flex:1,border:"none",outline:"none",background:"transparent",fontSize:14,fontFamily:"inherit",color:PB_INK,padding:"0 10px 0 2px",minWidth:0,fontWeight:700,letterSpacing:-.1}}/>
           </div>
           <button type="button" onClick={function(){_perfilDel(i);}} title="Remover perfil"
             style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,borderRadius:7,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
@@ -67241,7 +67273,7 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
               })}
             </div>
           </div>}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
             {_units.map(function(u){
               var _unitPerfis = perfis.map(function(p,idx){ return {p:p,idx:idx}; }).filter(function(x){ return x.p.unitId===u.id; });
               return <div key={u.id} style={{background:"#fff",border:"1px solid "+PB_BORDER2,borderRadius:12,padding:"12px 12px 10px",display:"flex",flexDirection:"column",gap:9,minWidth:0}}>
