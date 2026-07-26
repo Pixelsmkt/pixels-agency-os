@@ -66718,149 +66718,73 @@ function PbMini({icon, label, value}){
   </div>;
 }
 
-// ─── Bloco específico de template ──────────────────────────
+// ─── Bloco específico de template ── MINIMAL
 function PlaybookTemplateBlock({tpl, isAdmin, editMode, onUpdate, onRemove, onSaveImg}){
-  const [tmpUrl,setTmpUrl] = useState(tpl.imgUrl||"");
   const [tmpTitle,setTmpTitle] = useState(tpl.title||"");
-  const [tmpSubtitle,setTmpSubtitle] = useState(tpl.subtitle||"");
-  const [tmpDesc,setTmpDesc] = useState(tpl.descricao||"");
+  const [_lbOpen, setLbOpen] = useState(false);
   const _update = onUpdate || (function(patch){if(patch.imgUrl!==undefined&&typeof onSaveImg==="function")onSaveImg(patch.imgUrl);});
-  useEffect(()=>{
-    setTmpUrl(tpl.imgUrl||"");
-    setTmpTitle(tpl.title||"");
-    setTmpSubtitle(tpl.subtitle||"");
-    setTmpDesc(tpl.descricao||"");
-  },[tpl.imgUrl, tpl.title, tpl.subtitle, tpl.descricao, editMode]);
+  useEffect(function(){ setTmpTitle(tpl.title||""); }, [tpl.title, editMode]);
+  useEffect(function(){
+    if(!_lbOpen) return;
+    const _esc = function(e){ if(e.key==="Escape") setLbOpen(false); };
+    document.addEventListener("keydown", _esc);
+    return function(){ document.removeEventListener("keydown", _esc); };
+  }, [_lbOpen]);
 
-  return <div style={{background:"#fff",border:"1px solid "+PB_PURPLE_BD,borderRadius:18,padding:0,overflow:"hidden",fontFamily:PB_INTER,boxShadow:"0 6px 24px rgba(159,67,246,.10)",scrollMarginTop:80}}>
-    {/* Header hero gradient */}
-    <div style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",padding:"18px 22px",position:"relative",overflow:"hidden"}}>
-      <div style={{position:"absolute",top:-40,right:-40,width:160,height:160,borderRadius:"50%",background:"rgba(255,255,255,.10)"}}/>
-      <div style={{position:"absolute",bottom:-30,left:"40%",width:120,height:120,borderRadius:"50%",background:"rgba(255,255,255,.06)"}}/>
-      <div style={{position:"relative",zIndex:1,display:"flex",alignItems:"center",gap:13}}>
-        <div style={{width:44,height:44,borderRadius:12,background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.28)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)",flexShrink:0}}>
-          <Ico n="image" size={20} color="#fff" strokeWidth={2.2}/>
-        </div>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:3}}>
-            <span style={{background:"rgba(255,255,255,.22)",color:"#fff",border:"1px solid rgba(255,255,255,.3)",borderRadius:6,padding:"2px 8px",fontSize:9.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Template</span>
-          </div>
-          {editMode && isAdmin
-            ? <input type="text" value={tmpTitle} onChange={e=>setTmpTitle(e.target.value)} onBlur={()=>{if(tmpTitle!==tpl.title)_update({title:tmpTitle});}}
-                placeholder="Nome do template (ex: Ajuste de template)"
-                style={{width:"100%",background:"rgba(255,255,255,.20)",border:"1px solid rgba(255,255,255,.3)",borderRadius:8,padding:"6px 10px",color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box"}}/>
-            : <div style={{color:"#fff",fontWeight:800,fontSize:17,letterSpacing:-.3}}>{tpl.title||"(sem nome)"}</div>
-          }
-          {editMode && isAdmin
-            ? <input type="text" value={tmpSubtitle} onChange={e=>setTmpSubtitle(e.target.value)} onBlur={()=>{if(tmpSubtitle!==tpl.subtitle)_update({subtitle:tmpSubtitle});}}
-                placeholder="Pra que serve este template (curto)"
-                style={{width:"100%",background:"rgba(255,255,255,.14)",border:"1px solid rgba(255,255,255,.22)",borderRadius:7,padding:"4px 9px",color:"#fff",fontWeight:500,fontSize:12,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",marginTop:6}}/>
-            : (tpl.subtitle && <div style={{color:"rgba(255,255,255,.82)",fontSize:12,marginTop:3,fontWeight:500,lineHeight:1.45}}>{tpl.subtitle}</div>)
-          }
-        </div>
-        {editMode && isAdmin && typeof onRemove==="function" && <button type="button" onClick={onRemove} title="Excluir template"
-          style={{background:"rgba(255,255,255,.18)",border:"1px solid rgba(255,255,255,.3)",borderRadius:10,width:36,height:36,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0,backdropFilter:"blur(8px)"}}>
-          <Ico n="trash" size={15} color="#fff"/>
-        </button>}
+  return <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:16,fontFamily:PB_INTER,boxShadow:"0 1px 2px rgba(15,23,42,.03)",display:"flex",flexDirection:"column",gap:14,scrollMarginTop:80}}>
+    {/* Header limpo */}
+    <div style={{display:"flex",alignItems:"center",gap:12}}>
+      <div style={{width:34,height:34,borderRadius:9,background:PB_PURPLE_BG,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,border:"1px solid "+PB_PURPLE_BD}}>
+        <Ico n="image" size={15} color={PB_PURPLE_DK}/>
       </div>
+      {editMode && isAdmin
+        ? <input value={tmpTitle} onChange={function(e){setTmpTitle(e.target.value);}} onBlur={function(){if(tmpTitle!==tpl.title)_update({title:tmpTitle});}}
+            placeholder="Nome do template"
+            style={{flex:1,background:"transparent",border:"none",outline:"none",fontSize:16,fontWeight:800,color:PB_INK,letterSpacing:-.3,fontFamily:PB_INTER,padding:0,minWidth:0}}/>
+        : <div style={{flex:1,color:PB_INK,fontWeight:800,fontSize:16,letterSpacing:-.3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tpl.title||"(sem nome)"}</div>
+      }
+      {editMode && isAdmin && typeof onRemove==="function" && <button type="button" onClick={onRemove} title="Excluir template"
+        style={{background:"transparent",border:"none",color:"#cbd5e1",cursor:"pointer",padding:6,borderRadius:7,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+        onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
+        onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#cbd5e1";}}>
+        <Ico n="trash" size={15}/>
+      </button>}
     </div>
 
-    <div style={{padding:"18px 22px"}}>
-      {/* Imagem de referência */}
-      {(tpl.imgUrl||editMode) && <div style={{marginBottom:18}}>
-        <div style={{color:PB_PURPLE_DK,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:5}}>
-          <Ico n="image" size={11} color={PB_PURPLE_DK}/> Imagem de referência
+    {/* Foto */}
+    {tpl.imgUrl
+      ? <div style={{position:"relative",background:"#fafbfc",borderRadius:11,overflow:"hidden",border:"1px solid #eef0f3",display:"flex",alignItems:"center",justifyContent:"center",minHeight:200}}>
+          <img src={tpl.imgUrl} alt="" referrerPolicy="no-referrer"
+            onClick={function(){ setLbOpen(true); }}
+            style={{maxWidth:"100%",maxHeight:420,display:"block",objectFit:"contain",cursor:"zoom-in"}}/>
+          {editMode && isAdmin && <button type="button" onClick={function(){_pbTemplateUploadImg(_update);}}
+            style={{position:"absolute",top:8,right:8,background:"rgba(15,23,42,0.78)",border:"none",borderRadius:8,padding:"6px 12px",color:"#fff",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,backdropFilter:"blur(4px)"}}>
+            <Ico n="upload" size={12} color="#fff"/> Trocar
+          </button>}
         </div>
-        {tpl.imgUrl
-          ? <_TemplateImageWithAnnotations tpl={tpl} editMode={editMode} isAdmin={isAdmin} onSaveAnnotations={a=>_update({annotations:a})}/>
-          : <div style={{background:"#fafafa",border:"1px dashed "+PB_BORDER,borderRadius:12,padding:"30px 18px",textAlign:"center"}}>
-              <Ico n="image" size={28} color="#cbd5e1"/>
-              <div style={{color:PB_MUTE,fontSize:11.5,marginTop:8,fontWeight:600}}>Nenhuma imagem cadastrada</div>
-              {isAdmin && editMode && <div style={{color:PB_SOFT,fontSize:10.5,marginTop:4}}>Use o botão abaixo pra subir do PC ou cole uma URL.</div>}
-              {isAdmin && !editMode && <div style={{color:PB_SOFT,fontSize:10.5,marginTop:4}}>Clique em "Editar playbook" pra cadastrar.</div>}
-            </div>
-        }
-        {editMode && isAdmin && <div style={{marginTop:10,display:"flex",flexDirection:"column",gap:8}}>
-          {/* Botão principal: subir do PC direto pra Supabase Storage */}
-          <button type="button" onClick={function(){_pbTemplateUploadImg(_update);}}
-            style={{background:"linear-gradient(135deg,#a855f7,#7c3aed)",border:"none",borderRadius:10,padding:"11px 18px",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,boxShadow:"0 6px 18px rgba(124,58,237,.28)",letterSpacing:-.1}}>
-            <Ico n="upload" size={14} color="#fff"/> {tpl.imgUrl?"Trocar imagem (subir do PC)":"Subir imagem do PC"}
-          </button>
-          {/* Separador "ou" */}
-          <div style={{display:"flex",alignItems:"center",gap:10,margin:"2px 0"}}>
-            <div style={{flex:1,height:1,background:PB_BORDER}}/>
-            <span style={{color:PB_SOFT,fontSize:10.5,fontWeight:700,letterSpacing:.6,textTransform:"uppercase"}}>ou</span>
-            <div style={{flex:1,height:1,background:PB_BORDER}}/>
-          </div>
-          {/* Input URL pra colar link externo */}
-          <div>
-            <div style={{color:PB_MUTE,fontSize:10.5,fontWeight:700,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Colar URL externa (Drive, CDN, etc)</div>
-            <div style={{display:"flex",gap:8}}>
-              <input value={tmpUrl} onChange={e=>setTmpUrl(e.target.value)} placeholder="https://..."
-                style={Object.assign({},_pbInpStyle(),{flex:1})}/>
-              <button type="button" onClick={()=>_update({imgUrl:tmpUrl.trim()})}
-                style={{background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:10,padding:"9px 16px",color:"#475569",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>Aplicar URL</button>
-            </div>
-            <div style={{color:PB_SOFT,fontSize:10,marginTop:5,lineHeight:1.4}}>Use isto se a imagem já está hospedada em outro lugar.</div>
-          </div>
-        </div>}
-      </div>}
+      : (editMode && isAdmin
+          ? <button type="button" onClick={function(){_pbTemplateUploadImg(_update);}}
+              style={{background:"#fafbfc",border:"1.5px dashed #cbd5e1",borderRadius:11,padding:"40px 20px",color:"#64748b",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:9,transition:"all .12s"}}
+              onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE_DK;}}
+              onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#64748b";}}>
+              <Ico n="image" size={24} color="currentColor"/>
+              <span>+ Adicionar imagem de referência</span>
+            </button>
+          : null
+        )
+    }
 
-      {/* Descrição / explicação do template — admin escreve o que cada parte significa */}
-      {(tpl.descricao || editMode) && <div style={{marginBottom:18}}>
-        <div style={{color:PB_PURPLE_DK,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:8,display:"flex",alignItems:"center",gap:5}}>
-          <Ico n="file-text" size={11} color={PB_PURPLE_DK}/> Explicação do template
-        </div>
-        {editMode && isAdmin
-          ? <textarea value={tmpDesc} onChange={e=>setTmpDesc(e.target.value)} onBlur={()=>{if(tmpDesc!==tpl.descricao)_update({descricao:tmpDesc});}}
-              rows={5}
-              placeholder="Explique cada parte do template. Use → pra setas. Ex: 'Mapa do Brasil → canto superior direito, sempre verde Bioter. Texto → 1ª linha leve, 2ª em negrito.'"
-              style={Object.assign({},_pbInpStyle(),{minHeight:100,resize:"vertical"})}/>
-          : (tpl.descricao && <div style={{background:"#fafafa",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",color:PB_TEXT,fontSize:13,lineHeight:1.65,whiteSpace:"pre-wrap"}}>{tpl.descricao}</div>)
-        }
-      </div>}
-
-      {/* Regras em grid de cards */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
-        {(tpl.rules||[]).map((sec,si)=>{
-          const secIco = _pbSecIcon(sec.section);
-          return <div key={si} style={{background:"#fafafa",border:"1px solid "+PB_BORDER2,borderRadius:12,padding:"13px 15px"}}>
-            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:9,paddingBottom:9,borderBottom:"1px solid "+PB_BORDER2}}>
-              <div style={{width:28,height:28,borderRadius:8,background:PB_PURPLE_BG,border:"1px solid "+PB_PURPLE_BD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <Ico n={secIco} size={13} color={PB_PURPLE_DK}/>
-              </div>
-              <div style={{color:PB_INK,fontWeight:800,fontSize:13,letterSpacing:-.2}}>{sec.section}</div>
-            </div>
-            <ul style={{margin:0,padding:0,listStyle:"none",display:"flex",flexDirection:"column",gap:6}}>
-              {sec.items.map((it,ii)=>{
-                const isAttention = it.toUpperCase().startsWith("ATENÇÃO") || it.toUpperCase().startsWith("ATENCAO");
-                return <li key={ii} style={{display:"flex",alignItems:"flex-start",gap:9,color:isAttention?"#b91c1c":PB_TEXT,fontSize:12.5,lineHeight:1.55,background:isAttention?"#fef2f2":"transparent",border:isAttention?"1px solid #fecaca":"none",borderRadius:isAttention?8:0,padding:isAttention?"6px 9px":0}}>
-                  {isAttention
-                    ? <Ico n="alert" size={13} color="#dc2626" strokeWidth={2.3}/>
-                    : <span style={{color:PB_PURPLE,marginTop:6,flexShrink:0,fontSize:14,lineHeight:1}}>•</span>
-                  }
-                  <span style={{flex:1,fontWeight:isAttention?600:500}}>{it}</span>
-                </li>;
-              })}
-            </ul>
-          </div>;
-        })}
-      </div>
-
-      {tpl.summary && <div style={{background:"linear-gradient(135deg, "+PB_PURPLE_BG+" 0%, #f3e8ff 100%)",border:"1px solid "+PB_PURPLE_BD,borderRadius:12,padding:"13px 16px",marginTop:14,display:"flex",gap:11}}>
-        <div style={{width:30,height:30,borderRadius:9,background:PB_PURPLE,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 4px 12px rgba(159,67,246,.4)"}}>
-          <Ico n="sparkles" size={14} color="#fff" strokeWidth={2.2}/>
-        </div>
-        <div>
-          <div style={{color:PB_PURPLE_DK,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:4}}>Regra principal</div>
-          <div style={{color:PB_INK,fontSize:13,lineHeight:1.6,fontWeight:500}}>{tpl.summary}</div>
-        </div>
-      </div>}
-    </div>
+    {/* Lightbox pra ver a imagem grande */}
+    {_lbOpen && tpl.imgUrl && <div onClick={function(){setLbOpen(false);}}
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)",cursor:"zoom-out"}}>
+      <button type="button" onClick={function(e){e.stopPropagation();setLbOpen(false);}}
+        style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:44,height:44,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:600,lineHeight:1,padding:0}}
+        title="Fechar (ESC)">×</button>
+      <img src={tpl.imgUrl} alt="" referrerPolicy="no-referrer" onClick={function(e){e.stopPropagation();}}
+        style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,0.5)",cursor:"default",objectFit:"contain",display:"block"}}/>
+    </div>}
   </div>;
 }
-
-
 
 /* ─── _TemplateImageWithAnnotations — imagem do Template com canvas SVG de setas/formas/texto ───
    Coordenadas em PERCENTUAL (0-100) pra ficar responsivo em qualquer tamanho.
