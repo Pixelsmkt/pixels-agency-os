@@ -67235,41 +67235,29 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
               <span style={{color:_cfg.color,fontWeight:800,fontSize:10}}>{_cfg.label.slice(0,2)}</span>
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{color:PB_INK,fontWeight:700,fontSize:12.5,letterSpacing:-.1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              <div style={{color:PB_INK,fontWeight:800,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 {_handleClean ? "@"+_handleClean : <span style={{color:PB_SOFT,fontWeight:500}}>(sem @)</span>}
-                {p.nome && <span style={{color:PB_MUTE,fontWeight:500}}> · {p.nome}</span>}
               </div>
-              {p.papel && <div style={{color:PB_MUTE,fontSize:11,marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.papel}</div>}
             </div>
           </div>;
         }
-        return <div key={i} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"10px 11px",display:"flex",flexDirection:"column",gap:7}}>
-          <div style={{display:"flex",gap:7,alignItems:"center"}}>
-            <select value={p.plataforma||"instagram"} onChange={function(e){_perfilSet(i,{plataforma:e.target.value});}}
-              style={Object.assign({},_pbInpStyle(),{width:110,padding:"6px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"})}>
-              {PLATAFORMAS.map(function(pl){return <option key={pl.id} value={pl.id}>{pl.label}</option>;})}
-            </select>
-            <div style={{flex:1,display:"flex",alignItems:"center",background:"#fff",border:"1px solid "+PB_BORDER2,borderRadius:8,overflow:"hidden",height:30}}>
-              <span style={{color:_cfg.color,fontWeight:800,fontSize:13,padding:"0 4px 0 10px",userSelect:"none"}}>@</span>
-              <input value={_handleClean} onChange={function(e){_perfilSet(i,{handle:e.target.value.replace(/^@+/,"").replace(/\s/g,"")});}}
-                placeholder="usuario"
-                style={{flex:1,border:"none",outline:"none",background:"transparent",fontSize:12,fontFamily:"inherit",color:PB_INK,padding:"0 8px 0 0",minWidth:0}}/>
-            </div>
-            <button type="button" onClick={function(){_perfilDel(i);}} title="Remover perfil"
-              style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,borderRadius:7,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
-              onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
-              onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
-              <Ico n="x" size={12} color="currentColor"/>
-            </button>
+        return <div key={i} style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"9px 11px",display:"flex",gap:7,alignItems:"center"}}>
+          <select value={p.plataforma||"instagram"} onChange={function(e){_perfilSet(i,{plataforma:e.target.value});}}
+            style={Object.assign({},_pbInpStyle(),{width:110,padding:"6px 8px",fontSize:11.5,fontWeight:700,cursor:"pointer"})}>
+            {PLATAFORMAS.map(function(pl){return <option key={pl.id} value={pl.id}>{pl.label}</option>;})}
+          </select>
+          <div style={{flex:1,display:"flex",alignItems:"center",background:"#fff",border:"1px solid "+PB_BORDER2,borderRadius:8,overflow:"hidden",height:30}}>
+            <span style={{color:_cfg.color,fontWeight:800,fontSize:13,padding:"0 4px 0 10px",userSelect:"none"}}>@</span>
+            <input value={_handleClean} onChange={function(e){_perfilSet(i,{handle:e.target.value.replace(/^@+/,"").replace(/\s/g,"")});}}
+              placeholder="usuario"
+              style={{flex:1,border:"none",outline:"none",background:"transparent",fontSize:13,fontFamily:"inherit",color:PB_INK,padding:"0 8px 0 0",minWidth:0,fontWeight:600}}/>
           </div>
-          <div style={{display:"flex",gap:7}}>
-            <input value={p.nome||""} onChange={function(e){_perfilSet(i,{nome:e.target.value});}}
-              placeholder="Nome (opcional)"
-              style={Object.assign({},_pbInpStyle(),{flex:1,padding:"6px 9px",fontSize:11.5})}/>
-            <input value={p.papel||""} onChange={function(e){_perfilSet(i,{papel:e.target.value});}}
-              placeholder="Papel (ex: parceiro · dono)"
-              style={Object.assign({},_pbInpStyle(),{flex:2,padding:"6px 9px",fontSize:11.5})}/>
-          </div>
+          <button type="button" onClick={function(){_perfilDel(i);}} title="Remover perfil"
+            style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:5,borderRadius:7,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",transition:"all .12s"}}
+            onMouseEnter={function(e){e.currentTarget.style.background="#fee2e2";e.currentTarget.style.color="#dc2626";}}
+            onMouseLeave={function(e){e.currentTarget.style.background="transparent";e.currentTarget.style.color="#94a3b8";}}>
+            <Ico n="x" size={12} color="currentColor"/>
+          </button>
         </div>;
       }
 
