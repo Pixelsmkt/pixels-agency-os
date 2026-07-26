@@ -3361,6 +3361,8 @@ function Ico({n,size=14,color,strokeWidth=2}){
   if(n==="image")     return <svg {...p}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
   if(n==="video")     return <svg {...p}><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
   if(n==="mic")       return <svg {...p}><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
+  if(n==="music")     return <svg {...p}><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>;
+  if(n==="volume"||n==="volume2") return <svg {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/><path d="M19.07 4.93a10 10 0 010 14.14"/></svg>;
   if(n==="tag")       return <svg {...p}><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>;
   if(n==="send")      return <svg {...p}><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
   if(n==="sparkles")  return <svg {...p}><path d="M12 3l1.88 5.76L20 11l-6.12 2.24L12 19l-1.88-5.76L4 11l6.12-2.24L12 3z"/></svg>;
@@ -65206,10 +65208,13 @@ function _pbStepUploadImg(cb){
 // Ícones disponíveis pro processo técnico — cada um com id + nome do Ico
 const _PB_PROC_ICONS = [
   {id:"play",     label:"Play"},
-  {id:"music",    label:"Áudio"},
   {id:"film",     label:"Vídeo"},
   {id:"camera",   label:"Câmera"},
   {id:"image",    label:"Imagem"},
+  // Áudio (3 opções)
+  {id:"music",    label:"Música"},
+  {id:"volume2",  label:"Som"},
+  {id:"mic",      label:"Microfone"},
   {id:"sparkles", label:"Efeitos"},
   {id:"edit",     label:"Editar"},
   {id:"scissors", label:"Cortar"},
@@ -67515,5 +67520,6 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
           )
       }
     </div>
+
   </div>;
 }
