@@ -3520,11 +3520,13 @@ function _VideoThumb(props){
 // Ordem otimizada pro grid 2-cols do picker (left-right):
 // Col 1: Castro, Chapecó, Toledo   |   Col 2: Gloria de Dourados, Paraguay, Uberlandia
 const BIOTER_UNITS = [
+  // Matrizes (verde escuro)
   { id:"castro",    label:"Castro/PR",             color:"#166534", abbr:"CA", pickerLabel:"Castro" },
-  { id:"gloria",    label:"Glória de Dourados/MS", color:"#16a34a", abbr:"GD", pickerLabel:"Glória de Dourados" },
   { id:"chapeco",   label:"Chapecó/SC",            color:"#166534", abbr:"CH", pickerLabel:"Chapecó" },
-  { id:"paraguay",  label:"Bioter Paraguay",       color:"#16a34a", abbr:"PY", pickerLabel:"Paraguay",   cidade:"Obligado" },
   { id:"toledo",    label:"Toledo/PR",             color:"#166534", abbr:"TO", pickerLabel:"Toledo" },
+  // Filiais (verde claro)
+  { id:"gloria",    label:"Glória de Dourados/MS", color:"#16a34a", abbr:"GD", pickerLabel:"Glória de Dourados" },
+  { id:"paraguay",  label:"Bioter Paraguay",       color:"#16a34a", abbr:"PY", pickerLabel:"Paraguay",   cidade:"Obligado" },
   { id:"uberlandia",label:"Uberlândia/MG",         color:"#16a34a", abbr:"UB", pickerLabel:"Uberlândia" },
 ];
 
@@ -65803,14 +65805,19 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Contatos — telefone, WhatsApp, endereço, site, redes sociais.
               Pra Bioter: cada unidade tem seus próprios contatos (Chapecó, Toledo, Castro...). */}
           <PlaybookBlock id="pb-contatos" title="Contatos" subtitle={_isBioter?"Dados de cada unidade — pra colocar nas artes e vídeos do post daquela unidade":"Dados pra colocar nas artes e vídeos"} icon="phone" color="#0d9488">
-            {_isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,paddingBottom:14,borderBottom:"1px solid "+PB_BORDER2}}>
-              {BIOTER_UNITS.map(function(u){
-                const active=_unitTab===u.id;
-                return <button key={u.id} type="button" onClick={function(){setUnitTab(u.id);}}
-                  style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 4px 12px "+u.color+"33":"none"}}>
-                  {u.pickerLabel||u.label}
-                </button>;
-              })}
+            {_isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid "+PB_BORDER2}}>
+              <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:7}}>Filtrar por unidade</div>
+              <div style={{display:"inline-flex",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:10,padding:3,gap:2,flexWrap:"wrap"}}>
+                {BIOTER_UNITS.map(function(u){
+                  const active=_unitTab===u.id;
+                  return <button key={u.id} type="button" onClick={function(){setUnitTab(u.id);}}
+                    style={{background:active?"#0f172a":"transparent",border:"none",color:active?"#fff":"#475569",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:active?700:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 2px 6px rgba(15,23,42,.25)":"none"}}
+                    onMouseEnter={function(e){if(!active) e.currentTarget.style.background="rgba(15,23,42,.06)";}}
+                    onMouseLeave={function(e){if(!active) e.currentTarget.style.background="transparent";}}>
+                    {u.pickerLabel||u.label}
+                  </button>;
+                })}
+              </div>
             </div>}
             {(function(){
               const _currentUnit = _isBioter ? _unitTab : null;
