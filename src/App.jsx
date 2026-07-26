@@ -65086,10 +65086,9 @@ return <div key={cl.id} onClick={()=>setOpenClient(cl.id)}
               onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 24px 48px rgba(15,23,42,0.12)";e.currentTarget.style.borderColor=_accentCl+"66";e.currentTarget.style.transform="translateY(-6px)";}}
               onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 4px 14px rgba(15,23,42,0.04)";e.currentTarget.style.borderColor="#eef0f3";e.currentTarget.style.transform="translateY(0)";}}>
 
-              {/* COVER gradient da cor do cliente + bolinhas */}
+              {/* COVER gradient da cor do cliente + bolinhas — sem badge de status */}
               <div style={{position:"relative",height:100,background:"linear-gradient(135deg, "+_accentCl+" 0%, "+_accentCl+"cc 100%)",overflow:"hidden"}}>
                 <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 1px 1px, rgba(255,255,255,0.18) 1px, transparent 0)",backgroundSize:"12px 12px",opacity:.5}}/>
-                <span style={{position:"absolute",top:14,right:14,background:hasArea?"rgba(255,255,255,0.95)":"rgba(15,23,42,0.75)",backdropFilter:"blur(8px)",color:hasArea?"#15803d":"#f1f5f9",fontSize:9.5,fontWeight:800,padding:"5px 11px",borderRadius:99,letterSpacing:.5,textTransform:"uppercase",boxShadow:"0 2px 8px rgba(0,0,0,0.15)"}}>{hasArea?"● Playbook OK":"Em construção"}</span>
               </div>
 
               {/* LOGO flutuante */}
@@ -65121,8 +65120,9 @@ return <div key={cl.id} onClick={()=>setOpenClient(cl.id)}
                       </span>
                     : <span/>
                   }
-                  <span style={{color:PB_PURPLE,fontSize:12,fontWeight:800,display:"inline-flex",alignItems:"center",gap:5,letterSpacing:.2,marginLeft:"auto"}}>
-                    Abrir playbook <Ico n="chevron-right" size={12} color={PB_PURPLE}/>
+                  <span style={{display:"inline-flex",alignItems:"center",gap:5,background:"#f8fafc",color:"#475569",fontWeight:700,fontSize:11.5,padding:"5px 10px",borderRadius:8,border:"1px solid #e2e8f0",marginLeft:"auto"}}>
+                    Abrir playbook
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                   </span>
                 </div>;
               })()}
