@@ -32996,8 +32996,9 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
   // Whitelist de MIME types permitidos — reduz risco de upload de executáveis
   const ALLOWED_MIME_PREFIXES=["image/","video/","audio/","application/pdf","application/msword","application/vnd.openxmlformats","text/plain","application/zip","application/x-zip-compressed"];
   const MAX_UPLOAD_SIZE=2*1024*1024*1024; // 2 GB (vídeos longos)
-  const MAX_IMAGES_PER_CARD=20;
-  const MAX_PARALLEL_UPLOADS=3; // máximo 3 uploads simultâneos
+  const MAX_IMAGES_PER_CARD=60;           // total geral (refs + finais)
+  const MAX_IMAGES_PER_TIPO=30;           // limite por seção (30 refs OU 30 finais)
+  const MAX_PARALLEL_UPLOADS=3;           // máximo 3 uploads simultâneos
 
   // Mapa extensão → MIME (fallback quando file.type vem vazio)
   const EXT_TO_MIME={
@@ -33263,16 +33264,30 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
     e.target.value="";
     if(files.length===0)return;
 
-    // ── VALIDA LIMITE DE 20 IMAGENS ──
+    // ── VALIDA LIMITE DE IMAGENS (total geral + por seção) ──
+    const _isImgFile = f => { const m=detectMime(f); return m&&m.startsWith("image/"); };
     const currentImgs=attachments.filter(a=>isImg(a)&&!a.isAnnotation).length;
-    const newImgs=files.filter(f=>{const m=detectMime(f);return m&&m.startsWith("image/");}).length;
-    const remaining=MAX_IMAGES_PER_CARD-currentImgs;
-    if(newImgs>0&&remaining<=0){
-      pixelsToast.warning(`Limite de ${MAX_IMAGES_PER_CARD} imagens atingido. Remova alguma antes de adicionar mais.`,5000);
+    const currentImgsTipo=attachments.filter(a=>isImg(a)&&!a.isAnnotation&&(a.tipo||"final")===tipo).length;
+    const newImgs=files.filter(_isImgFile).length;
+    const remainingTotal=MAX_IMAGES_PER_CARD-currentImgs;
+    const remainingTipo=MAX_IMAGES_PER_TIPO-currentImgsTipo;
+    const _secLabel = tipo==="referencia" ? "referências" : "arquivos finais";
+    // limite por seção
+    if(newImgs>0 && remainingTipo<=0){
+      pixelsToast.warning(`Limite de ${MAX_IMAGES_PER_TIPO} ${_secLabel} atingido. Remova alguma antes de adicionar mais.`,5000);
       return;
     }
-    if(newImgs>remaining){
-      pixelsToast.warning(`Você selecionou ${newImgs} imagens, mas só cabem mais ${remaining} (limite: ${MAX_IMAGES_PER_CARD}).`,5000);
+    if(newImgs>remainingTipo){
+      pixelsToast.warning(`Você selecionou ${newImgs} imagens, mas só cabem mais ${remainingTipo} em ${_secLabel} (limite: ${MAX_IMAGES_PER_TIPO}).`,5000);
+      return;
+    }
+    // limite total (safety net)
+    if(newImgs>0 && remainingTotal<=0){
+      pixelsToast.warning(`Limite total de ${MAX_IMAGES_PER_CARD} imagens no cartão atingido. Remova alguma antes de adicionar mais.`,5000);
+      return;
+    }
+    if(newImgs>remainingTotal){
+      pixelsToast.warning(`Você selecionou ${newImgs} imagens, mas só cabem mais ${remainingTotal} no total do cartão (limite: ${MAX_IMAGES_PER_CARD}).`,5000);
       return;
     }
 
