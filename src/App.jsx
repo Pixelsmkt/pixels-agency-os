@@ -65161,6 +65161,46 @@ const _PB_VP_SEED = [
   }
 ];
 
+// Normaliza passo: string legada → {text, img} object
+function _pbNormStep(s){
+  if(!s) return {text:"", img:""};
+  if(typeof s === "string") return {text:s, img:""};
+  return {text: s.text||"", img: s.img||""};
+}
+// Upload de imagem de passo pro Supabase Storage (mesma pattern do _pbTemplateUploadImg)
+function _pbStepUploadImg(cb){
+  try{
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = "image/*";
+    inp.style.display = "none";
+    inp.onchange = async function(e){
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      try{
+        if(!window._sb) throw new Error("Supabase indisponível");
+        const ext = (file.name.split(".").pop()||"png").replace(/[^a-zA-Z0-9]/g,"").toLowerCase();
+        const rnd = Math.random().toString(36).slice(2,11);
+        const path = "playbook-passos/"+Date.now()+"-"+rnd+"."+ext;
+        if(typeof pixelsToast!=="undefined") pixelsToast.info("Enviando imagem...",1500);
+        const {error} = await window._sb.storage.from("agency-files").upload(path, file, {cacheControl:"3600", upsert:false});
+        if(error) throw error;
+        const {data:pub} = window._sb.storage.from("agency-files").getPublicUrl(path);
+        if(pub && pub.publicUrl){
+          cb(pub.publicUrl);
+          if(typeof pixelsToast!=="undefined") pixelsToast.success("Imagem subida!",1500);
+        }
+      }catch(err){
+        console.warn("[upload passo]", err);
+        if(typeof pixelsToast!=="undefined") pixelsToast.error("Erro: "+(err && err.message||"desconhecido"));
+      }
+    };
+    document.body.appendChild(inp);
+    inp.click();
+    setTimeout(function(){try{document.body.removeChild(inp);}catch(_){}}, 60000);
+  }catch(err){ console.warn(err); }
+}
+
 function _PbVideoProcesses({isAdmin}){
   const [processes, setProcesses] = useState(function(){
     try{ const r=localStorage.getItem(_PB_VP_KEY); if(r) return JSON.parse(r); }catch(_){}
@@ -65168,6 +65208,13 @@ function _PbVideoProcesses({isAdmin}){
   });
   const [editing, setEditing] = useState(null); // null | {idx, draft}
   const [expanded, setExpanded] = useState({}); // {idx: true/false}
+  const [stepLb, setStepLb] = useState(null); // URL da imagem em lightbox
+  useEffect(function(){
+    if(!stepLb) return;
+    const _esc = function(e){ if(e.key==="Escape") setStepLb(null); };
+    document.addEventListener("keydown", _esc);
+    return function(){ document.removeEventListener("keydown", _esc); };
+  },[stepLb]);
 
   // Pull do Supabase no mount (sobrescreve seed local)
   useEffect(function(){
@@ -65191,10 +65238,13 @@ function _PbVideoProcesses({isAdmin}){
   function _toggle(idx){ setExpanded(function(p){return Object.assign({},p,{[idx]:!p[idx]});}); }
 
   function _new(){
-    setEditing({idx:-1, draft:{id:"p-"+Date.now(), title:"", descricao:"", passos:[""]}});
+    setEditing({idx:-1, draft:{id:"p-"+Date.now(), title:"", descricao:"", passos:[{text:"",img:""}]}});
   }
   function _edit(idx){
-    setEditing({idx, draft:JSON.parse(JSON.stringify(processes[idx]))});
+    // Normaliza passos legados (string) pra {text,img} ao entrar em edit
+    var _draft = JSON.parse(JSON.stringify(processes[idx]));
+    _draft.passos = (_draft.passos||[]).map(_pbNormStep);
+    setEditing({idx, draft:_draft});
   }
   function _del(idx){
     if(typeof pixelsConfirm==="function"){
@@ -65211,7 +65261,10 @@ function _PbVideoProcesses({isAdmin}){
     if(!editing) return;
     var d = editing.draft;
     if(!d.title.trim()){ if(typeof pixelsToast!=="undefined")pixelsToast.warning("Coloca um título no processo"); return; }
-    var cleanPassos = (d.passos||[]).map(function(s){return String(s||"").trim();}).filter(Boolean);
+    var cleanPassos = (d.passos||[]).map(function(s){
+      var n = _pbNormStep(s);
+      return {text: (n.text||"").trim(), img: n.img||""};
+    }).filter(function(p){ return p.text || p.img; });
     var clean = Object.assign({},d,{passos:cleanPassos});
     var next;
     if(editing.idx===-1){ next = processes.concat([clean]); }
@@ -65221,8 +65274,9 @@ function _PbVideoProcesses({isAdmin}){
     if(typeof pixelsToast!=="undefined")pixelsToast.success("Processo salvo!");
   }
   function _setDraft(patch){ setEditing(function(p){return Object.assign({},p,{draft:Object.assign({},p.draft,patch)});}); }
-  function _setStep(i,val){ _setDraft({passos:editing.draft.passos.map(function(s,idx){return idx===i?val:s;})}); }
-  function _addStep(){ _setDraft({passos:(editing.draft.passos||[]).concat([""])});}
+  function _setStepText(i,val){ _setDraft({passos:editing.draft.passos.map(function(s,idx){ if(idx!==i) return s; var n=_pbNormStep(s); return Object.assign({},n,{text:val}); })}); }
+  function _setStepImg(i,url){ _setDraft({passos:editing.draft.passos.map(function(s,idx){ if(idx!==i) return s; var n=_pbNormStep(s); return Object.assign({},n,{img:url}); })}); }
+  function _addStep(){ _setDraft({passos:(editing.draft.passos||[]).concat([{text:"",img:""}])});}
   function _delStep(i){ _setDraft({passos:editing.draft.passos.filter(function(_,idx){return idx!==i;})});}
 
   // Renderiza modal de edição
@@ -65255,14 +65309,31 @@ function _PbVideoProcesses({isAdmin}){
           </button>
         </div>
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {(editing.draft.passos||[]).map(function(step,i){
-            return <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
-              <div style={{flexShrink:0,width:26,height:26,borderRadius:"50%",background:"#0ea5e914",color:"#0284c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,marginTop:5}}>{i+1}</div>
-              <textarea value={step} onChange={function(e){_setStep(i,e.target.value);}} rows={2}
-                placeholder={"Passo "+(i+1)+"..."}
-                style={Object.assign({},_pbInpStyle(),{minHeight:48})}/>
+          {(editing.draft.passos||[]).map(function(rawStep,i){
+            var step = _pbNormStep(rawStep);
+            return <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:10}}>
+              <div style={{flexShrink:0,width:26,height:26,borderRadius:"50%",background:"#0ea5e914",color:"#0284c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,marginTop:4}}>{i+1}</div>
+              <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
+                <textarea value={step.text} onChange={function(e){_setStepText(i,e.target.value);}} rows={2}
+                  placeholder={"Passo "+(i+1)+"..."}
+                  style={Object.assign({},_pbInpStyle(),{minHeight:48})}/>
+                {step.img ? (
+                  <div style={{position:"relative",width:180,borderRadius:9,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0"}}>
+                    <img src={step.img} alt="" referrerPolicy="no-referrer" style={{width:"100%",display:"block",maxHeight:180,objectFit:"cover"}}/>
+                    <button onClick={function(){_setStepImg(i,"");}} title="Remover imagem"
+                      style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,.75)",border:"none",borderRadius:99,width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,lineHeight:1,padding:0}}>×</button>
+                  </div>
+                ) : (
+                  <button onClick={function(){_pbStepUploadImg(function(url){_setStepImg(i,url);});}}
+                    style={{alignSelf:"flex-start",background:"#fff",border:"1.5px dashed #cbd5e1",borderRadius:8,padding:"6px 12px",color:"#64748b",fontSize:11.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:6,transition:"all .12s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.borderColor="#0ea5e9";e.currentTarget.style.color="#0284c7";e.currentTarget.style.background="#f0f9ff";}}
+                    onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.color="#64748b";e.currentTarget.style.background="#fff";}}>
+                    <Ico n="image" size={12} color="currentColor"/> Adicionar imagem
+                  </button>
+                )}
+              </div>
               <button onClick={function(){_delStep(i);}} title="Remover passo"
-                style={{flexShrink:0,background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,marginTop:3}}>
+                style={{flexShrink:0,background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,marginTop:2}}>
                 <Ico n="x" size={13} color="currentColor"/>
               </button>
             </div>;
@@ -65294,10 +65365,16 @@ function _PbVideoProcesses({isAdmin}){
         {open && <div style={{padding:"4px 14px 16px",borderTop:"1px solid "+PB_BORDER2,background:"#fff"}}>
           {proc.descricao && <div style={{color:PB_TEXT,fontSize:13,lineHeight:1.6,marginTop:12,marginBottom:14,whiteSpace:"pre-wrap"}}>{proc.descricao}</div>}
           {Array.isArray(proc.passos) && proc.passos.length>0 && <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {proc.passos.map(function(step,si){
+            {proc.passos.map(function(rawStep,si){
+              var step = _pbNormStep(rawStep);
               return <div key={si} style={{display:"flex",gap:10,alignItems:"flex-start"}}>
                 <div style={{flexShrink:0,width:24,height:24,borderRadius:"50%",background:"#0ea5e914",color:"#0284c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,marginTop:1}}>{si+1}</div>
-                <div style={{color:PB_TEXT,fontSize:13,lineHeight:1.55,flex:1}}>{step}</div>
+                <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
+                  <div style={{color:PB_TEXT,fontSize:13,lineHeight:1.55}}>{step.text}</div>
+                  {step.img && <img src={step.img} alt="" referrerPolicy="no-referrer"
+                    onClick={function(){setStepLb(step.img);}}
+                    style={{maxWidth:420,width:"100%",borderRadius:10,border:"1px solid #e2e8f0",background:"#f8fafc",cursor:"zoom-in",display:"block",boxShadow:"0 1px 3px rgba(15,23,42,.05)"}}/>}
+                </div>
               </div>;
             })}
           </div>}
@@ -65312,6 +65389,14 @@ function _PbVideoProcesses({isAdmin}){
         </div>}
       </div>;
     })}
+    {stepLb && <div onClick={function(){setStepLb(null);}}
+      style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)",cursor:"zoom-out"}}>
+      <button type="button" onClick={function(e){e.stopPropagation();setStepLb(null);}}
+        style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:44,height:44,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:600,lineHeight:1,padding:0}}
+        title="Fechar (ESC)">×</button>
+      <img src={stepLb} alt="" referrerPolicy="no-referrer" onClick={function(e){e.stopPropagation();}}
+        style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,0.5)",cursor:"default",objectFit:"contain",display:"block"}}/>
+    </div>}
     {isAdmin && <button onClick={_new}
       style={{background:"linear-gradient(135deg, "+PB_PURPLE+" 0%, "+PB_PURPLE_DK+" 100%)",border:"none",borderRadius:11,padding:"10px 16px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",boxShadow:"0 6px 16px rgba(159,67,246,.4)",display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,alignSelf:"flex-start"}}>
       <Ico n="plus" size={13} color="#fff"/> Novo processo
@@ -66486,6 +66571,39 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
         </div>
       </div>
     </div>
+
+    {/* ═════ Lightbox de produto (fullscreen, mesma aba) ═════ */}
+    {_prodLightbox && (function(){
+      const _lbUrls = Array.isArray(_prodLightbox.urls) ? _prodLightbox.urls : [];
+      const _lbIdx = Math.max(0, Math.min(_prodLightbox.idx||0, _lbUrls.length-1));
+      const _lbUrl = _lbUrls[_lbIdx];
+      const _go = function(delta){
+        const _n = _lbUrls.length;
+        if(_n<=1) return;
+        const _next = ((_lbIdx+delta)%_n + _n) % _n;
+        setProdLightbox({urls:_lbUrls, idx:_next});
+      };
+      return <div onClick={function(){setProdLightbox(null);}}
+        style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)",cursor:"zoom-out"}}>
+        <button type="button" onClick={function(e){e.stopPropagation();setProdLightbox(null);}}
+          style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:44,height:44,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:600,lineHeight:1,padding:0}}
+          title="Fechar (ESC)">×</button>
+        {_lbUrls.length>1 && <button type="button" onClick={function(e){e.stopPropagation();_go(-1);}}
+          style={{position:"absolute",left:20,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:52,height:52,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
+          title="Anterior">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>}
+        {_lbUrls.length>1 && <button type="button" onClick={function(e){e.stopPropagation();_go(1);}}
+          style={{position:"absolute",right:20,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:52,height:52,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
+          title="Próxima">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>}
+        {_lbUrls.length>1 && <div style={{position:"absolute",bottom:22,left:"50%",transform:"translateX(-50%)",background:"rgba(255,255,255,0.14)",color:"#fff",padding:"6px 14px",borderRadius:99,fontSize:12.5,fontWeight:700,letterSpacing:.3,fontFamily:PB_INTER}}>{_lbIdx+1} / {_lbUrls.length}</div>}
+        <img src={_lbUrl} alt="" referrerPolicy="no-referrer" onClick={function(e){e.stopPropagation();}}
+          style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,0.5)",cursor:"default",objectFit:"contain",display:"block"}}/>
+      </div>;
+    })()}
+
   </div>;
 }
 
@@ -67324,38 +67442,5 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
           )
       }
     </div>
-
-    {/* ═════ Lightbox de produto (fullscreen, mesma aba) ═════ */}
-    {_prodLightbox && (function(){
-      const _lbUrls = Array.isArray(_prodLightbox.urls) ? _prodLightbox.urls : [];
-      const _lbIdx = Math.max(0, Math.min(_prodLightbox.idx||0, _lbUrls.length-1));
-      const _lbUrl = _lbUrls[_lbIdx];
-      const _go = function(delta){
-        const _n = _lbUrls.length;
-        if(_n<=1) return;
-        const _next = ((_lbIdx+delta)%_n + _n) % _n;
-        setProdLightbox({urls:_lbUrls, idx:_next});
-      };
-      return <div onClick={function(){setProdLightbox(null);}}
-        style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)",cursor:"zoom-out"}}>
-        <button type="button" onClick={function(e){e.stopPropagation();setProdLightbox(null);}}
-          style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:44,height:44,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:600,lineHeight:1,padding:0}}
-          title="Fechar (ESC)">×</button>
-        {_lbUrls.length>1 && <button type="button" onClick={function(e){e.stopPropagation();_go(-1);}}
-          style={{position:"absolute",left:20,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:52,height:52,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
-          title="Anterior">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>}
-        {_lbUrls.length>1 && <button type="button" onClick={function(e){e.stopPropagation();_go(1);}}
-          style={{position:"absolute",right:20,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:52,height:52,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
-          title="Próxima">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-        </button>}
-        {_lbUrls.length>1 && <div style={{position:"absolute",bottom:22,left:"50%",transform:"translateX(-50%)",background:"rgba(255,255,255,0.14)",color:"#fff",padding:"6px 14px",borderRadius:99,fontSize:12.5,fontWeight:700,letterSpacing:.3,fontFamily:PB_INTER}}>{_lbIdx+1} / {_lbUrls.length}</div>}
-        <img src={_lbUrl} alt="" referrerPolicy="no-referrer" onClick={function(e){e.stopPropagation();}}
-          style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,0.5)",cursor:"default",objectFit:"contain",display:"block"}}/>
-      </div>;
-    })()}
-
   </div>;
 }
