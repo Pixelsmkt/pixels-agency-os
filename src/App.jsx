@@ -59323,6 +59323,9 @@ function PagePlanejamento({isMob, effectiveUser}){
     {/* ═══ Seção fixa de Metas (sempre visível embaixo das dailies/weeklies) ═══ */}
     <MetasFixedPanel entries={metas} onEdit={setEditing} onDelete={handleDelete} onUpsert={upsert} onNew={openNew}/>
 
+    {/* ═══ Planejador de eventos (feiras, ativações) ═══ */}
+    <_EventosPlanner isMob={isMob}/>
+
     {/* ═══ Modal editor ═══ */}
     {editing && <_PlEditErrorBoundary onClose={function(){setEditing(null);}}>
       <PlanEditModalInner entry={editing} setEntry={setEditing} onSave={handleSave}
@@ -60887,6 +60890,273 @@ function PlanEditModalInner({entry, setEntry, onSave, onClose, onAutoSave}){
 
 function _PlLBL({children}){
   return <div style={{color:"#64748b",fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:.7,marginBottom:6,fontFamily:"inherit"}}>{children}</div>;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//   _EventosPlanner — Planejador de eventos (feiras, ativações, ações externas)
+//   Persiste em Supabase team_data tipo='agency_events' + cache localStorage
+// ═══════════════════════════════════════════════════════════════
+function _EventosPlanner({isMob}){
+  const _LS_KEY = "pixels-agency-events";
+  const [eventos, setEventos] = useState(function(){
+    try{ const s = localStorage.getItem(_LS_KEY); if(s) return JSON.parse(s)||[]; }catch(_){}
+    return [];
+  });
+  const [editing, setEditing] = useState(null);
+
+  // Carrega do Supabase no mount
+  useEffect(function(){
+    if(!window._sb) return;
+    window._sb.from("team_data").select("data").eq("tipo","agency_events").maybeSingle()
+      .then(function(r){
+        if(r && r.error){ console.warn("[agency_events load]", r.error.message||r.error); return; }
+        if(r && r.data && Array.isArray(r.data.data && r.data.data.eventos)){
+          setEventos(r.data.data.eventos);
+          try{ localStorage.setItem(_LS_KEY, JSON.stringify(r.data.data.eventos)); }catch(_){}
+        }
+      })
+      .catch(function(e){ console.warn("[agency_events load]", e && e.message ? e.message : e); });
+  }, []);
+
+  function _persist(next){
+    setEventos(next);
+    try{ localStorage.setItem(_LS_KEY, JSON.stringify(next)); }catch(_){}
+    if(!window._sb) return;
+    window._sb.from("team_data").upsert({tipo:"agency_events", data:{eventos:next}}, {onConflict:"tipo"})
+      .then(function(r){ if(r && r.error) console.warn("[agency_events save]", r.error.message||r.error); })
+      .catch(function(e){ console.warn("[agency_events save]", e && e.message ? e.message : e); });
+  }
+
+  function _new(){
+    setEditing({id:"ev-"+Date.now(), nome:"", cidade:"", uf:"", dataIni:"", dataFim:"", tasks:[], metas:[], observacoes:""});
+  }
+  function _save(ev){
+    const _isNew = !eventos.some(function(e){return e.id===ev.id;});
+    const next = _isNew ? [ev].concat(eventos) : eventos.map(function(e){return e.id===ev.id?ev:e;});
+    _persist(next);
+    setEditing(null);
+  }
+  function _del(id){
+    if(typeof pixelsConfirm==="function"){
+      pixelsConfirm({title:"Excluir evento?", message:"O evento e todas as tasks/metas serão perdidos.", danger:true}).then(function(ok){
+        if(ok) _persist(eventos.filter(function(e){return e.id!==id;}));
+      });
+    } else if(window.confirm("Excluir?")){
+      _persist(eventos.filter(function(e){return e.id!==id;}));
+    }
+  }
+  function _toggleTask(evId, taskId){
+    const next = eventos.map(function(e){
+      if(e.id!==evId) return e;
+      const _tasks = (e.tasks||[]).map(function(t){return t.id===taskId?Object.assign({},t,{done:!t.done}):t;});
+      return Object.assign({},e,{tasks:_tasks});
+    });
+    _persist(next);
+  }
+  function _toggleMeta(evId, metaId){
+    const next = eventos.map(function(e){
+      if(e.id!==evId) return e;
+      const _metas = (e.metas||[]).map(function(m){return m.id===metaId?Object.assign({},m,{done:!m.done}):m;});
+      return Object.assign({},e,{metas:_metas});
+    });
+    _persist(next);
+  }
+
+  const _fmtDate = function(iso){
+    if(!iso) return "";
+    try{ const [y,m,d]=iso.split("-"); return d+"/"+m; }catch(_){return iso;}
+  };
+  const _fmtRange = function(ev){
+    const a=_fmtDate(ev.dataIni), b=_fmtDate(ev.dataFim);
+    if(a && b && a!==b) return a+" — "+b;
+    return a || b || "sem data";
+  };
+
+  return <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:16,paddingTop:16,borderTop:"2px dashed #e2e8f0"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,paddingBottom:4,flexWrap:"wrap"}}>
+      <div style={{display:"flex",alignItems:"center",gap:11}}>
+        <div style={{width:44,height:44,borderRadius:12,background:"linear-gradient(135deg,#f59e0b,#f97316)",display:"inline-flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0,boxShadow:"0 6px 18px rgba(245,158,11,.32)"}}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </div>
+        <div>
+          <div style={{color:"#0f172a",fontWeight:800,fontSize:16,letterSpacing:-.3}}>Planejamento de eventos</div>
+          <div style={{color:"#64748b",fontSize:12,fontWeight:500,marginTop:2}}>Feiras, ativações e ações externas — tasks e metas por evento</div>
+        </div>
+      </div>
+      <button onClick={_new} type="button"
+        style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",border:"none",borderRadius:10,padding:"9px 17px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:7,boxShadow:"0 6px 18px rgba(245,158,11,0.38)"}}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novo evento
+      </button>
+    </div>
+
+    {eventos.length===0
+      ? <div style={{background:"#fffbeb",border:"1px dashed #fbbf24",borderRadius:12,padding:"28px 20px",textAlign:"center",color:"#78350f",fontSize:13}}>
+          Nenhum evento cadastrado ainda. Cadastre feiras, ações externas ou eventos com tasks e metas.
+        </div>
+      : <div style={{display:"grid",gridTemplateColumns:isMob?"1fr":"repeat(auto-fill,minmax(320px,1fr))",gap:12}}>
+          {eventos.map(function(ev){
+            const _totTasks = (ev.tasks||[]).length;
+            const _doneTasks = (ev.tasks||[]).filter(function(t){return t.done;}).length;
+            const _totMetas = (ev.metas||[]).length;
+            const _doneMetas = (ev.metas||[]).filter(function(m){return m.done;}).length;
+            return <div key={ev.id} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,overflow:"hidden",boxShadow:"0 1px 3px rgba(15,23,42,.04)",display:"flex",flexDirection:"column"}}>
+              <div style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",padding:"12px 14px",color:"#fff",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+                <div style={{minWidth:0,flex:1}}>
+                  <div style={{fontWeight:800,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{ev.nome||"(sem nome)"}</div>
+                  <div style={{fontSize:11,fontWeight:600,opacity:.9,marginTop:2}}>
+                    {_fmtRange(ev)}{ev.cidade?" · "+ev.cidade:""}{ev.uf?"/"+ev.uf:""}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:4,flexShrink:0}}>
+                  <button onClick={function(){setEditing(Object.assign({},ev));}} type="button" title="Editar"
+                    style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:7,width:26,height:26,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                  <button onClick={function(){_del(ev.id);}} type="button" title="Excluir"
+                    style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:7,width:26,height:26,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div style={{padding:"12px 14px",display:"flex",flexDirection:"column",gap:10,flex:1}}>
+                {_totTasks>0 && <div>
+                  <div style={{color:"#78350f",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5}}>Tasks {_doneTasks}/{_totTasks}</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    {(ev.tasks||[]).slice(0,6).map(function(t){
+                      return <label key={t.id} style={{display:"flex",alignItems:"flex-start",gap:7,fontSize:12.5,color:t.done?"#94a3b8":"#0f172a",lineHeight:1.4,cursor:"pointer",textDecoration:t.done?"line-through":"none"}}>
+                        <input type="checkbox" checked={!!t.done} onChange={function(){_toggleTask(ev.id,t.id);}} style={{marginTop:2,cursor:"pointer",accentColor:"#f97316"}}/>
+                        <span style={{flex:1}}>{t.text}</span>
+                      </label>;
+                    })}
+                    {(ev.tasks||[]).length>6 && <div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>+{(ev.tasks||[]).length-6} tasks</div>}
+                  </div>
+                </div>}
+                {_totMetas>0 && <div>
+                  <div style={{color:"#166534",fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:5,display:"inline-flex",alignItems:"center",gap:5}}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                    Metas {_doneMetas}/{_totMetas}
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                    {(ev.metas||[]).slice(0,4).map(function(m){
+                      return <label key={m.id} style={{display:"flex",alignItems:"flex-start",gap:7,fontSize:12.5,color:m.done?"#94a3b8":"#0f172a",lineHeight:1.4,cursor:"pointer",textDecoration:m.done?"line-through":"none"}}>
+                        <input type="checkbox" checked={!!m.done} onChange={function(){_toggleMeta(ev.id,m.id);}} style={{marginTop:2,cursor:"pointer",accentColor:"#16a34a"}}/>
+                        <span style={{flex:1,fontWeight:m.done?500:600}}>{m.text}</span>
+                      </label>;
+                    })}
+                    {(ev.metas||[]).length>4 && <div style={{color:"#94a3b8",fontSize:11,fontStyle:"italic"}}>+{(ev.metas||[]).length-4} metas</div>}
+                  </div>
+                </div>}
+                {_totTasks===0 && _totMetas===0 && <div style={{color:"#94a3b8",fontSize:12,fontStyle:"italic",padding:"6px 0"}}>Sem tasks nem metas ainda. Clique em editar pra adicionar.</div>}
+                {ev.observacoes && <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:8,padding:"8px 10px",color:"#475569",fontSize:12,lineHeight:1.5,whiteSpace:"pre-wrap"}}>{ev.observacoes}</div>}
+              </div>
+            </div>;
+          })}
+        </div>
+    }
+
+    {editing && <_EventoEditModal evento={editing} onSave={_save} onClose={function(){setEditing(null);}}/>}
+  </div>;
+}
+
+function _EventoEditModal({evento, onSave, onClose}){
+  const [ev, setEv] = useState(evento);
+  useEffect(function(){
+    function _esc(e){ if(e.key==="Escape"){ e.preventDefault(); onClose(); } }
+    document.addEventListener("keydown", _esc);
+    return function(){ document.removeEventListener("keydown", _esc); };
+  }, [onClose]);
+  function _set(k,v){ setEv(function(prev){ return Object.assign({},prev,{[k]:v}); }); }
+  function _addTask(){ setEv(function(p){return Object.assign({},p,{tasks:(p.tasks||[]).concat({id:"t-"+Date.now(),text:"",done:false})});}); }
+  function _setTask(i,txt){ setEv(function(p){const t=(p.tasks||[]).slice();t[i]=Object.assign({},t[i],{text:txt});return Object.assign({},p,{tasks:t});}); }
+  function _delTask(i){ setEv(function(p){const t=(p.tasks||[]).slice();t.splice(i,1);return Object.assign({},p,{tasks:t});}); }
+  function _addMeta(){ setEv(function(p){return Object.assign({},p,{metas:(p.metas||[]).concat({id:"m-"+Date.now(),text:"",done:false})});}); }
+  function _setMeta(i,txt){ setEv(function(p){const m=(p.metas||[]).slice();m[i]=Object.assign({},m[i],{text:txt});return Object.assign({},p,{metas:m});}); }
+  function _delMeta(i){ setEv(function(p){const m=(p.metas||[]).slice();m.splice(i,1);return Object.assign({},p,{metas:m});}); }
+  const _inp = {width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 12px",fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
+  return <div onClick={function(e){if(e.target===e.currentTarget) onClose();}}
+    style={{position:"fixed",inset:0,background:"rgba(15,23,42,.55)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16,fontFamily:"inherit"}}>
+    <div onClick={function(e){e.stopPropagation();}} style={{background:"#fff",borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 60px rgba(15,23,42,.3)",display:"flex",flexDirection:"column"}}>
+      <div style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",padding:"14px 18px",color:"#fff",fontWeight:800,fontSize:14,letterSpacing:-.2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <span>{evento && evento.nome ? "Editar evento" : "Novo evento"}</span>
+        <button onClick={onClose} type="button" style={{background:"rgba(255,255,255,.2)",border:"none",borderRadius:7,width:28,height:28,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center"}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:14}}>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Nome do evento</div>
+          <input value={ev.nome||""} onChange={function(e){_set("nome",e.target.value);}} style={_inp} placeholder="Ex: Agroleite 2027"/>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 100px",gap:10}}>
+          <div>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Cidade</div>
+            <input value={ev.cidade||""} onChange={function(e){_set("cidade",e.target.value);}} style={_inp} placeholder="Castro"/>
+          </div>
+          <div>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>UF</div>
+            <input value={ev.uf||""} onChange={function(e){_set("uf",e.target.value.toUpperCase().slice(0,2));}} style={_inp} placeholder="PR"/>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Data início</div>
+            <input type="date" value={ev.dataIni||""} onChange={function(e){_set("dataIni",e.target.value);}} style={_inp}/>
+          </div>
+          <div>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Data fim</div>
+            <input type="date" value={ev.dataFim||""} onChange={function(e){_set("dataFim",e.target.value);}} style={_inp}/>
+          </div>
+        </div>
+        <div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Tasks</div>
+            <button onClick={_addTask} type="button" style={{background:"transparent",border:"1px dashed #cbd5e1",borderRadius:7,padding:"4px 9px",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Task
+            </button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {(ev.tasks||[]).map(function(t,i){
+              return <div key={t.id} style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input value={t.text||""} onChange={function(e){_setTask(i,e.target.value);}} style={Object.assign({},_inp,{padding:"7px 10px",fontSize:12.5})} placeholder="Descreva a task"/>
+                <button onClick={function(){_delTask(i);}} type="button" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,display:"inline-flex"}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>;
+            })}
+          </div>
+        </div>
+        <div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+            <div style={{color:"#475569",fontSize:11,fontWeight:700,textTransform:"uppercase",letterSpacing:.4}}>Metas</div>
+            <button onClick={_addMeta} type="button" style={{background:"transparent",border:"1px dashed #cbd5e1",borderRadius:7,padding:"4px 9px",color:"#64748b",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",display:"inline-flex",alignItems:"center",gap:5}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Meta
+            </button>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+            {(ev.metas||[]).map(function(m,i){
+              return <div key={m.id} style={{display:"flex",gap:6,alignItems:"center"}}>
+                <input value={m.text||""} onChange={function(e){_setMeta(i,e.target.value);}} style={Object.assign({},_inp,{padding:"7px 10px",fontSize:12.5})} placeholder="Descreva a meta"/>
+                <button onClick={function(){_delMeta(i);}} type="button" style={{background:"transparent",border:"none",color:"#94a3b8",cursor:"pointer",padding:6,display:"inline-flex"}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>;
+            })}
+          </div>
+        </div>
+        <div>
+          <div style={{color:"#475569",fontSize:11,fontWeight:700,marginBottom:5,textTransform:"uppercase",letterSpacing:.4}}>Observações</div>
+          <textarea value={ev.observacoes||""} onChange={function(e){_set("observacoes",e.target.value);}}
+            style={Object.assign({},_inp,{minHeight:70,resize:"vertical",lineHeight:1.5})} placeholder="Notas gerais, contatos, custos..."/>
+        </div>
+      </div>
+      <div style={{padding:"12px 18px",borderTop:"1px solid #eef0f3",display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <button onClick={onClose} type="button" style={{background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:9,padding:"9px 16px",color:"#475569",fontSize:12.5,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>Cancelar</button>
+        <button onClick={function(){onSave(ev);}} type="button" style={{background:"linear-gradient(135deg,#f59e0b,#f97316)",border:"none",borderRadius:9,padding:"9px 18px",color:"#fff",fontSize:12.5,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>Salvar</button>
+      </div>
+    </div>
+  </div>;
 }
 
 // DashSocio v5 (2026-06-10):
