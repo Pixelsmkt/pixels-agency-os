@@ -23105,14 +23105,6 @@ function PublicacaoEditModal({task, onClose, onReject}){
                     onTimeUpdate={function(e){setVideoCurrentTime(e.target.currentTime||0);}}
                     onLoadedMetadata={function(e){setVideoCurrentTime(e.target.currentTime||0);}}
                     style={{maxWidth:"100%",maxHeight:"68vh",width:"auto",height:"auto",objectFit:"contain",display:"block",background:"#0f172a",margin:"0 auto"}}/>
-                  {/* Botao Baixar vídeo — flutuante no top-right do container, fora dos controles nativos */}
-                  <button onClick={_downloadNow} title="Baixar vídeo original"
-                    style={{position:"absolute",top:12,right:12,zIndex:10,background:"rgba(15,23,42,0.72)",backdropFilter:"blur(6px)",color:"#fff",border:"1px solid rgba(255,255,255,0.18)",borderRadius:10,padding:"9px 14px",fontSize:12.5,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7,transition:"all .15s",boxShadow:"0 4px 14px rgba(0,0,0,0.35)",fontFamily:"'Inter',system-ui,sans-serif",letterSpacing:-.1}}
-                    onMouseEnter={function(e){e.currentTarget.style.background="rgba(124,58,237,0.92)";e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 6px 20px rgba(124,58,237,0.5)";}}
-                    onMouseLeave={function(e){e.currentTarget.style.background="rgba(15,23,42,0.72)";e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="0 4px 14px rgba(0,0,0,0.35)";}}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Baixar vídeo
-                  </button>
                 </>;
               }
               return currentSrc
@@ -24157,10 +24149,89 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                 </div>)}
               </div>)}
               {/* Linha 2: tipo + prazos + mês + prioridade — chips grandes, padronizados com linha 1 */}
-              {metaTags.length>0&&(<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+              {(metaTags.length>0 || tab==="video" || tab==="publicacao")&&(<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                 {metaTags.map(t=>(<span key={t.key} style={{background:t.bg,color:t.color,border:"1px solid "+t.color+"30",borderRadius:8,padding:"4px 10px",fontSize:12,fontWeight:600,letterSpacing:-.1,display:"inline-flex",alignItems:"center",gap:5,whiteSpace:"nowrap"}}>
                   <Ico n={t.icon} size={12} color={t.color}/>{t.label}
                 </span>))}
+                {/* ═════ Botões Baixar + Compartilhar — canto direito, após pagamento/prioridade ═════ */}
+                {(tab==="video"||tab==="publicacao")&&(<div style={{marginLeft:"auto",display:"inline-flex",alignItems:"center",gap:6,flexShrink:0}}>
+                  <button type="button" title={tab==="video"?"Baixar vídeo original":"Baixar arte final"}
+                    onClick={async function(){
+                      try{
+                        let _url = null;
+                        if(tab==="video"){
+                          const _videos = (current.files||[]).filter(function(f){return !f.isAnnotation && (String(f.type||"").startsWith("video/") || (typeof _isVideoUrl==="function" && _isVideoUrl(f.url)));}).filter(function(f){return !f.tipo || f.tipo==="final";});
+                          const _v = _videos[0] || (Array.isArray(allImgs)?allImgs.find(function(u){return typeof _isVideoUrl==="function" && _isVideoUrl(typeof u==="string"?u:u&&u.url);}):null);
+                          _url = _v ? (typeof _v==="string"?_v:_v.url) : null;
+                        } else {
+                          const _isVid = function(u){return typeof _isVideoUrl==="function" && _isVideoUrl(u);};
+                          const _imgs = (current.files||[]).filter(function(f){
+                            if(!f || f.isAnnotation) return false;
+                            if(f.tipo && f.tipo!=="final") return false;
+                            if(String(f.type||"").startsWith("video/")) return false;
+                            if(_isVid(f.url)) return false;
+                            return !!f.url;
+                          });
+                          const _parseT = function(s){if(!s)return 0;const _i=new Date(s).getTime();return isNaN(_i)?0:_i;};
+                          _imgs.sort(function(a,b){return (_parseT(b.addedAtIso)||_parseT(b.addedAt)||0)-(_parseT(a.addedAtIso)||_parseT(a.addedAt)||0);});
+                          if(_imgs[0]) _url = _imgs[0].url;
+                          if(!_url && Array.isArray(allImgs)){
+                            for(let i=0;i<allImgs.length;i++){ const _u = typeof allImgs[i]==="string"?allImgs[i]:(allImgs[i]&&allImgs[i].url); if(_u && !_isVid(_u)){ _url = _u; break; } }
+                          }
+                        }
+                        if(!_url){ if(typeof pixelsToast!=="undefined") pixelsToast.warning((tab==="video"?"Nenhum vídeo":"Nenhuma arte")+" anexado(a).",3000); return; }
+                        if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando…",2000);
+                        let _fname = "";
+                        try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
+                        if(!_fname || _fname.length<4){
+                          const _t = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : (tab==="video"?"video":"arte");
+                          const _extM = String(_url).toLowerCase().match(/\.(mp4|mov|webm|png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
+                          _fname = _t + "." + (_extM?_extM[1]:(tab==="video"?"mp4":"png"));
+                        }
+                        const _r = await fetch(_url);
+                        const _b = await _r.blob();
+                        const _u = URL.createObjectURL(_b);
+                        const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
+                        document.body.appendChild(_a); _a.click();
+                        setTimeout(function(){URL.revokeObjectURL(_u);_a.remove();},250);
+                        if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname,3000);
+                      }catch(e){
+                        console.warn("[header download]",e);
+                        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
+                      }
+                    }}
+                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 11px",color:"#0284c7",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit",transition:"all .15s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#f0f9ff";e.currentTarget.style.borderColor="#0284c7";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    {tab==="video"?"Baixar vídeo":"Baixar arte"}
+                  </button>
+                  <button type="button" title="Compartilhar link do cartão"
+                    onClick={async function(){
+                      try{
+                        const _url = (typeof window!=="undefined" && window.location ? window.location.origin+window.location.pathname : "") + "#card="+current.id;
+                        const _title = current.title || "Cartão Pixels";
+                        if(navigator && navigator.share){
+                          try{ await navigator.share({title:_title, url:_url}); return; }catch(_){/* usuario cancelou ou falhou → cai no fallback */}
+                        }
+                        if(navigator && navigator.clipboard && navigator.clipboard.writeText){
+                          await navigator.clipboard.writeText(_url);
+                          if(typeof pixelsToast!=="undefined") pixelsToast.success("Link copiado pra área de transferência",2500);
+                        } else {
+                          window.prompt("Copie o link:", _url);
+                        }
+                      }catch(e){
+                        console.warn("[share]",e);
+                        if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha ao compartilhar: "+(e&&e.message||"erro"),3000);
+                      }
+                    }}
+                    style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:8,padding:"5px 11px",color:"#7c3aed",fontSize:12,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5,fontFamily:"inherit",transition:"all .15s"}}
+                    onMouseEnter={function(e){e.currentTarget.style.background="#faf5ff";e.currentTarget.style.borderColor="#7c3aed";}}
+                    onMouseLeave={function(e){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#e2e8f0";}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    Compartilhar
+                  </button>
+                </div>)}
               </div>)}
             </div>);
           })()}
@@ -24634,76 +24705,6 @@ const nowFmt=()=>new Date().toLocaleDateString("pt-BR")+" "+new Date().toLocaleT
                   {label:"Reprovar publicação", color:"#dc2626", colorDark:"#b91c1c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>, onClick:async()=>{ if(await pixelsConfirm("Reprovar este material? Ele vai pra coluna Reprovadas. A produção foi feita, então ainda conta no pagamento do mês.",{okText:"Reprovar",danger:true})) rejectPub(current); }, title:"Cliente reprovou e não dá pra ajustar. Vai pra Reprovadas. Conta no pagamento."},
                   {label:"Solicitar ajuste", color:"#ea580c", colorDark:"#c2410c", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>, onClick:()=>setEditAnnot(current)},
                   {label:"Enviar para ajuste de copy", color:"#eab308", colorDark:"#ca8a04", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7V4h16v3"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>, onClick:()=>sendBackToCopy(current), title:"Manda direto pra Hellen ajustar a copy. Use quando o problema é grande ou se aprovou por engano."},
-                  ...(tab==="video"?[{label:"Baixar vídeo", color:"#0ea5e9", colorDark:"#0284c7", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>, onClick:async()=>{
-                    try{
-                      const _videos = (current.files||[]).filter(f=>!f.isAnnotation && (String(f.type||"").startsWith("video/") || _isVideoUrl(f.url))).filter(f=>!f.tipo || f.tipo==="final");
-                      const _v = _videos[0] || allImgs.find(u=>typeof _isVideoUrl==="function"&&_isVideoUrl(u));
-                      const _url = _v ? (typeof _v==="string"?_v:_v.url) : null;
-                      if(!_url){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nenhum vídeo anexado.",3000); return; }
-                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando vídeo…",2000);
-                      let _fname = "";
-                      try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
-                      if(!_fname || _fname.length<4){
-                        const _t = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : "video";
-                        _fname = _t + ".mp4";
-                      }
-                      const _r = await fetch(_url);
-                      const _b = await _r.blob();
-                      const _u = URL.createObjectURL(_b);
-                      const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
-                      document.body.appendChild(_a); _a.click();
-                      setTimeout(function(){ URL.revokeObjectURL(_u); _a.remove(); }, 250);
-                      if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname, 3000);
-                    }catch(e){
-                      console.warn("[download btn sidebar]", e);
-                      if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
-                    }
-                  }, title:"Baixa o vídeo original com 1 clique"}]:[]),
-                  // Botão Baixar arte — só na aba Avaliação de design (tab==="publicacao")
-                  // Baixa a última imagem FINAL anexada com 1 clique
-                  ...(tab==="publicacao"?[{label:"Baixar arte", color:"#0ea5e9", colorDark:"#0284c7", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>, onClick:async()=>{
-                    try{
-                      // Isola só imagens FINAIS (não anotação, não referência) e não-vídeos
-                      const _isVid = function(u){ return typeof _isVideoUrl==="function" && _isVideoUrl(u); };
-                      const _imgs = (current.files||[]).filter(function(f){
-                        if(!f || f.isAnnotation) return false;
-                        if(f.tipo && f.tipo!=="final") return false;
-                        if(String(f.type||"").startsWith("video/")) return false;
-                        if(_isVid(f.url)) return false;
-                        return !!f.url;
-                      });
-                      // Ordena pelo mais recente (addedAtIso)
-                      const _parseT = function(s){ if(!s) return 0; const _i=new Date(s).getTime(); return isNaN(_i)?0:_i; };
-                      _imgs.sort(function(a,b){ return (_parseT(b.addedAtIso)||_parseT(b.addedAt)||0) - (_parseT(a.addedAtIso)||_parseT(a.addedAt)||0); });
-                      let _url = null;
-                      let _srcFile = _imgs[0];
-                      if(_srcFile) _url = _srcFile.url;
-                      // Fallback: pega da lista allImgs (que exclui videos)
-                      if(!_url && Array.isArray(allImgs)){
-                        for(let i=0;i<allImgs.length;i++){ const _u = typeof allImgs[i]==="string"?allImgs[i]:(allImgs[i]&&allImgs[i].url); if(_u && !_isVid(_u)){ _url = _u; break; } }
-                      }
-                      if(!_url){ if(typeof pixelsToast!=="undefined") pixelsToast.warning("Nenhuma arte anexada.",3000); return; }
-                      if(typeof pixelsToast!=="undefined") pixelsToast.info("Baixando arte…",2000);
-                      let _fname = "";
-                      try{ _fname = decodeURIComponent(String(_url).split("/").pop().split("?")[0]||""); }catch(_){}
-                      if(!_fname || _fname.length<4){
-                        const _t = current.title ? String(current.title).replace(/[^\w\s-]/g,"").trim().replace(/\s+/g,"_") : "arte";
-                        // detecta extensão pela URL
-                        const _extM = String(_url).toLowerCase().match(/\.(png|jpg|jpeg|webp|gif|svg)(?:\?|$)/);
-                        _fname = _t + "." + (_extM?_extM[1]:"png");
-                      }
-                      const _r = await fetch(_url);
-                      const _b = await _r.blob();
-                      const _u = URL.createObjectURL(_b);
-                      const _a = document.createElement("a"); _a.href=_u; _a.download=_fname;
-                      document.body.appendChild(_a); _a.click();
-                      setTimeout(function(){ URL.revokeObjectURL(_u); _a.remove(); }, 250);
-                      if(typeof pixelsToast!=="undefined") pixelsToast.success("Baixado: "+_fname, 3000);
-                    }catch(e){
-                      console.warn("[download arte sidebar]", e);
-                      if(typeof pixelsToast!=="undefined") pixelsToast.error("Falha no download: "+(e&&e.message||"erro"),4000);
-                    }
-                  }, title:"Baixa a arte final (última imagem enviada) com 1 clique"}]:[]),
                   {label:"Ver detalhes do cartão", color:"#64748b", colorDark:"#475569", icon:<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>, onClick:()=>setOpenCard(current), title:"Abre o cartão completo pra editar/ver detalhes"},
                 ];
                 return _BTNS.map(function(b,i){
@@ -34020,12 +34021,6 @@ function CardModal({task,tasks,setTasks,onClose:_onClose,currentUser,cardPerms,c
               onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
               <Ico n="link" size={16}/>
             </button>
-            {canEdit&&<button onClick={duplicateCard} title="Duplicar cartão"
-              style={{width:36,height:36,borderRadius:10,border:"0.5px solid #e2e8f0",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",transition:"all .15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.color="#0f172a";}}
-              onMouseLeave={e=>{e.currentTarget.style.background="#fff";e.currentTarget.style.color="#64748b";}}>
-              <Ico n="copy" size={16}/>
-            </button>}
             {canDelete&&onTrash&&<button onClick={()=>onTrash(task.id)} title="Mover para lixeira"
               style={{width:36,height:36,borderRadius:10,border:"0.5px solid #fecaca",background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#dc2626",transition:"all .15s"}}
               onMouseEnter={e=>{e.currentTarget.style.background="#fef2f2";}}
