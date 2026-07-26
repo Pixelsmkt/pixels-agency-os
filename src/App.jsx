@@ -66065,7 +66065,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         return <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {_urls.map(function(_url,_ii){
                             return <div key={_ii} style={{position:"relative",width:130,height:130,borderRadius:12,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
-                              <img src={_url} alt="" referrerPolicy="no-referrer" onClick={function(){setProdLightbox({urls:_urls, idx:_ii});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                              <img src={_url} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_urls, idx:_ii});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
                               <button type="button" onClick={function(e){e.stopPropagation();_produtoRemoveImg(pi,_ii);}} title="Remover foto"
                                 style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,.75)",border:"none",borderRadius:99,width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,lineHeight:1,padding:0}}>×</button>
                             </div>;
@@ -66160,10 +66160,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
                           {_viewUrls.length>0
                             ? <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
-                                <img src={_viewUrls[0]} alt={prod.nome||""} referrerPolicy="no-referrer" onClick={function(){setProdLightbox({urls:_viewUrls, idx:0});}} style={{width:160,height:160,borderRadius:12,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>
+                                <img src={_viewUrls[0]} alt={prod.nome||""} referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_viewUrls, idx:0});}} style={{width:160,height:160,borderRadius:12,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>
                                 {_viewUrls.length>1 && <div style={{display:"flex",gap:5,flexWrap:"wrap",maxWidth:160}}>
                                   {_viewUrls.slice(1,5).map(function(_u,_ii){
-                                    return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" onClick={function(){setProdLightbox({urls:_viewUrls, idx:_ii+1});}} style={{width:36,height:36,borderRadius:7,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>;
+                                    return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" onClick={function(){setProdLightbox({urls:_viewUrls, idx:_ii+1});}} style={{width:36,height:36,borderRadius:7,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>;
                                   })}
                                   {_viewUrls.length>5 && <div onClick={function(){setProdLightbox({urls:_viewUrls, idx:5});}} style={{width:36,height:36,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800,cursor:"zoom-in"}}>+{_viewUrls.length-5}</div>}
                                 </div>}
