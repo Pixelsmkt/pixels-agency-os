@@ -65373,6 +65373,14 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // Tab de unidade ativa (Bioter only) — controla qual unidade está sendo visualizada/editada
   const _firstUnitId = (typeof BIOTER_UNITS!=="undefined"&&BIOTER_UNITS[0])?BIOTER_UNITS[0].id:"";
   const [_unitTab,setUnitTab] = useState(_firstUnitId);
+  // Lightbox pra ver imagem de produto expandida (sem abrir nova aba)
+  const [_prodLightbox,setProdLightbox] = useState(null);
+  useEffect(function(){
+    if(!_prodLightbox) return;
+    const _esc = function(e){ if(e.key==="Escape") setProdLightbox(null); };
+    document.addEventListener("keydown", _esc);
+    return function(){ document.removeEventListener("keydown", _esc); };
+  }, [_prodLightbox]);
 
   useEffect(()=>{
     setEditSobre(data.sobre||"");
@@ -65851,10 +65859,11 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"12px 16px",background:"linear-gradient(90deg, #7c3aed 0%, #8b5cf6 100%)",color:"#fff",cursor:"grab",userSelect:"none"}}
                       onMouseDown={function(e){e.currentTarget.style.cursor="grabbing";}}
                       onMouseUp={function(e){e.currentTarget.style.cursor="grab";}}>
-                      <div style={{display:"inline-flex",alignItems:"center",gap:10,fontSize:13,fontWeight:800,letterSpacing:-.1}}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{opacity:.9}}><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>
-                        <span style={{background:"rgba(255,255,255,0.22)",padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase"}}>Posição {filteredIdx+1}</span>
-                        <span style={{opacity:.85,fontWeight:600,fontSize:11.5,letterSpacing:.1}}>arraste pra reordenar</span>
+                      <div style={{display:"inline-flex",alignItems:"center",gap:10,fontSize:13,fontWeight:800,letterSpacing:-.1,minWidth:0,flex:1}}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style={{opacity:.9,flexShrink:0}}><circle cx="9" cy="5" r="1.7"/><circle cx="15" cy="5" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="19" r="1.7"/><circle cx="15" cy="19" r="1.7"/></svg>
+                        <span style={{background:"rgba(255,255,255,0.22)",padding:"3px 10px",borderRadius:99,fontSize:11,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",flexShrink:0}}>Posição {filteredIdx+1}</span>
+                        <span style={{fontWeight:800,fontSize:14,letterSpacing:-.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",minWidth:0}}>{prod.nomePrincipalPt || prod.nome || "Sem nome"}</span>
+                        <span style={{opacity:.7,fontWeight:600,fontSize:11,letterSpacing:.1,flexShrink:0}}>· arraste pra reordenar</span>
                       </div>
                       <button type="button" onClick={function(){_produtoDel(pi);}} title="Remover produto"
                         draggable={false}
@@ -65878,18 +65887,18 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         const _urls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
                         return <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {_urls.map(function(_url,_ii){
-                            return <div key={_ii} style={{position:"relative",width:180,height:180,borderRadius:14,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
-                              <img src={_url} alt="" referrerPolicy="no-referrer" style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-                              <button type="button" onClick={function(){_produtoRemoveImg(pi,_ii);}} title="Remover foto"
-                                style={{position:"absolute",top:7,right:7,background:"rgba(15,23,42,.8)",border:"none",borderRadius:99,width:26,height:26,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,lineHeight:1,padding:0}}>×</button>
+                            return <div key={_ii} style={{position:"relative",width:130,height:130,borderRadius:12,overflow:"hidden",background:"#f8fafc",border:"1px solid #e2e8f0",flexShrink:0}}>
+                              <img src={_url} alt="" referrerPolicy="no-referrer" onClick={function(){setProdLightbox({urls:_urls, idx:_ii});}} style={{width:"100%",height:"100%",objectFit:"cover",display:"block",cursor:"zoom-in"}}/>
+                              <button type="button" onClick={function(e){e.stopPropagation();_produtoRemoveImg(pi,_ii);}} title="Remover foto"
+                                style={{position:"absolute",top:5,right:5,background:"rgba(15,23,42,.75)",border:"none",borderRadius:99,width:22,height:22,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,lineHeight:1,padding:0}}>×</button>
                             </div>;
                           })}
                           <button type="button" onClick={function(){_pbProdutoUploadImg(pi,function(_pi,_patch){ if(_patch && _patch.imgUrl){ _produtoAddImgToArr(_pi, _patch.imgUrl); } });}}
-                            style={{width:180,height:180,borderRadius:14,background:"#fafbfc",border:"1.5px dashed #cbd5e1",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:7,color:"#64748b",fontFamily:PB_INTER,transition:"all .12s",flexShrink:0}}
+                            style={{width:130,height:130,borderRadius:12,background:"#fafbfc",border:"1.5px dashed #cbd5e1",cursor:"pointer",padding:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,color:"#64748b",fontFamily:PB_INTER,transition:"all .12s",flexShrink:0}}
                             onMouseEnter={function(e){e.currentTarget.style.borderColor=PB_PURPLE;e.currentTarget.style.background="#faf5ff";e.currentTarget.style.color=PB_PURPLE;}}
                             onMouseLeave={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.background="#fafbfc";e.currentTarget.style.color="#64748b";}}>
-                            <Ico n="image" size={30} color="currentColor"/>
-                            <span style={{fontSize:12,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ {_urls.length>0?"Outra foto":"Adicionar foto"}</span>
+                            <Ico n="image" size={22} color="currentColor"/>
+                            <span style={{fontSize:10.5,fontWeight:800,letterSpacing:.3,textTransform:"uppercase"}}>+ {_urls.length>0?"Outra foto":"Adicionar foto"}</span>
                           </button>
                         </div>;
                       })()}
@@ -65969,16 +65978,16 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,.06)";}}
                           onMouseLeave={function(e){e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.boxShadow="0 1px 2px rgba(15,23,42,.03)";}}>
                           {_viewUrls.length>0
-                            ? <div style={{display:"flex",flexDirection:"column",gap:7,flexShrink:0}}>
-                                <img src={_viewUrls[0]} alt={prod.nome||""} referrerPolicy="no-referrer" style={{width:220,height:220,borderRadius:14,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block"}}/>
-                                {_viewUrls.length>1 && <div style={{display:"flex",gap:6,flexWrap:"wrap",maxWidth:220}}>
+                            ? <div style={{display:"flex",flexDirection:"column",gap:6,flexShrink:0}}>
+                                <img src={_viewUrls[0]} alt={prod.nome||""} referrerPolicy="no-referrer" onClick={function(){setProdLightbox({urls:_viewUrls, idx:0});}} style={{width:160,height:160,borderRadius:12,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>
+                                {_viewUrls.length>1 && <div style={{display:"flex",gap:5,flexWrap:"wrap",maxWidth:160}}>
                                   {_viewUrls.slice(1,5).map(function(_u,_ii){
-                                    return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" style={{width:50,height:50,borderRadius:8,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block"}}/>;
+                                    return <img key={_ii} src={_u} alt="" referrerPolicy="no-referrer" onClick={function(){setProdLightbox({urls:_viewUrls, idx:_ii+1});}} style={{width:36,height:36,borderRadius:7,objectFit:"cover",border:"1px solid #e2e8f0",background:"#f8fafc",display:"block",cursor:"zoom-in"}}/>;
                                   })}
-                                  {_viewUrls.length>5 && <div style={{width:50,height:50,borderRadius:8,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:12,fontWeight:800}}>+{_viewUrls.length-5}</div>}
+                                  {_viewUrls.length>5 && <div onClick={function(){setProdLightbox({urls:_viewUrls, idx:5});}} style={{width:36,height:36,borderRadius:7,background:"#f1f5f9",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",color:"#64748b",fontSize:11,fontWeight:800,cursor:"zoom-in"}}>+{_viewUrls.length-5}</div>}
                                 </div>}
                               </div>
-                            : <div style={{width:220,height:220,borderRadius:14,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#cbd5e1"}}><Ico n="package" size={52} color="currentColor"/></div>
+                            : <div style={{width:160,height:160,borderRadius:12,background:"#f8fafc",border:"1px solid #e2e8f0",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,color:"#cbd5e1"}}><Ico n="package" size={40} color="currentColor"/></div>
                           }
                           <div style={{flex:1,minWidth:0}}>
                             {!_hasFilter && _isBioter && (unitObjs.length>0 || unitsList.length===0) && <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:8}}>
@@ -67315,6 +67324,38 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
           )
       }
     </div>
+
+    {/* ═════ Lightbox de produto (fullscreen, mesma aba) ═════ */}
+    {_prodLightbox && (function(){
+      const _lbUrls = Array.isArray(_prodLightbox.urls) ? _prodLightbox.urls : [];
+      const _lbIdx = Math.max(0, Math.min(_prodLightbox.idx||0, _lbUrls.length-1));
+      const _lbUrl = _lbUrls[_lbIdx];
+      const _go = function(delta){
+        const _n = _lbUrls.length;
+        if(_n<=1) return;
+        const _next = ((_lbIdx+delta)%_n + _n) % _n;
+        setProdLightbox({urls:_lbUrls, idx:_next});
+      };
+      return <div onClick={function(){setProdLightbox(null);}}
+        style={{position:"fixed",inset:0,background:"rgba(15,23,42,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:24,backdropFilter:"blur(4px)",cursor:"zoom-out"}}>
+        <button type="button" onClick={function(e){e.stopPropagation();setProdLightbox(null);}}
+          style={{position:"absolute",top:20,right:20,background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:44,height:44,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:600,lineHeight:1,padding:0}}
+          title="Fechar (ESC)">×</button>
+        {_lbUrls.length>1 && <button type="button" onClick={function(e){e.stopPropagation();_go(-1);}}
+          style={{position:"absolute",left:20,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:52,height:52,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
+          title="Anterior">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>}
+        {_lbUrls.length>1 && <button type="button" onClick={function(e){e.stopPropagation();_go(1);}}
+          style={{position:"absolute",right:20,top:"50%",transform:"translateY(-50%)",background:"rgba(255,255,255,0.14)",border:"none",borderRadius:99,width:52,height:52,color:"#fff",cursor:"pointer",display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0}}
+          title="Próxima">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>}
+        {_lbUrls.length>1 && <div style={{position:"absolute",bottom:22,left:"50%",transform:"translateX(-50%)",background:"rgba(255,255,255,0.14)",color:"#fff",padding:"6px 14px",borderRadius:99,fontSize:12.5,fontWeight:700,letterSpacing:.3,fontFamily:PB_INTER}}>{_lbIdx+1} / {_lbUrls.length}</div>}
+        <img src={_lbUrl} alt="" referrerPolicy="no-referrer" onClick={function(e){e.stopPropagation();}}
+          style={{maxWidth:"92vw",maxHeight:"88vh",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,0.5)",cursor:"default",objectFit:"contain",display:"block"}}/>
+      </div>;
+    })()}
 
   </div>;
 }
