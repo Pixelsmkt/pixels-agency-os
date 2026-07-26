@@ -65960,7 +65960,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:7}}>Filtrar por unidade</div>
               <div style={{display:"inline-flex",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:10,padding:3,gap:2,flexWrap:"wrap"}}>
                 {BIOTER_UNITS.map(function(u){
-                  const active=_unitTabProdProd===u.id;
+                  const active=_unitTabProd===u.id;
                   return <button key={u.id} type="button" onClick={function(){setUnitTabProd(u.id);}}
                     style={{background:active?"#0f172a":"transparent",border:"none",color:active?"#fff":"#475569",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:active?700:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 2px 6px rgba(15,23,42,.25)":"none"}}
                     onMouseEnter={function(e){if(!active) e.currentTarget.style.background="rgba(15,23,42,.06)";}}
