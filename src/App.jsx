@@ -65500,6 +65500,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
   // Tab de unidade ativa (Bioter only) — controla qual unidade está sendo visualizada/editada
   const _firstUnitId = (typeof BIOTER_UNITS!=="undefined"&&BIOTER_UNITS[0])?BIOTER_UNITS[0].id:"";
   const [_unitTab,setUnitTab] = useState(_firstUnitId);
+  // Filtro independente pra aba Produtos (nao compartilha com Contatos)
+  const [_unitTabProd,setUnitTabProd] = useState(_firstUnitId);
   // Lightbox pra ver imagem de produto expandida (sem abrir nova aba)
   const [_prodLightbox,setProdLightbox] = useState(null);
   useEffect(function(){
@@ -65949,26 +65951,31 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
           {/* Produtos — lista do que trabalhamos pro cliente.
               Bioter: cada produto pode ter unidades específicas (varia por região). */}
           <PlaybookBlock id="pb-produtos" title="Produtos" subtitle={_isBioter?"Produtos por unidade — filtra pra ver os produtos daquela unidade":"Produtos trabalhados pelo cliente"} icon="package" color="#f59e0b">
-            {_isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14,paddingBottom:14,borderBottom:"1px solid "+PB_BORDER2}}>
-              {BIOTER_UNITS.map(function(u){
-                const active=_unitTab===u.id;
-                return <button key={u.id} type="button" onClick={function(){setUnitTab(u.id);}}
-                  style={{background:active?u.color:"#fff",border:"1px solid "+(active?u.color:"#e2e8f0"),color:active?"#fff":"#475569",borderRadius:99,padding:"6px 14px",fontSize:12,fontWeight:active?800:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 4px 12px "+u.color+"33":"none"}}>
-                  {u.pickerLabel||u.label}
-                </button>;
-              })}
+            {_isBioter && typeof BIOTER_UNITS!=="undefined" && <div style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid "+PB_BORDER2}}>
+              <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.6,textTransform:"uppercase",marginBottom:7}}>Filtrar por unidade</div>
+              <div style={{display:"inline-flex",background:"#f1f5f9",border:"1px solid #e2e8f0",borderRadius:10,padding:3,gap:2,flexWrap:"wrap"}}>
+                {BIOTER_UNITS.map(function(u){
+                  const active=_unitTabProdProd===u.id;
+                  return <button key={u.id} type="button" onClick={function(){setUnitTabProd(u.id);}}
+                    style={{background:active?"#0f172a":"transparent",border:"none",color:active?"#fff":"#475569",borderRadius:8,padding:"6px 12px",fontSize:12,fontWeight:active?700:600,cursor:"pointer",fontFamily:PB_INTER,letterSpacing:-.1,transition:"all .12s",boxShadow:active?"0 2px 6px rgba(15,23,42,.25)":"none"}}
+                    onMouseEnter={function(e){if(!active) e.currentTarget.style.background="rgba(15,23,42,.06)";}}
+                    onMouseLeave={function(e){if(!active) e.currentTarget.style.background="transparent";}}>
+                    {u.pickerLabel||u.label}
+                  </button>;
+                })}
+              </div>
             </div>}
             {editMode
               ? (function(){
                   // Filtro por unidade ativo? Se sim, mostra apenas produtos daquela unidade + habilita drag
-                  const _editUnitFilter = _isBioter && _unitTab;
+                  const _editUnitFilter = _isBioter && _unitTabProd;
                   let _visibleEdit;
                   if(_editUnitFilter){
                     _visibleEdit=[];
                     (editProdutos||[]).forEach(function(p,gi){
                       const u=Array.isArray(p.unidades)?p.unidades:[];
-                      if(u.length===0 || u.indexOf(_unitTab)>=0){
-                        const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTab]==="number")?p.ordemPorUnidade[_unitTab]:999+gi;
+                      if(u.length===0 || u.indexOf(_unitTabProd)>=0){
+                        const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTabProd]==="number")?p.ordemPorUnidade[_unitTabProd]:999+gi;
                         _visibleEdit.push({prod:p, gi:gi, ord:_ord});
                       }
                     });
@@ -65985,7 +65992,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     const prod=_item.prod;
                     const pi=_item.gi;
                     const _dref = _dragProdRef.current;
-                    const _isDragging = _dref.unitId===_unitTab && _dref.srcIdx===filteredIdx;
+                    const _isDragging = _dref.unitId===_unitTabProd && _dref.srcIdx===filteredIdx;
                     // Onde renderizar o indicador: ANTES do card alvo se movendo pra cima, ANTES tambem se movendo pra baixo (indicador aparece na posicao de insercao)
                     const _showDropBefore = _editUnitFilter && _dropIdx===filteredIdx && _dref.srcIdx>=0 && _dref.srcIdx!==filteredIdx;
                     return <React.Fragment key={pi}>
@@ -66000,8 +66007,8 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       onDrop={_editUnitFilter?function(e){
                         e.preventDefault();
                         const dref=_dragProdRef.current;
-                        if(dref.unitId===_unitTab && dref.srcIdx>=0 && dref.srcIdx!==filteredIdx){
-                          _produtoReorderInUnit(_unitTab, dref.srcIdx, filteredIdx);
+                        if(dref.unitId===_unitTabProd && dref.srcIdx>=0 && dref.srcIdx!==filteredIdx){
+                          _produtoReorderInUnit(_unitTabProd, dref.srcIdx, filteredIdx);
                         }
                         _dragProdRef.current={unitId:null,srcIdx:-1};
                         setDropIdx(-1);
@@ -66011,7 +66018,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                     {_editUnitFilter ? <div
                       draggable={true}
                       onDragStart={function(e){
-                        _dragProdRef.current={unitId:_unitTab, srcIdx:filteredIdx};
+                        _dragProdRef.current={unitId:_unitTabProd, srcIdx:filteredIdx};
                         e.dataTransfer.effectAllowed="move";
                         try{e.dataTransfer.setData("text/plain",String(filteredIdx));}catch(_){}
                         // Force re-render pra mostrar opacity via state
@@ -66069,7 +66076,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       })()}
                       {/* Grid PT | ES — ES so aparece na aba Paraguay (Bioter) */}
                       {(function(){
-                        const _showEsEdit = _isBioter && _unitTab === "paraguay";
+                        const _showEsEdit = _isBioter && _unitTabProd === "paraguay";
                         return <div style={{display:"grid",gridTemplateColumns:_showEsEdit?"1fr 1fr":"1fr",gap:10}}>
                           <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",flexDirection:"column",gap:7}}>
                             <div style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:10.5,fontWeight:800,color:"#005825",letterSpacing:.4,textTransform:"uppercase"}}>
@@ -66127,12 +66134,12 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
               : (function(){
                   // Sort por ordemPorUnidade quando filtro ativo
                   const _allProds = Array.isArray(data.produtos)?data.produtos:[];
-                  const _filtered = (_isBioter && _unitTab)
+                  const _filtered = (_isBioter && _unitTabProd)
                     ? _allProds.filter(function(p){
                         const u = Array.isArray(p.unidades)?p.unidades:[];
-                        return u.length===0 || u.indexOf(_unitTab)>=0;
+                        return u.length===0 || u.indexOf(_unitTabProd)>=0;
                       }).map(function(p,idx){
-                        const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTab]==="number")?p.ordemPorUnidade[_unitTab]:999+idx;
+                        const _ord=(p.ordemPorUnidade&&typeof p.ordemPorUnidade[_unitTabProd]==="number")?p.ordemPorUnidade[_unitTabProd]:999+idx;
                         return {p:p, ord:_ord};
                       }).sort(function(a,b){return a.ord-b.ord;}).map(function(x){return x.p;})
                     : _allProds;
@@ -66141,7 +66148,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                       {_filtered.map(function(prod,pi){
                         const unitsList=Array.isArray(prod.unidades)?prod.unidades:[];
                         const unitObjs=_isBioter&&typeof BIOTER_UNITS!=="undefined"?BIOTER_UNITS.filter(function(u){return unitsList.indexOf(u.id)>=0;}):[];
-                        const _hasFilter = _isBioter && _unitTab;
+                        const _hasFilter = _isBioter && _unitTabProd;
                         const _viewUrls = Array.isArray(prod.imgUrls) && prod.imgUrls.length ? prod.imgUrls : (prod.imgUrl?[prod.imgUrl]:[]);
                         return <div key={pi} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:14,padding:16,display:"flex",gap:16,alignItems:"flex-start",boxShadow:"0 1px 2px rgba(15,23,42,.03)",transition:"box-shadow .15s, border-color .15s"}}
                           onMouseEnter={function(e){e.currentTarget.style.borderColor="#cbd5e1";e.currentTarget.style.boxShadow="0 4px 12px rgba(15,23,42,.06)";}}
@@ -66176,7 +66183,7 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                               const _outrosEs=_parseNomes(prod.nomesEs);
                               const _hasPt=_nomePt||_outrosPt.length>0;
                               // Espanhol só aparece quando aba selecionada é Paraguay
-                              const _showEs = _isBioter && _unitTab==="paraguay";
+                              const _showEs = _isBioter && _unitTabProd==="paraguay";
                               const _hasEs=_showEs && (_nomeEs||_outrosEs.length>0);
                               if(!_hasPt && !_hasEs) return <div style={{color:"#94a3b8",fontSize:13,fontStyle:"italic"}}>(sem nome)</div>;
                               return <div style={{display:"grid",gridTemplateColumns:(_hasPt&&_hasEs)?"1fr 1fr":"1fr",gap:10}}>
