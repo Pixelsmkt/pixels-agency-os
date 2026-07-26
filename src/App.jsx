@@ -65344,7 +65344,7 @@ function _PbVideoProcesses({isAdmin}){
       </div>
       <div>
         <div style={{color:PB_SOFT,fontSize:10.5,fontWeight:800,letterSpacing:.4,textTransform:"uppercase",marginBottom:6}}>Descrição / contexto</div>
-        <textarea value={editing.draft.descricao} onChange={function(e){_setDraft({descricao:e.target.value});}} rows={3}
+        <_PbAutoTextarea value={editing.draft.descricao} onChange={function(e){_setDraft({descricao:e.target.value});}} rows={3}
           placeholder="Por que esse processo existe, quando aplicar, qual o objetivo..."
           style={_pbInpStyle()}/>
       </div>
@@ -65361,7 +65361,7 @@ function _PbVideoProcesses({isAdmin}){
             return <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start",background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:10}}>
               <div style={{flexShrink:0,width:26,height:26,borderRadius:"50%",background:"#0ea5e914",color:"#0284c7",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,marginTop:4}}>{i+1}</div>
               <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
-                <textarea value={step.text} onChange={function(e){_setStepText(i,e.target.value);}} rows={2}
+                <_PbAutoTextarea value={step.text} onChange={function(e){_setStepText(i,e.target.value);}} rows={2}
                   placeholder={"Passo "+(i+1)+"..."}
                   style={Object.assign({},_pbInpStyle(),{minHeight:48})}/>
                 {step.img ? (
@@ -66109,10 +66109,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                           </div>}
                         </div>;
                       })()}
-                      <textarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
+                      <_PbAutoTextarea placeholder="Descrição / explicação rápida do produto..." value={prod.descricao||""}
                         onChange={function(e){_produtoUpd(pi,{descricao:e.target.value});}}
                         rows={2}
-                        style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",resize:"vertical",minHeight:56,boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
+                        style={{width:"100%",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"9px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",background:"#fff",lineHeight:1.5}}/>
                       {_isBioter&&typeof BIOTER_UNITS!=="undefined"&&<div>
                         <div style={{color:PB_SOFT,fontSize:10,fontWeight:800,letterSpacing:.5,textTransform:"uppercase",marginBottom:7}}>Unidades onde se aplica</div>
                         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -66685,10 +66685,10 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
                         </div>
                         <div style={{flex:1,display:"flex",flexDirection:"column"}}>
                           <div style={{color:PB_MUTE,fontSize:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.6,marginBottom:5}}>Conteúdo</div>
-                          <textarea value={_txtOpen.body} onChange={e=>_setTxtOpen(p=>({...p,body:e.target.value}))}
+                          <_PbAutoTextarea value={_txtOpen.body} onChange={e=>_setTxtOpen(p=>({...p,body:e.target.value}))}
                             placeholder="Escreva aqui as decisões da reunião, pontos discutidos, próximos passos, ideias..."
                             rows={12}
-                            style={{width:"100%",background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"10px 12px",fontSize:13,color:PB_INK,fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box",resize:"vertical",lineHeight:1.6,minHeight:220}}/>
+                            style={{width:"100%",background:"#fff",border:"1px solid "+PB_BORDER,borderRadius:8,padding:"10px 12px",fontSize:13,color:PB_INK,fontFamily:"'Inter',system-ui,sans-serif",outline:"none",boxSizing:"border-box",lineHeight:1.6,minHeight:220}}/>
                         </div>
                       </div>
                       <div style={{padding:"12px 20px",borderTop:"1px solid "+PB_BORDER,display:"flex",justifyContent:"flex-end",gap:8}}>
@@ -66902,10 +66902,10 @@ function PlaybookTemplateBlock({tpl, isAdmin, editMode, onUpdate, onRemove, onSa
 
     {/* Descrição simples do template */}
     {editMode && isAdmin
-      ? <textarea value={tmpDesc} onChange={function(e){setTmpDesc(e.target.value);}} onBlur={function(){if(tmpDesc!==(tpl.descricao||""))_update({descricao:tmpDesc});}}
+      ? <_PbAutoTextarea value={tmpDesc} onChange={function(e){setTmpDesc(e.target.value);}} onBlur={function(){if(tmpDesc!==(tpl.descricao||""))_update({descricao:tmpDesc});}}
           placeholder="Descreva o template (curto): pra que serve, quando usar, o que manter…"
           rows={2}
-          style={{width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",resize:"vertical",minHeight:56,boxSizing:"border-box",lineHeight:1.55}}/>
+          style={{width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",boxSizing:"border-box",lineHeight:1.55}}/>
       : (tpl.descricao && <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:"10px 12px",color:PB_TEXT,fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{tpl.descricao}</div>)
     }
 
@@ -67248,7 +67248,7 @@ function _PbVisualOrientItem({item, editMode, isAdmin, color, onUpdate, onRemove
         </button>}
       </div>
       {editMode && isAdmin
-        ? <textarea value={tDesc} onChange={function(e){setTDesc(e.target.value);}} onBlur={function(){if(tDesc!==item.description) onUpdate({description:tDesc});}} rows={4}
+        ? <_PbAutoTextarea value={tDesc} onChange={function(e){setTDesc(e.target.value);}} onBlur={function(){if(tDesc!==item.description) onUpdate({description:tDesc});}} rows={4}
             placeholder="Descreva o que a imagem representa e como aplicar (aparece nos cards do setor)."
             style={Object.assign({},_pbInpStyle(),{minHeight:80,fontSize:12.5})}/>
         : (item.description
@@ -67540,12 +67540,12 @@ function _PbSocialConfig({areaData, isAdmin, editMode, onUpdate, clientId}){
       <div style={{color:PB_MUTE,fontSize:11.5,marginBottom:10,lineHeight:1.45}}>Detalhes específicos desse cliente: hashtags, tom de voz, formato de legenda, chamada de ação padrão, horários preferidos…</div>
 
       {editMode && isAdmin
-        ? <textarea value={particularidades}
+        ? <_PbAutoTextarea value={particularidades}
             onChange={function(e){setParticularidades(e.target.value);}}
             onBlur={function(){_save({particularidades:particularidades});}}
             rows={5}
             placeholder="Ex: Sempre incluir hashtag #Bioter + hashtag da cidade. CTA padrão: 'fale com um consultor'. Evitar posts entre 22h e 6h…"
-            style={Object.assign({},_pbInpStyle(),{minHeight:100,resize:"vertical"})}/>
+            style={_pbInpStyle()}/>
         : (particularidades
             ? <div style={{background:"#fafbfc",border:"1px solid "+PB_BORDER2,borderRadius:10,padding:"12px 14px",color:PB_TEXT,fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{particularidades}</div>
             : <_PbEmpty icon="sparkles" text="Sem particularidades cadastradas." sub={isAdmin?"Preencha abaixo pra cadastrar.":""}/>
