@@ -65593,7 +65593,27 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
       return Object.assign({},it,{imgUrls:cur, imgUrl: cur[0] || ""});
     });});
   };
-  const _produtoToggleUnit=function(idx,unitId){setEditProdutos(function(p){return p.map(function(it,i){if(i!==idx)return it;const cur=Array.isArray(it.unidades)?it.unidades:[];const has=cur.indexOf(unitId)>=0;return Object.assign({},it,{unidades:has?cur.filter(function(u){return u!==unitId;}):cur.concat([unitId])});});});};
+  const _produtoToggleUnit=function(idx,unitId){
+    setEditProdutos(function(p){return p.map(function(it,i){
+      if(i!==idx) return it;
+      const cur=Array.isArray(it.unidades)?it.unidades:[];
+      const has=cur.indexOf(unitId)>=0;
+      let next;
+      if(has){
+        // Removendo — se ficar vazio, volta pra "coringa" (aparece em todas)
+        next = cur.filter(function(u){return u!==unitId;});
+      } else {
+        // Adicionando. Se era coringa (sem unidades) e a aba ativa eh outra,
+        // inclui a aba atual TAMBEM pra o produto nao sumir de onde o usuario
+        // estava mexendo.
+        next = cur.concat([unitId]);
+        if(cur.length===0 && _unitTab && _unitTab!==unitId && next.indexOf(_unitTab)<0){
+          next.push(_unitTab);
+        }
+      }
+      return Object.assign({},it,{unidades:next});
+    });});
+  };
   // Reordena produtos dentro de UMA unidade Bioter e persiste em prod.ordemPorUnidade[unitId]
   const _produtoReorderInUnit=function(unitId, srcIdx, dstIdx){
     if(!unitId || srcIdx===dstIdx) return;
@@ -66208,6 +66228,15 @@ function PlaybookDetalhe({cl, area, areaCfg, data, isAdmin, editMode, setEditMod
 
           {/* Templates específicos (só design) — vários templates por playbook (ex: Ajuste de template, Carrossel, Story...) */}
           {hasTemplate && <div id="pb-templates" style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"flex",alignItems:"center",gap:11,paddingBottom:4,borderBottom:"1px solid "+PB_BORDER2,marginBottom:2}}>
+              <div style={{width:32,height:32,borderRadius:9,background:PB_PURPLE_BG,border:"1px solid "+PB_PURPLE_BD,display:"inline-flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Ico n="image" size={15} color={PB_PURPLE_DK}/>
+              </div>
+              <div style={{minWidth:0}}>
+                <div style={{color:PB_INK,fontWeight:800,fontSize:16,letterSpacing:-.3}}>Templates</div>
+                <div style={{color:PB_MUTE,fontSize:12,marginTop:2}}>Referências visuais reutilizáveis pros formatos deste cliente</div>
+              </div>
+            </div>
             {templates.map(tpl=>(
               <PlaybookTemplateBlock key={tpl.id} tpl={tpl} isAdmin={isAdmin} editMode={editMode}
                 onUpdate={(patch)=>onUpdateArea({templates:(areaData.templates||[]).map(t=>t.id===tpl.id?Object.assign({},t,patch):t)})}
@@ -66764,9 +66793,11 @@ function PbMini({icon, label, value}){
 // ─── Bloco específico de template ── MINIMAL
 function PlaybookTemplateBlock({tpl, isAdmin, editMode, onUpdate, onRemove, onSaveImg}){
   const [tmpTitle,setTmpTitle] = useState(tpl.title||"");
+  const [tmpDesc,setTmpDesc] = useState(tpl.descricao||"");
   const [_lbOpen, setLbOpen] = useState(false);
   const _update = onUpdate || (function(patch){if(patch.imgUrl!==undefined&&typeof onSaveImg==="function")onSaveImg(patch.imgUrl);});
   useEffect(function(){ setTmpTitle(tpl.title||""); }, [tpl.title, editMode]);
+  useEffect(function(){ setTmpDesc(tpl.descricao||""); }, [tpl.descricao, editMode]);
   useEffect(function(){
     if(!_lbOpen) return;
     const _esc = function(e){ if(e.key==="Escape") setLbOpen(false); };
@@ -66815,6 +66846,15 @@ function PlaybookTemplateBlock({tpl, isAdmin, editMode, onUpdate, onRemove, onSa
             </button>
           : null
         )
+    }
+
+    {/* Descrição simples do template */}
+    {editMode && isAdmin
+      ? <textarea value={tmpDesc} onChange={function(e){setTmpDesc(e.target.value);}} onBlur={function(){if(tmpDesc!==(tpl.descricao||""))_update({descricao:tmpDesc});}}
+          placeholder="Descreva o template (curto): pra que serve, quando usar, o que manter…"
+          rows={2}
+          style={{width:"100%",background:"#fafbfc",border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",fontSize:13,color:PB_TEXT,fontFamily:PB_INTER,outline:"none",resize:"vertical",minHeight:56,boxSizing:"border-box",lineHeight:1.55}}/>
+      : (tpl.descricao && <div style={{background:"#fafbfc",border:"1px solid #eef0f3",borderRadius:10,padding:"10px 12px",color:PB_TEXT,fontSize:13,lineHeight:1.6,whiteSpace:"pre-wrap"}}>{tpl.descricao}</div>)
     }
 
     {/* Lightbox pra ver a imagem grande */}
